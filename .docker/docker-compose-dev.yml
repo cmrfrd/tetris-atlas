@@ -1,7 +1,7 @@
 version: "3.7"
 
 services:
-  lc3_rs_dev:
+  tetris_atlas_dev:
     build:
       context: ..
       dockerfile: .docker/Dockerfile.dev
@@ -9,10 +9,3 @@ services:
       - ..:/workspace:Z
     network_mode: 'host'
     entrypoint: sleep infinity
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
