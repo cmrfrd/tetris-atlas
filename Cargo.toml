@@ -1,0 +1,19 @@
+[package]
+name = "tetris-atlas"
+version = "0.1.0"
+edition = "2024"
+authors = ["Alex Comerford <alex@taoa.io>"]
+
+[lib]
+name = "tetris_atlas"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tetris_atlas"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.95"
+clap = { version = "4.5.28", features = ["derive"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
