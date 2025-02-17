@@ -4,6 +4,8 @@
 //! The bits are packed into a 25 byte array for efficient storage and manipulation.
 //! The board is indexed from left to right, top to bottom.
 
+use rand::Rng;
+
 use crate::assert_level;
 use std::fmt::Display;
 
@@ -86,13 +88,13 @@ macro_rules! piece_bytes {
 /// 10  | 0000 000000 |   12   |   13
 /// 11  | 00 00000000 |   13   |   14
 /// 12  | 00000000 00 |   15   |   16
-/// 13  | 000000 0000 |   17   |   18
-/// 14  | 0000 000000 |   18   |   19
-/// 15  | 00 00000000 |   19   |   20
-/// 16  | 00000000 00 |   21   |   22
-/// 17  | 000000 0000 |   22   |   23
-/// 18  | 0000 000000 |   23   |   24
-/// 19  | 00 00000000 |   24   |   25
+/// 13  | 000000 0000 |   16   |   17
+/// 14  | 0000 000000 |   17   |   18
+/// 15  | 00 00000000 |   18   |   19
+/// 16  | 00000000 00 |   20   |   21
+/// 17  | 000000 0000 |   21   |   22
+/// 18  | 0000 000000 |   22   |   23
+/// 19  | 00 00000000 |   23   |   24
 type BoardRaw = [u8; NUM_BYTES_FOR_BOARD];
 
 // A rotation is represented as a u8.
@@ -104,9 +106,12 @@ type BoardRaw = [u8; NUM_BYTES_FOR_BOARD];
 pub struct Rotation(pub u8);
 
 impl Rotation {
-    // When we iterate over the rotations
     pub fn next(&mut self) {
         *self = unsafe { std::mem::transmute((self.0.wrapping_add(1)) % 4) };
+    }
+
+    pub fn is_last(&self) -> bool {
+        self.0 == 3
     }
 }
 
@@ -118,9 +123,17 @@ impl Rotation {
 /// 4 = T -> 4 rotations
 /// 5 = L -> 4 rotations
 /// 6 = J -> 4 rotations
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct TetrisPiece(pub u8);
 impl TetrisPiece {
+    pub fn next(&mut self) {
+        *self = unsafe { std::mem::transmute((self.0.wrapping_add(1)) % 7) };
+    }
+
+    pub fn is_last(&self) -> bool {
+        self.0 == 6
+    }
+
     /// Calculate the number of rotations for a tetris piece.
     ///
     /// The mapping for each piece is:
@@ -241,24 +254,6 @@ impl TetrisPiece {
         //     3_u8.wrapping_add(b2)
         // }
 
-        // let b0 = ((self.0 | self.0.wrapping_neg()) >> 7) & 1; // 1 if piece != 0 else 0
-        // let b1 = ((self.0.wrapping_sub(2)) >> 7) ^ 1; // 1 if piece >= 2 else 0
-        // let b2 = b0 & (1_u8 ^ b1); // 1 if piece=0, 0 if piece=1, 0 if piece>=2
-        // if (!rotation.0 & 1) == 0 {
-        //     2_u8.wrapping_sub(b2)
-        // } else {
-        //     2_u8.wrapping_add(3_u8.wrapping_mul(b2).wrapping_add(b0 & b1))
-        //         .wrapping_sub(b2)
-        // }
-
-        // let b0 = ((self.0 | self.0.wrapping_neg()) >> 7) & 1; // 1 if piece != 0 else 0
-        // let b1 = ((self.0.wrapping_sub(2)) >> 7) ^ 1; // 1 if piece >= 2 else 0
-        // let b2 = b0 & (1_u8 ^ b1); // 1 if piece=0, 0 if piece=1, 0 if piece>=2
-        // // a = 1 if rotation is even, 0 if rotation is odd
-        // // re = a * (b2 * 3 + b0 & b1)
-        // let re = (!rotation.0 & 1).wrapping_mul(b2.wrapping_mul(3_u8).wrapping_add(b0 & b1));
-        // 2_u8.wrapping_add(re).wrapping_sub(b2)
-
         // let b0 = ((self.0 | self.0.wrapping_neg()) >> 7) & 1;
         // let b1 = ((self.0.wrapping_sub(2)) >> 7) ^ 1;
         // let eq0 = (1_u8 ^ b0) & (1_u8 ^ b1); // (piece=0)
@@ -331,6 +326,19 @@ impl TetrisPiece {
 
         //     _ => panic!("Invalid piece or rotation"),
         // }
+
+        // // return (width, height)
+        // match (self.0, rotation.0) {
+        //     (0, _) => 2, // O piece: always 2x2
+
+        //     (1, 0 | 2) => 4, // I piece: 4x1 when flat
+        //     (1, 1 | 3) => 1, // I piece: 1x4 when tall
+
+        //     (2..=6, 0 | 2) => 3, // S,Z,T,L,J: 3x2 when flat
+        //     (2..=6, 1 | 3) => 2, // S,Z,T,L,J: 2x3 when tall
+
+        //     _ => panic!("Invalid piece or rotation"),
+        // }
     }
 }
 
@@ -350,11 +358,15 @@ impl Display for TetrisPiece {
 }
 
 pub struct TetrisBoard {
-    board: BoardRaw,
+    play_board: BoardRaw,
+    piece_board: BoardRaw,
 
     /// Shift buffers used to store intermediate results of shifts.
     shift_buf_a: u8,
     shift_buf_b: u8,
+
+    /// Cleared rows buffer.
+    cleared_rows: [u8; 3],
 }
 
 pub trait Shiftable {
@@ -381,45 +393,68 @@ pub trait Shiftable {
 
 impl Shiftable for TetrisBoard {
     fn shift_up(&mut self) {
-        // Shift all bytes up by 1
-        self.board.copy_within(1..NUM_BYTES_FOR_BOARD, 0);
-        assert_level!((NUM_BYTES_FOR_BOARD - 1) < self.board.len());
-        self.board[NUM_BYTES_FOR_BOARD - 1] = 0;
+        // // Shift all bytes up by 1
+        // self.play_board.copy_within(1..NUM_BYTES_FOR_BOARD, 0);
+        // assert_level!((NUM_BYTES_FOR_BOARD - 1) < self.play_board.len());
+        // self.play_board[NUM_BYTES_FOR_BOARD - 1] = 0;
 
-        // Shift the bits up and carry the bottom 2 bits to the next byte
-        for i in (0..(NUM_BYTES_FOR_BOARD - 1)).rev() {
-            assert_level!(i < self.board.len());
-            unsafe {
-                self.shift_buf_b = (self.board.get_unchecked(i) & 0b1100_0000) >> 6; // are we at a byte boundary?
-                *self.board.get_unchecked_mut(i) =
-                    (self.board.get_unchecked(i) << 2) | self.shift_buf_a;
-            }
-            self.shift_buf_a = self.shift_buf_b;
+        // // Shift the bits up and carry the bottom 2 bits to the next byte
+        // for i in (0..(NUM_BYTES_FOR_BOARD - 1)).rev() {
+        //     assert_level!(i < self.play_board.len());
+        //     unsafe {
+        //         self.shift_buf_b = (self.play_board.get_unchecked(i) & 0b1100_0000) >> 6; // are we at a byte boundary?
+        //         *self.play_board.get_unchecked_mut(i) =
+        //             (self.play_board.get_unchecked(i) << 2) | self.shift_buf_a;
+        //     }
+        //     self.shift_buf_a = self.shift_buf_b;
+        // }
+
+        // // Clear the shift buffer
+        // self.shift_buf_a = 0;
+
+        for i in 0..(NUM_BYTES_FOR_BOARD - 2) {
+            self.play_board[i] =
+                (self.play_board[i + 1] << 2) | ((self.play_board[i + 2] & 0b1100_0000) >> 6);
         }
-
-        // Clear the shift buffer
-        self.shift_buf_a = 0;
+        self.play_board[NUM_BYTES_FOR_BOARD - 2] = self.play_board[NUM_BYTES_FOR_BOARD - 1] << 2;
+        self.play_board[NUM_BYTES_FOR_BOARD - 1] = 0;
     }
 
     fn shift_down(&mut self) {
-        // Shift all bytes down by 1
-        self.board.copy_within(0..(NUM_BYTES_FOR_BOARD - 1), 1);
-        assert_level!(0 < self.board.len());
-        self.board[0] = 0;
+        // // Shift all bytes down by 1
+        // self.play_board.copy_within(0..(NUM_BYTES_FOR_BOARD - 1), 1);
+        // // assert_level!(0 < self.play_board.len());
+        // self.play_board[0] = 0;
 
-        // Shift the bits down and carry the top 2 bits to the next byte
-        for i in 0..NUM_BYTES_FOR_BOARD {
-            assert_level!(i < self.board.len());
-            unsafe {
-                self.shift_buf_b = (self.board.get_unchecked(i) & 0b0000_0011) << 6;
-                *self.board.get_unchecked_mut(i) =
-                    (self.board.get_unchecked(i) >> 2) | self.shift_buf_a;
-            }
-            self.shift_buf_a = self.shift_buf_b;
+        // // Shift the bits down and carry the top 2 bits to the next byte
+        // for i in 0..NUM_BYTES_FOR_BOARD {
+        //     // assert_level!(i < self.play_board.len());
+        //     self.shift_buf_b = (self.play_board[i] & 0b0000_0011) << 6;
+        //     self.play_board[i] = (self.play_board[i] >> 2) | self.shift_buf_a;
+        //     self.shift_buf_a = self.shift_buf_b;
+        // }
+        // self.shift_buf_a = 0;
+
+        // // iterator pattern
+        // let old_board = self.play_board;
+        // old_board[..NUM_BYTES_FOR_BOARD - 1]
+        //     .array_windows::<2>()
+        //     .rev()
+        //     .enumerate()
+        //     .for_each(|(i, &[prev, curr])| {
+        //         self.play_board[NUM_BYTES_FOR_BOARD - 1 - i] =
+        //             (curr >> 2) | ((prev & 0b0000_0011) << 6);
+        //     });
+        // self.play_board[1] = old_board[0] >> 2;
+        // self.play_board[0] = 0;
+
+        for i in 2..NUM_BYTES_FOR_BOARD {
+            self.play_board[NUM_BYTES_FOR_BOARD - i + 1] =
+                (self.play_board[NUM_BYTES_FOR_BOARD - i] >> 2)
+                    | ((self.play_board[NUM_BYTES_FOR_BOARD - i - 1] & 0b0000_0011) << 6);
         }
-
-        // Clear the shift buffer
-        self.shift_buf_a = 0;
+        self.play_board[1] = self.play_board[0] >> 2;
+        self.play_board[0] = 0;
     }
 
     fn shift_left(&mut self) {
@@ -455,6 +490,7 @@ impl Shiftable for TetrisBoard {
 
 pub trait BitSetter {
     fn set_bit(&mut self, col: usize, row: usize, value: bool);
+    fn set_random_bits(&mut self, num_bits: usize);
     fn get_bit(&self, col: usize, row: usize) -> bool;
 }
 
@@ -462,14 +498,24 @@ impl BitSetter for TetrisBoard {
     fn set_bit(&mut self, col: usize, row: usize, value: bool) {
         // Set the bit at the given column and row
         if value {
-            self.board[(row * COLS + col) / 8] |= 1 << (7 - ((row * COLS + col) % 8));
+            self.play_board[(row * COLS + col) / 8] |= 1 << (7 - ((row * COLS + col) % 8));
         } else {
-            self.board[(row * COLS + col) / 8] &= !(1 << (7 - ((row * COLS + col) % 8)));
+            self.play_board[(row * COLS + col) / 8] &= !(1 << (7 - ((row * COLS + col) % 8)));
+        }
+    }
+
+    fn set_random_bits(&mut self, num_bits: usize) {
+        let mut rng = rand::rng();
+        for _ in 0..num_bits {
+            let col = rng.random_range(0..COLS);
+            let row = rng.random_range(0..ROWS);
+            let value = rng.random();
+            self.set_bit(col, row, value);
         }
     }
 
     fn get_bit(&self, col: usize, row: usize) -> bool {
-        self.board[(row.wrapping_mul(COLS).wrapping_add(col)) >> 3]
+        self.play_board[(row.wrapping_mul(COLS).wrapping_add(col)) >> 3]
             & (1_u8.wrapping_shl(
                 7_u32.wrapping_sub(((row.wrapping_mul(COLS).wrapping_add(col)) & 7) as u32),
             ))
@@ -496,44 +542,108 @@ impl Clearer for TetrisBoard {
                 !(0b1111_1111_u8.wrapping_shl(lbi.wrapping_mul(BYTE_OVERLAP_PER_ROW) as u32));
             let rmask =
                 !(0b1111_1111_u8.wrapping_shr(rbi.wrapping_mul(BYTE_OVERLAP_PER_ROW) as u32));
-            let lfilled = (self.board[lbi] & lmask) == lmask;
-            let rfilled = (self.board[rbi] & rmask) == rmask;
-            if lfilled || rfilled {
-                self.board[lbi] &= lmask;
-                self.board[rbi] &= rmask;
+            let lfilled = ((self.play_board[lbi] & lmask) == lmask) as u8;
+            let rfilled = ((self.play_board[rbi] & rmask) == rmask) as u8;
+            if lfilled & rfilled == 0 {
+                self.play_board[lbi] &= lmask;
+                self.play_board[rbi] &= rmask;
+                self.cleared_rows[row / 8] |= 0b1000_0000 >> (row % 8);
             }
         }
     }
 
     fn clear_all(&mut self) {
-        self.board = [0; NUM_BYTES_FOR_BOARD];
+        self.play_board = [0_u8; NUM_BYTES_FOR_BOARD];
     }
 }
 
 impl TetrisBoard {
-    pub fn add_piece_top(&mut self, piece: TetrisPiece, rotation: Rotation) {
-        match (piece.0, rotation.0) {
-            (0, 0 | 2) => self.board[0] |= 0b1111_0000, // I (flat)
-            (0, 1 | 3) => {
-                self.board[0] |= 0b1000_0000;
-                self.board[1] |= 0b0010_0000;
-                self.board[2] |= 0b0000_1000;
-                self.board[3] |= 0b0000_0010;
-            }
+    pub fn add_piece_top(&mut self, piece: TetrisPiece, rotation: Rotation, col: usize) {
+        match (piece.0, rotation.0, col) {
+            (0, _, 0) => self.play_board[..5].copy_from_slice(&piece_bytes! {
+                1100000000
+                1100000000
+                0000000000
+                0000000000
+            }),
+            (0, _, 1) => self.play_board[..5].copy_from_slice(&piece_bytes! {
+                0110000000
+                0110000000
+                0000000000
+                0000000000
+            }),
+            (0, _, 2) => self.play_board[..5].copy_from_slice(&piece_bytes! {
+                0011000000
+                0011000000
+                0000000000
+                0000000000
+            }),
+            (0, _, 3) => self.play_board[..5].copy_from_slice(&piece_bytes! {
+                0001100000
+                0001100000
+                0000000000
+                0000000000
+            }),
+            (0, _, 4) => self.play_board[..5].copy_from_slice(&piece_bytes! {
+                0000110000
+                0000110000
+                0000000000
+                0000000000
+            }),
+            (0, _, 5) => self.play_board[..5].copy_from_slice(&piece_bytes! {
+                0000011000
+                0000011000
+                0000000000
+                0000000000
+            }),
+            (0, _, 6) => self.play_board[..5].copy_from_slice(&piece_bytes! {
+                0000001100
+                0000001100
+                0000000000
+                0000000000
+            }),
+            (0, _, 7) => self.play_board[..5].copy_from_slice(&piece_bytes! {
+                0000000110
+                0000000110
+                0000000000
+                0000000000
+            }),
+            (0, _, 8) => self.play_board[..5].copy_from_slice(&piece_bytes! {
+                0000000011
+                0000000011
+                0000000000
+                0000000000
+            }),
+
+            (1, 0 | 2, _) => self.play_board[0] |= 0b1111_0000, // I (flat)
+            (1, 1 | 3, _) => self.play_board[..5].copy_from_slice(&piece_bytes! {
+                1000000000
+                1000000000
+                1000000000
+                1000000000
+            }),
             _ => todo!(),
         }
     }
 
     pub fn collides(&self, other: &Self) -> bool {
-        self.board
-            .iter()
-            .zip(other.board.iter())
-            .any(|(&a, &b)| a & b != 0)
+        unsafe {
+            let ptr_a = self.play_board.as_ptr();
+            let ptr_b = other.play_board.as_ptr();
+            let chunk1_a = std::ptr::read_unaligned(ptr_a as *const u128);
+            let chunk1_b = std::ptr::read_unaligned(ptr_b as *const u128);
+            let chunk2_a = std::ptr::read_unaligned(ptr_a.add(16) as *const u128);
+            let chunk2_b = std::ptr::read_unaligned(ptr_b.add(16) as *const u128);
+            if (chunk1_a & chunk1_b).wrapping_add(chunk2_a & chunk2_b) != 0 {
+                return true;
+            }
+        }
+        false
     }
 
     /// Count all the bits in the board.
     pub fn count(&self) -> u8 {
-        self.board
+        self.play_board
             .iter()
             .fold(0, |acc, &byte| acc + byte.count_ones() as u8)
     }
@@ -542,34 +652,43 @@ impl TetrisBoard {
     /// top 4 rows. 4 rows = 40 cells = 40 bits = 5 bytes.
     /// Check if the top 5 bytes are non-zero.
     pub fn loss(&self) -> bool {
-        (self.board[0] != 0)
-            || (self.board[1] != 0)
-            || (self.board[2] != 0)
-            || (self.board[3] != 0)
-            || (self.board[4] != 0)
+        (self.play_board[0] != 0)
+            || (self.play_board[1] != 0)
+            || (self.play_board[2] != 0)
+            || (self.play_board[3] != 0)
+            || (self.play_board[4] != 0)
     }
 
     pub fn from_bytes(bytes: BoardRaw) -> Self {
         Self {
-            board: bytes,
+            play_board: bytes,
+            piece_board: [0; NUM_BYTES_FOR_BOARD],
+            cleared_rows: [0; 3],
             shift_buf_a: 0,
             shift_buf_b: 0,
         }
     }
 
-    pub fn from_bytes_mut(mut self, bytes: BoardRaw) -> Self {
-        self.board = bytes;
-        self
+    pub fn from_bytes_mut(&mut self, bytes: BoardRaw) {
+        self.play_board = bytes;
     }
 }
 
 impl Default for TetrisBoard {
     fn default() -> Self {
         Self {
-            board: [0; NUM_BYTES_FOR_BOARD],
+            play_board: [0; NUM_BYTES_FOR_BOARD],
+            piece_board: [0; NUM_BYTES_FOR_BOARD],
+            cleared_rows: [0; 3],
             shift_buf_a: 0,
             shift_buf_b: 0,
         }
+    }
+}
+
+impl TetrisBoard {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
@@ -758,6 +877,50 @@ mod tests {
 
         board2.set_bit(0, 0, false);
         assert!(!board1.collides(&board2));
+
+        board1.set_bit(4, 4, true);
+        assert!(!board1.collides(&board2));
+
+        board2.set_bit(4, 4, true);
+        assert!(board1.collides(&board2));
+        board2.set_bit(4, 4, false);
+
+        board1.set_bit(5, 4, true);
+        assert!(!board1.collides(&board2));
+
+        board1.set_bit(4, 5, true);
+        assert!(!board1.collides(&board2));
+
+        // test end of board
+        board1.set_bit(COLS - 1, ROWS - 1, true);
+        assert!(!board1.collides(&board2));
+
+        board2.set_bit(COLS - 1, ROWS - 1, true);
+        assert!(board1.collides(&board2));
+
+        // another method
+        board1.clear_all();
+        board2.clear_all();
+        assert!(
+            !board1.collides(&board2),
+            "Cleared boards should not collide"
+        );
+
+        // set the board to all ones
+        board1.from_bytes_mut([255; NUM_BYTES_FOR_BOARD]);
+        assert!(
+            !board1.collides(&board2),
+            "All ones and empty board should not collide"
+        );
+
+        for i in 0..COLS {
+            for j in 0..ROWS {
+                board2.set_bit(i, j, true);
+                assert!(board1.collides(&board2));
+                board1.set_bit(i, j, false);
+                assert!(!board1.collides(&board2));
+            }
+        }
     }
 
     #[test]
