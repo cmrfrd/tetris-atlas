@@ -417,53 +417,59 @@ impl TetrisPieceBag {
         0b0111_1110, // next bag 0
         0b0111_1111  // current bag
     );
+    const FULL_BAG: [(TetrisPieceBag, TetrisPiece); 7] = [
+        (
+            TetrisPieceBag((Self::BASE_BAG >> 8) as u8),
+            TetrisPiece(0b0000_0001),
+        ),
+        (
+            TetrisPieceBag((Self::BASE_BAG >> 16) as u8),
+            TetrisPiece(0b0000_0010),
+        ),
+        (
+            TetrisPieceBag((Self::BASE_BAG >> 24) as u8),
+            TetrisPiece(0b0000_0100),
+        ),
+        (
+            TetrisPieceBag((Self::BASE_BAG >> 32) as u8),
+            TetrisPiece(0b0000_1000),
+        ),
+        (
+            TetrisPieceBag((Self::BASE_BAG >> 40) as u8),
+            TetrisPiece(0b0001_0000),
+        ),
+        (
+            TetrisPieceBag((Self::BASE_BAG >> 48) as u8),
+            TetrisPiece(0b0010_0000),
+        ),
+        (
+            TetrisPieceBag((Self::BASE_BAG >> 56) as u8),
+            TetrisPiece(0b0100_0000),
+        ),
+    ];
 
     pub fn new() -> Self {
         Self::default()
     }
 
     #[inline(always)]
-    pub fn next_bags(&self) -> [(TetrisPieceBag, TetrisPiece); 7] {
+    pub fn next_bags(&self) -> NextBagsIter {
         // Check if there is exactly one piece left in the bag
         // Count bits set to 1 in self.0 using population count
-        if self.0.count_ones() == 0 {
-            [
-                (
-                    TetrisPieceBag((Self::BASE_BAG >> 8) as u8),
-                    TetrisPiece::new(0),
-                ),
-                (
-                    TetrisPieceBag((Self::BASE_BAG >> 16) as u8),
-                    TetrisPiece::new(1),
-                ),
-                (
-                    TetrisPieceBag((Self::BASE_BAG >> 24) as u8),
-                    TetrisPiece::new(2),
-                ),
-                (
-                    TetrisPieceBag((Self::BASE_BAG >> 32) as u8),
-                    TetrisPiece::new(3),
-                ),
-                (
-                    TetrisPieceBag((Self::BASE_BAG >> 40) as u8),
-                    TetrisPiece::new(4),
-                ),
-                (
-                    TetrisPieceBag((Self::BASE_BAG >> 48) as u8),
-                    TetrisPiece::new(5),
-                ),
-                (
-                    TetrisPieceBag((Self::BASE_BAG >> 56) as u8),
-                    TetrisPiece::new(6),
-                ),
-            ]
-        } else {
-            // broadcast the current bag to a u64
-            // then use a mask to remove the bit that represents each
-            // piece from it's respective future bag
-            let next_bags =
-                ((self.0 as u64) * 0x0101_0101_0101_0100_u64) & !(0x40_20_10_08_04_02_01_FF_u64);
-            [
+        if self.0 == 0 {
+            return NextBagsIter {
+                next_bags: Self::FULL_BAG,
+                current_bag: Self::default(),
+            };
+        }
+
+        // broadcast the current bag to a u64
+        // then use a mask to remove the bit that represents each
+        // piece from it's respective future bag
+        let next_bags =
+            ((self.0 as u64) * 0x0101_0101_0101_0100_u64) & !(0x40_20_10_08_04_02_01_FF_u64);
+        NextBagsIter {
+            next_bags: [
                 (
                     TetrisPieceBag((next_bags >> 8) as u8),
                     TetrisPiece(
@@ -497,10 +503,40 @@ impl TetrisPieceBag {
                     TetrisPieceBag((next_bags >> 56) as u8),
                     TetrisPiece(0b1000_0000 >> (1 * (((self.0 & 0b0100_0000) != 0) as u8))),
                 ),
-            ]
+            ],
+            current_bag: *self,
         }
     }
 }
+
+#[derive(Debug)]
+pub struct NextBagsIter {
+    next_bags: [(TetrisPieceBag, TetrisPiece); 7],
+    current_bag: TetrisPieceBag,
+}
+
+impl Iterator for NextBagsIter {
+    type Item = (TetrisPieceBag, TetrisPiece);
+
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_bag.0 == 0 {
+            return None;
+        }
+
+        let pos = self.current_bag.0.trailing_zeros() as usize;
+        self.current_bag.0 &= !(1 << pos);
+        Some(self.next_bags[pos])
+    }
+
+    #[inline(always)]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.current_bag.0.count_ones() as usize;
+        (remaining, Some(remaining))
+    }
+}
+
+impl ExactSizeIterator for NextBagsIter {}
 
 /// To save on compute, we use a u64 to represent 8 bags.
 /// 1 byte to represent the current bag, and 7 bytes to represent
@@ -527,7 +563,6 @@ pub struct BAGS(u64);
 ///   | 15 | 14 | 13 | 12 | 11 | 10 | 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
 ///   +----+----+----+----+----+----+---+---+---+---+---+---+---+---+---+---+
 /// ```
-///
 // #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 // pub struct TetrisPieceBag(pub u16);
 
@@ -620,25 +655,17 @@ impl Shiftable for TetrisBoard {
         // }
         // self.shift_buf_a = 0;
 
-        // // iterator pattern
-        // let old_board = self.play_board;
-        // old_board[..NUM_BYTES_FOR_BOARD - 1]
-        //     .array_windows::<2>()
-        //     .rev()
-        //     .enumerate()
-        //     .for_each(|(i, &[prev, curr])| {
-        //         self.play_board[NUM_BYTES_FOR_BOARD - 1 - i] =
-        //             (curr >> 2) | ((prev & 0b0000_0011) << 6);
-        //     });
-        // self.play_board[1] = old_board[0] >> 2;
-        // self.play_board[0] = 0;
-
-        for i in 2..NUM_BYTES_FOR_BOARD {
-            self.play_board[NUM_BYTES_FOR_BOARD - i + 1] =
-                (self.play_board[NUM_BYTES_FOR_BOARD - i] >> 2)
-                    | ((self.play_board[NUM_BYTES_FOR_BOARD - i - 1] & 0b0000_0011) << 6);
-        }
-        self.play_board[1] = self.play_board[0] >> 2;
+        // iterator pattern
+        let old_board = self.play_board;
+        old_board[..NUM_BYTES_FOR_BOARD - 1]
+            .array_windows::<2>()
+            .rev()
+            .enumerate()
+            .for_each(|(i, &[prev, curr])| {
+                self.play_board[NUM_BYTES_FOR_BOARD - 1 - i] =
+                    (curr >> 2) | ((prev & 0b0000_0011) << 6);
+            });
+        self.play_board[1] = old_board[0] >> 2;
         self.play_board[0] = 0;
     }
 }
@@ -859,7 +886,10 @@ impl Display for TetrisBoard {
 mod tests {
     use std::collections::HashSet;
 
-    use rand::{Rng, seq::IndexedRandom};
+    use rand::{
+        Rng,
+        seq::{IndexedRandom, IteratorRandom},
+    };
 
     use super::*;
 
@@ -1175,128 +1205,90 @@ mod tests {
     fn test_bag() {
         // take 6 pieces and check that the bag has reset
         let mut bag = TetrisPieceBag::new();
-        let num_empties = bag
-            .next_bags()
-            .iter()
-            .filter(|(_, piece)| piece.is_empty())
-            .count();
-        assert_eq!(num_empties, 0);
+        assert_eq!(bag.next_bags().count(), 7);
 
-        bag = bag.next_bags()[0].0;
-        let num_empties = bag
-            .next_bags()
-            .iter()
-            .filter(|(_, piece)| piece.is_empty())
-            .count();
-        assert_eq!(num_empties, 1);
+        bag = bag.next_bags().next().unwrap().0;
+        assert_eq!(bag.next_bags().count(), 6);
 
-        bag = bag.next_bags()[1].0;
-        let num_empties = bag
-            .next_bags()
-            .iter()
-            .filter(|(_, piece)| piece.is_empty())
-            .count();
-        assert_eq!(num_empties, 2);
+        bag = bag.next_bags().next().unwrap().0;
+        assert_eq!(bag.next_bags().count(), 5);
 
-        bag = bag.next_bags()[2].0;
-        let num_empties = bag
-            .next_bags()
-            .iter()
-            .filter(|(_, piece)| piece.is_empty())
-            .count();
-        assert_eq!(num_empties, 3);
+        bag = bag.next_bags().next().unwrap().0;
+        assert_eq!(bag.next_bags().count(), 4);
 
-        bag = bag.next_bags()[3].0;
-        let num_empties = bag
-            .next_bags()
-            .iter()
-            .filter(|(_, piece)| piece.is_empty())
-            .count();
-        assert_eq!(num_empties, 4);
+        bag = bag.next_bags().next().unwrap().0;
+        assert_eq!(bag.next_bags().count(), 3);
 
-        bag = bag.next_bags()[4].0;
-        let num_empties = bag
-            .next_bags()
-            .iter()
-            .filter(|(_, piece)| piece.is_empty())
-            .count();
-        assert_eq!(num_empties, 5);
+        bag = bag.next_bags().next().unwrap().0;
+        assert_eq!(bag.next_bags().count(), 2);
 
-        bag = bag.next_bags()[5].0;
-        let num_empties = bag
-            .next_bags()
-            .iter()
-            .filter(|(_, piece)| piece.is_empty())
-            .count();
+        bag = bag.next_bags().next().unwrap().0;
+        assert_eq!(bag.next_bags().count(), 1);
 
-        assert_eq!(num_empties, 6);
+        bag = bag.next_bags().next().unwrap().0;
+        assert_eq!(bag.next_bags().count(), 7);
 
         // fuzz test sampling a bunch from the bag
+        let num_bags = 10_000;
         let mut all_collected_pieces = Vec::new();
         let mut bag = TetrisPieceBag::new();
         let mut rng = rand::rng();
-        for _ in 0..(10 * NUM_TETRIS_PIECES) {
-            let next_bags = bag
-                .next_bags()
-                .iter()
-                .filter(|(_, piece)| !piece.is_empty())
-                .map(|(bag, piece)| (*bag, *piece))
-                .collect::<Vec<_>>();
-            let selected_bag = next_bags.choose(&mut rng).unwrap();
-            bag = selected_bag.0;
-            all_collected_pieces.push(selected_bag.1);
+        for _ in 0..(num_bags * NUM_TETRIS_PIECES) {
+            let selected = bag.next_bags().choose(&mut rng).unwrap();
+            bag = selected.0;
+            all_collected_pieces.push(selected.1);
         }
 
         // check that all pieces of the correct are present
-        assert_eq!(all_collected_pieces.len(), NUM_TETRIS_PIECES * 10);
+        assert_eq!(all_collected_pieces.len(), num_bags * NUM_TETRIS_PIECES);
         assert_eq!(
             all_collected_pieces
                 .iter()
                 .filter(|piece| **piece == TetrisPiece::new(0))
                 .count(),
-            10
+            num_bags
         );
         assert_eq!(
             all_collected_pieces
                 .iter()
                 .filter(|piece| **piece == TetrisPiece::new(1))
                 .count(),
-            10
+            num_bags
         );
         assert_eq!(
             all_collected_pieces
                 .iter()
                 .filter(|piece| **piece == TetrisPiece::new(2))
                 .count(),
-            10
+            num_bags
         );
         assert_eq!(
             all_collected_pieces
                 .iter()
                 .filter(|piece| **piece == TetrisPiece::new(3))
                 .count(),
-            10
+            num_bags
         );
         assert_eq!(
             all_collected_pieces
                 .iter()
                 .filter(|piece| **piece == TetrisPiece::new(4))
                 .count(),
-            10
+            num_bags
         );
         assert_eq!(
             all_collected_pieces
                 .iter()
                 .filter(|piece| **piece == TetrisPiece::new(5))
                 .count(),
-            10
+            num_bags
         );
         assert_eq!(
             all_collected_pieces
                 .iter()
                 .filter(|piece| **piece == TetrisPiece::new(6))
                 .count(),
-            10
+            num_bags
         );
     }
 
