@@ -2,7 +2,7 @@ use clap::Parser;
 use std::str::FromStr;
 use tracing::{Level, info};
 
-use tetris_atlas::{BitSetter, Shiftable, TetrisBoard};
+use tetris_atlas::tetris_board::{BitSetter, Shiftable, TetrisBoard};
 
 fn setup_logging(verbosity: u8) -> String {
     let verbosity = verbosity.saturating_add(2).clamp(0, 5);
@@ -35,7 +35,8 @@ fn main() {
     match &cli.command {
         Commands::Run => {
             let mut board = TetrisBoard::default();
-            board.set_bit(0, 9, true);
+            info!("{}", board);
+            board.flip_random_bits(100);
             info!("{}", board);
         }
     }
