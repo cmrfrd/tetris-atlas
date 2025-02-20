@@ -3,6 +3,7 @@ name = "tetris-atlas"
 version = "0.1.0"
 edition = "2024"
 authors = ["Alex Comerford <alex@taoa.io>"]
+publish = false
 
 [lib]
 name = "tetris_atlas"
@@ -18,6 +19,7 @@ clap = { version = "4.5.28", features = ["derive"] }
 rand = "0.9.0"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+macros = { path = "macros" }
 
 [dev-dependencies]
 criterion = "0.5.1"
