@@ -1,5 +1,8 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use tetris_atlas::tetris_board::{BitSetter, Clearer, Merge, Shiftable, TetrisBoard};
+use rand::seq::{IndexedRandom, IteratorRandom};
+use tetris_atlas::tetris_board::{
+    BitSetter, Clearer, Merge, Shiftable, TetrisBoard, TetrisPieceBag,
+};
 
 fn criterion_benchmark(c: &mut Criterion) {
     let mut boards = black_box(
@@ -52,6 +55,15 @@ fn criterion_benchmark(c: &mut Criterion) {
                 .iter_mut()
                 .map(|p| p.merge(&base))
                 .collect::<Vec<_>>()
+        })
+    });
+
+    c.bench_function("bag_iter", |b| {
+        b.iter(|| {
+            let mut bag = TetrisPieceBag::new();
+            for _ in 0..10_000 {
+                bag = bag.next_bags().next().unwrap().0;
+            }
         })
     });
 }
