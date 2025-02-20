@@ -1,12 +1,12 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use tetris_atlas::{BitSetter, Clearer, Shiftable, TetrisBoard};
+use tetris_atlas::tetris_board::{BitSetter, Clearer, Merge, Shiftable, TetrisBoard};
 
 fn criterion_benchmark(c: &mut Criterion) {
     let mut boards = black_box(
         (0..10_000)
             .map(|_| {
                 let mut b = TetrisBoard::default();
-                b.set_random_bits(16);
+                b.flip_random_bits(16);
                 b
             })
             .collect::<Vec<_>>(),
@@ -35,6 +35,24 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_function("shift_up", |b| {
         b.iter(|| boards.iter_mut().map(|p| p.shift_up()).collect::<Vec<_>>())
+    });
+
+    c.bench_function("loss", |b| {
+        b.iter(|| boards.iter().map(|p| p.loss()).collect::<Vec<_>>())
+    });
+
+    c.bench_function("merge", |b| {
+        let base = {
+            let mut b = TetrisBoard::default();
+            b.flip_random_bits(16);
+            b
+        };
+        b.iter(|| {
+            boards
+                .iter_mut()
+                .map(|p| p.merge(&base))
+                .collect::<Vec<_>>()
+        })
     });
 }
 

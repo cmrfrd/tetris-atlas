@@ -1,5 +1,5 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use tetris_atlas::{Rotation, TetrisPiece};
+use tetris_atlas::tetris_board::{Rotation, TetrisPiece};
 
 fn criterion_benchmark(c: &mut Criterion) {
     let pieces = black_box(
@@ -16,12 +16,21 @@ fn criterion_benchmark(c: &mut Criterion) {
             .map(|_| Rotation(rand::random::<u8>() % 4))
             .collect::<Vec<_>>(),
     );
-    c.bench_function("dimensions", |b| {
+    c.bench_function("width", |b| {
         b.iter(|| {
             pieces
                 .iter()
                 .zip(rotations.iter())
                 .map(|(p, r)| p.width(*r))
+                .collect::<Vec<_>>()
+        })
+    });
+    c.bench_function("height", |b| {
+        b.iter(|| {
+            pieces
+                .iter()
+                .zip(rotations.iter())
+                .map(|(p, r)| p.height(*r))
                 .collect::<Vec<_>>()
         })
     });
