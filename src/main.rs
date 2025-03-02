@@ -36,8 +36,6 @@ fn main() {
         Commands::Run => {
             let mut board = TetrisBoard::default();
             info!("{}", board);
-            board.flip_random_bits(100);
-            info!("{}", board);
         }
     }
 }
