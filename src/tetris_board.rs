@@ -1,16 +1,13 @@
-//! This module implements a bit-packed Tetris game board representation.
-//!
-//! The board is represented as a 20x10 grid of cells, where each cell is a single bit.
-//! The bits are packed into a 25 byte array for efficient storage and manipulation.
-//! The board is indexed from left to right, top to bottom.
-
-use macros::{pack_bytes_u16, pack_bytes_u32, pack_bytes_u64, piece_bytes, piece_u64};
+use macros::{piece_bytes, piece_u64};
 use rand::{Rng, SeedableRng};
 
-use std::fmt::Display;
+use std::hash::Hash;
+use std::{fmt::Display, hash::Hasher};
 
 pub const ROWS: usize = 20;
 pub const COLS: usize = 10;
+pub const ROWS_U8: u8 = ROWS as u8;
+pub const COLS_U8: u8 = COLS as u8;
 pub const BOARD_SIZE: usize = ROWS * COLS;
 pub const NUM_BYTES_FOR_BOARD: usize = BOARD_SIZE / 8;
 pub const ROW_CHUNK: usize = 4;
@@ -27,7 +24,7 @@ pub const NUM_TETRIS_PIECES: usize = 7;
 /// 2 = 180 degrees
 /// 3 = 270 degrees
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub struct Rotation(pub u8);
 
 impl Display for Rotation {
@@ -50,16 +47,16 @@ impl Rotation {
 /// where only one bit is set.
 ///
 /// ```text
-/// 0000_0001 = O -> 1 rotation
-/// 0000_0010 = I -> 2 rotations
-/// 0000_0100 = S -> 2 rotations
-/// 0000_1000 = Z -> 2 rotations
-/// 0001_0000 = T -> 4 rotations
-/// 0010_0000 = L -> 4 rotations
-/// 0100_0000 = J -> 4 rotations
-/// 1000_0000 = "Empty piece"
+/// 0000_0001 = 1 = O -> 1 rotation
+/// 0000_0010 = 2 = I -> 2 rotations
+/// 0000_0100 = 4 = S -> 2 rotations
+/// 0000_1000 = 8 = Z -> 2 rotations
+/// 0001_0000 = 16 = T -> 4 rotations
+/// 0010_0000 = 32 = L -> 4 rotations
+/// 0100_0000 = 64 = J -> 4 rotations
+/// 1000_0000 = 128 = "Empty piece"
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TetrisPiece(pub u8);
 impl TetrisPiece {
     pub fn new(piece: u8) -> Self {
@@ -77,11 +74,6 @@ impl TetrisPiece {
     }
 
     #[inline(always)]
-    pub fn next(&mut self) {
-        *self = unsafe { std::mem::transmute(1u8 << (((self.0.trailing_zeros() as u8) + 1) % 7)) };
-    }
-
-    #[inline(always)]
     pub fn is_last(&self) -> bool {
         self.0 == 0b0100_0000
     }
@@ -90,40 +82,38 @@ impl TetrisPiece {
     ///
     /// The mapping for each piece is:
     /// ```text
-    /// 0 -> 1
-    /// 1 | 2 | 3 -> 2
-    /// 4 | 5 | 6 -> 4
+    /// 1 -> 1
+    /// 2 | 4 | 8 -> 2
+    /// 16 | 32 | 64 -> 4
     /// ```
-    ///
-    /// In pseudo-code:
-    /// ```text
-    /// b = 1 if piece != 0 else 0
-    /// c = 1 if piece >= 4 else 0
-    /// return (1 + b) << c
-    /// ```
-    ///
-    /// NOTE: I originally did 1 << (b + c), with the idea rotations is just '1' but shifted,
-    ///       but this is slower ¯\_(ツ)_/¯. (1 + b) << c is 'maginally' faster.
     ///
     /// NOTE: I also tried doing a lookup from `const ROTATION_MAP: [u8; 7] = [1, 2, 2, 2, 4, 4, 4];`
-    ///       but this was slower than the above!
+    ///       but this was slow!
     ///
     /// More fine grained:
     /// ```text
-    /// b = ((x | -x) >> 7) & 1
-    /// c = (x >> 2) & 1
-    /// return (1 + b) << c
+    /// b = 1 + (piece >= 16 && piece < 128)
+    /// c = piece == 1
+    /// return 2 * b - c
     /// ```
     ///
     #[inline(always)]
     pub const fn num_rotations(&self) -> u8 {
-        (1_u8.wrapping_add((self.0 != 0) as u8)) << ((self.0 >> 2) & 1)
+        2u8.wrapping_mul(1u8.wrapping_add(((self.0 & 0b0111_0000) != 0) as u8))
+            .wrapping_sub((self.0 == 0b0000_0001) as u8)
 
-        // // much slower ...
+        // // slightly faster ...
+        // let tz = self.0.trailing_zeros();
+        // (1_u8.wrapping_add((tz != 0) as u8)) << ((tz >> 2) & 1)
+
+        // much slower ...
         // match self.0 {
-        //     0 => 1,
-        //     1..=3 => 2,
-        //     4..=6 => 4,
+        //     // O piece
+        //     0b0000_0001 => 1,
+        //     // I, S, Z pieces
+        //     0b0000_0010 | 0b0000_0100 | 0b0000_1000 => 2,
+        //     // T, L, J pieces
+        //     0b0001_0000 | 0b0010_0000 | 0b0100_0000 => 4,
         //     _ => panic!("Invalid piece"),
         // }
     }
@@ -328,6 +318,19 @@ impl TetrisPiece {
     }
 }
 
+impl Iterator for TetrisPiece {
+    type Item = TetrisPiece;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.is_empty() {
+            None
+        } else {
+            self.0 <<= 1;
+            Some(*self)
+        }
+    }
+}
+
 impl Display for TetrisPiece {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
@@ -368,7 +371,7 @@ impl Display for TetrisPiece {
 /// bags (represented as a u64), we can indicate which 'next'
 /// bags are invalid.
 ///
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TetrisPieceBag(pub u8);
 
 impl Display for TetrisPieceBag {
@@ -393,6 +396,11 @@ impl Default for TetrisPieceBag {
 impl TetrisPieceBag {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    #[inline(always)]
+    pub fn merge(&mut self, other: &Self) {
+        self.0 |= other.0;
     }
 
     #[inline(always)]
@@ -479,8 +487,8 @@ impl ExactSizeIterator for NextBagsIter {}
 /// 18  | 0000 000000 |   22   |   23
 /// 19  | 00 00000000 |   23   |   24
 /// ```
-#[derive(PartialEq, Eq, Debug)]
-pub struct BoardRaw([u8; NUM_BYTES_FOR_BOARD]);
+#[derive(PartialEq, Eq, Debug, Hash, Clone, Ord, PartialOrd)]
+pub struct BoardRaw(pub [u8; NUM_BYTES_FOR_BOARD]);
 
 impl Default for BoardRaw {
     fn default() -> Self {
@@ -692,62 +700,6 @@ impl Clearer for BoardRaw {
             if (chunk & (0x00_00_00_03_FF_00_00_00_u64)) == (0x00_00_00_03_FF_00_00_00_u64) {
                 self.shift_down_from(chunk_base_idx + 3);
             }
-
-            // unsafe {
-            //     if (u16::from_be_bytes(self.play_board[base_idx..base_idx + 2].try_into().unwrap())
-            //         & pack_bytes_u16!(0b1111_1111, 0b1100_0000))
-            //         == pack_bytes_u16!(0b1111_1111, 0b1100_0000)
-            //     {
-            //         *self.play_board.get_unchecked_mut(base_idx) &= !0b1111_1111;
-            //         *self.play_board.get_unchecked_mut(base_idx + 1) &= !0b1100_0000;
-            //     }
-            // }
-
-            // let row_filled =
-            //     ((u16::from_be_bytes(self.play_board[base_idx..base_idx + 2].try_into().unwrap())
-            //         & pack_bytes_u16!(0b1111_1111, 0b1100_0000))
-            //         == pack_bytes_u16!(0b1111_1111, 0b1100_0000)) as u8;
-            // self.play_board[base_idx] &= !(row_filled * 0b1111_1111);
-            // self.play_board[base_idx + 1] &= !(row_filled * 0b1100_0000);
-
-            // unsafe {
-            //     if (u16::from_be_bytes(
-            //         self.play_board[base_idx + 1..base_idx + 3]
-            //             .try_into()
-            //             .unwrap(),
-            //     ) & pack_bytes_u16!(0b0011_1111, 0b1111_0000))
-            //         == pack_bytes_u16!(0b0011_1111, 0b1111_0000)
-            //     {
-            //         *self.play_board.get_unchecked_mut(base_idx + 1) &= !0b0011_1111;
-            //         *self.play_board.get_unchecked_mut(base_idx + 2) &= !0b1111_1100;
-            //     }
-            // }
-
-            // unsafe {
-            //     if (u16::from_be_bytes(
-            //         self.play_board[base_idx + 2..base_idx + 4]
-            //             .try_into()
-            //             .unwrap(),
-            //     ) & pack_bytes_u16!(0b0000_1111, 0b1111_1100))
-            //         == pack_bytes_u16!(0b0000_1111, 0b1111_1100)
-            //     {
-            //         *self.play_board.get_unchecked_mut(base_idx + 2) &= !0b0000_1111;
-            //         *self.play_board.get_unchecked_mut(base_idx + 3) &= !0b1111_1100;
-            //     }
-            // }
-
-            // unsafe {
-            //     if (u16::from_be_bytes(
-            //         self.play_board[base_idx + 3..base_idx + 5]
-            //             .try_into()
-            //             .unwrap(),
-            //     ) & pack_bytes_u16!(0b0000_0011, 0b1111_1111))
-            //         == pack_bytes_u16!(0b0000_0011, 0b1111_1111)
-            //     {
-            //         *self.play_board.get_unchecked_mut(base_idx + 3) &= !0b0000_0011;
-            //         *self.play_board.get_unchecked_mut(base_idx + 4) &= !0b1111_1111;
-            //     }
-            // }
         }
     }
 
@@ -837,8 +789,70 @@ pub struct TetrisBoard {
     pub piece_board: BoardRaw,
 }
 
+impl Hash for TetrisBoard {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.play_board.hash(state);
+    }
+}
+
+impl Clone for TetrisBoard {
+    fn clone(&self) -> Self {
+        Self {
+            play_board: self.play_board.clone(),
+            piece_board: BoardRaw::default(),
+        }
+    }
+}
+
 impl TetrisBoard {
-    pub fn add_piece_top(&mut self, piece: TetrisPiece, rotation: Rotation, col: usize) {
+    #[inline(always)]
+    pub fn loss(&self) -> bool {
+        self.play_board.loss()
+    }
+
+    #[inline(always)]
+    pub fn happy_state(&self) -> bool {
+        // if the row height is <= 4, then we are in a happy state
+        unsafe {
+            let ptr = self.play_board.0.as_ptr();
+
+            // first 16 bytes (12.6 rows)
+            // if any of the first 12.6 rows are filled, then
+            // we are not in a happy state
+            if (ptr as *const u128).read_unaligned() != 0 {
+                return false;
+            }
+
+            // next 3 bytes (2.4 rows)
+            // same thing here
+            if ((ptr.add(16) as *const u64).read_unaligned() & 0xFF_FF_FF_FF_FF_FF_F0_00_u64) != 0 {
+                return false;
+            }
+
+            return true;
+        }
+    }
+
+    pub fn play_piece(&mut self, piece: TetrisPiece, rotation: Rotation, col: u8) {
+        // add piece to top of piece board
+        // this should always be possible
+        self.add_piece_top(piece, rotation, col);
+        for _ in 0..(ROWS_U8 - piece.height(rotation)) {
+            self.piece_board.shift_down();
+            if self.play_board.collides(&self.piece_board) {
+                self.piece_board.shift_up();
+                self.play_board.merge(&self.piece_board);
+                self.piece_board.clear_all();
+                self.play_board.clear_rows();
+                return;
+            }
+        }
+        self.play_board.merge(&self.piece_board);
+        self.piece_board.clear_all();
+        self.play_board.clear_rows();
+    }
+
+    fn add_piece_top(&mut self, piece: TetrisPiece, rotation: Rotation, col: u8) {
         match (piece.0, rotation.0, col) {
             (0b0000_0001, _, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
                 1100000000
@@ -1152,48 +1166,54 @@ impl TetrisBoard {
                 0000000000
             }),
             (0b0000_1000, 1 | 3, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
+                0100000000
+                1100000000
+                1000000000
+                0000000000
+            }),
+            (0b0000_1000, 1 | 3, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
                 0010000000
                 0110000000
                 0100000000
                 0000000000
             }),
-            (0b0000_1000, 1 | 3, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
+            (0b0000_1000, 1 | 3, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
                 0001000000
                 0011000000
                 0010000000
                 0000000000
             }),
-            (0b0000_1000, 1 | 3, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
+            (0b0000_1000, 1 | 3, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
                 0000100000
                 0001100000
                 0001000000
                 0000000000
             }),
-            (0b0000_1000, 1 | 3, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
+            (0b0000_1000, 1 | 3, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
                 0000010000
                 0000110000
                 0000100000
                 0000000000
             }),
-            (0b0000_1000, 1 | 3, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
+            (0b0000_1000, 1 | 3, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
                 0000001000
                 0000011000
                 0000010000
                 0000000000
             }),
-            (0b0000_1000, 1 | 3, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
+            (0b0000_1000, 1 | 3, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
                 0000000100
                 0000001100
                 0000001000
                 0000000000
             }),
-            (0b0000_1000, 1 | 3, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
+            (0b0000_1000, 1 | 3, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
                 0000000010
                 0000000110
                 0000000100
                 0000000000
             }),
-            (0b0000_1000, 1 | 3, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
+            (0b0000_1000, 1 | 3, 8) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
                 0000000001
                 0000000011
                 0000000010
@@ -1399,7 +1419,7 @@ impl TetrisBoard {
                 0000000100
                 0000000000
             }),
-            (0b0001_0000, 4, 8) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
+            (0b0001_0000, 3, 8) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
                 0000000010
                 0000000011
                 0000000010
@@ -1817,25 +1837,8 @@ impl TetrisBoard {
                 0000000011
                 0000000000
             }),
-            _ => unreachable!("Invalid: {:?} {:?} {:?}", piece, rotation, col),
+            _ => unreachable!("Invalid: {} {:?} {:?}", piece, rotation, col),
         }
-    }
-
-    pub fn drop_piece(&mut self, piece: TetrisPiece, rotation: Rotation, col: usize) {
-        // add piece to top of piece board
-        // this should always be possible
-        self.add_piece_top(piece, rotation, col);
-        for _ in 0..(ROWS - piece.height(rotation) as usize) {
-            self.piece_board.shift_down();
-            if self.play_board.collides(&self.piece_board) {
-                self.piece_board.shift_up();
-                self.play_board.merge(&self.piece_board);
-                self.piece_board.clear_all();
-                return;
-            }
-        }
-        self.play_board.merge(&self.piece_board);
-        self.piece_board.clear_all();
     }
 }
 
@@ -1882,20 +1885,44 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_board_raw_ord() {
+        let mut board1 = BoardRaw::default();
+        board1.set_bit(0, 0);
+        let mut board2 = BoardRaw::default();
+        board2.set_bit(0, 1);
+        assert!(board2 < board1);
+
+        // set more lower bits on the 'smaller' board
+        board2.set_bit(0, ROWS - 1);
+        assert!(board2 < board1);
+
+        // two empty boards should be equal
+        let board1 = BoardRaw::default();
+        let board2 = BoardRaw::default();
+        assert!(board1 == board2);
+    }
+
+    #[test]
     fn test_piece_rotations() {
         fn rotations_reference_slow(i: u8) -> u8 {
+            // match i {
+            //     0 => 1,
+            //     1 | 2 | 3 => 2,
+            //     4 | 5 | 6 => 4,
+            //     _ => panic!("Invalid piece"),
+            // }
             match i {
-                0 => 1,
-                1 | 2 | 3 => 2,
-                4 | 5 | 6 => 4,
+                0b0000_0001 => 1,
+                0b0000_0010 | 0b0000_0100 | 0b0000_1000 => 2,
+                0b0001_0000 | 0b0010_0000 | 0b0100_0000 => 4,
                 _ => panic!("Invalid piece"),
             }
         }
         for i in 0..7 {
-            let piece = TetrisPiece(i);
+            let piece = TetrisPiece::new(i);
             assert_eq!(
                 piece.num_rotations(),
-                rotations_reference_slow(i),
+                rotations_reference_slow(piece.0),
                 "Piece: {}, Rotations: {}",
                 piece,
                 piece.num_rotations()
@@ -2455,8 +2482,7 @@ mod tests {
     fn test_drop_piece() {
         // simple case
         let mut board = TetrisBoard::default();
-        board.drop_piece(TetrisPiece::new(0), Rotation(0), 0);
-        println!("{}", board);
+        board.play_piece(TetrisPiece::new(0), Rotation(0), 0);
         assert!(board.play_board.count() == 4);
         assert!(board.play_board.get_bit(0, ROWS - 1));
         assert!(board.play_board.get_bit(1, ROWS - 1));
@@ -2467,8 +2493,8 @@ mod tests {
         for _ in 0..10_000 {
             let piece = TetrisPiece::new(rand::random::<u8>() % 7);
             let rotation = Rotation(rand::random::<u8>() % 4);
-            let col = rand::random::<u8>() % (COLS as u8 - piece.width(rotation));
-            TetrisBoard::default().drop_piece(piece, rotation, col as usize);
+            let col = (rand::random::<u8>()) % ((COLS as u8) - piece.width(rotation));
+            TetrisBoard::default().play_piece(piece, rotation, col);
         }
     }
 }
