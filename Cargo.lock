@@ -659,6 +659,7 @@ dependencies = [
  "criterion",
  "macros",
  "rand",
+ "rayon",
  "tracing",
  "tracing-subscriber",
 ]
