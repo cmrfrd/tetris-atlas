@@ -138,7 +138,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             empty_boards
                 .iter_mut()
                 .zip(pieces_rot_col.iter())
-                .map(|(b, (piece, rotation, col))| b.drop_piece(*piece, *rotation, *col as usize))
+                .map(|(b, (piece, rotation, col))| b.play_piece(*piece, *rotation, *col))
                 .collect::<Vec<_>>()
         })
     });

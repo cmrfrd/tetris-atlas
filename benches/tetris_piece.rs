@@ -4,7 +4,7 @@ use tetris_atlas::tetris_board::{Rotation, TetrisPiece};
 fn criterion_benchmark(c: &mut Criterion) {
     let pieces = black_box(
         (0..10_000)
-            .map(|_| TetrisPiece(rand::random::<u8>() % 7))
+            .map(|_| TetrisPiece::new(rand::random::<u8>() % 7))
             .collect::<Vec<_>>(),
     );
     c.bench_function("num_rotations", |b| {
