@@ -6,6 +6,15 @@ use tetris_atlas::tetris_board::{
 };
 
 fn criterion_benchmark(c: &mut Criterion) {
+    let mut board = BoardRaw::default();
+    c.bench_function("next_mut", |b| {
+        b.iter(|| {
+            for _ in 0..262_143 {
+                board.next_mut();
+            }
+        })
+    });
+
     let mut boards = black_box(
         (0..10_000)
             .map(|_| {
@@ -15,6 +24,10 @@ fn criterion_benchmark(c: &mut Criterion) {
             })
             .collect::<Vec<_>>(),
     );
+
+    c.bench_function("count", |b| {
+        b.iter(|| boards.iter().map(|p| p.count()).collect::<Vec<_>>())
+    });
 
     c.bench_function("clear_filled_rows", |b| {
         b.iter(|| {
@@ -112,10 +125,6 @@ fn criterion_benchmark(c: &mut Criterion) {
                 bag = bag.next_bags().choose(&mut rng).unwrap().0;
             }
         })
-    });
-
-    c.bench_function("count", |b| {
-        b.iter(|| boards.iter().map(|p| p.count()).collect::<Vec<_>>())
     });
 
     let mut empty_boards = black_box(
