@@ -21,6 +21,8 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 macros = { path = "macros" }
 rayon = "1.10.0"
+itertools = "0.14.0"
+borsh = { version = "1.5.5", features = ["derive"] }
 
 [dev-dependencies]
 criterion = "0.5.1"
