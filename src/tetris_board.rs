@@ -1,3 +1,4 @@
+use borsh::{BorshDeserialize, BorshSerialize};
 use macros::{piece_bytes, piece_u64};
 use rand::{Rng, SeedableRng};
 
@@ -24,8 +25,16 @@ pub const NUM_TETRIS_PIECES: usize = 7;
 /// 2 = 180 degrees
 /// 3 = 270 degrees
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, BorshSerialize, BorshDeserialize,
+)]
 pub struct Rotation(pub u8);
+
+impl Default for Rotation {
+    fn default() -> Self {
+        Self(0)
+    }
+}
 
 impl Display for Rotation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -56,8 +65,17 @@ impl Rotation {
 /// 0100_0000 = 64 = J -> 4 rotations
 /// 1000_0000 = 128 = "Empty piece"
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, BorshSerialize, BorshDeserialize,
+)]
 pub struct TetrisPiece(pub u8);
+
+impl Default for TetrisPiece {
+    fn default() -> Self {
+        Self(0b0000_0001)
+    }
+}
+
 impl TetrisPiece {
     pub fn new(piece: u8) -> Self {
         Self(0b0000_0001 << piece)
@@ -371,7 +389,9 @@ impl Display for TetrisPiece {
 /// bags (represented as a u64), we can indicate which 'next'
 /// bags are invalid.
 ///
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, BorshSerialize, BorshDeserialize,
+)]
 pub struct TetrisPieceBag(pub u8);
 
 impl Display for TetrisPieceBag {
@@ -396,6 +416,16 @@ impl Default for TetrisPieceBag {
 impl TetrisPieceBag {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    #[inline(always)]
+    pub fn inc(&mut self) {
+        self.0 += 1;
+    }
+
+    #[inline(always)]
+    pub fn pieces_remaining(&self) -> u8 {
+        self.0.count_ones() as u8
     }
 
     #[inline(always)]
@@ -487,12 +517,31 @@ impl ExactSizeIterator for NextBagsIter {}
 /// 18  | 0000 000000 |   22   |   23
 /// 19  | 00 00000000 |   23   |   24
 /// ```
-#[derive(PartialEq, Eq, Debug, Hash, Clone, Ord, PartialOrd)]
+#[derive(
+    PartialEq, Eq, Debug, Hash, Clone, Copy, Ord, PartialOrd, BorshSerialize, BorshDeserialize,
+)]
 pub struct BoardRaw(pub [u8; NUM_BYTES_FOR_BOARD]);
 
 impl Default for BoardRaw {
     fn default() -> Self {
         Self([0; NUM_BYTES_FOR_BOARD])
+    }
+}
+
+impl Display for BoardRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f)?;
+        write!(f, " {:2} {:2} {:2}| game\n", "r", "a", "b")?;
+        for row in 0..ROWS {
+            let first_byte = row + (row / 4);
+            let second_byte = first_byte + 1;
+            write!(f, "{:2} {:2} {:2} | ", row, first_byte, second_byte)?;
+            for col in 0..COLS {
+                write!(f, "{}", self.get_bit(col, row) as u8)?;
+            }
+            writeln!(f)?;
+        }
+        Ok(())
     }
 }
 
@@ -743,6 +792,13 @@ pub trait Countable {
 
 impl Countable for BoardRaw {
     fn count(&self) -> usize {
+        // unsafe {
+        //     let ptr = self.0.as_ptr();
+        //     ((std::ptr::read_unaligned(ptr as *const u128).count_ones())
+        //         + ((std::ptr::read_unaligned(ptr.add(NUM_BYTES_FOR_BOARD - 16) as *const u128)
+        //             & 0xFFFF_FFFF_FFFF_FFFF_FF00_0000_0000_0000_u128)
+        //             .count_ones())) as usize
+        // }
         self.0
             .iter()
             .fold(0, |acc, &byte| acc + byte.count_ones() as usize)
@@ -783,10 +839,66 @@ impl Losable for BoardRaw {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+impl BoardRaw {
+    pub fn next(&self) -> Self {
+        let mut board = self.clone();
+        board.next_mut();
+        board
+    }
+
+    #[inline(always)]
+    pub fn next_mut(&mut self) {
+        unsafe {
+            let ptr = self.0.as_mut_ptr();
+
+            // First try to increment the last byte (index 24)
+            let last_byte = ptr.add(24);
+            *last_byte = last_byte.read().wrapping_add(1);
+            if *last_byte != 0 {
+                return;
+            }
+
+            // If the last byte overflowed, increment the previous 8 bytes as a u64
+            let chunk64_ptr = ptr.add(16) as *mut u64;
+            let chunk64 = chunk64_ptr.read_unaligned();
+            let new_chunk64 = chunk64.wrapping_add(1);
+            chunk64_ptr.write_unaligned(new_chunk64);
+            if new_chunk64 != 0 {
+                return;
+            }
+
+            // If the u64 chunk overflowed, increment the first 16 bytes as a u128
+            let chunk128_ptr = ptr as *mut u128;
+            let chunk128 = chunk128_ptr.read_unaligned();
+            let new_chunk128 = chunk128.wrapping_add(1);
+            chunk128_ptr.write_unaligned(new_chunk128);
+        }
+
+        // for i in (0..NUM_BYTES_FOR_BOARD).rev() {
+        //     self.0[i] = self.0[i].wrapping_add(1);
+        //     if self.0[i] != 0 {
+        //         break;
+        //     }
+        // }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct TetrisBoard {
     pub play_board: BoardRaw,
     pub piece_board: BoardRaw,
+}
+
+impl PartialOrd for TetrisBoard {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.play_board.cmp(&other.play_board))
+    }
+}
+
+impl Ord for TetrisBoard {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.play_board.cmp(&other.play_board)
+    }
 }
 
 impl Hash for TetrisBoard {
@@ -795,16 +907,14 @@ impl Hash for TetrisBoard {
     }
 }
 
-impl Clone for TetrisBoard {
-    fn clone(&self) -> Self {
+impl TetrisBoard {
+    pub fn from_raw(raw: BoardRaw) -> Self {
         Self {
-            play_board: self.play_board.clone(),
+            play_board: raw,
             piece_board: BoardRaw::default(),
         }
     }
-}
 
-impl TetrisBoard {
     #[inline(always)]
     pub fn loss(&self) -> bool {
         self.play_board.loss()
@@ -1883,6 +1993,35 @@ mod tests {
     use rand::seq::IteratorRandom;
 
     use super::*;
+
+    #[test]
+    fn test_board_count() {
+        let mut board = BoardRaw::default();
+        let mut count = 0;
+        for row in 0..ROWS {
+            for col in 0..COLS {
+                board.set_bit(col, row);
+                count += 1;
+
+                let board_count = board.count();
+                assert_eq!(
+                    count, board_count,
+                    "Count should be {}, not {}\n{}",
+                    count, board_count, board
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_board_next() {
+        let mut board = BoardRaw::default();
+        while board.count() < 8 {
+            board.next_mut();
+        }
+        assert_eq!(board.count(), 8);
+        assert_eq!(board.0[NUM_BYTES_FOR_BOARD - 1], 255);
+    }
 
     #[test]
     fn test_board_raw_ord() {
