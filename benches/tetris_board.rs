@@ -1,17 +1,54 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use rand::seq::{IndexedRandom, IteratorRandom};
+use rand::seq::IteratorRandom;
 use tetris_atlas::tetris_board::{
-    BitSetter, BoardRaw, COLS, Clearer, Collides, Countable, Losable, Mergeable, Rotation,
-    Shiftable, TetrisBoard, TetrisPiece, TetrisPieceBag,
+    BitSetter, BoardRaw, COLS, Clearer, Collides, Column, Countable, Losable, Mergeable,
+    PiecePlacement, Rotation, Shiftable, TetrisBoard, TetrisPiece, TetrisPieceBag,
 };
 
 fn criterion_benchmark(c: &mut Criterion) {
+    let mut bag = TetrisPieceBag::new();
+    c.bench_function("bag_iter", |b| {
+        b.iter(|| {
+            for _ in 0..10_000 {
+                bag = bag.next_bags().next().unwrap().0;
+            }
+        })
+    });
+
+    let mut rng = rand::rng();
+    let mut bag = TetrisPieceBag::new();
+    c.bench_function("bag_iter_random", |b| {
+        b.iter(|| {
+            for _ in 0..10_000 {
+                bag = bag.next_bags().choose(&mut rng).unwrap().0;
+            }
+        })
+    });
+
     let mut board = BoardRaw::default();
     c.bench_function("next_mut", |b| {
         b.iter(|| {
             for _ in 0..262_143 {
                 board.next_mut();
             }
+        })
+    });
+
+    let single_bit_boards = black_box(
+        (0..10_000)
+            .map(|_| {
+                let mut b = TetrisBoard::default();
+                b.play_board.flip_random_bits(1, 42);
+                b
+            })
+            .collect::<Vec<_>>(),
+    );
+    c.bench_function("line_height", |b| {
+        b.iter(|| {
+            single_bit_boards
+                .iter()
+                .map(|p| p.line_height())
+                .collect::<Vec<_>>()
         })
     });
 
@@ -108,25 +145,6 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
-    let mut bag = TetrisPieceBag::new();
-    c.bench_function("bag_iter", |b| {
-        b.iter(|| {
-            for _ in 0..10_000 {
-                bag = bag.next_bags().next().unwrap().0;
-            }
-        })
-    });
-
-    let mut rng = rand::rng();
-    let mut bag = TetrisPieceBag::new();
-    c.bench_function("bag_iter_random", |b| {
-        b.iter(|| {
-            for _ in 0..10_000 {
-                bag = bag.next_bags().choose(&mut rng).unwrap().0;
-            }
-        })
-    });
-
     let mut empty_boards = black_box(
         (0..10_000)
             .map(|_| TetrisBoard::default())
@@ -147,7 +165,13 @@ fn criterion_benchmark(c: &mut Criterion) {
             empty_boards
                 .iter_mut()
                 .zip(pieces_rot_col.iter())
-                .map(|(b, (piece, rotation, col))| b.play_piece(*piece, *rotation, *col))
+                .map(|(b, (piece, rotation, col))| {
+                    b.play_piece(PiecePlacement {
+                        piece: *piece,
+                        rotation: *rotation,
+                        column: Column(*col),
+                    })
+                })
                 .collect::<Vec<_>>()
         })
     });

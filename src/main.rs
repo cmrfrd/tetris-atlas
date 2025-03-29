@@ -1,19 +1,23 @@
+use ascii_table::{Align, AsciiTable};
 use clap::Parser;
+use dashmap::DashSet;
 use itertools::Itertools;
-use rand::{rng, seq::IteratorRandom};
+use num_format::{Locale, ToFormattedString};
+use rand::{rng, seq::IndexedRandom};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::{
-    hash::{DefaultHasher, Hash, Hasher, SipHasher},
+    fmt::Display,
     ops::AddAssign,
     str::FromStr,
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, RwLock,
         atomic::{AtomicBool, Ordering},
     },
+    time::Instant,
 };
 use tetris_atlas::{
-    atlas::{Atlas, AtlasNode, Dfs, TetrisState},
-    tetris_board::{BitSetter, Countable, Shiftable, TetrisBoard},
+    atlas::{Atlas, AtlasNode, AtlasSearch},
+    tetris_board::Countable,
 };
 use tracing::{Level, info};
 
@@ -27,6 +31,87 @@ fn setup_logging(verbosity: u8) -> String {
     level.to_string()
 }
 
+#[derive(Clone)]
+struct Stats {
+    timer: Instant,
+    counters: Vec<Arc<Mutex<usize>>>,
+    visited: Arc<DashSet<AtlasNode>>,
+    atlas: Arc<RwLock<Atlas>>,
+}
+
+impl Stats {
+    fn new(
+        count_counts: usize,
+        visited: Arc<DashSet<AtlasNode>>,
+        atlas: Arc<RwLock<Atlas>>,
+    ) -> Self {
+        let counters = (0..count_counts).map(|_| Arc::new(Mutex::new(0))).collect();
+        Self {
+            timer: Instant::now(),
+            counters,
+            visited,
+            atlas,
+        }
+    }
+
+    fn update(&self, node: &AtlasNode) {
+        let index = node.board.play_board.count() % self.counters.len();
+        let mut counter = self.counters[index].lock().unwrap();
+        *counter += 1;
+    }
+
+    fn print_stats(&self) {
+        let mut ascii_table = AsciiTable::default();
+        ascii_table.set_max_width(40);
+        ascii_table
+            .column(0)
+            .set_header("Stat Item")
+            .set_align(Align::Left);
+        ascii_table
+            .column(1)
+            .set_header("Value")
+            .set_align(Align::Right);
+        let mut data: Vec<Vec<String>> = Vec::with_capacity(2_usize.pow(8));
+
+        let elapsed = self.timer.elapsed();
+        let duration_str = format!(
+            "{}:{:02}:{:02}",
+            elapsed.as_secs() / 3600,
+            (elapsed.as_secs() % 3600) / 60,
+            elapsed.as_secs() % 60
+        );
+        data.push(vec!["Duration".to_string(), duration_str]);
+
+        let total: usize = self
+            .counters
+            .iter()
+            .map(|counter| *counter.lock().unwrap())
+            .sum();
+        data.push(vec![
+            "Total Nodes Counted".to_string(),
+            total.to_formatted_string(&Locale::en),
+        ]);
+
+        let visited_size = self.visited.len();
+        data.push(vec![
+            "Unique Visited Nodes".to_string(),
+            visited_size.to_formatted_string(&Locale::en),
+        ]);
+
+        let atlas_size = self.atlas.read().unwrap().inner.len();
+        data.push(vec![
+            "Atlas Size".to_string(),
+            atlas_size.to_formatted_string(&Locale::en),
+        ]);
+
+        let display_data: Vec<Vec<&dyn Display>> = data
+            .iter()
+            .map(|row| row.iter().map(|s| s as &dyn Display).collect())
+            .collect();
+        ascii_table.print(display_data);
+    }
+}
+
 #[derive(Debug, Parser)]
 enum Commands {
     Run {
@@ -37,13 +122,10 @@ enum Commands {
         max_depth: usize,
     },
     Explore {
-        #[arg(long, help = "Path to the atlas file")]
+        #[arg(short = 'a', long = "atlas-file", help = "Path to the atlas file")]
         atlas_file: String,
     },
-    Play {
-        #[arg(long, default_value = "16", help = "Number of pieces to play")]
-        num_pieces: usize,
-    },
+    Play {},
 }
 
 #[derive(Debug, Parser)]
@@ -60,30 +142,91 @@ fn main() {
     let filter = setup_logging(cli.verbose);
     info!("Debug level: level={}", filter);
     match &cli.command {
-        Commands::Play { num_pieces } => {
-            let mut rng = rng();
-            let mut state = TetrisState::default();
-            println!("Board: {}", state.board);
-            for _ in 0..*num_pieces {
-                let placements = state.all_next_placements();
-                let (new_bag, new_placement) = placements.choose(&mut rng).unwrap();
-                state.board.play_piece(
-                    new_placement.piece,
-                    new_placement.rotation,
-                    new_placement.column.0,
-                );
-                state.bag = new_bag;
+        Commands::Play {} => {
+            let mut current_node = AtlasNode::default();
+            println!("Welcome to Tetris! (Type 'quit' to exit)");
 
-                println!("Board: {}", state.board);
-                println!("Bag: {}", new_bag);
-                println!("Placements: {}", new_placement);
+            loop {
+                // Print current board state
+                println!("\nCurrent Board:");
+                println!("{}", current_node.board);
+                println!("Current Bag: {}", current_node.bag);
 
-                // Wait for user to press Enter before continuing
-                println!("Press Enter to continue...");
+                // Get all possible next moves
+                let next_nodes = current_node.children().collect::<Vec<_>>();
+                if next_nodes.is_empty() {
+                    println!("Game over! No more valid moves.");
+                    break;
+                }
+
+                // Display available information
+                println!("\nCurrent bag: {}", current_node.bag);
+                println!("Enter piece, rotation, and column e.g. 1 0 0 (or 'quit' to exit)");
+
+                // Get user input
                 let mut input = String::new();
                 std::io::stdin()
                     .read_line(&mut input)
                     .expect("Failed to read line");
+
+                let input = input.trim();
+                if input.eq_ignore_ascii_case("quit") || input.eq_ignore_ascii_case("exit") {
+                    println!("Thanks for playing!");
+                    break;
+                }
+
+                // Parse input as piece, rotation, column
+                let parts: Vec<&str> = input.split_whitespace().collect();
+                if parts.len() != 3 {
+                    println!("Invalid input. Please enter three numbers: piece rotation column");
+                    continue;
+                }
+
+                // Parse each part
+                let piece = match parts[0].parse::<usize>() {
+                    Ok(p) => p,
+                    Err(_) => {
+                        println!("Invalid piece number. Please enter a number.");
+                        continue;
+                    }
+                };
+
+                let rotation = match parts[1].parse::<usize>() {
+                    Ok(r) => r,
+                    Err(_) => {
+                        println!("Invalid rotation number. Please enter a number.");
+                        continue;
+                    }
+                };
+
+                let column = match parts[2].parse::<usize>() {
+                    Ok(c) => c,
+                    Err(_) => {
+                        println!("Invalid column number. Please enter a number.");
+                        continue;
+                    }
+                };
+
+                // Find matching placement
+                let next_move = next_nodes.iter().find(|(_, placement)| {
+                    placement.piece.0 == piece as u8
+                        && placement.rotation.0 == rotation as u8
+                        && placement.column.0 == column as u8
+                });
+
+                match next_move {
+                    Some((new_node, placement)) => {
+                        println!(
+                            "\nPlaying: Piece {}, Rotation {}, Column {}",
+                            placement.piece, placement.rotation, placement.column
+                        );
+                        current_node = new_node.clone();
+                    }
+                    None => {
+                        println!("Invalid move. This placement is not possible.");
+                        continue;
+                    }
+                }
             }
         }
         Commands::Explore { atlas_file } => {
@@ -96,73 +239,34 @@ fn main() {
             save_file,
         } => {
             let max_depth: Option<usize> = Some(*max_depth);
-            let root: AtlasNode = AtlasNode {
-                state: TetrisState::default(),
-            };
+            let root: AtlasNode = AtlasNode::default();
+            let atlas_search = AtlasSearch::new(root, max_depth);
 
-            let dfs = Dfs::new(root, max_depth);
-
-            let count_counts = 16;
-            let running_count_counts = (0..count_counts)
-                .map(|_| Arc::new(Mutex::new(0)))
-                .collect::<Vec<_>>();
+            let stats = Stats::new(64, atlas_search.visited.clone(), atlas_search.atlas.clone());
 
             // Launch a background thread to print progress every second
-            let also_visited = dfs.visited.clone();
-            let also_atlas = dfs.atlas.clone();
-            let also_running_count_counts = running_count_counts.clone();
+            let also_stats = stats.clone();
             let progress_running = Arc::new(AtomicBool::new(true));
             let also_progress_running = progress_running.clone();
             let handle = std::thread::spawn(move || {
                 while also_progress_running.load(Ordering::Relaxed) {
                     std::thread::sleep(std::time::Duration::from_secs(3));
-
-                    let total_visited = also_visited.read().unwrap().len();
-                    println!("Total nodes visited: {}", total_visited);
-
-                    let total = also_running_count_counts
-                        .iter()
-                        .map(|mutex| *mutex.lock().unwrap())
-                        .sum::<usize>();
-                    println!("Total nodes processed: {}", total);
-
-                    // get the total size of the atlas
-                    let atlas_size = also_atlas.read().unwrap().inner.len();
-                    println!("Atlas size: {}", atlas_size);
+                    also_stats.print_stats();
                 }
             });
 
-            dfs.clone().into_par_iter().for_each(|n| {
-                running_count_counts[n.node.state.board.play_board.count() % count_counts]
-                    .lock()
-                    .unwrap()
-                    .add_assign(1);
+            let also_stats = stats.clone();
+            atlas_search.clone().into_par_iter().for_each(|n| {
+                also_stats.update(&n.node);
             });
 
             // Signal the thread to exit and wait for it to finish
             progress_running.store(false, Ordering::Relaxed);
             handle.join().unwrap();
 
-            // print total counters
-            let mut total_count = 0;
-            for (i, count) in running_count_counts.iter().enumerate() {
-                println!("Counter {}: {}", i, *count.lock().unwrap());
-                total_count += *count.lock().unwrap();
-            }
-            println!("Total count: {}", total_count);
-
             if let Some(save_file) = save_file {
-                dfs.atlas.write().unwrap().save_atlas(save_file);
+                atlas_search.atlas.write().unwrap().save_atlas(save_file);
             }
-
-            // calc stats of the atlas
-            let also_dfs = dfs.clone();
-            let atlas = also_dfs.atlas.read().unwrap();
-
-            let atlas_size = atlas.inner.len();
-            println!("Atlas size: {}", atlas_size);
-            let num_unique_boards = atlas.inner.iter().map(|e| e.board).unique().count();
-            println!("Number of unique boards: {}", num_unique_boards);
         }
     }
 }

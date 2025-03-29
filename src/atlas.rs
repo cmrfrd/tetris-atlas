@@ -13,13 +13,17 @@ use std::{
 
 use itertools::Itertools;
 
-use crate::tetris_board::{BoardRaw, COLS_U8, Rotation, TetrisBoard, TetrisPiece, TetrisPieceBag};
+use crate::tetris_board::{
+    BoardRaw, COLS_U8, Column, PiecePlacement, Rotation, TetrisBoard, TetrisPiece, TetrisPieceBag,
+};
 use rayon::iter::ParallelIterator;
 use rayon::iter::plumbing::{Folder, Reducer, UnindexedConsumer};
 use rayon::{current_num_threads, join_context};
 use std::iter::Iterator;
 
 use std::range::Bound::{Excluded, Included};
+
+use dashmap::DashSet;
 
 /// An iterator that can be split.
 pub trait SplittableIterator: Iterator + Sized {
@@ -136,7 +140,7 @@ where
     }
 }
 
-impl SplittableIterator for Dfs {
+impl SplittableIterator for AtlasSearch {
     fn split(&mut self) -> Option<Self> {
         let len = self.queue.len();
         if len >= 2 {
@@ -153,9 +157,9 @@ impl SplittableIterator for Dfs {
     }
 }
 
-impl rayon::iter::IntoParallelIterator for Dfs {
+impl rayon::iter::IntoParallelIterator for AtlasSearch {
     type Iter = ParallelSplittableIterator<Self>;
-    type Item = DfsItem;
+    type Item = AtlasSearchItem;
 
     fn into_par_iter(self) -> Self::Iter {
         ParallelSplittableIterator::new(self)
@@ -177,155 +181,59 @@ where
     }
 }
 
+/// The key used to index the tetris atlas composed of (board, bag, placement).
+///
+/// This is all the information needed to calculate the next tetris board.
 #[derive(
-    Debug,
-    Hash,
-    PartialEq,
-    Eq,
-    Clone,
-    Copy,
-    Ord,
-    PartialOrd,
-    Default,
-    BorshSerialize,
-    BorshDeserialize,
+    Debug, Hash, PartialEq, Eq, Clone, Default, PartialOrd, BorshSerialize, BorshDeserialize,
 )]
-pub struct Column(pub u8);
+pub struct AtlasKey(pub BoardRaw, pub TetrisPieceBag, pub PiecePlacement);
 
-impl Display for Column {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Column({})", self.0)
-    }
-}
-
-#[derive(
-    Debug,
-    Hash,
-    PartialEq,
-    Eq,
-    Clone,
-    Copy,
-    Ord,
-    PartialOrd,
-    Default,
-    BorshSerialize,
-    BorshDeserialize,
-)]
-pub struct PiecePlacement {
-    pub piece: TetrisPiece,
-    pub rotation: Rotation,
-    pub column: Column,
-}
-
-impl Display for PiecePlacement {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "PiecePlacement(piece: {}, rotation: {}, column: {})",
-            self.piece, self.rotation, self.column
-        )
-    }
-}
-
-#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Ord, PartialOrd)]
-pub struct TetrisState {
-    pub board: TetrisBoard,
-    pub bag: TetrisPieceBag,
-}
-
-impl Default for TetrisState {
-    fn default() -> Self {
-        Self {
-            board: TetrisBoard::default(),
-            bag: TetrisPieceBag::default(),
+impl Ord for AtlasKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.0.cmp(&other.0) {
+            std::cmp::Ordering::Equal => match self.1.cmp(&other.1) {
+                std::cmp::Ordering::Equal => self.2.cmp(&other.2),
+                ordering => ordering,
+            },
+            ordering => ordering,
         }
     }
-}
-
-impl TetrisState {
-    pub fn all_next_placements(
-        &self,
-    ) -> impl Iterator<Item = (TetrisPieceBag, PiecePlacement)> + '_ {
-        self.bag
-            .next_bags()
-            .flat_map(move |(next_bag, next_piece)| {
-                (0..next_piece.num_rotations()).flat_map(move |r| {
-                    (0..=(COLS_U8 - next_piece.width(Rotation(r)))).map(move |col| {
-                        (
-                            next_bag,
-                            PiecePlacement {
-                                piece: next_piece,
-                                rotation: Rotation(r),
-                                column: Column(col),
-                            },
-                        )
-                    })
-                })
-            })
-    }
-}
-
-#[derive(
-    Debug, Hash, PartialEq, Eq, Clone, Ord, PartialOrd, Default, BorshSerialize, BorshDeserialize,
-)]
-pub struct AtlasKey {
-    pub board: BoardRaw,
-    pub bag: TetrisPieceBag,
-    pub placement: PiecePlacement,
 }
 
 impl AtlasKey {
     pub fn from_board(board: BoardRaw) -> Self {
-        Self {
-            board,
-            bag: TetrisPieceBag::default(),
-            placement: PiecePlacement::default(),
-        }
+        Self(board, TetrisPieceBag::default(), PiecePlacement::default())
     }
 
-    pub fn from_state(state: TetrisState) -> Self {
-        Self {
-            board: state.board.play_board,
-            bag: state.bag,
-            placement: PiecePlacement::default(),
-        }
-    }
-
+    /// Get the range so we can query the atlas for all entries
+    /// that use the same board.
     pub fn board_range_query(&self) -> AtlasKeyRange {
         AtlasKeyRange {
+            start: AtlasKey(
+                self.0.clone(),
+                TetrisPieceBag::default(),
+                PiecePlacement::default(),
+            ),
             end: {
-                let mut also_board = self.board.clone();
-                also_board.next_mut();
-                AtlasKey {
-                    board: also_board,
-                    bag: TetrisPieceBag::default(),
-                    placement: PiecePlacement::default(),
-                }
-            },
-            start: AtlasKey {
-                board: self.board,
-                bag: TetrisPieceBag::default(),
-                placement: PiecePlacement::default(),
+                let mut also_board = self.0;
+                AtlasKey(
+                    *also_board.next_mut(),
+                    TetrisPieceBag::default(),
+                    PiecePlacement::default(),
+                )
             },
         }
     }
 
+    /// Get the range so we can query the atlas for all entries
+    /// that use the same board and bag.
     pub fn board_bag_range_query(&self) -> AtlasKeyRange {
+        let mut bag = self.1.clone();
+        bag.inc();
         AtlasKeyRange {
-            end: {
-                let mut also_bag = self.bag.clone();
-                also_bag.inc();
-                AtlasKey {
-                    board: self.board.clone(),
-                    bag: also_bag,
-                    placement: PiecePlacement::default(),
-                }
-            },
-            start: AtlasKey {
-                board: self.board,
-                bag: self.bag,
-                placement: PiecePlacement::default(),
-            },
+            start: AtlasKey(self.0.clone(), self.1.clone(), PiecePlacement::default()),
+            end: AtlasKey(self.0.clone(), bag, PiecePlacement::default()),
         }
     }
 }
@@ -345,32 +253,37 @@ impl RangeBounds<AtlasKey> for AtlasKeyRange {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Default)]
 pub struct AtlasNode {
-    pub state: TetrisState,
-}
-
-impl Hash for AtlasNode {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.state.board.hash(state);
-    }
+    pub board: TetrisBoard,
+    pub bag: TetrisPieceBag,
 }
 
 impl AtlasNode {
+    pub fn to_key(&self) -> AtlasKey {
+        AtlasKey(self.board.play_board, self.bag, PiecePlacement::default())
+    }
+
+    /// Take the current node, iterate through every
     pub fn children(&self) -> impl Iterator<Item = (AtlasNode, PiecePlacement)> {
-        (!self.state.board.loss())
-            .then(|| self.state.all_next_placements())
+        (!self.board.loss())
+            .then(|| {
+                self.bag
+                    .next_bags()
+                    .flat_map(move |(next_bag, next_piece)| {
+                        PiecePlacement::all_from_piece(next_piece)
+                            .map(move |placement| (next_bag, placement))
+                    })
+            })
             .into_iter()
             .flatten()
             .map(|(next_bag, placement)| {
-                let mut new_board = self.state.board.clone();
-                new_board.play_piece(placement.piece, placement.rotation, placement.column.0);
+                let mut new_board = self.board.clone();
+                new_board.play_piece(placement);
                 (
                     AtlasNode {
-                        state: TetrisState {
-                            board: new_board,
-                            bag: next_bag,
-                        },
+                        board: new_board,
+                        bag: next_bag,
                     },
                     placement,
                 )
@@ -383,13 +296,18 @@ impl AtlasNode {
         queue: &mut VecDeque<(usize, Self, Vec<(AtlasNode, PiecePlacement)>)>,
         path: Vec<(AtlasNode, PiecePlacement)>,
     ) {
-        for (child, placement) in self.children() {
-            queue.push_back((depth, child.clone(), {
-                let mut p = path.clone();
-                p.push((child, placement));
-                p
-            }));
-        }
+        queue.extend(self.children().map(|(child_node, placement)| {
+            let mut p = path.clone();
+            p.push((self.clone(), placement));
+            (depth, child_node, p)
+        }));
+        // for (child_node, placement) in self.children() {
+        //     queue.push_back((depth, child_node, {
+        //         let mut p = path.clone();
+        //         p.push((self.clone(), placement));
+        //         p
+        //     }));
+        // }
     }
 }
 
@@ -448,20 +366,21 @@ impl Atlas {
     }
 
     pub fn interactive_traverse(&self) {
-        let mut current_state = TetrisState::default();
+        let mut current_node = AtlasNode::default();
         loop {
             // get all the next options
-            let query = AtlasKey::from_state(current_state);
+            let query = current_node.to_key();
             let options = self
                 .inner
                 .range(query.board_bag_range_query())
                 .collect_vec();
 
-            println!("Current board: {}", current_state.board);
-            println!("Current bag: {}", current_state.bag);
+            println!("Current board: {}", current_node.board);
+            println!("Current bag: {}", current_node.bag);
             println!("Num options: {}", options.len());
             options.iter().enumerate().for_each(|(i, e)| {
-                println!("Option {}: {}", i, e.placement);
+                let placement = e.2;
+                println!("Option {}: {}", i, placement);
             });
 
             println!("Enter option number: ");
@@ -470,29 +389,37 @@ impl Atlas {
             let input: usize = input.trim().parse().unwrap();
 
             // Create a new TetrisBoard from the BoardRaw
-            current_state.board.play_piece(
-                options[input].placement.piece,
-                options[input].placement.rotation,
-                options[input].placement.column.0,
+            let option = options[input];
+            let placement = option.2;
+            let mut bag = option.1;
+            bag.take(placement.piece);
+            println!("Playing piece: {}", placement.piece);
+            println!("Result bag: {}", bag);
+            current_node.board.play_piece(placement);
+
+            assert!(
+                current_node.bag.contains(placement.piece),
+                "Bag does not contain piece"
             );
+            current_node.bag = bag;
         }
     }
 }
 
 #[derive(Clone)]
-pub struct Dfs {
-    pub visited: Arc<RwLock<HashSet<AtlasNode>>>,
+pub struct AtlasSearch {
+    pub visited: Arc<DashSet<AtlasNode>>,
     pub atlas: Arc<RwLock<Atlas>>,
     pub queue: VecDeque<(usize, AtlasNode, Vec<(AtlasNode, PiecePlacement)>)>,
     pub max_depth: Option<usize>,
 }
 
-impl Dfs {
+impl AtlasSearch {
     pub fn new(root: AtlasNode, max_depth: Option<usize>) -> Self {
-        let visited = Arc::new(RwLock::new(HashSet::new()));
+        let visited = Arc::new(DashSet::new());
         let atlas = Arc::new(RwLock::new(Atlas::new()));
         let mut queue = VecDeque::<(usize, AtlasNode, Vec<(AtlasNode, PiecePlacement)>)>::new();
-        queue.push_back((0, root, Vec::with_capacity(max_depth.unwrap_or(8) + 1)));
+        queue.push_back((0, root, Vec::with_capacity(max_depth.unwrap())));
         Self {
             visited,
             atlas,
@@ -503,14 +430,14 @@ impl Dfs {
 }
 
 #[derive(Debug)]
-pub struct DfsItem {
+pub struct AtlasSearchItem {
     pub depth: usize,
     pub node: AtlasNode,
     pub path: Vec<(AtlasNode, PiecePlacement)>,
 }
 
-impl Iterator for Dfs {
-    type Item = DfsItem;
+impl Iterator for AtlasSearch {
+    type Item = AtlasSearchItem;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -518,70 +445,97 @@ impl Iterator for Dfs {
             Some((depth, node, path)) => {
                 if let Some(max_depth) = self.max_depth {
                     if depth >= max_depth {
-                        return Some(DfsItem { depth, node, path });
+                        return Some(AtlasSearchItem { depth, node, path });
                     }
                 }
 
-                // if we are at a happy node, we add it to the atlas
-                if node.state.board.happy_state() {
-                    let mut atlas = self.atlas.write().unwrap();
-                    path.iter().for_each(|p: &(AtlasNode, PiecePlacement)| {
-                        atlas.inner.insert(AtlasKey {
-                            board: p.0.state.board.play_board,
-                            bag: p.0.state.bag,
-                            placement: p.1,
-                        });
-                    });
-                    self.visited.write().unwrap().insert(node);
-                    // self.visited
-                    //     .write()
-                    //     .unwrap()
-                    //     .extend(path.iter().map(|p| p.0));
-                    node.add_children(depth + 1, &mut self.queue, path.clone());
-                    return Some(DfsItem { depth, node, path });
-                    // return None;s
-                }
-
-                if self.visited.read().unwrap().contains(&node) {
+                if node.board.line_height() > 8 {
                     return None;
                 }
 
-                let in_atlas = self
-                    .atlas
-                    .read()
-                    .unwrap()
-                    .inner
-                    .range(AtlasKey::from_state(node.state).board_bag_range_query())
-                    .next()
-                    .is_some();
-
-                // If the current node being searched is already in the atlas,
-                // we can insert our current path also into the atlas
-                // we then make sure we add all current
-                if in_atlas {
+                // if we are at a happy node, we add it to the atlas
+                if node.board.line_height() <= 4 {
                     let mut atlas = self.atlas.write().unwrap();
-                    path.iter().for_each(|p: &(AtlasNode, PiecePlacement)| {
-                        atlas.inner.insert(AtlasKey {
-                            board: p.0.state.board.play_board,
-                            bag: p.0.state.bag,
-                            placement: p.1,
-                        });
+                    path.iter().for_each(|&(node, placement)| {
+                        atlas
+                            .inner
+                            .insert(AtlasKey(node.board.play_board, node.bag, placement));
                     });
-                    self.visited.write().unwrap().insert(node);
-                    // self.visited
-                    //     .write()
+
+                    // Start a new path from the current node
+                    // self.visited.insert(node);
+                    node.add_children(
+                        0,
+                        &mut self.queue,
+                        Vec::with_capacity(self.max_depth.unwrap()),
+                    );
+                    return Some(AtlasSearchItem { depth, node, path });
+
+                    // let in_atlas = self
+                    //     .atlas
+                    //     .read()
                     //     .unwrap()
-                    //     .extend(path.iter().map(|p| p.0));
-                    node.add_children(depth + 1, &mut self.queue, path.clone());
-                    return Some(DfsItem { depth, node, path });
-                    // return None;
+                    //     .inner
+                    //     .range(node.to_key().board_bag_range_query())
+                    //     .next()
+                    //     .is_some();
+                    // if in_atlas {
+                    //     return None;
+                    // } else {
+                    //     let mut atlas = self.atlas.write().unwrap();
+                    //     path.iter().for_each(|&(node, placement)| {
+                    //         atlas.inner.insert(AtlasKey(
+                    //             node.board.play_board,
+                    //             node.bag,
+                    //             placement,
+                    //         ));
+                    //     });
+
+                    //     // Start a new path from the current node
+                    //     self.visited.insert(node);
+                    //     node.add_children(
+                    //         0,
+                    //         &mut self.queue,
+                    //         Vec::with_capacity(self.max_depth.unwrap()),
+                    //     );
+                    //     return Some(AtlasSearchItem { depth, node, path });
+                    // }
                 }
 
-                // Don't both revisiting explored nodes, someone
-                // else is already exploring this node
-                self.visited.write().unwrap().insert(node);
+                // // If the current node being searched is already in the atlas,
+                // // we can insert our current path also into the atlas
+                // // we then make sure we add all current nodes up to this point
+                // // to the visited set
+                // let in_atlas = self
+                //     .atlas
+                //     .read()
+                //     .unwrap()
+                //     .inner
+                //     .range(AtlasKey::from_state(node.state).board_bag_range_query())
+                //     .next()
+                //     .is_some();
+                // if in_atlas {
+                //     let mut atlas = self.atlas.write().unwrap();
+                //     path.iter().for_each(|p: &(AtlasNode, PiecePlacement)| {
+                //         atlas.inner.insert(AtlasKey {
+                //             board: p.0.state.board.play_board,
+                //             bag: p.0.state.bag,
+                //             placement: p.1,
+                //         });
+                //     });
+                // }
+
+                // if self.visited.contains(&node) {
+                //     return None;
+                // } else {
+                //     self.visited.insert(node);
+                //     node.add_children(depth + 1, &mut self.queue, path.clone());
+                //     return Some(AtlasSearchItem { depth, node, path });
+                // }
+
+                // self.visited.insert(node);
                 node.add_children(depth + 1, &mut self.queue, path.clone());
-                return Some(DfsItem { depth, node, path });
+                return Some(AtlasSearchItem { depth, node, path });
             }
             None => None,
         }
@@ -590,22 +544,19 @@ impl Iterator for Dfs {
 
 #[cfg(test)]
 mod tests {
-    use std::hash::DefaultHasher;
-
     use super::*;
 
     #[test]
-    fn test_atlas_entry() {
-        let state = TetrisState {
-            board: TetrisBoard::default(),
-            bag: TetrisPieceBag::default(),
-        };
-        // for (bag, placement) in state.all_next_placements() {
-        //     println!(
-        //         "bag: {:?}, piece: {:?}, rotation: {:?}, column: {:?}",
-        //         bag, placement.piece, placement.rotation, placement.column
-        //     );
-        // }
-        // println!("Num of placements: {}", state.all_next_placements().count());
+    fn test_atlas_query() {
+        // test ord
+        let a = AtlasKey::default();
+
+        let mut b = AtlasKey::default();
+        b.0 = BoardRaw::default().next();
+        assert!(a < b);
+
+        let mut c = AtlasKey::default();
+        c.0 = BoardRaw::default().next().next();
+        assert!(b < c);
     }
 }
