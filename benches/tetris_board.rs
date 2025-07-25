@@ -1,8 +1,8 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use rand::seq::IteratorRandom;
+use rand::{Rng, seq::IteratorRandom};
 use tetris_atlas::tetris_board::{
-    BitSetter, BoardRaw, COLS, Clearer, Collides, Column, Countable, Losable, Mergeable,
-    PiecePlacement, Rotation, Shiftable, TetrisBoard, TetrisPiece, TetrisPieceBag,
+    BitSetter, Clearer, Mergeable, PiecePlacement, Shiftable, TetrisBoard, TetrisBoardRaw,
+    TetrisPieceBag,
 };
 
 fn criterion_benchmark(c: &mut Criterion) {
@@ -25,7 +25,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
-    let mut board = BoardRaw::default();
+    let mut board = TetrisBoardRaw::default();
     c.bench_function("next_mut", |b| {
         b.iter(|| {
             for _ in 0..262_143 {
@@ -38,7 +38,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         (0..10_000)
             .map(|_| {
                 let mut b = TetrisBoard::default();
-                b.play_board.flip_random_bits(1, 42);
+                b.flip_random_bits(1, &mut rng);
                 b
             })
             .collect::<Vec<_>>(),
@@ -47,7 +47,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.iter(|| {
             single_bit_boards
                 .iter()
-                .map(|p| p.line_height())
+                .map(|p| p.height())
                 .collect::<Vec<_>>()
         })
     });
@@ -55,8 +55,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     let mut boards = black_box(
         (0..10_000)
             .map(|_| {
-                let mut b = BoardRaw::default();
-                b.flip_random_bits(1024, 42);
+                let mut b = TetrisBoardRaw::default();
+                b.flip_random_bits(1024, &mut rng);
                 b
             })
             .collect::<Vec<_>>(),
@@ -93,8 +93,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 
     let mut shift_board = {
-        let mut b = BoardRaw::default();
-        b.flip_random_bits(16, 42);
+        let mut b = TetrisBoardRaw::default();
+        b.flip_random_bits(16, &mut rng);
         b
     };
     c.bench_function("shift_down", |b| {
@@ -106,8 +106,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 
     let mut shift_board = {
-        let mut b = BoardRaw::default();
-        b.flip_random_bits(16, 42);
+        let mut b = TetrisBoardRaw::default();
+        b.flip_random_bits(16, &mut rng);
         b
     };
     c.bench_function("shift_down_from", |b| {
@@ -119,8 +119,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 
     let mut shift_board = {
-        let mut b = BoardRaw::default();
-        b.flip_random_bits(16, 42);
+        let mut b = TetrisBoardRaw::default();
+        b.flip_random_bits(16, &mut rng);
         b
     };
     c.bench_function("shift_up", |b| {
@@ -132,8 +132,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 
     let base = {
-        let mut b = BoardRaw::default();
-        b.flip_random_bits(16, 42);
+        let mut b = TetrisBoardRaw::default();
+        b.flip_random_bits(16, &mut rng);
         b
     };
     c.bench_function("merge", |b| {
@@ -150,28 +150,17 @@ fn criterion_benchmark(c: &mut Criterion) {
             .map(|_| TetrisBoard::default())
             .collect::<Vec<_>>(),
     );
-    let pieces_rot_col = black_box(
-        (0..10_000)
-            .map(|_| {
-                let piece = TetrisPiece::new(rand::random::<u8>() % 7);
-                let rotation = Rotation(rand::random::<u8>() % 4);
-                let col = rand::random::<u8>() % (COLS as u8 - piece.width(rotation));
-                (piece, rotation, col)
-            })
+    let placements = black_box(
+        rng.random_iter::<PiecePlacement>()
+            .take(10_000)
             .collect::<Vec<_>>(),
     );
     c.bench_function("drop", |b| {
         b.iter(|| {
             empty_boards
                 .iter_mut()
-                .zip(pieces_rot_col.iter())
-                .map(|(b, (piece, rotation, col))| {
-                    b.play_piece(PiecePlacement {
-                        piece: *piece,
-                        rotation: *rotation,
-                        column: Column(*col),
-                    })
-                })
+                .zip(placements.iter())
+                .map(|(b, &p)| b.play_piece(p))
                 .collect::<Vec<_>>()
         })
     });
