@@ -14,7 +14,8 @@ use std::{
 use itertools::Itertools;
 
 use crate::tetris_board::{
-    BoardRaw, COLS_U8, Column, PiecePlacement, Rotation, TetrisBoard, TetrisPiece, TetrisPieceBag,
+    COLS_U8, Column, PiecePlacement, Rotation, TetrisBoard, TetrisBoardRaw, TetrisPiece,
+    TetrisPieceBag,
 };
 use rayon::iter::ParallelIterator;
 use rayon::iter::plumbing::{Folder, Reducer, UnindexedConsumer};
@@ -187,7 +188,7 @@ where
 #[derive(
     Debug, Hash, PartialEq, Eq, Clone, Default, PartialOrd, BorshSerialize, BorshDeserialize,
 )]
-pub struct AtlasKey(pub BoardRaw, pub TetrisPieceBag, pub PiecePlacement);
+pub struct AtlasKey(pub TetrisBoardRaw, pub TetrisPieceBag, pub PiecePlacement);
 
 impl Ord for AtlasKey {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
@@ -202,7 +203,7 @@ impl Ord for AtlasKey {
 }
 
 impl AtlasKey {
-    pub fn from_board(board: BoardRaw) -> Self {
+    pub fn from_board(board: TetrisBoardRaw) -> Self {
         Self(board, TetrisPieceBag::default(), PiecePlacement::default())
     }
 
@@ -449,12 +450,12 @@ impl Iterator for AtlasSearch {
                     }
                 }
 
-                if node.board.line_height() > 8 {
+                if node.board.height() > 8 {
                     return None;
                 }
 
                 // if we are at a happy node, we add it to the atlas
-                if node.board.line_height() <= 4 {
+                if node.board.height() <= 4 {
                     let mut atlas = self.atlas.write().unwrap();
                     path.iter().for_each(|&(node, placement)| {
                         atlas
@@ -552,11 +553,11 @@ mod tests {
         let a = AtlasKey::default();
 
         let mut b = AtlasKey::default();
-        b.0 = BoardRaw::default().next();
+        b.0 = TetrisBoardRaw::default().next();
         assert!(a < b);
 
         let mut c = AtlasKey::default();
-        c.0 = BoardRaw::default().next().next();
+        c.0 = TetrisBoardRaw::default().next().next();
         assert!(b < c);
     }
 }

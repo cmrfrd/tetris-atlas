@@ -1,6 +1,6 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use rand::Rng;
-use tetris_atlas::tetris_board::{PiecePlacement, TetrisPiece};
+use tetris_atlas::tetris::{TetrisPiecePlacement, TetrisPiece};
 
 fn criterion_benchmark(c: &mut Criterion) {
     let rng = rand::rng();
@@ -15,16 +15,16 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let rng = rand::rng();
     let placements = black_box(
-        rng.random_iter::<PiecePlacement>()
+        rng.random_iter::<TetrisPiecePlacement>()
             .take(10_000)
-            .map(|p| p.piece_rotation())
+            .map(|p| p.piece_orientation())
             .collect::<Vec<_>>(),
     );
     c.bench_function("width", |b| {
         b.iter(|| {
             placements
                 .iter()
-                .map(|(p, r)| p.width(*r))
+                .map(|(p, o)| p.width(o.rotation))
                 .collect::<Vec<_>>()
         })
     });
@@ -32,7 +32,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.iter(|| {
             placements
                 .iter()
-                .map(|(p, r)| p.height(*r))
+                .map(|(p, o)| p.height(o.rotation))
                 .collect::<Vec<_>>()
         })
     });

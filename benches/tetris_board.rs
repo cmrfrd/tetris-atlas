@@ -1,8 +1,11 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use rand::{Rng, seq::IteratorRandom};
-use tetris_atlas::tetris_board::{
-    BitSetter, Clearer, Mergeable, PiecePlacement, Shiftable, TetrisBoard, TetrisBoardRaw,
-    TetrisPieceBag,
+use rand::{
+    Rng,
+    seq::{IndexedRandom, IteratorRandom},
+};
+use tetris_atlas::tetris::{
+    BitSetter, Clearer, Mergeable, Shiftable, TetrisBoard, TetrisBoardRaw, TetrisGame, TetrisPiece,
+    TetrisPieceBag, TetrisPiecePlacement,
 };
 
 fn criterion_benchmark(c: &mut Criterion) {
@@ -151,7 +154,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             .collect::<Vec<_>>(),
     );
     let placements = black_box(
-        rng.random_iter::<PiecePlacement>()
+        rng.random_iter::<TetrisPiecePlacement>()
             .take(10_000)
             .collect::<Vec<_>>(),
     );
@@ -160,8 +163,81 @@ fn criterion_benchmark(c: &mut Criterion) {
             empty_boards
                 .iter_mut()
                 .zip(placements.iter())
-                .map(|(b, &p)| b.play_piece(p))
+                .map(|(b, &p)| b.apply_piece_placement(p))
                 .collect::<Vec<_>>()
+        })
+    });
+
+    let mut rng = rand::rng();
+    let boards = black_box(
+        (0..10_000)
+            .map(|_| {
+                let mut b = TetrisBoardRaw::default();
+                b.flip_random_bits(1024, &mut rng);
+                b
+            })
+            .collect::<Vec<_>>(),
+    );
+    c.bench_function("to_binary_slice", |b| {
+        b.iter(|| {
+            boards
+                .iter()
+                .map(|b| b.to_binary_slice())
+                .collect::<Vec<_>>()
+        })
+    });
+
+    let binary_slices = black_box(
+        boards
+            .iter()
+            .map(|b| b.to_binary_slice())
+            .collect::<Vec<_>>(),
+    );
+    c.bench_function("from_binary_slice", |b| {
+        b.iter(|| {
+            binary_slices
+                .iter()
+                .map(|b| TetrisBoard::from_binary_slice(*b))
+                .collect::<Vec<_>>()
+        })
+    });
+
+    c.bench_function("placement_index", |b| {
+        b.iter(|| placements.iter().map(|p| p.index()).collect::<Vec<_>>())
+    });
+
+    let rng = rand::rng();
+    let pieces = black_box(
+        rng.random_iter::<TetrisPiece>()
+            .take(10_000)
+            .collect::<Vec<_>>(),
+    );
+    c.bench_function("placements_from_piece", |b| {
+        b.iter(|| {
+            pieces
+                .iter()
+                .map(|p| TetrisPiecePlacement::all_from_piece(*p))
+                .collect::<Vec<_>>()
+        })
+    });
+
+    let mut rng = rand::rng();
+    c.bench_function("play_placements", |b| {
+        let mut counter = 0;
+        let num_games = 100;
+        let mut game = TetrisGame::new_with_seed(123);
+        b.iter(|| {
+            counter = 0;
+            game.reset(None);
+
+            while counter < num_games {
+                let placement = *game.current_placements().choose(&mut rng).unwrap();
+                let is_lost = game.apply_placement(placement);
+                if is_lost.into() {
+                    counter += 1;
+                    game.reset(None);
+                }
+            }
         })
     });
 }
