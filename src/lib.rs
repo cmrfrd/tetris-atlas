@@ -17,16 +17,8 @@ pub mod utils;
 
 pub use hf::*;
 
-pub const ASSERT_LEVEL: u32 = 1;
-pub static ARTIFACT_DIR: &str = "/tmp/tetris-game-transformer";
+// With feature `bench`, expose the benchmark module from its own file.
+#[cfg(feature = "bench")]
+pub mod benches;
 
-/// MurmurHash3 64-bit hash function
-#[inline(always)]
-pub fn fmix64(mut x: u64) -> u64 {
-    x ^= x >> 33;
-    x = x.wrapping_mul(0xff51afd7ed558ccd);
-    x ^= x >> 33;
-    x = x.wrapping_mul(0xc4ceb9fe1a85ec53);
-    x ^= x >> 33;
-    x
-}
+pub const ASSERT_LEVEL: u32 = 1;
