@@ -3,9 +3,8 @@ use std::collections::HashMap;
 use candle_core::{Tensor, Var};
 use candle_nn::{AdamW, Optimizer};
 
-/// Gradient accumulator for Candle, similar to Burn's GradientsAccumulator
-/// This accumulates gradients for individual parameters using their tensor IDs as keys
-/// Uses memory-efficient GPU accumulation to prevent CUDA OOM with high accumulation steps
+/// Gradient accumulator:
+/// Accumulates gradients for individual parameters using their tensor IDs as keys
 pub struct GradientAccumulator {
     accumulated_grads: HashMap<candle_core::TensorId, Tensor>,
     step_count: usize,
