@@ -26,6 +26,7 @@ cuda = ["burn/cuda"]
 candle = ["burn/candle"]
 candle-cuda = ["burn/candle-cuda"]
 candle-cuda-2 = ["candle-core/cuda", "candle-nn/cuda"]
+bench = ["dep:criterion"]
 
 [dependencies]
 anyhow = "1.0.95"
@@ -36,7 +37,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 macros = { path = "macros" }
 rayon = "1.10.0"
 itertools = "0.14.0"
-borsh = { version = "1.5.5", features = ["derive"] }
 dashmap = { version = "6.1.0", features = [] }
 ascii_table = "4.0.6"
 num-format = "0.4.4"
@@ -44,18 +44,15 @@ burn = { version = "0.18.0", features = ["train", "ndarray"] }
 ruint = "1.15.0"
 candle-core = "0.9.1"
 candle-nn = "0.9.1"
+criterion = { version = "0.5.1", optional = true }
 
 [dev-dependencies]
-criterion = "0.5.1"
 
 
 [[bench]]
-name = "tetris_piece"
+name = "benches"
 harness = false
-
-[[bench]]
-name = "tetris_board"
-harness = false
+required-features = ["bench"]
 
 [profile.release]
 lto = "fat"
