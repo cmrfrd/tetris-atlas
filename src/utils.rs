@@ -6,6 +6,30 @@ use std::hint::spin_loop;
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicBool, Ordering};
 
+/// MurmurHash3 64-bit hash function
+#[inline(always)]
+pub fn fmix64(mut x: u64) -> u64 {
+    x ^= x >> 33;
+    x = x.wrapping_mul(0xff51afd7ed558ccd);
+    x ^= x >> 33;
+    x = x.wrapping_mul(0xc4ceb9fe1a85ec53);
+    x ^= x >> 33;
+    x
+}
+
+/// Convert a slice of u8 "bits" (0/1) to a byte.
+#[inline(always)]
+pub const fn bits_to_byte(bits: &[u8; 8]) -> u8 {
+    ((bits[0] & 1) << 7)
+        | ((bits[1] & 1) << 6)
+        | ((bits[2] & 1) << 5)
+        | ((bits[3] & 1) << 4)
+        | ((bits[4] & 1) << 3)
+        | ((bits[5] & 1) << 2)
+        | ((bits[6] & 1) << 1)
+        | (bits[7] & 1)
+}
+
 /// A spin lock for shared-mutual exclusion.
 #[derive(Debug)]
 pub struct SpinLock<T: Debug> {
