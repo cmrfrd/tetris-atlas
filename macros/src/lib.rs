@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{ToTokens, quote};
-use syn::{LitStr, parse_macro_input};
+use syn::parse_macro_input;
 
 /// A macro to pack multiple bytes into a u64 (big-endian order)
 ///
