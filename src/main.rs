@@ -1,7 +1,6 @@
 use clap::Parser;
-use itertools::Itertools;
 use std::str::FromStr;
-use tetris_atlas::{hf, tetris::TetrisPiecePlacement, train};
+use tetris_atlas::train;
 use tracing::{Level, info};
 
 fn setup_logging(verbosity: u8) -> String {
@@ -128,10 +127,6 @@ fn main() {
     info!("Debug level: level={}", filter);
     match &cli.command {
         Commands::Train {} => {
-            // hf::train::train();
-            hf::rl::train();
-        }
-        Commands::Test {} => {
             train::train();
         }
         // Commands::Play {} => {
