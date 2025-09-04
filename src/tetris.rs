@@ -1,41 +1,24 @@
-use borsh::{BorshDeserialize, BorshSerialize};
 use macros::piece_bytes;
 use rand::distr::{Distribution, StandardUniform};
 use rand::{Rng, RngCore};
 use ruint::Uint;
 
+use std::fmt::Display;
 use std::hash::Hash;
 use std::ops::Range;
-use std::{fmt::Display, hash::Hasher};
 
-use crate::fmix64;
-use crate::utils::{HeaplessVec, apply_all};
+use crate::utils::HeaplessVec;
+use crate::utils::{bits_to_byte, fmix64};
 
-pub const ROWS: usize = 24;
-pub const COLS: usize = 10;
-pub const ROWS_U8: u8 = ROWS as u8;
-pub const COLS_U8: u8 = COLS as u8;
-pub const BOARD_SIZE: usize = ROWS * COLS;
-pub const NUM_BYTES_FOR_BOARD: usize = BOARD_SIZE / 8;
-pub const ROW_CHUNK: usize = 4;
-pub const BYTES_PER_ROW_CHUNK: usize = ROW_CHUNK * COLS / 8;
-pub const BYTE_OVERLAP_PER_ROW: usize = COLS - 8;
+const ROWS: usize = 24;
+const COLS: usize = 10;
+const BOARD_SIZE: usize = ROWS * COLS;
+const NUM_BYTES_FOR_BOARD: usize = BOARD_SIZE / 8;
+const ROW_CHUNK: usize = 4;
+const BYTES_PER_ROW_CHUNK: usize = ROW_CHUNK * COLS / 8;
+const NUM_TETRIS_PIECES: usize = 7;
 
 pub const NUM_TETRIS_CELL_STATES: usize = 2;
-pub const NUM_TETRIS_PIECES: usize = 7;
-
-/// Convert a slice of u8 "bits" (0/1) to a byte.
-#[inline(always)]
-const fn bits_to_byte(bits: &[u8; 8]) -> u8 {
-    ((bits[0] & 1) << 7)
-        | ((bits[1] & 1) << 6)
-        | ((bits[2] & 1) << 5)
-        | ((bits[3] & 1) << 4)
-        | ((bits[4] & 1) << 3)
-        | ((bits[5] & 1) << 2)
-        | ((bits[6] & 1) << 1)
-        | (bits[7] & 1)
-}
 
 /// A rotation is an orientation of a tetris piece. For
 /// simplicity, we represent a rotation as a u8. There are
@@ -47,9 +30,7 @@ const fn bits_to_byte(bits: &[u8; 8]) -> u8 {
 /// 2 = 180 degrees
 /// 3 = 270 degrees
 /// ```
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, BorshSerialize, BorshDeserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct Rotation(u8);
 
 impl Default for Rotation {
@@ -87,19 +68,7 @@ impl Rotation {
 /// A column is a single integer representing a column on the tetris board.
 ///
 /// It's pretty self explanatory.
-#[derive(
-    Debug,
-    Hash,
-    PartialEq,
-    Eq,
-    Clone,
-    Copy,
-    Ord,
-    PartialOrd,
-    Default,
-    BorshSerialize,
-    BorshDeserialize,
-)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Ord, PartialOrd, Default)]
 pub struct Column(u8);
 
 impl Display for Column {
@@ -109,7 +78,7 @@ impl Display for Column {
 }
 
 impl Column {
-    pub const MAX: u8 = COLS_U8;
+    pub const MAX: u8 = COLS as u8;
 }
 
 /// A tetris piece is a tetromino. There are only 7 possible tetrominos,
@@ -126,9 +95,7 @@ impl Column {
 /// 0100_0000 = 64  = J -> 4 rotations
 /// 1000_0000 = 128 = "Empty piece"
 /// ```
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, BorshSerialize, BorshDeserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct TetrisPiece(u8);
 
 impl Default for TetrisPiece {
@@ -156,6 +123,20 @@ impl TetrisPiece {
     pub const EMPTY_PIECE: Self = Self(0b1000_0000);
 
     const DEFAULT: Self = Self::O_PIECE;
+
+    /// Get all pieces as a slice.
+    #[inline(always)]
+    pub const fn all() -> [Self; NUM_TETRIS_PIECES] {
+        [
+            Self::O_PIECE,
+            Self::I_PIECE,
+            Self::S_PIECE,
+            Self::Z_PIECE,
+            Self::T_PIECE,
+            Self::L_PIECE,
+            Self::J_PIECE,
+        ]
+    }
 
     /// Create a new tetris piece from a u8 representing the piece.
     ///
@@ -353,20 +334,6 @@ impl TetrisPiece {
             3_u8.wrapping_add(b)
         }
     }
-
-    /// Get all pieces as a slice.
-    #[inline(always)]
-    pub const fn all() -> [Self; NUM_TETRIS_PIECES] {
-        [
-            Self::O_PIECE,
-            Self::I_PIECE,
-            Self::S_PIECE,
-            Self::Z_PIECE,
-            Self::T_PIECE,
-            Self::L_PIECE,
-            Self::J_PIECE,
-        ]
-    }
 }
 
 impl Display for TetrisPiece {
@@ -386,19 +353,7 @@ impl Display for TetrisPiece {
 }
 
 /// A tetris orientation is a rotation & a column.
-#[derive(
-    Debug,
-    Hash,
-    PartialEq,
-    Eq,
-    Clone,
-    Copy,
-    Ord,
-    PartialOrd,
-    Default,
-    BorshSerialize,
-    BorshDeserialize,
-)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Ord, PartialOrd, Default)]
 pub struct TetrisPieceOrientation {
     pub rotation: Rotation,
     pub column: Column,
@@ -435,31 +390,31 @@ impl TetrisPieceOrientation {
 
     pub const NUM_ORIENTATIONS: usize = Self::ALL.len();
 
-    const NUM_ORIENTATIONS_BY_PIECE: [usize; NUM_TETRIS_PIECES] = [
-        TetrisPieceOrientation::num_orientations_from_piece(TetrisPiece::O_PIECE),
-        TetrisPieceOrientation::num_orientations_from_piece(TetrisPiece::I_PIECE),
-        TetrisPieceOrientation::num_orientations_from_piece(TetrisPiece::S_PIECE),
-        TetrisPieceOrientation::num_orientations_from_piece(TetrisPiece::Z_PIECE),
-        TetrisPieceOrientation::num_orientations_from_piece(TetrisPiece::T_PIECE),
-        TetrisPieceOrientation::num_orientations_from_piece(TetrisPiece::L_PIECE),
-        TetrisPieceOrientation::num_orientations_from_piece(TetrisPiece::J_PIECE),
-    ];
+    // const NUM_ORIENTATIONS_BY_PIECE: [usize; NUM_TETRIS_PIECES] = [
+    //     TetrisPieceOrientation::num_orientations_from_piece(TetrisPiece::O_PIECE),
+    //     TetrisPieceOrientation::num_orientations_from_piece(TetrisPiece::I_PIECE),
+    //     TetrisPieceOrientation::num_orientations_from_piece(TetrisPiece::S_PIECE),
+    //     TetrisPieceOrientation::num_orientations_from_piece(TetrisPiece::Z_PIECE),
+    //     TetrisPieceOrientation::num_orientations_from_piece(TetrisPiece::T_PIECE),
+    //     TetrisPieceOrientation::num_orientations_from_piece(TetrisPiece::L_PIECE),
+    //     TetrisPieceOrientation::num_orientations_from_piece(TetrisPiece::J_PIECE),
+    // ];
 
-    /// Get the number of unique orientations for a piece.
-    ///
-    /// O piece: 1 rotation, 9 columns -> 9 orientations
-    const fn num_orientations_from_piece(piece: TetrisPiece) -> usize {
-        let num_rotations = piece.num_rotations();
-        let mut num_orientations = 0;
-        let mut i = 0;
-        while i < num_rotations {
-            let width = piece.width(Rotation(i));
-            let num_placeable_columns = COLS_U8 - width + 1;
-            num_orientations += num_placeable_columns;
-            i += 1;
-        }
-        num_orientations as usize
-    }
+    // /// Get the number of unique orientations for a piece.
+    // ///
+    // /// O piece: 1 rotation, 9 columns -> 9 orientations
+    // const fn num_orientations_from_piece(piece: TetrisPiece) -> usize {
+    //     let num_rotations = piece.num_rotations();
+    //     let mut num_orientations = 0;
+    //     let mut i = 0;
+    //     while i < num_rotations {
+    //         let width = piece.width(Rotation(i));
+    //         let num_placeable_columns = (COLS as u8) - width + 1;
+    //         num_orientations += num_placeable_columns;
+    //         i += 1;
+    //     }
+    //     num_orientations as usize
+    // }
 
     pub const fn new_from_piece(piece: TetrisPiece, rotation: Rotation, column: Column) -> Self {
         let rotation = Rotation(rotation.0 % piece.num_rotations());
@@ -491,7 +446,7 @@ impl TetrisPieceOrientation {
     pub fn binary_mask_from_piece(piece: TetrisPiece) -> [u8; Self::NUM_ORIENTATIONS] {
         let mut mask = [0u8; Self::NUM_ORIENTATIONS];
         for r in 0..piece.num_rotations() {
-            for c in 0..COLS_U8 - piece.width(Rotation(r)) + 1 {
+            for c in 0..(COLS as u8) - piece.width(Rotation(r)) + 1 {
                 let orientation = Self::new_from_piece(piece, Rotation(r), Column(c));
                 mask[orientation.index() as usize] = 1;
             }
@@ -509,19 +464,7 @@ impl TetrisPieceOrientation {
 /// We use this struct to help represent all possible placements
 /// of some piece so we can calculate possible next tetris boards,
 /// and so on.
-#[derive(
-    Debug,
-    Hash,
-    PartialEq,
-    Eq,
-    Clone,
-    Copy,
-    Ord,
-    PartialOrd,
-    Default,
-    BorshSerialize,
-    BorshDeserialize,
-)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Ord, PartialOrd, Default)]
 pub struct TetrisPiecePlacement {
     pub piece: TetrisPiece,
     pub orientation: TetrisPieceOrientation,
@@ -610,7 +553,7 @@ impl TetrisPiecePlacement {
             let piece = all_pieces[i];
             let mut r = 0;
             while r < piece.num_rotations() {
-                total_placements += ((COLS_U8 - piece.width(Rotation(r))) + 1) as usize;
+                total_placements += (((COLS as u8) - piece.width(Rotation(r))) + 1) as usize;
                 r += 1;
             }
             i += 1;
@@ -632,7 +575,7 @@ impl TetrisPiecePlacement {
             let mut r = 0;
             while r < piece.num_rotations() {
                 let mut c = 0;
-                while c <= COLS_U8 - piece.width(Rotation(r)) {
+                while c <= (COLS as u8) - piece.width(Rotation(r)) {
                     placements[placement_id] = Self {
                         piece,
                         orientation: TetrisPieceOrientation {
@@ -783,9 +726,7 @@ impl TetrisPiecePlacement {
 ///
 /// The '-' bit is unused.
 ///
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, BorshSerialize, BorshDeserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct TetrisPieceBag(u8);
 
 impl Display for TetrisPieceBag {
@@ -891,7 +832,7 @@ impl TetrisPieceBag {
         NextBagsIter::new(*self)
     }
 
-    pub fn rand_next(&mut self, rng: &mut TetrisGameRng) -> TetrisPiece {
+    pub(self) fn rand_next(&mut self, rng: &mut TetrisGameRng) -> TetrisPiece {
         if self.is_empty() {
             self.fill();
             return self.rand_next(rng);
@@ -1003,9 +944,7 @@ impl ExactSizeIterator for NextBagsIter {}
 /// 22  | 0000 000000 |   27   |   28
 /// 23  | 00 00000000 |   28   |   29
 /// ```
-#[derive(
-    PartialEq, Eq, Debug, Hash, Clone, Copy, Ord, PartialOrd, BorshSerialize, BorshDeserialize,
-)]
+#[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Ord, PartialOrd)]
 pub struct TetrisBoardRaw([u8; NUM_BYTES_FOR_BOARD]);
 
 pub type TetrisUint = Uint<240, 4>;
@@ -1058,22 +997,28 @@ impl From<TetrisBoardRaw> for TetrisUint {
     }
 }
 
-/// A trait for types that can be shifted up and down,
-/// such as a tetris board..
-pub trait Shiftable {
-    fn shift_up(&mut self);
-    fn shift_down(&mut self);
-    fn shift_down_from(&mut self, row: usize);
-    fn shift_down_by(&mut self, num_rows: usize);
+impl TetrisBoardRaw {
+    pub const SIZE: usize = BOARD_SIZE;
+    pub const WIDTH: usize = COLS;
+    pub const HEIGHT: usize = ROWS;
+    pub const NUM_TETRIS_CELL_STATES: usize = NUM_TETRIS_CELL_STATES;
+
+    const EMPTY_BOARD: Self = Self([0_u8; NUM_BYTES_FOR_BOARD]);
+    const FULL_BOARD: Self = Self([0xFF_u8; NUM_BYTES_FOR_BOARD]);
+    const DEFAULT: Self = Self::EMPTY_BOARD;
 }
 
-impl Shiftable for TetrisBoardRaw {
+/// Implement all the shifting based methods.
+///
+/// These are used for core game logic when a line is cleared
+/// and all rows above are shifted down.
+impl TetrisBoardRaw {
     /// Shift all the rows up by 1.
     /// This is used after we 'drop' a piece and find a collision,
     /// Once a collision is found, we need to shift up the piece
     /// before adding it to the board.
     #[inline(always)]
-    fn shift_up(&mut self) {
+    pub(crate) fn shift_up(&mut self) {
         for i in 0..(NUM_BYTES_FOR_BOARD - 2) {
             self.0[i] = (self.0[i + 1] << 2) | ((self.0[i + 2] & 0b1100_0000) >> 6);
         }
@@ -1084,7 +1029,7 @@ impl Shiftable for TetrisBoardRaw {
     /// Shift all the rows down by 1.
     /// When placing a piece, we progressively shift it down until it
     /// either hits the bottom of the board or collides with another space.
-    fn shift_down(&mut self) {
+    pub(crate) fn shift_down(&mut self) {
         // unsafe {
         //     std::ptr::copy(
         //         self.play_board.as_ptr(),
@@ -1115,7 +1060,7 @@ impl Shiftable for TetrisBoardRaw {
     /// This is used when we want to 'clear' a row.
     /// All the row bits above the given row are shifted down
     /// by 1 row.
-    fn shift_down_from(&mut self, row: usize) {
+    pub(crate) fn shift_down_from(&mut self, row: usize) {
         if row == 0 {
             self.0[0] = 0;
             self.0[1] &= 0b0011_1111;
@@ -1137,44 +1082,34 @@ impl Shiftable for TetrisBoardRaw {
         self.0[1] = self.0[0] >> 2;
         self.0[0] = 0;
     }
+}
 
-    /// Shift the entire 24×10 board down by `num_rows` in one go.
-    ///
-    /// Each row is 10 bits, so we shift right by `num_rows * 10` bits.
+/// Implement all the bit setting based methods.
+///
+/// We use these for fuzzing, benchmarking, and for data augmentation.
+impl TetrisBoardRaw {
     #[inline(always)]
-    fn shift_down_by(&mut self, num_rows: usize) {
-        let bit_shift = (num_rows * COLS) as u32;
-        let mut whole: TetrisUint = TetrisUint::from_be_bytes(self.0);
-        whole >>= bit_shift;
-        self.0 = whole.to_be_bytes();
+    pub const fn get_bit(&self, col: usize, row: usize) -> bool {
+        let (byte_idx, bit_idx) = get_byte_bit_idx(col, row);
+        (self.0[byte_idx] & (1 << bit_idx)) != 0
     }
-}
 
-pub trait BitSetter {
-    fn flip_bit(&mut self, col: usize, row: usize);
-    fn set_bit(&mut self, col: usize, row: usize);
-    fn unset_bit(&mut self, col: usize, row: usize);
-    fn flip_random_bits<R: Rng + ?Sized>(&mut self, num_bits: usize, rng: &mut R);
-}
-
-/// Not perf critical, so we can use a naive implementation.
-impl BitSetter for TetrisBoardRaw {
-    fn flip_bit(&mut self, col: usize, row: usize) {
+    pub(crate) fn flip_bit(&mut self, col: usize, row: usize) {
         let (byte_idx, bit_idx) = get_byte_bit_idx(col, row);
         self.0[byte_idx] ^= 1 << bit_idx;
     }
 
-    fn set_bit(&mut self, col: usize, row: usize) {
+    pub(crate) fn set_bit(&mut self, col: usize, row: usize) {
         let (byte_idx, bit_idx) = get_byte_bit_idx(col, row);
         self.0[byte_idx] |= 1 << bit_idx;
     }
 
-    fn unset_bit(&mut self, col: usize, row: usize) {
+    pub(crate) fn unset_bit(&mut self, col: usize, row: usize) {
         let (byte_idx, bit_idx) = get_byte_bit_idx(col, row);
         self.0[byte_idx] &= !(1 << bit_idx);
     }
 
-    fn flip_random_bits<R: Rng + ?Sized>(&mut self, num_bits: usize, rng: &mut R) {
+    pub(crate) fn flip_random_bits<R: Rng + ?Sized>(&mut self, num_bits: usize, rng: &mut R) {
         for _ in 0..num_bits {
             let col = rng.random_range(0..COLS);
             let row = rng.random_range(0..ROWS);
@@ -1183,17 +1118,35 @@ impl BitSetter for TetrisBoardRaw {
     }
 }
 
-pub trait Mergeable {
-    fn merge(&mut self, other: &Self);
-}
+impl TetrisBoardRaw {
+    /// Clear the entire board by setting all the bits to 0.
+    pub(crate) fn clear_all(&mut self) {
+        *self = Self::DEFAULT;
+    }
 
-impl Mergeable for TetrisBoardRaw {
+    /// Fill the entire board with 1s.
+    pub(crate) fn fill_all(&mut self) {
+        *self = Self::FULL_BOARD;
+    }
+
+    /// Check if the board is clear.
+    #[inline(always)]
+    pub fn is_clear(&self) -> bool {
+        self.0 == Self::DEFAULT.0
+    }
+
+    /// Check if the board is full.
+    #[inline(always)]
+    pub fn is_full(&self) -> bool {
+        self.0 == Self::FULL_BOARD.0
+    }
+
     /// Merge two boards together.
     ///
     /// This is used when we are placing a piece on the board.
     /// After we test a piece collision, we merge the piece board
     /// with the main board.
-    fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) {
         unsafe {
             let src = other.0.as_ptr();
             let dst = self.0.as_mut_ptr();
@@ -1227,20 +1180,10 @@ impl Mergeable for TetrisBoardRaw {
             }
         }
     }
-}
 
-pub trait Clearer {
-    fn clear_rows(&mut self) -> u32;
-    fn clear_all(&mut self);
-    fn fill_all(&mut self);
-    fn is_clear(&self) -> bool;
-    fn is_full(&self) -> bool;
-}
-
-impl Clearer for TetrisBoardRaw {
     /// Whenever a row is full, clear it and settle the rows above it.
     /// Returns the number of lines cleared.
-    fn clear_rows(&mut self) -> u32 {
+    pub(crate) fn clear_rows(&mut self) -> u32 {
         let mut lines_cleared = 0;
 
         for chunk_idx in 0..(NUM_BYTES_FOR_BOARD / BYTES_PER_ROW_CHUNK) {
@@ -1279,77 +1222,6 @@ impl Clearer for TetrisBoardRaw {
         }
 
         lines_cleared
-    }
-
-    /// Clear the entire board by setting all the bits to 0.
-    fn clear_all(&mut self) {
-        *self = Self::DEFAULT;
-    }
-
-    /// Fill the entire board with 1s.
-    fn fill_all(&mut self) {
-        *self = Self::FULL_BOARD;
-    }
-
-    /// Check if the board is clear.
-    #[inline(always)]
-    fn is_clear(&self) -> bool {
-        self.0 == Self::DEFAULT.0
-    }
-
-    /// Check if the board is full.
-    #[inline(always)]
-    fn is_full(&self) -> bool {
-        self.0 == Self::FULL_BOARD.0
-    }
-}
-
-pub trait FromBytes {
-    fn from_bytes(bytes: TetrisBoardRaw) -> Self;
-    fn from_bytes_mut(&mut self, bytes: TetrisBoardRaw);
-}
-
-impl FromBytes for TetrisBoardRaw {
-    fn from_bytes(bytes: TetrisBoardRaw) -> Self {
-        Self(bytes.0)
-    }
-
-    fn from_bytes_mut(&mut self, bytes: TetrisBoardRaw) {
-        *self = Self(bytes.0);
-    }
-}
-
-/// Wrapper type to indicate if the game is lost.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(transparent)]
-pub struct IsLost(bool);
-
-impl IsLost {
-    pub const LOST: Self = Self(true);
-    pub const NOT_LOST: Self = Self(false);
-}
-
-impl Into<bool> for IsLost {
-    fn into(self) -> bool {
-        self.0
-    }
-}
-
-impl TetrisBoardRaw {
-    pub const SIZE: usize = BOARD_SIZE;
-    pub const WIDTH: usize = COLS;
-    pub const HEIGHT: usize = ROWS;
-    pub const NUM_TETRIS_CELL_STATES: usize = NUM_TETRIS_CELL_STATES;
-
-    pub const EMPTY_BOARD: Self = Self([0_u8; NUM_BYTES_FOR_BOARD]);
-    pub const FULL_BOARD: Self = Self([0xFF_u8; NUM_BYTES_FOR_BOARD]);
-    const DEFAULT: Self = Self::EMPTY_BOARD;
-
-    /// Const version of get_bit for use in const contexts
-    #[inline(always)]
-    pub const fn get_bit(&self, col: usize, row: usize) -> bool {
-        let (byte_idx, bit_idx) = get_byte_bit_idx(col, row);
-        (self.0[byte_idx] & (1 << bit_idx)) != 0
     }
 
     /// Count the number of cells / bits set in the board.
@@ -1451,42 +1323,6 @@ impl TetrisBoardRaw {
         }
     }
 
-    pub fn next(&self) -> Self {
-        let mut board = self.clone();
-        board.next_mut();
-        board
-    }
-
-    #[inline(always)]
-    pub fn next_mut(&mut self) -> &mut Self {
-        unsafe {
-            let ptr = self.0.as_mut_ptr();
-
-            // First try to increment the last byte (index 24)
-            let last_byte = ptr.add(24);
-            *last_byte = last_byte.read().wrapping_add(1);
-            if *last_byte != 0 {
-                return self;
-            }
-
-            // If the last byte overflowed, increment the previous 8 bytes as a u64
-            let chunk64_ptr = ptr.add(16) as *mut u64;
-            let chunk64 = chunk64_ptr.read_unaligned();
-            let new_chunk64 = chunk64.wrapping_add(1);
-            chunk64_ptr.write_unaligned(new_chunk64);
-            if new_chunk64 != 0 {
-                return self;
-            }
-
-            // If the u64 chunk overflowed, increment the first 16 bytes as a u128
-            let chunk128_ptr = ptr as *mut u128;
-            let chunk128 = chunk128_ptr.read_unaligned();
-            let new_chunk128 = chunk128.wrapping_add(1);
-            chunk128_ptr.write_unaligned(new_chunk128);
-        }
-        self
-    }
-
     /// Convert the original byte-representation of the board to a
     /// binary slice of 0/1 values.
     ///
@@ -1535,6 +1371,22 @@ impl TetrisBoardRaw {
     }
 }
 
+/// Wrapper type to indicate if the game is lost.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct IsLost(bool);
+
+impl IsLost {
+    pub const LOST: Self = Self(true);
+    pub const NOT_LOST: Self = Self(false);
+}
+
+impl Into<bool> for IsLost {
+    fn into(self) -> bool {
+        self.0
+    }
+}
+
 /// When a placement is applied, we return a `PlacementResult`
 /// This represents what that placement did.
 pub struct PlacementResult {
@@ -1561,45 +1413,12 @@ impl TetrisBoard {
     }
 }
 
-impl PartialOrd for TetrisBoard {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.play_board.cmp(&other.play_board))
-    }
-}
-
-impl Ord for TetrisBoard {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.play_board.cmp(&other.play_board)
-    }
-}
-
-impl Hash for TetrisBoard {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.play_board.hash(state);
-    }
-}
-
 impl Default for TetrisBoard {
     fn default() -> Self {
         Self {
             play_board: TetrisBoardRaw::default(),
             piece_board: TetrisBoardRaw::default(),
         }
-    }
-}
-
-impl BitSetter for TetrisBoard {
-    fn flip_bit(&mut self, c: usize, r: usize) {
-        self.play_board.flip_bit(c, r)
-    }
-    fn set_bit(&mut self, c: usize, r: usize) {
-        self.play_board.set_bit(c, r)
-    }
-    fn unset_bit(&mut self, c: usize, r: usize) {
-        self.play_board.unset_bit(c, r)
-    }
-    fn flip_random_bits<R: Rng + ?Sized>(&mut self, n: usize, r: &mut R) {
-        self.play_board.flip_random_bits(n, r)
     }
 }
 
@@ -1646,11 +1465,6 @@ impl TetrisBoard {
     pub fn loss(&self) -> IsLost {
         self.play_board.loss()
     }
-
-    #[inline(always)]
-    pub fn happy_state(&self) -> bool {
-        self.play_board.height() < 4
-    }
 }
 
 /// Main functions for the TetrisBoard.
@@ -1696,8 +1510,9 @@ impl TetrisBoard {
                 lines_cleared: 0,
             };
         }
+
         self.add_piece_top(placement);
-        for _ in 0..(ROWS_U8 - placement.piece.height(placement.orientation.rotation)) {
+        for _ in 0..((ROWS as u8) - placement.piece.height(placement.orientation.rotation)) {
             self.piece_board.shift_down();
             if self.play_board.collides(&self.piece_board) {
                 self.piece_board.shift_up();
@@ -2880,6 +2695,11 @@ pub struct TetrisGameSet(HeaplessVec<TetrisGame, MAX_GAMES>);
 impl TetrisGameSet {
     /// Create a new TetrisGameSet with N default games.
     pub fn new(num_games: usize) -> Self {
+        debug_assert!(
+            num_games <= MAX_GAMES,
+            "Too many games. MAX_GAMES = {}",
+            MAX_GAMES
+        );
         let mut games = HeaplessVec::new();
         (0..num_games).for_each(|_| games.push(TetrisGame::new()));
         Self(games)
@@ -2975,33 +2795,6 @@ mod tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn test_board_next() {
-        let mut board = TetrisBoardRaw::default();
-        while board.count() < 8 {
-            board.next_mut();
-        }
-        assert_eq!(board.count(), 8);
-    }
-
-    #[test]
-    fn test_board_raw_ord() {
-        let mut board1 = TetrisBoardRaw::default();
-        board1.set_bit(0, 0);
-        let mut board2 = TetrisBoardRaw::default();
-        board2.set_bit(0, 1);
-        assert!(board2 < board1);
-
-        // set more lower bits on the 'smaller' board
-        board2.set_bit(0, ROWS - 1);
-        assert!(board2 < board1);
-
-        // two empty boards should be equal
-        let board1 = TetrisBoardRaw::default();
-        let board2 = TetrisBoardRaw::default();
-        assert!(board1 == board2);
     }
 
     #[test]
@@ -3202,7 +2995,7 @@ mod tests {
 
         // start with the shifted down board with the diagonal of ones
         // and shift from rows above the diagonal. No changes should be made
-        let base_board = TetrisBoardRaw::from_bytes(TetrisBoardRaw(board.0.clone()));
+        let base_board = board.clone();
         for i in 0..COLS {
             board.shift_down_from(i);
             assert_eq!(base_board, board, "Shift down from {} failed", i);
@@ -3438,7 +3231,8 @@ mod tests {
         );
 
         // set the board to all ones
-        board1.from_bytes_mut(TetrisBoardRaw([255; NUM_BYTES_FOR_BOARD]));
+        // and ensure it doesn't collide with an empty board
+        board1.fill_all();
         assert!(
             !board1.collides(&board2),
             "All ones and empty board should not collide"
@@ -3704,7 +3498,7 @@ mod tests {
                 board.play_board.set_bit(i, j);
             }
         }
-        assert_eq!(board.height(), ROWS_U8);
+        assert_eq!(board.height(), ROWS as u8);
 
         // Test that line_height decreases as we clear rows from the bottom
         let mut board = TetrisBoard::default();
@@ -3714,10 +3508,10 @@ mod tests {
                 board.play_board.set_bit(i, j);
             }
         }
-        assert_eq!(board.height(), ROWS_U8);
+        assert_eq!(board.height(), ROWS as u8);
 
         // Shift down and verify line height decreases by 1 each time
-        for expected_height in (0..ROWS_U8).rev() {
+        for expected_height in (0..ROWS as u8).rev() {
             board.play_board.shift_down();
             assert_eq!(board.height(), expected_height);
         }
