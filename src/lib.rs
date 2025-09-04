@@ -6,16 +6,14 @@
 #![feature(iter_array_chunks)]
 
 // pub mod atlas;
-pub mod dataset;
-pub mod hf;
-pub mod infer;
+pub mod data;
+pub mod grad_accum;
 pub mod model;
+pub mod ops;
 pub mod tetris;
 pub mod tetris_explorer;
 pub mod train;
 pub mod utils;
-
-pub use hf::*;
 
 // With feature `bench`, expose the benchmark module from its own file.
 #[cfg(feature = "bench")]
