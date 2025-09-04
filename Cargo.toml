@@ -14,18 +14,8 @@ name = "tetris_atlas"
 path = "src/main.rs"
 
 [features]
-default = ["burn/dataset", "burn/tch"]
-ndarray = ["burn/ndarray"]
-ndarray-blas-accelerate = ["burn/ndarray", "burn/accelerate"]
-ndarray-blas-netlib = ["burn/ndarray", "burn/blas-netlib"]
-ndarray-blas-openblas = ["burn/ndarray", "burn/openblas"]
-tch-cpu = ["burn/tch"]
-tch-gpu = ["burn/tch"]
-wgpu = ["burn/wgpu"]
-cuda = ["burn/cuda"]
-candle = ["burn/candle"]
-candle-cuda = ["burn/candle-cuda"]
-candle-cuda-2 = ["candle-core/cuda", "candle-nn/cuda"]
+default = []
+candle-cuda = ["candle-core/cuda", "candle-nn/cuda"]
 bench = ["dep:criterion"]
 
 [dependencies]
@@ -37,10 +27,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 macros = { path = "macros" }
 rayon = "1.10.0"
 itertools = "0.14.0"
-dashmap = { version = "6.1.0", features = [] }
-ascii_table = "4.0.6"
-num-format = "0.4.4"
-burn = { version = "0.18.0", features = ["train", "ndarray"] }
 ruint = "1.15.0"
 candle-core = "0.9.1"
 candle-nn = "0.9.1"
