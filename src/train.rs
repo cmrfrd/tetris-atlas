@@ -11,11 +11,11 @@ use crate::{
     data::{TetrisBoardsDistTensor, TetrisDatasetGenerator, TetrisPieceTensor},
     grad_accum::GradientAccumulator,
     model::{
-        CausalSelfAttentionConfig, DynamicTanhConfig, MlpConfig,
-        TetrisBoardEncoderTransformerConfig, TetrisGameTransformer,
+        CausalSelfAttentionConfig, DynamicTanhConfig, MlpConfig, TetrisGameTransformer,
         TetrisGameTransformerBlockConfig, TetrisGameTransformerConfig, TetrisPlayerTransformer,
         TetrisPlayerTransformerConfig, TetrisWorldModel, TetrisWorldModelBlockConfig,
         TetrisWorldModelConfig, TetrisWorldModelTokenizer, TetrisWorldModelTokenizerConfig,
+        TetrisWorldModelTokenizerTransformerBlockConfig,
     },
     tetris::{
         NUM_TETRIS_CELL_STATES, TetrisBoardRaw, TetrisPiece, TetrisPieceOrientation,
@@ -36,65 +36,46 @@ pub fn train() {
     let model_vs = VarBuilder::from_varmap(&model_varmap, DType::F32, &device);
 
     let world_model_dim = 32;
-    let board_embedding_dim = 16;
-    let piece_embedding_dim = 8;
-    let placement_embedding_dim = 8;
 
     let tokenizer_cfg = TetrisWorldModelTokenizerConfig {
-        board_encoder_config: TetrisBoardEncoderTransformerConfig {
-            board_embedding_config: (NUM_TETRIS_CELL_STATES, board_embedding_dim),
-            blocks_config: TetrisGameTransformerBlockConfig {
-                dyn_tan_config: DynamicTanhConfig {
-                    alpha_init_value: 1.0,
-                    normalized_shape: board_embedding_dim,
-                },
-                attn_config: CausalSelfAttentionConfig {
-                    d_model: board_embedding_dim,
-                    n_attention_heads: 8,
-                    n_kv_heads: 8,
-                    rope_theta: 10000.0,
-                    max_position_embeddings: TetrisBoardRaw::SIZE,
-                },
-                mlp_config: MlpConfig {
-                    hidden_size: board_embedding_dim,
-                    intermediate_size: 2 * board_embedding_dim,
-                    output_size: board_embedding_dim,
-                },
+        board_embedding_dim: world_model_dim,
+        piece_embedding_dim: world_model_dim,
+        orientation_embedding_dim: world_model_dim,
+        blocks_config: TetrisWorldModelTokenizerTransformerBlockConfig {
+            attn_config: CausalSelfAttentionConfig {
+                d_model: world_model_dim,
+                n_attention_heads: 8,
+                n_kv_heads: 8,
+                rope_theta: 10000.0,
+                max_position_embeddings: TetrisBoardRaw::SIZE,
             },
-            num_blocks: 8,
-            dyn_tanh_1_config: DynamicTanhConfig {
+            dyn_tanh_config: DynamicTanhConfig {
                 alpha_init_value: 1.0,
-                normalized_shape: board_embedding_dim,
+                normalized_shape: world_model_dim,
             },
-            mlp_1_config: MlpConfig {
-                hidden_size: TetrisBoardRaw::SIZE,
-                intermediate_size: 2 * TetrisBoardRaw::SIZE,
-                output_size: 1,
-            },
-            dyn_tanh_2_config: DynamicTanhConfig {
-                alpha_init_value: 1.0,
-                normalized_shape: board_embedding_dim,
-            },
-            mlp_2_config: MlpConfig {
-                hidden_size: board_embedding_dim,
-                intermediate_size: 2 * board_embedding_dim,
-                output_size: board_embedding_dim,
+            mlp_config: MlpConfig {
+                hidden_size: world_model_dim,
+                intermediate_size: 3 * world_model_dim,
+                output_size: world_model_dim,
             },
         },
-        piece_embedding_dim,
-        placement_embedding_dim,
+        num_blocks: 8,
+        num_residuals: 4,
+        dyn_tanh_config: DynamicTanhConfig {
+            alpha_init_value: 1.0,
+            normalized_shape: world_model_dim,
+        },
         token_encoder_config: MlpConfig {
-            hidden_size: (piece_embedding_dim + placement_embedding_dim + board_embedding_dim),
-            intermediate_size: 3
-                * (piece_embedding_dim + placement_embedding_dim + board_embedding_dim),
-            output_size: world_model_dim,
+            hidden_size: TetrisBoardRaw::SIZE,
+            intermediate_size: 3 * world_model_dim,
+            output_size: 1,
         },
     };
 
     let num_blocks = 16;
     let model_cfg = TetrisWorldModelConfig {
         blocks_config: TetrisWorldModelBlockConfig {
-            dyn_tan_config: DynamicTanhConfig {
+            dyn_tanh_config: DynamicTanhConfig {
                 alpha_init_value: 1.0,
                 normalized_shape: world_model_dim,
             },
@@ -117,7 +98,7 @@ pub fn train() {
             intermediate_size: 2 * world_model_dim,
             output_size: TetrisPieceOrientation::NUM_ORIENTATIONS,
         },
-        dyn_tan_config: DynamicTanhConfig {
+        dyn_tanh_config: DynamicTanhConfig {
             alpha_init_value: 1.0,
             normalized_shape: world_model_dim,
         },
@@ -159,7 +140,6 @@ pub fn train() {
             .iter()
             .map(|p| TetrisPieceTensor::from_pieces(p, &device).unwrap())
             .collect::<Vec<TetrisPieceTensor>>();
-        let placement_sequence = datum_sequence.placements;
         let orientation_sequence = datum_sequence.orientations;
 
         // [B, 2+S, D]
@@ -168,7 +148,7 @@ pub fn train() {
                 &goal_board,
                 &board_sequence,
                 &piece_sequence,
-                &placement_sequence,
+                &orientation_sequence,
             )
             .unwrap();
 
@@ -265,7 +245,8 @@ pub fn train() {
         let grad_norm = model_grad_accumulator.gradient_norm().unwrap();
 
         // Backprop + gradient accumulation (train both heads)
-        let loss = (board_loss + orientation_loss).unwrap();
+        // let loss = (board_loss + orientation_loss).unwrap();
+        let loss = board_loss;
         let loss_value = loss.to_scalar::<f32>().unwrap();
 
         // calculate board logits accuracy (mean over all predictions)
