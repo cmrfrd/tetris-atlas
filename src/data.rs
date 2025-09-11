@@ -66,6 +66,7 @@ impl TetrisDatasetGenerator {
     pub fn new() -> Self {
         Self {}
     }
+
     pub fn gen_uniform_sampled_gameset<R: Rng>(
         &self,
         num_piece_range: Range<usize>,
@@ -101,7 +102,7 @@ impl TetrisDatasetGenerator {
         let mut gameset = self.gen_uniform_sampled_gameset(num_piece_range, batch_size, rng)?;
 
         // Now we generate a transition
-        let current_board = TetrisBoardsTensor::from_gameset(gameset, device.clone())?;
+        let current_board = TetrisBoardsTensor::from_gameset(gameset, device)?;
         let (placement, orientation, piece) = {
             let placements = gameset
                 .current_placements()
@@ -111,7 +112,7 @@ impl TetrisDatasetGenerator {
             let pieces = placements.iter().map(|&p| p.piece).collect::<Vec<_>>();
             gameset.apply_placement(&placements);
             (
-                TetrisPiecePlacementTensor::from_placements(&placements, device.clone())
+                TetrisPiecePlacementTensor::from_placements(&placements, device)
                     .expect("Failed to create placement tensor"),
                 TetrisPieceOrientationTensor::from_orientations(
                     &placements
@@ -119,13 +120,13 @@ impl TetrisDatasetGenerator {
                         .map(|&p| p.orientation)
                         .collect::<Vec<_>>()
                         .as_slice(),
-                    device.clone(),
+                    device,
                 )
                 .expect("Failed to create orientation tensor"),
                 pieces,
             )
         };
-        let result_board = TetrisBoardsTensor::from_gameset(gameset, device.clone())?;
+        let result_board = TetrisBoardsTensor::from_gameset(gameset, device)?;
         Ok(TetrisTransition {
             current_board,
             placement,
@@ -154,7 +155,7 @@ impl TetrisDatasetGenerator {
         let mut pieces: Vec<Vec<TetrisPiece>> = Vec::new();
 
         for _ in 0..sequence_length {
-            let current_board = TetrisBoardsTensor::from_gameset(gameset, device.clone())?;
+            let current_board = TetrisBoardsTensor::from_gameset(gameset, device)?;
             current_boards.push(current_board);
 
             let (placement, orientation) = {
@@ -165,15 +166,14 @@ impl TetrisDatasetGenerator {
                     .collect::<Box<[_]>>();
                 pieces.push(placements.iter().map(|&p| p.piece).collect::<Vec<_>>());
                 gameset.apply_placement(&placements);
-                let placement =
-                    TetrisPiecePlacementTensor::from_placements(&placements, device.clone())
-                        .expect("Failed to create placement tensor");
+                let placement = TetrisPiecePlacementTensor::from_placements(&placements, device)
+                    .expect("Failed to create placement tensor");
                 let orientation = TetrisPieceOrientationTensor::from_orientations(
                     &placements
                         .iter()
                         .map(|&p| p.orientation)
                         .collect::<Vec<_>>(),
-                    device.clone(),
+                    device,
                 )
                 .expect("Failed to create orientation tensor");
                 (placement, orientation)
@@ -181,7 +181,7 @@ impl TetrisDatasetGenerator {
             placements.push(placement);
             orientations.push(orientation);
 
-            let result_board = TetrisBoardsTensor::from_gameset(gameset, device.clone())?;
+            let result_board = TetrisBoardsTensor::from_gameset(gameset, device)?;
             result_boards.push(result_board);
         }
 
@@ -205,7 +205,7 @@ pub struct TetrisBoardsTensor(Tensor);
 
 impl TetrisBoardsTensor {
     /// Create a tetris boards tensor from a gameset
-    pub fn from_gameset(games: TetrisGameSet, device: Device) -> Result<Self> {
+    pub fn from_gameset(games: TetrisGameSet, device: &Device) -> Result<Self> {
         let shape = Shape::from_dims(&[games.len(), TetrisBoardRaw::SIZE]);
         let boards = games
             .boards()
@@ -215,18 +215,18 @@ impl TetrisBoardsTensor {
             .flat_map(|board| board.iter())
             .map(|&b| b as u32)
             .collect::<Vec<_>>();
-        let boards = Tensor::from_vec(boards, &shape, &device)?.to_dtype(DType::U32)?;
+        let boards = Tensor::from_vec(boards, &shape, device)?.to_dtype(DType::U32)?;
         Ok(Self(boards))
     }
 
     /// Create a tetris boards tensor from a slice of raw boards
-    pub fn from_boards(boards: &[TetrisBoardRaw], device: Device) -> Result<Self> {
+    pub fn from_boards(boards: &[TetrisBoardRaw], device: &Device) -> Result<Self> {
         let shape = Shape::from_dims(&[boards.len(), TetrisBoardRaw::SIZE]);
         let mut flattened: Vec<u32> = Vec::with_capacity(boards.len() * TetrisBoardRaw::SIZE);
         for board in boards.iter() {
             flattened.extend(board.to_binary_slice().iter().map(|&v| v as u32));
         }
-        let boards = Tensor::from_vec(flattened, &shape, &device)?.to_dtype(DType::U32)?;
+        let boards = Tensor::from_vec(flattened, &shape, device)?.to_dtype(DType::U32)?;
         Ok(Self(boards))
     }
 
@@ -485,11 +485,12 @@ pub struct TetrisPiecePlacementTensor(Tensor);
 
 impl TetrisPiecePlacementTensor {
     /// Convert a list of placements to a tensor
-    /// using the index of the placement
-    pub fn from_placements(placements: &[TetrisPiecePlacement], device: Device) -> Result<Self> {
+    /// using the index of the placement    dyn_tanh: DynamicTanh,
+
+    pub fn from_placements(placements: &[TetrisPiecePlacement], device: &Device) -> Result<Self> {
         let shape = Shape::from_dims(&[placements.len(), 1]);
         let placement_indices: Vec<u8> = placements.iter().map(|p| p.index()).collect();
-        let tensor = Tensor::from_vec(placement_indices, &shape, &device)?;
+        let tensor = Tensor::from_vec(placement_indices, &shape, device)?;
         Ok(Self(tensor))
     }
 
@@ -606,11 +607,11 @@ impl TetrisPieceOrientationTensor {
     /// using the index of the orientation
     pub fn from_orientations(
         orientations: &[TetrisPieceOrientation],
-        device: Device,
+        device: &Device,
     ) -> Result<Self> {
         let shape = Shape::from_dims(&[orientations.len(), 1]);
         let orientation_indices: Vec<u8> = orientations.iter().map(|o| o.index()).collect();
-        let tensor = Tensor::from_vec(orientation_indices, &shape, &device)?;
+        let tensor = Tensor::from_vec(orientation_indices, &shape, device)?;
         Ok(Self(tensor))
     }
 
@@ -701,7 +702,7 @@ impl TetrisPieceOrientationDistTensor {
     /// using the index of the orientation
     pub fn from_orientations(
         orientations: &[TetrisPieceOrientation],
-        device: Device,
+        device: &Device,
     ) -> Result<Self> {
         let base_tensor = TetrisPieceOrientationTensor::from_orientations(orientations, device)?;
         let self_tensor = Self::try_from(base_tensor)?;
@@ -947,7 +948,7 @@ mod test {
             .unwrap();
 
         let recovered_orientations_tensor =
-            TetrisPieceOrientationTensor::from_orientations(&original_orientations, Device::Cpu)
+            TetrisPieceOrientationTensor::from_orientations(&original_orientations, &Device::Cpu)
                 .unwrap();
         let recovered_orientations = recovered_orientations_tensor
             .clone()
@@ -992,7 +993,8 @@ mod test {
             .unwrap();
 
         let recovered_placements_tensor =
-            TetrisPiecePlacementTensor::from_placements(&original_placements, Device::Cpu).unwrap();
+            TetrisPiecePlacementTensor::from_placements(&original_placements, &Device::Cpu)
+                .unwrap();
         let recovered_placements = recovered_placements_tensor
             .clone()
             .into_placements()
@@ -1046,12 +1048,89 @@ mod test {
         let original_boards = original_boards_tensor.clone().into_boards().unwrap();
 
         let recovered_boards_tensor =
-            TetrisBoardsTensor::from_boards(&original_boards, Device::Cpu).unwrap();
+            TetrisBoardsTensor::from_boards(&original_boards, &Device::Cpu).unwrap();
         let recovered_boards = recovered_boards_tensor.clone().into_boards().unwrap();
 
         // Check original / recovered boards equality
         assert_eq!(original_boards, recovered_boards);
-
-        // check the diff of some tensors
     }
+
+    // #[test]
+    // fn test_test() {
+    //     // create a full board
+    //     let rng = rand::rng();
+
+    //     let empty_board = TetrisBoardRaw::default();
+    //     let full_board = *TetrisBoardRaw::default().fill_all();
+    //     let rand_board = *TetrisBoardRaw::default().flip_random_bits(1_000, &mut rand::rng());
+
+    //     // tetris board tensor
+    //     let empty_tetris_board_tensor =
+    //         TetrisBoardsTensor::from_boards(&[empty_board], Device::Cpu).unwrap();
+    //     let empty_tetris_board_tensor_dist =
+    //         TetrisBoardsDistTensor::try_from(empty_tetris_board_tensor).unwrap();
+
+    //     let full_tetris_board_tensor =
+    //         TetrisBoardsTensor::from_boards(&[full_board], Device::Cpu).unwrap();
+    //     let full_tetris_board_tensor_dist =
+    //         TetrisBoardsDistTensor::try_from(full_tetris_board_tensor).unwrap();
+
+    //     let rand_tetris_board_tensor =
+    //         TetrisBoardsTensor::from_boards(&[rand_board], Device::Cpu).unwrap();
+    //     let rand_tetris_board_tensor_dist =
+    //         TetrisBoardsDistTensor::try_from(rand_tetris_board_tensor).unwrap();
+
+    //     let max_entropy_board_tensor_dist = TetrisBoardsDistTensor::try_from(
+    //         Tensor::full(
+    //             0.5f32,
+    //             Shape::from_dims(&[1, TetrisBoardRaw::SIZE, NUM_TETRIS_CELL_STATES]),
+    //             &Device::Cpu,
+    //         )
+    //         .unwrap(),
+    //     )
+    //     .unwrap();
+
+    //     // check the dist is correct
+    //     let dist_empty_full = empty_tetris_board_tensor_dist
+    //         .similarity(&full_tetris_board_tensor_dist)
+    //         .unwrap()
+    //         .to_scalar::<f32>()
+    //         .unwrap();
+    //     println!("dist_empty_full: {}", dist_empty_full);
+
+    //     let dist_empty_rand = empty_tetris_board_tensor_dist
+    //         .similarity(&rand_tetris_board_tensor_dist)
+    //         .unwrap()
+    //         .to_scalar::<f32>()
+    //         .unwrap();
+    //     println!("dist_empty_rand: {}", dist_empty_rand);
+
+    //     let dist_full_rand = full_tetris_board_tensor_dist
+    //         .similarity(&rand_tetris_board_tensor_dist)
+    //         .unwrap()
+    //         .to_scalar::<f32>()
+    //         .unwrap();
+    //     println!("dist_full_rand: {}", dist_full_rand);
+
+    //     let dist_max_entropy_rand = max_entropy_board_tensor_dist
+    //         .similarity(&rand_tetris_board_tensor_dist)
+    //         .unwrap()
+    //         .to_scalar::<f32>()
+    //         .unwrap();
+    //     println!("dist_max_entropy_rand: {}", dist_max_entropy_rand);
+
+    //     let dist_max_entropy_full = max_entropy_board_tensor_dist
+    //         .similarity(&full_tetris_board_tensor_dist)
+    //         .unwrap()
+    //         .to_scalar::<f32>()
+    //         .unwrap();
+    //     println!("dist_max_entropy_full: {}", dist_max_entropy_full);
+
+    //     let dist_max_entropy_empty = max_entropy_board_tensor_dist
+    //         .similarity(&empty_tetris_board_tensor_dist)
+    //         .unwrap()
+    //         .to_scalar::<f32>()
+    //         .unwrap();
+    //     println!("dist_max_entropy_empty: {}", dist_max_entropy_empty);
+    // }
 }
