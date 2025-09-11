@@ -1,10 +1,10 @@
 use crate::{
-    data::{TetrisBoardsDistTensor, TetrisBoardsTensor, TetrisPieceTensor},
+    data::TetrisPieceTensor,
     tetris::{TetrisPiece, TetrisPieceOrientation},
 };
-use anyhow::Result;
-use candle_core::{DType, Tensor};
-use candle_nn::loss::cross_entropy;
+use anyhow::{Result, ensure};
+use candle_core::{DType, Device, Tensor};
+use candle_nn::Embedding;
 
 /// Create the mask over all orientations for a specific piece.
 const PIECE_MASK_LOOKUP: [u8; TetrisPiece::NUM_PIECES * TetrisPieceOrientation::NUM_ORIENTATIONS] = [
@@ -83,37 +83,67 @@ pub fn masked_softmax_2d(x: &Tensor, mask: &Tensor) -> Result<Tensor> {
     Ok(probs.broadcast_mul(&row_nonzero_f32)?)
 }
 
-pub fn board_loss(
-    outputs: &TetrisBoardsDistTensor,
-    targets: &TetrisBoardsTensor,
-) -> Result<Tensor> {
-    let (outputs_batch_size, outputs_seq_len, outputs_states) = outputs.dims3()?;
-    let (targets_batch_size, targets_seq_len) = targets.dims2()?;
-    if outputs_batch_size != targets_batch_size {
-        return Err(anyhow::Error::msg(
-            "board_loss: outputs and targets must have identical shapes",
-        ));
-    }
+/// tril - lower triangular part of the matrix
+/// - `t`:    sequence length
+/// - `device`: device to create the mask on
+/// Returns [t, t] mask; masked entries are exactly 0.
+pub fn triu2d(t: usize, device: &Device) -> Result<Tensor> {
+    let mask = (0..t)
+        .flat_map(|i| (0..t).map(move |j| u8::from(j >= i)))
+        .collect::<Vec<_>>();
+    let mask = Tensor::from_slice(&mask, (t, t), &device)?;
+    Ok(mask)
+}
 
-    let outputs_flat = outputs.reshape(&[outputs_batch_size * outputs_seq_len, outputs_states])?;
-    let targets_flat = targets.reshape(&[targets_batch_size * targets_seq_len])?;
-    let loss = cross_entropy(&outputs_flat, &targets_flat)?;
-    Ok(loss)
+/// Embedding soft forward
+/// - `embedding`: [P, D]
+/// - `dist`: [..., P]
+/// Returns [..., D]
+pub fn embedding_soft_forward(embedding: &Embedding, dist: &Tensor) -> Result<Tensor> {
+    let embeddings = embedding.embeddings();
+
+    let last_dim = dist.dims().last().unwrap();
+    let (in_size, out_size) = embeddings.dims2()?;
+    ensure!(
+        *last_dim == in_size,
+        "Dist last dim {} must equal vocab size {}",
+        last_dim,
+        in_size
+    );
+
+    let dist_rank = dist.rank();
+    ensure!(
+        dist_rank >= 2,
+        "Dist must be 2D or higher, got {}",
+        dist_rank
+    );
+
+    // Broadcast embeddings across leading batch dims of `dist` and batched matmul:
+    // dist: [..., M, P] @ rhs: [..., P, D] => [..., M, D]
+    let batch_ndims = dist_rank - 2;
+    let mut rhs_shape: Vec<usize> = vec![1; batch_ndims];
+    rhs_shape.push(in_size);
+    rhs_shape.push(out_size);
+    let rhs = embeddings.reshape(rhs_shape.as_slice())?;
+    println!("rhs: {:?}", rhs.shape());
+    println!("dist: {:?}", dist.shape());
+    let out = dist.broadcast_matmul(&rhs)?; // [..., D] with second-to-last dim preserved as M
+    Ok(out)
+}
+
+pub fn masked_fill(on_false: &Tensor, mask: &Tensor, on_true: f32) -> Result<Tensor> {
+    let shape = mask.shape();
+    let on_true = Tensor::new(on_true, on_false.device())?.broadcast_as(shape.dims())?;
+    let m = mask.where_cond(&on_true, on_false)?;
+    Ok(m)
 }
 
 /// KL(P || Q) where `p` and `q` are probability distributions along `dim`.
 /// Uses PyTorch-style "batchmean": sum along `dim`, then mean across batches.
 pub fn kl_div<D: candle_core::shape::Dim>(p: &Tensor, q: &Tensor, dim: D) -> Result<Tensor> {
-    let (p_batch_size, p_dim) = p.dims2()?;
-    let (q_batch_size, q_dim) = q.dims2()?;
-    if p_batch_size != q_batch_size {
+    if p.shape() != q.shape() {
         return Err(anyhow::Error::msg(
-            "kl_div: p and q must have identical batch sizes",
-        ));
-    }
-    if p_dim != q_dim {
-        return Err(anyhow::Error::msg(
-            "kl_div: p and q must have identical dimensions",
+            "kl_div: p and q must have identical shapes",
         ));
     }
 
@@ -213,6 +243,15 @@ mod tests {
             assert_eq!(row, &expected_mask);
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_tril2d() -> Result<()> {
+        let mask = triu2d(3, &Device::Cpu)?;
+        let mask_as_vec = mask.to_vec2::<u8>().unwrap();
+        let expected_mask = vec![vec![1, 0, 0], vec![1, 1, 0], vec![1, 1, 1]];
+        assert_eq!(mask_as_vec, expected_mask);
         Ok(())
     }
 }
