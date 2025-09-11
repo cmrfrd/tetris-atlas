@@ -120,7 +120,7 @@ impl TetrisPiece {
     pub const T_PIECE: Self = Self(0b0001_0000);
     pub const L_PIECE: Self = Self(0b0010_0000);
     pub const J_PIECE: Self = Self(0b0100_0000);
-    pub const EMPTY_PIECE: Self = Self(0b1000_0000);
+    pub const NULL_PIECE: Self = Self(0b1000_0000);
 
     const DEFAULT: Self = Self::O_PIECE;
 
@@ -346,13 +346,39 @@ impl Display for TetrisPiece {
             val if val == Self::T_PIECE.0 => write!(f, "T"),
             val if val == Self::L_PIECE.0 => write!(f, "L"),
             val if val == Self::J_PIECE.0 => write!(f, "J"),
-            val if val == Self::EMPTY_PIECE.0 => write!(f, "Empty"),
+            val if val == Self::NULL_PIECE.0 => write!(f, "Empty"),
             _ => panic!("Invalid piece"),
         }
     }
 }
 
-/// A tetris orientation is a rotation & a column.
+/// A Tetris orientation is a (rotation, column) pair; each piece allows only a subset.
+/// Layout per cell (row-major): [O][I][S] / [Z][T][L] / [J][ ][ ]
+///
+/// The "X" cell is reserved for the "null" orientation.
+///
+/// Columns →
+/// Rotations ↓
+/// ```text
+///       0   1   2   3   4   5   6   7   8   9
+///     +---+---+---+---+---+---+---+---+---+---+
+///  0  |OIS|OIS|OIS|OIS|OIS|OIS|OIS|O S|O  |XXX|
+///     |ZTL|ZTL|ZTL|ZTL|ZTL|ZTL|ZTL|ZTL|   |XXX|
+///     |J  |J  |J  |J  |J  |J  |J  |J  |   |XXX|
+///     +---+---+---+---+---+---+---+---+---+---+
+///  1  | IS| IS| IS| IS| IS| IS| IS| IS| IS| I |
+///     |ZTL|ZTL|ZTL|ZTL|ZTL|ZTL|ZTL|ZTL|ZTL|   |
+///     |J  |J  |J  |J  |J  |J  |J  |J  |J  |   |
+///     +---+---+---+---+---+---+---+---+---+---+
+///  2  |  S|  S|  S|  S|  S|  S|  S|  S|   |   |
+///     |ZTL|ZTL|ZTL|ZTL|ZTL|ZTL|ZTL|ZTL|   |   |
+///     |J  |J  |J  |J  |J  |J  |J  |J  |   |   |
+///     +---+---+---+---+---+---+---+---+---+---+
+///  3  |  S|  S|  S|  S|  S|  S|  S|  S|  S|   |
+///     |ZTL|ZTL|ZTL|ZTL|ZTL|ZTL|ZTL|ZTL|ZTL|   |
+///     |J  |J  |J  |J  |J  |J  |J  |J  |J  |   |
+///     +---+---+---+---+---+---+---+---+---+---+
+/// ```
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Ord, PartialOrd, Default)]
 pub struct TetrisPieceOrientation {
     pub rotation: Rotation,
@@ -370,13 +396,20 @@ impl Display for TetrisPieceOrientation {
 }
 
 impl TetrisPieceOrientation {
+    pub const NUM_ORIENTATIONS: usize = Rotation::MAX as usize * Column::MAX as usize;
+
     pub const DEFAULT: Self = Self {
         rotation: Rotation(0),
         column: Column(0),
     };
 
-    pub const ALL: [Self; Rotation::MAX as usize * Column::MAX as usize] = {
-        let mut orientations = [Self::DEFAULT; Rotation::MAX as usize * Column::MAX as usize];
+    pub const NULL_ORIENTATION: Self = Self {
+        rotation: Rotation(0),
+        column: Column(Column::MAX),
+    };
+
+    pub const ALL: [Self; Self::NUM_ORIENTATIONS] = {
+        let mut orientations = [Self::DEFAULT; Self::NUM_ORIENTATIONS];
         let mut i = 0;
         while i < orientations.len() {
             orientations[i] = Self {
@@ -387,8 +420,6 @@ impl TetrisPieceOrientation {
         }
         orientations
     };
-
-    pub const NUM_ORIENTATIONS: usize = Self::ALL.len();
 
     // const NUM_ORIENTATIONS_BY_PIECE: [usize; NUM_TETRIS_PIECES] = [
     //     TetrisPieceOrientation::num_orientations_from_piece(TetrisPiece::O_PIECE),
@@ -970,7 +1001,7 @@ const fn get_row_col_idx(byte_idx: usize, bit_idx: usize) -> (usize, usize) {
 
 impl Default for TetrisBoardRaw {
     fn default() -> Self {
-        Self([0; NUM_BYTES_FOR_BOARD])
+        Self::EMPTY_BOARD
     }
 }
 
@@ -1003,9 +1034,8 @@ impl TetrisBoardRaw {
     pub const HEIGHT: usize = ROWS;
     pub const NUM_TETRIS_CELL_STATES: usize = NUM_TETRIS_CELL_STATES;
 
-    const EMPTY_BOARD: Self = Self([0_u8; NUM_BYTES_FOR_BOARD]);
-    const FULL_BOARD: Self = Self([0xFF_u8; NUM_BYTES_FOR_BOARD]);
-    const DEFAULT: Self = Self::EMPTY_BOARD;
+    pub const EMPTY_BOARD: Self = Self([0_u8; NUM_BYTES_FOR_BOARD]);
+    pub const FULL_BOARD: Self = Self([0xFF_u8; NUM_BYTES_FOR_BOARD]);
 }
 
 /// Implement all the shifting based methods.
@@ -1109,30 +1139,37 @@ impl TetrisBoardRaw {
         self.0[byte_idx] &= !(1 << bit_idx);
     }
 
-    pub(crate) fn flip_random_bits<R: Rng + ?Sized>(&mut self, num_bits: usize, rng: &mut R) {
+    pub(crate) fn flip_random_bits<R: Rng + ?Sized>(
+        &mut self,
+        num_bits: usize,
+        rng: &mut R,
+    ) -> &mut Self {
         for _ in 0..num_bits {
             let col = rng.random_range(0..COLS);
             let row = rng.random_range(0..ROWS);
             self.flip_bit(col, row);
         }
+        self
     }
 }
 
 impl TetrisBoardRaw {
     /// Clear the entire board by setting all the bits to 0.
-    pub(crate) fn clear_all(&mut self) {
-        *self = Self::DEFAULT;
+    pub(crate) fn clear_all(&mut self) -> &mut Self {
+        *self = Self::EMPTY_BOARD;
+        self
     }
 
     /// Fill the entire board with 1s.
-    pub(crate) fn fill_all(&mut self) {
+    pub(crate) fn fill_all(&mut self) -> &mut Self {
         *self = Self::FULL_BOARD;
+        self
     }
 
     /// Check if the board is clear.
     #[inline(always)]
     pub fn is_clear(&self) -> bool {
-        self.0 == Self::DEFAULT.0
+        self == &Self::EMPTY_BOARD
     }
 
     /// Check if the board is full.
@@ -1146,7 +1183,7 @@ impl TetrisBoardRaw {
     /// This is used when we are placing a piece on the board.
     /// After we test a piece collision, we merge the piece board
     /// with the main board.
-    pub(crate) fn merge(&mut self, other: &Self) {
+    pub(crate) fn merge(&mut self, other: &Self) -> &mut Self {
         unsafe {
             let src = other.0.as_ptr();
             let dst = self.0.as_mut_ptr();
@@ -1179,6 +1216,7 @@ impl TetrisBoardRaw {
                 (dst.add(28) as *mut u16).write_unaligned(chunk | existing);
             }
         }
+        self
     }
 
     /// Whenever a row is full, clear it and settle the rows above it.
@@ -1350,7 +1388,7 @@ impl TetrisBoardRaw {
     /// Convert a binary slice to a tetris board. This is the inverse
     /// of `to_binary_slice`.
     pub const fn from_binary_slice(binary_slice: [u8; BOARD_SIZE]) -> Self {
-        let mut board = Self::DEFAULT;
+        let mut board = Self::EMPTY_BOARD;
         let mut byte_idx = 0;
         while byte_idx < NUM_BYTES_FOR_BOARD {
             let base_idx = byte_idx * 8;
