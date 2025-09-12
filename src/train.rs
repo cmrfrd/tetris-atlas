@@ -8,7 +8,10 @@ use candle_nn::{
 use rand::{Rng, distr::Uniform};
 
 use crate::{
-    data::{TetrisBoardsDistTensor, TetrisDatasetGenerator, TetrisPieceTensor},
+    data::{
+        TetrisBoardsDistTensor, TetrisDatasetGenerator, TetrisPiecePlacementDistTensor,
+        TetrisPieceTensor,
+    },
     grad_accum::GradientAccumulator,
     model::{
         CausalSelfAttentionConfig, DynamicTanhConfig, MlpConfig, TetrisGameTransformer,
@@ -17,11 +20,131 @@ use crate::{
         TetrisWorldModelConfig, TetrisWorldModelTokenizer, TetrisWorldModelTokenizerConfig,
         TetrisWorldModelTokenizerTransformerBlockConfig,
     },
+    tensorboard::summary_writer::SummaryWriter,
     tetris::{
         NUM_TETRIS_CELL_STATES, TetrisBoardRaw, TetrisPiece, TetrisPieceOrientation,
         TetrisPiecePlacement,
     },
 };
+
+pub fn train_game_transformer(tensorboard_logdir: String) {
+    println!("Training world model");
+    const NUM_ITERATIONS: usize = 10_000;
+    const BATCH_SIZE: usize = 256;
+
+    const ACCUMULATE_GRADIENTS_STEPS: usize = 8;
+
+    let mut summary_writer = SummaryWriter::new(tensorboard_logdir);
+
+    let device = Device::new_cuda(0).unwrap();
+    let model_varmap = VarMap::new();
+    let model_vs = VarBuilder::from_varmap(&model_varmap, DType::F32, &device);
+
+    let model_dim = 32;
+
+    let game_transformer_cfg = TetrisGameTransformerConfig {
+        board_embedding_config: (NUM_TETRIS_CELL_STATES, model_dim),
+        placement_embedding_config: (TetrisPiecePlacement::NUM_PLACEMENTS, model_dim),
+        num_blocks: 16,
+        num_placement_embedding_residuals: 8,
+        blocks_config: TetrisGameTransformerBlockConfig {
+            attn_config: CausalSelfAttentionConfig {
+                d_model: model_dim,
+                n_attention_heads: 16,
+                n_kv_heads: 16,
+                rope_theta: 10000.0,
+                max_position_embeddings: TetrisBoardRaw::SIZE,
+            },
+            mlp_config: MlpConfig {
+                hidden_size: model_dim,
+                intermediate_size: 2 * model_dim,
+                output_size: model_dim,
+            },
+            dyn_tanh_config: DynamicTanhConfig {
+                alpha_init_value: 1.0,
+                normalized_shape: model_dim,
+            },
+        },
+        dyn_tanh_config: DynamicTanhConfig {
+            alpha_init_value: 1.0,
+            normalized_shape: model_dim,
+        },
+        output_layer_config: (model_dim, NUM_TETRIS_CELL_STATES),
+    };
+
+    let game_transformer = TetrisGameTransformer::init(&model_vs, &game_transformer_cfg).unwrap();
+    let mut game_transformer_optimizer =
+        AdamW::new(model_varmap.all_vars(), ParamsAdamW::default()).unwrap();
+    let game_transformer_params = model_varmap.all_vars();
+    let mut game_transformer_grad_accumulator =
+        GradientAccumulator::new(ACCUMULATE_GRADIENTS_STEPS);
+    println!("Game transformer optimizer and grad accumulator initialized");
+
+    let data_generator = TetrisDatasetGenerator::new();
+    let mut rng = rand::rng();
+
+    for i in 0..NUM_ITERATIONS {
+        let datum = data_generator
+            .gen_uniform_sampled_transition((10..11).into(), BATCH_SIZE, &device, &mut rng)
+            .unwrap();
+
+        let current_board = datum.current_board;
+        let placement = datum.placement;
+
+        let output = game_transformer
+            .forward(&current_board, &placement)
+            .unwrap();
+        let target = datum.result_board;
+
+        let output_flat = output
+            .reshape(&[BATCH_SIZE * TetrisBoardRaw::SIZE, NUM_TETRIS_CELL_STATES])
+            .unwrap();
+        let target_flat = target
+            .reshape(&[BATCH_SIZE * TetrisBoardRaw::SIZE])
+            .unwrap();
+
+        let loss = cross_entropy(&output_flat, &target_flat).unwrap();
+        let loss_value = loss.to_scalar::<f32>().unwrap();
+
+        let board_logits_argmax = output_flat
+            .argmax(D::Minus1)
+            .unwrap()
+            .to_dtype(DType::U32)
+            .unwrap();
+        let correct_mask = board_logits_argmax
+            .eq(&target_flat)
+            .unwrap()
+            .to_dtype(DType::F32)
+            .unwrap();
+        let correct_sum = correct_mask.sum_all().unwrap().to_scalar::<f32>().unwrap();
+        let total_preds = (BATCH_SIZE * TetrisBoardRaw::SIZE) as f32;
+        let board_logits_accuracy = correct_sum / total_preds;
+
+        let grad_norm = game_transformer_grad_accumulator.gradient_norm().unwrap();
+
+        summary_writer.add_scalar("loss", loss_value, i);
+        summary_writer.add_scalar("board_logits_accuracy", board_logits_accuracy, i);
+        summary_writer.add_scalar("grad_norm", grad_norm, i);
+
+        println!(
+            "Iteration {:>6} | loss {:>10.4} | batch_accuracy {:>7.4} | grad_norm {:>10.4}",
+            i, loss_value, board_logits_accuracy, grad_norm
+        );
+
+        let grads = loss.backward().unwrap();
+        game_transformer_grad_accumulator
+            .accumulate(grads, &game_transformer_params)
+            .unwrap();
+
+        let should_step = game_transformer_grad_accumulator
+            .apply_and_reset(&mut game_transformer_optimizer, &game_transformer_params)
+            .unwrap();
+
+        if should_step {
+            println!("Stepping game transformer");
+        }
+    }
+}
 
 pub fn train() {
     println!("Training world model");
@@ -175,6 +298,15 @@ pub fn train() {
         let board_logits_seq = world_model_board_output_logits
             .i((.., 2.., .., ..))
             .unwrap(); // [B, S, T, NUM_STATES]
+        assert_eq!(
+            board_logits_seq.shape().dims(),
+            &[
+                BATCH_SIZE,
+                sequence_length,
+                TetrisBoardRaw::SIZE,
+                NUM_TETRIS_CELL_STATES
+            ]
+        );
 
         // Targets per step: next boards (result_boards[t]) → [B, S, T]
         let target_seq = {
