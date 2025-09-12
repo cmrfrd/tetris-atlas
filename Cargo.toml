@@ -31,9 +31,16 @@ ruint = "1.15.0"
 candle-core = "0.9.1"
 candle-nn = "0.9.1"
 criterion = { version = "0.5.1", optional = true }
+gethostname = "1.0.2"
+image = "0.25.8"
+
+prost = "0.13"
+prost-types = "0.13"
 
 [dev-dependencies]
 
+[build-dependencies]
+prost-build = "0.13"   # code generator that runs at build time
 
 [[bench]]
 name = "benches"
