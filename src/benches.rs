@@ -111,7 +111,11 @@ pub fn tetris_board(c: &mut Criterion) {
     });
 
     c.bench_function("clear_all", |b| {
-        b.iter(|| boards.iter_mut().map(|p| p.clear_all()).collect::<Vec<_>>())
+        b.iter(|| {
+            for board in boards.iter_mut() {
+                black_box(board.clear_all());
+            }
+        })
     });
 
     c.bench_function("collides", |b| {
@@ -169,10 +173,9 @@ pub fn tetris_board(c: &mut Criterion) {
     };
     c.bench_function("merge", |b| {
         b.iter(|| {
-            boards
-                .iter_mut()
-                .map(|p| p.merge(&base))
-                .collect::<Vec<_>>()
+            for board in boards.iter_mut() {
+                black_box(board.merge(&base));
+            }
         })
     });
 
