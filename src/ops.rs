@@ -89,7 +89,7 @@ pub fn masked_softmax_2d(x: &Tensor, mask: &Tensor) -> Result<Tensor> {
 /// Returns [t, t] mask; masked entries are exactly 0.
 pub fn triu2d(t: usize, device: &Device) -> Result<Tensor> {
     let mask = (0..t)
-        .flat_map(|i| (0..t).map(move |j| u8::from(j >= i)))
+        .flat_map(|i| (0..t).map(move |j| u8::from(j > i)))
         .collect::<Vec<_>>();
     let mask = Tensor::from_slice(&mask, (t, t), &device)?;
     Ok(mask)
@@ -250,7 +250,7 @@ mod tests {
     fn test_tril2d() -> Result<()> {
         let mask = triu2d(3, &Device::Cpu)?;
         let mask_as_vec = mask.to_vec2::<u8>().unwrap();
-        let expected_mask = vec![vec![1, 0, 0], vec![1, 1, 0], vec![1, 1, 1]];
+        let expected_mask = vec![vec![0, 1, 1], vec![0, 0, 1], vec![0, 0, 0]];
         assert_eq!(mask_as_vec, expected_mask);
         Ok(())
     }
