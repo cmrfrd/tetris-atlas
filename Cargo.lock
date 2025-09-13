@@ -2570,6 +2570,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tensorboard"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "crc32fast",
+ "gethostname",
+ "image",
+ "prost",
+ "prost-build",
+ "prost-types",
+]
+
+[[package]]
 name = "tetris-atlas"
 version = "0.1.0"
 dependencies = [
@@ -2588,6 +2601,7 @@ dependencies = [
  "rand 0.9.2",
  "rayon",
  "ruint",
+ "tensorboard",
  "tracing",
  "tracing-subscriber",
 ]
