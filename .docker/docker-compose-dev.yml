@@ -5,7 +5,39 @@ services:
     build:
       context: ..
       dockerfile: .docker/Dockerfile.dev
+      args:
+        BASE_FLAVOR: cpu
     volumes:
       - ..:/workspace:Z
     network_mode: 'host'
     entrypoint: sleep infinity
+
+  # tetris_atlas_dev:
+  #   build:
+  #     context: ..
+  #     dockerfile: .docker/Dockerfile.dev
+  #     args:
+  #       BASE_FLAVOR: gpu
+  #       CUDA_IMAGE_TAG: 12.4.0-devel-ubuntu22.04
+  #   volumes:
+  #     - ..:/workspace:Z
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - capabilities: ["gpu"]
+  #   runtime: nvidia
+  #   network_mode: 'host'
+  #   entrypoint: sleep infinity
+
+  tensorboard:
+    build:
+      context: ..
+      dockerfile: .docker/Dockerfile.uv
+      args:
+        TENSORBOARD_VERSION: 2.20.0
+    working_dir: /workspace
+    volumes:
+      - ..:/workspace:Z
+    network_mode: 'host'
+    command: uv tool run tensorboard serve --logdir /workspace/logdir --host 0.0.0.0 --port 6006

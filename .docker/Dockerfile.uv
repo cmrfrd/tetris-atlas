@@ -1,0 +1,11 @@
+ARG TENSORBOARD_VERSION=2.20.0
+ARG UBUNTU_VERSION=22.04
+FROM --platform=amd64 ubuntu:${UBUNTU_VERSION}
+
+ARG UV_VERSION=0.8.17
+
+RUN apt-get update && \
+    apt-get install -y python3 python3-pip && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+RUN python3 -m pip install uv==${UV_VERSION}

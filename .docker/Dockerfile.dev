@@ -1,5 +1,10 @@
 ARG UBUNTU_VERSION=22.04
-FROM --platform=amd64 ubuntu:${UBUNTU_VERSION} as base
+ARG CUDA_IMAGE_TAG=12.4.0-devel-ubuntu22.04
+ARG BASE_FLAVOR=cpu
+
+FROM --platform=amd64 ubuntu:${UBUNTU_VERSION} as cpu_base
+FROM --platform=amd64 nvidia/cuda:${CUDA_IMAGE_TAG} as gpu_base
+FROM ${BASE_FLAVOR}_base as base
 
 ARG USER=user
 ARG USER_UID=1000
