@@ -3,7 +3,7 @@ use std::{collections::HashMap, ops::Deref};
 use candle_core::{D, DType, Device, IndexOp, Shape, Tensor};
 use candle_nn::{
     Conv2d, Conv2dConfig, Embedding, Linear, Module, VarBuilder, conv2d, embedding, linear,
-    ops::softmax_last_dim,
+    linear_no_bias, ops::softmax_last_dim,
 };
 
 use anyhow::{Result, ensure};
@@ -15,7 +15,7 @@ use crate::{
         TetrisPieceOrientationTensor, TetrisPiecePlacementDistTensor, TetrisPiecePlacementTensor,
         TetrisPieceTensor,
     },
-    ops::{create_orientation_mask, embedding_soft_forward, masked_fill, triu2d},
+    ops::{create_orientation_mask, masked_fill, triu2d},
     tetris::{
         NUM_TETRIS_CELL_STATES, TetrisBoardRaw, TetrisPiece, TetrisPieceOrientation,
         TetrisPiecePlacement,

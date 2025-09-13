@@ -111,7 +111,7 @@ enum Commands {
     Test {},
     Train {
         #[arg(long, help = "Path to save the tensorboard logs")]
-        tensorboard_logdir: Option<String>,
+        logdir: Option<String>,
     },
 }
 
@@ -129,14 +129,9 @@ fn main() {
     let filter = setup_logging(cli.verbose);
     info!("Debug level: level={}", filter);
     match &cli.command {
-        Commands::Train { tensorboard_logdir } => {
+        Commands::Train { logdir } => {
             // train::train();
-            train::train_game_transformer(
-                tensorboard_logdir
-                    .as_deref()
-                    .map(|s| s.to_string())
-                    .expect("tensorboard_logdir is required"),
-            );
+            train::train_game_transformer(logdir.clone());
         }
         // Commands::Play {} => {
         //     let mut current_node = AtlasNode::default();

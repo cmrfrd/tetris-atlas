@@ -6,6 +6,7 @@ use candle_nn::{
     loss::{cross_entropy, nll},
 };
 use rand::{Rng, distr::Uniform};
+use tensorboard::summary_writer::SummaryWriter;
 
 use crate::{
     data::{
@@ -20,38 +21,39 @@ use crate::{
         TetrisWorldModelConfig, TetrisWorldModelTokenizer, TetrisWorldModelTokenizerConfig,
         TetrisWorldModelTokenizerTransformerBlockConfig,
     },
-    tensorboard::summary_writer::SummaryWriter,
     tetris::{
         NUM_TETRIS_CELL_STATES, TetrisBoardRaw, TetrisPiece, TetrisPieceOrientation,
         TetrisPiecePlacement,
     },
 };
 
-pub fn train_game_transformer(tensorboard_logdir: String) {
+pub fn train_game_transformer(logdir: Option<String>) {
     println!("Training world model");
     const NUM_ITERATIONS: usize = 10_000;
-    const BATCH_SIZE: usize = 256;
+    const BATCH_SIZE: usize = 16;
 
-    const ACCUMULATE_GRADIENTS_STEPS: usize = 8;
+    const ACCUMULATE_GRADIENTS_STEPS: usize = 16;
 
-    let mut summary_writer = SummaryWriter::new(tensorboard_logdir);
+    let mut summary_writer = logdir.map(|s| SummaryWriter::new(s));
 
-    let device = Device::new_cuda(0).unwrap();
+    // let device = Device::new_cuda(0).unwrap();
+    let device = Device::Cpu;
+
     let model_varmap = VarMap::new();
     let model_vs = VarBuilder::from_varmap(&model_varmap, DType::F32, &device);
 
-    let model_dim = 32;
+    let model_dim = 16;
 
     let game_transformer_cfg = TetrisGameTransformerConfig {
         board_embedding_config: (NUM_TETRIS_CELL_STATES, model_dim),
         placement_embedding_config: (TetrisPiecePlacement::NUM_PLACEMENTS, model_dim),
-        num_blocks: 16,
+        num_blocks: 8,
         num_placement_embedding_residuals: 8,
         blocks_config: TetrisGameTransformerBlockConfig {
             attn_config: CausalSelfAttentionConfig {
                 d_model: model_dim,
-                n_attention_heads: 16,
-                n_kv_heads: 16,
+                n_attention_heads: 8,
+                n_kv_heads: 8,
                 rope_theta: 10000.0,
                 max_position_embeddings: TetrisBoardRaw::SIZE,
             },
@@ -122,9 +124,15 @@ pub fn train_game_transformer(tensorboard_logdir: String) {
 
         let grad_norm = game_transformer_grad_accumulator.gradient_norm().unwrap();
 
-        summary_writer.add_scalar("loss", loss_value, i);
-        summary_writer.add_scalar("board_logits_accuracy", board_logits_accuracy, i);
-        summary_writer.add_scalar("grad_norm", grad_norm, i);
+        summary_writer
+            .as_mut()
+            .map(|s| s.add_scalar("loss", loss_value, i));
+        summary_writer
+            .as_mut()
+            .map(|s| s.add_scalar("board_logits_accuracy", board_logits_accuracy, i));
+        summary_writer
+            .as_mut()
+            .map(|s| s.add_scalar("grad_norm", grad_norm, i));
 
         println!(
             "Iteration {:>6} | loss {:>10.4} | batch_accuracy {:>7.4} | grad_norm {:>10.4}",
