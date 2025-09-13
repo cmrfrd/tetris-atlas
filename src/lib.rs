@@ -9,8 +9,6 @@ pub mod data;
 pub mod grad_accum;
 pub mod model;
 pub mod ops;
-pub mod tensorboard;
-pub mod tensorboard_generated;
 pub mod tetris;
 pub mod tetris_explorer;
 pub mod train;
