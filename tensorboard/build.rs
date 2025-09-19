@@ -1,6 +1,13 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+// File paths and directories
+const DOWNLOAD_SCRIPT_PATH: &str = "../scripts/download_tensorboard_protos.sh";
+const GENERATED_DIR: &str = "src/tensorboard_generated";
+const TENSORBOARD_TMP_DIR: &str = "/tmp/tensorboard";
+const PROTO_SUBPATH: &[&str] = &["tensorboard", "compat", "proto"];
+const MOD_FILE_NAME: &str = "mod.rs";
+
 fn dedent(input: &str) -> String {
     let lines: Vec<&str> = input.lines().collect();
     let min_indent = lines
@@ -79,7 +86,7 @@ fn generate_mod_file(generated_dir: &PathBuf) -> Result<(), Box<dyn std::error::
         .filter_map(|entry| {
             let entry = entry.ok()?;
             let path = entry.path();
-            if path.extension()? == "rs" && path.file_name()? != "mod.rs" {
+            if path.extension()? == "rs" && path.file_name()? != MOD_FILE_NAME {
                 let stem = path.file_stem()?.to_str()?;
                 Some((stem.to_string(), stem.replace(".", "_")))
             } else {
@@ -89,16 +96,16 @@ fn generate_mod_file(generated_dir: &PathBuf) -> Result<(), Box<dyn std::error::
         .collect::<Vec<_>>();
     let mod_content = build_mod_content(&generated_files);
 
-    let mod_rs_path = generated_dir.join("mod.rs");
+    let mod_rs_path = generated_dir.join(MOD_FILE_NAME);
     std::fs::write(&mod_rs_path, mod_content)?;
     Ok(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("cargo:rerun-if-changed=../scripts/download_tensorboard_protos.sh");
+    println!("cargo:rerun-if-changed={}", DOWNLOAD_SCRIPT_PATH);
 
     let output = Command::new("bash")
-        .arg("../scripts/download_tensorboard_protos.sh")
+        .arg(DOWNLOAD_SCRIPT_PATH)
         .output()
         .expect("Failed to execute download script");
     if !output.status.success() {
@@ -108,12 +115,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let generated_dir = PathBuf::from("src/tensorboard_generated");
-    let tensorboard_dir = PathBuf::from("/tmp/tensorboard");
-    let proto_path = tensorboard_dir
-        .join("tensorboard")
-        .join("compat")
-        .join("proto");
+    let generated_dir = PathBuf::from(GENERATED_DIR);
+    let tensorboard_dir = PathBuf::from(TENSORBOARD_TMP_DIR);
+    let proto_path = PROTO_SUBPATH
+        .iter()
+        .fold(tensorboard_dir.clone(), |path, segment| path.join(segment));
     if !proto_path.exists() {
         panic!("Proto directory does not exist: {}", proto_path.display());
     }
