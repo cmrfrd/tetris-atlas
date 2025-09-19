@@ -1,5 +1,5 @@
 use crate::{
-    data::TetrisPieceTensor,
+    tensors::TetrisPieceTensor,
     tetris::{TetrisPiece, TetrisPieceOrientation},
 };
 use anyhow::{Result, ensure};
@@ -93,42 +93,6 @@ pub fn triu2d(t: usize, device: &Device) -> Result<Tensor> {
         .collect::<Vec<_>>();
     let mask = Tensor::from_slice(&mask, (t, t), &device)?;
     Ok(mask)
-}
-
-/// Embedding soft forward
-/// - `embedding`: [P, D]
-/// - `dist`: [..., P]
-/// Returns [..., D]
-pub fn embedding_soft_forward(embedding: &Embedding, dist: &Tensor) -> Result<Tensor> {
-    let embeddings = embedding.embeddings();
-
-    let last_dim = dist.dims().last().unwrap();
-    let (in_size, out_size) = embeddings.dims2()?;
-    ensure!(
-        *last_dim == in_size,
-        "Dist last dim {} must equal vocab size {}",
-        last_dim,
-        in_size
-    );
-
-    let dist_rank = dist.rank();
-    ensure!(
-        dist_rank >= 2,
-        "Dist must be 2D or higher, got {}",
-        dist_rank
-    );
-
-    // Broadcast embeddings across leading batch dims of `dist` and batched matmul:
-    // dist: [..., M, P] @ rhs: [..., P, D] => [..., M, D]
-    let batch_ndims = dist_rank - 2;
-    let mut rhs_shape: Vec<usize> = vec![1; batch_ndims];
-    rhs_shape.push(in_size);
-    rhs_shape.push(out_size);
-    let rhs = embeddings.reshape(rhs_shape.as_slice())?;
-    println!("rhs: {:?}", rhs.shape());
-    println!("dist: {:?}", dist.shape());
-    let out = dist.broadcast_matmul(&rhs)?; // [..., D] with second-to-last dim preserved as M
-    Ok(out)
 }
 
 pub fn masked_fill(on_false: &Tensor, mask: &Tensor, on_true: f32) -> Result<Tensor> {
