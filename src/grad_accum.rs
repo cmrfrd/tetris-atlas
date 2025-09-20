@@ -3,6 +3,20 @@ use std::collections::HashMap;
 use candle_core::{Tensor, Var};
 use candle_nn::{AdamW, Optimizer};
 
+use anyhow::Result;
+
+pub fn get_l2_norm(grad_store: &candle_core::backprop::GradStore, params: &[Var]) -> Result<f32> {
+    let mut total_squared_sum: f32 = 0.0;
+    for param in params {
+        let grad = grad_store
+            .get(param)
+            .ok_or(anyhow::anyhow!("Gradient not found for parameter"))?;
+        let sum_sq = grad.sqr()?.sum_all()?.to_scalar::<f32>()?;
+        total_squared_sum += sum_sq;
+    }
+    Ok(total_squared_sum.sqrt())
+}
+
 /// Gradient accumulator:
 /// Accumulates gradients for individual parameters using their tensor IDs as keys
 pub struct GradientAccumulator {
@@ -94,16 +108,5 @@ impl GradientAccumulator {
     pub fn reset(&mut self) {
         self.accumulated_grads.clear();
         self.step_count = 0;
-    }
-
-    /// Compute the global L2 norm of the currently accumulated gradients
-    /// Returns 0.0 if no gradients have been accumulated
-    pub fn gradient_norm(&self) -> Result<f32, candle_core::Error> {
-        let mut total_squared_sum: f32 = 0.0;
-        for grad in self.accumulated_grads.values() {
-            let sum_sq = grad.sqr()?.sum_all()?.to_scalar::<f32>()?;
-            total_squared_sum += sum_sq;
-        }
-        Ok(total_squared_sum.sqrt())
     }
 }
