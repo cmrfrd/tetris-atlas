@@ -2,9 +2,8 @@ use crate::{
     tensors::TetrisPieceTensor,
     tetris::{TetrisPiece, TetrisPieceOrientation},
 };
-use anyhow::{Result, ensure};
+use anyhow::Result;
 use candle_core::{DType, Device, Tensor};
-use candle_nn::Embedding;
 
 /// Create the mask over all orientations for a specific piece.
 const PIECE_MASK_LOOKUP: [u8; TetrisPiece::NUM_PIECES * TetrisPieceOrientation::NUM_ORIENTATIONS] = [
@@ -120,6 +119,53 @@ pub fn kl_div<D: candle_core::shape::Dim>(p: &Tensor, q: &Tensor, dim: D) -> Res
     Ok(elem.sum(dim)?.mean_all()?)
 }
 
+/// Numerically stable binary cross entropy loss.
+/// - `logits`: `[B, ...]` raw predictions (not probabilities)
+/// - `targets`: `[B, ...]` binary targets (0 or 1)
+/// Returns scalar mean loss.
+///
+/// Numerically stable computation using the log-sum-exp trick:
+/// ```
+/// BCE = -[y * log(σ(x)) + (1-y) * log(1-σ(x))]
+/// where σ(x) = 1/(1+exp(-x))
+/// ```
+///
+/// This can be rewritten as:
+/// ```
+/// BCE = max(x, 0) - x*y + log(1 + exp(-|x|))
+/// ```
+/// This formulation avoids overflow/underflow issues.
+pub fn binary_cross_entropy_with_logits_stable(
+    logits: &Tensor,
+    targets: &Tensor,
+) -> Result<Tensor> {
+    if logits.shape() != targets.shape() {
+        return Err(anyhow::Error::msg(
+            "binary_cross_entropy_with_logits: logits and targets must have identical shapes",
+        ));
+    }
+
+    // max(x, 0)
+    let zero = logits.zeros_like()?;
+    let max_val = logits.maximum(&zero)?;
+
+    // log(1 + exp(-|x|))
+    let abs_logits = logits.abs()?;
+    let neg_abs_logits = abs_logits.neg()?;
+    let log_exp_term = neg_abs_logits
+        .exp()?
+        .add(&Tensor::ones_like(&neg_abs_logits)?)?
+        .log()?;
+
+    // x * y
+    let xy_term = logits.mul(&targets.to_dtype(DType::F32)?)?;
+
+    // BCE = max(x, 0) - x*y + log(1 + exp(-|x|))
+    let loss = (max_val - xy_term)?.add(&log_exp_term)?;
+
+    Ok(loss.mean_all()?)
+}
+
 #[cfg(test)]
 mod tests {
     use candle_core::Device;
@@ -216,6 +262,52 @@ mod tests {
         let mask_as_vec = mask.to_vec2::<u8>().unwrap();
         let expected_mask = vec![vec![0, 1, 1], vec![0, 0, 1], vec![0, 0, 0]];
         assert_eq!(mask_as_vec, expected_mask);
+        Ok(())
+    }
+
+    #[test]
+    fn test_binary_cross_entropy_with_logits() -> Result<()> {
+        let dev = Device::Cpu;
+
+        // Test case 1: Perfect predictions (logits = +∞ for target=1, -∞ for target=0)
+        // Using large but finite values to approximate
+        let logits = Tensor::from_vec(vec![10.0f32, -10.0, 10.0, -10.0], (2, 2), &dev)?;
+        let targets = Tensor::from_vec(vec![1.0f32, 0.0, 1.0, 0.0], (2, 2), &dev)?;
+        let loss = binary_cross_entropy_with_logits_stable(&logits, &targets)?;
+        let loss_val = loss.to_scalar::<f32>()?;
+        assert!(
+            loss_val < 1e-4,
+            "Perfect predictions should have near-zero loss"
+        );
+
+        // Test case 2: Worst predictions (logits = -∞ for target=1, +∞ for target=0)
+        let logits = Tensor::from_vec(vec![-10.0f32, 10.0, -10.0, 10.0], (2, 2), &dev)?;
+        let targets = Tensor::from_vec(vec![1.0f32, 0.0, 1.0, 0.0], (2, 2), &dev)?;
+        let loss = binary_cross_entropy_with_logits_stable(&logits, &targets)?;
+        let loss_val = loss.to_scalar::<f32>()?;
+        assert!(loss_val > 9.0, "Worst predictions should have high loss");
+
+        // Test case 3: Neutral predictions (logits = 0)
+        let logits = Tensor::zeros((2, 2), DType::F32, &dev)?;
+        let targets = Tensor::from_vec(vec![1.0f32, 0.0, 1.0, 0.0], (2, 2), &dev)?;
+        let loss = binary_cross_entropy_with_logits_stable(&logits, &targets)?;
+        let loss_val = loss.to_scalar::<f32>()?;
+        let expected = (2.0f32).ln(); // log(2) ≈ 0.693
+        assert!(
+            (loss_val - expected).abs() < 1e-6,
+            "Neutral predictions should have log(2) loss"
+        );
+
+        // Test case 4: Test numerical stability with extreme values
+        let logits = Tensor::from_vec(vec![100.0f32, -100.0], (2,), &dev)?;
+        let targets = Tensor::from_vec(vec![1.0f32, 0.0], (2,), &dev)?;
+        let loss = binary_cross_entropy_with_logits_stable(&logits, &targets)?;
+        let loss_val = loss.to_scalar::<f32>()?;
+        assert!(
+            loss_val.is_finite() && loss_val < 1e-4,
+            "Should handle extreme values without overflow"
+        );
+
         Ok(())
     }
 }
