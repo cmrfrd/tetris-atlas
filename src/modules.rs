@@ -361,7 +361,7 @@ pub struct TransformerBlockConfig {
 }
 
 impl TransformerBlock {
-    fn init(vb: &VarBuilder, cfg: &TransformerBlockConfig) -> Result<TransformerBlock> {
+    pub fn init(vb: &VarBuilder, cfg: &TransformerBlockConfig) -> Result<TransformerBlock> {
         let dyn_tanh_1 = DynamicTanh::init(&vb.pp("dyn_tanh_1"), &cfg.dyn_tanh_config)?;
         let attn = CausalSelfAttention::init(&vb.pp("attn"), &cfg.attn_config)?;
         let dyn_tanh_2 = DynamicTanh::init(&vb.pp("dyn_tanh_2"), &cfg.dyn_tanh_config)?;
@@ -374,7 +374,7 @@ impl TransformerBlock {
         })
     }
 
-    fn forward(&self, x: Tensor, with_causal_mask: bool) -> Result<Tensor> {
+    pub fn forward(&self, x: Tensor, with_causal_mask: bool) -> Result<Tensor> {
         let (_b, _t, d) = x.dims3()?;
         ensure!(
             d == self.attn.head_dim * self.attn.num_attention_heads,
@@ -384,14 +384,16 @@ impl TransformerBlock {
         );
 
         // x = x + attention(norm(x))
-        let normed_x = self.dyn_tanh_1.forward(x.clone())?;
-        let (attn_out, _) = self.attn.forward(normed_x, with_causal_mask)?;
-        let x = (x + attn_out)?;
+        let x_residual = x.clone();
+        let x = self.dyn_tanh_1.forward(x)?;
+        let (x, _) = self.attn.forward(x, with_causal_mask)?;
+        let x = (x + x_residual)?;
 
         // x = x + mlp(norm(x))
-        let normed_x = self.dyn_tanh_2.forward(x.clone())?;
-        let mlp_out = self.mlp.forward(&normed_x)?;
-        let x = (x + mlp_out)?;
+        let x_residual = x.clone();
+        let x = self.dyn_tanh_2.forward(x)?;
+        let x = self.mlp.forward(&x)?;
+        let x = (x + x_residual)?;
 
         Ok(x)
     }
@@ -431,6 +433,7 @@ impl TransformerBody {
 
 #[derive(Debug, Clone)]
 pub struct ConvBlockSpec {
+    pub in_channels: usize,
     pub out_channels: usize,
     pub kernel_size: usize,
     pub conv_cfg: Conv2dConfig,
@@ -439,7 +442,6 @@ pub struct ConvBlockSpec {
 
 #[derive(Debug, Clone)]
 pub struct ConvEncoderConfig {
-    pub in_channels: usize,
     pub input_hw: (usize, usize),
     pub blocks: Vec<ConvBlockSpec>,
     pub mlp: MlpConfig,
@@ -452,18 +454,13 @@ struct ConvBlock {
 }
 
 impl ConvBlock {
-    fn init(
-        vb: &VarBuilder,
-        in_ch: usize,
-        spec: &ConvBlockSpec,
-        idx: usize,
-    ) -> Result<(Self, usize)> {
+    fn init(vb: &VarBuilder, spec: &ConvBlockSpec, idx: usize) -> Result<(Self, usize)> {
         assert!(
             spec.out_channels % spec.gn_groups == 0,
             "gn_groups must divide out_channels"
         );
         let conv = conv2d(
-            in_ch,
+            spec.in_channels,
             spec.out_channels,
             spec.kernel_size,
             spec.conv_cfg,
@@ -494,17 +491,39 @@ pub struct ConvEncoder {
 
 impl ConvEncoder {
     pub fn init(vb: &VarBuilder, cfg: &ConvEncoderConfig) -> Result<Self> {
+        // Validate that blocks are properly chained
+        if cfg.blocks.is_empty() {
+            return Err(anyhow::anyhow!("ConvEncoder must have at least one block"));
+        }
+
+        // Validate that consecutive blocks have matching channels
+        for (i, block) in cfg.blocks.windows(2).enumerate() {
+            let curr = &block[1];
+            let prev = &block[0];
+            if curr.in_channels != prev.out_channels {
+                return Err(anyhow::anyhow!(
+                    "Block {} in_channels ({}) must match block {} out_channels ({})",
+                    i + 1,
+                    curr.in_channels,
+                    i,
+                    prev.out_channels
+                ));
+            }
+        }
+
         let mut blocks = Vec::with_capacity(cfg.blocks.len());
-        let mut in_ch = cfg.in_channels;
         for (i, spec) in cfg.blocks.iter().enumerate() {
-            let (b, out_ch) = ConvBlock::init(vb, in_ch, spec, i)?;
+            let (b, _out_ch) = ConvBlock::init(vb, spec, i)?;
             blocks.push(b);
-            in_ch = out_ch;
         }
 
         // infer flatten dim using vb's device/dtype
         let (h, w) = cfg.input_hw;
-        let mut y = Tensor::zeros((1, cfg.in_channels, h, w), vb.dtype(), vb.device())?;
+        let mut y = Tensor::zeros(
+            (1, cfg.blocks[0].in_channels, h, w),
+            vb.dtype(),
+            vb.device(),
+        )?;
         for b in &blocks {
             y = b.forward(&y)?;
         }
@@ -550,6 +569,7 @@ pub struct FilmConfig {
 pub struct Film {
     proj1: Linear, // cond_dim -> hidden
     proj2: Linear, // hidden -> 2*feat_dim
+    post: Linear,  // feat_dim -> feat_dim
     cond_dim: usize,
     feat_dim: usize,
 }
@@ -558,9 +578,11 @@ impl Film {
     pub fn init(vb: &VarBuilder, cfg: &FilmConfig) -> Result<Self> {
         let proj1 = linear(cfg.cond_dim, cfg.hidden, vb.pp("proj1"))?;
         let proj2 = linear(cfg.hidden, 2 * cfg.feat_dim, vb.pp("proj2"))?;
+        let post = linear(cfg.feat_dim, cfg.feat_dim, vb.pp("post"))?;
         Ok(Self {
             proj1,
             proj2,
+            post,
             cond_dim: cfg.cond_dim,
             feat_dim: cfg.feat_dim,
         })
@@ -582,6 +604,7 @@ impl Film {
         let gamma = gb.narrow(1, 0, self.feat_dim)?; // [B, D]
         let beta = gb.narrow(1, self.feat_dim, self.feat_dim)?; // [B, D]
         let y = ((x * (&gamma + 1.0f64)?)? + &beta)?;
+        let y = (&y + candle_nn::ops::silu(&self.post.forward(&y)?)?)?;
         Ok(y)
     }
 }
