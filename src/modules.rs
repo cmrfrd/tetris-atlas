@@ -559,14 +559,14 @@ impl ConvEncoder {
 }
 
 #[derive(Debug, Clone)]
-pub struct FilmConfig {
+pub struct FiLMConfig {
     pub cond_dim: usize,
     pub feat_dim: usize, // D of x: [B, D]
     pub hidden: usize,
 }
 
 #[derive(Debug, Clone)]
-pub struct Film {
+pub struct FiLM {
     proj1: Linear, // cond_dim -> hidden
     proj2: Linear, // hidden -> 2*feat_dim
     post: Linear,  // feat_dim -> feat_dim
@@ -574,8 +574,8 @@ pub struct Film {
     feat_dim: usize,
 }
 
-impl Film {
-    pub fn init(vb: &VarBuilder, cfg: &FilmConfig) -> Result<Self> {
+impl FiLM {
+    pub fn init(vb: &VarBuilder, cfg: &FiLMConfig) -> Result<Self> {
         let proj1 = linear(cfg.cond_dim, cfg.hidden, vb.pp("proj1"))?;
         let proj2 = linear(cfg.hidden, 2 * cfg.feat_dim, vb.pp("proj2"))?;
         let post = linear(cfg.feat_dim, cfg.feat_dim, vb.pp("post"))?;
