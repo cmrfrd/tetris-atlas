@@ -20,7 +20,7 @@ const NUM_TETRIS_PIECES: usize = 7;
 
 pub const NUM_TETRIS_CELL_STATES: usize = 2;
 
-/// A rotation is an orientation of a tetris piece. For
+/// A rotation is an orientation of a Tetris piece. For
 /// simplicity, we represent a rotation as a u8. There are
 /// 4 maximum possible rotations for each piece.
 ///
@@ -65,9 +65,7 @@ impl Rotation {
     }
 }
 
-/// A column is a single integer representing a column on the tetris board.
-///
-/// It's pretty self explanatory.
+/// A column index on the Tetris board.
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Ord, PartialOrd, Default)]
 pub struct Column(u8);
 
@@ -81,7 +79,7 @@ impl Column {
     pub const MAX: u8 = COLS as u8;
 }
 
-/// A tetris piece is a tetromino. There are only 7 possible tetrominos,
+/// A Tetris piece is a tetromino. There are 7 possible tetrominoes,
 /// and we use a single byte with a single bit set to represent any one of them.
 /// The index of the bit set in the byte represents the tetromino.
 ///
@@ -93,7 +91,7 @@ impl Column {
 /// 0001_0000 = 16  = T -> 4 rotations
 /// 0010_0000 = 32  = L -> 4 rotations
 /// 0100_0000 = 64  = J -> 4 rotations
-/// 1000_0000 = 128 = "Empty piece"
+/// 1000_0000 = 128 = "Null piece"
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct TetrisPiece(u8);
@@ -138,7 +136,7 @@ impl TetrisPiece {
         ]
     }
 
-    /// Create a new tetris piece from a u8 representing the piece.
+    /// Create a new Tetris piece from a `u8` representing the piece.
     ///
     /// ```text
     /// 0 = O
@@ -180,7 +178,7 @@ impl TetrisPiece {
         self.0 == 0b0100_0000
     }
 
-    /// Calculate the number of rotations for a tetris piece.
+    /// Calculate the number of rotations for a Tetris piece.
     ///
     /// The mapping for each piece is:
     ///
@@ -190,10 +188,10 @@ impl TetrisPiece {
     /// 16 | 32 | 64 -> 4
     /// ```
     ///
-    /// NOTE: I tried doing a simple lookup from `[1, 2, 2, 2, 4, 4, 4];`
-    ///       but this was slow!
+    /// NOTE: I tried a simple lookup `[1, 2, 2, 2, 4, 4, 4]`,
+    /// but this was slower.
     ///
-    /// More fine grained approach for this function is:
+    /// A more fine-grained approach for this function is:
     ///
     /// ```text
     /// b = 1 + (piece >= 16 && piece < 128)
@@ -222,7 +220,7 @@ impl TetrisPiece {
         // }
     }
 
-    /// Calculate the width of a tetris piece.
+    /// Calculate the width of a Tetris piece.
     ///
     /// The width is the number of columns the piece occupies. This is useful to know
     /// when determining the number of possible columns to place a piece.
@@ -244,8 +242,8 @@ impl TetrisPiece {
     /// (6, 1 | 3) => 2, // J (tall)
     /// ```
     ///
-    /// We could implement this as a lookup table, but we can get more perf gains
-    /// if we think of the lookup table as follows:
+    /// We could implement this as a lookup table, but we can get more performance
+    /// by thinking of the lookup table as follows:
     ///
     /// ```text
     ///   rotation
@@ -265,9 +263,9 @@ impl TetrisPiece {
     ///
     /// With this table in mind, we can think of computing width as follows:
     ///
-    /// 1. calc b if the piece is the line piece
-    /// 2. branch if the rotation is odd or the square piece
-    /// 3. use b to compute the width
+    /// 1. Compute `b` if the piece is the line piece
+    /// 2. Branch if the rotation is odd or the square piece
+    /// 3. Use `b` to compute the width
     ///
     /// ```text
     /// b = 1 if piece=1 else 0
@@ -278,8 +276,8 @@ impl TetrisPiece {
     /// ```
     ///
     /// Instead of fetching an entry in a lookup table, leverage that certain
-    /// widths can be grouped together based on common properties. This results
-    /// in orders of magnitude faster code.
+    /// widths can be grouped based on common properties. This results in
+    /// significantly faster code.
     #[inline(always)]
     pub const fn width(&self, rotation: Rotation) -> u8 {
         let b = (self.0 == Self::I_PIECE.0) as u8;
@@ -303,7 +301,7 @@ impl TetrisPiece {
         // }
     }
 
-    /// Calculate the height of a tetris piece.
+    /// Calculate the height of a Tetris piece.
     ///
     /// See [`width`](TetrisPiece::width) for more details.
     ///
@@ -352,8 +350,12 @@ impl Display for TetrisPiece {
     }
 }
 
-/// A Tetris orientation is a (rotation, column) pair; each piece allows only a subset.
-/// Layout per cell (row-major): [O][I][S] / [Z][T][L] / [J][ ][ ]
+/// A Tetris orientation is a (rotation, column) pair that defines how a piece is positioned on the board.
+/// Each piece type only allows certain orientations.
+/// The following shows which pieces can be placed in each cell, laid out in row-major order:
+/// First row:  [O][I][S]
+/// Second row: [Z][T][L]  
+/// Third row:  [J][ ][ ]
 ///
 /// The "X" cell is reserved for the "null" orientation.
 ///
@@ -488,13 +490,11 @@ impl TetrisPieceOrientation {
 
 /// A piece placement contains the following:
 ///
-/// - The tetris piece
-/// - The rotation of the piece
-/// - The column to place the piece in
+/// - The Tetris piece
+/// - The orientation of the piece (rotation and column)
 ///
-/// We use this struct to help represent all possible placements
-/// of some piece so we can calculate possible next tetris boards,
-/// and so on.
+/// We use this struct to represent the "how" we are placing
+/// a piece on a tetris board
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Ord, PartialOrd, Default)]
 pub struct TetrisPiecePlacement {
     pub piece: TetrisPiece,
@@ -566,7 +566,7 @@ impl TetrisPiecePlacement {
         max_count
     };
 
-    /// Get all posible placements for all pieces.
+    /// Get all possible placements for all pieces.
     pub const NUM_PLACEMENTS: usize = Self::calculate_num_placements();
 
     pub const ALL_PLACEMENTS: [Self; Self::NUM_PLACEMENTS] = Self::all_placements();
@@ -735,9 +735,9 @@ impl TetrisPiecePlacement {
     // }
 }
 
-/// A tetris piece bag is a random selection algorithm to prevent
-/// sequences of pieces that 'garuntee' losses (like consistent
-/// S & Z pieces).
+/// A Tetris piece bag is a random selection algorithm to prevent
+/// sequences of pieces that guarantee losses (e.g., long runs of
+/// S and Z pieces).
 ///
 /// A bag starts with 7 pieces. Then as a tetris game is played, pieces
 /// are randomly removed from the bag one by one. Once the bag is
@@ -745,7 +745,7 @@ impl TetrisPiecePlacement {
 /// is continually repeated.
 ///
 /// A single bag of pieces is represented by a single byte where
-/// mulitple bits are set to represent what's left in the bag.
+/// multiple bits are set to represent what's left in the bag.
 ///
 /// ```text
 /// +---+---+---+---+---+---+---+---+
@@ -825,12 +825,12 @@ impl TetrisPieceBag {
         self.0 = 0b0111_1111;
     }
 
-    /// Take a piece from the bag.
+    /// Remove a piece from the bag.
     ///
     /// If the piece is not in the bag, this function will return
     /// the bag unchanged.
     #[inline(always)]
-    pub fn take(&mut self, piece: TetrisPiece) -> TetrisPieceBag {
+    pub fn remove(&mut self, piece: TetrisPiece) -> TetrisPieceBag {
         self.0 &= !(piece.0);
         *self
     }
@@ -863,16 +863,18 @@ impl TetrisPieceBag {
         NextBagsIter::new(*self)
     }
 
+    /// Get a random piece from the bag and remove it.
+    /// If the bag is empty, fill it with all pieces first.
+    /// Uses the provided RNG to select a random piece from the remaining pieces.
     pub(self) fn rand_next(&mut self, rng: &mut TetrisGameRng) -> TetrisPiece {
         if self.is_empty() {
             self.fill();
-            return self.rand_next(rng);
         }
 
         let count = self.count();
         let idx = (rng.next_u64() % count as u64) as usize;
         let piece = self.pieces().nth(idx).unwrap();
-        self.take(piece);
+        self.remove(piece);
         piece
     }
 }
@@ -941,7 +943,7 @@ impl Iterator for NextBagsIter {
 
 impl ExactSizeIterator for NextBagsIter {}
 
-/// A tetris board is a 20x10 grid of cells. Each cell is a bit.
+/// A Tetris board is a 20x10 grid of cells. Each cell is a bit.
 /// However we use 24x10 to make the math easier and for detecting
 /// losses easier.
 ///
@@ -1043,10 +1045,9 @@ impl TetrisBoardRaw {
 /// These are used for core game logic when a line is cleared
 /// and all rows above are shifted down.
 impl TetrisBoardRaw {
-    /// Shift all the rows up by 1.
-    /// This is used after we 'drop' a piece and find a collision,
-    /// Once a collision is found, we need to shift up the piece
-    /// before adding it to the board.
+    /// Shift all rows up by 1.
+    /// Used after dropping a piece when a collision is detected:
+    /// shift the piece up before merging into the board.
     #[inline(always)]
     pub(crate) fn shift_up(&mut self) {
         for i in 0..(NUM_BYTES_FOR_BOARD - 2) {
@@ -1056,9 +1057,9 @@ impl TetrisBoardRaw {
         self.0[NUM_BYTES_FOR_BOARD - 1] = 0;
     }
 
-    /// Shift all the rows down by 1.
-    /// When placing a piece, we progressively shift it down until it
-    /// either hits the bottom of the board or collides with another space.
+    /// Shift all rows down by 1.
+    /// When placing a piece, shift it down until it hits the bottom
+    /// of the board or collides with another cell.
     pub(crate) fn shift_down(&mut self) {
         // unsafe {
         //     std::ptr::copy(
@@ -1086,7 +1087,7 @@ impl TetrisBoardRaw {
         self.0[0] = 0;
     }
 
-    /// Shift all the rows down by 1 w.r.t. a given row.
+    /// Shift all rows down by 1 relative to a given row.
     /// This is used when we want to 'clear' a row.
     /// All the row bits above the given row are shifted down
     /// by 1 row.
@@ -1178,11 +1179,8 @@ impl TetrisBoardRaw {
         self.0 == Self::FULL_BOARD.0
     }
 
-    /// Merge two boards together.
-    ///
-    /// This is used when we are placing a piece on the board.
-    /// After we test a piece collision, we merge the piece board
-    /// with the main board.
+    /// Merge another board into this one (bitwise OR).
+    /// Used when placing a piece onto the play board after collision tests.
     pub(crate) fn merge(&mut self, other: &Self) -> &mut Self {
         unsafe {
             let src = other.0.as_ptr();
@@ -1285,7 +1283,7 @@ impl TetrisBoardRaw {
 
     /// Compute the height of the board.
     ///
-    /// The height is the row number (w.r.t. the bottom of the board),
+    /// The height is the row number (relative to the bottom of the board),
     /// of the first non-zero cell / bit.
     #[inline(always)]
     pub const fn height(&self) -> u8 {
@@ -1346,8 +1344,7 @@ impl TetrisBoardRaw {
         }
     }
 
-    /// A loss is defined when we have any cell in the
-    /// top 4 rows is filled.
+    /// Loss is defined as any cell being filled in the top 4 rows.
     ///
     /// To compute this quickly, we read the first 8 bytes of the board
     /// as a u64, mask out the last 3 bytes, and check if the result is non-zero.
@@ -1361,8 +1358,7 @@ impl TetrisBoardRaw {
         }
     }
 
-    /// Convert the original byte-representation of the board to a
-    /// binary slice of 0/1 values.
+    /// Convert the board’s byte representation to a binary slice of 0/1 values.
     ///
     /// This is used to "vectorize" the board for training purposes.
     #[inline(always)]
@@ -1385,7 +1381,7 @@ impl TetrisBoardRaw {
         result
     }
 
-    /// Convert a binary slice to a tetris board. This is the inverse
+    /// Convert a binary slice to a Tetris board. This is the inverse
     /// of `to_binary_slice`.
     pub const fn from_binary_slice(binary_slice: [u8; BOARD_SIZE]) -> Self {
         let mut board = Self::EMPTY_BOARD;
@@ -1492,7 +1488,7 @@ impl From<TetrisBoard> for TetrisUint {
     }
 }
 
-/// Small helper functions for the TetrisBoard.
+/// Small helper functions for `TetrisBoard`.
 impl TetrisBoard {
     #[inline(always)]
     pub fn height(&self) -> u8 {
@@ -1505,33 +1501,33 @@ impl TetrisBoard {
     }
 }
 
-/// Main functions for the TetrisBoard.
+/// Main functions for `TetrisBoard`.
 impl TetrisBoard {
-    /// Convert the tetris board to a binary slice by bits.
+    /// Convert the Tetris board to a binary slice by bits.
     /// This is used to "vectorize" the board.
     pub const fn to_binary_slice(&self) -> [u8; BOARD_SIZE] {
         self.play_board.to_binary_slice()
     }
 
-    /// Convert a binary slice to a tetris board.
+    /// Convert a binary slice to a Tetris board.
     /// This is used to "de-vectorize" the board.
     pub fn from_binary_slice(binary_slice: [u8; BOARD_SIZE]) -> Self {
         Self::from(TetrisBoardRaw::from_binary_slice(binary_slice))
     }
 
-    /// Get the current playing board.
+    /// Get the current play board.
     #[inline(always)]
     pub const fn board(&self) -> TetrisBoardRaw {
         self.play_board
     }
 
-    /// Reset the board to the starting state.
+    /// Reset the board to the initial empty state.
     pub fn reset(&mut self) {
         self.play_board.clear_all();
         self.piece_board.clear_all();
     }
 
-    /// Apply a piece placement to the board. This is the main 'play' function.
+    /// Apply a piece placement to the board. This is the main play function.
     ///
     /// To play a piece, we first add it to the top of the piece board.
     /// Then we shift the piece down row by row until we find a collision or
@@ -1574,8 +1570,8 @@ impl TetrisBoard {
 
     /// Add a piece to the top of the piece board.
     ///
-    /// Every piece, rotation, column combiantion is extrapolated
-    /// out.
+    /// Every piece, rotation, and column combination is expanded
+    /// explicitly.
     fn add_piece_top(&mut self, placement: TetrisPiecePlacement) {
         match (
             placement.piece.0,
@@ -2585,13 +2581,13 @@ impl TetrisGameRng {
     }
 }
 
-/// A tetris game is:
+/// A Tetris game is:
 ///
 /// 1. A board
 /// 2. A bag of pieces
 /// 3. The current piece
 ///
-/// The interface for playing tetris is 'get' placements and 'apply' placements.
+/// The interface for playing Tetris is “get placements” and “apply placements”.
 /// This ensures the caller only plays possible moves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct TetrisGame {
@@ -2624,7 +2620,7 @@ impl Display for TetrisGame {
 }
 
 impl TetrisGame {
-    /// Create a new tetris game.
+    /// Create a new Tetris game.
     ///
     /// The game is initialized with a new board, a new bag, and a random piece
     /// popped from the bag.
@@ -2674,18 +2670,15 @@ impl TetrisGame {
         self.piece_buf
     }
 
-    /// Get the current placements.
-    ///
-    /// These are the placements that can be applied to the current piece.
+    /// Get the current placements that can be applied to the current piece.
     pub fn current_placements(&self) -> &[TetrisPiecePlacement] {
         TetrisPiecePlacement::all_from_piece(self.piece_buf)
     }
 
     /// Apply a placement to the board.
     ///
-    /// This will return true if the game is lost, false otherwise.
-    /// Lines cleared is tracked by measure the diff between the height before and after the placement.
-    ///
+    /// Returns `true` if the game is lost; otherwise `false`.
+    /// Lines cleared are tracked by the difference in height before and after placement.
     /// If the game is not lost, the current piece is replaced with a new random piece.
     pub fn apply_placement(&mut self, placement: TetrisPiecePlacement) -> IsLost {
         debug_assert!(
@@ -2718,7 +2711,7 @@ impl TetrisGame {
         self.piece_count = 0;
     }
 
-    /// Export the current board as a u256.
+    /// Export the current board as a `u256`.
     pub fn export_board(&self) -> TetrisUint {
         self.board.into()
     }
@@ -2791,7 +2784,7 @@ impl TetrisGameSet {
     /// Apply a placement to the board.
     ///
     /// This will return true if the game is lost, false otherwise.
-    /// Lines cleared is tracked by measure the diff between the height before and after the placement.
+    /// Lines cleared are tracked by measuring the difference in height before and after the placement.
     ///
     /// If the game is not lost, the current piece is replaced with a new random piece.
     pub fn apply_placement(&mut self, placements: &[TetrisPiecePlacement]) -> Vec<IsLost> {
@@ -3314,25 +3307,25 @@ mod tests {
     fn test_bag() {
         // take individually from the bag
         let mut bag = TetrisPieceBag::new();
-        bag.take(TetrisPiece::new(0));
+        bag.remove(TetrisPiece::new(0));
         assert_eq!(bag.count(), 6);
         assert_eq!(bag.contains(TetrisPiece::new(0)), false);
-        bag.take(TetrisPiece::new(1));
+        bag.remove(TetrisPiece::new(1));
         assert_eq!(bag.count(), 5);
         assert_eq!(bag.contains(TetrisPiece::new(1)), false);
-        bag.take(TetrisPiece::new(2));
+        bag.remove(TetrisPiece::new(2));
         assert_eq!(bag.count(), 4);
         assert_eq!(bag.contains(TetrisPiece::new(2)), false);
-        bag.take(TetrisPiece::new(3));
+        bag.remove(TetrisPiece::new(3));
         assert_eq!(bag.count(), 3);
         assert_eq!(bag.contains(TetrisPiece::new(3)), false);
-        bag.take(TetrisPiece::new(4));
+        bag.remove(TetrisPiece::new(4));
         assert_eq!(bag.count(), 2);
         assert_eq!(bag.contains(TetrisPiece::new(4)), false);
-        bag.take(TetrisPiece::new(5));
+        bag.remove(TetrisPiece::new(5));
         assert_eq!(bag.count(), 1);
         assert_eq!(bag.contains(TetrisPiece::new(5)), false);
-        bag.take(TetrisPiece::new(6));
+        bag.remove(TetrisPiece::new(6));
         assert_eq!(bag.count(), 0);
         assert_eq!(bag.contains(TetrisPiece::new(6)), false);
 
