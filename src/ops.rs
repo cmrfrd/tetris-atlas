@@ -3,7 +3,7 @@ use crate::{
     tetris::{TetrisPiece, TetrisPieceOrientation},
 };
 use anyhow::Result;
-use candle_core::{DType, Device, Tensor};
+use candle_core::{DType, Device, Tensor, Var, backprop::GradStore};
 
 /// Create the mask over all orientations for a specific piece.
 const PIECE_MASK_LOOKUP: [u8; TetrisPiece::NUM_PIECES * TetrisPieceOrientation::NUM_ORIENTATIONS] = [
@@ -55,6 +55,7 @@ pub fn masked_softmax_2d(x: &Tensor, mask: &Tensor) -> Result<Tensor> {
     if x.dtype() != DType::F32 {
         return Err(anyhow::Error::msg("masked_softmax_2d: x must be f32"));
     }
+    let device = x.device();
 
     // build an integer predicate: non-zero => keep
     let zero = mask.zeros_like()?;
@@ -62,7 +63,7 @@ pub fn masked_softmax_2d(x: &Tensor, mask: &Tensor) -> Result<Tensor> {
     let _keep_f32 = keep.to_dtype(DType::F32)?; // kept for potential downstream use
 
     // stable masked max: exclude masked positions by setting them to -inf for the max step
-    let neg_inf = Tensor::full(f32::NEG_INFINITY, x.dims(), x.device())?;
+    let neg_inf = Tensor::full(f32::NEG_INFINITY, x.dims(), device)?;
     let masked_for_max = keep.where_cond(x, &neg_inf)?; // [B,N]
     let max_keep = masked_for_max.max_keepdim(1)?; // [B,1]
 
@@ -71,7 +72,7 @@ pub fn masked_softmax_2d(x: &Tensor, mask: &Tensor) -> Result<Tensor> {
     let shifted_masked = keep.where_cond(&shifted, &neg_inf)?; // [B,N]
     let exps = shifted_masked.exp()?; // [B,N], masked -> exp(-inf)=0
     let denom = exps.sum_keepdim(1)?; // [B,1]
-    let eps = Tensor::full(1e-12f32, denom.dims(), x.device())?;
+    let eps = Tensor::full(f32::EPSILON, denom.dims(), device)?;
     let denom = (denom + &eps)?; // avoid division by zero
     let probs = exps.broadcast_div(&denom)?; // [B,N]
 
@@ -96,7 +97,9 @@ pub fn triu2d(t: usize, device: &Device) -> Result<Tensor> {
 
 pub fn masked_fill(on_false: &Tensor, mask: &Tensor, on_true: f32) -> Result<Tensor> {
     let shape = mask.shape();
-    let on_true = Tensor::new(on_true, on_false.device())?.broadcast_as(shape.dims())?;
+    let on_true = Tensor::new(on_true, on_false.device())?
+        .to_dtype(on_false.dtype())?
+        .broadcast_as(shape.dims())?;
     let m = mask.where_cond(&on_true, on_false)?;
     Ok(m)
 }
@@ -110,8 +113,8 @@ pub fn kl_div<D: candle_core::shape::Dim>(p: &Tensor, q: &Tensor, dim: D) -> Res
         ));
     }
 
-    let p_stable = (p + 1e-8)?;
-    let q_stable = (q + 1e-8)?;
+    let p_stable = (p + f32::EPSILON as f64)?;
+    let q_stable = (q + f32::EPSILON as f64)?;
 
     let log_p = p_stable.log()?;
     let log_q = q_stable.log()?;
@@ -125,13 +128,13 @@ pub fn kl_div<D: candle_core::shape::Dim>(p: &Tensor, q: &Tensor, dim: D) -> Res
 /// Returns scalar mean loss.
 ///
 /// Numerically stable computation using the log-sum-exp trick:
-/// ```
+/// ```text
 /// BCE = -[y * log(σ(x)) + (1-y) * log(1-σ(x))]
 /// where σ(x) = 1/(1+exp(-x))
 /// ```
 ///
 /// This can be rewritten as:
-/// ```
+/// ```text
 /// BCE = max(x, 0) - x*y + log(1 + exp(-|x|))
 /// ```
 /// This formulation avoids overflow/underflow issues.
@@ -164,6 +167,35 @@ pub fn binary_cross_entropy_with_logits_stable(
     let loss = (max_val - xy_term)?.add(&log_exp_term)?;
 
     Ok(loss.mean_all()?)
+}
+
+pub fn clip_grad_norm(vars: &[Var], grads: &mut GradStore, max_norm: f64) -> Result<f64> {
+    let mut total_sq: f32 = 0.0;
+    for var in vars {
+        match grads.get(var) {
+            Some(grad) => {
+                let sq = grad.sqr()?.sum_all()?.to_scalar::<f32>()?;
+                total_sq += sq;
+            }
+            None => {}
+        }
+    }
+    let norm = total_sq.sqrt() as f64;
+
+    let scale = if norm > max_norm {
+        max_norm / (norm + f32::EPSILON as f64)
+    } else {
+        1.0
+    };
+
+    // Scale gradients
+    for var in vars {
+        if let Some(grad) = grads.remove(var) {
+            grads.insert(var, grad.affine(scale, 0.0)?);
+        }
+    }
+
+    Ok(norm)
 }
 
 #[cfg(test)]
@@ -307,6 +339,74 @@ mod tests {
             loss_val.is_finite() && loss_val < 1e-4,
             "Should handle extreme values without overflow"
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_masked_softmax_2d_basic() -> Result<()> {
+        let dev = Device::Cpu;
+
+        // x: [1, 2, 3, 4], mask: keep indices 0,1,3; mask out index 2
+        let x = Tensor::from_vec(vec![1.0f32, 2.0, 3.0, 4.0], (1, 4), &dev)?;
+        let mask = Tensor::from_vec(vec![1u8, 1, 0, 1], (1, 4), &dev)?;
+
+        let probs = masked_softmax_2d(&x, &mask)?;
+        let v = probs.to_vec2::<f32>().unwrap();
+
+        let e1 = (1.0f32 - 4.0).exp(); // exp(-3)
+        let e2 = (2.0f32 - 4.0).exp(); // exp(-2)
+        let e4 = (4.0f32 - 4.0).exp(); // 1
+        let den = e1 + e2 + e4;
+        let expected = vec![vec![e1 / den, e2 / den, 0.0, e4 / den]];
+
+        for (row_v, row_e) in v.iter().zip(expected.iter()) {
+            for (a, b) in row_v.iter().zip(row_e.iter()) {
+                assert!((a - b).abs() < 1e-6, "{} vs {}", a, b);
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_masked_softmax_2d_all_masked_row() -> Result<()> {
+        let dev = Device::Cpu;
+
+        let x = Tensor::from_vec(vec![0.5f32, -1.0, 2.0], (1, 3), &dev)?;
+        let mask = Tensor::from_vec(vec![0u8, 0, 0], (1, 3), &dev)?;
+
+        let probs = masked_softmax_2d(&x, &mask)?;
+        let v = probs.to_vec2::<f32>().unwrap();
+        assert_eq!(v, vec![vec![0.0, 0.0, 0.0]]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_masked_softmax_2d_all_zero_inputs_row() -> Result<()> {
+        let dev = Device::Cpu;
+
+        // Even with all mask=1, a row with all-zero inputs should output all zeros
+        let x = Tensor::zeros((1, 4), DType::F32, &dev)?;
+        let mask = Tensor::from_vec(vec![1u8, 1, 1, 1], (1, 4), &dev)?;
+
+        let probs = masked_softmax_2d(&x, &mask)?;
+        let v = probs.to_vec2::<f32>().unwrap();
+        assert_eq!(v, vec![vec![0.0, 0.0, 0.0, 0.0]]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_masked_softmax_2d_shape_mismatch_errors() -> Result<()> {
+        let dev = Device::Cpu;
+
+        let x = Tensor::zeros((2, 3), DType::F32, &dev)?;
+        let mask = Tensor::zeros((2, 2), DType::U8, &dev)?;
+
+        let res = masked_softmax_2d(&x, &mask);
+        assert!(res.is_err());
 
         Ok(())
     }

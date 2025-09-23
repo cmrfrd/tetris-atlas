@@ -250,7 +250,7 @@ impl TetrisBoardsDistTensor {
         }
         // Temperature scaling: q = softmax(log(p) / T)
         let device = self.device();
-        let eps = Tensor::new(1e-12f32, device)?.broadcast_as((batch, size, states))?;
+        let eps = Tensor::new(f32::EPSILON, device)?.broadcast_as((batch, size, states))?;
         let p = self.inner().maximum(&eps)?;
         let logits = p.log()?;
         let scaled = softmax(&(logits / (temperature as f64))?, D::Minus1)?; // [B, SIZE, 2]
@@ -281,7 +281,7 @@ impl TetrisBoardsDistTensor {
     // Calculate the entropy of the distribution for each board
     pub fn entropy(&self) -> Result<Tensor> {
         let device = self.device();
-        let eps = Tensor::new(1e-12f32, device)?.broadcast_as(self.shape_tuple())?;
+        let eps = Tensor::new(f32::EPSILON, device)?.broadcast_as(self.shape_tuple())?;
         let p = self.inner().maximum(&eps)?;
 
         let plogp = p.log()?.mul(&p)?; // [B, SIZE, 2]
