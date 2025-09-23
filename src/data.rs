@@ -19,29 +19,6 @@ use rand::{
     seq::IndexedRandom,
 };
 
-/// Helper function to assert a 3D tensor for tetris board distributions/logits
-/// Validates shape (_, TetrisBoardRaw::SIZE, NUM_TETRIS_CELL_STATES) and F32 dtype
-fn assert_tetris_board_3d_tensor(tensor: &Tensor) {
-    let (_batch_size, board_size, num_states) = tensor.dims3().expect("Tensor must be 3D");
-    assert!(
-        board_size == TetrisBoardRaw::SIZE,
-        "Tensor must have {} board size, got {}",
-        TetrisBoardRaw::SIZE,
-        board_size
-    );
-    assert!(
-        num_states == NUM_TETRIS_CELL_STATES,
-        "Tensor must have {} states, got {}",
-        NUM_TETRIS_CELL_STATES,
-        num_states
-    );
-    assert!(
-        tensor.dtype() == DType::F32,
-        "Tensor must be f32, got {:?}",
-        tensor.dtype()
-    );
-}
-
 pub struct TetrisTransition {
     pub current_board: TetrisBoardsTensor,
     pub result_board: TetrisBoardsTensor,
@@ -79,11 +56,11 @@ impl TetrisDatasetGenerator {
         let base_seed = rng.next_u64();
 
         // Seed each game with its own random number of placements
-        let u = Uniform::new(num_piece_range.start, num_piece_range.end)?;
+        let distribution = Uniform::new(num_piece_range.start, num_piece_range.end)?;
         let mut games: Vec<TetrisGame> = Vec::with_capacity(batch_size);
         for i in 0..batch_size {
             let mut game = TetrisGame::new_with_seed(base_seed + i as u64);
-            let num_pieces = u.sample(rng);
+            let num_pieces = distribution.sample(rng);
             for _ in 0..num_pieces {
                 let placement = *game.current_placements().choose(rng).unwrap();
                 game.apply_placement(placement);
