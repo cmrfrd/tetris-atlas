@@ -112,6 +112,12 @@ enum Commands {
     Train {
         #[arg(long, help = "Path to save the tensorboard logs")]
         logdir: Option<String>,
+
+        #[arg(long, help = "Path to load/save model checkpoints")]
+        checkpoint_dir: Option<String>,
+
+        #[arg(long, help = "Name of the training run")]
+        run_name: String,
     },
 }
 
@@ -129,7 +135,23 @@ fn main() {
     let filter = setup_logging(cli.verbose);
     info!("Debug level: level={}", filter);
     match &cli.command {
-        Commands::Train { logdir } => {
+        Commands::Train {
+            logdir,
+            checkpoint_dir,
+            run_name,
+        } => {
+            let ulid = ulid::Ulid::new().to_string();
+            let run_name = format!("{}_{}", run_name, ulid);
+            let logdir = logdir.as_ref().map(|s| {
+                let path = std::path::Path::new(s).join(&run_name);
+                std::fs::create_dir_all(&path).expect("Failed to create log directory");
+                path
+            });
+            let checkpoint_dir = checkpoint_dir.as_ref().map(|s| {
+                let path = std::path::Path::new(s).join(&run_name);
+                std::fs::create_dir_all(&path).expect("Failed to create checkpoint directory"); 
+                path
+            });
             // train::train();
             train::train_game_transformer(logdir.clone());
         }
