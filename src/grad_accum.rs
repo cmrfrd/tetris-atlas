@@ -5,6 +5,8 @@ use candle_nn::{AdamW, Optimizer};
 
 use anyhow::Result;
 
+use crate::ops::clip_grad_norm;
+
 pub fn get_l2_norm(grad_store: &candle_core::backprop::GradStore, params: &[Var]) -> Result<f32> {
     let mut total_squared_sum: f32 = 0.0;
     for param in params {
@@ -48,11 +50,13 @@ impl GradientAccumulator {
         for param in params {
             if let Some(grad) = grads.get(param) {
                 let param_id = param.id();
-                let scaled_grad = grad.affine(scale, 0.0)?;
+                // Detach before scaling so we don't retain the forward graph.
+                let scaled_grad = grad.detach().affine(scale, 0.0)?.detach();
 
                 match self.accumulated_grads.get_mut(&param_id) {
                     Some(accumulated_grad) => {
-                        *accumulated_grad = accumulated_grad.add(&scaled_grad)?;
+                        // Ensure the accumulator never carries a grad tape across steps.
+                        *accumulated_grad = accumulated_grad.add(&scaled_grad)?.detach();
                     }
                     None => {
                         self.accumulated_grads.insert(param_id, scaled_grad);
@@ -76,7 +80,8 @@ impl GradientAccumulator {
         &mut self,
         optimizer: &mut AdamW,
         params: &[Var],
-    ) -> Result<bool, candle_core::Error> {
+        clip_grad_max_norm: Option<f64>,
+    ) -> Result<bool> {
         if !self.should_step() {
             return Ok(false);
         }
@@ -94,6 +99,10 @@ impl GradientAccumulator {
             if let Some(accumulated_grad) = self.accumulated_grads.remove(&param.id()) {
                 grad_store.insert(param, accumulated_grad);
             }
+        }
+
+        if let Some(clip_grad_max_norm) = clip_grad_max_norm {
+            let _ = clip_grad_norm(&params, &mut grad_store, clip_grad_max_norm)?;
         }
 
         // Apply the optimizer step
