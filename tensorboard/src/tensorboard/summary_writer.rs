@@ -32,9 +32,11 @@ impl FileWriter {
             writer: EventFileWriter::new(logdir),
         }
     }
+
     pub fn get_logdir(&self) -> PathBuf {
         self.writer.get_logdir()
     }
+
     pub fn add_event(&mut self, event: &Event, step: usize) {
         let mut event = event.clone();
 
@@ -48,11 +50,13 @@ impl FileWriter {
 
         self.writer.add_event(&event)
     }
+
     pub fn add_summary(&mut self, summary: Summary, step: usize) {
         let mut evn = Event::default();
         evn.what = Some(What::Summary(summary));
         self.add_event(&evn, step)
     }
+
     pub fn add_graph(&mut self, graph: GraphDef, meta: RunMetadata) {
         let graph_vec = graph.encode_to_vec();
         let mut graph_evn = Event::default();
@@ -67,6 +71,7 @@ impl FileWriter {
         meta_evn.what = Some(What::TaggedRunMetadata(tagged_meta));
         self.writer.add_event(&meta_evn);
     }
+
     pub fn flush(&mut self) {
         self.writer.flush()
     }
