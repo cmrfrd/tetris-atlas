@@ -8,6 +8,7 @@ use candle_nn::{Embedding, Module, VarBuilder, VarMap, embedding};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tensorboard::summary_writer::SummaryWriter;
+use tracing::{debug, info};
 
 use crate::{
     checkpointer::Checkpointer,
@@ -181,7 +182,7 @@ impl TetrisGameTransitionModel {
 
         // Per-token cell head to single logit per cell
         let logits = self.cell_head.forward(&x)?.squeeze(2)?; // [B, T]
-        Ok(TetrisBoardLogitsTensor::try_from(logits)?)
+        TetrisBoardLogitsTensor::try_from(logits)
     }
 }
 
@@ -190,7 +191,7 @@ pub fn train_game_transition_model(
     logdir: Option<PathBuf>,
     checkpoint_dir: Option<PathBuf>,
 ) -> Result<()> {
-    println!("Training world model");
+    info!("Training world model");
     const NUM_ITERATIONS: usize = 1_000_000;
     const BATCH_SIZE: usize = 32;
     const ACCUMULATE_GRADIENTS_STEPS: usize = 16;
@@ -263,7 +264,7 @@ pub fn train_game_transition_model(
     let mut model_optimizer = AdamW::new(model_varmap.all_vars(), ParamsAdamW::default()).unwrap();
     let model_params = model_varmap.all_vars();
     let mut model_grad_accumulator = GradientAccumulator::new(ACCUMULATE_GRADIENTS_STEPS);
-    println!("Model optimizer and grad accumulator initialized");
+    info!("Model optimizer and grad accumulator initialized");
 
     let data_generator = TetrisDatasetGenerator::new();
     let mut rng = rand::rng();
@@ -301,7 +302,7 @@ pub fn train_game_transition_model(
         let elapsed_time = start_time.elapsed().as_secs_f32();
         let boards_per_sec = (total_boards as f32) / elapsed_time;
 
-        println!(
+        info!(
             "Iteration {} | BCE Loss: {:.4} | Entropy Loss: {:.4} | Batch Accuracy: {:.4} | Grad Norm: {:.4} | Board/Sec: {:.4}",
             i, bce_loss_value, mean_entropy_loss_value, sample_0, grad_norm, boards_per_sec
         );
@@ -340,7 +341,7 @@ pub fn train_game_transition_model(
             .unwrap();
 
         if should_step {
-            println!("Stepping model");
+            debug!("Stepping model");
         }
 
         if let Some(ref checkpointer) = checkpointer {

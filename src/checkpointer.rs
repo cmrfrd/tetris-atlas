@@ -1,6 +1,7 @@
 use anyhow::Result;
 use candle_nn::VarMap;
 use std::{fs, path::Path, path::PathBuf};
+use tracing::info;
 
 /// A simple checkpointer for saving model state during training.
 ///
@@ -112,7 +113,7 @@ impl Checkpointer {
     ) -> Result<PathBuf> {
         let path = self.checkpoint_path_with(iteration, prefix, suffix);
         item.save_to_path(&path)?;
-        println!("Saved checkpoint at iteration {} to {:?}", iteration, path);
+        info!("Saved checkpoint at iteration {} to {:?}", iteration, path);
         Ok(path)
     }
 
@@ -124,7 +125,7 @@ impl Checkpointer {
     ) -> Result<Option<(PathBuf, usize)>> {
         if let Some((path, iter)) = self.latest_checkpoint_filtered(suffix)? {
             item.load_from_path(&path)?;
-            println!("Loaded checkpoint from iteration {} at {:?}", iter, path);
+            info!("Loaded checkpoint from iteration {} at {:?}", iter, path);
             Ok(Some((path, iter)))
         } else {
             Ok(None)
@@ -257,10 +258,10 @@ impl Checkpointer {
     pub fn load_latest_checkpoint(&self, varmap: &mut VarMap) -> Result<Option<usize>> {
         if let Some((path, iteration)) = self.latest_checkpoint()? {
             self.load_checkpoint(&path, varmap)?;
-            println!("Loaded checkpoint from iteration {}", iteration);
+            info!("Loaded checkpoint from iteration {}", iteration);
             Ok(Some(iteration))
         } else {
-            println!("No checkpoint found for run '{}'", self.run_name);
+            info!("No checkpoint found for run '{}'", self.run_name);
             Ok(None)
         }
     }
