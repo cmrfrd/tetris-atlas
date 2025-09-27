@@ -1,0 +1,30 @@
+{
+    // Simple Rust configuration - everything is implicit
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.fixAll": "explicit",
+        "source.organizeImports": "explicit",
+        "source.fixAll.clippy": "explicit"
+    },
+    "[rust]": {
+        "editor.defaultFormatter": "rust-lang.rust-analyzer",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit",
+            "source.organizeImports": "explicit",
+            "source.fixAll.clippy": "explicit"
+        }
+    },
+    // Ensure rust-analyzer uses Clippy for checking and fixing
+    "rust-analyzer.checkOnSave": true,
+    "rust-analyzer.checkOnSave.command": "clippy",
+    "rust-analyzer.checkOnSave.extraArgs": [
+        "--fix",
+        "--allow-dirty"
+    ],
+    // Force rust-analyzer to use our Cargo.toml configuration
+    "rust-analyzer.lints.clippy.unwrap_used": "warn",
+    "rust-analyzer.lints.clippy.expect_used": "warn",
+    "rust-analyzer.assist.importGranularity": "module",
+    "rust-analyzer.assist.importPrefix": "by_crate"
+}

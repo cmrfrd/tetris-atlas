@@ -46,7 +46,7 @@ tensorboard = { path = "tensorboard" }
 [dev-dependencies]
 
 [build-dependencies]
-prost-build = "0.13"   # code generator that runs at build time
+prost-build = "0.13"
 
 [[bench]]
 name = "benches"
@@ -58,3 +58,46 @@ lto = "fat"
 codegen-units = 1
 opt-level = 3
 target-cpu = "native"
+
+[lints.clippy]
+too_many_arguments = "allow"
+needless_pass_by_value = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+too_many_lines = "allow"
+many_single_char_names = "allow"
+similar_names = "allow"
+unreadable_literal = "allow"
+unused_variables = "allow"
+dead_code = "allow"
+unused_mut = "allow"
+unused_assignments = "allow"
+items_after_statements = "allow"
+redundant_closure = "allow"
+needless_borrow = "allow"
+option_map_unit_fn = "allow"
+semicolon_if_nothing_returned = "allow"
+uninlined_format_args = "allow"
+unnecessary_cast = "allow"
+cast_precision_loss = "allow"
+doc_markdown = "allow"
+inline_always = "allow"
+must_use_candidate = "allow"
+missing_const_for_fn = "allow"
+type_repetition_in_bounds = "allow"
+elidable_lifetime_names = "allow"
+use_self = "allow"
+new_without_default = "allow"
+uninit_assumed_init = "allow"
+iter_without_into_iter = "allow"
+ptr_arg = "allow"
+ptr_as_ptr = "allow"
+redundant_clone = "allow"
+
+
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"

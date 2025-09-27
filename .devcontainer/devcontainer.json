@@ -32,7 +32,8 @@
         "tamasfe.even-better-toml",
         "davidanson.vscode-markdownlint",
         "ms-azuretools.vscode-docker",
-        "vscode-icons-team.vscode-icons"
+        "vscode-icons-team.vscode-icons",
+        "ms-python.python"
       ]
     }
   }
