@@ -76,9 +76,9 @@ impl GradientAccumulator {
 
     /// Apply the accumulated gradients and reset the accumulator
     /// This creates a new GradStore with the accumulated gradients and applies them via the optimizer
-    pub fn apply_and_reset(
+    pub fn apply_and_reset<O: OptimStep>(
         &mut self,
-        optimizer: &mut AdamW,
+        optimizer: &mut O,
         params: &[Var],
         clip_grad_max_norm: Option<f64>,
     ) -> Result<bool> {
@@ -106,7 +106,7 @@ impl GradientAccumulator {
         }
 
         // Apply the optimizer step
-        optimizer.step(&grad_store)?;
+        optimizer.step_like(&grad_store)?;
 
         // Reset the accumulator state
         self.step_count = 0;
@@ -117,5 +117,22 @@ impl GradientAccumulator {
     pub fn reset(&mut self) {
         self.accumulated_grads.clear();
         self.step_count = 0;
+    }
+}
+
+/// Small abstraction to allow using either the built-in candle AdamW or the local AdamW.
+pub trait OptimStep {
+    fn step_like(&mut self, grads: &candle_core::backprop::GradStore) -> Result<()>;
+}
+
+impl OptimStep for candle_nn::AdamW {
+    fn step_like(&mut self, grads: &candle_core::backprop::GradStore) -> Result<()> {
+        Ok(candle_nn::Optimizer::step(self, grads)?)
+    }
+}
+
+impl OptimStep for crate::optim::AdamW {
+    fn step_like(&mut self, grads: &candle_core::backprop::GradStore) -> Result<()> {
+        Ok(Optimizer::step(self, grads)?)
     }
 }
