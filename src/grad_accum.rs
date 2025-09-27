@@ -1,17 +1,17 @@
 use std::collections::HashMap;
 
 use candle_core::{Tensor, Var};
-use candle_nn::{AdamW, Optimizer};
+use candle_nn::Optimizer;
 
 use anyhow::Result;
 
 use crate::ops::clip_grad_norm;
 
-pub fn get_l2_norm(grad_store: &candle_core::backprop::GradStore, params: &[Var]) -> Result<f32> {
+pub fn get_l2_norm(grad_store: &candle_core::backprop::GradStore) -> Result<f32> {
     let mut total_squared_sum: f32 = 0.0;
-    for param in params {
+    for param_id in grad_store.get_ids() {
         let grad = grad_store
-            .get(param)
+            .get_id(*param_id)
             .ok_or(anyhow::anyhow!("Gradient not found for parameter"))?;
         let sum_sq = grad.sqr()?.sum_all()?.to_scalar::<f32>()?;
         total_squared_sum += sum_sq;
