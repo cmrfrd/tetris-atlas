@@ -156,7 +156,7 @@ fn main() {
             run_name,
         } => {
             let ulid = ulid::Ulid::new().to_string();
-            let run_name = format!("{}_{}", run_name, ulid);
+            let run_name = format!("{run_name}_{ulid}");
             let logdir = logdir.as_ref().map(|s| {
                 let path = std::path::Path::new(s).join(&run_name);
                 std::fs::create_dir_all(&path).expect("Failed to create log directory");

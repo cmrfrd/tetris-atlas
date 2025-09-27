@@ -30,14 +30,8 @@ pub const NUM_TETRIS_CELL_STATES: usize = 2;
 /// 2 = 180 degrees
 /// 3 = 270 degrees
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct Rotation(u8);
-
-impl Default for Rotation {
-    fn default() -> Self {
-        Self(0)
-    }
-}
 
 impl Display for Rotation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1010,7 +1004,7 @@ impl Default for TetrisBoardRaw {
 impl Display for TetrisBoardRaw {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f)?;
-        write!(f, " {:2} {:2} {:2}| board\n", "r", "a", "b")?;
+        writeln!(f, " {:2} {:2} {:2}| board", "r", "a", "b")?;
         for row in 0..ROWS {
             let first_byte = row + (row / 4);
             let second_byte = first_byte + 1;
@@ -1340,7 +1334,7 @@ impl TetrisBoardRaw {
             if chunk128_c & chunk128_d != 0 {
                 return true;
             }
-            return false;
+            false
         }
     }
 
@@ -1368,7 +1362,7 @@ impl TetrisBoardRaw {
         while i < NUM_BYTES_FOR_BOARD {
             let byte = self.0[i];
             let base_idx = i * 8;
-            result[base_idx + 0] = (byte >> 7) & 1;
+            result[base_idx] = (byte >> 7) & 1;
             result[base_idx + 1] = (byte >> 6) & 1;
             result[base_idx + 2] = (byte >> 5) & 1;
             result[base_idx + 3] = (byte >> 4) & 1;
@@ -1389,7 +1383,7 @@ impl TetrisBoardRaw {
         while byte_idx < NUM_BYTES_FOR_BOARD {
             let base_idx = byte_idx * 8;
             let bits = [
-                binary_slice[base_idx + 0],
+                binary_slice[base_idx],
                 binary_slice[base_idx + 1],
                 binary_slice[base_idx + 2],
                 binary_slice[base_idx + 3],
@@ -1415,9 +1409,9 @@ impl IsLost {
     pub const NOT_LOST: Self = Self(false);
 }
 
-impl Into<bool> for IsLost {
-    fn into(self) -> bool {
-        self.0
+impl From<IsLost> for bool {
+    fn from(val: IsLost) -> Self {
+        val.0
     }
 }
 
@@ -1435,31 +1429,16 @@ pub struct PlacementResult {
 ///
 /// The game board is the main board that we play on.
 /// The piece board is a 'buffer' we use to test piece placements.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub struct TetrisBoard {
     play_board: TetrisBoardRaw,
     piece_board: TetrisBoardRaw,
 }
 
-impl TetrisBoard {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl Default for TetrisBoard {
-    fn default() -> Self {
-        Self {
-            play_board: TetrisBoardRaw::default(),
-            piece_board: TetrisBoardRaw::default(),
-        }
-    }
-}
-
 impl Display for TetrisBoard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f)?;
-        write!(f, " {:2} {:2} {:2}| board\n", "r", "a", "b")?;
+        writeln!(f, " {:2} {:2} {:2}| board", "r", "a", "b")?;
         for row in 0..ROWS {
             let first_byte = row + (row / 4);
             let second_byte = first_byte + 1;
@@ -2627,7 +2606,7 @@ impl TetrisGame {
     pub fn new() -> Self {
         let seed = rand::rng().next_u64();
         let mut rng = TetrisGameRng::new(seed);
-        let board = TetrisBoard::new();
+        let board = TetrisBoard::default();
         let mut bag = TetrisPieceBag::new();
         let piece_buf = bag.rand_next(&mut rng);
         Self {
@@ -2643,7 +2622,7 @@ impl TetrisGame {
 
     pub fn new_with_seed(seed: u64) -> Self {
         let mut rng = TetrisGameRng::new(seed);
-        let board = TetrisBoard::new();
+        let board = TetrisBoard::default();
         let mut bag = TetrisPieceBag::new();
         let piece_buf = bag.rand_next(&mut rng);
         Self {
@@ -3026,7 +3005,7 @@ mod tests {
 
         // start with the shifted down board with the diagonal of ones
         // and shift from rows above the diagonal. No changes should be made
-        let base_board = board.clone();
+        let base_board = board;
         for i in 0..COLS {
             board.shift_down_from(i);
             assert_eq!(base_board, board, "Shift down from {} failed", i);
@@ -3309,25 +3288,25 @@ mod tests {
         let mut bag = TetrisPieceBag::new();
         bag.remove(TetrisPiece::new(0));
         assert_eq!(bag.count(), 6);
-        assert_eq!(bag.contains(TetrisPiece::new(0)), false);
+        assert!(!bag.contains(TetrisPiece::new(0)));
         bag.remove(TetrisPiece::new(1));
         assert_eq!(bag.count(), 5);
-        assert_eq!(bag.contains(TetrisPiece::new(1)), false);
+        assert!(!bag.contains(TetrisPiece::new(1)));
         bag.remove(TetrisPiece::new(2));
         assert_eq!(bag.count(), 4);
-        assert_eq!(bag.contains(TetrisPiece::new(2)), false);
+        assert!(!bag.contains(TetrisPiece::new(2)));
         bag.remove(TetrisPiece::new(3));
         assert_eq!(bag.count(), 3);
-        assert_eq!(bag.contains(TetrisPiece::new(3)), false);
+        assert!(!bag.contains(TetrisPiece::new(3)));
         bag.remove(TetrisPiece::new(4));
         assert_eq!(bag.count(), 2);
-        assert_eq!(bag.contains(TetrisPiece::new(4)), false);
+        assert!(!bag.contains(TetrisPiece::new(4)));
         bag.remove(TetrisPiece::new(5));
         assert_eq!(bag.count(), 1);
-        assert_eq!(bag.contains(TetrisPiece::new(5)), false);
+        assert!(!bag.contains(TetrisPiece::new(5)));
         bag.remove(TetrisPiece::new(6));
         assert_eq!(bag.count(), 0);
-        assert_eq!(bag.contains(TetrisPiece::new(6)), false);
+        assert!(!bag.contains(TetrisPiece::new(6)));
 
         // take 6 pieces and check that the bag has reset
         let mut bag = TetrisPieceBag::new();
@@ -3340,7 +3319,7 @@ mod tests {
 
         bag = next_bags[0].0;
         assert_eq!(bag.count(), 6);
-        assert_eq!(bag.contains(next_bags[0].1), false);
+        assert!(!bag.contains(next_bags[0].1));
         next_bags = bag.next_bags().collect::<Vec<_>>();
         assert_eq!(next_bags.len(), 6);
         next_bags
@@ -3349,7 +3328,7 @@ mod tests {
 
         bag = next_bags[0].0;
         assert_eq!(bag.count(), 5);
-        assert_eq!(bag.contains(next_bags[0].1), false);
+        assert!(!bag.contains(next_bags[0].1));
         next_bags = bag.next_bags().collect::<Vec<_>>();
         assert_eq!(next_bags.len(), 5);
         next_bags
@@ -3358,7 +3337,7 @@ mod tests {
 
         bag = next_bags[0].0;
         assert_eq!(bag.count(), 4);
-        assert_eq!(bag.contains(next_bags[0].1), false);
+        assert!(!bag.contains(next_bags[0].1));
         next_bags = bag.next_bags().collect::<Vec<_>>();
         assert_eq!(next_bags.len(), 4);
         next_bags
@@ -3367,7 +3346,7 @@ mod tests {
 
         bag = next_bags[0].0;
         assert_eq!(bag.count(), 3);
-        assert_eq!(bag.contains(next_bags[0].1), false);
+        assert!(!bag.contains(next_bags[0].1));
         next_bags = bag.next_bags().collect::<Vec<_>>();
         assert_eq!(next_bags.len(), 3);
         next_bags
@@ -3376,7 +3355,7 @@ mod tests {
 
         bag = next_bags[0].0;
         assert_eq!(bag.count(), 2);
-        assert_eq!(bag.contains(next_bags[0].1), false);
+        assert!(!bag.contains(next_bags[0].1));
         next_bags = bag.next_bags().collect::<Vec<_>>();
         assert_eq!(next_bags.len(), 2);
         next_bags
@@ -3385,7 +3364,7 @@ mod tests {
 
         bag = next_bags[0].0;
         assert_eq!(bag.count(), 1);
-        assert_eq!(bag.contains(next_bags[0].1), false);
+        assert!(!bag.contains(next_bags[0].1));
         next_bags = bag.next_bags().collect::<Vec<_>>();
         assert_eq!(next_bags.len(), 1);
         next_bags

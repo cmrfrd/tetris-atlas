@@ -33,11 +33,10 @@ impl TetrisBoardsTensor {
             .map(|board| board.to_binary_slice())
             .to_slice()
             .iter()
-            .flat_map(|board| board.iter())
-            .map(|&b| b)
+            .flat_map(|board| board.iter()).copied()
             .collect::<Vec<_>>();
         let boards = Tensor::from_vec(boards, &shape, device)?;
-        Ok(Self::try_from(boards)?)
+        Self::try_from(boards)
     }
 
     /// Create a tetris boards tensor from a slice of raw boards
@@ -48,7 +47,7 @@ impl TetrisBoardsTensor {
             flattened.extend(board.to_binary_slice().iter());
         }
         let boards = Tensor::from_vec(flattened, &shape, device)?;
-        Ok(Self::try_from(boards)?)
+        Self::try_from(boards)
     }
 
     /// Convert tetris board tensor into tetris boards
@@ -72,7 +71,7 @@ impl TetrisBoardsTensor {
 
     pub fn into_dist(&self) -> Result<TetrisBoardsDistTensor> {
         let dist = one_hot(self.inner().clone(), NUM_TETRIS_CELL_STATES, 1f32, 0f32)?;
-        Ok(TetrisBoardsDistTensor::try_from(dist)?)
+        TetrisBoardsDistTensor::try_from(dist)
     }
 
     /// Count the number of boards that are equal between two tetris boards tensors
@@ -162,13 +161,13 @@ impl TetrisBoardLogitsTensor {
         let p1_expanded = p1.unsqueeze(2)?; // [B, SIZE, 1]
         let dist = Tensor::cat(&[p0_expanded, p1_expanded], 2)?; // [B, SIZE, 2]
 
-        Ok(TetrisBoardsDistTensor::try_from(dist)?)
+        TetrisBoardsDistTensor::try_from(dist)
     }
 
     pub fn argmax(&self) -> Result<TetrisBoardsTensor> {
         // For single logits, threshold at 0: positive -> 1, negative/zero -> 0
         let argmax = self.inner().gt(0.0f64)?.to_dtype(DType::U8)?;
-        Ok(TetrisBoardsTensor::try_from(argmax)?)
+        TetrisBoardsTensor::try_from(argmax)
     }
 
     pub fn sample(&self, temperature: f32) -> Result<TetrisBoardsTensor> {
@@ -184,7 +183,7 @@ impl TetrisBoardLogitsTensor {
         // Sample Bernoulli using probability of state 1
         let u = Tensor::rand(0f32, 1f32, &[batch, size], self.device())?; // [B, SIZE]
         let sampled = u.lt(&p1)?.to_dtype(DType::U8)?; // 1 if u < p1, else 0
-        Ok(TetrisBoardsTensor::try_from(sampled)?)
+        TetrisBoardsTensor::try_from(sampled)
     }
 }
 
@@ -216,7 +215,7 @@ impl TetrisBoardsDistTensor {
         let a = tensor.reshape(&[num_games, board_size, 1])?;
         let b = (1.0 - a.clone())?;
         let dists = Tensor::cat(&[&a, &b], 2)?;
-        Ok(Self::try_from(dists)?)
+        Self::try_from(dists)
     }
 
     /// Add random noise to the distribution tensor along the last dimension
@@ -232,7 +231,7 @@ impl TetrisBoardsDistTensor {
         // Normalize along last dim
         let sums = noised.sum(D::Minus1)?.reshape(&[batch, size, 1])?;
         let normalized = (noised / sums)?;
-        Ok(Self::try_from(normalized)?)
+        Self::try_from(normalized)
     }
 
     /// Convert a tetris boards distribution tensor to a tetris boards tensor
@@ -240,7 +239,7 @@ impl TetrisBoardsDistTensor {
     /// Returns a tetris boards tensor of shape (num_games, TetrisBoardRaw::SIZE)
     pub fn argmax(&self) -> Result<TetrisBoardsTensor> {
         let argmax = self.inner().argmax(D::Minus1)?;
-        Ok(TetrisBoardsTensor::try_from(argmax)?)
+        TetrisBoardsTensor::try_from(argmax)
     }
 
     pub fn sample(&self, temperature: f32) -> Result<TetrisBoardsTensor> {
@@ -259,7 +258,7 @@ impl TetrisBoardsDistTensor {
         let p1 = scaled.i((.., .., 1))?; // [B, SIZE]
         let u = Tensor::rand(0f32, 1f32, &[batch, size], device)?; // [B, SIZE]
         let sampled = u.lt(&p1)?.to_dtype(DType::U8)?; // 1 if choose state 1, else 0
-        Ok(TetrisBoardsTensor::try_from(sampled)?)
+        TetrisBoardsTensor::try_from(sampled)
     }
 
     /// Compares two tetris boards distribution tensors
@@ -311,7 +310,7 @@ impl TetrisPiecePlacementTensor {
         let shape = Shape::from_dims(&[placements.len(), 1]);
         let placement_indices: Vec<u8> = placements.iter().map(|p| p.index()).collect();
         let tensor = Tensor::from_vec(placement_indices, &shape, device)?;
-        Ok(Self::try_from(tensor)?)
+        Self::try_from(tensor)
     }
 
     /// Convert a tensor of placement indices to a list of placements
@@ -364,7 +363,7 @@ impl TetrisPiecePlacementDistTensor {
         )?
         .to_dtype(DType::F32)?
         .reshape(&[batch_size, TetrisPiecePlacement::NUM_PLACEMENTS])?;
-        Ok(Self::try_from(dists)?)
+        Self::try_from(dists)
     }
 }
 
@@ -413,7 +412,21 @@ impl TetrisPieceOrientationTensor {
         )?
         .to_dtype(DType::F32)?
         .reshape(&[batch_size, TetrisPieceOrientation::NUM_ORIENTATIONS])?;
-        Ok(TetrisPieceOrientationDistTensor::try_from(dist)?)
+        TetrisPieceOrientationDistTensor::try_from(dist)
+    }
+
+    pub fn perc_equal(&self, other: &Self) -> Result<f32> {
+        let (batch_size, _) = self.shape_tuple();
+        let (other_batch_size, _) = other.shape_tuple();
+        assert!(
+            batch_size == other_batch_size,
+            "Batch sizes must match, got {} and {}",
+            batch_size,
+            other_batch_size
+        );
+        let equal = self.inner().eq(other.inner())?.to_dtype(DType::F32)?;
+        let perc_equal = (equal.sum_all()? / (batch_size as f64))?.to_scalar::<f32>()?;
+        Ok(perc_equal)
     }
 }
 
@@ -436,7 +449,41 @@ impl_wrapped_tensor!(
 impl TetrisPieceOrientationLogitsTensor {
     pub fn into_dist(&self) -> Result<TetrisPieceOrientationDistTensor> {
         let dist = softmax(&self.0, D::Minus1)?;
-        Ok(TetrisPieceOrientationDistTensor::try_from(dist)?)
+        TetrisPieceOrientationDistTensor::try_from(dist)
+    }
+
+    pub fn argmax(&self) -> Result<TetrisPieceOrientationTensor> {
+        let (batch_size, _) = self.shape_tuple();
+        let argmax = self
+            .inner()
+            .argmax(D::Minus1)?
+            .to_dtype(DType::U8)?
+            .reshape(&[batch_size, 1])?;
+        TetrisPieceOrientationTensor::try_from(argmax)
+    }
+
+    pub fn sample(&self, temperature: f32) -> Result<TetrisPieceOrientationTensor> {
+        let (batch_size, num_orientations) = self.shape_tuple();
+        if temperature == 0.0 {
+            return self.argmax();
+        }
+
+        // Temperature scaling: scale logits by 1/T, then sample via Gumbel-max
+        let scaled_logits = (self.inner() / (temperature as f64))?;
+
+        let device = self.device();
+        let u = Tensor::rand(0f32, 1f32, &[batch_size, num_orientations], device)?;
+        let eps = Tensor::new(f32::EPSILON, device)?.broadcast_as(u.shape())?;
+        let one = Tensor::new(1f32, device)?.broadcast_as(u.shape())?;
+        let u = u.maximum(&eps)?.minimum(&(&one - &eps)?)?;
+        let g = u.log()?.neg()?.log()?.neg()?; // -log(-log(u))
+
+        let y = (scaled_logits + g)?;
+        let sampled = y
+            .argmax(D::Minus1)?
+            .to_dtype(DType::U8)?
+            .reshape(&[batch_size, 1])?;
+        TetrisPieceOrientationTensor::try_from(sampled)
     }
 }
 
@@ -478,7 +525,7 @@ impl TetrisPieceOrientationDistTensor {
         )?
         .to_dtype(DType::F32)?
         .reshape(&[batch_size, TetrisPieceOrientation::NUM_ORIENTATIONS])?;
-        Ok(Self::try_from(dists)?)
+        Self::try_from(dists)
     }
 
     /// Convert a tensor of distribution of orientations to a list of orientations
@@ -489,6 +536,16 @@ impl TetrisPieceOrientationDistTensor {
             .into_iter()
             .map(TetrisPieceOrientation::from_index)
             .collect())
+    }
+
+    pub fn entropy(&self) -> Result<Tensor> {
+        let device = self.device();
+        let eps = Tensor::new(f32::EPSILON, device)?.broadcast_as(self.shape_tuple())?;
+        let p = self.inner().maximum(&eps)?;
+
+        let plogp = p.log()?.mul(&p)?; // [B, NUM_ORIENTATIONS]
+        let h = plogp.sum(D::Minus1)?; // [B]
+        Ok(h.neg()?)
     }
 }
 
@@ -520,6 +577,26 @@ impl TetrisPieceTensor {
     }
 }
 
+/// Tetris piece sequence tensor
+/// Tensor of shape (batch_size, seq_len)
+///
+/// Represents the sequence of pieces
+#[derive(Debug, Clone)]
+pub struct TetrisPieceSequenceTensor(Tensor);
+
+impl_wrapped_tensor!(
+    TetrisPieceSequenceTensor,
+    dtype = DType::U32,
+    shape_spec = (ShapeDim::Any, ShapeDim::Any)
+);
+
+impl TetrisPieceSequenceTensor {
+    pub fn from_vec_pieces(pieces: Vec<TetrisPieceTensor>) -> Result<Self> {
+        let inners = pieces.iter().map(|p| p.inner()).collect::<Vec<_>>();
+        Self::try_from(Tensor::cat(&inners, 1)?)
+    }
+}
+
 /// Tetris context tensor
 /// Tensor of shape (batch_size, seq_len, dim)
 ///
@@ -537,7 +614,7 @@ impl TetrisContextTensor {
     pub fn push_tokens(&self, tokens: &Tensor) -> Result<Self> {
         // cat([B, S_A, D], [B, S_B, D]) -> [B, S_A+S_B, D]
         let new_tensor = Tensor::cat(&[self.inner(), tokens], 1)?;
-        Ok(Self::try_from(new_tensor)?)
+        Self::try_from(new_tensor)
     }
 
     pub fn swap_goal_token(&self, new_goal_token: &Tensor) -> Result<Self> {

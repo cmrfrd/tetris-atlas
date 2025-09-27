@@ -79,7 +79,7 @@ impl Checkpointer {
         prefix: Option<&str>,
         suffix: Option<&str>,
     ) -> Result<bool> {
-        if iteration > 0 && iteration % self.save_every == 0 {
+        if iteration > 0 && iteration.is_multiple_of(self.save_every) {
             let _ = self.save_item(iteration, item, prefix, suffix)?;
             if !self.keep_all {
                 self.cleanup_old_checkpoints(iteration)?;
@@ -145,11 +145,11 @@ impl Checkpointer {
         name.push_str(&self.run_name);
         name.push_str("_iter_");
         name.push_str(&format!("{:08}", iteration));
-        if let Some(s) = suffix {
-            if !s.is_empty() {
-                name.push('.');
-                name.push_str(s);
-            }
+        if let Some(s) = suffix
+            && !s.is_empty()
+        {
+            name.push('.');
+            name.push_str(s);
         }
         name.push_str(".safetensors");
         self.checkpoint_dir.join(name)
@@ -168,31 +168,28 @@ impl Checkpointer {
             let entry = entry?;
             let path = entry.path();
 
-            if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                if filename.starts_with(&self.run_name)
-                    && filename.ends_with(".safetensors")
-                    && !filename.contains(".optimizer.")
+            if let Some(filename) = path.file_name().and_then(|n| n.to_str())
+                && filename.starts_with(&self.run_name)
+                && filename.ends_with(".safetensors")
+                && !filename.contains(".optimizer.")
+            {
+                // Expect formats:
+                //   <run>_iter_XXXXXXXX.safetensors
+                //   <run>_iter_XXXXXXXX.<suffix>.safetensors
+                if let Some(after_prefix) =
+                    filename.strip_prefix(&format!("{}_iter_", self.run_name))
+                    && let Some(before_ext) = after_prefix.strip_suffix(".safetensors")
                 {
-                    // Expect formats:
-                    //   <run>_iter_XXXXXXXX.safetensors
-                    //   <run>_iter_XXXXXXXX.<suffix>.safetensors
-                    if let Some(after_prefix) =
-                        filename.strip_prefix(&format!("{}_iter_", self.run_name))
+                    let digits: String = before_ext
+                        .chars()
+                        .take_while(|c| c.is_ascii_digit())
+                        .collect();
+                    if !digits.is_empty()
+                        && let Ok(iteration) = digits.parse::<usize>()
+                        && iteration > latest_iteration
                     {
-                        if let Some(before_ext) = after_prefix.strip_suffix(".safetensors") {
-                            let digits: String = before_ext
-                                .chars()
-                                .take_while(|c| c.is_ascii_digit())
-                                .collect();
-                            if digits.len() > 0 {
-                                if let Ok(iteration) = digits.parse::<usize>() {
-                                    if iteration > latest_iteration {
-                                        latest_iteration = iteration;
-                                        latest_path = Some(path.clone());
-                                    }
-                                }
-                            }
-                        }
+                        latest_iteration = iteration;
+                        latest_path = Some(path.clone());
                     }
                 }
             }
@@ -230,20 +227,18 @@ impl Checkpointer {
                 }
                 if let Some(after_prefix) =
                     filename.strip_prefix(&format!("{}_iter_", self.run_name))
+                    && let Some(before_ext) = after_prefix.strip_suffix(".safetensors")
                 {
-                    if let Some(before_ext) = after_prefix.strip_suffix(".safetensors") {
-                        let digits: String = before_ext
-                            .chars()
-                            .take_while(|c| c.is_ascii_digit())
-                            .collect();
-                        if !digits.is_empty() {
-                            if let Ok(iteration) = digits.parse::<usize>() {
-                                if iteration > latest_iteration {
-                                    latest_iteration = iteration;
-                                    latest_path = Some(path.clone());
-                                }
-                            }
-                        }
+                    let digits: String = before_ext
+                        .chars()
+                        .take_while(|c| c.is_ascii_digit())
+                        .collect();
+                    if !digits.is_empty()
+                        && let Ok(iteration) = digits.parse::<usize>()
+                        && iteration > latest_iteration
+                    {
+                        latest_iteration = iteration;
+                        latest_path = Some(path.clone());
                     }
                 }
             }
@@ -280,23 +275,21 @@ impl Checkpointer {
             let entry = entry?;
             let path = entry.path();
 
-            if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                if filename.starts_with(&self.run_name) && filename.ends_with(".safetensors") {
-                    if let Some(after_prefix) =
-                        filename.strip_prefix(&format!("{}_iter_", self.run_name))
-                    {
-                        if let Some(before_ext) = after_prefix.strip_suffix(".safetensors") {
-                            let digits: String = before_ext
-                                .chars()
-                                .take_while(|c| c.is_ascii_digit())
-                                .collect();
-                            if digits.len() > 0 {
-                                if let Ok(iteration) = digits.parse::<usize>() {
-                                    checkpoints.push((iteration, path.clone()));
-                                }
-                            }
-                        }
-                    }
+            if let Some(filename) = path.file_name().and_then(|n| n.to_str())
+                && filename.starts_with(&self.run_name)
+                && filename.ends_with(".safetensors")
+                && let Some(after_prefix) =
+                    filename.strip_prefix(&format!("{}_iter_", self.run_name))
+                && let Some(before_ext) = after_prefix.strip_suffix(".safetensors")
+            {
+                let digits: String = before_ext
+                    .chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect();
+                if !digits.is_empty()
+                    && let Ok(iteration) = digits.parse::<usize>()
+                {
+                    checkpoints.push((iteration, path.clone()));
                 }
             }
         }

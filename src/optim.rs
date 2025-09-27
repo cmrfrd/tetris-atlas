@@ -208,8 +208,7 @@ impl Checkpointable for AdamW {
 
     fn load_from_path(&mut self, path: &Path) -> candle_core::Result<()> {
         let first_device = self
-            .vars
-            .get(0)
+            .vars.first()
             .map(|v| v.var.device())
             .unwrap_or(&Device::Cpu);
         let map = candle_core::safetensors::load(path, &first_device)?;

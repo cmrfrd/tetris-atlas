@@ -1,18 +1,13 @@
-use std::{ops::Deref, range::Range};
+use std::range::Range;
 
 use crate::{
-    impl_wrapped_tensor,
-    ops::kl_div,
     tensors::{TetrisBoardsTensor, TetrisPieceOrientationTensor, TetrisPiecePlacementTensor},
     tetris::{
-        NUM_TETRIS_CELL_STATES, TetrisBoardRaw, TetrisGame, TetrisGameSet, TetrisPiece,
-        TetrisPieceOrientation, TetrisPiecePlacement,
+        TetrisGame, TetrisGameSet, TetrisPiece,
     },
-    wrapped_tensor::{ShapeDim, WrappedTensor},
 };
 use anyhow::Result;
-use candle_core::{D, DType, Device, IndexOp, Shape, Tensor};
-use candle_nn::{encoding::one_hot, ops::softmax};
+use candle_core::Device;
 use rand::{
     Rng,
     distr::{Distribution, Uniform},
@@ -126,7 +121,7 @@ impl TetrisDatasetGenerator {
     ) -> Result<TetrisTransitionSequence> {
         let mut gameset = self.gen_uniform_sampled_gameset(num_piece_range, batch_size, rng)?;
 
-        let init_gameset = gameset.clone();
+        let init_gameset = gameset;
 
         let mut current_boards: Vec<TetrisBoardsTensor> = Vec::new();
         let mut placements: Vec<TetrisPiecePlacementTensor> = Vec::new();

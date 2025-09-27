@@ -280,7 +280,7 @@ impl TetrisExplorerNode {
         for placement in self.game.current_placements() {
             let mut next_game = self.game;
             let is_lost = next_game.apply_placement(*placement);
-            if is_lost.into() || !filter.map_or(true, |f| f(&self)) {
+            if is_lost.into() || !filter.is_none_or(|f| f(&self)) {
                 continue;
             }
             buf_guard.push(TetrisExplorerItem {
@@ -368,11 +368,10 @@ impl Iterator for TetrisExplorer {
                 Some(item_batch) => {
                     let mut new_items = item_batch.items;
                     new_items.retain(|item| {
-                        if let Some(max_depth) = self.max_depth {
-                            if item.depth > max_depth {
+                        if let Some(max_depth) = self.max_depth
+                            && item.depth > max_depth {
                                 return false;
                             }
-                        }
 
                         let is_visited = self.visited.check_and_mark(item.node.game.board().into());
                         if is_visited {
@@ -391,7 +390,7 @@ impl Iterator for TetrisExplorer {
             }
         }
 
-        if iter_buf.len() == 0 {
+        if iter_buf.is_empty() {
             None
         } else {
             Some(TetrisExplorerItemMegaBatch { items: *iter_buf })
@@ -493,7 +492,7 @@ impl Iterator for TetrisExplorer {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
+    
 
     use super::*;
 

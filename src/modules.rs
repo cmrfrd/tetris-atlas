@@ -1,27 +1,12 @@
-use std::{collections::HashMap, ops::Deref};
-
-use candle_core::{D, DType, Device, IndexOp, Shape, Tensor};
-use candle_nn::{
-    Conv2d, Conv2dConfig, Embedding, GroupNorm, Linear, Module, VarBuilder, conv2d, embedding,
-    group_norm, linear, linear_no_bias, ops::softmax_last_dim,
-};
+use candle_core::{D, DType, Device, IndexOp, Tensor};
+use candle_nn::Conv2dConfig as CandleConv2dConfig;
+use candle_nn::{Conv2d, GroupNorm, Linear, Module, VarBuilder, conv2d, group_norm, linear};
 
 use anyhow::{Result, ensure};
+use image::{Rgb, RgbImage};
+use serde::{Deserialize, Serialize};
 
-use crate::{
-    ops::{create_orientation_mask, masked_fill, triu2d},
-    tensors::{
-        TetrisBoardLogitsTensor, TetrisBoardsDistTensor, TetrisBoardsTensor, TetrisContextTensor,
-        TetrisPieceOrientationDistTensor, TetrisPieceOrientationLogitsTensor,
-        TetrisPieceOrientationTensor, TetrisPiecePlacementDistTensor, TetrisPiecePlacementTensor,
-        TetrisPieceTensor,
-    },
-    tetris::{
-        NUM_TETRIS_CELL_STATES, TetrisBoardRaw, TetrisPiece, TetrisPieceOrientation,
-        TetrisPiecePlacement,
-    },
-    wrapped_tensor::WrappedTensor,
-};
+use crate::ops::{masked_fill, triu2d};
 
 fn calculate_default_inv_freq(head_dim: usize, theta: f32) -> Vec<f32> {
     (0..head_dim)
@@ -30,7 +15,7 @@ fn calculate_default_inv_freq(head_dim: usize, theta: f32) -> Vec<f32> {
         .collect()
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RopeEncodingConfig {
     pub max_position_embeddings: usize,
     pub head_dim: usize,
@@ -78,14 +63,21 @@ impl RopeEncoding {
             "RoPE seq_len {} must be greater than 0",
             seq_len
         );
-        let cos = self.cos.narrow(0, 0, seq_len)?;
-        let sin = self.sin.narrow(0, 0, seq_len)?;
+        let cos = self.cos.narrow(0, 0, seq_len)?.contiguous()?;
+        let sin = self.sin.narrow(0, 0, seq_len)?.contiguous()?;
+        let y = candle_nn::rotary_emb::rope(&x, &cos, &sin)?;
+        Ok(y)
+    }
+
+    pub fn forward_with_pos_emb(&self, x: Tensor, pos_emb: usize) -> Result<Tensor> {
+        let cos = self.cos.narrow(0, pos_emb, 1)?.contiguous()?;
+        let sin = self.sin.narrow(0, pos_emb, 1)?.contiguous()?;
         let y = candle_nn::rotary_emb::rope(&x, &cos, &sin)?;
         Ok(y)
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CausalSelfAttentionConfig {
     pub d_model: usize,
     pub n_attention_heads: usize,
@@ -112,10 +104,16 @@ impl CausalSelfAttention {
     pub fn init(vb: &VarBuilder, config: &CausalSelfAttentionConfig) -> Result<Self> {
         let size_in = config.d_model;
         ensure!(
-            config.d_model % config.n_attention_heads == 0,
+            config.d_model.is_multiple_of(config.n_attention_heads),
             "d_model ({}) must be divisible by n_attention_heads ({})",
             config.d_model,
             config.n_attention_heads
+        );
+        ensure!(
+            config.n_attention_heads.is_multiple_of(config.n_kv_heads),
+            "n_attention_heads ({}) must be divisible by n_kv_heads ({})",
+            config.n_attention_heads,
+            config.n_kv_heads
         );
         let size_q = (config.d_model / config.n_attention_heads) * config.n_attention_heads;
         let size_kv = (config.d_model / config.n_attention_heads) * config.n_kv_heads;
@@ -125,7 +123,7 @@ impl CausalSelfAttention {
         let o_proj = linear(size_q, size_in, vb.pp("o_proj"))?;
 
         let head_dim = config.d_model / config.n_attention_heads;
-        ensure!(head_dim % 2 == 0, "head_dim must be even");
+        ensure!(head_dim.is_multiple_of(2), "head_dim must be even");
         let rope = RopeEncoding::new(
             RopeEncodingConfig {
                 max_position_embeddings: config.max_position_embeddings,
@@ -186,31 +184,15 @@ impl CausalSelfAttention {
         let q = self.rope.forward(q)?;
         let k = self.rope.forward(k)?;
 
-        // repeat kv
+        // repeat kv along the head dimension
         let num_rep = self.num_attention_heads / self.num_kv_heads;
         let k = match num_rep {
             1 => k,
-            _ => {
-                let (b_sz, n_kv_head, seq_len, head_dim) = k.dims4()?;
-                Tensor::cat(&vec![&k; num_rep], 2)?.reshape((
-                    b_sz,
-                    n_kv_head * num_rep,
-                    seq_len,
-                    head_dim,
-                ))?
-            }
+            _ => Tensor::cat(&vec![&k; num_rep], 1)?,
         };
         let v = match num_rep {
             1 => v,
-            _ => {
-                let (b_sz, n_kv_head, seq_len, head_dim) = v.dims4()?;
-                Tensor::cat(&vec![&v; num_rep], 2)?.reshape((
-                    b_sz,
-                    n_kv_head * num_rep,
-                    seq_len,
-                    head_dim,
-                ))?
-            }
+            _ => Tensor::cat(&vec![&v; num_rep], 1)?,
         };
 
         // attn_scores: [B, H, T, T]
@@ -223,8 +205,8 @@ impl CausalSelfAttention {
             let mask = triu2d(seq_len, &device)?
                 .reshape(&[1, 1, seq_len, seq_len])?
                 .broadcast_as(attn_scores.shape())?;
-            let m = masked_fill(&attn_scores, &mask, -1e9_f32)?;
-            m
+
+            masked_fill(&attn_scores, &mask, -1e9_f32)?
         };
 
         let attn_weights = candle_nn::ops::softmax_last_dim(&attn_scores)?;
@@ -238,7 +220,7 @@ impl CausalSelfAttention {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MlpConfig {
     pub hidden_size: usize,
     pub intermediate_size: usize,
@@ -277,7 +259,7 @@ impl Mlp {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamicTanhConfig {
     pub alpha_init_value: f64,
     pub normalized_shape: usize,
@@ -353,7 +335,7 @@ pub struct TransformerBlock {
     mlp: Mlp,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransformerBlockConfig {
     pub dyn_tanh_config: DynamicTanhConfig,
     pub attn_config: CausalSelfAttentionConfig,
@@ -375,6 +357,21 @@ impl TransformerBlock {
     }
 
     pub fn forward(&self, x: Tensor, with_causal_mask: bool) -> Result<Tensor> {
+        let (output, _) = self.forward_internal(x, with_causal_mask, false)?;
+        Ok(output)
+    }
+
+    pub fn forward_with_attn(&self, x: Tensor, with_causal_mask: bool) -> Result<(Tensor, Tensor)> {
+        let (output, attn_opt) = self.forward_internal(x, with_causal_mask, true)?;
+        Ok((output, attn_opt.unwrap()))
+    }
+
+    fn forward_internal(
+        &self,
+        x: Tensor,
+        with_causal_mask: bool,
+        return_attention: bool,
+    ) -> Result<(Tensor, Option<Tensor>)> {
         let (_b, _t, d) = x.dims3()?;
         ensure!(
             d == self.attn.head_dim * self.attn.num_attention_heads,
@@ -386,7 +383,7 @@ impl TransformerBlock {
         // x = x + attention(norm(x))
         let x_residual = x.clone();
         let x = self.dyn_tanh_1.forward(x)?;
-        let (x, _) = self.attn.forward(x, with_causal_mask)?;
+        let (x, attn) = self.attn.forward(x, with_causal_mask)?;
         let x = (x + x_residual)?;
 
         // x = x + mlp(norm(x))
@@ -395,7 +392,8 @@ impl TransformerBlock {
         let x = self.mlp.forward(&x)?;
         let x = (x + x_residual)?;
 
-        Ok(x)
+        let attn_opt = if return_attention { Some(attn) } else { None };
+        Ok((x, attn_opt))
     }
 }
 
@@ -405,7 +403,7 @@ pub struct TransformerBody {
     dyn_tanh: DynamicTanh,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransformerBodyConfig {
     pub blocks_config: TransformerBlockConfig,
     pub num_blocks: usize,
@@ -415,23 +413,86 @@ pub struct TransformerBodyConfig {
 impl TransformerBody {
     pub fn init(vb: &VarBuilder, cfg: &TransformerBodyConfig) -> Result<TransformerBody> {
         let blocks = (0..cfg.num_blocks)
-            .map(|i| TransformerBlock::init(&vb.pp(&format!("block_{}", i)), &cfg.blocks_config))
+            .map(|i| TransformerBlock::init(&vb.pp(format!("block_{}", i)), &cfg.blocks_config))
             .collect::<Result<Vec<TransformerBlock>>>()?;
         let dyn_tanh = DynamicTanh::init(&vb.pp("dyn_tanh"), &cfg.dyn_tanh_config)?;
         Ok(TransformerBody { blocks, dyn_tanh })
     }
 
     pub fn forward(&self, x: Tensor, with_causal_mask: bool) -> Result<Tensor> {
+        let (output, _) = self.forward_internal(x, with_causal_mask, false)?;
+        Ok(output)
+    }
+
+    pub fn forward_with_attn(
+        &self,
+        x: Tensor,
+        with_causal_mask: bool,
+    ) -> Result<(Tensor, Vec<Tensor>)> {
+        let (output, attns) = self.forward_internal(x, with_causal_mask, true)?;
+        Ok((output, attns.unwrap_or_default()))
+    }
+
+    fn forward_internal(
+        &self,
+        x: Tensor,
+        with_causal_mask: bool,
+        return_attention: bool,
+    ) -> Result<(Tensor, Option<Vec<Tensor>>)> {
         let mut x = x;
+        let mut attns = if return_attention {
+            Some(Vec::with_capacity(self.blocks.len()))
+        } else {
+            None
+        };
+
         for block in self.blocks.iter() {
-            x = block.forward(x, with_causal_mask)?;
+            if return_attention {
+                let (y, attn) = block.forward_with_attn(x, with_causal_mask)?;
+                x = y;
+                attns.as_mut().unwrap().push(attn);
+            } else {
+                x = block.forward(x, with_causal_mask)?;
+            }
         }
+
         let x = self.dyn_tanh.forward(x)?;
-        Ok(x)
+        Ok((x, attns))
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Conv2dConfig {
+    pub padding: usize,
+    pub stride: usize,
+    pub dilation: usize,
+    pub groups: usize,
+}
+
+impl From<Conv2dConfig> for CandleConv2dConfig {
+    fn from(val: Conv2dConfig) -> Self {
+        CandleConv2dConfig {
+            padding: val.padding,
+            stride: val.stride,
+            dilation: val.dilation,
+            groups: val.groups,
+            cudnn_fwd_algo: None,
+        }
+    }
+}
+
+impl From<CandleConv2dConfig> for Conv2dConfig {
+    fn from(cfg: CandleConv2dConfig) -> Self {
+        Self {
+            padding: cfg.padding,
+            stride: cfg.stride,
+            dilation: cfg.dilation,
+            groups: cfg.groups,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConvBlockSpec {
     pub in_channels: usize,
     pub out_channels: usize,
@@ -440,7 +501,7 @@ pub struct ConvBlockSpec {
     pub gn_groups: usize, // must divide out_channels
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConvEncoderConfig {
     pub input_hw: (usize, usize),
     pub blocks: Vec<ConvBlockSpec>,
@@ -456,21 +517,21 @@ struct ConvBlock {
 impl ConvBlock {
     fn init(vb: &VarBuilder, spec: &ConvBlockSpec, idx: usize) -> Result<(Self, usize)> {
         assert!(
-            spec.out_channels % spec.gn_groups == 0,
+            spec.out_channels.is_multiple_of(spec.gn_groups),
             "gn_groups must divide out_channels"
         );
         let conv = conv2d(
             spec.in_channels,
             spec.out_channels,
             spec.kernel_size,
-            spec.conv_cfg,
-            vb.pp(&format!("blocks_{idx}_conv")),
+            spec.conv_cfg.into(),
+            vb.pp(format!("blocks_{idx}_conv")),
         )?;
         let gn = group_norm(
             spec.gn_groups,
             spec.out_channels,
             1e-8,
-            vb.pp(&format!("blocks_{idx}_gn")),
+            vb.pp(format!("blocks_{idx}_gn")),
         )?;
         Ok((Self { conv, gn }, spec.out_channels))
     }
@@ -479,6 +540,51 @@ impl ConvBlock {
         let x = self.conv.forward(x)?;
         let x = self.gn.forward(&x)?;
         Ok(candle_nn::ops::silu(&x)?)
+    }
+
+    pub fn get_conv_filters(&self) -> Result<RgbImage> {
+        let w = self.conv.weight();
+        let w = w.to_dtype(DType::F32)?;
+        let w = w.to_device(&Device::Cpu)?;
+        let (out_channels, in_per_group, kh, kw) = w.dims4()?;
+
+        // Layout a grid for visualization
+        let pad: usize = 1;
+        let cols: usize = (f32::sqrt(out_channels as f32).ceil() as usize).max(1);
+        let rows: usize = out_channels.div_ceil(cols);
+        let img_w: usize = cols * kw + (cols.saturating_sub(1)) * pad;
+        let img_h: usize = rows * kh + (rows.saturating_sub(1)) * pad;
+        let mut img = RgbImage::new(img_w as u32, img_h as u32);
+
+        for o in 0..out_channels {
+            let row = o / cols;
+            let col = o % cols;
+            let x0 = col * (kw + pad);
+            let y0 = row * (kh + pad);
+
+            // [in_per_group, kh, kw]
+            let k = w.i(o)?.contiguous()?.reshape(&[in_per_group, kh, kw])?;
+
+            // Universal path: average across input channels to a single map
+            let mean_2d = k.mean([0])?; // [kh, kw]
+            let gray_flat: Vec<f32> = mean_2d.reshape((kh * kw,))?.to_vec1::<f32>()?;
+            // Per-filter min/max normalization (single pass using built-in min/max)
+            let (mn, mx) = gray_flat
+                .iter()
+                .fold((f32::INFINITY, f32::NEG_INFINITY), |(mn, mx), &v| {
+                    (mn.min(v), mx.max(v))
+                });
+            let denom = if mx > mn { mx - mn } else { 1.0 };
+            for yy in 0..kh {
+                for xx in 0..kw {
+                    let v = gray_flat[yy * kw + xx];
+                    let g = (((v - mn) / denom) * 255.0).clamp(0.0, 255.0) as u8;
+                    img.put_pixel((x0 + xx) as u32, (y0 + yy) as u32, Rgb([g, g, g]));
+                }
+            }
+        }
+
+        Ok(img)
     }
 }
 
@@ -556,13 +662,18 @@ impl ConvEncoder {
     pub fn flatten_dim(&self) -> usize {
         self.flatten_dim
     }
+
+    pub fn get_conv_filters(&self) -> Result<Vec<RgbImage>> {
+        self.blocks.iter().map(|b| b.get_conv_filters()).collect()
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FiLMConfig {
     pub cond_dim: usize,
     pub feat_dim: usize, // D of x: [B, D]
     pub hidden: usize,
+    pub output_dim: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -572,39 +683,61 @@ pub struct FiLM {
     post: Linear,  // feat_dim -> feat_dim
     cond_dim: usize,
     feat_dim: usize,
+    _output_dim: usize,
 }
 
 impl FiLM {
     pub fn init(vb: &VarBuilder, cfg: &FiLMConfig) -> Result<Self> {
         let proj1 = linear(cfg.cond_dim, cfg.hidden, vb.pp("proj1"))?;
         let proj2 = linear(cfg.hidden, 2 * cfg.feat_dim, vb.pp("proj2"))?;
-        let post = linear(cfg.feat_dim, cfg.feat_dim, vb.pp("post"))?;
+        let post = linear(cfg.feat_dim, cfg.output_dim, vb.pp("post"))?;
         Ok(Self {
             proj1,
             proj2,
             post,
             cond_dim: cfg.cond_dim,
             feat_dim: cfg.feat_dim,
+            _output_dim: cfg.output_dim,
         })
     }
 
     pub fn forward(&self, x: &Tensor, cond: &Tensor) -> Result<Tensor> {
         assert!(
-            x.dims().len() == 2 && cond.dims().len() == 2,
-            "FiLM expects [B,D] and [B,cond]"
+            x.rank() >= 2,
+            "FiLM expects x to have at least 2 dimensions"
         );
-        let (bx, dx) = (x.dims()[0], x.dims()[1]);
-        let (bc, dc) = (cond.dims()[0], cond.dims()[1]);
+        assert!(
+            cond.rank() >= 2,
+            "FiLM expects cond to have at least 2 dimensions"
+        );
+        let (bx, dx) = (x.dims()[0], x.dims()[x.rank() - 1]);
+        let (bc, dc) = (cond.dims()[0], cond.dims()[cond.rank() - 1]);
         assert_eq!(bx, bc, "batch mismatch");
         assert_eq!(dx, self.feat_dim, "x dim != feat_dim");
         assert_eq!(dc, self.cond_dim, "cond dim != cond_dim");
 
         let h = candle_nn::ops::silu(&self.proj1.forward(cond)?)?;
         let gb = self.proj2.forward(&h)?; // [B, 2*D]
-        let gamma = gb.narrow(1, 0, self.feat_dim)?; // [B, D]
-        let beta = gb.narrow(1, self.feat_dim, self.feat_dim)?; // [B, D]
-        let y = ((x * (&gamma + 1.0f64)?)? + &beta)?;
-        let y = (&y + candle_nn::ops::silu(&self.post.forward(&y)?)?)?;
+        let gamma = gb.narrow(D::Minus1, 0, self.feat_dim)?; // [B, D]
+        let beta = gb.narrow(D::Minus1, self.feat_dim, self.feat_dim)?; // [B, D]
+
+        // Broadcast gamma/beta across all non-batch, non-feature dims of x
+        // x has rank >= 2, with last dim = D and first dim = B
+        // Build target shape [B, 1, 1, ..., D] to match x's rank
+        let x_rank = x.rank();
+        let mut target_shape: Vec<usize> = Vec::with_capacity(x_rank);
+        target_shape.push(bx);
+        for _ in 0..(x_rank - 2) {
+            target_shape.push(1);
+        }
+        target_shape.push(self.feat_dim);
+        let gamma_b = gamma.reshape(target_shape.as_slice())?; // [B, 1, ..., D]
+        let beta_b = beta.reshape(target_shape.as_slice())?; // [B, 1, ..., D]
+
+        let gamma1 = (&gamma_b + 1.0f64)?; // [B, 1, ..., D]
+        let scaled = x.broadcast_mul(&gamma1)?; // [B, ..., D]
+        let y = scaled.broadcast_add(&beta_b)?; // [B, ..., D]
+        let y = self.post.forward(&candle_nn::ops::silu(&y)?)?;
         Ok(y)
     }
 }

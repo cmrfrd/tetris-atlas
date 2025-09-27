@@ -172,12 +172,9 @@ pub fn binary_cross_entropy_with_logits_stable(
 pub fn clip_grad_norm(vars: &[Var], grads: &mut GradStore, max_norm: f64) -> Result<f64> {
     let mut total_sq: f32 = 0.0;
     for var in vars {
-        match grads.get(var) {
-            Some(grad) => {
-                let sq = grad.sqr()?.sum_all()?.to_scalar::<f32>()?;
-                total_sq += sq;
-            }
-            None => {}
+        if let Some(grad) = grads.get(var) {
+            let sq = grad.sqr()?.sum_all()?.to_scalar::<f32>()?;
+            total_sq += sq;
         }
     }
     let norm = total_sq.sqrt() as f64;
@@ -281,7 +278,7 @@ mod tests {
             0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
             0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         ];
-        for (_, row) in mask_as_vec.iter().enumerate() {
+        for row in mask_as_vec.iter() {
             assert_eq!(row, &expected_mask);
         }
 
@@ -358,7 +355,7 @@ mod tests {
         let e2 = (2.0f32 - 4.0).exp(); // exp(-2)
         let e4 = (4.0f32 - 4.0).exp(); // 1
         let den = e1 + e2 + e4;
-        let expected = vec![vec![e1 / den, e2 / den, 0.0, e4 / den]];
+        let expected = [vec![e1 / den, e2 / den, 0.0, e4 / den]];
 
         for (row_v, row_e) in v.iter().zip(expected.iter()) {
             for (a, b) in row_v.iter().zip(row_e.iter()) {
