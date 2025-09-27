@@ -126,14 +126,29 @@ struct Cli {
     #[arg(short = 'v', long, global = true, action = clap::ArgAction::Count, help = "Increase verbosity level (-v = ERROR, -vv = WARN, -vvv = INFO, -vvvv = DEBUG, -vvvvv = TRACE)")]
     verbose: u8,
 
+    #[arg(long, global = true, help = "Enable Chrome tracing")]
+    trace: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
 
 fn main() {
+    use tracing_chrome::ChromeLayerBuilder;
+    use tracing_subscriber::prelude::*;
+
     let cli = Cli::parse();
     let filter = setup_logging(cli.verbose);
     info!("Debug level: level={}", filter);
+
+    let _guard = if cli.trace {
+        let (chrome_layer, guard) = ChromeLayerBuilder::new().build();
+        tracing_subscriber::registry().with(chrome_layer).init();
+        Some(guard)
+    } else {
+        None
+    };
+
     match &cli.command {
         Commands::Train {
             logdir,
@@ -149,7 +164,7 @@ fn main() {
             });
             let checkpoint_dir = checkpoint_dir.as_ref().map(|s| {
                 let path = std::path::Path::new(s).join(&run_name);
-                std::fs::create_dir_all(&path).expect("Failed to create checkpoint directory"); 
+                std::fs::create_dir_all(&path).expect("Failed to create checkpoint directory");
                 path
             });
             // train::train();
