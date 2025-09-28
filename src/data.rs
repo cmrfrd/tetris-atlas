@@ -1,13 +1,13 @@
 use std::range::Range;
+use std::thread;
 
 use crate::{
     tensors::{TetrisBoardsTensor, TetrisPieceOrientationTensor, TetrisPiecePlacementTensor},
-    tetris::{
-        TetrisGame, TetrisGameSet, TetrisPiece,
-    },
+    tetris::{TetrisGame, TetrisGameSet, TetrisPiece},
 };
 use anyhow::Result;
 use candle_core::Device;
+use crossbeam::channel::{Receiver, bounded};
 use rand::{
     Rng,
     distr::{Distribution, Uniform},
@@ -168,6 +168,86 @@ impl TetrisDatasetGenerator {
             result_boards,
             pieces,
         })
+    }
+
+    /// Spawn a background worker that continuously generates `TetrisTransition` items
+    /// and pushes them into a bounded channel. The worker runs until the returned
+    /// receiver is dropped. The channel capacity provides backpressure.
+    pub fn spawn_transition_channel(
+        &self,
+        num_piece_range: Range<usize>,
+        batch_size: usize,
+        device: Device,
+        buffer_capacity: usize,
+    ) -> Receiver<TetrisTransition> {
+        let (tx, rx) = bounded::<TetrisTransition>(buffer_capacity);
+
+        let _ = thread::Builder::new()
+            .name("tetris-trans-pref".to_string())
+            .spawn(move || {
+                let generator = TetrisDatasetGenerator::new();
+                let mut rng = rand::rng();
+
+                loop {
+                    let item = generator
+                        .gen_uniform_sampled_transition(
+                            num_piece_range.clone(),
+                            batch_size,
+                            &device,
+                            &mut rng,
+                        )
+                        .expect("Failed to generate TetrisTransition");
+
+                    // If the receiver is dropped, exit the worker.
+                    if tx.send(item).is_err() {
+                        break;
+                    }
+                }
+            })
+            .expect("Failed to spawn tetris-trans-pref thread");
+
+        rx
+    }
+
+    /// Spawn a background worker that continuously generates `TetrisTransitionSequence`
+    /// items and pushes them into a bounded channel. The worker runs until the returned
+    /// receiver is dropped. The channel capacity provides backpressure.
+    pub fn spawn_sequence_channel(
+        &self,
+        num_piece_range: Range<usize>,
+        batch_size: usize,
+        sequence_length: usize,
+        device: Device,
+        buffer_capacity: usize,
+    ) -> Receiver<TetrisTransitionSequence> {
+        let (tx, rx) = bounded::<TetrisTransitionSequence>(buffer_capacity);
+
+        let _ = thread::Builder::new()
+            .name("tetris-seq-pref".to_string())
+            .spawn(move || {
+                let generator = TetrisDatasetGenerator::new();
+                let mut rng = rand::rng();
+
+                loop {
+                    let item = generator
+                        .gen_sequence(
+                            num_piece_range.clone(),
+                            batch_size,
+                            sequence_length,
+                            &device,
+                            &mut rng,
+                        )
+                        .expect("Failed to generate TetrisTransitionSequence");
+
+                    // If the receiver is dropped, exit the worker.
+                    if tx.send(item).is_err() {
+                        break;
+                    }
+                }
+            })
+            .expect("Failed to spawn tetris-seq-pref thread");
+
+        rx
     }
 }
 
