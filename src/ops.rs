@@ -4,6 +4,7 @@ use crate::{
 };
 use anyhow::Result;
 use candle_core::{DType, Device, Tensor, Var, backprop::GradStore};
+use tracing::instrument;
 
 /// Create the mask over all orientations for a specific piece.
 const PIECE_MASK_LOOKUP: [u8; TetrisPiece::NUM_PIECES * TetrisPieceOrientation::NUM_ORIENTATIONS] = [
@@ -22,6 +23,7 @@ const PIECE_MASK_LOOKUP: [u8; TetrisPiece::NUM_PIECES * TetrisPieceOrientation::
     1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1,
     1, 1, 1, 1, 1, 1, 1, 0, // S
 ];
+#[instrument(level = "debug", skip(pieces))]
 pub fn create_orientation_mask(pieces: &TetrisPieceTensor) -> Result<Tensor> {
     let device = pieces.device();
     let masks: Tensor = Tensor::from_slice(
@@ -41,6 +43,7 @@ pub fn create_orientation_mask(pieces: &TetrisPieceTensor) -> Result<Tensor> {
 /// - `mask`: [B, N] (bool/int/float; >0 => keep, 0 => mask)
 /// Returns [B, N] probs; masked entries are exactly 0.
 /// Rows that are fully masked become all-zeros (no NaNs).
+#[instrument(level = "debug", fields(x_shape = ?x.dims(), mask_shape = ?mask.dims()), skip(x, mask))]
 pub fn masked_softmax_2d(x: &Tensor, mask: &Tensor) -> Result<Tensor> {
     if x.dims().len() != 2 || mask.dims().len() != 2 {
         return Err(anyhow::Error::msg(
@@ -87,6 +90,7 @@ pub fn masked_softmax_2d(x: &Tensor, mask: &Tensor) -> Result<Tensor> {
 /// - `t`:    sequence length
 /// - `device`: device to create the mask on
 /// Returns [t, t] mask; masked entries are exactly 0.
+#[instrument(level = "trace", fields(t))]
 pub fn triu2d(t: usize, device: &Device) -> Result<Tensor> {
     let mask = (0..t)
         .flat_map(|i| (0..t).map(move |j| u8::from(j > i)))
@@ -95,6 +99,7 @@ pub fn triu2d(t: usize, device: &Device) -> Result<Tensor> {
     Ok(mask)
 }
 
+#[instrument(level = "trace", fields(on_true, shape = ?mask.shape()), skip(on_false, mask))]
 pub fn masked_fill(on_false: &Tensor, mask: &Tensor, on_true: f32) -> Result<Tensor> {
     let shape = mask.shape();
     let on_true = Tensor::new(on_true, on_false.device())?
@@ -106,6 +111,7 @@ pub fn masked_fill(on_false: &Tensor, mask: &Tensor, on_true: f32) -> Result<Ten
 
 /// KL(P || Q) where `p` and `q` are probability distributions along `dim`.
 /// Uses PyTorch-style "batchmean": sum along `dim`, then mean across batches.
+#[instrument(level = "debug", fields(p_shape = ?p.shape(), q_shape = ?q.shape()), skip(p, q, dim))]
 pub fn kl_div<D: candle_core::shape::Dim>(p: &Tensor, q: &Tensor, dim: D) -> Result<Tensor> {
     if p.shape() != q.shape() {
         return Err(anyhow::Error::msg(
@@ -138,6 +144,7 @@ pub fn kl_div<D: candle_core::shape::Dim>(p: &Tensor, q: &Tensor, dim: D) -> Res
 /// BCE = max(x, 0) - x*y + log(1 + exp(-|x|))
 /// ```
 /// This formulation avoids overflow/underflow issues.
+#[instrument(level = "debug", fields(logits_shape = ?logits.shape(), targets_shape = ?targets.shape()), skip(logits, targets))]
 pub fn binary_cross_entropy_with_logits_stable(
     logits: &Tensor,
     targets: &Tensor,
@@ -169,6 +176,7 @@ pub fn binary_cross_entropy_with_logits_stable(
     Ok(loss.mean_all()?)
 }
 
+#[instrument(level = "debug", fields(num_vars = %vars.len(), max_norm), skip(vars, grads), ret)]
 pub fn clip_grad_norm(vars: &[Var], grads: &mut GradStore, max_norm: f64) -> Result<f64> {
     let mut total_sq: f32 = 0.0;
     for var in vars {
