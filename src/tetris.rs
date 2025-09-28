@@ -1,7 +1,9 @@
 use macros::piece_bytes;
 use rand::distr::{Distribution, StandardUniform};
 use rand::{Rng, RngCore};
+use rayon::prelude::*;
 use ruint::Uint;
+use tracing::instrument;
 
 use std::fmt::Display;
 use std::hash::Hash;
@@ -860,6 +862,7 @@ impl TetrisPieceBag {
     /// Get a random piece from the bag and remove it.
     /// If the bag is empty, fill it with all pieces first.
     /// Uses the provided RNG to select a random piece from the remaining pieces.
+    #[instrument(level = "trace", name = "tetris_piece_bag_rand_next", fields(bag_count = %self.count()), ret)]
     pub(self) fn rand_next(&mut self, rng: &mut TetrisGameRng) -> TetrisPiece {
         if self.is_empty() {
             self.fill();
@@ -1043,6 +1046,7 @@ impl TetrisBoardRaw {
     /// Used after dropping a piece when a collision is detected:
     /// shift the piece up before merging into the board.
     #[inline(always)]
+    #[instrument(level = "trace", name = "tetris_board_raw_shift_up")]
     pub(crate) fn shift_up(&mut self) {
         for i in 0..(NUM_BYTES_FOR_BOARD - 2) {
             self.0[i] = (self.0[i + 1] << 2) | ((self.0[i + 2] & 0b1100_0000) >> 6);
@@ -1054,6 +1058,7 @@ impl TetrisBoardRaw {
     /// Shift all rows down by 1.
     /// When placing a piece, shift it down until it hits the bottom
     /// of the board or collides with another cell.
+    #[instrument(level = "trace", name = "tetris_board_raw_shift_down")]
     pub(crate) fn shift_down(&mut self) {
         // unsafe {
         //     std::ptr::copy(
@@ -1085,6 +1090,7 @@ impl TetrisBoardRaw {
     /// This is used when we want to 'clear' a row.
     /// All the row bits above the given row are shifted down
     /// by 1 row.
+    #[instrument(level = "trace", name = "tetris_board_raw_shift_down_from", fields(row))]
     pub(crate) fn shift_down_from(&mut self, row: usize) {
         if row == 0 {
             self.0[0] = 0;
@@ -1150,12 +1156,14 @@ impl TetrisBoardRaw {
 
 impl TetrisBoardRaw {
     /// Clear the entire board by setting all the bits to 0.
+    #[instrument(level = "debug", name = "tetris_board_raw_clear_all")]
     pub(crate) fn clear_all(&mut self) -> &mut Self {
         *self = Self::EMPTY_BOARD;
         self
     }
 
     /// Fill the entire board with 1s.
+    #[instrument(level = "debug", name = "tetris_board_raw_fill_all")]
     pub(crate) fn fill_all(&mut self) -> &mut Self {
         *self = Self::FULL_BOARD;
         self
@@ -1163,18 +1171,21 @@ impl TetrisBoardRaw {
 
     /// Check if the board is clear.
     #[inline(always)]
+    #[instrument(level = "trace", name = "tetris_board_raw_is_clear", ret)]
     pub fn is_clear(&self) -> bool {
         self == &Self::EMPTY_BOARD
     }
 
     /// Check if the board is full.
     #[inline(always)]
+    #[instrument(level = "trace", name = "tetris_board_raw_is_full", ret)]
     pub fn is_full(&self) -> bool {
         self.0 == Self::FULL_BOARD.0
     }
 
     /// Merge another board into this one (bitwise OR).
     /// Used when placing a piece onto the play board after collision tests.
+    #[instrument(level = "debug", name = "tetris_board_raw_merge", fields(other_count = other.count()))]
     pub(crate) fn merge(&mut self, other: &Self) -> &mut Self {
         unsafe {
             let src = other.0.as_ptr();
@@ -1213,6 +1224,7 @@ impl TetrisBoardRaw {
 
     /// Whenever a row is full, clear it and settle the rows above it.
     /// Returns the number of lines cleared.
+    #[instrument(level = "trace", name = "tetris_board_raw_clear_rows", ret)]
     pub(crate) fn clear_rows(&mut self) -> u32 {
         let mut lines_cleared = 0;
 
@@ -1255,7 +1267,8 @@ impl TetrisBoardRaw {
     }
 
     /// Count the number of cells / bits set in the board.
-    pub const fn count(&self) -> usize {
+    #[instrument(level = "trace", name = "tetris_board_raw_count", ret)]
+    pub fn count(&self) -> usize {
         unsafe {
             // Read bytes 0-15 as a u128
             let upper_chunk = self.0.as_ptr();
@@ -1280,7 +1293,8 @@ impl TetrisBoardRaw {
     /// The height is the row number (relative to the bottom of the board),
     /// of the first non-zero cell / bit.
     #[inline(always)]
-    pub const fn height(&self) -> u8 {
+    #[instrument(level = "trace", name = "tetris_board_raw_height", ret)]
+    pub fn height(&self) -> u8 {
         unsafe {
             // Upper 16 bytes represent the first 12.8 rows
             let upper_chunk = self.0.as_ptr();
@@ -1314,7 +1328,8 @@ impl TetrisBoardRaw {
     /// We do this by checking if the bitwise AND of the two boards
     /// is non-zero.
     #[inline(always)]
-    pub const fn collides(&self, other: &Self) -> bool {
+    #[instrument(level = "trace", name = "tetris_board_raw_collides", ret)]
+    pub fn collides(&self, other: &Self) -> bool {
         // For performance reasons, we read each board as 2 * u128 chunks
         // then check if any bits are aligned.
         unsafe {
@@ -1356,7 +1371,8 @@ impl TetrisBoardRaw {
     ///
     /// This is used to "vectorize" the board for training purposes.
     #[inline(always)]
-    pub const fn to_binary_slice(&self) -> [u8; BOARD_SIZE] {
+    #[instrument(level = "trace", name = "tetris_board_raw_to_binary_slice")]
+    pub fn to_binary_slice(&self) -> [u8; BOARD_SIZE] {
         let mut result = [0u8; BOARD_SIZE];
         let mut i = 0;
         while i < NUM_BYTES_FOR_BOARD {
@@ -1377,7 +1393,8 @@ impl TetrisBoardRaw {
 
     /// Convert a binary slice to a Tetris board. This is the inverse
     /// of `to_binary_slice`.
-    pub const fn from_binary_slice(binary_slice: [u8; BOARD_SIZE]) -> Self {
+    #[instrument(level = "trace", name = "tetris_board_raw_from_binary_slice")]
+    pub fn from_binary_slice(binary_slice: [u8; BOARD_SIZE]) -> Self {
         let mut board = Self::EMPTY_BOARD;
         let mut byte_idx = 0;
         while byte_idx < NUM_BYTES_FOR_BOARD {
@@ -1484,12 +1501,14 @@ impl TetrisBoard {
 impl TetrisBoard {
     /// Convert the Tetris board to a binary slice by bits.
     /// This is used to "vectorize" the board.
-    pub const fn to_binary_slice(&self) -> [u8; BOARD_SIZE] {
+    #[instrument(level = "trace", name = "tetris_board_to_binary_slice")]
+    pub fn to_binary_slice(&self) -> [u8; BOARD_SIZE] {
         self.play_board.to_binary_slice()
     }
 
     /// Convert a binary slice to a Tetris board.
     /// This is used to "de-vectorize" the board.
+    #[instrument(level = "trace", name = "tetris_board_from_binary_slice")]
     pub fn from_binary_slice(binary_slice: [u8; BOARD_SIZE]) -> Self {
         Self::from(TetrisBoardRaw::from_binary_slice(binary_slice))
     }
@@ -1501,6 +1520,7 @@ impl TetrisBoard {
     }
 
     /// Reset the board to the initial empty state.
+    #[instrument(level = "debug", name = "tetris_board_reset")]
     pub fn reset(&mut self) {
         self.play_board.clear_all();
         self.piece_board.clear_all();
@@ -1515,6 +1535,7 @@ impl TetrisBoard {
     ///
     /// If a board is lost and we try to continue playing, we fill the board
     /// with 1s and return a lost state.
+    #[instrument(level = "debug", name = "tetris_board_apply_piece_placement", fields(piece = %placement.piece, rotation = %placement.orientation.rotation, column = %placement.orientation.column))]
     pub fn apply_piece_placement(&mut self, placement: TetrisPiecePlacement) -> PlacementResult {
         if self.loss().into() {
             self.play_board.fill_all();
@@ -1551,6 +1572,7 @@ impl TetrisBoard {
     ///
     /// Every piece, rotation, and column combination is expanded
     /// explicitly.
+    #[instrument(level = "trace", name = "tetris_board_add_piece_top", fields(piece = %placement.piece, rotation = %placement.orientation.rotation, column = %placement.orientation.column))]
     fn add_piece_top(&mut self, placement: TetrisPiecePlacement) {
         match (
             placement.piece.0,
@@ -2603,6 +2625,7 @@ impl TetrisGame {
     ///
     /// The game is initialized with a new board, a new bag, and a random piece
     /// popped from the bag.
+    #[instrument(level = "info", name = "tetris_game_new")]
     pub fn new() -> Self {
         let seed = rand::rng().next_u64();
         let mut rng = TetrisGameRng::new(seed);
@@ -2620,6 +2643,7 @@ impl TetrisGame {
         }
     }
 
+    #[instrument(level = "info", name = "tetris_game_new_with_seed")]
     pub fn new_with_seed(seed: u64) -> Self {
         let mut rng = TetrisGameRng::new(seed);
         let board = TetrisBoard::default();
@@ -2659,6 +2683,14 @@ impl TetrisGame {
     /// Returns `true` if the game is lost; otherwise `false`.
     /// Lines cleared are tracked by the difference in height before and after placement.
     /// If the game is not lost, the current piece is replaced with a new random piece.
+    #[instrument(level = "info", name = "tetris_game_apply_placement", fields(
+        piece = %placement.piece, 
+        rotation = %placement.orientation.rotation, 
+        column = %placement.orientation.column,
+        board_height = %self.board.height(),
+        piece_count = %self.piece_count,
+        lines_cleared = %self.lines_cleared
+    ))]
     pub fn apply_placement(&mut self, placement: TetrisPiecePlacement) -> IsLost {
         debug_assert!(
             self.current_placements().contains(&placement),
@@ -2681,6 +2713,7 @@ impl TetrisGame {
     }
 
     /// Reset the game to a new board, bag, and piece.
+    #[instrument(level = "info", name = "tetris_game_reset", fields(new_seed = ?new_seed, old_seed = %self.seed))]
     pub fn reset(&mut self, new_seed: Option<u64>) {
         self.board.reset();
         self.bag.fill();
@@ -2704,6 +2737,7 @@ pub struct TetrisGameSet(HeaplessVec<TetrisGame, MAX_GAMES>);
 
 impl TetrisGameSet {
     /// Create a new TetrisGameSet with N default games.
+    #[instrument(level = "info", name = "tetris_game_set_new")]
     pub fn new(num_games: usize) -> Self {
         debug_assert!(
             num_games <= MAX_GAMES,
@@ -2717,6 +2751,7 @@ impl TetrisGameSet {
 
     /// Create a new TetrisGameSet with N games using the provided seed.
     /// Each game gets a slightly different seed (seed + index).
+    #[instrument(level = "info", name = "tetris_game_set_new_with_seed")]
     pub fn new_with_seed(seed: u64, num_games: usize) -> Self {
         let mut games = HeaplessVec::new();
         (0..num_games).for_each(|i| games.push(TetrisGame::new_with_seed(seed + i as u64)));
@@ -2746,6 +2781,7 @@ impl TetrisGameSet {
         self.0.map(|game| game.board())
     }
 
+    #[instrument(level = "trace", name = "tetris_game_set_current_pieces")]
     pub fn current_pieces(&self) -> HeaplessVec<TetrisPiece, MAX_GAMES> {
         self.0.map(|game| game.current_piece())
     }
@@ -2753,6 +2789,7 @@ impl TetrisGameSet {
     /// Get the current placements for all games.
     ///
     /// These are the placements that can be applied to the current piece.
+    #[instrument(level = "trace", name = "tetris_game_set_current_placements")]
     pub fn current_placements(&self) -> Vec<&[TetrisPiecePlacement]> {
         self.0
             .iter()
@@ -2766,10 +2803,13 @@ impl TetrisGameSet {
     /// Lines cleared are tracked by measuring the difference in height before and after the placement.
     ///
     /// If the game is not lost, the current piece is replaced with a new random piece.
+    #[instrument(level = "debug", name = "tetris_game_set_apply_placement", fields(num_games = %self.0.len(), num_placements = %placements.len()))]
     pub fn apply_placement(&mut self, placements: &[TetrisPiecePlacement]) -> Vec<IsLost> {
         self.0
             .iter_mut()
             .zip(placements)
+            .par_bridge()
+            .into_par_iter()
             .map(|(game, &placement)| game.apply_placement(placement))
             .collect()
     }
