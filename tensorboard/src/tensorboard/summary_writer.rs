@@ -107,6 +107,52 @@ impl SummaryWriter {
         }
     }
 
+    /// Automatically determines optimal number of histogram buckets using statistical rules.
+    ///
+    /// Uses the Freedman-Diaconis rule which is robust to outliers:
+    /// bin_width = 2 * IQR / n^(1/3), where IQR is the interquartile range.
+    ///
+    /// Falls back to Sturges' rule for small datasets: k = ceil(log2(n) + 1)
+    fn auto_buckets(data: &[f64]) -> usize {
+        let n = data.len();
+
+        // For very small datasets, use simple rules
+        if n < 10 {
+            return n.min(5).max(1);
+        }
+
+        // Sturges' rule as baseline (works well for normal distributions)
+        let sturges = ((n as f64).log2() + 1.0).ceil() as usize;
+
+        // Try Freedman-Diaconis rule (more robust to outliers)
+        let mut sorted_data = data.to_vec();
+        sorted_data.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+        let q1_idx = n / 4;
+        let q3_idx = (3 * n) / 4;
+        let q1 = sorted_data[q1_idx];
+        let q3 = sorted_data[q3_idx];
+        let iqr = q3 - q1;
+
+        let min = sorted_data[0];
+        let max = sorted_data[n - 1];
+        let range = max - min;
+
+        // If IQR is too small or zero, fall back to Sturges
+        if iqr < 1e-10 || range < 1e-10 {
+            return sturges.clamp(10, 50);
+        }
+
+        // Freedman-Diaconis: bin_width = 2 * IQR * n^(-1/3)
+        let bin_width = 2.0 * iqr / (n as f64).powf(1.0 / 3.0);
+        let fd_buckets = (range / bin_width).ceil() as usize;
+
+        // Clamp to reasonable range (10-100) and prefer FD rule but consider Sturges too
+        let buckets = fd_buckets.max(sturges).clamp(10, 100);
+
+        buckets
+    }
+
     pub fn add_histogram_raw(
         &mut self,
         tag: &str,
@@ -137,6 +183,86 @@ impl SummaryWriter {
             step,
         );
     }
+
+    /// Adds a histogram from raw data, automatically calculating all necessary statistics.
+    ///
+    /// This is a convenience method that computes min, max, sum, sum_squares, and bucket
+    /// distributions from the provided data.
+    ///
+    /// # Arguments
+    /// * `tag` - The tag/name for this histogram
+    /// * `data` - Slice of values to create the histogram from
+    /// * `num_buckets` - Number of buckets to use. If None, automatically determines optimal count
+    ///   using the Freedman-Diaconis rule (or Sturges' rule as fallback)
+    /// * `step` - The global step value
+    pub fn add_histogram(
+        &mut self,
+        tag: &str,
+        data: &[f64],
+        num_buckets: Option<usize>,
+        step: usize,
+    ) {
+        if data.is_empty() {
+            return;
+        }
+
+        let num_buckets = num_buckets.unwrap_or_else(|| Self::auto_buckets(data));
+
+        // Calculate basic statistics
+        let min = data.iter().copied().fold(f64::INFINITY, f64::min);
+        let max = data.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        let sum: f64 = data.iter().sum();
+        let sum_squares: f64 = data.iter().map(|x| x * x).sum();
+        let num = data.len() as f64;
+
+        // Handle edge case where all values are the same
+        if (max - min).abs() < f64::EPSILON {
+            let bucket_limits = vec![min + 1e-10];
+            let bucket_counts = vec![num];
+            self.add_histogram_raw(
+                tag,
+                min,
+                max,
+                num,
+                sum,
+                sum_squares,
+                &bucket_limits,
+                &bucket_counts,
+                step,
+            );
+            return;
+        }
+
+        // Create bucket limits and counts
+        let mut bucket_limits = Vec::with_capacity(num_buckets);
+        let mut bucket_counts = vec![0.0; num_buckets];
+
+        let bucket_width = (max - min) / num_buckets as f64;
+        for i in 0..num_buckets {
+            bucket_limits.push(min + (i as f64 + 1.0) * bucket_width);
+        }
+
+        // Count values in each bucket
+        for &value in data {
+            let bucket_idx = ((value - min) / bucket_width).floor() as usize;
+            // Handle edge case where value == max
+            let bucket_idx = bucket_idx.min(num_buckets - 1);
+            bucket_counts[bucket_idx] += 1.0;
+        }
+
+        self.add_histogram_raw(
+            tag,
+            min,
+            max,
+            num,
+            sum,
+            sum_squares,
+            &bucket_limits,
+            &bucket_counts,
+            step,
+        );
+    }
+
     pub fn add_image(&mut self, tag: &str, data: &[u8], dim: &[usize], step: usize) {
         self.writer.add_summary(image(tag, data, dim), step);
     }
