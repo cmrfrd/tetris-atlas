@@ -4,18 +4,23 @@ use candle_core::{Tensor, Var};
 use candle_nn::Optimizer;
 
 use anyhow::Result;
+use rayon::prelude::*;
 
 use crate::ops::clip_grad_norm;
 
 pub fn get_l2_norm(grad_store: &candle_core::backprop::GradStore) -> Result<f32> {
-    let mut total_squared_sum: f32 = 0.0;
-    for param_id in grad_store.get_ids() {
-        let grad = grad_store
-            .get_id(*param_id)
-            .ok_or(anyhow::anyhow!("Gradient not found for parameter"))?;
-        let sum_sq = grad.sqr()?.sum_all()?.to_scalar::<f32>()?;
-        total_squared_sum += sum_sq;
-    }
+    let total_squared_sum: f32 = grad_store
+        .get_ids()
+        .par_bridge()
+        .map(|param_id| -> Result<f32> {
+            let grad = grad_store
+                .get_id(*param_id)
+                .ok_or(anyhow::anyhow!("Gradient not found for parameter"))?;
+            let sum_sq = grad.sqr()?.sum_all()?.to_scalar::<f32>()?;
+            Ok(sum_sq)
+        })
+        .try_reduce(|| 0.0f32, |acc, x| Ok(acc + x))?;
+
     Ok(total_squared_sum.sqrt())
 }
 
