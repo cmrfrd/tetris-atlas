@@ -15,6 +15,8 @@ use rand::{
 };
 
 pub struct TetrisTransition {
+    pub current_gameset: TetrisGameSet,
+
     pub current_board: TetrisBoardsTensor,
     pub result_board: TetrisBoardsTensor,
 
@@ -103,6 +105,7 @@ impl TetrisDatasetGenerator {
         };
         let result_board = TetrisBoardsTensor::from_gameset(gameset, device)?;
         Ok(TetrisTransition {
+            current_gameset: gameset,
             current_board,
             placement,
             orientation,
