@@ -1,9 +1,40 @@
-Dockerfile
-.dockerignore
-.git
-target
-data
-doc
-*.md
-build/
+# Build artifacts
 target/
+build/
+
+# Git
+.git/
+.gitignore
+
+# Docker files
+.docker/
+Dockerfile*
+.dockerignore
+
+# Training artifacts
+checkpoint/
+logdir/
+traces/
+*.csv
+
+# Documentation
+*.md
+doc/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+serve.py
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Fly
+fly.toml
