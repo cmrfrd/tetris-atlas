@@ -147,6 +147,22 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
     }
 
     #[inline(always)]
+    pub fn get(&self, index: usize) -> Option<&T> {
+        if index >= self.len {
+            return None;
+        }
+        Some(unsafe { self.data[index].assume_init_ref() })
+    }
+
+    #[inline(always)]
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        if index >= self.len {
+            return None;
+        }
+        Some(unsafe { self.data[index].assume_init_mut() })
+    }
+
+    #[inline(always)]
     pub fn clear(&mut self) {
         self.len = 0;
     }
