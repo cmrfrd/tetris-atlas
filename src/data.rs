@@ -255,6 +255,7 @@ impl TetrisDatasetGenerator {
 }
 
 mod test {
+    #[allow(unused_imports)]
     use super::*;
 
     /// Test that the sequence of boards is chained correctly
