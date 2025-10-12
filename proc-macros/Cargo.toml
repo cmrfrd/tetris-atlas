@@ -1,5 +1,5 @@
 [package]
-name = "macros"
+name = "proc-macros"
 version = "0.1.0"
 edition = "2024"
 
@@ -8,4 +8,4 @@ proc-macro = true
 
 [dependencies]
 quote = "1.0.38"
-syn = "2.0.98"
+syn = { version = "2.0.98", features = ["full"] }
