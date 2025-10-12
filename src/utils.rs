@@ -6,9 +6,27 @@ use std::hint::spin_loop;
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// MurmurHash3 64-bit hash function
-#[inline(always)]
-pub fn fmix64(mut x: u64) -> u64 {
+use proc_macros::inline_conditioned;
+
+/// Applies the MurmurHash3 64-bit finalization mixer to a value.
+///
+/// # Arguments
+///
+/// * `x` - The 64-bit value to mix
+///
+/// # Returns
+///
+/// The mixed 64-bit value with improved bit distribution
+///
+/// # Example
+///
+/// ```
+/// use tetris_atlas::utils::fmix64;
+/// let hash = fmix64(12345u64);
+/// assert_eq!(hash, 1716623506685013753u64); // known pre-image
+/// ```
+#[inline_conditioned(always)]
+pub const fn fmix64(mut x: u64) -> u64 {
     x ^= x >> 33;
     x = x.wrapping_mul(0xff51afd7ed558ccd);
     x ^= x >> 33;
@@ -17,17 +35,39 @@ pub fn fmix64(mut x: u64) -> u64 {
     x
 }
 
-/// Convert a slice of u8 "bits" (0/1) to a byte.
-#[inline(always)]
+/// Converts an array of 8 bit values (0 or 1) into a single byte.
+///
+/// Each element in the array is treated as a single bit, with the first element
+/// becoming the most significant bit (bit 7) and the last element becoming the
+/// least significant bit (bit 0).
+///
+/// # Arguments
+///
+/// * `bits` - An array of 8 bytes, each containing either 0 or 1
+///
+/// # Returns
+///
+/// A byte formed by packing the 8 bits together
+///
+/// # Example
+///
+/// ```
+/// use tetris_atlas::utils::bits_to_byte;
+/// let bits = [1, 0, 1, 0, 1, 0, 1, 0];
+/// assert_eq!(bits_to_byte(&bits), 0b10101010);
+/// ```
+#[inline_conditioned(always)]
 pub const fn bits_to_byte(bits: &[u8; 8]) -> u8 {
-    ((bits[0] & 1) << 7)
-        | ((bits[1] & 1) << 6)
-        | ((bits[2] & 1) << 5)
-        | ((bits[3] & 1) << 4)
-        | ((bits[4] & 1) << 3)
-        | ((bits[5] & 1) << 2)
-        | ((bits[6] & 1) << 1)
-        | (bits[7] & 1)
+    let packed = u64::from_le_bytes(*bits);
+
+    (((packed) & 1) << 7
+        | ((packed >> 8) & 1) << 6
+        | ((packed >> 16) & 1) << 5
+        | ((packed >> 24) & 1) << 4
+        | ((packed >> 32) & 1) << 3
+        | ((packed >> 40) & 1) << 2
+        | ((packed >> 48) & 1) << 1
+        | ((packed >> 56) & 1)) as u8
 }
 
 /// A spin lock for shared-mutual exclusion.
@@ -51,6 +91,15 @@ impl<'a, T> Drop for SpinLockGuard<'a, T> {
 }
 
 impl<T: Debug> SpinLock<T> {
+    /// Creates a new `SpinLock` containing the given data.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The value to protect with the spin lock
+    ///
+    /// # Returns
+    ///
+    /// A new `SpinLock` instance in the unlocked state
     pub const fn new(data: T) -> Self {
         SpinLock {
             lock: AtomicBool::new(false),
@@ -58,6 +107,14 @@ impl<T: Debug> SpinLock<T> {
         }
     }
 
+    /// Acquires the lock, blocking the current thread until it becomes available.
+    ///
+    /// This method will spin in a tight loop until the lock is acquired. The returned
+    /// guard will release the lock when dropped.
+    ///
+    /// # Returns
+    ///
+    /// A guard that provides mutable access to the protected data
     pub fn lock(&self) -> SpinLockGuard<'_, T> {
         while self.lock.swap(true, Ordering::Acquire) {
             spin_loop();
@@ -69,6 +126,14 @@ impl<T: Debug> SpinLock<T> {
         }
     }
 
+    /// Attempts to acquire the lock without blocking.
+    ///
+    /// If the lock is currently held by another thread, this method returns `None`
+    /// immediately instead of spinning.
+    ///
+    /// # Returns
+    ///
+    /// `Some(guard)` if the lock was successfully acquired, `None` otherwise
     pub fn try_lock(&self) -> Option<SpinLockGuard<'_, T>> {
         if self
             .lock
@@ -111,6 +176,11 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
     const ELEM: MaybeUninit<T> = MaybeUninit::uninit();
     const INIT: [MaybeUninit<T>; N] = [Self::ELEM; N]; // important for optimization of `new`
 
+    /// Creates a new empty `HeaplessVec` with fixed capacity `N`.
+    ///
+    /// # Returns
+    ///
+    /// An empty vector with no allocated elements
     pub const fn new() -> Self {
         Self {
             data: Self::INIT,
@@ -118,27 +188,57 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         }
     }
 
-    #[inline(always)]
+    /// Returns the maximum number of elements the vector can hold.
+    ///
+    /// # Returns
+    ///
+    /// The capacity `N` of this vector
+    #[inline_conditioned(always)]
     pub const fn capacity() -> usize {
         N
     }
 
-    #[inline(always)]
+    /// Returns `true` if the vector contains no elements.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the vector is empty, `false` otherwise
+    #[inline_conditioned(always)]
     pub const fn is_empty(&self) -> bool {
         self.len == 0
     }
 
-    #[inline(always)]
+    /// Returns `true` if the vector has reached its maximum capacity.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the vector is full, `false` otherwise
+    #[inline_conditioned(always)]
     pub const fn is_full(&self) -> bool {
         self.len == N
     }
 
-    #[inline(always)]
+    /// Returns the number of elements currently in the vector.
+    ///
+    /// # Returns
+    ///
+    /// The number of initialized elements
+    #[inline_conditioned(always)]
     pub const fn len(&self) -> usize {
         self.len
     }
 
-    #[inline(always)]
+    /// Appends an element to the end of the vector.
+    ///
+    /// # Arguments
+    ///
+    /// * `item` - The element to append
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure the vector is not full before calling this method.
+    /// Pushing to a full vector will cause undefined behavior.
+    #[inline_conditioned(always)]
     pub fn push(&mut self, item: T) {
         unsafe {
             *self.data.get_unchecked_mut(self.len) = MaybeUninit::new(item); // safe because we know the index is in bounds
@@ -146,7 +246,16 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         }
     }
 
-    #[inline(always)]
+    /// Returns a reference to the element at the given index, or `None` if out of bounds.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - The index of the element to retrieve
+    ///
+    /// # Returns
+    ///
+    /// `Some(&T)` if the index is valid, `None` otherwise
+    #[inline_conditioned(always)]
     pub fn get(&self, index: usize) -> Option<&T> {
         if index >= self.len {
             return None;
@@ -154,7 +263,16 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         Some(unsafe { self.data[index].assume_init_ref() })
     }
 
-    #[inline(always)]
+    /// Returns a mutable reference to the element at the given index, or `None` if out of bounds.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - The index of the element to retrieve
+    ///
+    /// # Returns
+    ///
+    /// `Some(&mut T)` if the index is valid, `None` otherwise
+    #[inline_conditioned(always)]
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         if index >= self.len {
             return None;
@@ -162,12 +280,23 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         Some(unsafe { self.data[index].assume_init_mut() })
     }
 
-    #[inline(always)]
+    /// Clears the vector, removing all elements.
+    ///
+    /// This operation does not deallocate memory; it simply resets the length to zero.
+    #[inline_conditioned(always)]
     pub fn clear(&mut self) {
         self.len = 0;
     }
 
-    #[inline(always)]
+    /// Retains only the elements specified by the predicate.
+    ///
+    /// Elements for which the predicate returns `false` are removed. The order of
+    /// retained elements is preserved.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - A predicate function that returns `true` for elements to keep
+    #[inline_conditioned(always)]
     pub fn retain<F>(&mut self, mut f: F)
     where
         F: FnMut(&T) -> bool,
@@ -189,6 +318,15 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         self.len = write_idx;
     }
 
+    /// Returns `true` if any element satisfies the predicate.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - A predicate function to test each element
+    ///
+    /// # Returns
+    ///
+    /// `true` if at least one element satisfies the predicate, `false` otherwise
     pub fn any<F>(&self, f: F) -> bool
     where
         F: Fn(&T) -> bool,
@@ -202,6 +340,15 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         false
     }
 
+    /// Returns `true` if all elements satisfy the predicate.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - A predicate function to test each element
+    ///
+    /// # Returns
+    ///
+    /// `true` if all elements satisfy the predicate, `false` otherwise
     pub fn all<F>(&self, f: F) -> bool
     where
         F: Fn(&T) -> bool,
@@ -215,6 +362,15 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         true
     }
 
+    /// Returns the first element that satisfies the predicate.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - A predicate function to test each element
+    ///
+    /// # Returns
+    ///
+    /// `Some(T)` containing the first matching element, or `None` if no match is found
     pub fn find<F>(&self, f: F) -> Option<T>
     where
         F: Fn(&T) -> bool,
@@ -228,6 +384,11 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         None
     }
 
+    /// Applies a function to each element in the vector, allowing mutation.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - A function to apply to each element
     pub fn apply_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut T),
@@ -239,6 +400,15 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         }
     }
 
+    /// Creates a new `HeaplessVec` by applying a function to each element.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - A function that transforms elements from type `T` to type `U`
+    ///
+    /// # Returns
+    ///
+    /// A new `HeaplessVec` containing the transformed elements
     pub fn map<F, U: Copy + Sized + Debug>(&self, f: F) -> HeaplessVec<U, N>
     where
         F: Fn(&T) -> U,
@@ -250,6 +420,19 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         result
     }
 
+    /// Fills this vector with elements from another vector, transferring from the end.
+    ///
+    /// Elements are transferred from the end of `other` to this vector until either
+    /// this vector is full or `other` is empty. The transferred elements are removed
+    /// from `other`.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The source vector to transfer elements from
+    ///
+    /// # Returns
+    ///
+    /// The number of elements transferred
     pub fn fill_from<const M: usize>(&mut self, other: &mut HeaplessVec<T, M>) -> usize {
         if self.len >= N {
             return 0;
@@ -275,6 +458,17 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         transfer_count
     }
 
+    /// Fills this vector with elements from a slice, taking from the end.
+    ///
+    /// Elements are copied from the end of the slice until this vector is full.
+    ///
+    /// # Arguments
+    ///
+    /// * `slice` - The source slice to copy elements from
+    ///
+    /// # Returns
+    ///
+    /// The number of elements copied
     pub fn fill_from_slice(&mut self, slice: &[T]) -> usize {
         if self.len >= N {
             return 0;
@@ -296,6 +490,15 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         transfer_count
     }
 
+    /// Fills this vector with all elements from a `Vec`.
+    ///
+    /// # Arguments
+    ///
+    /// * `vec` - The source vector to copy elements from
+    ///
+    /// # Panics
+    ///
+    /// Panics if the source vector has more elements than this vector's capacity
     pub fn fill_from_vec(&mut self, vec: &Vec<T>) {
         self.len = vec.len();
         unsafe {
@@ -307,6 +510,11 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         }
     }
 
+    /// Converts this `HeaplessVec` to a standard `Vec`.
+    ///
+    /// # Returns
+    ///
+    /// A new `Vec<T>` containing copies of all elements
     pub fn to_vec(&self) -> Vec<T> {
         let mut vec = Vec::with_capacity(self.len);
         if self.len > 0 {
@@ -323,14 +531,29 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         vec
     }
 
+    /// Returns a slice containing all elements in the vector.
+    ///
+    /// # Returns
+    ///
+    /// A slice view of the vector's elements
     pub fn to_slice(&self) -> &[T] {
         unsafe { std::slice::from_raw_parts(self.data.as_ptr() as *const T, self.len) }
     }
 
+    /// Returns an iterator over the elements of the vector.
+    ///
+    /// # Returns
+    ///
+    /// An iterator yielding immutable references to each element
     pub fn iter(&self) -> std::slice::Iter<'_, T> {
         unsafe { std::slice::from_raw_parts(self.data.as_ptr() as *const T, self.len).iter() }
     }
 
+    /// Returns a mutable iterator over the elements of the vector.
+    ///
+    /// # Returns
+    ///
+    /// An iterator yielding mutable references to each element
     pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
         unsafe {
             std::slice::from_raw_parts_mut(self.data.as_mut_ptr() as *mut T, self.len).iter_mut()
@@ -344,6 +567,11 @@ pub struct VecPool<T: Copy + Sized + Debug, const N: usize, const M: usize> {
 }
 
 impl<T: Copy + Sized + Debug, const N: usize, const M: usize> VecPool<T, N, M> {
+    /// Creates a new pool of `M` vectors, each with capacity `N`.
+    ///
+    /// # Returns
+    ///
+    /// A new `VecPool` with all vectors initialized to empty state
     pub const fn new() -> Self {
         let mut pool: [SpinLock<HeaplessVec<T, N>>; M] =
             unsafe { MaybeUninit::uninit().assume_init() };
@@ -355,6 +583,14 @@ impl<T: Copy + Sized + Debug, const N: usize, const M: usize> VecPool<T, N, M> {
         Self { pool }
     }
 
+    /// Acquires a lock on one of the vectors in the pool.
+    ///
+    /// This method tries each vector in the pool in sequence until it finds one
+    /// that is available. It will spin until a vector becomes available.
+    ///
+    /// # Returns
+    ///
+    /// A guard providing exclusive access to one of the pool's vectors
     pub fn get_lock(&self) -> SpinLockGuard<'_, HeaplessVec<T, N>> {
         loop {
             for lock in &self.pool {
@@ -367,21 +603,446 @@ impl<T: Copy + Sized + Debug, const N: usize, const M: usize> VecPool<T, N, M> {
     }
 }
 
-/// Apply all runs a function over a slice
-/// Apply `f` in-place to every element of a fixed-size array.
+/// Applies a function in-place to every element of a fixed-size array.
 ///
-/// In release mode rustc removes bounds checks and iterator bookkeeping,
-/// so the generated machine code is already a tight pointer walk.
-#[inline]
+/// This function provides an optimized way to mutate all elements of an array.
+/// In release mode, the compiler removes bounds checks and iterator bookkeeping,
+/// resulting in efficient machine code.
+///
+/// # Arguments
+///
+/// * `arr` - A mutable reference to the array to modify
+/// * `f` - A function to apply to each element
+///
+/// # Example
+///
+/// ```
+/// use tetris_atlas::utils::apply_all;
+/// let mut arr = [1, 2, 3, 4, 5];
+/// apply_all(&mut arr, |x| *x *= 2);
+/// assert_eq!(arr, [2, 4, 6, 8, 10]);
+/// ```
+#[inline_conditioned]
 pub fn apply_all<T, const N: usize>(arr: &mut [T; N], mut f: impl FnMut(&mut T)) {
     for x in arr {
         f(x);
     }
 }
 
+#[macro_export]
+macro_rules! rep1_at {
+    ($start:expr, $i:ident, $b:block) => {{
+        const $i: usize = $start;
+        $b
+    }};
+}
+
+#[macro_export]
+macro_rules! rep2_at {
+    ($start:expr, $i:ident, $b:block) => {{
+        $crate::rep1_at!($start + 0, $i, $b);
+        $crate::rep1_at!($start + 1, $i, $b);
+    }};
+}
+
+#[macro_export]
+macro_rules! rep4_at {
+    ($start:expr, $i:ident, $b:block) => {{
+        $crate::rep2_at!(($start + 0), $i, $b);
+        $crate::rep2_at!(($start + 2), $i, $b);
+    }};
+}
+
+#[macro_export]
+macro_rules! rep8_at {
+    ($start:expr, $i:ident, $b:block) => {{
+        $crate::rep4_at!(($start + 0), $i, $b);
+        $crate::rep4_at!(($start + 4), $i, $b);
+    }};
+}
+
+#[macro_export]
+macro_rules! repeat_exact_idx {
+    (0,  $i:ident, $b:block) => {};
+    (1,  $i:ident, $b:block) => {
+        $crate::rep1_at!(0, $i, $b)
+    };
+    (2,  $i:ident, $b:block) => {
+        $crate::rep2_at!(0, $i, $b)
+    };
+    (3,  $i:ident, $b:block) => {{
+        $crate::rep2_at!(0, $i, $b);
+        $crate::rep1_at!(2, $i, $b);
+    }};
+    (4,  $i:ident, $b:block) => {
+        $crate::rep4_at!(0, $i, $b)
+    };
+    (5,  $i:ident, $b:block) => {{
+        $crate::rep4_at!(0, $i, $b);
+        $crate::rep1_at!(4, $i, $b);
+    }};
+    (6,  $i:ident, $b:block) => {{
+        $crate::rep4_at!(0, $i, $b);
+        $crate::rep2_at!(4, $i, $b);
+    }};
+    (7,  $i:ident, $b:block) => {{
+        $crate::rep4_at!(0, $i, $b);
+        $crate::rep2_at!(4, $i, $b);
+        $crate::rep1_at!(6, $i, $b);
+    }};
+    (8,  $i:ident, $b:block) => {
+        $crate::rep8_at!(0, $i, $b)
+    };
+    (9,  $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep1_at!(8, $i, $b);
+    }};
+    (10, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep2_at!(8, $i, $b);
+    }};
+    (11, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep2_at!(8, $i, $b);
+        $crate::rep1_at!(10, $i, $b);
+    }};
+    (12, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep4_at!(8, $i, $b);
+    }};
+    (13, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep4_at!(8, $i, $b);
+        $crate::rep1_at!(12, $i, $b);
+    }};
+    (14, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep4_at!(8, $i, $b);
+        $crate::rep2_at!(12, $i, $b);
+    }};
+    (15, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep4_at!(8, $i, $b);
+        $crate::rep2_at!(12, $i, $b);
+        $crate::rep1_at!(14, $i, $b);
+    }};
+}
+
+#[macro_export]
+macro_rules! repeat_idx_generic {
+    ($N:expr, $i:ident, $b:block) => {
+        match $N {
+            0 => {}
+            1 => {
+                $crate::repeat_exact_idx!(1, $i, $b)
+            }
+            2 => {
+                $crate::repeat_exact_idx!(2, $i, $b)
+            }
+            3 => {
+                $crate::repeat_exact_idx!(3, $i, $b)
+            }
+            4 => {
+                $crate::repeat_exact_idx!(4, $i, $b)
+            }
+            5 => {
+                $crate::repeat_exact_idx!(5, $i, $b)
+            }
+            6 => {
+                $crate::repeat_exact_idx!(6, $i, $b)
+            }
+            7 => {
+                $crate::repeat_exact_idx!(7, $i, $b)
+            }
+            8 => {
+                $crate::repeat_exact_idx!(8, $i, $b)
+            }
+            9 => {
+                $crate::repeat_exact_idx!(9, $i, $b)
+            }
+            10 => {
+                $crate::repeat_exact_idx!(10, $i, $b)
+            }
+            11 => {
+                $crate::repeat_exact_idx!(11, $i, $b)
+            }
+            12 => {
+                $crate::repeat_exact_idx!(12, $i, $b)
+            }
+            13 => {
+                $crate::repeat_exact_idx!(13, $i, $b)
+            }
+            14 => {
+                $crate::repeat_exact_idx!(14, $i, $b)
+            }
+            15 => {
+                $crate::repeat_exact_idx!(15, $i, $b)
+            }
+            _ => panic!("repeat_idx_generic! supports up to N=15"),
+        }
+    };
+}
+
+/// Right shifts elements in a u32 array based on a mask, performing `I` iterations.
+///
+/// For each iteration, this function:
+/// 1. Finds the most significant bit (MSB) in the mask
+/// 2. Right shifts all elements by 1 position from that bit onward
+/// 3. Clears the MSB from the mask
+///
+/// # Type Parameters
+///
+/// * `N` - The number of u32 elements in the array
+/// * `I` - The number of shift iterations to perform
+///
+/// # Arguments
+///
+/// * `xs` - Array of u32 values to shift
+/// * `m` - Mask indicating which bit positions to shift from
+///
+/// # Example
+/// ```rust
+/// use tetris_atlas::utils::rshift_slice_from_mask_u32;
+/// let mut arr = [0b1111_0000_0000_0000_0000_0000_0000_0000_u32; 2];
+/// let mask = 0b1111_0000_0000_0000_0000_0000_0000_0000_u32;
+/// rshift_slice_from_mask_u32::<2, 4>(&mut arr, mask);
+/// // After 4 iterations, each 1 in the mask causes a right shift by 1
+/// // So the result shifts everything down by 4 positions
+/// assert_eq!(arr, [0b0000_1111_0000_0000_0000_0000_0000_0000_u32; 2]);
+/// ```
+#[inline_conditioned(always)]
+pub fn rshift_slice_from_mask_u32<const N: usize, const I: usize>(xs: &mut [u32; N], mut m: u32) {
+    #[inline_conditioned(always)]
+    const fn step<const N: usize>(xs: &mut [u32; N], m: &mut u32) {
+        let active = 0u32.wrapping_sub((*m != 0) as u32);
+        let mut v = *m;
+        v |= v >> 1;
+        v |= v >> 2;
+        v |= v >> 4;
+        v |= v >> 8;
+        v |= v >> 16;
+        let pivot = (v ^ (v >> 1)) & active;
+        let keep = pivot | pivot.wrapping_sub(1);
+
+        repeat_idx_generic!(N, IDX, {
+            let x = xs[IDX];
+            let shifted = ((x >> 1) & !keep) | (x & keep);
+            xs[IDX] = (x & !active) | (shifted & active);
+        });
+        *m &= !pivot;
+    }
+
+    repeat_idx_generic!(I, _I, {
+        step(xs, &mut m);
+    });
+}
+
+/// Right shifts a slice of u32s by `n` bits starting from a given index.
+///
+/// For each u32 in the slice:
+/// - Bits before `idx` are kept unchanged
+/// - Bits after `idx` are shifted right by `n` positions
+///
+/// # Arguments
+///
+/// * `xs` - Array of u32s to shift
+/// * `idx` - Starting bit index for the shift
+/// * `n` - Number of positions to shift right
+///
+/// # Example
+/// ```rust
+/// use tetris_atlas::utils::rshift_slice_n_from_index_u32;
+/// let mut arr = [0b1111_0000_0000_0000_0000_0000_0000_0000_u32; 1];
+/// let expected = 0b0000_1111_0000_0000_0000_0000_0000_0000;
+/// rshift_slice_n_from_index_u32(&mut arr, 8, 4);
+/// assert_eq!(
+///     arr[0], expected,
+///     "\nExpected {:032b},\n     got {:032b}",
+///     expected,
+///     arr[0]
+/// );
+/// ```
+#[inline_conditioned(always)]
+pub const fn rshift_slice_n_from_index_u32<const N: usize>(
+    xs: &mut [u32; N],
+    idx: usize,
+    n: usize,
+) {
+    let mask = u32::MAX >> idx;
+    repeat_idx_generic!(N, I, {
+        let shifted = (xs[I] >> n) & !mask;
+        let kept = xs[I] & mask;
+        xs[I] = shifted | kept;
+    });
+}
+
+/// Right shifts a u32 by `n` bits starting from a given index.
+///
+/// Bits before `idx` are kept unchanged, while bits from `idx` onward are shifted right.
+///
+/// # Arguments
+///
+/// * `x` - The u32 value to shift
+/// * `idx` - Starting bit index for the shift (0 = MSB)
+/// * `n` - Number of positions to shift right
+///
+/// # Returns
+///
+/// The shifted u32 value
+///
+/// # Example
+///
+/// ```
+/// use tetris_atlas::utils::rshift_n_from_index;
+/// let x = 0b1111_0000_0000_0000_0000_0000_0000_0000u32;
+/// let result = rshift_n_from_index(x, 8, 4);
+/// assert_eq!(result, 0b0000_1111_0000_0000_0000_0000_0000_0000u32);
+/// ```
+#[inline_conditioned(always)]
+pub const fn rshift_n_from_index(x: u32, idx: usize, n: usize) -> u32 {
+    let mask = u32::MAX >> idx;
+    let shifted = (x >> n) & !mask;
+    let kept = x & mask;
+    shifted | kept
+}
+
+/// Performs a bitwise AND operation across all elements in a fixed-size array of u32s.
+///
+/// # Arguments
+///
+/// * `xs` - Fixed-size array of u32s to AND together
+///
+/// # Returns
+///
+/// A u32 containing the bitwise AND of all elements in the input array
+///
+/// # Example
+/// ```
+/// use tetris_atlas::utils::and_all;
+/// let arr = [0b1111_0000u32, 0b1100_1100u32, 0b1010_1010u32];
+/// assert_eq!(and_all(arr), 0b1000_0000u32);
+/// ```
+#[inline_conditioned(always)]
+pub const fn and_all<const N: usize>(xs: [u32; N]) -> u32 {
+    let mut acc = u32::MAX;
+    repeat_idx_generic!(N, I, {
+        acc &= xs[I];
+    });
+    acc
+}
+
+/// Counts the total number of set bits across all elements in a fixed-size array of u32s.
+///
+/// # Arguments
+///
+/// * `xs` - Fixed-size array of u32s to count bits in
+///
+/// # Returns
+///
+/// The total count of set bits (1s) across all elements
+///
+/// # Example
+///
+/// ```
+/// use tetris_atlas::utils::count_all;
+/// let arr = [0b1111u32, 0b1100u32, 0b1010u32];
+/// assert_eq!(count_all(arr), 8); // 4 + 2 + 2 = 8 bits set
+/// ```
+#[inline_conditioned(always)]
+pub const fn count_all<const N: usize>(xs: [u32; N]) -> u32 {
+    let mut acc = 0;
+    repeat_idx_generic!(N, I, {
+        acc += xs[I].count_ones();
+    });
+    acc
+}
+
+/// Compute the "height" of each column in a fixed-size array of u32s.
+///
+/// The height of a u32 is the index of the first non-zero bit from the most significant bit.
+///
+/// # Arguments
+///
+/// * `xs` - Fixed-size array of u32s to compute heights for
+///
+/// # Returns
+///
+/// A fixed-size array of u32s containing the heights of each column
+///
+/// # Example
+///
+/// ```
+/// use tetris_atlas::utils::heights_all;
+/// let arr = [0b1111u32, 0b0101u32, 0b0011u32];
+/// assert_eq!(heights_all(arr), [4, 3, 2]);
+/// ```
+#[inline_conditioned(always)]
+pub const fn heights_all<const N: usize>(xs: [u32; N]) -> [u32; N] {
+    let mut heights = [0; N];
+    repeat_idx_generic!(N, I, {
+        heights[I] = u32::BITS - xs[I].leading_zeros();
+    });
+    heights
+}
+
+#[inline_conditioned(always)]
+pub const fn trailing_zeros_all<const N: usize>(xs: [u32; N]) -> [u32; N] {
+    let mut trailing_zeros = [0; N];
+    repeat_idx_generic!(N, I, {
+        trailing_zeros[I] = xs[I].trailing_zeros();
+    });
+    trailing_zeros
+}
+
+/// Compute the maximum value across all elements in a fixed-size array of u32s.
+///
+/// # Arguments
+///
+/// * `xs` - Fixed-size array of u32s to compute the maximum for
+///
+/// # Returns
+///
+/// The maximum value across all elements
+///
+/// # Example
+///
+/// ```
+/// use tetris_atlas::utils::max_all;
+/// let arr = [0b1111u32, 0b1100u32, 0b1010u32];
+/// assert_eq!(max_all(arr), 0b1111u32);
+/// ```
+#[inline_conditioned(always)]
+pub const fn max_all<const N: usize>(xs: [u32; N]) -> u32 {
+    let mut max = 0;
+    repeat_idx_generic!(N, I, {
+        max = max ^ ((max ^ xs[I]) & ((max < xs[I]) as u32).wrapping_neg());
+    });
+    max
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_rshift_n_from_index() {
+        assert_eq!(
+            rshift_n_from_index(0b1111_0000_0000_0000_0000_0000_0000_0000, 0, 4),
+            0b1111_0000_0000_0000_0000_0000_0000_0000
+        );
+        assert_eq!(
+            rshift_n_from_index(0b1111_0000_0000_0000_0000_0000_0000_0000, 4, 4),
+            0b0000_0000_0000_0000_0000_0000_0000_0000
+        );
+        assert_eq!(
+            rshift_n_from_index(0b1111_0000_0000_0000_0000_0000_0000_0000, 8, 4),
+            0b0000_1111_0000_0000_0000_0000_0000_0000
+        );
+        assert_eq!(
+            rshift_n_from_index(0b1111_0000_0000_0000_0000_0000_0000_1111, 12, 4),
+            0b0000_1111_0000_0000_0000_0000_0000_1111
+        );
+    }
 
     #[test]
     fn test_new() {
