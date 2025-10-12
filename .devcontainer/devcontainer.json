@@ -33,7 +33,8 @@
         "davidanson.vscode-markdownlint",
         "ms-azuretools.vscode-docker",
         "vscode-icons-team.vscode-icons",
-        "ms-python.python"
+        "ms-python.python",
+        "ms-vscode.live-server"
       ]
     }
   }
