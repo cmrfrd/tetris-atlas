@@ -2,7 +2,7 @@ use crate::{
     impl_wrapped_tensor,
     ops::kl_div,
     tetris::{
-        NUM_TETRIS_CELL_STATES, TetrisBoardRaw, TetrisGameSet, TetrisPiece, TetrisPieceOrientation,
+        NUM_TETRIS_CELL_STATES, TetrisBoard, TetrisGameSet, TetrisPiece, TetrisPieceOrientation,
         TetrisPiecePlacement,
     },
     wrapped_tensor::{ShapeDim, WrappedTensor},
@@ -12,7 +12,7 @@ use candle_core::{D, DType, Device, IndexOp, Shape, Tensor};
 use candle_nn::{encoding::one_hot, ops::softmax};
 
 /// Tetris boards tensor
-/// Tensor of shape (num_games, TetrisBoardRaw::SIZE)
+/// Tensor of shape (num_games, TetrisBoard::SIZE)
 ///
 /// Represents a "set" of tetris games
 #[derive(Debug, Clone)]
@@ -21,28 +21,25 @@ pub struct TetrisBoardsTensor(Tensor);
 impl_wrapped_tensor!(
     TetrisBoardsTensor,
     dtype = DType::U8,
-    shape_spec = (ShapeDim::Any, ShapeDim::Dim(TetrisBoardRaw::SIZE))
+    shape_spec = (ShapeDim::Any, ShapeDim::Dim(TetrisBoard::SIZE))
 );
 
 impl TetrisBoardsTensor {
     /// Create a tetris boards tensor from a gameset
     pub fn from_gameset(games: TetrisGameSet, device: &Device) -> Result<Self> {
-        let shape = Shape::from_dims(&[games.len(), TetrisBoardRaw::SIZE]);
-        let boards = games
-            .boards()
-            .map(|board| board.to_binary_slice())
-            .to_slice()
-            .iter()
-            .flat_map(|board| board.iter()).copied()
-            .collect::<Vec<_>>();
+        let mut boards = Vec::with_capacity(games.len() * TetrisBoard::SIZE);
+        games.boards().iter().for_each(|board| {
+            boards.extend_from_slice(&board.to_binary_slice());
+        });
+        let shape = Shape::from_dims(&[games.len(), TetrisBoard::SIZE]);
         let boards = Tensor::from_vec(boards, &shape, device)?;
         Self::try_from(boards)
     }
 
     /// Create a tetris boards tensor from a slice of raw boards
-    pub fn from_boards(boards: &[TetrisBoardRaw], device: &Device) -> Result<Self> {
-        let shape = Shape::from_dims(&[boards.len(), TetrisBoardRaw::SIZE]);
-        let mut flattened: Vec<u8> = Vec::with_capacity(boards.len() * TetrisBoardRaw::SIZE);
+    pub fn from_boards(boards: &[TetrisBoard], device: &Device) -> Result<Self> {
+        let shape = Shape::from_dims(&[boards.len(), TetrisBoard::SIZE]);
+        let mut flattened: Vec<u8> = Vec::with_capacity(boards.len() * TetrisBoard::SIZE);
         for board in boards.iter() {
             flattened.extend(board.to_binary_slice().iter());
         }
@@ -51,7 +48,7 @@ impl TetrisBoardsTensor {
     }
 
     /// Convert tetris board tensor into tetris boards
-    pub fn into_boards(self) -> Result<Vec<TetrisBoardRaw>> {
+    pub fn into_boards(self) -> Result<Vec<TetrisBoard>> {
         let (batch_size, _board_size) = self.shape_tuple();
         let boards = {
             let mut boards = Vec::with_capacity(batch_size);
@@ -62,7 +59,7 @@ impl TetrisBoardsTensor {
                     .flatten_all()?
                     .to_dtype(DType::U8)?
                     .to_vec1::<u8>()?;
-                boards.push(TetrisBoardRaw::from_binary_slice(board.try_into().unwrap()));
+                boards.push(TetrisBoard::from_binary_slice(board.try_into().unwrap()));
             }
             boards
         };
@@ -122,7 +119,7 @@ impl TetrisBoardsTensor {
         );
         let equal = self.inner().eq(other.inner())?.to_dtype(DType::U32)?;
         let num_cells_equal = equal.sum(D::Minus1)?.to_dtype(DType::F64)?;
-        let perc_cells_equal = (num_cells_equal / ((TetrisBoardRaw::SIZE) as f64))?;
+        let perc_cells_equal = (num_cells_equal / ((TetrisBoard::SIZE) as f64))?;
         let perc_equal = perc_cells_equal
             .to_dtype(DType::F32)?
             .mean([0])?
@@ -132,7 +129,7 @@ impl TetrisBoardsTensor {
 }
 
 /// Tetris boards logits tensor
-/// Tensor of shape (num_games, TetrisBoardRaw::SIZE)
+/// Tensor of shape (num_games, TetrisBoard::SIZE)
 ///
 /// This tensor represents the logits of a board for binary classification:
 /// - Positive values indicate the cell is likely occupied (state 1)
@@ -146,12 +143,12 @@ pub struct TetrisBoardLogitsTensor(Tensor);
 impl_wrapped_tensor!(
     TetrisBoardLogitsTensor,
     dtype = DType::F32,
-    shape_spec = (ShapeDim::Any, ShapeDim::Dim(TetrisBoardRaw::SIZE))
+    shape_spec = (ShapeDim::Any, ShapeDim::Dim(TetrisBoard::SIZE))
 );
 
 impl TetrisBoardLogitsTensor {
     /// Convert the logits tensor to a distribution tensor by applying sigmoid to get probabilities
-    /// Returns a tetris boards distribution tensor of shape (num_games, TetrisBoardRaw::SIZE, 2)
+    /// Returns a tetris boards distribution tensor of shape (num_games, TetrisBoard::SIZE, 2)
     pub fn into_dist(&self) -> Result<TetrisBoardsDistTensor> {
         let p1 = candle_nn::ops::sigmoid(self.inner())?;
         let p0 = (1.0 - &p1)?;
@@ -188,7 +185,7 @@ impl TetrisBoardLogitsTensor {
 }
 
 /// Tetris boards distribution tensor
-/// Tensor of shape (num_games, TetrisBoardRaw::SIZE, 2)
+/// Tensor of shape (num_games, TetrisBoard::SIZE, 2)
 ///
 /// This tensor represents the distribution of a board across the 2 possible states:
 /// - 0: The board is empty
@@ -203,7 +200,7 @@ impl_wrapped_tensor!(
     dtype = DType::F32,
     shape_spec = (
         ShapeDim::Any,
-        ShapeDim::Dim(TetrisBoardRaw::SIZE),
+        ShapeDim::Dim(TetrisBoard::SIZE),
         ShapeDim::Dim(2)
     )
 );
@@ -236,7 +233,7 @@ impl TetrisBoardsDistTensor {
 
     /// Convert a tetris boards distribution tensor to a tetris boards tensor
     /// by taking the argmax of the last dimension
-    /// Returns a tetris boards tensor of shape (num_games, TetrisBoardRaw::SIZE)
+    /// Returns a tetris boards tensor of shape (num_games, TetrisBoard::SIZE)
     pub fn argmax(&self) -> Result<TetrisBoardsTensor> {
         let argmax = self.inner().argmax(D::Minus1)?;
         TetrisBoardsTensor::try_from(argmax)
@@ -574,6 +571,33 @@ impl TetrisPieceTensor {
     pub fn into_pieces(self) -> Result<Vec<TetrisPiece>> {
         let pieces = self.0.flatten_all()?.to_vec1::<u8>()?;
         Ok(pieces.into_iter().map(TetrisPiece::from_index).collect())
+    }
+}
+
+/// Tetris piece one-hot tensor
+/// Tensor of shape (batch_size, NUM_PIECES)
+///
+/// One-hot encoded representation of pieces
+#[derive(Debug, Clone)]
+pub struct TetrisPieceOneHotTensor(Tensor);
+
+impl_wrapped_tensor!(
+    TetrisPieceOneHotTensor,
+    dtype = DType::F32,
+    shape_spec = (ShapeDim::Any, ShapeDim::Dim(TetrisPiece::NUM_PIECES))
+);
+
+impl TetrisPieceOneHotTensor {
+    pub fn from_piece_tensor(piece_tensor: TetrisPieceTensor) -> Result<Self> {
+        let (batch_size, _) = piece_tensor.shape_tuple();
+        let one_hot = one_hot(
+            piece_tensor.inner().clone(),
+            TetrisPiece::NUM_PIECES,
+            1f32,
+            0f32,
+        )?
+        .reshape(&[batch_size, TetrisPiece::NUM_PIECES])?;
+        Self::try_from(one_hot)
     }
 }
 
