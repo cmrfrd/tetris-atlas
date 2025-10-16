@@ -35,6 +35,7 @@ ARG RUST_VERSION=nightly
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
     sh -s -- -y --default-toolchain ${RUST_VERSION} && \
     rustup component add rust-src rust-analyzer-preview && \
+    cargo install flamegraph cargo-expand cargo-show-asm && \
     chown -R $USER:$USER /usr/local/rustup /usr/local/cargo
 RUN rustup update
 
@@ -43,6 +44,16 @@ RUN chown -R $USER:$USER /usr/local/cargo
 
 ## Install uv
 RUN python3 -m pip install uv
+
+## Install flyctl
+RUN curl -L https://fly.io/install.sh | sh && \
+    mkdir -p /usr/local/fly && \
+    cp -r /root/.fly/* /usr/local/fly/ && \
+    rm -rf /root/.fly && \
+    ln -sf /usr/local/fly/bin/flyctl /usr/local/bin/fly && \
+    chown -R $USER:$USER /usr/local/fly && \
+    chmod +x /usr/local/bin/fly && \
+    chmod -R +x /usr/local/fly/bin
 
 # Change to non-privileged user
 USER $USER
