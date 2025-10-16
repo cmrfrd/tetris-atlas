@@ -1,9 +1,13 @@
+use std::sync::RwLock;
+
 use crate::{
+    grad_accum::get_l2_norm,
     tensors::TetrisPieceTensor,
     tetris::{TetrisPiece, TetrisPieceOrientation},
 };
 use anyhow::Result;
 use candle_core::{DType, Device, Tensor, Var, backprop::GradStore};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tracing::instrument;
 
 /// Create the mask over all orientations for a specific piece.
@@ -176,29 +180,26 @@ pub fn binary_cross_entropy_with_logits_stable(
     Ok(loss.mean_all()?)
 }
 
-#[instrument(level = "debug", fields(num_vars = %vars.len(), max_norm), skip(vars, grads), ret)]
-pub fn clip_grad_norm(vars: &[Var], grads: &mut GradStore, max_norm: f64) -> Result<f64> {
-    let mut total_sq: f32 = 0.0;
-    for var in vars {
-        if let Some(grad) = grads.get(var) {
-            let sq = grad.sqr()?.sum_all()?.to_scalar::<f32>()?;
-            total_sq += sq;
-        }
-    }
-    let norm = total_sq.sqrt() as f64;
-
+pub fn clip_grad_norm(vars: &[Var], grad_store: &mut GradStore, max_norm: f64) -> Result<f64> {
+    let norm = get_l2_norm(grad_store)? as f64;
     let scale = if norm > max_norm {
         max_norm / (norm + f32::EPSILON as f64)
     } else {
         1.0
     };
 
-    // Scale gradients
-    for var in vars {
-        if let Some(grad) = grads.remove(var) {
-            grads.insert(var, grad.affine(scale, 0.0)?);
+    // Scale gradients - still need vars for the mutable operations
+    let grad_store_mutex = RwLock::new(grad_store);
+    vars.par_iter().try_for_each(|var| -> Result<()> {
+        let read_guard = grad_store_mutex.read().unwrap();
+        if let Some(grad) = read_guard.get_id(var.id()) {
+            let scaled_grad = grad.affine(scale, 0.0)?;
+            drop(read_guard);
+            let mut write_guard = grad_store_mutex.write().unwrap();
+            write_guard.insert(var, scaled_grad);
         }
-    }
+        Ok(())
+    })?;
 
     Ok(norm)
 }
@@ -206,6 +207,7 @@ pub fn clip_grad_norm(vars: &[Var], grads: &mut GradStore, max_norm: f64) -> Res
 #[cfg(test)]
 mod tests {
     use candle_core::Device;
+    use rand::seq::SliceRandom;
 
     use super::*;
 
@@ -412,6 +414,132 @@ mod tests {
 
         let res = masked_softmax_2d(&x, &mask);
         assert!(res.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_scatter_set() -> Result<()> {
+        let dev = Device::Cpu;
+
+        // This test demonstrates permuting the rows of a matrix using scatter_set.
+        // Source matrix: [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+        let source = Tensor::arange(0f32, 9., &dev)?.reshape((3, 3))?;
+
+        // The tensor to be modified in-place, starts as zeros.
+        let x = Tensor::zeros((3, 3), DType::F32, &dev)?;
+
+        // We want to permute rows: 0->1, 1->2, 2->0. The indices tensor specifies
+        // the destination row for each element of the source.
+        let indices = Tensor::from_vec(vec![1u32, 2, 0], (3,), &dev)?
+            .reshape((3, 1))?
+            .broadcast_as((3, 3))?
+            .contiguous()?;
+
+        // Perform scatter_set along dimension 0 (rows).
+        x.scatter_set(&indices, &source, 0)?;
+
+        let y_vec = x.to_vec2::<f32>()?;
+        // Expected permuted matrix: [[6, 7, 8], [0, 1, 2], [3, 4, 5]]
+        let expected = vec![
+            vec![6.0, 7.0, 8.0], // Original row 2
+            vec![0.0, 1.0, 2.0], // Original row 0
+            vec![3.0, 4.0, 5.0], // Original row 1
+        ];
+        assert_eq!(y_vec, expected);
+
+        fn simple_gather(x: Vec<usize>, indices: Vec<usize>) -> Vec<usize> {
+            let mut y = Vec::with_capacity(indices.len());
+            for idx in indices {
+                y.push(x[idx]);
+            }
+            y
+        }
+        /// Reorder `x` in place so that after[i] = before[indices[i]].
+        /// - `indices` must be a permutation of 0..n-1
+        /// - Modifies `indices` (marks visited by adding n)
+        /// - O(1) aux, T: Copy
+        pub fn gather_permute_in_place<T: Copy>(
+            x: &mut [T],
+            indices: &mut [usize],
+        ) -> Result<(), &'static str> {
+            let n = x.len();
+            if indices.len() != n {
+                return Err("indices.len() must equal x.len()");
+            }
+            if n == 0 {
+                return Ok(());
+            }
+            if n > usize::MAX / 2 {
+                return Err("n too large for add-n marking");
+            }
+
+            // Verify indices is a valid permutation
+            let mut seen = vec![false; n];
+            for &v in indices.iter() {
+                if v >= n || std::mem::replace(&mut seen[v], true) {
+                    return Err("indices is not a valid permutation");
+                }
+            }
+
+            let nn = n;
+
+            let mut i = 0usize;
+            while i < n {
+                // already visited/placed?
+                if indices[i] >= nn {
+                    i += 1;
+                    continue;
+                }
+
+                // follow the cycle starting at i
+                let mut cur = i;
+                let tmp = x[i]; // displaced value from position i
+
+                loop {
+                    let src = indices[cur]; // src < n (by contract)
+                    indices[cur] = src + nn; // mark visited
+
+                    // if the next link is visited, close the cycle
+                    if indices[src] >= nn {
+                        x[cur] = tmp;
+                        break;
+                    } else {
+                        x[cur] = x[src];
+                        cur = src;
+                    }
+                }
+
+                i += 1;
+            }
+
+            Ok(())
+        }
+
+        // Test that both implementations produce the same result
+        let mut rng = rand::rng();
+        let num_samples = 100_000;
+        let vec_size = 128;
+        let _ = (0..num_samples)
+            .map(|_| {
+                let x = (0..vec_size)
+                    .map(|_| rand::random::<u32>() as usize)
+                    .collect::<Vec<_>>();
+                let mut indices = (0..vec_size).collect::<Vec<_>>();
+                indices.shuffle(&mut rng);
+
+                let x_simple_gather = x.clone();
+                let indices_simple_gather = indices.clone();
+                let mut x_permute_in_place_fast = x.clone();
+                let mut indices_permute_in_place_fast = indices.clone();
+                let output_simple_gather = simple_gather(x_simple_gather, indices_simple_gather);
+                let _ = gather_permute_in_place(
+                    &mut x_permute_in_place_fast,
+                    &mut indices_permute_in_place_fast,
+                );
+                assert_eq!(output_simple_gather, x_permute_in_place_fast);
+            })
+            .count();
 
         Ok(())
     }
