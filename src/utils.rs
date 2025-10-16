@@ -1038,85 +1038,6 @@ pub const fn rshift_n_from_index(x: u32, idx: usize, n: usize) -> u32 {
     shifted | kept
 }
 
-/// Performs a bitwise AND operation across all elements in a fixed-size array of u32s.
-///
-/// # Arguments
-///
-/// * `xs` - Fixed-size array of u32s to AND together
-///
-/// # Returns
-///
-/// A u32 containing the bitwise AND of all elements in the input array
-///
-/// # Example
-/// ```
-/// use tetris_atlas::utils::and_all;
-/// let arr = [0b1111_0000u32, 0b1100_1100u32, 0b1010_1010u32];
-/// assert_eq!(and_all(arr), 0b1000_0000u32);
-/// ```
-#[inline_conditioned(always)]
-pub const fn and_all<const N: usize>(xs: [u32; N]) -> u32 {
-    let mut acc = u32::MAX;
-    repeat_idx_generic!(N, I, {
-        acc &= xs[I];
-    });
-    acc
-}
-
-/// Counts the total number of set bits across all elements in a fixed-size array of u32s.
-///
-/// # Arguments
-///
-/// * `xs` - Fixed-size array of u32s to count bits in
-///
-/// # Returns
-///
-/// The total count of set bits (1s) across all elements
-///
-/// # Example
-///
-/// ```
-/// use tetris_atlas::utils::count_all;
-/// let arr = [0b1111u32, 0b1100u32, 0b1010u32];
-/// assert_eq!(count_all(arr), 8); // 4 + 2 + 2 = 8 bits set
-/// ```
-#[inline_conditioned(always)]
-pub const fn count_all<const N: usize>(xs: [u32; N]) -> u32 {
-    let mut acc = 0;
-    repeat_idx_generic!(N, I, {
-        acc += xs[I].count_ones();
-    });
-    acc
-}
-
-/// Compute the "height" of each column in a fixed-size array of u32s.
-///
-/// The height of a u32 is the index of the first non-zero bit from the most significant bit.
-///
-/// # Arguments
-///
-/// * `xs` - Fixed-size array of u32s to compute heights for
-///
-/// # Returns
-///
-/// A fixed-size array of u32s containing the heights of each column
-///
-/// # Example
-///
-/// ```
-/// use tetris_atlas::utils::heights_all;
-/// let arr = [0b1111u32, 0b0101u32, 0b0011u32];
-/// assert_eq!(heights_all(arr), [4, 3, 2]);
-/// ```
-#[inline_conditioned(always)]
-pub const fn heights_all<const N: usize>(xs: [u32; N]) -> [u32; N] {
-    let mut heights = [0; N];
-    repeat_idx_generic!(N, I, {
-        heights[I] = u32::BITS - xs[I].leading_zeros();
-    });
-    heights
-}
-
 #[inline_conditioned(always)]
 pub const fn trailing_zeros_all<const N: usize>(xs: [u32; N]) -> [u32; N] {
     let mut trailing_zeros = [0; N];
@@ -1124,32 +1045,6 @@ pub const fn trailing_zeros_all<const N: usize>(xs: [u32; N]) -> [u32; N] {
         trailing_zeros[I] = xs[I].trailing_zeros();
     });
     trailing_zeros
-}
-
-/// Compute the maximum value across all elements in a fixed-size array of u32s.
-///
-/// # Arguments
-///
-/// * `xs` - Fixed-size array of u32s to compute the maximum for
-///
-/// # Returns
-///
-/// The maximum value across all elements
-///
-/// # Example
-///
-/// ```
-/// use tetris_atlas::utils::max_all;
-/// let arr = [0b1111u32, 0b1100u32, 0b1010u32];
-/// assert_eq!(max_all(arr), 0b1111u32);
-/// ```
-#[inline_conditioned(always)]
-pub const fn max_all<const N: usize>(xs: [u32; N]) -> u32 {
-    let mut max = 0;
-    repeat_idx_generic!(N, I, {
-        max = max ^ ((max ^ xs[I]) & ((max < xs[I]) as u32).wrapping_neg());
-    });
-    max
 }
 
 #[cfg(test)]
