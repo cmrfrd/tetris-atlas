@@ -3,25 +3,27 @@
 #![feature(new_range_api)]
 #![feature(const_trait_impl)]
 #![feature(iter_array_chunks)]
+#![feature(const_index)]
 
 use rayon::ThreadPoolBuilder;
 
+pub mod benches;
 pub mod checkpointer;
 pub mod data;
 pub mod grad_accum;
-pub mod model;
+pub mod modules;
 pub mod ops;
 pub mod optim;
 pub mod tensors;
 pub mod tetris;
+pub mod tetris_evolution_player_model;
 pub mod tetris_explorer;
-pub mod train;
+pub mod tetris_simple_player_model;
+pub mod tetris_transition_model;
+pub mod tetris_transition_transformer_model;
+pub mod tetris_world_model;
 pub mod utils;
 pub mod wrapped_tensor;
-
-// With feature `bench`, expose the benchmark module from its own file.
-#[cfg(feature = "bench")]
-pub mod benches;
 
 pub const ASSERT_LEVEL: u32 = 1;
 
