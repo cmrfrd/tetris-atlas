@@ -22,17 +22,17 @@ use proc_macros::inline_conditioned;
 ///
 /// ```
 /// use tetris_atlas::utils::fmix64;
-/// let hash = fmix64(12345u64);
-/// assert_eq!(hash, 1716623506685013753u64); // known pre-image
+/// let mut x = 12345u64;
+/// fmix64(&mut x);
+/// assert_eq!(x, 1716623506685013753u64); // known pre-image
 /// ```
 #[inline_conditioned(always)]
-pub const fn fmix64(mut x: u64) -> u64 {
-    x ^= x >> 33;
-    x = x.wrapping_mul(0xff51afd7ed558ccd);
-    x ^= x >> 33;
-    x = x.wrapping_mul(0xc4ceb9fe1a85ec53);
-    x ^= x >> 33;
-    x
+pub const fn fmix64(x: &mut u64) {
+    *x ^= *x >> 33;
+    *x = x.wrapping_mul(0xff51afd7ed558ccd);
+    *x ^= *x >> 33;
+    *x = x.wrapping_mul(0xc4ceb9fe1a85ec53);
+    *x ^= *x >> 33;
 }
 
 /// Converts an array of 8 bit values (0 or 1) into a single byte.
