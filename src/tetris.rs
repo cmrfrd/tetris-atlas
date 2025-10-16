@@ -1,23 +1,21 @@
-use macros::piece_bytes;
+use proc_macros::{inline_conditioned, piece_u32_cols};
 use rand::distr::{Distribution, StandardUniform};
 use rand::{Rng, RngCore};
 use rayon::prelude::*;
-use ruint::Uint;
-use tracing::instrument;
 
 use std::fmt::Display;
 use std::hash::Hash;
 use std::ops::Range;
+use std::ops::{Index, IndexMut};
 
-use crate::utils::HeaplessVec;
-use crate::utils::{bits_to_byte, fmix64};
+use crate::repeat_idx_generic;
+use crate::utils::fmix64;
+use crate::utils::{HeaplessVec, rshift_slice_from_mask_u32, trailing_zeros_all};
 
-const ROWS: usize = 24;
+const ROWS: usize = 20;
+const ACTUAL_ROWS: usize = u32::BITS as usize;
 const COLS: usize = 10;
 const BOARD_SIZE: usize = ROWS * COLS;
-const NUM_BYTES_FOR_BOARD: usize = BOARD_SIZE / 8;
-const ROW_CHUNK: usize = 4;
-const BYTES_PER_ROW_CHUNK: usize = ROW_CHUNK * COLS / 8;
 const NUM_TETRIS_PIECES: usize = 7;
 
 pub const NUM_TETRIS_CELL_STATES: usize = 2;
@@ -119,7 +117,7 @@ impl TetrisPiece {
     const DEFAULT: Self = Self::O_PIECE;
 
     /// Get all pieces as a slice.
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub const fn all() -> [Self; NUM_TETRIS_PIECES] {
         [
             Self::O_PIECE,
@@ -143,33 +141,34 @@ impl TetrisPiece {
     /// 5 = L
     /// 6 = J
     /// ```
+    #[inline_conditioned(always)]
     pub const fn new(piece: u8) -> Self {
         Self(0b0000_0001 << piece)
     }
 
     /// Get the index of the piece.
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub const fn index(&self) -> u8 {
         self.0.trailing_zeros() as u8
     }
 
     /// From index (alias for `new`)
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub const fn from_index(index: u8) -> Self {
         Self::new(index)
     }
 
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub const fn is_empty(&self) -> bool {
         self.0 == 0b1000_0000
     }
 
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub const fn to_empty(&mut self) {
         *self = unsafe { std::mem::transmute(0b1000_0000u8) };
     }
 
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub const fn is_last(&self) -> bool {
         self.0 == 0b0100_0000
     }
@@ -195,7 +194,7 @@ impl TetrisPiece {
     /// return 2 * b - c
     /// ```
     ///
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub const fn num_rotations(&self) -> u8 {
         2u8.wrapping_mul(1u8.wrapping_add(((self.0 & 0b0111_0000) != 0) as u8))
             .wrapping_sub((self.0 == 0b0000_0001) as u8)
@@ -274,13 +273,19 @@ impl TetrisPiece {
     /// Instead of fetching an entry in a lookup table, leverage that certain
     /// widths can be grouped based on common properties. This results in
     /// significantly faster code.
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub const fn width(&self, rotation: Rotation) -> u8 {
+        // let b = (self.0 == Self::I_PIECE.0) as u8;
+        // let cond = ((rotation.0 & 1_u8) | (self.0 == Self::O_PIECE.0) as u8) == 1;
+        // let sub = 2_u8.wrapping_sub(b);
+        // let add = 3_u8.wrapping_add(b);
+        // (sub & (0_u8.wrapping_sub(cond as u8))) | (add & (0_u8.wrapping_sub(!cond as u8)))
+
         let b = (self.0 == Self::I_PIECE.0) as u8;
         if ((rotation.0 & 1_u8) | (self.0 == Self::O_PIECE.0) as u8) == 1 {
-            2_u8.wrapping_sub(b)
+            2_u8 - b
         } else {
-            3_u8.wrapping_add(b)
+            3_u8 + b
         }
 
         // // slow implementation
@@ -319,13 +324,19 @@ impl TetrisPiece {
     ///     0  1  2  3  4  5  6
     ///           piece
     /// ```
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub const fn height(&self, rotation: Rotation) -> u8 {
+        // let cond = (((rotation.0 & 1) == 0) as u8 | (self.0 == Self::O_PIECE.0) as u8) == 1;
+        // let b = (self.0 == Self::I_PIECE.0) as u8;
+        // let sub = 2_u8.wrapping_sub(b);
+        // let add = 3_u8.wrapping_add(b);
+        // (sub & (0_u8.wrapping_sub(cond as u8))) | (add & (0_u8.wrapping_sub(!cond as u8)))
+
         let b = (self.0 == Self::I_PIECE.0) as u8;
         if (((rotation.0 & 1) == 0) as u8 | (self.0 == Self::O_PIECE.0) as u8) == 1 {
-            2_u8.wrapping_sub(b)
+            2_u8 - b
         } else {
-            3_u8.wrapping_add(b)
+            3_u8 + b
         }
     }
 }
@@ -349,9 +360,9 @@ impl Display for TetrisPiece {
 /// A Tetris orientation is a (rotation, column) pair that defines how a piece is positioned on the board.
 /// Each piece type only allows certain orientations.
 /// The following shows which pieces can be placed in each cell, laid out in row-major order:
-/// First row:  [O][I][S]
-/// Second row: [Z][T][L]  
-/// Third row:  [J][ ][ ]
+/// First row:  [OIS]
+/// Second row: [ZTL]  
+/// Third row:  [J  ]
 ///
 /// The "X" cell is reserved for the "null" orientation.
 ///
@@ -461,7 +472,7 @@ impl TetrisPieceOrientation {
     /// Get an orientation from an index.
     ///
     /// This is the inverse of [`index`](TetrisPieceOrientation::index).
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub const fn from_index(index: u8) -> Self {
         Self {
             rotation: Rotation(index / Column::MAX),
@@ -642,7 +653,7 @@ impl TetrisPiecePlacement {
     }
 
     /// Get the index of this placement in the list of all possible placements.
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub const fn index(&self) -> u8 {
         let piece_idx = self.piece.index() as usize;
 
@@ -774,74 +785,78 @@ impl Display for TetrisPieceBag {
 /// bag, hence it's the default case.
 impl Default for TetrisPieceBag {
     fn default() -> Self {
-        Self(0b0111_1111)
+        Self(Self::FULL_MASK)
     }
 }
 
 impl TetrisPieceBag {
     pub const SIZE: usize = NUM_TETRIS_PIECES;
+    pub const FULL_MASK: u8 = 0b0111_1111;
 
     pub fn new() -> Self {
         Self::default()
     }
 
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub fn inc(&mut self) -> Self {
         self.0 += 1;
         *self
     }
 
     /// Count the number of pieces in the bag.
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub const fn count(&self) -> u8 {
         self.0.count_ones() as u8
     }
 
     /// Check if the bag contains a given piece.
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub const fn contains(&self, piece: TetrisPiece) -> bool {
         (self.0 & piece.0) > 0
     }
 
     /// Check if the bag is empty.
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub const fn is_empty(&self) -> bool {
         self.0 == 0
     }
 
     /// Check if the bag is full.
-    #[inline(always)]
+    #[inline_conditioned(always)]
     pub const fn is_full(&self) -> bool {
-        self.0 == 0b0111_1111
+        self.0 == Self::FULL_MASK
     }
 
     /// Fill the bag with all pieces.
-    #[inline(always)]
-    pub fn fill(&mut self) {
-        self.0 = 0b0111_1111;
+    #[inline_conditioned(always)]
+    pub const fn fill(&mut self) {
+        self.0 = Self::FULL_MASK;
+    }
+
+    /// Get a new bag filled if it's empty.
+    #[inline_conditioned(always)]
+    pub const fn new_fill_if_empty(&self) -> Self {
+        Self(self.0 | (self.is_empty() as u8).wrapping_neg() & Self::FULL_MASK)
+    }
+
+    /// Mutably fill the bag if it's empty.
+    #[inline_conditioned(always)]
+    pub const fn mut_fill_if_empty(&mut self) {
+        *self = self.new_fill_if_empty();
     }
 
     /// Remove a piece from the bag.
     ///
     /// If the piece is not in the bag, this function will return
     /// the bag unchanged.
-    #[inline(always)]
-    pub fn remove(&mut self, piece: TetrisPiece) -> TetrisPieceBag {
+    #[inline_conditioned(always)]
+    pub const fn remove(&mut self, piece: TetrisPiece) {
         self.0 &= !(piece.0);
-        *self
-    }
-
-    /// Get an iterator over all pieces in the bag.
-    #[inline(always)]
-    pub fn pieces(&self) -> impl Iterator<Item = TetrisPiece> {
-        (0..NUM_TETRIS_PIECES)
-            .map(|i| TetrisPiece::new(i as u8))
-            .filter(|&i| self.contains(i))
     }
 
     /// Merge two bags together. Duplicate pieces are not added.
-    #[inline(always)]
-    pub fn merge(&mut self, other: &Self) {
+    #[inline_conditioned(always)]
+    pub const fn merge(&mut self, other: &Self) {
         self.0 |= other.0;
     }
 
@@ -849,28 +864,33 @@ impl TetrisPieceBag {
     ///
     /// Once a bag is empty, we need to 'restart' the bag with a new
     /// set of pieces.
-    #[inline(always)]
-    pub fn next_bags(&self) -> NextBagsIter {
+    #[inline_conditioned(always)]
+    pub const fn next_bags(&self) -> NextBagsIter {
         // Check if there are no pieces left in the bag
         // If so, return the full bag
-        if self.is_empty() {
-            return NextBagsIter::new(Self::default());
-        }
-        NextBagsIter::new(*self)
+        NextBagsIter::new(self.new_fill_if_empty())
     }
 
     /// Get a random piece from the bag and remove it.
     /// If the bag is empty, fill it with all pieces first.
     /// Uses the provided RNG to select a random piece from the remaining pieces.
-    #[instrument(level = "trace", name = "tetris_piece_bag_rand_next", fields(bag_count = %self.count()), ret)]
-    pub(self) fn rand_next(&mut self, rng: &mut TetrisGameRng) -> TetrisPiece {
-        if self.is_empty() {
-            self.fill();
-        }
+    #[inline_conditioned(always)]
+    pub const fn rand_next(&mut self, rng: &mut TetrisGameRng) -> TetrisPiece {
+        self.mut_fill_if_empty();
 
+        // select a random "nth" set bit
+        // then eliminate all other set bits
         let count = self.count();
-        let idx = (rng.next_u64() % count as u64) as usize;
-        let piece = self.pieces().nth(idx).unwrap();
+        let n = (rng.next_u64() % count as u64) as usize;
+        let mut x = self.0;
+        repeat_idx_generic!(7, I, {
+            let mask = ((I < n) as i8).wrapping_neg() as u8;
+            x &= !(mask) | (x - 1);
+        });
+        x &= x.wrapping_neg();
+
+        // get, then remove the piece
+        let piece = TetrisPiece::new(x.trailing_zeros() as u8);
         self.remove(piece);
         piece
     }
@@ -888,7 +908,7 @@ pub struct NextBagsIter {
 }
 
 impl NextBagsIter {
-    fn new(current_bag: TetrisPieceBag) -> Self {
+    const fn new(current_bag: TetrisPieceBag) -> Self {
         Self {
             current_bag,
             // This is a bit of magic hackery.
@@ -908,7 +928,7 @@ impl Iterator for NextBagsIter {
     type Item = (TetrisPieceBag, TetrisPiece);
 
     /// Get the next bag and the respective piece that was removed.
-    #[inline(always)]
+    #[inline_conditioned(always)]
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_bag.is_empty() {
             return None;
@@ -940,479 +960,591 @@ impl Iterator for NextBagsIter {
 
 impl ExactSizeIterator for NextBagsIter {}
 
-/// A Tetris board is a 20x10 grid of cells. Each cell is a bit.
-/// However we use 24x10 to make the math easier and for detecting
-/// losses easier.
-///
-/// For conciseness, we operate on a byte by byte level.
-/// The memory layout of the board is as follows:
-///
-/// ```text
-/// row | bit layout  | byte a | byte b
-///  0  | 00000000 00 |   0    |   1
-///  1  | 000000 0000 |   1    |   2
-///  2  | 0000 000000 |   2    |   3
-///  3  | 00 00000000 |   3    |   4
-///  4  | 00000000 00 |   5    |   6
-///  5  | 000000 0000 |   6    |   7
-///  6  | 0000 000000 |   7    |   8
-///  7  | 00 00000000 |   8    |   9
-///  8  | 00000000 00 |   10   |   11
-///  9  | 000000 0000 |   11   |   12
-/// 10  | 0000 000000 |   12   |   13
-/// 11  | 00 00000000 |   13   |   14
-/// 12  | 00000000 00 |   15   |   16
-/// 13  | 000000 0000 |   16   |   17
-/// 14  | 0000 000000 |   17   |   18
-/// 15  | 00 00000000 |   18   |   19
-/// 16  | 00000000 00 |   20   |   21
-/// 17  | 000000 0000 |   21   |   22
-/// 18  | 0000 000000 |   22   |   23
-/// 19  | 00 00000000 |   23   |   24
-/// 20  | 00000000 00 |   25   |   26
-/// 21  | 000000 0000 |   26   |   27
-/// 22  | 0000 000000 |   27   |   28
-/// 23  | 00 00000000 |   28   |   29
-/// ```
+mod tetris_piece_data {
+    use super::piece_u32_cols;
+
+    pub const O_PIECE_ROT_0: [u32; 2] = piece_u32_cols! {
+        11
+        11
+        00
+        00
+    };
+    pub const I_PIECE_ROT_0: [u32; 4] = piece_u32_cols! {
+        1111
+        0000
+        0000
+        0000
+    };
+    pub const I_PIECE_ROT_1: [u32; 1] = piece_u32_cols! {
+        1
+        1
+        1
+        1
+    };
+    pub const S_PIECE_ROT_0: [u32; 3] = piece_u32_cols! {
+        011
+        110
+        000
+        000
+    };
+    pub const S_PIECE_ROT_1: [u32; 2] = piece_u32_cols! {
+        10
+        11
+        01
+        00
+    };
+    pub const Z_PIECE_ROT_0: [u32; 3] = piece_u32_cols! {
+        110
+        011
+        000
+        000
+    };
+    pub const Z_PIECE_ROT_1: [u32; 2] = piece_u32_cols! {
+        01
+        11
+        10
+        00
+    };
+    pub const T_PIECE_ROT_0: [u32; 3] = piece_u32_cols! {
+        111
+        010
+        000
+        000
+    };
+    pub const T_PIECE_ROT_1: [u32; 2] = piece_u32_cols! {
+        01
+        11
+        01
+        00
+    };
+    pub const T_PIECE_ROT_2: [u32; 3] = piece_u32_cols! {
+        010
+        111
+        000
+        000
+    };
+    pub const T_PIECE_ROT_3: [u32; 2] = piece_u32_cols! {
+        10
+        11
+        10
+        00
+    };
+    pub const L_PIECE_ROT_0: [u32; 3] = piece_u32_cols! {
+        001
+        111
+        000
+        000
+    };
+    pub const L_PIECE_ROT_1: [u32; 2] = piece_u32_cols! {
+        10
+        10
+        11
+        00
+    };
+    pub const L_PIECE_ROT_2: [u32; 3] = piece_u32_cols! {
+        111
+        100
+        000
+        000
+    };
+    pub const L_PIECE_ROT_3: [u32; 2] = piece_u32_cols! {
+        11
+        01
+        01
+        00
+    };
+    pub const J_PIECE_ROT_0: [u32; 3] = piece_u32_cols! {
+        100
+        111
+        000
+        000
+    };
+    pub const J_PIECE_ROT_1: [u32; 2] = piece_u32_cols! {
+        11
+        10
+        10
+        00
+    };
+    pub const J_PIECE_ROT_2: [u32; 3] = piece_u32_cols! {
+        111
+        001
+        000
+        000
+    };
+    pub const J_PIECE_ROT_3: [u32; 2] = piece_u32_cols! {
+        01
+        01
+        11
+        00
+    };
+}
+
+/// A Tetris board represented as an array of columns, where each column is a u32.
+/// Each bit in the u32 represents a cell in that column, making it efficient to
+/// check for collisions and manipulate individual columns.
+/// The memory layout has one u32 per column, with bits representing rows from bottom to top.
 #[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Ord, PartialOrd)]
-pub struct TetrisBoardRaw([u8; NUM_BYTES_FOR_BOARD]);
+pub struct TetrisBoard([u32; COLS]);
 
-pub type TetrisUint = Uint<240, 4>;
+pub type TetrisBoardBinarySlice = [u8; BOARD_SIZE];
 
-/// This is a utility function for getting the byte and bit index
-/// for a given coordinate. This is used when we want to read/write
-/// a bit on the board.
-#[inline(always)]
-const fn get_byte_bit_idx(col: usize, row: usize) -> (usize, usize) {
-    let raw_idx = row * COLS + col;
-    let byte_idx = raw_idx / 8;
-    let bit_idx = 7 - (raw_idx % 8);
-    (byte_idx, bit_idx)
-}
-
-#[inline(always)]
-const fn get_row_col_idx(byte_idx: usize, bit_idx: usize) -> (usize, usize) {
-    let raw_idx = byte_idx * 8 + (7 - bit_idx);
-    let row = raw_idx / COLS;
-    let col = raw_idx % COLS;
-    (row, col)
-}
-
-impl Default for TetrisBoardRaw {
-    fn default() -> Self {
-        Self::EMPTY_BOARD
-    }
-}
-
-impl Display for TetrisBoardRaw {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f)?;
-        writeln!(f, " {:2} {:2} {:2}| board", "r", "a", "b")?;
-        for row in 0..ROWS {
-            let first_byte = row + (row / 4);
-            let second_byte = first_byte + 1;
-            write!(f, "{:2} {:2} {:2} | ", row, first_byte, second_byte)?;
-            for col in 0..COLS {
-                write!(f, "{}", self.get_bit(col, row) as u8)?;
-            }
-            writeln!(f)?;
-        }
-        Ok(())
-    }
-}
-
-impl From<TetrisBoardRaw> for TetrisUint {
-    fn from(board: TetrisBoardRaw) -> Self {
-        TetrisUint::from_be_bytes(board.0)
-    }
-}
-
-impl TetrisBoardRaw {
+impl TetrisBoard {
     pub const SIZE: usize = BOARD_SIZE;
     pub const WIDTH: usize = COLS;
     pub const HEIGHT: usize = ROWS;
     pub const NUM_TETRIS_CELL_STATES: usize = NUM_TETRIS_CELL_STATES;
 
-    pub const EMPTY_BOARD: Self = Self([0_u8; NUM_BYTES_FOR_BOARD]);
-    pub const FULL_BOARD: Self = Self([0xFF_u8; NUM_BYTES_FOR_BOARD]);
-}
+    pub const EMPTY_BOARD: Self = Self([0_u32; COLS]);
+    pub const FULL_BOARD: Self = Self([u32::MAX; COLS]);
 
-/// Implement all the shifting based methods.
-///
-/// These are used for core game logic when a line is cleared
-/// and all rows above are shifted down.
-impl TetrisBoardRaw {
-    /// Shift all rows up by 1.
-    /// Used after dropping a piece when a collision is detected:
-    /// shift the piece up before merging into the board.
-    #[inline(always)]
-    #[instrument(level = "trace", name = "tetris_board_raw_shift_up")]
-    pub(crate) fn shift_up(&mut self) {
-        for i in 0..(NUM_BYTES_FOR_BOARD - 2) {
-            self.0[i] = (self.0[i + 1] << 2) | ((self.0[i + 2] & 0b1100_0000) >> 6);
-        }
-        self.0[NUM_BYTES_FOR_BOARD - 2] = self.0[NUM_BYTES_FOR_BOARD - 1] << 2;
-        self.0[NUM_BYTES_FOR_BOARD - 1] = 0;
-    }
-
-    /// Shift all rows down by 1.
-    /// When placing a piece, shift it down until it hits the bottom
-    /// of the board or collides with another cell.
-    #[instrument(level = "trace", name = "tetris_board_raw_shift_down")]
-    pub(crate) fn shift_down(&mut self) {
-        // unsafe {
-        //     std::ptr::copy(
-        //         self.play_board.as_ptr(),
-        //         self.play_board.as_mut_ptr().add(1),
-        //         24,
-        //     );
-        // }
-        // self.play_board[0] = 0;
-        // for i in (1..NUM_BYTES_FOR_BOARD).rev() {
-        //     self.play_board[i] =
-        //         (self.play_board[i] >> 2) | ((self.play_board[i - 1] & 0b0000_0011) << 6);
-        // }
-        // self.play_board[0] >>= 2;
-
-        let old_board = self.0;
-        old_board[..NUM_BYTES_FOR_BOARD - 1]
-            .array_windows::<2>()
-            .rev()
-            .enumerate()
-            .for_each(|(i, &[prev, curr])| {
-                self.0[NUM_BYTES_FOR_BOARD - 1 - i] = (curr >> 2) | ((prev & 0b0000_0011) << 6);
-            });
-        self.0[1] = old_board[0] >> 2;
-        self.0[0] = 0;
-    }
-
-    /// Shift all rows down by 1 relative to a given row.
-    /// This is used when we want to 'clear' a row.
-    /// All the row bits above the given row are shifted down
-    /// by 1 row.
-    #[instrument(level = "trace", name = "tetris_board_raw_shift_down_from", fields(row))]
-    pub(crate) fn shift_down_from(&mut self, row: usize) {
-        if row == 0 {
-            self.0[0] = 0;
-            self.0[1] &= 0b0011_1111;
-            return;
-        }
-        let end_byte = (row & !3) + (row >> 2) + (row & 3) + 1;
-
-        self.0[end_byte] = ((self.0[end_byte - 2] & 0b0000_0011) << 6)
-            | ((self.0[end_byte - 1]
-                & (0b1111_1111_u8.unbounded_shl((8 - (2 * ((end_byte - 1) % 5))) as u32)))
-            .unbounded_shr(2))
-            | (self.0[end_byte]
-                & (0b1111_1111_u8.unbounded_shr((8 - 2 * ((4 - (end_byte % 5)) % 4)) as u32)));
-        for idx in (2..end_byte).rev() {
-            self.0[idx] = ((self.0[idx - 2] & 0b0000_0011) << 6)
-                | (self.0[idx - 1] & (0b1111_1111_u8.unbounded_shl(2 * (idx % 5 != 0) as u32)))
-                    .unbounded_shr(2);
-        }
-        self.0[1] = self.0[0] >> 2;
-        self.0[0] = 0;
+    pub const fn as_limbs(&self) -> [u32; COLS] {
+        self.0
     }
 }
 
-/// Implement all the bit setting based methods.
-///
-/// We use these for fuzzing, benchmarking, and for data augmentation.
-impl TetrisBoardRaw {
-    #[inline(always)]
-    pub const fn get_bit(&self, col: usize, row: usize) -> bool {
-        let (byte_idx, bit_idx) = get_byte_bit_idx(col, row);
-        (self.0[byte_idx] & (1 << bit_idx)) != 0
+impl TetrisBoard {
+    /// Gets the value of a single bit at the specified column and row position.
+    ///
+    /// # Arguments
+    ///
+    /// * `col` - The column index (0 to COLS-1)
+    /// * `row` - The row index (0 to ROWS-1)
+    ///
+    /// # Returns
+    ///
+    /// * `bool` - The bit value (false or true) at the specified position
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::TetrisBoard;
+    /// let board = TetrisBoard::new();
+    /// assert_eq!(board.get_bit(0, 0), false); // Empty cell at bottom-left
+    /// ```
+    #[inline_conditioned(always)]
+    pub fn get_bit(&self, col: usize, row: usize) -> bool {
+        ((self.0[col] >> row) & 1) != 0
     }
 
-    pub(crate) fn flip_bit(&mut self, col: usize, row: usize) {
-        let (byte_idx, bit_idx) = get_byte_bit_idx(col, row);
-        self.0[byte_idx] ^= 1 << bit_idx;
+    /// Sets a bit at the specified column and row position.
+    ///
+    /// # Arguments
+    ///
+    /// * `col` - The column index (0 to COLS-1)
+    /// * `row` - The row index (0 to ROWS-1)
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::TetrisBoard;
+    /// let mut board = TetrisBoard::new();
+    /// board.set_bit(0, 0); // Set bottom-left cell
+    /// assert_eq!(board.get_bit(0, 0), true);
+    /// ```
+    #[inline_conditioned(always)]
+    pub fn set_bit(&mut self, col: usize, row: usize) {
+        self.0[col] |= 1 << row;
     }
 
-    pub(crate) fn set_bit(&mut self, col: usize, row: usize) {
-        let (byte_idx, bit_idx) = get_byte_bit_idx(col, row);
-        self.0[byte_idx] |= 1 << bit_idx;
-    }
-
-    pub(crate) fn unset_bit(&mut self, col: usize, row: usize) {
-        let (byte_idx, bit_idx) = get_byte_bit_idx(col, row);
-        self.0[byte_idx] &= !(1 << bit_idx);
-    }
-
-    pub(crate) fn flip_random_bits<R: Rng + ?Sized>(
-        &mut self,
-        num_bits: usize,
-        rng: &mut R,
-    ) -> &mut Self {
+    /// Sets a specified number of random bits in the board.
+    ///
+    /// # Arguments
+    ///
+    /// * `num_bits` - The number of random bits to set
+    /// * `rng` - Random number generator implementing the `Rng` trait
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::TetrisBoard;
+    /// use rand::thread_rng;
+    /// let mut board = TetrisBoard::new();
+    /// let mut rng = thread_rng();
+    /// board.set_random_bits(10, &mut rng);
+    /// ```
+    pub fn set_random_bits<R: Rng + ?Sized>(&mut self, num_bits: usize, rng: &mut R) {
         for _ in 0..num_bits {
-            let col = rng.random_range(0..COLS);
-            let row = rng.random_range(0..ROWS);
-            self.flip_bit(col, row);
+            let rand = rng.random::<u32>();
+            let col = ((rand >> 16) as u16 % COLS as u16) as usize;
+            let row = ((rand & 0xFFFF) % ROWS as u32) as usize;
+            self.set_bit(col, row);
         }
-        self
     }
 }
 
-impl TetrisBoardRaw {
-    /// Clear the entire board by setting all the bits to 0.
-    #[instrument(level = "debug", name = "tetris_board_raw_clear_all")]
-    pub(crate) fn clear_all(&mut self) -> &mut Self {
-        *self = Self::EMPTY_BOARD;
-        self
-    }
-
-    /// Fill the entire board with 1s.
-    #[instrument(level = "debug", name = "tetris_board_raw_fill_all")]
-    pub(crate) fn fill_all(&mut self) -> &mut Self {
-        *self = Self::FULL_BOARD;
-        self
-    }
-
-    /// Check if the board is clear.
-    #[inline(always)]
-    #[instrument(level = "trace", name = "tetris_board_raw_is_clear", ret)]
-    pub fn is_clear(&self) -> bool {
-        self == &Self::EMPTY_BOARD
-    }
-
-    /// Check if the board is full.
-    #[inline(always)]
-    #[instrument(level = "trace", name = "tetris_board_raw_is_full", ret)]
-    pub fn is_full(&self) -> bool {
-        self.0 == Self::FULL_BOARD.0
-    }
-
-    /// Merge another board into this one (bitwise OR).
-    /// Used when placing a piece onto the play board after collision tests.
-    #[instrument(level = "debug", name = "tetris_board_raw_merge", fields(other_count = other.count()))]
-    pub(crate) fn merge(&mut self, other: &Self) -> &mut Self {
-        unsafe {
-            let src = other.0.as_ptr();
-            let dst = self.0.as_mut_ptr();
-
-            // Process 1 u128 chunk at offset 0 (bytes 0-15)
-            {
-                let chunk = (src as *const u128).read_unaligned();
-                let existing = (dst as *const u128).read_unaligned();
-                (dst as *mut u128).write_unaligned(chunk | existing);
+impl Display for TetrisBoard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f)?;
+        writeln!(f, " {:2}| board", "r")?;
+        for row in (0..ACTUAL_ROWS).rev() {
+            let mut row_str = String::new();
+            for col in 0..COLS {
+                let bit = self.get_bit(col, row);
+                row_str.push(if bit { '#' } else { '.' });
             }
-
-            // Process 1 u64 chunk at offset 16 (bytes 16-23)
-            {
-                let chunk = (src.add(16) as *const u64).read_unaligned();
-                let existing = (dst.add(16) as *const u64).read_unaligned();
-                (dst.add(16) as *mut u64).write_unaligned(chunk | existing);
-            }
-
-            // Process 1 u32 chunk at offset 24 (bytes 24-27)
-            {
-                let chunk = (src.add(24) as *const u32).read_unaligned();
-                let existing = (dst.add(24) as *const u32).read_unaligned();
-                (dst.add(24) as *mut u32).write_unaligned(chunk | existing);
-            }
-
-            // Process 1 u16 chunk at offset 28 (bytes 28-29)
-            {
-                let chunk = (src.add(28) as *const u16).read_unaligned();
-                let existing = (dst.add(28) as *const u16).read_unaligned();
-                (dst.add(28) as *mut u16).write_unaligned(chunk | existing);
-            }
+            writeln!(f, "{:2} | {}", row, row_str)?;
         }
-        self
+        Ok(())
     }
+}
 
-    /// Whenever a row is full, clear it and settle the rows above it.
-    /// Returns the number of lines cleared.
-    #[instrument(level = "trace", name = "tetris_board_raw_clear_rows", ret)]
-    pub(crate) fn clear_rows(&mut self) -> u32 {
-        let mut lines_cleared = 0;
-
-        for chunk_idx in 0..(NUM_BYTES_FOR_BOARD / BYTES_PER_ROW_CHUNK) {
-            let chunk_base_idx = chunk_idx * ROW_CHUNK;
-
-            let chunk = u64::from_be_bytes(
-                unsafe {
-                    std::slice::from_raw_parts(
-                        self.0[((chunk_base_idx & !3)
-                            + (chunk_base_idx >> 2)
-                            + (chunk_base_idx & 3))..]
-                            .as_ptr(),
-                        8,
-                    )
-                }
-                .try_into()
-                .unwrap(),
-            );
-
-            if (chunk & 0xFF_C0_00_00_00_00_00_00_u64) == 0xFF_C0_00_00_00_00_00_00_u64 {
-                self.shift_down_from(chunk_base_idx);
-                lines_cleared += 1;
-            }
-            if (chunk & (0x00_3F_F0_00_00_00_00_00_u64)) == (0x00_3F_F0_00_00_00_00_00_u64) {
-                self.shift_down_from(chunk_base_idx + 1);
-                lines_cleared += 1;
-            }
-            if (chunk & (0x00_00_0F_FC_00_00_00_00_u64)) == (0x00_00_0F_FC_00_00_00_00_u64) {
-                self.shift_down_from(chunk_base_idx + 2);
-                lines_cleared += 1;
-            }
-            if (chunk & (0x00_00_00_03_FF_00_00_00_u64)) == (0x00_00_00_03_FF_00_00_00_u64) {
-                self.shift_down_from(chunk_base_idx + 3);
-                lines_cleared += 1;
-            }
-        }
-
-        lines_cleared
-    }
-
-    /// Count the number of cells / bits set in the board.
-    #[instrument(level = "trace", name = "tetris_board_raw_count", ret)]
-    pub fn count(&self) -> usize {
-        unsafe {
-            // Read bytes 0-15 as a u128
-            let upper_chunk = self.0.as_ptr();
-            let chunk128_a = std::ptr::read_unaligned(upper_chunk as *const u128);
-            let count_a = chunk128_a.count_ones() as usize;
-
-            // Read bytes 14-29 (16 bytes) with 2-byte overlap
-            let lower_chunk = self.0.as_ptr().add(NUM_BYTES_FOR_BOARD - 16);
-            let chunk128_b = std::ptr::read_unaligned(lower_chunk as *const u128);
-
-            // Mask out the overlapping 2 bytes (bytes 14-15) from the second chunk
-            // Keep only bytes 16-29 in little-endian format
-            const MASK: u128 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_0000_u128;
-            let count_b = (chunk128_b & MASK).count_ones() as usize;
-
-            count_a + count_b
-        }
-    }
-
-    /// Compute the height of the board.
+impl TetrisBoard {
+    /// Converts the board to a binary slice representation.
+    /// Each cell is represented as a single bit (0 or 1).
     ///
-    /// The height is the row number (relative to the bottom of the board),
-    /// of the first non-zero cell / bit.
-    #[inline(always)]
-    #[instrument(level = "trace", name = "tetris_board_raw_height", ret)]
-    pub fn height(&self) -> u8 {
-        unsafe {
-            // Upper 16 bytes represent the first 12.8 rows
-            let upper_chunk = self.0.as_ptr();
-            let chunk128_a = u128::from_be(std::ptr::read_unaligned(upper_chunk as *const u128));
-            let first_nonzero_idx = chunk128_a.leading_zeros() as usize;
-            if first_nonzero_idx < 128 {
-                let byte_idx = first_nonzero_idx / 8;
-                let bit_idx = 7 - (first_nonzero_idx % 8);
-                let (row, _) = get_row_col_idx(byte_idx, bit_idx);
-                return (ROWS - row) as u8;
-            }
-
-            // Lower 16 bytes represent the last 12.8 rows
-            const LOWER_CHUNK_OFFSET: usize = NUM_BYTES_FOR_BOARD - 16;
-            let lower_chunk = self.0.as_ptr().add(LOWER_CHUNK_OFFSET);
-            let chunk128_b = u128::from_be(std::ptr::read_unaligned(lower_chunk as *const u128));
-            let first_nonzero_idx = chunk128_b.leading_zeros() as usize;
-            if first_nonzero_idx < 128 {
-                let byte_idx = (first_nonzero_idx) / 8 + LOWER_CHUNK_OFFSET;
-                let bit_idx = 7 - ((first_nonzero_idx) % 8);
-                let (row, _) = get_row_col_idx(byte_idx, bit_idx);
-                return (ROWS - row) as u8;
-            }
-            0
-        }
-    }
-
-    /// Check if two boards collide.
+    /// # Returns
     ///
-    /// This is used to check if a piece can be placed on a board.
-    /// We do this by checking if the bitwise AND of the two boards
-    /// is non-zero.
-    #[inline(always)]
-    #[instrument(level = "trace", name = "tetris_board_raw_collides", ret)]
-    pub fn collides(&self, other: &Self) -> bool {
-        // For performance reasons, we read each board as 2 * u128 chunks
-        // then check if any bits are aligned.
-        unsafe {
-            let src_a = self.0.as_ptr();
-            let src_b = other.0.as_ptr();
-
-            let chunk128_a = std::ptr::read_unaligned(src_a as *const u128);
-            let chunk128_b = std::ptr::read_unaligned(src_b as *const u128);
-            if chunk128_a & chunk128_b != 0 {
-                return true;
-            }
-
-            let chunk128_c =
-                std::ptr::read_unaligned(src_a.add(NUM_BYTES_FOR_BOARD - 16) as *const u128);
-            let chunk128_d =
-                std::ptr::read_unaligned(src_b.add(NUM_BYTES_FOR_BOARD - 16) as *const u128);
-            if chunk128_c & chunk128_d != 0 {
-                return true;
-            }
-            false
-        }
-    }
-
-    /// Loss is defined as any cell being filled in the top 4 rows.
+    /// A fixed-size array of u8 representing the board state
     ///
-    /// To compute this quickly, we read the first 8 bytes of the board
-    /// as a u64, mask out the last 3 bytes, and check if the result is non-zero.
-    /// Any bits in the first 5 bytes make the value positive (a loss).
-    #[inline]
-    pub const fn loss(&self) -> IsLost {
-        unsafe {
-            IsLost(
-                (std::ptr::read_unaligned(self.0.as_ptr() as *const u64) & 0x000000FFFFFFFFFF) != 0,
-            )
-        }
-    }
-
-    /// Convert the board’s byte representation to a binary slice of 0/1 values.
+    /// # Example
     ///
-    /// This is used to "vectorize" the board for training purposes.
-    #[inline(always)]
-    #[instrument(level = "trace", name = "tetris_board_raw_to_binary_slice")]
-    pub fn to_binary_slice(&self) -> [u8; BOARD_SIZE] {
-        let mut result = [0u8; BOARD_SIZE];
-        let mut i = 0;
-        while i < NUM_BYTES_FOR_BOARD {
-            let byte = self.0[i];
-            let base_idx = i * 8;
-            result[base_idx] = (byte >> 7) & 1;
-            result[base_idx + 1] = (byte >> 6) & 1;
-            result[base_idx + 2] = (byte >> 5) & 1;
-            result[base_idx + 3] = (byte >> 4) & 1;
-            result[base_idx + 4] = (byte >> 3) & 1;
-            result[base_idx + 5] = (byte >> 2) & 1;
-            result[base_idx + 6] = (byte >> 1) & 1;
-            result[base_idx + 7] = byte & 1;
-            i += 1;
-        }
+    /// ```
+    /// use tetris_atlas::tetris::TetrisBoard;
+    /// let mut board = TetrisBoard::new();
+    /// let binary = board.to_binary_slice();
+    /// assert!(binary.iter().all(|&x| x == 0));
+    /// ```
+    #[inline_conditioned(always)]
+    pub const fn to_binary_slice(&self) -> TetrisBoardBinarySlice {
+        let mut result: TetrisBoardBinarySlice = [0u8; Self::SIZE];
+        repeat_idx_generic!(Self::SIZE / 8, I, {
+            const I1: usize = 8 * I;
+            result[I1] = ((self.0[I1 / ROWS] >> (I1 % ROWS)) & 1) as u8;
+            const I2: usize = 8 * I + 1;
+            result[I2] = ((self.0[I2 / ROWS] >> (I2 % ROWS)) & 1) as u8;
+            const I3: usize = 8 * I + 2;
+            result[I3] = ((self.0[I3 / ROWS] >> (I3 % ROWS)) & 1) as u8;
+            const I4: usize = 8 * I + 3;
+            result[I4] = ((self.0[I4 / ROWS] >> (I4 % ROWS)) & 1) as u8;
+            const I5: usize = 8 * I + 4;
+            result[I5] = ((self.0[I5 / ROWS] >> (I5 % ROWS)) & 1) as u8;
+            const I6: usize = 8 * I + 5;
+            result[I6] = ((self.0[I6 / ROWS] >> (I6 % ROWS)) & 1) as u8;
+            const I7: usize = 8 * I + 6;
+            result[I7] = ((self.0[I7 / ROWS] >> (I7 % ROWS)) & 1) as u8;
+            const I8: usize = 8 * I + 7;
+            result[I8] = ((self.0[I8 / ROWS] >> (I8 % ROWS)) & 1) as u8;
+        });
         result
     }
 
-    /// Convert a binary slice to a Tetris board. This is the inverse
-    /// of `to_binary_slice`.
-    #[instrument(level = "trace", name = "tetris_board_raw_from_binary_slice")]
-    pub fn from_binary_slice(binary_slice: [u8; BOARD_SIZE]) -> Self {
-        let mut board = Self::EMPTY_BOARD;
-        let mut byte_idx = 0;
-        while byte_idx < NUM_BYTES_FOR_BOARD {
-            let base_idx = byte_idx * 8;
-            let bits = [
-                binary_slice[base_idx],
-                binary_slice[base_idx + 1],
-                binary_slice[base_idx + 2],
-                binary_slice[base_idx + 3],
-                binary_slice[base_idx + 4],
-                binary_slice[base_idx + 5],
-                binary_slice[base_idx + 6],
-                binary_slice[base_idx + 7],
-            ];
-            board.0[byte_idx] = bits_to_byte(&bits);
-            byte_idx += 1;
+    /// Creates a board from a binary slice representation.
+    ///
+    /// # Arguments
+    ///
+    /// * `binary` - Fixed-size array of u8 representing the board state
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::TetrisBoard;
+    /// let mut board = TetrisBoard::new();
+    /// board.set_bit(0, 0);
+    /// let binary = board.to_binary_slice();
+    /// let board2 = TetrisBoard::from_binary_slice(binary);
+    /// assert_eq!(board2.get_bit(0, 0), true);
+    /// ```
+    #[inline_conditioned(always)]
+    pub const fn from_binary_slice(binary: TetrisBoardBinarySlice) -> Self {
+        let mut result = Self::EMPTY_BOARD;
+        repeat_idx_generic!(Self::SIZE / 8, I, {
+            const I1: usize = 8 * I;
+            result.0[I1 / ROWS] |= (binary[I1] as u32) << (I1 % ROWS);
+            const I2: usize = 8 * I + 1;
+            result.0[I2 / ROWS] |= (binary[I2] as u32) << (I2 % ROWS);
+            const I3: usize = 8 * I + 2;
+            result.0[I3 / ROWS] |= (binary[I3] as u32) << (I3 % ROWS);
+            const I4: usize = 8 * I + 3;
+            result.0[I4 / ROWS] |= (binary[I4] as u32) << (I4 % ROWS);
+            const I5: usize = 8 * I + 4;
+            result.0[I5 / ROWS] |= (binary[I5] as u32) << (I5 % ROWS);
+            const I6: usize = 8 * I + 5;
+            result.0[I6 / ROWS] |= (binary[I6] as u32) << (I6 % ROWS);
+            const I7: usize = 8 * I + 6;
+            result.0[I7 / ROWS] |= (binary[I7] as u32) << (I7 % ROWS);
+            const I8: usize = 8 * I + 7;
+            result.0[I8 / ROWS] |= (binary[I8] as u32) << (I8 % ROWS);
+        });
+        result
+    }
+}
+
+impl TetrisBoard {
+    /// Creates a new empty Tetris board.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::TetrisBoard;
+    /// let board = TetrisBoard::new();
+    /// assert_eq!(board.count(), 0);
+    /// ```
+    pub const fn new() -> Self {
+        Self::EMPTY_BOARD
+    }
+
+    /// Creates a new Tetris board with random filled cells.
+    ///
+    /// # Arguments
+    ///
+    /// * `rng` - Random number generator implementing the `Rng` trait
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::TetrisBoard;
+    /// use rand::thread_rng;
+    /// let mut rng = thread_rng();
+    /// let board = TetrisBoard::new_rand(&mut rng);
+    /// ```
+    pub fn new_rand<R: Rng + ?Sized>(rng: &mut R) -> Self {
+        Self([rng.random::<u32>(); COLS])
+    }
+
+    /// Returns the total number of filled cells in the board.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::TetrisBoard;
+    /// let mut board = TetrisBoard::new();
+    /// board.set_bit(0, 0);
+    /// assert_eq!(board.count(), 1);
+    /// ```
+    #[inline_conditioned(always)]
+    pub fn count(&self) -> u32 {
+        let mut acc = 0;
+        repeat_idx_generic!(COLS, I, {
+            acc += self.0[I].count_ones();
+        });
+        acc
+    }
+
+    /// Clears all cells in the board, setting them to empty.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::TetrisBoard;
+    /// let mut board = TetrisBoard::new();
+    /// board.set_bit(0, 0);
+    /// board.clear();
+    /// assert_eq!(board.count(), 0);
+    /// ```
+    #[inline_conditioned(always)]
+    pub const fn clear(&mut self) {
+        *self = Self::EMPTY_BOARD;
+    }
+
+    /// Fills all cells in the board.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::TetrisBoard;
+    /// let mut board = TetrisBoard::new();
+    /// board.fill();
+    /// assert!(board.get_bit(0, 0));
+    /// ```
+    #[inline_conditioned(always)]
+    pub const fn fill(&mut self) {
+        *self = Self::FULL_BOARD;
+    }
+
+    /// Returns the height of the highest block in the board.
+    ///
+    /// The height is determined by finding the highest set bit across all columns.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::TetrisBoard;
+    /// let mut board = TetrisBoard::new();
+    /// board.set_bit(0, 1); // Set bit at row 1
+    /// assert_eq!(board.height(), 2); // Height should be 2
+    /// ```
+    #[inline_conditioned(always)]
+    pub const fn height(&self) -> u32 {
+        let mut acc = 0;
+        repeat_idx_generic!(COLS, I, {
+            acc |= self.0[I];
+        });
+        u32::BITS - acc.leading_zeros()
+    }
+
+    /// Returns whether the game is lost by checking if any column exceeds the maximum height.
+    ///
+    /// A Tetris game is lost when any piece extends beyond the top of the board.
+    /// This is detected by checking if any column has blocks above row ROWS-1.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::TetrisBoard;
+    /// let mut board = TetrisBoard::new();
+    /// board.set_bit(0, 19); // Set bit at max valid height
+    /// assert!(!board.is_lost());
+    /// board.set_bit(0, 20); // Set bit above max height
+    /// assert!(board.is_lost());
+    /// ```
+    #[inline_conditioned(always)]
+    pub const fn is_lost(&self) -> bool {
+        self.height() > ROWS as u32
+    }
+
+    /// Clears all completely filled rows and shifts remaining rows down.
+    ///
+    /// In Tetris, when a row is completely filled with blocks, that row is cleared and all rows above
+    /// are shifted downward to fill the gap. This method implements that game mechanic.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of rows that were cleared.
+    ///
+    /// # Implementation Details
+    ///
+    /// The implementation works in two steps:
+    /// 1. Creates a mask of filled rows by performing a bitwise AND across all columns
+    /// 2. Shifts remaining rows downward based on the mask of filled rows
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::TetrisBoard;
+    /// let mut board = TetrisBoard::new();
+    /// // Fill an entire row
+    /// for col in 0..10 {
+    ///     board.set_bit(col, 0);
+    /// }
+    /// assert_eq!(board.clear_filled_rows(), 1);
+    /// ```
+    #[inline_conditioned(always)]
+    pub const fn clear_filled_rows(&mut self) -> u32 {
+        let mut filled_rows_mask = u32::MAX;
+        repeat_idx_generic!(COLS, I, {
+            filled_rows_mask &= self.0[I];
+        });
+        rshift_slice_from_mask_u32::<COLS, 4>(&mut self.0, filled_rows_mask);
+        filled_rows_mask.count_ones()
+    }
+
+    #[inline_conditioned(always)]
+    pub fn apply_piece_placement(&mut self, placement: TetrisPiecePlacement) -> PlacementResult {
+        // Early exit: if the board is already in a lost state (all bits set),
+        // don't process the placement to preserve the end state marker
+        if self.is_lost() {
+            return PlacementResult {
+                is_lost: IsLost::LOST,
+                lines_cleared: 0,
+            };
         }
-        board
+
+        /// Place a piece on the board by:
+        /// 1. Extracting the board column slice where the piece will land
+        /// 2. Computing the minimum shift for each column to avoid collision
+        /// 3. Taking the minimum (the column that collides first determines the shift)
+        /// 4. Shifting the piece down by that amount and OR-ing it into the board
+        macro_rules! place_piece_with_consts {
+            ($board_cols:expr, $piece_cols:expr) => {{
+                const NUM_COLS: usize = $piece_cols.len();
+                const TRAILING: [u32; NUM_COLS] = trailing_zeros_all($piece_cols);
+
+                let shift = {
+                    let mut min_diff = u32::MAX;
+                    repeat_idx_generic!(NUM_COLS, I, {
+                        let col_height = u32::BITS - $board_cols[I].leading_zeros();
+                        let diff = col_height.abs_diff(TRAILING[I]);
+
+                        // equivalient to min(min_diff, diff)
+                        min_diff = min_diff
+                            ^ ((min_diff ^ diff) & ((diff < min_diff) as u32).wrapping_neg());
+                    });
+                    min_diff
+                };
+
+                // Place the piece by OR-ing it with the board
+                repeat_idx_generic!(NUM_COLS, I, {
+                    $board_cols[I] |= $piece_cols[I] >> shift;
+                });
+            }};
+        }
+
+        let piece_width = placement.piece.width(placement.orientation.rotation);
+        let start_idx = placement.orientation.column.0 as usize;
+        let end_idx = start_idx + (piece_width as usize);
+        let board_cols = &mut self.0[start_idx..end_idx];
+
+        match (placement.piece, placement.orientation.rotation) {
+            (TetrisPiece::O_PIECE, _) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::O_PIECE_ROT_0)
+            }
+            (TetrisPiece::I_PIECE, Rotation(0) | Rotation(2)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::I_PIECE_ROT_0)
+            }
+            (TetrisPiece::I_PIECE, Rotation(1) | Rotation(3)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::I_PIECE_ROT_1)
+            }
+            (TetrisPiece::S_PIECE, Rotation(0) | Rotation(2)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::S_PIECE_ROT_0)
+            }
+            (TetrisPiece::S_PIECE, Rotation(1) | Rotation(3)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::S_PIECE_ROT_1)
+            }
+            (TetrisPiece::Z_PIECE, Rotation(0) | Rotation(2)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::Z_PIECE_ROT_0)
+            }
+            (TetrisPiece::Z_PIECE, Rotation(1) | Rotation(3)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::Z_PIECE_ROT_1)
+            }
+            (TetrisPiece::T_PIECE, Rotation(0)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::T_PIECE_ROT_0)
+            }
+            (TetrisPiece::T_PIECE, Rotation(1)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::T_PIECE_ROT_1)
+            }
+            (TetrisPiece::T_PIECE, Rotation(2)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::T_PIECE_ROT_2)
+            }
+            (TetrisPiece::T_PIECE, Rotation(3)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::T_PIECE_ROT_3)
+            }
+            (TetrisPiece::L_PIECE, Rotation(0)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::L_PIECE_ROT_0)
+            }
+            (TetrisPiece::L_PIECE, Rotation(1)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::L_PIECE_ROT_1)
+            }
+            (TetrisPiece::L_PIECE, Rotation(2)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::L_PIECE_ROT_2)
+            }
+            (TetrisPiece::L_PIECE, Rotation(3)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::L_PIECE_ROT_3)
+            }
+            (TetrisPiece::J_PIECE, Rotation(0)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::J_PIECE_ROT_0)
+            }
+            (TetrisPiece::J_PIECE, Rotation(1)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::J_PIECE_ROT_1)
+            }
+            (TetrisPiece::J_PIECE, Rotation(2)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::J_PIECE_ROT_2)
+            }
+            (TetrisPiece::J_PIECE, Rotation(3)) => {
+                place_piece_with_consts!(board_cols, tetris_piece_data::J_PIECE_ROT_3)
+            }
+            _ => panic!("Invalid piece or rotation"),
+        };
+
+        let lines_cleared = self.clear_filled_rows();
+        let is_lost = self.is_lost();
+        if is_lost {
+            self.fill();
+        }
+
+        PlacementResult {
+            lines_cleared,
+            is_lost: IsLost(is_lost),
+        }
     }
 }
 
@@ -1432,1154 +1564,26 @@ impl From<IsLost> for bool {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct TetrisGameRng(u64);
+
+impl TetrisGameRng {
+    pub const fn new(seed: u64) -> Self {
+        Self(seed)
+    }
+
+    #[inline_conditioned(always)]
+    pub const fn next_u64(&mut self) -> u64 {
+        fmix64(&mut self.0);
+        self.0
+    }
+}
+
 /// When a placement is applied, we return a `PlacementResult`
 /// This represents what that placement did.
 pub struct PlacementResult {
     pub is_lost: IsLost,
     pub lines_cleared: u32,
-}
-
-/// A Tetris board.
-///
-/// This is a wrapper around a `BoardRaw` that contains the game board
-/// and the piece board.
-///
-/// The game board is the main board that we play on.
-/// The piece board is a 'buffer' we use to test piece placements.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
-pub struct TetrisBoard {
-    play_board: TetrisBoardRaw,
-    piece_board: TetrisBoardRaw,
-}
-
-impl Display for TetrisBoard {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f)?;
-        writeln!(f, " {:2} {:2} {:2}| board", "r", "a", "b")?;
-        for row in 0..ROWS {
-            let first_byte = row + (row / 4);
-            let second_byte = first_byte + 1;
-            write!(f, "{:2} {:2} {:2} | ", row, first_byte, second_byte)?;
-            for col in 0..COLS {
-                write!(f, "{}", self.play_board.get_bit(col, row) as u8)?;
-            }
-            writeln!(f)?;
-        }
-        Ok(())
-    }
-}
-
-impl From<TetrisBoardRaw> for TetrisBoard {
-    fn from(raw: TetrisBoardRaw) -> Self {
-        Self {
-            play_board: raw,
-            piece_board: TetrisBoardRaw::default(),
-        }
-    }
-}
-
-impl From<TetrisBoard> for TetrisUint {
-    fn from(board: TetrisBoard) -> Self {
-        board.play_board.into()
-    }
-}
-
-/// Small helper functions for `TetrisBoard`.
-impl TetrisBoard {
-    #[inline(always)]
-    pub fn height(&self) -> u8 {
-        self.play_board.height()
-    }
-
-    #[inline(always)]
-    pub fn loss(&self) -> IsLost {
-        self.play_board.loss()
-    }
-}
-
-/// Main functions for `TetrisBoard`.
-impl TetrisBoard {
-    /// Convert the Tetris board to a binary slice by bits.
-    /// This is used to "vectorize" the board.
-    #[instrument(level = "trace", name = "tetris_board_to_binary_slice")]
-    pub fn to_binary_slice(&self) -> [u8; BOARD_SIZE] {
-        self.play_board.to_binary_slice()
-    }
-
-    /// Convert a binary slice to a Tetris board.
-    /// This is used to "de-vectorize" the board.
-    #[instrument(level = "trace", name = "tetris_board_from_binary_slice")]
-    pub fn from_binary_slice(binary_slice: [u8; BOARD_SIZE]) -> Self {
-        Self::from(TetrisBoardRaw::from_binary_slice(binary_slice))
-    }
-
-    /// Get the current play board.
-    #[inline(always)]
-    pub const fn board(&self) -> TetrisBoardRaw {
-        self.play_board
-    }
-
-    /// Reset the board to the initial empty state.
-    #[instrument(level = "debug", name = "tetris_board_reset")]
-    pub fn reset(&mut self) {
-        self.play_board.clear_all();
-        self.piece_board.clear_all();
-    }
-
-    /// Apply a piece placement to the board. This is the main play function.
-    ///
-    /// To play a piece, we first add it to the top of the piece board.
-    /// Then we shift the piece down row by row until we find a collision or
-    /// the piece is at the bottom of the board. If we find a collision, we
-    /// shift the piece up, merge it with the main board, then exit.
-    ///
-    /// If a board is lost and we try to continue playing, we fill the board
-    /// with 1s and return a lost state.
-    #[instrument(level = "debug", name = "tetris_board_apply_piece_placement", fields(piece = %placement.piece, rotation = %placement.orientation.rotation, column = %placement.orientation.column))]
-    pub fn apply_piece_placement(&mut self, placement: TetrisPiecePlacement) -> PlacementResult {
-        if self.loss().into() {
-            self.play_board.fill_all();
-            return PlacementResult {
-                is_lost: IsLost::LOST,
-                lines_cleared: 0,
-            };
-        }
-
-        self.add_piece_top(placement);
-        for _ in 0..((ROWS as u8) - placement.piece.height(placement.orientation.rotation)) {
-            self.piece_board.shift_down();
-            if self.play_board.collides(&self.piece_board) {
-                self.piece_board.shift_up();
-                self.play_board.merge(&self.piece_board);
-                self.piece_board.clear_all();
-                let lines_cleared = self.play_board.clear_rows();
-                return PlacementResult {
-                    is_lost: self.loss(),
-                    lines_cleared,
-                };
-            }
-        }
-        self.play_board.merge(&self.piece_board);
-        self.piece_board.clear_all();
-        let lines_cleared = self.play_board.clear_rows();
-        PlacementResult {
-            is_lost: self.loss(),
-            lines_cleared,
-        }
-    }
-
-    /// Add a piece to the top of the piece board.
-    ///
-    /// Every piece, rotation, and column combination is expanded
-    /// explicitly.
-    #[instrument(level = "trace", name = "tetris_board_add_piece_top", fields(piece = %placement.piece, rotation = %placement.orientation.rotation, column = %placement.orientation.column))]
-    fn add_piece_top(&mut self, placement: TetrisPiecePlacement) {
-        match (
-            placement.piece.0,
-            placement.orientation.rotation.0,
-            placement.orientation.column.0,
-        ) {
-            (0b0000_0001, _, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                1100000000
-                1100000000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0001, _, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0110000000
-                0110000000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0001, _, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0011000000
-                0011000000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0001, _, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001100000
-                0001100000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0001, _, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000110000
-                0000110000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0001, _, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000011000
-                0000011000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0001, _, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001100
-                0000001100
-                0000000000
-                0000000000
-            }),
-            (0b0000_0001, _, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000110
-                0000000110
-                0000000000
-                0000000000
-            }),
-            (0b0000_0001, _, 8) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000011
-                0000000011
-                0000000000
-                0000000000
-            }),
-
-            // I piece
-            (0b0000_0010, 0 | 2, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                1111000000
-                0000000000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0010, 0 | 2, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0111100000
-                0000000000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0010, 0 | 2, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0011110000
-                0000000000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0010, 0 | 2, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001111000
-                0000000000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0010, 0 | 2, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000111100
-                0000000000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0010, 0 | 2, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000011110
-                0000000000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0010, 0 | 2, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001111
-                0000000000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0010, 1 | 3, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                1000000000
-                1000000000
-                1000000000
-                1000000000
-            }),
-            (0b0000_0010, 1 | 3, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0100000000
-                0100000000
-                0100000000
-                0100000000
-            }),
-            (0b0000_0010, 1 | 3, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0010000000
-                0010000000
-                0010000000
-                0010000000
-            }),
-            (0b0000_0010, 1 | 3, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001000000
-                0001000000
-                0001000000
-                0001000000
-            }),
-            (0b0000_0010, 1 | 3, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000100000
-                0000100000
-                0000100000
-                0000100000
-            }),
-            (0b0000_0010, 1 | 3, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000010000
-                0000010000
-                0000010000
-                0000010000
-            }),
-            (0b0000_0010, 1 | 3, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001000
-                0000001000
-                0000001000
-                0000001000
-            }),
-            (0b0000_0010, 1 | 3, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000100
-                0000000100
-                0000000100
-                0000000100
-            }),
-            (0b0000_0010, 1 | 3, 8) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000010
-                0000000010
-                0000000010
-                0000000010
-            }),
-            (0b0000_0010, 1 | 3, 9) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000001
-                0000000001
-                0000000001
-                0000000001
-            }),
-
-            // S piece
-            (0b0000_0100, 0 | 2, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0110000000
-                1100000000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0100, 0 | 2, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0011000000
-                0110000000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0100, 0 | 2, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001100000
-                0011000000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0100, 0 | 2, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000110000
-                0001100000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0100, 0 | 2, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000011000
-                0000110000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0100, 0 | 2, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001100
-                0000011000
-                0000000000
-                0000000000
-            }),
-            (0b0000_0100, 0 | 2, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000110
-                0000001100
-                0000000000
-                0000000000
-            }),
-            (0b0000_0100, 0 | 2, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000011
-                0000000110
-                0000000000
-                0000000000
-            }),
-            (0b0000_0100, 1 | 3, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                1000000000
-                1100000000
-                0100000000
-                0000000000
-            }),
-            (0b0000_0100, 1 | 3, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0100000000
-                0110000000
-                0010000000
-                0000000000
-            }),
-            (0b0000_0100, 1 | 3, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0010000000
-                0011000000
-                0001000000
-                0000000000
-            }),
-            (0b0000_0100, 1 | 3, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001000000
-                0001100000
-                0000100000
-                0000000000
-            }),
-            (0b0000_0100, 1 | 3, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000100000
-                0000110000
-                0000010000
-                0000000000
-            }),
-            (0b0000_0100, 1 | 3, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000010000
-                0000011000
-                0000001000
-                0000000000
-            }),
-            (0b0000_0100, 1 | 3, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001000
-                0000001100
-                0000000100
-                0000000000
-            }),
-            (0b0000_0100, 1 | 3, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000100
-                0000000110
-                0000000010
-                0000000000
-            }),
-            (0b0000_0100, 1 | 3, 8) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000010
-                0000000011
-                0000000001
-                0000000000
-            }),
-            // Z piece
-            (0b0000_1000, 0 | 2, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                1100000000
-                0110000000
-                0000000000
-                0000000000
-            }),
-            (0b0000_1000, 0 | 2, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0110000000
-                0011000000
-                0000000000
-                0000000000
-            }),
-            (0b0000_1000, 0 | 2, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0011000000
-                0001100000
-                0000000000
-                0000000000
-            }),
-            (0b0000_1000, 0 | 2, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001100000
-                0000110000
-                0000000000
-                0000000000
-            }),
-            (0b0000_1000, 0 | 2, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000110000
-                0000011000
-                0000000000
-                0000000000
-            }),
-            (0b0000_1000, 0 | 2, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000011000
-                0000001100
-                0000000000
-                0000000000
-            }),
-            (0b0000_1000, 0 | 2, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001100
-                0000000110
-                0000000000
-                0000000000
-            }),
-            (0b0000_1000, 0 | 2, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000110
-                0000000011
-                0000000000
-                0000000000
-            }),
-            (0b0000_1000, 1 | 3, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0100000000
-                1100000000
-                1000000000
-                0000000000
-            }),
-            (0b0000_1000, 1 | 3, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0010000000
-                0110000000
-                0100000000
-                0000000000
-            }),
-            (0b0000_1000, 1 | 3, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001000000
-                0011000000
-                0010000000
-                0000000000
-            }),
-            (0b0000_1000, 1 | 3, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000100000
-                0001100000
-                0001000000
-                0000000000
-            }),
-            (0b0000_1000, 1 | 3, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000010000
-                0000110000
-                0000100000
-                0000000000
-            }),
-            (0b0000_1000, 1 | 3, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001000
-                0000011000
-                0000010000
-                0000000000
-            }),
-            (0b0000_1000, 1 | 3, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000100
-                0000001100
-                0000001000
-                0000000000
-            }),
-            (0b0000_1000, 1 | 3, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000010
-                0000000110
-                0000000100
-                0000000000
-            }),
-            (0b0000_1000, 1 | 3, 8) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000001
-                0000000011
-                0000000010
-                0000000000
-            }),
-
-            // T piece
-            (0b0001_0000, 0, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                1110000000
-                0100000000
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 0, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0111000000
-                0010000000
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 0, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0011100000
-                0001000000
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 0, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001110000
-                0000100000
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 0, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000111000
-                0000010000
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 0, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000011100
-                0000001000
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 0, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001110
-                0000000100
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 0, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000111
-                0000000010
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 1, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0100000000
-                1100000000
-                0100000000
-                0000000000
-            }),
-            (0b0001_0000, 1, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0010000000
-                0110000000
-                0010000000
-                0000000000
-            }),
-            (0b0001_0000, 1, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001000000
-                0011000000
-                0001000000
-                0000000000
-            }),
-            (0b0001_0000, 1, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000100000
-                0001100000
-                0000100000
-                0000000000
-            }),
-            (0b0001_0000, 1, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000010000
-                0000110000
-                0000010000
-                0000000000
-            }),
-            (0b0001_0000, 1, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001000
-                0000011000
-                0000001000
-                0000000000
-            }),
-            (0b0001_0000, 1, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000100
-                0000001100
-                0000000100
-                0000000000
-            }),
-            (0b0001_0000, 1, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000010
-                0000000110
-                0000000010
-                0000000000
-            }),
-            (0b0001_0000, 1, 8) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000001
-                0000000011
-                0000000001
-                0000000000
-            }),
-            (0b0001_0000, 2, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0100000000
-                1110000000
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 2, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0010000000
-                0111000000
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 2, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001000000
-                0011100000
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 2, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000100000
-                0001110000
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 2, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000010000
-                0000111000
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 2, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001000
-                0000011100
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 2, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000100
-                0000001110
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 2, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000010
-                0000000111
-                0000000000
-                0000000000
-            }),
-            (0b0001_0000, 3, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                1000000000
-                1100000000
-                1000000000
-                0000000000
-            }),
-            (0b0001_0000, 3, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0100000000
-                0110000000
-                0100000000
-                0000000000
-            }),
-            (0b0001_0000, 3, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0010000000
-                0011000000
-                0010000000
-                0000000000
-            }),
-            (0b0001_0000, 3, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001000000
-                0001100000
-                0001000000
-                0000000000
-            }),
-            (0b0001_0000, 3, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000100000
-                0000110000
-                0000100000
-                0000000000
-            }),
-            (0b0001_0000, 3, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000010000
-                0000011000
-                0000010000
-                0000000000
-            }),
-            (0b0001_0000, 3, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001000
-                0000001100
-                0000001000
-                0000000000
-            }),
-            (0b0001_0000, 3, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000100
-                0000000110
-                0000000100
-                0000000000
-            }),
-            (0b0001_0000, 3, 8) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000010
-                0000000011
-                0000000010
-                0000000000
-            }),
-
-            // L piece
-            (0b0010_0000, 0, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0010000000
-                1110000000
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 0, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001000000
-                0111000000
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 0, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000100000
-                0011100000
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 0, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000010000
-                0001110000
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 0, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001000
-                0000111000
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 0, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000100
-                0000011100
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 0, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000010
-                0000001110
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 0, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000001
-                0000000111
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 1, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                1000000000
-                1000000000
-                1100000000
-                0000000000
-            }),
-            (0b0010_0000, 1, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0100000000
-                0100000000
-                0110000000
-                0000000000
-            }),
-            (0b0010_0000, 1, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0010000000
-                0010000000
-                0011000000
-                0000000000
-            }),
-            (0b0010_0000, 1, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001000000
-                0001000000
-                0001100000
-                0000000000
-            }),
-            (0b0010_0000, 1, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000100000
-                0000100000
-                0000110000
-                0000000000
-            }),
-            (0b0010_0000, 1, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000010000
-                0000010000
-                0000011000
-                0000000000
-            }),
-            (0b0010_0000, 1, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001000
-                0000001000
-                0000001100
-                0000000000
-            }),
-            (0b0010_0000, 1, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000100
-                0000000100
-                0000000110
-                0000000000
-            }),
-            (0b0010_0000, 1, 8) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000010
-                0000000010
-                0000000011
-                0000000000
-            }),
-            (0b0010_0000, 2, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                1110000000
-                1000000000
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 2, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0111000000
-                0100000000
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 2, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0011100000
-                0010000000
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 2, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001110000
-                0001000000
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 2, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000111000
-                0000100000
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 2, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000011100
-                0000010000
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 2, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001110
-                0000001000
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 2, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000111
-                0000000100
-                0000000000
-                0000000000
-            }),
-            (0b0010_0000, 3, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                1100000000
-                0100000000
-                0100000000
-                0000000000
-            }),
-            (0b0010_0000, 3, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0110000000
-                0010000000
-                0010000000
-                0000000000
-            }),
-            (0b0010_0000, 3, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0011000000
-                0001000000
-                0001000000
-                0000000000
-            }),
-            (0b0010_0000, 3, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001100000
-                0000100000
-                0000100000
-                0000000000
-            }),
-            (0b0010_0000, 3, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000110000
-                0000010000
-                0000010000
-                0000000000
-            }),
-            (0b0010_0000, 3, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000011000
-                0000001000
-                0000001000
-                0000000000
-            }),
-            (0b0010_0000, 3, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001100
-                0000000100
-                0000000100
-                0000000000
-            }),
-            (0b0010_0000, 3, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000110
-                0000000010
-                0000000010
-                0000000000
-            }),
-            (0b0010_0000, 3, 8) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000011
-                0000000001
-                0000000001
-                0000000000
-            }),
-
-            // J piece
-            (0b0100_0000, 0, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                1000000000
-                1110000000
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 0, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0100000000
-                0111000000
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 0, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0010000000
-                0011100000
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 0, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001000000
-                0001110000
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 0, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000100000
-                0000111000
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 0, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000010000
-                0000011100
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 0, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001000
-                0000001110
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 0, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000100
-                0000000111
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 1, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                1100000000
-                1000000000
-                1000000000
-                0000000000
-            }),
-            (0b0100_0000, 1, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0110000000
-                0100000000
-                0100000000
-                0000000000
-            }),
-            (0b0100_0000, 1, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0011000000
-                0010000000
-                0010000000
-                0000000000
-            }),
-            (0b0100_0000, 1, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001100000
-                0001000000
-                0001000000
-                0000000000
-            }),
-            (0b0100_0000, 1, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000110000
-                0000100000
-                0000100000
-                0000000000
-            }),
-            (0b0100_0000, 1, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000011000
-                0000010000
-                0000010000
-                0000000000
-            }),
-            (0b0100_0000, 1, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001100
-                0000001000
-                0000001000
-                0000000000
-            }),
-            (0b0100_0000, 1, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000110
-                0000000100
-                0000000100
-                0000000000
-            }),
-            (0b0100_0000, 1, 8) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000011
-                0000000010
-                0000000010
-                0000000000
-            }),
-            (0b0100_0000, 2, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                1110000000
-                0010000000
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 2, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0111000000
-                0001000000
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 2, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0011100000
-                0000100000
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 2, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001110000
-                0000010000
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 2, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000111000
-                0000001000
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 2, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000011100
-                0000000100
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 2, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001110
-                0000000010
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 2, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000111
-                0000000001
-                0000000000
-                0000000000
-            }),
-            (0b0100_0000, 3, 0) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0100000000
-                0100000000
-                1100000000
-                0000000000
-            }),
-            (0b0100_0000, 3, 1) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0010000000
-                0010000000
-                0110000000
-                0000000000
-            }),
-            (0b0100_0000, 3, 2) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0001000000
-                0001000000
-                0011000000
-                0000000000
-            }),
-            (0b0100_0000, 3, 3) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000100000
-                0000100000
-                0001100000
-                0000000000
-            }),
-            (0b0100_0000, 3, 4) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000010000
-                0000010000
-                0000110000
-                0000000000
-            }),
-            (0b0100_0000, 3, 5) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000001000
-                0000001000
-                0000011000
-                0000000000
-            }),
-            (0b0100_0000, 3, 6) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000100
-                0000000100
-                0000001100
-                0000000000
-            }),
-            (0b0100_0000, 3, 7) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000010
-                0000000010
-                0000000110
-                0000000000
-            }),
-            (0b0100_0000, 3, 8) => self.piece_board.0[..5].copy_from_slice(&piece_bytes! {
-                0000000001
-                0000000001
-                0000000011
-                0000000000
-            }),
-            _ => unreachable!("Invalid: {}", placement),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-struct TetrisGameRng(u64);
-
-impl TetrisGameRng {
-    pub fn new(seed: u64) -> Self {
-        Self(seed)
-    }
-
-    #[inline(always)]
-    pub fn next_u64(&mut self) -> u64 {
-        self.0 = fmix64(self.0);
-        self.0
-    }
 }
 
 /// A Tetris game is:
@@ -2588,9 +1592,9 @@ impl TetrisGameRng {
 /// 2. A bag of pieces
 /// 3. The current piece
 ///
-/// The interface for playing Tetris is “get placements” and “apply placements”.
+/// The interface for playing Tetris is "get placements" and "apply placements".
 /// This ensures the caller only plays possible moves.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TetrisGame {
     board: TetrisBoard,
     bag: TetrisPieceBag,
@@ -2625,11 +1629,10 @@ impl TetrisGame {
     ///
     /// The game is initialized with a new board, a new bag, and a random piece
     /// popped from the bag.
-    #[instrument(level = "info", name = "tetris_game_new")]
     pub fn new() -> Self {
         let seed = rand::rng().next_u64();
         let mut rng = TetrisGameRng::new(seed);
-        let board = TetrisBoard::default();
+        let board = TetrisBoard::new();
         let mut bag = TetrisPieceBag::new();
         let piece_buf = bag.rand_next(&mut rng);
         Self {
@@ -2643,10 +1646,9 @@ impl TetrisGame {
         }
     }
 
-    #[instrument(level = "info", name = "tetris_game_new_with_seed")]
     pub fn new_with_seed(seed: u64) -> Self {
         let mut rng = TetrisGameRng::new(seed);
-        let board = TetrisBoard::default();
+        let board = TetrisBoard::new();
         let mut bag = TetrisPieceBag::new();
         let piece_buf = bag.rand_next(&mut rng);
         Self {
@@ -2660,10 +1662,10 @@ impl TetrisGame {
         }
     }
 
-    /// Get the current playing board.
-    #[inline(always)]
-    pub const fn board(&self) -> TetrisBoardRaw {
-        self.board.board()
+    /// Get the current board.
+    #[inline_conditioned(always)]
+    pub const fn board(&self) -> TetrisBoard {
+        self.board
     }
 
     /// Get the current piece.
@@ -2683,21 +1685,13 @@ impl TetrisGame {
     /// Returns `true` if the game is lost; otherwise `false`.
     /// Lines cleared are tracked by the difference in height before and after placement.
     /// If the game is not lost, the current piece is replaced with a new random piece.
-    #[instrument(level = "info", name = "tetris_game_apply_placement", fields(
-        piece = %placement.piece, 
-        rotation = %placement.orientation.rotation, 
-        column = %placement.orientation.column,
-        board_height = %self.board.height(),
-        piece_count = %self.piece_count,
-        lines_cleared = %self.lines_cleared
-    ))]
     pub fn apply_placement(&mut self, placement: TetrisPiecePlacement) -> IsLost {
-        debug_assert!(
-            self.current_placements().contains(&placement),
-            "Placement {} is not valid for current piece {}",
-            placement,
-            self.piece_buf
-        );
+        // debug_assert!(
+        //     self.current_placements().contains(&placement),
+        //     "Placement {} is not valid for current piece {}",
+        //     placement,
+        //     self.piece_buf
+        // );
 
         let PlacementResult {
             is_lost,
@@ -2706,26 +1700,20 @@ impl TetrisGame {
         if is_lost.into() {
             return IsLost::LOST;
         }
-        self.lines_cleared += lines_cleared;
+        self.lines_cleared += lines_cleared as u32;
         self.piece_buf = self.bag.rand_next(&mut self.rng);
         self.piece_count += 1;
         IsLost::NOT_LOST
     }
 
     /// Reset the game to a new board, bag, and piece.
-    #[instrument(level = "info", name = "tetris_game_reset", fields(new_seed = ?new_seed, old_seed = %self.seed))]
     pub fn reset(&mut self, new_seed: Option<u64>) {
-        self.board.reset();
+        self.board.clear();
         self.bag.fill();
         self.rng = TetrisGameRng::new(new_seed.unwrap_or(self.seed));
         self.piece_buf = self.bag.rand_next(&mut self.rng);
         self.lines_cleared = 0;
         self.piece_count = 0;
-    }
-
-    /// Export the current board as a `u256`.
-    pub fn export_board(&self) -> TetrisUint {
-        self.board.into()
     }
 }
 
@@ -2737,7 +1725,6 @@ pub struct TetrisGameSet(HeaplessVec<TetrisGame, MAX_GAMES>);
 
 impl TetrisGameSet {
     /// Create a new TetrisGameSet with N default games.
-    #[instrument(level = "info", name = "tetris_game_set_new")]
     pub fn new(num_games: usize) -> Self {
         debug_assert!(
             num_games <= MAX_GAMES,
@@ -2751,7 +1738,6 @@ impl TetrisGameSet {
 
     /// Create a new TetrisGameSet with N games using the provided seed.
     /// Each game gets a slightly different seed (seed + index).
-    #[instrument(level = "info", name = "tetris_game_set_new_with_seed")]
     pub fn new_with_seed(seed: u64, num_games: usize) -> Self {
         let mut games = HeaplessVec::new();
         (0..num_games).for_each(|i| games.push(TetrisGame::new_with_seed(seed + i as u64)));
@@ -2765,6 +1751,19 @@ impl TetrisGameSet {
         Self(games)
     }
 
+    /// Permute the gameset using the provided permutation vector.
+    ///
+    /// The permutation vector must be the same length as the gameset and contain
+    /// valid indices (0..len). Each index should appear exactly once.
+    pub fn permute(&mut self, permutation: &[usize]) {
+        assert_eq!(permutation.len(), self.len(), "Permutation length mismatch");
+        let mut new_games = HeaplessVec::new();
+        for &idx in permutation {
+            new_games.push(*self.0.get(idx).unwrap());
+        }
+        self.0 = new_games;
+    }
+
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -2776,20 +1775,21 @@ impl TetrisGameSet {
         Self(input_games)
     }
 
-    #[inline(always)]
-    pub fn boards(&self) -> HeaplessVec<TetrisBoardRaw, MAX_GAMES> {
+    pub fn boards(&self) -> HeaplessVec<TetrisBoard, MAX_GAMES> {
         self.0.map(|game| game.board())
     }
 
-    #[instrument(level = "trace", name = "tetris_game_set_current_pieces")]
     pub fn current_pieces(&self) -> HeaplessVec<TetrisPiece, MAX_GAMES> {
         self.0.map(|game| game.current_piece())
+    }
+
+    pub fn piece_counts(&self) -> HeaplessVec<u32, MAX_GAMES> {
+        self.0.map(|game| game.piece_count)
     }
 
     /// Get the current placements for all games.
     ///
     /// These are the placements that can be applied to the current piece.
-    #[instrument(level = "trace", name = "tetris_game_set_current_placements")]
     pub fn current_placements(&self) -> Vec<&[TetrisPiecePlacement]> {
         self.0
             .iter()
@@ -2803,7 +1803,6 @@ impl TetrisGameSet {
     /// Lines cleared are tracked by measuring the difference in height before and after the placement.
     ///
     /// If the game is not lost, the current piece is replaced with a new random piece.
-    #[instrument(level = "debug", name = "tetris_game_set_apply_placement", fields(num_games = %self.0.len(), num_placements = %placements.len()))]
     pub fn apply_placement(&mut self, placements: &[TetrisPiecePlacement]) -> Vec<IsLost> {
         self.0
             .iter_mut()
@@ -2814,9 +1813,47 @@ impl TetrisGameSet {
             .collect()
     }
 
+    /// Apply a placement from orientations to the board.
+    ///
+    /// This will return true if the game is lost, false otherwise.
+    /// Lines cleared are tracked by measuring the difference in height before and after the placement.
+    ///
+    /// If the game is not lost, the current piece is replaced with a new random piece.
+    pub fn apply_placement_from_orientations(
+        &mut self,
+        orientations: &[TetrisPieceOrientation],
+    ) -> Vec<IsLost> {
+        self.0
+            .iter_mut()
+            .zip(orientations)
+            .par_bridge()
+            .into_par_iter()
+            .map(|(game, &orientation)| {
+                game.apply_placement(TetrisPiecePlacement {
+                    piece: game.current_piece(),
+                    orientation,
+                })
+            })
+            .collect()
+    }
+
     /// Reset the game to a new board, bag, and piece.
     pub fn reset(&mut self, new_seed: Option<u64>) {
         self.0.apply_mut(|game| game.reset(new_seed));
+    }
+}
+
+impl Index<usize> for TetrisGameSet {
+    type Output = TetrisGame;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0.get(index).unwrap()
+    }
+}
+
+impl IndexMut<usize> for TetrisGameSet {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        self.0.get_mut(index).unwrap()
     }
 }
 
@@ -2824,13 +1861,16 @@ impl TetrisGameSet {
 mod tests {
     use std::collections::HashSet;
 
+    use proc_macros::piece_u32_cols;
     use rand::seq::IteratorRandom;
+
+    use crate::{repeat_exact_idx, repeat_idx_generic};
 
     use super::*;
 
     #[test]
     fn test_board_count() {
-        let mut board = TetrisBoardRaw::default();
+        let mut board = TetrisBoard::new();
         let mut count = 0;
         for row in 0..ROWS {
             for col in 0..COLS {
@@ -2848,14 +1888,49 @@ mod tests {
     }
 
     #[test]
+    fn test_set_and_get_bit() {
+        let mut board = TetrisBoard::new();
+        board.set_bit(0, 0);
+        assert!(board.get_bit(0, 0));
+        assert!(!board.get_bit(1, 0));
+        assert!(!board.get_bit(0, 1));
+    }
+
+    #[test]
+    fn test_drop_piece() {
+        // simple case
+        let mut board = TetrisBoard::new();
+        board.apply_piece_placement(TetrisPiecePlacement {
+            piece: TetrisPiece::new(0),
+            orientation: TetrisPieceOrientation {
+                rotation: Rotation(0),
+                column: Column(0),
+            },
+        });
+        assert!(board.count() == 4);
+        assert!(board.get_bit(0, 0));
+        assert!(board.get_bit(1, 0));
+        assert!(board.get_bit(0, 1));
+        assert!(board.get_bit(1, 1));
+
+        // fuzz test
+        for _ in 0..10_000 {
+            let piece = TetrisPiece::new(rand::random::<u8>() % 7);
+            let rotation = Rotation(rand::random::<u8>() % 4);
+            let col = (rand::random::<u8>()) % ((COLS as u8) - piece.width(rotation));
+            TetrisBoard::new().apply_piece_placement(TetrisPiecePlacement {
+                piece,
+                orientation: TetrisPieceOrientation {
+                    rotation,
+                    column: Column(col),
+                },
+            });
+        }
+    }
+
+    #[test]
     fn test_piece_rotations() {
         fn rotations_reference_slow(i: u8) -> u8 {
-            // match i {
-            //     0 => 1,
-            //     1 | 2 | 3 => 2,
-            //     4 | 5 | 6 => 4,
-            //     _ => panic!("Invalid piece"),
-            // }
             match i {
                 0b0000_0001 => 1,
                 0b0000_0010 | 0b0000_0100 | 0b0000_1000 => 2,
@@ -2932,394 +2007,82 @@ mod tests {
     }
 
     #[test]
-    fn test_set_and_get_bit() {
-        let mut board = TetrisBoardRaw::default();
-        board.set_bit(0, 0);
-        assert!(board.get_bit(0, 0));
-        assert!(!board.get_bit(1, 0));
-        assert!(!board.get_bit(0, 1));
-    }
-
-    #[test]
-    fn test_shift_down() {
-        let mut board = TetrisBoardRaw::default();
-        board.set_bit(0, 0); // Top-left bit
-        assert!(board.get_bit(0, 0));
-
-        board.shift_down();
-        assert!(!board.get_bit(0, 0));
-        assert!(board.get_bit(0, 1));
-
-        let mut board = TetrisBoardRaw::default();
-        for col in 0..COLS {
-            board.set_bit(col, 0);
-            for row in 0..ROWS {
-                assert!(
-                    board.get_bit(col, row),
-                    "Bit at ({}, {}) is false",
-                    col,
-                    row
-                );
-                assert!(board.count() == 1);
-                board.shift_down();
-            }
-
-            // test if the shift goes off the board
-            assert!(
-                !board.get_bit(col, ROWS - 1),
-                "Bit at ({}, {}) is true",
-                col,
-                ROWS - 1
-            );
-            assert!(board.count() == 0);
-
-            board.clear_all();
-        }
-    }
-
-    #[test]
-    fn test_shift_down_from() {
-        fn is_row_filled(board: &TetrisBoardRaw, row: usize) -> bool {
-            for col in 0..COLS {
-                if !board.get_bit(col, row) {
-                    return false;
-                }
-            }
-            true
-        }
-        fn fill_row(board: &mut TetrisBoardRaw, row: usize) {
-            for col in 0..COLS {
-                board.set_bit(col, row);
-            }
-        }
-
-        // start with empty board
-        // and fill the first row
-        let mut board = TetrisBoardRaw::default();
-        fill_row(&mut board, 0);
-        assert!(is_row_filled(&board, 0));
-        assert!(board.count() == COLS);
-
-        // test 'shift down from' operates the same as 'shift down'
-        for row in 0..ROWS {
-            assert!(is_row_filled(&board, row));
-            board.shift_down_from(ROWS - 1);
-            assert!(!is_row_filled(&board, row));
-        }
-        assert!(board.count() == 0);
-
-        // start with an initial board with a diagonal of 1s
-        // and shift down from the bottom
-        // making sure the diagonal is still there
-        let mut board = TetrisBoardRaw::default();
-        for col in 0..COLS {
-            // set the diagonal to 1
-            board.set_bit(col, col);
-        }
-        for start_idx in 0..COLS {
-            // check that the diagonal is still there
-            for i in 0..COLS {
-                assert!(
-                    board.get_bit(i, start_idx + i),
-                    "Bit at ({}, {}) is false",
-                    i,
-                    i
-                );
-            }
-
-            // shift down from the bottom
-            board.shift_down_from(ROWS - 1);
-        }
-        for i in 0..COLS {
-            assert!(
-                board.get_bit(i, COLS + i),
-                "Bit at ({}, {}) is false",
-                i,
-                COLS + i
-            );
-        }
-        // shift down by 4 into the "alive" range
-        for _ in 0..4 {
-            board.shift_down_from(ROWS - 1);
-        }
-
-        // start with the shifted down board with the diagonal of ones
-        // and shift from rows above the diagonal. No changes should be made
-        let base_board = board;
-        for i in 0..COLS {
-            board.shift_down_from(i);
-            assert_eq!(base_board, board, "Shift down from {} failed", i);
-        }
-
-        // Now start shifting from the bottom row again.
-        // This time, the diagonal should be shifted down
-        // off the board
-        for _ in 0..COLS {
-            board.shift_down_from(ROWS - 1);
-        }
-        assert!(board.count() == 0);
-
-        // Now start with a full board, and shift down from random rows
-        let mut board = TetrisBoardRaw::default();
-        for i in 0..ROWS {
-            for j in 0..COLS {
-                board.set_bit(j, i);
-            }
-        }
-
-        let start_row = ROWS - 10;
-        for i in start_row..ROWS {
-            board.shift_down_from(i);
-            assert!(!is_row_filled(&board, i - start_row), "Row {} is filled", i);
-        }
-        for i in start_row..ROWS {
-            assert!(is_row_filled(&board, i), "Row {} is not filled", i);
-        }
-
-        // Now test that if we have a filled row,
-        // and we shift down from that same row, it
-        // get's 'cleared'
-        let mut board = TetrisBoardRaw::default();
-        for r in 0..ROWS {
-            for i in 0..COLS {
-                board.set_bit(i, r);
-            }
-            board.shift_down_from(r);
-            assert!(board.count() == 0);
-        }
-    }
-
-    #[test]
-    fn test_shift_up() {
-        let mut board = TetrisBoardRaw::default();
-        board.set_bit(0, 1); // Second row, first column
-        assert!(board.get_bit(0, 1));
-
-        board.shift_up();
-        assert!(!board.get_bit(0, 1));
-        assert!(board.get_bit(0, 0));
-    }
-
-    #[test]
-    fn test_merge() {
-        let mut boarda = TetrisBoardRaw::default();
-        let mut boardb = TetrisBoardRaw::default();
-        boarda.set_bit(0, 0);
-        boarda.set_bit(1, 1);
-        boardb.set_bit(0, 0);
-        boardb.set_bit(1, 1);
-        boarda.merge(&boardb);
-        assert!(boarda.get_bit(0, 0));
-        assert!(boarda.get_bit(1, 1));
-
-        boarda.clear_all();
-        boardb.clear_all();
-        assert!(!boarda.get_bit(0, 0));
-        assert!(!boardb.get_bit(1, 1));
-        boarda.merge(&boardb);
-        assert!(!boarda.get_bit(0, 0));
-        assert!(!boarda.get_bit(1, 1));
-
-        boarda.clear_all();
-        boardb.clear_all();
-        // fill boardb with 1s
-        for i in 0..ROWS {
-            for j in 0..COLS {
-                boardb.set_bit(j, i);
-            }
-        }
-        assert!(boarda.count() == 0);
-        assert!(boardb.count() == (ROWS * COLS));
-        boarda.merge(&boardb);
-        assert!(boarda.count() == (ROWS * COLS));
-    }
-
-    #[test]
     fn test_clear() {
-        let mut board = TetrisBoardRaw::default();
+        let mut board = TetrisBoard::new();
         board.set_bit(0, 0);
         board.set_bit(9, 19);
         assert!(board.get_bit(0, 0));
         assert!(board.get_bit(9, 19));
 
-        board.clear_all();
+        board.clear();
         assert!(!board.get_bit(0, 0));
         assert!(!board.get_bit(9, 19));
 
         // small fuzz test
-        board.flip_random_bits(100, &mut rand::rng());
+        board.set_random_bits(100, &mut rand::rng());
         assert!(board.count() > 0);
-        board.clear_all();
+        board.clear();
         assert!(board.count() == 0);
+    }
+
+    #[test]
+    fn test_height() {
+        let mut board = TetrisBoard::new();
+        assert_eq!(board.height(), 0);
+
+        // Test each row
+        for row in 0..ROWS {
+            // Test each column in this row
+            for col in 0..COLS {
+                board.clear();
+                board.set_bit(col, row);
+                assert_eq!(
+                    board.height(),
+                    row as u32 + 1,
+                    "Height should be {} when bit set at col {}, row {}",
+                    row + 1,
+                    col,
+                    row
+                );
+            }
+        }
     }
 
     #[test]
     fn test_clear_filled_rows() {
-        let mut board = TetrisBoardRaw::default();
+        let mut board = TetrisBoard::new();
         assert!(board.count() == 0);
 
-        // set whole bottom row to 1, then clear
-        for col in 0..COLS {
-            board.set_bit(col, ROWS - 1);
-        }
-        assert!(board.count() == COLS);
-        board.clear_rows();
-        assert!(board.count() == 0);
-
-        // multiple rows
-        for row in [0, 3, 6, 9, 12, 15, 18] {
+        // Test clearing each row
+        for row in 0..ROWS {
+            // Fill entire row
             for col in 0..COLS {
                 board.set_bit(col, row);
             }
+            assert!(board.count() == COLS as u32);
+            board.clear_filled_rows();
+            assert!(
+                board.count() == 0,
+                "count should be 0, not {}",
+                board.count()
+            );
         }
-        // println!("{}", board);
-        // assert!(board.count() == COLS as u8 * 7);
-        // board.set_bit(0, 18);
-        board.clear_rows();
-        assert!(board.count() == 0);
-        board.clear_all();
-
-        // set 1 row to 1 and a few other places
-        for col in 0..COLS {
-            board.set_bit(col, ROWS - 1);
-        }
-        board.set_bit(0, 1);
-        board.set_bit(1, 1);
-        board.set_bit(2, 1);
-        assert!(board.count() == COLS + 3);
-        board.clear_rows();
-        assert!(board.count() == 3);
-        board.clear_all();
-
-        // set every other bit to 1
-        for i in 0..(ROWS * COLS) {
-            if i % 2 == 0 {
-                board.set_bit(i % COLS, i / COLS);
-            }
-        }
-        assert!(board.count() == (ROWS * COLS) / 2);
-        board.clear_rows();
-        assert!(board.count() == (ROWS * COLS) / 2);
-        board.clear_all();
-        assert!(board.count() == 0);
     }
 
     #[test]
     fn test_loss_condition() {
-        let mut board = TetrisBoardRaw::default();
-        assert!(!Into::<bool>::into(board.loss()));
+        let mut board = TetrisBoard::new();
+        assert!(!Into::<bool>::into(board.is_lost()));
 
         // Set a bit in the top 4 rows
-        board.set_bit(0, 1);
-        assert!(Into::<bool>::into(board.loss()));
-        board.clear_all();
-        assert!(!Into::<bool>::into(board.loss()));
+        board.set_bit(0, ROWS + 1);
+        assert!(Into::<bool>::into(board.is_lost()));
+        board.clear();
+        assert!(!Into::<bool>::into(board.is_lost()));
 
         // Set a bit in the bottom row
-        board.set_bit(0, ROWS - 1);
-        assert!(!Into::<bool>::into(board.loss()));
-    }
-
-    #[test]
-    fn test_collision() {
-        let mut board1 = TetrisBoardRaw::default();
-        let mut board2 = TetrisBoardRaw::default();
-
-        board1.flip_bit(0, 0);
-        assert!(!board1.collides(&board2));
-        assert!(board1.count() == 1);
-        assert!(board2.count() == 0);
-
-        board2.flip_bit(0, 0);
-        assert!(board1.collides(&board2));
-        assert!(board1.count() == 1);
-        assert!(board2.count() == 1);
-
-        board2.flip_bit(0, 0);
-        assert!(!board1.collides(&board2));
-        assert!(board1.count() == 1);
-        assert!(board2.count() == 0);
-
-        board1.flip_bit(4, 4);
-        assert!(!board1.collides(&board2));
-        assert!(board1.count() == 2);
-        assert!(board2.count() == 0);
-
-        board2.flip_bit(4, 4);
-        assert!(board1.collides(&board2));
-        assert!(board1.count() == 2);
-        assert!(board2.count() == 1);
-
-        board2.flip_bit(4, 4);
-        assert!(!board1.collides(&board2));
-        assert!(board1.count() == 2);
-        assert!(board2.count() == 0);
-
-        board1.flip_bit(5, 4);
-        assert!(!board1.collides(&board2));
-        assert!(board1.count() == 3);
-        assert!(board2.count() == 0);
-
-        board1.flip_bit(4, 5);
-        assert!(!board1.collides(&board2));
-        assert!(board1.count() == 4);
-        assert!(board2.count() == 0);
-
-        // test end of board
-        board1.flip_bit(COLS - 1, ROWS - 1);
-        assert!(!board1.collides(&board2));
-
-        board2.flip_bit(COLS - 1, ROWS - 1);
-        assert!(board1.collides(&board2));
-
-        // another method
-        board1.clear_all();
-        board2.clear_all();
-        assert!(
-            !board1.collides(&board2),
-            "Cleared boards should not collide"
-        );
-
-        // set the board to all ones
-        // and ensure it doesn't collide with an empty board
-        board1.fill_all();
-        assert!(
-            !board1.collides(&board2),
-            "All ones and empty board should not collide"
-        );
-
-        for i in 0..COLS {
-            for j in 0..ROWS {
-                board2.flip_bit(i, j);
-                assert!(board1.collides(&board2));
-                board1.flip_bit(i, j);
-                assert!(!board1.collides(&board2));
-            }
-        }
-    }
-
-    #[test]
-    fn test_traverse_up() {
-        let mut board = TetrisBoardRaw::default();
-        for col in 0..COLS {
-            board.set_bit(col, ROWS - 1);
-            for row in (0..ROWS).rev() {
-                assert!(
-                    board.get_bit(col, row),
-                    "Bit at ({}, {}) is false",
-                    col,
-                    row
-                );
-                assert!(board.count() == 1);
-                board.shift_up();
-            }
-
-            // test if the shift goes off the board
-            assert!(!board.get_bit(col, 0), "Bit at ({}, {}) is true", col, 0);
-            assert!(board.count() == 0);
-
-            board.clear_all();
-        }
+        board.set_bit(0, 0);
+        assert!(!Into::<bool>::into(board.is_lost()));
     }
 
     #[test]
@@ -3485,118 +2248,99 @@ mod tests {
     }
 
     #[test]
-    fn test_add_piece_top() {
-        let mut board = TetrisBoard::default();
+    fn test_rand_next() {
+        let mut tetris_rng = TetrisGameRng::new(42);
 
-        let o_piece = TetrisPiece::new(0);
-        let rotation = Rotation(0);
-        let col = 0;
-        board.add_piece_top(TetrisPiecePlacement {
-            piece: o_piece,
-            orientation: TetrisPieceOrientation {
-                rotation,
-                column: Column(col),
-            },
-        });
-        assert!(board.piece_board.count() == 4);
-        assert!(board.piece_board.get_bit(0, 0));
-        assert!(board.piece_board.get_bit(1, 0));
-        assert!(board.piece_board.get_bit(0, 1));
-        assert!(board.piece_board.get_bit(1, 1));
-    }
+        let mut bag = TetrisPieceBag::new();
+        let mut pieces = std::collections::HashSet::new();
 
-    #[test]
-    fn test_drop_piece() {
-        // simple case
-        let mut board = TetrisBoard::default();
-        board.apply_piece_placement(TetrisPiecePlacement {
-            piece: TetrisPiece::new(0),
-            orientation: TetrisPieceOrientation {
-                rotation: Rotation(0),
-                column: Column(0),
-            },
-        });
-        assert!(board.play_board.count() == 4);
-        assert!(board.play_board.get_bit(0, ROWS - 1));
-        assert!(board.play_board.get_bit(1, ROWS - 1));
-        assert!(board.play_board.get_bit(0, ROWS - 2));
-        assert!(board.play_board.get_bit(1, ROWS - 2));
+        for _ in 0..7 {
+            let piece = bag.rand_next(&mut tetris_rng);
+            assert!(!bag.contains(piece), "Piece {} should not be in bag", piece);
+            pieces.insert(piece);
+        }
+        assert_eq!(pieces.len(), 7, "Should get 7 unique pieces");
 
-        // fuzz test
-        for _ in 0..10_000 {
-            let piece = TetrisPiece::new(rand::random::<u8>() % 7);
-            let rotation = Rotation(rand::random::<u8>() % 4);
-            let col = (rand::random::<u8>()) % ((COLS as u8) - piece.width(rotation));
-            TetrisBoard::default().apply_piece_placement(TetrisPiecePlacement {
-                piece,
-                orientation: TetrisPieceOrientation {
-                    rotation,
-                    column: Column(col),
-                },
+        // Helper function to perform KS test on a sequence of samples
+        fn assert_ks_test(samples: &[f32], num_categories: usize, sample_size: usize) {
+            // Expected uniform distribution
+            let expected = vec![1.0 / num_categories as f32; num_categories];
+            let mut observed = vec![0.0; num_categories];
+
+            // Calculate observed frequencies
+            for sample in samples {
+                observed[*sample as usize] += 1.0 / sample_size as f32;
+            }
+
+            // Kolmogorov-Smirnov test
+            let mut max_diff = 0.0f32;
+            let mut cumsum_expected = 0.0f32;
+            let mut cumsum_observed = 0.0f32;
+
+            for i in 0..num_categories {
+                cumsum_expected += expected[i];
+                cumsum_observed += observed[i];
+                let diff = (cumsum_expected - cumsum_observed).abs();
+                max_diff = max_diff.max(diff);
+            }
+
+            // Critical value for alpha=0.05 is approximately 1.36/sqrt(n)
+            let critical_value = 1.36 / (sample_size as f32).sqrt();
+            assert!(
+                max_diff < critical_value,
+                "KS test failed {} > {}",
+                max_diff,
+                critical_value
+            );
+        }
+
+        // Generate 1000 samples of 7 pieces each and run Kolmogorov-Smirnov test
+        // to verify that each position in the sequence has a uniform distribution
+        // across all piece types. This ensures the RNG is unbiased for each draw.
+        let mut samples = vec![
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        ];
+        for _ in 0..1000 {
+            let mut bag = TetrisPieceBag::new();
+            (0..7).for_each(|nth_sample| {
+                let ith_piece = bag.rand_next(&mut tetris_rng);
+                samples[nth_sample].push(ith_piece.index() as f32);
             });
         }
-    }
-
-    #[test]
-    fn test_line_height() {
-        let board = TetrisBoard::default();
-        assert_eq!(board.height(), 0);
-
-        let mut board = TetrisBoard::default();
-        for i in 0..COLS {
-            for j in 0..ROWS {
-                board.play_board.set_bit(i, j);
-            }
-        }
-        assert_eq!(board.height(), ROWS as u8);
-
-        // Test that line_height decreases as we clear rows from the bottom
-        let mut board = TetrisBoard::default();
-        // Fill the entire board
-        for i in 0..COLS {
-            for j in 0..ROWS {
-                board.play_board.set_bit(i, j);
-            }
-        }
-        assert_eq!(board.height(), ROWS as u8);
-
-        // Shift down and verify line height decreases by 1 each time
-        for expected_height in (0..ROWS as u8).rev() {
-            board.play_board.shift_down();
-            assert_eq!(board.height(), expected_height);
-        }
-    }
-
-    #[test]
-    fn test_coord_iff_byte_bit() {
-        for i in 0..COLS {
-            for j in 0..ROWS {
-                let (byte_idx, bit_idx) = get_byte_bit_idx(i, j);
-                let (row, col) = get_row_col_idx(byte_idx, bit_idx);
-                assert_eq!(row, j, "row: {}, col: {}", row, col);
-                assert_eq!(col, i, "row: {}, col: {}", row, col);
-            }
-        }
+        samples.iter().for_each(|sample| {
+            assert!(
+                sample.len() == 1000,
+                "Sample length should be 1000, got {}",
+                sample.len()
+            );
+            assert_ks_test(sample, 7, 1000);
+        });
     }
 
     #[test]
     fn test_to_binary_slice() {
-        let board_raw = TetrisBoardRaw::default();
+        let board = TetrisBoard::new();
 
-        let binary_slice = board_raw.to_binary_slice();
+        let binary_slice = board.to_binary_slice();
         assert_eq!(binary_slice.len(), BOARD_SIZE);
 
-        let board_raw2 = TetrisBoardRaw::from_binary_slice(binary_slice);
-        assert_eq!(board_raw, board_raw2);
+        let board2 = TetrisBoard::from_binary_slice(binary_slice);
+        assert_eq!(board, board2);
 
         // fuzz test
         let mut rng = rand::rng();
         for _ in 0..100 {
-            let mut board_raw = TetrisBoardRaw::default();
-            board_raw.flip_random_bits(1_000, &mut rng);
-            let binary_slice = board_raw.to_binary_slice();
-            let board_raw2 = TetrisBoardRaw::from_binary_slice(binary_slice);
-            assert_eq!(board_raw, board_raw2);
+            let mut board = TetrisBoard::new();
+            board.set_random_bits(1024, &mut rng);
+            let binary_slice = board.to_binary_slice();
+            let board2 = TetrisBoard::from_binary_slice(binary_slice);
+            assert_eq!(board, board2);
         }
     }
 
@@ -3637,5 +2381,46 @@ mod tests {
             let index = orientation.index();
             assert!(set.contains(&index));
         }
+    }
+
+    #[test]
+    fn test_tetris_board_raw2() {
+        let mut board = TetrisBoard::new();
+        board.apply_piece_placement(TetrisPiecePlacement {
+            piece: TetrisPiece::J_PIECE,
+            orientation: TetrisPieceOrientation {
+                rotation: Rotation(0),
+                column: Column(0),
+            },
+        });
+        board.apply_piece_placement(TetrisPiecePlacement {
+            piece: TetrisPiece::new(0),
+            orientation: TetrisPieceOrientation {
+                rotation: Rotation(0),
+                column: Column(3),
+            },
+        });
+        board.apply_piece_placement(TetrisPiecePlacement {
+            piece: TetrisPiece::new(0),
+            orientation: TetrisPieceOrientation {
+                rotation: Rotation(0),
+                column: Column(5),
+            },
+        });
+        board.apply_piece_placement(TetrisPiecePlacement {
+            piece: TetrisPiece::new(0),
+            orientation: TetrisPieceOrientation {
+                rotation: Rotation(0),
+                column: Column(7),
+            },
+        });
+        board.apply_piece_placement(TetrisPiecePlacement {
+            piece: TetrisPiece::L_PIECE,
+            orientation: TetrisPieceOrientation {
+                rotation: Rotation(3),
+                column: Column(8),
+            },
+        });
+        board.clear_filled_rows();
     }
 }
