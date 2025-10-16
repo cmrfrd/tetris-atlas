@@ -700,6 +700,108 @@ macro_rules! repeat_exact_idx {
         $crate::rep2_at!(12, $i, $b);
         $crate::rep1_at!(14, $i, $b);
     }};
+    (16, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+    }};
+    (17, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep1_at!(16, $i, $b);
+    }};
+    (18, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep2_at!(16, $i, $b);
+    }};
+    (19, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep2_at!(16, $i, $b);
+        $crate::rep1_at!(18, $i, $b);
+    }};
+    (20, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep4_at!(16, $i, $b);
+    }};
+    (21, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep4_at!(16, $i, $b);
+        $crate::rep1_at!(20, $i, $b);
+    }};
+    (22, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep4_at!(16, $i, $b);
+        $crate::rep2_at!(20, $i, $b);
+    }};
+    (23, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep4_at!(16, $i, $b);
+        $crate::rep2_at!(20, $i, $b);
+        $crate::rep1_at!(22, $i, $b);
+    }};
+    (24, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep8_at!(16, $i, $b);
+    }};
+    (25, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep8_at!(16, $i, $b);
+        $crate::rep1_at!(24, $i, $b);
+    }};
+    (26, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep8_at!(16, $i, $b);
+        $crate::rep2_at!(24, $i, $b);
+    }};
+    (27, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep8_at!(16, $i, $b);
+        $crate::rep2_at!(24, $i, $b);
+        $crate::rep1_at!(26, $i, $b);
+    }};
+    (28, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep8_at!(16, $i, $b);
+        $crate::rep4_at!(24, $i, $b);
+    }};
+    (29, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep8_at!(16, $i, $b);
+        $crate::rep4_at!(24, $i, $b);
+        $crate::rep1_at!(28, $i, $b);
+    }};
+    (30, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep8_at!(16, $i, $b);
+        $crate::rep4_at!(24, $i, $b);
+        $crate::rep2_at!(28, $i, $b);
+    }};
+    (31, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep8_at!(16, $i, $b);
+        $crate::rep4_at!(24, $i, $b);
+        $crate::rep2_at!(28, $i, $b);
+        $crate::rep1_at!(30, $i, $b);
+    }};
+    (32, $i:ident, $b:block) => {{
+        $crate::rep8_at!(0, $i, $b);
+        $crate::rep8_at!(8, $i, $b);
+        $crate::rep8_at!(16, $i, $b);
+        $crate::rep8_at!(24, $i, $b);
+    }};
 }
 
 #[macro_export]
@@ -752,7 +854,58 @@ macro_rules! repeat_idx_generic {
             15 => {
                 $crate::repeat_exact_idx!(15, $i, $b)
             }
-            _ => panic!("repeat_idx_generic! supports up to N=15"),
+            16 => {
+                $crate::repeat_exact_idx!(16, $i, $b)
+            }
+            17 => {
+                $crate::repeat_exact_idx!(17, $i, $b)
+            }
+            18 => {
+                $crate::repeat_exact_idx!(18, $i, $b)
+            }
+            19 => {
+                $crate::repeat_exact_idx!(19, $i, $b)
+            }
+            20 => {
+                $crate::repeat_exact_idx!(20, $i, $b)
+            }
+            21 => {
+                $crate::repeat_exact_idx!(21, $i, $b)
+            }
+            22 => {
+                $crate::repeat_exact_idx!(22, $i, $b)
+            }
+            23 => {
+                $crate::repeat_exact_idx!(23, $i, $b)
+            }
+            24 => {
+                $crate::repeat_exact_idx!(24, $i, $b)
+            }
+            25 => {
+                $crate::repeat_exact_idx!(25, $i, $b)
+            }
+            26 => {
+                $crate::repeat_exact_idx!(26, $i, $b)
+            }
+            27 => {
+                $crate::repeat_exact_idx!(27, $i, $b)
+            }
+            28 => {
+                $crate::repeat_exact_idx!(28, $i, $b)
+            }
+            29 => {
+                $crate::repeat_exact_idx!(29, $i, $b)
+            }
+            30 => {
+                $crate::repeat_exact_idx!(30, $i, $b)
+            }
+            31 => {
+                $crate::repeat_exact_idx!(31, $i, $b)
+            }
+            32 => {
+                $crate::repeat_exact_idx!(32, $i, $b)
+            }
+            _ => panic!("repeat_idx_generic! supports up to N=32"),
         }
     };
 }
