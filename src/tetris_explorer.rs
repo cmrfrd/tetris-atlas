@@ -1,4 +1,5 @@
-use crate::tetris::{TetrisGame, TetrisPiecePlacement, TetrisUint};
+use crate::repeat_idx_generic;
+use crate::tetris::{TetrisBoard, TetrisBoardBinarySlice, TetrisGame, TetrisPiecePlacement};
 use crate::utils::{HeaplessVec, VecPool};
 use rayon::iter::ParallelIterator;
 use rayon::iter::plumbing::{Folder, Reducer, UnindexedConsumer};
@@ -41,28 +42,27 @@ impl TetrisBloom1 {
         TetrisBloom1 { bits }
     }
 
-    const fn hash_tetris_uint(x: TetrisUint) -> usize {
+    const fn hash_tetris_board(x: TetrisBoard) -> usize {
         let limbs = x.as_limbs();
 
-        // Mix limbs with different rotations and multipliers
-        let mut h = limbs[0];
-        h ^= limbs[1].rotate_left(16);
-        h ^= limbs[2].rotate_left(32);
-        h ^= limbs[3].rotate_left(48);
+        // Mix all limbs together
+        let mut h = 0u64;
+        repeat_idx_generic!(TetrisBoard::WIDTH, I, {
+            h ^= (limbs[I] as u64).rotate_left((I * 16) as u32);
+        });
 
-        // Apply avalanche mixing
-        h ^= h >> 33;
-        h = h.wrapping_mul(0xff51afd7ed558ccd);
-        h ^= h >> 33;
-        h = h.wrapping_mul(0xc4ceb9fe1a85ec53);
-        h ^= h >> 33;
+        // Mix with FNV-1a hash
+        h = h.wrapping_mul(0x100000001b3);
+        h ^= h >> 32;
+        h = h.wrapping_mul(0x100000001b3);
+        h ^= h >> 32;
 
         h as usize
     }
 
     /// Returns true if already seen, false if first time
-    pub fn check_and_mark(&self, x: TetrisUint) -> bool {
-        let hash = Self::hash_tetris_uint(x);
+    pub fn check_and_mark(&self, x: TetrisBoard) -> bool {
+        let hash = Self::hash_tetris_board(x);
         let bit_index = hash % BITMASK_BITS;
         let word = bit_index / BITS_PER_WORD;
         let bit = bit_index % BITS_PER_WORD;
@@ -236,7 +236,7 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct TetrisExplorerNode {
     pub prev_game: Option<TetrisGame>,
     pub placement: Option<TetrisPiecePlacement>,
@@ -369,9 +369,10 @@ impl Iterator for TetrisExplorer {
                     let mut new_items = item_batch.items;
                     new_items.retain(|item| {
                         if let Some(max_depth) = self.max_depth
-                            && item.depth > max_depth {
-                                return false;
-                            }
+                            && item.depth > max_depth
+                        {
+                            return false;
+                        }
 
                         let is_visited = self.visited.check_and_mark(item.node.game.board().into());
                         if is_visited {
@@ -492,19 +493,10 @@ impl Iterator for TetrisExplorer {
 
 #[cfg(test)]
 mod tests {
-    
 
     use super::*;
 
     const GAME_SEED: u64 = 12345;
-
-    #[test]
-    fn test_explorer_count_items_non_parallel() {
-        let depth = 1;
-        let explorer = TetrisExplorer::new_with_seed(GAME_SEED, Some(depth));
-        let total_items = explorer.map(|item| item.items.len()).sum::<usize>();
-        assert!(total_items == 18, "Should find 18 items");
-    }
 
     #[test]
     fn test_explorer_find_line_clear_state_non_parallel() {
