@@ -603,32 +603,6 @@ impl<T: Copy + Sized + Debug, const N: usize, const M: usize> VecPool<T, N, M> {
     }
 }
 
-/// Applies a function in-place to every element of a fixed-size array.
-///
-/// This function provides an optimized way to mutate all elements of an array.
-/// In release mode, the compiler removes bounds checks and iterator bookkeeping,
-/// resulting in efficient machine code.
-///
-/// # Arguments
-///
-/// * `arr` - A mutable reference to the array to modify
-/// * `f` - A function to apply to each element
-///
-/// # Example
-///
-/// ```
-/// use tetris_atlas::utils::apply_all;
-/// let mut arr = [1, 2, 3, 4, 5];
-/// apply_all(&mut arr, |x| *x *= 2);
-/// assert_eq!(arr, [2, 4, 6, 8, 10]);
-/// ```
-#[inline_conditioned]
-pub fn apply_all<T, const N: usize>(arr: &mut [T; N], mut f: impl FnMut(&mut T)) {
-    for x in arr {
-        f(x);
-    }
-}
-
 #[macro_export]
 macro_rules! rep1_at {
     ($start:expr, $i:ident, $b:block) => {{
