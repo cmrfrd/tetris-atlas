@@ -58,22 +58,22 @@ macro_rules! impl_wrapped_tensor {
             type ShapeSpec = $crate::__tensors_type_tuple_by_specs!( $crate::wrapped_tensor::ShapeDim ; $($spec),* );
             type ShapeTuple = $crate::__tensors_type_tuple_by_specs!( usize ; $($spec),* );
 
-            #[inline]
+            #[proc_macros::inline_conditioned]
             fn inner(&self) -> &candle_core::Tensor {
                 &self.0
             }
 
-            #[inline]
+            #[proc_macros::inline_conditioned]
             fn inner_mut(&mut self) -> &mut candle_core::Tensor {
                 &mut self.0
             }
 
-            #[inline]
+            #[proc_macros::inline_conditioned]
             fn expected_dtype() -> candle_core::DType {
                 $dtype
             }
 
-            #[inline]
+            #[proc_macros::inline_conditioned]
             fn shape_ok(tensor: &candle_core::Tensor) -> ::anyhow::Result<()> {
                 let expected: &[$crate::wrapped_tensor::ShapeDim] = &[$($spec),*];
                 let actual = tensor.shape().dims();
@@ -100,10 +100,10 @@ macro_rules! impl_wrapped_tensor {
                 Ok(())
             }
 
-            #[inline]
+            #[proc_macros::inline_conditioned]
             fn shape_spec(&self) -> Self::ShapeSpec { ( $($spec),* ) }
 
-            #[inline]
+            #[proc_macros::inline_conditioned]
             fn shape_tuple(&self) -> Self::ShapeTuple {
                 let sized_dims: [usize; $crate::__count_tuple_elements!( $($spec),* )] = self.tensor_shape().dims().try_into().unwrap();
                 sized_dims.into()
@@ -113,14 +113,14 @@ macro_rules! impl_wrapped_tensor {
         impl std::ops::Deref for $ty {
             type Target = candle_core::Tensor;
 
-            #[inline]
+            #[proc_macros::inline_conditioned]
             fn deref(&self) -> &Self::Target {
                 &self.0
             }
         }
 
         impl Into<candle_core::Tensor> for $ty {
-            #[inline]
+            #[proc_macros::inline_conditioned]
             fn into(self) -> candle_core::Tensor {
                 self.0
             }
