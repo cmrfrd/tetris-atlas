@@ -1,0 +1,73 @@
+ARG CUDA_VERSION=12.5.1
+ARG UBUNTU_VERSION=ubuntu24.04
+ARG CUDA_COMPUTE_CAP=86
+
+FROM nvidia/cuda:${CUDA_VERSION}-devel-${UBUNTU_VERSION} as chef
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    protobuf-compiler \
+    libprotobuf-dev \
+    build-essential \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --default-toolchain 1.83.0 --profile minimal
+RUN cargo install cargo-chef --locked
+
+WORKDIR /build
+
+FROM chef as planner
+
+COPY . .
+
+ARG CUDA_VERSION
+ARG UBUNTU_VERSION
+ARG CUDA_COMPUTE_CAP
+ENV CUDA_COMPUTE_CAP=${CUDA_COMPUTE_CAP}
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef as builder
+
+COPY --from=planner /build/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+COPY . .
+RUN cd ./tensorboard && cargo build --release --lib
+RUN cargo build --release --features candle-cuda --bin tetris_atlas
+
+FROM nvidia/cuda:${CUDA_VERSION}-runtime-${UBUNTU_VERSION} as runtime
+ARG CUDA_VERSION
+ARG UBUNTU_VERSION
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG USER=tetris
+ARG USER_UID=10000
+ARG USER_GID=$USER_UID
+RUN groupadd --gid $USER_GID $USER || true \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USER || useradd -m $USER
+
+COPY --from=builder /build/target/release/tetris_atlas /usr/local/bin/tetris_atlas
+
+RUN chown $USER:$USER /usr/local/bin/tetris_atlas
+
+USER $USER
+WORKDIR /home/$USER
+
+ENV RUST_LOG=info
+ENV RUST_BACKTRACE=1
+
+ENTRYPOINT ["tetris_atlas"]
+# CMD ["--help"]
+CMD ["train", "--model", "TransitionTransformer", "--run-name", "transition_transformer"]
