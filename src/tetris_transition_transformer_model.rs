@@ -23,7 +23,7 @@ use crate::{
         TetrisBoardLogitsTensor, TetrisBoardsTensor, TetrisPieceOrientationTensor,
         TetrisPieceTensor,
     },
-    tetris::{NUM_TETRIS_CELL_STATES, TetrisBoardRaw, TetrisPiece, TetrisPieceOrientation},
+    tetris::{NUM_TETRIS_CELL_STATES, TetrisBoard, TetrisPiece, TetrisPieceOrientation},
     wrapped_tensor::WrappedTensor,
 };
 
@@ -94,7 +94,7 @@ impl TetrisGameTransitionModel {
 
         // Board token + positional embeddings
         let token_embed = embedding(NUM_TETRIS_CELL_STATES, cfg.d_model, vb.pp("token_embed"))?;
-        let pos_embed = embedding(TetrisBoardRaw::SIZE, cfg.d_model, vb.pp("pos_embed"))?;
+        let pos_embed = embedding(TetrisBoard::SIZE, cfg.d_model, vb.pp("pos_embed"))?;
 
         // Conditioning embeddings
         let piece_embedding = embedding(
@@ -154,15 +154,15 @@ impl TetrisGameTransitionModel {
         orientation: &TetrisPieceOrientationTensor,
     ) -> Result<TetrisBoardLogitsTensor> {
         let (batch_size, board_size) = current_board.shape_tuple();
-        assert_eq!(board_size, TetrisBoardRaw::SIZE, "Unexpected board size");
+        assert_eq!(board_size, TetrisBoard::SIZE, "Unexpected board size");
 
         // Token + positional embeddings
         let tokens = current_board.inner().to_dtype(DType::U32)?; // [B, T]
         let x_tokens = self.token_embed.forward(&tokens)?; // [B, T, D]
 
-        let pos_ids = Tensor::arange(0, TetrisBoardRaw::SIZE as u32, tokens.device())?
+        let pos_ids = Tensor::arange(0, TetrisBoard::SIZE as u32, tokens.device())?
             .to_dtype(DType::U32)?
-            .reshape(&[1, TetrisBoardRaw::SIZE])?
+            .reshape(&[1, TetrisBoard::SIZE])?
             .repeat(&[batch_size, 1])?; // [B, T]
         let x_pos = self.pos_embed.forward(&pos_ids)?; // [B, T, D]
 
@@ -193,13 +193,13 @@ pub fn train_game_transition_model(
 ) -> Result<()> {
     info!("Training world model");
     const NUM_ITERATIONS: usize = 1_000_000;
-    const BATCH_SIZE: usize = 32;
+    const BATCH_SIZE: usize = 128;
     const ACCUMULATE_GRADIENTS_STEPS: usize = 16;
     const CHECKPOINT_INTERVAL: usize = 10_000;
     const ENTROPY_LOSS_WEIGHT: f64 = 0.001;
     const CLIP_GRAD_MAX_NORM: f64 = 0.1;
 
-    let model_dim = 16;
+    let model_dim = 32;
 
     let mut summary_writer = logdir.map(|s| SummaryWriter::new(s));
 
@@ -233,7 +233,7 @@ pub fn train_game_transition_model(
             n_attention_heads: 8,
             n_kv_heads: 8,
             rope_theta: 10_000.0,
-            max_position_embeddings: TetrisBoardRaw::SIZE,
+            max_position_embeddings: TetrisBoard::SIZE,
         },
         block_mlp_config: MlpConfig {
             hidden_size: model_dim,

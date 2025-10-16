@@ -21,7 +21,7 @@ use crate::{
         TetrisBoardLogitsTensor, TetrisBoardsTensor, TetrisPieceOrientationTensor,
         TetrisPieceTensor,
     },
-    tetris::{TetrisBoardRaw, TetrisPiece, TetrisPieceOrientation},
+    tetris::{TetrisBoard, TetrisPiece, TetrisPieceOrientation},
     wrapped_tensor::WrappedTensor,
 };
 
@@ -93,7 +93,7 @@ impl TetrisGameTransitionModel {
     ) -> Result<TetrisBoardLogitsTensor> {
         let (b, _) = current_board.shape_tuple();
         let current_board = current_board
-            .reshape(&[b, 1, TetrisBoardRaw::HEIGHT, TetrisBoardRaw::WIDTH])?
+            .reshape(&[b, 1, TetrisBoard::HEIGHT, TetrisBoard::WIDTH])?
             .to_dtype(DType::F32)?;
 
         // [B, 1, H, W] -> [B, D]
@@ -122,12 +122,12 @@ pub fn train_game_transition_model(
     checkpoint_dir: Option<PathBuf>,
 ) -> Result<()> {
     info!("Training world model");
-    const NUM_ITERATIONS: usize = 1_000_000;
-    const BATCH_SIZE: usize = 128;
-    const ACCUMULATE_GRADIENTS_STEPS: usize = 2;
-    const CHECKPOINT_INTERVAL: usize = 10_000;
-    let model_dim = 32;
-
+    const NUM_ITERATIONS: usize = 10_000;
+    const BATCH_SIZE: usize = 32;
+    const ACCUMULATE_GRADIENTS_STEPS: usize = 1;
+    const CHECKPOINT_INTERVAL: usize = 1_000;
+    const CLIP_GRAD_MAX_NORM: f64 = 0.1;
+    let model_dim = 8;
     let mut summary_writer = logdir.map(|s| SummaryWriter::new(s));
 
     // let device = Device::Cpu;
@@ -143,6 +143,18 @@ pub fn train_game_transition_model(
             blocks: vec![
                 ConvBlockSpec {
                     in_channels: 1,
+                    out_channels: 128,
+                    kernel_size: 3,
+                    conv_cfg: Conv2dConfig {
+                        padding: 1,
+                        stride: 1,
+                        dilation: 1,
+                        groups: 1,
+                    },
+                    gn_groups: 64,
+                },
+                ConvBlockSpec {
+                    in_channels: 128,
                     out_channels: 128,
                     kernel_size: 3,
                     conv_cfg: Conv2dConfig {
@@ -202,7 +214,7 @@ pub fn train_game_transition_model(
                     gn_groups: 8,
                 },
             ],
-            input_hw: (TetrisBoardRaw::HEIGHT, TetrisBoardRaw::WIDTH),
+            input_hw: (TetrisBoard::HEIGHT, TetrisBoard::WIDTH),
             mlp: MlpConfig {
                 hidden_size: 1920,
                 intermediate_size: 4 * model_dim,
@@ -226,7 +238,7 @@ pub fn train_game_transition_model(
         mlp_config: MlpConfig {
             hidden_size: model_dim,
             intermediate_size: 2 * model_dim,
-            output_size: TetrisBoardRaw::SIZE,
+            output_size: TetrisBoard::SIZE,
         },
     };
 
@@ -248,15 +260,16 @@ pub fn train_game_transition_model(
     info!("Model optimizer and grad accumulator initialized");
 
     let data_generator = TetrisDatasetGenerator::new();
-    let mut rng = rand::rng();
+    let datum_rx =
+        data_generator.spawn_transition_channel((3..18).into(), BATCH_SIZE, device.clone(), 256);
 
     let mut total_boards = 0;
     let start_time = std::time::Instant::now();
 
     for i in 0..NUM_ITERATIONS {
-        let datum = data_generator
-            .gen_uniform_sampled_transition((3..18).into(), BATCH_SIZE, &device, &mut rng)
-            .unwrap();
+        let span = tracing::info_span!("datum_recv", iteration = i, batch = BATCH_SIZE);
+        let _enter = span.enter();
+        let datum = datum_rx.recv().expect("prefetch thread stopped");
 
         let current_board = datum.current_board;
         let piece = TetrisPieceTensor::from_pieces(&datum.piece, &device).unwrap();
@@ -327,7 +340,11 @@ pub fn train_game_transition_model(
             .unwrap();
 
         let should_step = model_grad_accumulator
-            .apply_and_reset(&mut model_optimizer, &model_params, Some(1.0))
+            .apply_and_reset(
+                &mut model_optimizer,
+                &model_params,
+                Some(CLIP_GRAD_MAX_NORM),
+            )
             .unwrap();
 
         if should_step {

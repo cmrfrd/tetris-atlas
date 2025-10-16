@@ -20,7 +20,7 @@ use crate::tensors::{
     TetrisBoardsTensor, TetrisPieceOrientationDistTensor, TetrisPieceOrientationLogitsTensor,
     TetrisPieceOrientationTensor, TetrisPieceTensor,
 };
-use crate::tetris::{TetrisBoardRaw, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement};
+use crate::tetris::{TetrisBoard, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement};
 use crate::wrapped_tensor::WrappedTensor;
 
 /// Simple goal-conditioned policy over placements using policy gradient (REINFORCE).
@@ -80,10 +80,10 @@ impl TetrisGoalPolicy {
 
         // Encode boards as images [B,1,H,W] -> [B,D]
         let goal_img = goal_board
-            .reshape(&[b, 1, TetrisBoardRaw::HEIGHT, TetrisBoardRaw::WIDTH])?
+            .reshape(&[b, 1, TetrisBoard::HEIGHT, TetrisBoard::WIDTH])?
             .to_dtype(DType::F32)?;
         let cur_img = current_board
-            .reshape(&[b, 1, TetrisBoardRaw::HEIGHT, TetrisBoardRaw::WIDTH])?
+            .reshape(&[b, 1, TetrisBoard::HEIGHT, TetrisBoard::WIDTH])?
             .to_dtype(DType::F32)?;
 
         let goal_embed = self.board_encoder.forward(&goal_img)?; // [B, D]
@@ -128,10 +128,10 @@ impl TetrisGoalPolicy {
 
         // Encode boards as images [B,1,H,W] -> [B,D]
         let goal_img = goal_board
-            .reshape(&[b, 1, TetrisBoardRaw::HEIGHT, TetrisBoardRaw::WIDTH])?
+            .reshape(&[b, 1, TetrisBoard::HEIGHT, TetrisBoard::WIDTH])?
             .to_dtype(DType::F32)?;
         let cur_img = current_board
-            .reshape(&[b, 1, TetrisBoardRaw::HEIGHT, TetrisBoardRaw::WIDTH])?
+            .reshape(&[b, 1, TetrisBoard::HEIGHT, TetrisBoard::WIDTH])?
             .to_dtype(DType::F32)?;
 
         let goal_embed = self.board_encoder.forward(&goal_img)?; // [B, D]
@@ -166,13 +166,13 @@ pub fn train_goal_policy(
     let device = Device::new_cuda(0).unwrap();
 
     // Hyperparameters
-    const NUM_ITERATIONS: usize = 200_000;
+    const NUM_ITERATIONS: usize = 1_000_000;
     const BATCH_SIZE: usize = 64;
     const ACCUM_STEPS: usize = 4;
     const ROLLOUT_STEPS: usize = 64; // number of steps per trajectory
     const GAMMA: f32 = 0.98; // discount factor
     const CHECKPOINT_INTERVAL: usize = 10_000;
-    let model_dim = 64;
+    let model_dim = 32;
 
     let model_varmap = VarMap::new();
     let vb = VarBuilder::from_varmap(&model_varmap, DType::F32, &device);
@@ -183,6 +183,18 @@ pub fn train_goal_policy(
             blocks: vec![
                 ConvBlockSpec {
                     in_channels: 1,
+                    out_channels: 32,
+                    kernel_size: 3,
+                    conv_cfg: Conv2dConfig {
+                        padding: 1,
+                        stride: 1,
+                        dilation: 1,
+                        groups: 1,
+                    },
+                    gn_groups: 32,
+                },
+                ConvBlockSpec {
+                    in_channels: 32,
                     out_channels: 32,
                     kernel_size: 3,
                     conv_cfg: Conv2dConfig {
@@ -218,9 +230,9 @@ pub fn train_goal_policy(
                     gn_groups: 8,
                 },
             ],
-            input_hw: (TetrisBoardRaw::HEIGHT, TetrisBoardRaw::WIDTH),
+            input_hw: (TetrisBoard::HEIGHT, TetrisBoard::WIDTH),
             mlp: MlpConfig {
-                hidden_size: 8 * TetrisBoardRaw::HEIGHT * TetrisBoardRaw::WIDTH,
+                hidden_size: 8 * TetrisBoard::HEIGHT * TetrisBoard::WIDTH,
                 intermediate_size: 3 * model_dim,
                 output_size: model_dim,
             },
@@ -267,20 +279,6 @@ pub fn train_goal_policy(
             .expect("Failed to create checkpointer")
     });
 
-    summary_writer.as_mut().map(|s| {
-        s.add_histogram_raw(
-            "test",
-            0.0,                                                       // min
-            10.0,                                                      // max
-            10.0,                                                      // num
-            50.0,                                                      // sum
-            500.0,                                                     // sum_squares
-            &[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0], // bucket_limits
-            &[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],  // bucket_counts
-            0,                                                         // step
-        );
-    });
-
     let generator = TetrisDatasetGenerator::new();
     let mut rng = rand::rng();
 
@@ -311,7 +309,7 @@ pub fn train_goal_policy(
                 let delta = (sim_next.clone() - &sim_cur)?; // [B]
                 let sim_shape = sim_next.dims();
                 let board_size_b =
-                    Tensor::new(TetrisBoardRaw::SIZE as f32, &device)?.broadcast_as(sim_shape)?; // [B]
+                    Tensor::new(TetrisBoard::SIZE as f32, &device)?.broadcast_as(sim_shape)?; // [B]
                 let exact = (eq_next.sum(D::Minus1)?)
                     .eq(&board_size_b)?
                     .to_dtype(DType::F32)?; // [B]
@@ -408,11 +406,11 @@ pub fn train_goal_policy(
     for i in 0..NUM_ITERATIONS {
         // Sample random goal board and random current board
         let goal_games =
-            generator.gen_uniform_sampled_gameset((5..10).into(), BATCH_SIZE, &mut rng)?;
+            generator.gen_uniform_sampled_gameset((2..5).into(), BATCH_SIZE, &mut rng)?;
         let goal_board = TetrisBoardsTensor::from_gameset(goal_games, &device)?; // [B,T]
 
         let mut current_games =
-            generator.gen_uniform_sampled_gameset((5..10).into(), BATCH_SIZE, &mut rng)?; // start random state
+            generator.gen_uniform_sampled_gameset((5..5).into(), BATCH_SIZE, &mut rng)?; // start random state
 
         // Rollout buffers
         let mut states_goal: Vec<TetrisBoardsTensor> = Vec::with_capacity(ROLLOUT_STEPS);
@@ -481,7 +479,7 @@ pub fn train_goal_policy(
             let delta = (sim_next.clone() - &sim_cur)?; // [B]
             let sim_shape = sim_next.dims();
             let board_size_b =
-                Tensor::new(TetrisBoardRaw::SIZE as f32, &device)?.broadcast_as(sim_shape)?; // [B]
+                Tensor::new(TetrisBoard::SIZE as f32, &device)?.broadcast_as(sim_shape)?; // [B]
             let exact = (eq_next.sum(D::Minus1)?)
                 .eq(&board_size_b)?
                 .to_dtype(DType::F32)?; // [B]
