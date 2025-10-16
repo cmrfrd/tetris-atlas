@@ -9,7 +9,7 @@ use crate::tetris::{
 use crate::utils::rshift_slice_from_mask_u32;
 use criterion::{BenchmarkId, Criterion, black_box};
 use rand::Rng;
-use rand::seq::{IndexedRandom, IteratorRandom};
+use rand::seq::IndexedRandom;
 
 pub fn tetris_game(c: &mut Criterion) {
     const NUM_ELEMS: usize = 10_000;
@@ -212,7 +212,7 @@ pub fn tetris_game(c: &mut Criterion) {
         |b, _| b.iter(|| placements.iter().map(|p| p.index()).collect::<Vec<_>>()),
     );
 
-    let mut rng = rand::rng();
+    let rng = rand::rng();
     let pieces = {
         black_box(
             rng.random_iter::<TetrisPiece>()
