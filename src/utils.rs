@@ -931,36 +931,41 @@ macro_rules! repeat_idx_generic {
 /// ```rust
 /// use tetris_atlas::utils::rshift_slice_from_mask_u32;
 /// let mut arr = [0b1111_0000_0000_0000_0000_0000_0000_0000_u32; 2];
-/// let mask = 0b1111_0000_0000_0000_0000_0000_0000_0000_u32;
+/// let mask = 0b0000_0000_0000_0000_0000_0000_0000_1111_u32;
 /// rshift_slice_from_mask_u32::<2, 4>(&mut arr, mask);
 /// // After 4 iterations, each 1 in the mask causes a right shift by 1
 /// // So the result shifts everything down by 4 positions
 /// assert_eq!(arr, [0b0000_1111_0000_0000_0000_0000_0000_0000_u32; 2]);
 /// ```
 #[inline_conditioned(always)]
-pub fn rshift_slice_from_mask_u32<const N: usize, const I: usize>(xs: &mut [u32; N], mut m: u32) {
+pub const fn rshift_slice_from_mask_u32<const N: usize, const I: usize>(
+    xs: &mut [u32; N],
+    mut m: u32,
+) {
     #[inline_conditioned(always)]
-    const fn step<const N: usize>(xs: &mut [u32; N], m: &mut u32) {
-        let active = 0u32.wrapping_sub((*m != 0) as u32);
-        let mut v = *m;
-        v |= v >> 1;
-        v |= v >> 2;
-        v |= v >> 4;
-        v |= v >> 8;
-        v |= v >> 16;
-        let pivot = (v ^ (v >> 1)) & active;
-        let keep = pivot | pivot.wrapping_sub(1);
+    const fn step<const N: usize>(xs: &mut [u32; N], m: &mut u32) -> bool {
+        if *m == 0 {
+            return false;
+        }
+        let pos = m.trailing_zeros();
+        let pivot = 1u32 << pos;
+        let keep = pivot - 1; // Mask for bits below pos
+        let shift_mask = !keep; // Mask for bits at and above pos
 
-        repeat_idx_generic!(N, IDX, {
-            let x = xs[IDX];
-            let shifted = ((x >> 1) & !keep) | (x & keep);
-            xs[IDX] = (x & !active) | (shifted & active);
+        // Shift each column: bits above pivot shift down, bits at/below pivot stay
+        repeat_idx_generic!(N, I, {
+            xs[I] = ((xs[I] >> 1) & shift_mask) | (xs[I] & keep);
         });
+
+        // Clear the processed bit from the mask
         *m &= !pivot;
+        true
     }
 
     repeat_idx_generic!(I, _I, {
-        step(xs, &mut m);
+        if !step(xs, &mut m) {
+            return;
+        }
     });
 }
 
