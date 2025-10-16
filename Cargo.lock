@@ -3077,7 +3077,6 @@ dependencies = [
  "clap",
  "criterion",
  "crossbeam",
- "fastrand",
  "gethostname",
  "image",
  "itertools 0.14.0",
