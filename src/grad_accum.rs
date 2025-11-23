@@ -86,6 +86,7 @@ impl GradientAccumulator {
         optimizer: &mut O,
         params: &[Var],
         clip_grad_max_norm: Option<f64>,
+        clip_grad_max_value: Option<f64>,
     ) -> Result<bool> {
         if !self.should_step() {
             return Ok(false);
@@ -107,7 +108,12 @@ impl GradientAccumulator {
         }
 
         if let Some(clip_grad_max_norm) = clip_grad_max_norm {
-            let _ = clip_grad_norm(&params, &mut grad_store, clip_grad_max_norm)?;
+            let _ = clip_grad_norm(
+                &params,
+                &mut grad_store,
+                clip_grad_max_norm,
+                clip_grad_max_value,
+            )?;
         }
 
         // Apply the optimizer step
