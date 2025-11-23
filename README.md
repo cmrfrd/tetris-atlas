@@ -25,3 +25,9 @@ cargo bench --bench benches -- --profile-time 5 && cargo bench --bench benches
 ## example analyzing a specific function
 cargo asm --features never-inline --dev --lib "tetris_atlas::utils::rshift_slice_from_mask_u32" 0 --rust
 ```
+
+## Training
+
+```
+cargo run 
+```
