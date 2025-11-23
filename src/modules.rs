@@ -6,6 +6,7 @@ use anyhow::{Result, ensure};
 use image::{Rgb, RgbImage};
 use serde::{Deserialize, Serialize};
 
+use crate::dtype;
 use crate::ops::{masked_fill, triu2d};
 
 fn calculate_default_inv_freq(head_dim: usize, theta: f32) -> Vec<f32> {
@@ -34,14 +35,14 @@ impl RopeEncoding {
         let dim = config.head_dim;
         let theta = Tensor::new(calculate_default_inv_freq(dim, config.theta), vb.device())?;
         let idx_theta = Tensor::arange(0, config.max_position_embeddings as u32, vb.device())?
-            .to_dtype(DType::F32)?
+            .to_dtype(dtype())?
             .reshape((config.max_position_embeddings, 1))?
             .matmul(&theta.reshape((1, theta.elem_count()))?)?;
 
         // This is different from the paper, see:
         // https://github.com/huggingface/transformers/blob/6112b1c6442aaf7affd2b0676a1cd4eee30c45cf/src/transformers/models/llama/modeling_llama.py#L112
-        let cos = idx_theta.cos()?.to_dtype(DType::F32)?;
-        let sin = idx_theta.sin()?.to_dtype(DType::F32)?;
+        let cos = idx_theta.cos()?.to_dtype(dtype())?;
+        let sin = idx_theta.sin()?.to_dtype(dtype())?;
         Ok(Self {
             cos,
             sin,
@@ -225,6 +226,8 @@ pub struct MlpConfig {
     pub hidden_size: usize,
     pub intermediate_size: usize,
     pub output_size: usize,
+    #[serde(default)]
+    pub dropout: Option<f32>,
 }
 
 #[derive(Debug, Clone)]
@@ -232,6 +235,7 @@ pub struct Mlp {
     c_fc1: Linear,
     c_fc2: Linear,
     c_proj: Linear,
+    dropout: Option<candle_nn::Dropout>,
     span: tracing::Span,
 }
 
@@ -244,17 +248,25 @@ impl Mlp {
         let c_fc1 = linear(h_size, i_size, vb.pp("gate_proj"))?;
         let c_fc2 = linear(h_size, i_size, vb.pp("up_proj"))?;
         let c_proj = linear(i_size, o_size, vb.pp("down_proj"))?;
+        let dropout = cfg.dropout.map(candle_nn::Dropout::new);
         Ok(Self {
             c_fc1,
             c_fc2,
             c_proj,
+            dropout,
             span,
         })
     }
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let _enter = self.span.enter();
-        let x = (candle_nn::ops::silu(&self.c_fc1.forward(x)?)? * self.c_fc2.forward(x)?)?;
+        let mut x = (candle_nn::ops::silu(&self.c_fc1.forward(x)?)? * self.c_fc2.forward(x)?)?;
+
+        // Apply dropout if configured
+        if let Some(ref dropout) = self.dropout {
+            x = dropout.forward(&x, true)?;
+        }
+
         Ok(self.c_proj.forward(&x)?)
     }
 }
@@ -544,7 +556,7 @@ impl ConvBlock {
 
     pub fn get_conv_filters(&self) -> Result<RgbImage> {
         let w = self.conv.weight();
-        let w = w.to_dtype(DType::F32)?;
+        let w = w.to_dtype(dtype())?;
         let w = w.to_device(&Device::Cpu)?;
         let (out_channels, in_per_group, kh, kw) = w.dims4()?;
 
