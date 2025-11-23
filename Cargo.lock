@@ -3080,6 +3080,7 @@ dependencies = [
  "gethostname",
  "image",
  "itertools 0.14.0",
+ "num_cpus",
  "pprof",
  "proc-macros",
  "prost 0.13.5",

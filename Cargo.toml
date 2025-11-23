@@ -49,6 +49,7 @@ prost-types = "0.13"
 
 proc-macros = { path = "proc-macros" }
 tensorboard = { path = "tensorboard" }
+num_cpus = "1.17.0"
 
 [dev-dependencies]
 
