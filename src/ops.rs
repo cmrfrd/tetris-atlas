@@ -180,16 +180,26 @@ pub fn binary_cross_entropy_with_logits_stable(
     Ok(loss.mean_all()?)
 }
 
-pub fn clip_grad_norm(vars: &[Var], grad_store: &mut GradStore, max_norm: f64) -> Result<f64> {
-    let norm = get_l2_norm(grad_store)? as f64;
+pub fn clip_grad_norm(
+    vars: &[Var],
+    grad_store: &mut GradStore,
+    max_norm: f64,
+    max_value: Option<f64>,
+) -> Result<f64> {
+    let grad_store_mutex = RwLock::new(grad_store);
+
+    // Compute norm FIRST (on unclipped gradients)
+    let read_guard = grad_store_mutex.read().unwrap();
+    let norm = get_l2_norm(&*read_guard)? as f64;
+    drop(read_guard);
+
     let scale = if norm > max_norm {
         max_norm / (norm + f32::EPSILON as f64)
     } else {
         1.0
     };
 
-    // Scale gradients - still need vars for the mutable operations
-    let grad_store_mutex = RwLock::new(grad_store);
+    // Scale gradients based on norm
     vars.par_iter().try_for_each(|var| -> Result<()> {
         let read_guard = grad_store_mutex.read().unwrap();
         if let Some(grad) = read_guard.get_id(var.id()) {
@@ -200,6 +210,20 @@ pub fn clip_grad_norm(vars: &[Var], grad_store: &mut GradStore, max_norm: f64) -
         }
         Ok(())
     })?;
+
+    // Optional element-wise value clipping (applied AFTER norm-based scaling)
+    if let Some(clip_value) = max_value {
+        vars.par_iter().try_for_each(|var| -> Result<()> {
+            let read_guard = grad_store_mutex.read().unwrap();
+            if let Some(grad) = read_guard.get_id(var.id()) {
+                let clipped = grad.clamp(-clip_value, clip_value)?;
+                drop(read_guard);
+                let mut write_guard = grad_store_mutex.write().unwrap();
+                write_guard.insert(var, clipped);
+            }
+            Ok(())
+        })?;
+    }
 
     Ok(norm)
 }
