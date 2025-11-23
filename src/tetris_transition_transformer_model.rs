@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::data::TetrisTransition;
 use crate::optim::{AdamW, ParamsAdamW};
 use candle_core::{DType, Device, Tensor};
 use candle_nn::Optimizer;
@@ -239,6 +240,7 @@ pub fn train_game_transition_model(
             hidden_size: model_dim,
             intermediate_size: 2 * model_dim,
             output_size: model_dim,
+            dropout: None,
         },
         with_causal_mask: false,
 
@@ -246,6 +248,7 @@ pub fn train_game_transition_model(
             hidden_size: model_dim,
             intermediate_size: 2 * model_dim,
             output_size: 1,
+            dropout: None,
         },
     };
 
@@ -337,6 +340,7 @@ pub fn train_game_transition_model(
                 &mut model_optimizer,
                 &model_params,
                 Some(CLIP_GRAD_MAX_NORM),
+                None,
             )
             .unwrap();
 

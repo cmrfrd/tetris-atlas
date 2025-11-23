@@ -374,7 +374,7 @@ impl Iterator for TetrisExplorer {
                             return false;
                         }
 
-                        let is_visited = self.visited.check_and_mark(item.node.game.board().into());
+                        let is_visited = self.visited.check_and_mark(item.node.game.board);
                         if is_visited {
                             return false;
                         }
@@ -504,7 +504,7 @@ mod tests {
 
         let success_state = |item: &TetrisExplorerItem| {
             let lines_cleared = item.node.game.lines_cleared;
-            let height = item.node.game.board().height();
+            let height = item.node.game.board.height();
             lines_cleared == 1 && height < 15
         };
 
@@ -524,7 +524,7 @@ mod tests {
         let success_state = |item: &TetrisExplorerItem| item.node.game.piece_count > 8;
         let target_state = pool.install(|| {
             TetrisExplorer::new_with_seed(GAME_SEED, Some(30))
-                .with_children_filter(|node| node.game.board().height() < 4)
+                .with_children_filter(|node| node.game.board.height() < 4)
                 .into_par_iter()
                 .filter_map(|batch| batch.items.find(|item| success_state(item)))
                 .find_any(|_| true)

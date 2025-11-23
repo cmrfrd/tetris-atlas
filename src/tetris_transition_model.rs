@@ -219,6 +219,7 @@ pub fn train_game_transition_model(
                 hidden_size: 1920,
                 intermediate_size: 4 * model_dim,
                 output_size: model_dim,
+                dropout: None,
             },
         },
 
@@ -239,6 +240,7 @@ pub fn train_game_transition_model(
             hidden_size: model_dim,
             intermediate_size: 2 * model_dim,
             output_size: TetrisBoard::SIZE,
+            dropout: None,
         },
     };
 
@@ -344,6 +346,7 @@ pub fn train_game_transition_model(
                 &mut model_optimizer,
                 &model_params,
                 Some(CLIP_GRAD_MAX_NORM),
+                None,
             )
             .unwrap();
 

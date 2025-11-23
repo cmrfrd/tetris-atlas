@@ -237,6 +237,7 @@ pub fn train_goal_policy(
                 hidden_size: 8 * TetrisBoard::HEIGHT * TetrisBoard::WIDTH,
                 intermediate_size: 3 * model_dim,
                 output_size: model_dim,
+                dropout: None,
             },
         },
         goal_film_config: FiLMConfig {
@@ -255,11 +256,13 @@ pub fn train_goal_policy(
             hidden_size: model_dim,
             intermediate_size: 2 * model_dim,
             output_size: TetrisPieceOrientation::NUM_ORIENTATIONS,
+            dropout: None,
         },
         value_mlp_config: MlpConfig {
             hidden_size: model_dim,
             intermediate_size: 2 * model_dim,
             output_size: 1,
+            dropout: None,
         },
     };
 
@@ -387,8 +390,12 @@ pub fn train_goal_policy(
                     s.add_scalar("pretrain/grad_norm", grad_norm, i);
                 });
 
-                let should_step =
-                    grad_accum.apply_and_reset(&mut optimizer, &model_params, Some(0.5_f64))?;
+                let should_step = grad_accum.apply_and_reset(
+                    &mut optimizer,
+                    &model_params,
+                    Some(0.5_f64),
+                    None,
+                )?;
 
                 if should_step {
                     debug!("Stepping model");
@@ -634,7 +641,8 @@ pub fn train_goal_policy(
             let grads = total_loss.backward()?;
             let grad_norm = get_l2_norm(&grads)?;
             grad_accum.accumulate(grads, &model_params)?;
-            let stepped = grad_accum.apply_and_reset(&mut optimizer, &model_params, Some(1.0))?;
+            let stepped =
+                grad_accum.apply_and_reset(&mut optimizer, &model_params, Some(1.0), None)?;
 
             // Logging
             summary_writer.as_mut().map(|s| {
