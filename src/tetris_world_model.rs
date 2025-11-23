@@ -10,7 +10,7 @@ use tensorboard::summary_writer::SummaryWriter;
 use tracing::{debug, info};
 
 use crate::checkpointer::Checkpointer;
-use crate::data::TetrisDatasetGenerator;
+use crate::data::{TetrisDatasetGenerator, TetrisTransitionSequence};
 use crate::grad_accum::{GradientAccumulator, get_l2_norm};
 use crate::modules::{
     Conv2dConfig, ConvBlockSpec, ConvEncoder, ConvEncoderConfig, FiLM, FiLMConfig, Mlp, MlpConfig,
@@ -20,7 +20,9 @@ use crate::tensors::{
     TetrisBoardsTensor, TetrisPieceOrientationDistTensor, TetrisPieceOrientationLogitsTensor,
     TetrisPieceOrientationTensor, TetrisPieceTensor,
 };
-use crate::tetris::{TetrisBoard, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement};
+use crate::tetris::{
+    IsLost, TetrisBoard, TetrisGameSet, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement,
+};
 use crate::wrapped_tensor::WrappedTensor;
 
 /// Simple goal-conditioned policy over placements using policy gradient (REINFORCE).

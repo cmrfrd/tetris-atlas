@@ -10,7 +10,7 @@ use tracing::{debug, info};
 
 use crate::{
     checkpointer::Checkpointer,
-    data::TetrisDatasetGenerator,
+    data::{TetrisDatasetGenerator, TetrisTransition},
     grad_accum::{GradientAccumulator, get_l2_norm},
     modules::{
         Conv2dConfig, ConvBlockSpec, ConvEncoder, ConvEncoderConfig, FiLM, FiLMConfig, Mlp,
