@@ -1189,12 +1189,23 @@ impl Display for TetrisBoard {
 }
 
 impl TetrisBoard {
-    /// Converts the board to a binary slice representation.
+    /// Converts the board to a binary slice representation in row-major order.
     /// Each cell is represented as a single bit (0 or 1).
+    ///
+    /// # Memory Layout
+    ///
+    /// The output is in row-major order, meaning the array is laid out as:
+    /// - Indices 0-9: Row 0 (columns 0-9)
+    /// - Indices 10-19: Row 1 (columns 0-9)
+    /// - ...
+    /// - Indices 190-199: Row 19 (columns 0-9)
+    ///
+    /// This layout is compatible with standard tensor reshape operations that
+    /// expect row-major ordering (e.g., reshaping to [HEIGHT, WIDTH]).
     ///
     /// # Returns
     ///
-    /// A fixed-size array of u8 representing the board state
+    /// A fixed-size array of u8 representing the board state in row-major order
     ///
     /// # Example
     ///
@@ -1209,30 +1220,31 @@ impl TetrisBoard {
         let mut result: TetrisBoardBinarySlice = [0u8; Self::SIZE];
         repeat_idx_generic!(Self::SIZE / 8, I, {
             const I1: usize = 8 * I;
-            result[I1] = ((self.0[I1 / ROWS] >> (I1 % ROWS)) & 1) as u8;
+            result[I1] = ((self.0[I1 % COLS] >> (I1 / COLS)) & 1) as u8;
             const I2: usize = 8 * I + 1;
-            result[I2] = ((self.0[I2 / ROWS] >> (I2 % ROWS)) & 1) as u8;
+            result[I2] = ((self.0[I2 % COLS] >> (I2 / COLS)) & 1) as u8;
             const I3: usize = 8 * I + 2;
-            result[I3] = ((self.0[I3 / ROWS] >> (I3 % ROWS)) & 1) as u8;
+            result[I3] = ((self.0[I3 % COLS] >> (I3 / COLS)) & 1) as u8;
             const I4: usize = 8 * I + 3;
-            result[I4] = ((self.0[I4 / ROWS] >> (I4 % ROWS)) & 1) as u8;
+            result[I4] = ((self.0[I4 % COLS] >> (I4 / COLS)) & 1) as u8;
             const I5: usize = 8 * I + 4;
-            result[I5] = ((self.0[I5 / ROWS] >> (I5 % ROWS)) & 1) as u8;
+            result[I5] = ((self.0[I5 % COLS] >> (I5 / COLS)) & 1) as u8;
             const I6: usize = 8 * I + 5;
-            result[I6] = ((self.0[I6 / ROWS] >> (I6 % ROWS)) & 1) as u8;
+            result[I6] = ((self.0[I6 % COLS] >> (I6 / COLS)) & 1) as u8;
             const I7: usize = 8 * I + 6;
-            result[I7] = ((self.0[I7 / ROWS] >> (I7 % ROWS)) & 1) as u8;
+            result[I7] = ((self.0[I7 % COLS] >> (I7 / COLS)) & 1) as u8;
             const I8: usize = 8 * I + 7;
-            result[I8] = ((self.0[I8 / ROWS] >> (I8 % ROWS)) & 1) as u8;
+            result[I8] = ((self.0[I8 % COLS] >> (I8 / COLS)) & 1) as u8;
         });
         result
     }
 
-    /// Creates a board from a binary slice representation.
+    /// Creates a board from a binary slice representation in row-major order.
     ///
     /// # Arguments
     ///
-    /// * `binary` - Fixed-size array of u8 representing the board state
+    /// * `binary` - Fixed-size array of u8 representing the board state in row-major order
+    ///              (see `to_binary_slice` for memory layout details)
     ///
     /// # Example
     ///
@@ -1249,21 +1261,21 @@ impl TetrisBoard {
         let mut result = Self::EMPTY_BOARD;
         repeat_idx_generic!(Self::SIZE / 8, I, {
             const I1: usize = 8 * I;
-            result.0[I1 / ROWS] |= (binary[I1] as u32) << (I1 % ROWS);
+            result.0[I1 % COLS] |= (binary[I1] as u32) << (I1 / COLS);
             const I2: usize = 8 * I + 1;
-            result.0[I2 / ROWS] |= (binary[I2] as u32) << (I2 % ROWS);
+            result.0[I2 % COLS] |= (binary[I2] as u32) << (I2 / COLS);
             const I3: usize = 8 * I + 2;
-            result.0[I3 / ROWS] |= (binary[I3] as u32) << (I3 % ROWS);
+            result.0[I3 % COLS] |= (binary[I3] as u32) << (I3 / COLS);
             const I4: usize = 8 * I + 3;
-            result.0[I4 / ROWS] |= (binary[I4] as u32) << (I4 % ROWS);
+            result.0[I4 % COLS] |= (binary[I4] as u32) << (I4 / COLS);
             const I5: usize = 8 * I + 4;
-            result.0[I5 / ROWS] |= (binary[I5] as u32) << (I5 % ROWS);
+            result.0[I5 % COLS] |= (binary[I5] as u32) << (I5 / COLS);
             const I6: usize = 8 * I + 5;
-            result.0[I6 / ROWS] |= (binary[I6] as u32) << (I6 % ROWS);
+            result.0[I6 % COLS] |= (binary[I6] as u32) << (I6 / COLS);
             const I7: usize = 8 * I + 6;
-            result.0[I7 / ROWS] |= (binary[I7] as u32) << (I7 % ROWS);
+            result.0[I7 % COLS] |= (binary[I7] as u32) << (I7 / COLS);
             const I8: usize = 8 * I + 7;
-            result.0[I8 / ROWS] |= (binary[I8] as u32) << (I8 % ROWS);
+            result.0[I8 % COLS] |= (binary[I8] as u32) << (I8 / COLS);
         });
         result
     }
@@ -1596,7 +1608,7 @@ pub struct PlacementResult {
 /// This ensures the caller only plays possible moves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TetrisGame {
-    board: TetrisBoard,
+    pub board: TetrisBoard,
     bag: TetrisPieceBag,
     piece_buf: TetrisPiece,
 
@@ -1662,12 +1674,6 @@ impl TetrisGame {
         }
     }
 
-    /// Get the current board.
-    #[inline_conditioned(always)]
-    pub const fn board(&self) -> TetrisBoard {
-        self.board
-    }
-
     /// Get the current piece.
     ///
     /// This is the piece that is currently in play.
@@ -1710,7 +1716,7 @@ impl TetrisGame {
     pub fn reset(&mut self, new_seed: Option<u64>) {
         self.board.clear();
         self.bag.fill();
-        self.rng = TetrisGameRng::new(new_seed.unwrap_or(self.seed));
+        self.rng = TetrisGameRng::new(new_seed.unwrap_or_else(|| self.rng.next_u64()));
         self.piece_buf = self.bag.rand_next(&mut self.rng);
         self.lines_cleared = 0;
         self.piece_count = 0;
@@ -1751,19 +1757,6 @@ impl TetrisGameSet {
         Self(games)
     }
 
-    /// Permute the gameset using the provided permutation vector.
-    ///
-    /// The permutation vector must be the same length as the gameset and contain
-    /// valid indices (0..len). Each index should appear exactly once.
-    pub fn permute(&mut self, permutation: &[usize]) {
-        assert_eq!(permutation.len(), self.len(), "Permutation length mismatch");
-        let mut new_games = HeaplessVec::new();
-        for &idx in permutation {
-            new_games.push(*self.0.get(idx).unwrap());
-        }
-        self.0 = new_games;
-    }
-
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -1776,7 +1769,7 @@ impl TetrisGameSet {
     }
 
     pub fn boards(&self) -> HeaplessVec<TetrisBoard, MAX_GAMES> {
-        self.0.map(|game| game.board())
+        self.0.map(|game| game.board)
     }
 
     pub fn current_pieces(&self) -> HeaplessVec<TetrisPiece, MAX_GAMES> {
@@ -1837,9 +1830,39 @@ impl TetrisGameSet {
             .collect()
     }
 
-    /// Reset the game to a new board, bag, and piece.
-    pub fn reset(&mut self, new_seed: Option<u64>) {
-        self.0.apply_mut(|game| game.reset(new_seed));
+    /// Go through each game in the gameset and reset it if it is lost.
+    /// Returns the number of games that were reset.
+    pub fn reset_lost_games(&mut self) -> usize {
+        self.0
+            .iter_mut()
+            .par_bridge()
+            .map(|game| {
+                if game.board.is_lost() {
+                    let next_seed = game.rng.next_u64();
+                    game.reset(Some(next_seed));
+                    1
+                } else {
+                    0
+                }
+            })
+            .sum()
+    }
+
+    /// Permute the gameset using the provided permutation vector.
+    ///
+    /// The permutation vector must be the same length as the gameset and contain
+    /// valid indices (0..len). Each index should appear exactly once.
+    pub fn permute(&mut self, permutation: &[usize]) {
+        assert_eq!(permutation.len(), self.len(), "Permutation length mismatch");
+        let mut new_games = HeaplessVec::new();
+        for &idx in permutation {
+            new_games.push(*self.0.get(idx).unwrap());
+        }
+        self.0 = new_games;
+    }
+
+    pub fn drop_lost_games(&mut self) {
+        self.0.retain(|game| !game.board.is_lost());
     }
 }
 
