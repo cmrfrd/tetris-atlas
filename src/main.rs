@@ -1,98 +1,25 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use std::str::FromStr;
-use tetris_atlas::train;
+use tetris_atlas::tetris::{Column, Rotation};
+use tetris_atlas::{
+    set_global_threadpool, tetris_evolution_player_model, tetris_exceed_the_mean,
+    tetris_simple_player_model, tetris_transition_model, tetris_transition_transformer_model,
+    tetris_world_model,
+};
+use time::OffsetDateTime;
 use tracing::{Level, info};
+use tracing_subscriber::prelude::*;
 
-fn setup_logging(verbosity: u8) -> String {
-    let verbosity = verbosity.saturating_add(2).clamp(0, 5);
-    let level = Level::from_str(verbosity.to_string().as_str()).unwrap();
-    tracing_subscriber::fmt()
-        .with_max_level(level)
-        .with_target(false)
-        .init();
-    level.to_string()
+#[derive(Debug, Copy, Clone, Eq, PartialEq, ValueEnum)]
+#[value(rename_all = "kebab-case")]
+enum TrainModel {
+    Evolution,
+    SimpleGoalPolicy,
+    ExceedTheMean,
+    Transition,
+    TransitionTransformer,
+    WorldGoalPolicy,
 }
-
-// #[derive(Clone)]
-// struct Stats {
-//     timer: Instant,
-//     counters: Vec<Arc<Mutex<usize>>>,
-//     visited: Arc<DashSet<AtlasNode>>,
-//     atlas: Arc<RwLock<Atlas>>,
-// }
-
-// impl Stats {
-//     fn new(
-//         count_counts: usize,
-//         visited: Arc<DashSet<AtlasNode>>,
-//         atlas: Arc<RwLock<Atlas>>,
-//     ) -> Self {
-//         let counters = (0..count_counts).map(|_| Arc::new(Mutex::new(0))).collect();
-//         Self {
-//             timer: Instant::now(),
-//             counters,
-//             visited,
-//             atlas,
-//         }
-//     }
-
-//     fn update(&self, node: &AtlasNode) {
-//         let index = node.board.play_board.count() % self.counters.len();
-//         let mut counter = self.counters[index].lock().unwrap();
-//         *counter += 1;
-//     }
-
-//     fn print_stats(&self) {
-//         let mut ascii_table = AsciiTable::default();
-//         ascii_table.set_max_width(40);
-//         ascii_table
-//             .column(0)
-//             .set_header("Stat Item")
-//             .set_align(Align::Left);
-//         ascii_table
-//             .column(1)
-//             .set_header("Value")
-//             .set_align(Align::Right);
-//         let mut data: Vec<Vec<String>> = Vec::with_capacity(2_usize.pow(8));
-
-//         let elapsed = self.timer.elapsed();
-//         let duration_str = format!(
-//             "{}:{:02}:{:02}",
-//             elapsed.as_secs() / 3600,
-//             (elapsed.as_secs() % 3600) / 60,
-//             elapsed.as_secs() % 60
-//         );
-//         data.push(vec!["Duration".to_string(), duration_str]);
-
-//         let total: usize = self
-//             .counters
-//             .iter()
-//             .map(|counter| *counter.lock().unwrap())
-//             .sum();
-//         data.push(vec![
-//             "Total Nodes Counted".to_string(),
-//             total.to_formatted_string(&Locale::en),
-//         ]);
-
-//         let visited_size = self.visited.len();
-//         data.push(vec![
-//             "Unique Visited Nodes".to_string(),
-//             visited_size.to_formatted_string(&Locale::en),
-//         ]);
-
-//         let atlas_size = self.atlas.read().unwrap().inner.len();
-//         data.push(vec![
-//             "Atlas Size".to_string(),
-//             atlas_size.to_formatted_string(&Locale::en),
-//         ]);
-
-//         let display_data: Vec<Vec<&dyn Display>> = data
-//             .iter()
-//             .map(|row| row.iter().map(|s| s as &dyn Display).collect())
-//             .collect();
-//         ascii_table.print(display_data);
-//     }
-// }
 
 #[derive(Debug, Parser)]
 enum Commands {
@@ -118,6 +45,9 @@ enum Commands {
 
         #[arg(long, help = "Name of the training run")]
         run_name: String,
+
+        #[arg(long, value_enum, help = "Select which training routine to run")]
+        model: TrainModel,
     },
 }
 
@@ -129,23 +59,63 @@ struct Cli {
     #[arg(long, global = true, help = "Enable Chrome tracing")]
     trace: bool,
 
+    #[arg(
+        long,
+        global = true,
+        help = "Directory to save Chrome trace files (only used with --trace)"
+    )]
+    trace_dir: Option<String>,
+
+    #[arg(
+        long,
+        global = true,
+        help = "Path to Perfetto configuration file (only used with --trace)"
+    )]
+    perfetto_config: Option<String>,
+
+    #[arg(
+        long,
+        global = true,
+        help = "Parse arguments and exit immediately (for validation)"
+    )]
+    noop: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
 
 fn main() {
-    use tracing_chrome::ChromeLayerBuilder;
-    use tracing_subscriber::prelude::*;
+    info!("Starting tetris-atlas");
+    set_global_threadpool();
 
     let cli = Cli::parse();
-    let filter = setup_logging(cli.verbose);
-    info!("Debug level: level={}", filter);
 
-    let _guard = if cli.trace {
-        let (chrome_layer, guard) = ChromeLayerBuilder::new().build();
-        tracing_subscriber::registry().with(chrome_layer).init();
-        Some(guard)
+    // If noop flag is set, exit immediately after parsing arguments
+    if cli.noop {
+        println!("✓ Arguments parsed successfully (--noop mode)");
+        std::process::exit(0);
+    }
+
+    let verbosity = cli.verbose.saturating_add(2).clamp(0, 5);
+    let level = Level::from_str(verbosity.to_string().as_str()).unwrap();
+
+    let registry = tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_target(false))
+        .with(tracing_subscriber::filter::LevelFilter::from_level(level));
+
+    // Initialize logging with optional Perfetto tracing
+    let _guard: Option<()> = if cli.trace {
+        let _timestamp = OffsetDateTime::now_utc()
+            .format(
+                &time::format_description::parse("[year][month][day]_[hour][minute][second]")
+                    .unwrap(),
+            )
+            .unwrap();
+        registry.init();
+        None
     } else {
+        registry.init();
+        info!("Logging initialized at level: {}", level);
         None
     };
 
@@ -154,6 +124,7 @@ fn main() {
             logdir,
             checkpoint_dir,
             run_name,
+            model,
         } => {
             let ulid = ulid::Ulid::new().to_string();
             let run_name = format!("{run_name}_{ulid}");
@@ -167,96 +138,214 @@ fn main() {
                 std::fs::create_dir_all(&path).expect("Failed to create checkpoint directory");
                 path
             });
-            // train::train();
-            train::train_game_transformer(logdir.clone());
+            match model {
+                TrainModel::Evolution => {
+                    tetris_evolution_player_model::train_population(
+                        run_name.clone(),
+                        logdir.clone(),
+                        checkpoint_dir.clone(),
+                    )
+                    .unwrap();
+                }
+                TrainModel::SimpleGoalPolicy => {
+                    tetris_simple_player_model::train_goal_policy(
+                        run_name.clone(),
+                        logdir.clone(),
+                        checkpoint_dir.clone(),
+                    )
+                    .unwrap();
+                }
+                TrainModel::ExceedTheMean => {
+                    tetris_exceed_the_mean::train_exceed_the_mean_policy(
+                        run_name.clone(),
+                        logdir.clone(),
+                        checkpoint_dir.clone(),
+                    )
+                    .unwrap();
+                }
+                TrainModel::Transition => {
+                    tetris_transition_model::train_game_transition_model(
+                        run_name.clone(),
+                        logdir.clone(),
+                        checkpoint_dir.clone(),
+                    )
+                    .unwrap();
+                }
+                TrainModel::TransitionTransformer => {
+                    tetris_transition_transformer_model::train_game_transition_model(
+                        run_name.clone(),
+                        logdir.clone(),
+                        checkpoint_dir.clone(),
+                    )
+                    .unwrap();
+                }
+                TrainModel::WorldGoalPolicy => {
+                    tetris_world_model::train_goal_policy(run_name, logdir, checkpoint_dir)
+                        .unwrap();
+                }
+            }
         }
-        // Commands::Play {} => {
-        //     let mut current_node = AtlasNode::default();
-        //     println!("Welcome to Tetris! (Type 'quit' to exit)");
+        Commands::Play {} => {
+            use std::io::Write;
+            use tetris_atlas::tetris::TetrisGame;
 
-        //     loop {
-        //         // Print current board state
-        //         println!("\nCurrent Board:");
-        //         println!("{}", current_node.board);
-        //         println!("Current Bag: {}", current_node.bag);
+            let mut game = TetrisGame::new();
+            println!("Welcome to Tetris! (Type 'quit' to exit)");
+            println!("\nInstructions:");
+            println!("  - Enter the column (0-9) and rotation (0-3) separated by space");
+            println!("  - Example: '5 2' places the piece at column 5 with rotation 2");
+            println!("  - Type 'quit' or 'exit' to stop playing\n");
 
-        //         // Get all possible next moves
-        //         let next_nodes = current_node.children().collect::<Vec<_>>();
-        //         if next_nodes.is_empty() {
-        //             println!("Game over! No more valid moves.");
-        //             break;
-        //         }
+            loop {
+                // Print current game state
+                println!("\n{}", "=".repeat(50));
+                println!("Current Piece: {}", game.current_piece());
+                println!("Lines Cleared: {}", game.lines_cleared);
+                println!("Pieces Played: {}", game.piece_count);
+                println!("\nCurrent Board:");
+                println!("{}", game.board);
 
-        //         // Display available information
-        //         println!("\nCurrent bag: {}", current_node.bag);
-        //         println!("Enter piece, rotation, and column e.g. 1 0 0 (or 'quit' to exit)");
+                // Get all valid placements for the current piece
+                let valid_placements = game.current_placements();
 
-        //         // Get user input
-        //         let mut input = String::new();
-        //         std::io::stdin()
-        //             .read_line(&mut input)
-        //             .expect("Failed to read line");
+                if valid_placements.is_empty() {
+                    println!("\n🎮 Game Over! No valid moves available.");
+                    println!("Final Score:");
+                    println!("  Lines Cleared: {}", game.lines_cleared);
+                    println!("  Pieces Played: {}", game.piece_count);
+                    break;
+                }
 
-        //         let input = input.trim();
-        //         if input.eq_ignore_ascii_case("quit") || input.eq_ignore_ascii_case("exit") {
-        //             println!("Thanks for playing!");
-        //             break;
-        //         }
+                // Show available valid moves
+                println!("\nValid moves for piece '{}':", game.current_piece());
+                let mut move_list = Vec::new();
+                for placement in valid_placements {
+                    // Extract the raw values from the Display output
+                    let col_str = format!("{}", placement.orientation.column);
+                    let rot_str = format!("{}", placement.orientation.rotation);
+                    // Parse the column value from "Column(X)" format
+                    let col_val = col_str
+                        .trim_start_matches("Column(")
+                        .trim_end_matches(")")
+                        .to_string();
+                    move_list.push((col_val, rot_str));
+                }
+                // Sort and deduplicate for cleaner display
+                move_list.sort();
+                move_list.dedup();
 
-        //         // Parse input as piece, rotation, column
-        //         let parts: Vec<&str> = input.split_whitespace().collect();
-        //         if parts.len() != 3 {
-        //             println!("Invalid input. Please enter three numbers: piece rotation column");
-        //             continue;
-        //         }
+                println!("  (column, rotation) pairs:");
+                for (col, rot) in &move_list {
+                    print!("  ({}, {}) ", col, rot);
+                }
+                println!("\n");
 
-        //         // Parse each part
-        //         let piece = match parts[0].parse::<usize>() {
-        //             Ok(p) => p,
-        //             Err(_) => {
-        //                 println!("Invalid piece number. Please enter a number.");
-        //                 continue;
-        //             }
-        //         };
+                // Get user input
+                print!("Enter your move (column rotation): ");
+                std::io::stdout().flush().expect("Failed to flush stdout");
 
-        //         let rotation = match parts[1].parse::<usize>() {
-        //             Ok(r) => r,
-        //             Err(_) => {
-        //                 println!("Invalid rotation number. Please enter a number.");
-        //                 continue;
-        //             }
-        //         };
+                let mut input = String::new();
+                std::io::stdin()
+                    .read_line(&mut input)
+                    .expect("Failed to read line");
 
-        //         let column = match parts[2].parse::<usize>() {
-        //             Ok(c) => c,
-        //             Err(_) => {
-        //                 println!("Invalid column number. Please enter a number.");
-        //                 continue;
-        //             }
-        //         };
+                let input = input.trim();
+                if input.eq_ignore_ascii_case("quit") || input.eq_ignore_ascii_case("exit") {
+                    println!("\nThanks for playing!");
+                    println!("Final Score:");
+                    println!("  Lines Cleared: {}", game.lines_cleared);
+                    println!("  Pieces Played: {}", game.piece_count);
+                    break;
+                }
 
-        //         // Find matching placement
-        //         let next_move = next_nodes.iter().find(|(_, placement)| {
-        //             placement.piece.0 == piece as u8
-        //                 && placement.rotation.0 == rotation as u8
-        //                 && placement.column.0 == column as u8
-        //         });
+                // Parse input as column and rotation
+                let parts: Vec<&str> = input.split_whitespace().collect();
+                if parts.len() != 2 {
+                    println!("❌ Invalid input. Please enter two numbers: column rotation");
+                    println!("   Example: '5 2' for column 5, rotation 2");
+                    continue;
+                }
 
-        //         match next_move {
-        //             Some((new_node, placement)) => {
-        //                 println!(
-        //                     "\nPlaying: Piece {}, Rotation {}, Column {}",
-        //                     placement.piece, placement.rotation, placement.column
-        //                 );
-        //                 current_node = new_node.clone();
-        //             }
-        //             None => {
-        //                 println!("Invalid move. This placement is not possible.");
-        //                 continue;
-        //             }
-        //         }
-        //     }
-        // }
+                // Parse column
+                let column_value = match parts[0].parse::<u8>() {
+                    Ok(c) => c,
+                    Err(_) => {
+                        println!("❌ Invalid column. Please enter a number between 0 and 9.");
+                        continue;
+                    }
+                };
+
+                // Parse rotation
+                let rotation_value = match parts[1].parse::<u8>() {
+                    Ok(r) => r,
+                    Err(_) => {
+                        println!("❌ Invalid rotation. Please enter a number between 0 and 3.");
+                        continue;
+                    }
+                };
+
+                // Validate column range
+                if column_value >= Column::MAX {
+                    println!(
+                        "❌ Invalid column {}. Must be between 0 and {}.",
+                        column_value,
+                        Column::MAX - 1
+                    );
+                    continue;
+                }
+
+                // Validate rotation range
+                if rotation_value >= 4 {
+                    println!(
+                        "❌ Invalid rotation {}. Must be between 0 and 3.",
+                        rotation_value
+                    );
+                    continue;
+                }
+
+                // Create the placement and check if it's valid for the current piece
+                // Use unsafe transmute like the codebase does internally
+                let column: Column = unsafe { std::mem::transmute(column_value) };
+                let rotation: Rotation = unsafe { std::mem::transmute(rotation_value) };
+
+                // Find matching valid placement
+                let matching_placement = valid_placements
+                    .iter()
+                    .find(|p| p.orientation.column == column && p.orientation.rotation == rotation);
+
+                match matching_placement {
+                    Some(placement) => {
+                        println!(
+                            "\n✓ Playing: {} at column {} with rotation {}",
+                            game.current_piece(),
+                            column_value,
+                            rotation_value
+                        );
+
+                        let is_lost = game.apply_placement(*placement);
+
+                        if is_lost.into() {
+                            println!("\n{}", game.board);
+                            println!("\n🎮 Game Over! The piece couldn't fit on the board.");
+                            println!("Final Score:");
+                            println!("  Lines Cleared: {}", game.lines_cleared);
+                            println!("  Pieces Played: {}", game.piece_count);
+                            break;
+                        }
+                    }
+                    None => {
+                        println!(
+                            "❌ Invalid move! Column {} with rotation {} is not a valid placement for piece '{}'.",
+                            column_value,
+                            rotation_value,
+                            game.current_piece()
+                        );
+                        println!("   Please choose from the valid moves listed above.");
+                        continue;
+                    }
+                }
+            }
+        }
         // Commands::Explore { atlas_file } => {
         //     let atlas = Atlas::load_atlas(atlas_file);
         //     atlas.interactive_traverse();
