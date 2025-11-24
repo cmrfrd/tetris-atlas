@@ -318,6 +318,43 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         self.len = write_idx;
     }
 
+    /// Removes multiple elements at the specified indices by swapping them with elements from the end.
+    ///
+    /// # Arguments
+    ///
+    /// * `indices` - Must be sorted in ascending order (duplicates allowed)
+    ///
+    /// # Panics
+    ///
+    /// Panics if indices are not sorted in ascending order.
+    #[inline_conditioned(always)]
+    pub fn swap_remove_indices(&mut self, indices: &[usize]) -> usize {
+        let mut removed_count = 0;
+        for i in (0..indices.len()).rev() {
+            if i < indices.len() - 1 {
+                assert!(
+                    indices[i] <= indices[i + 1],
+                    "indices must be sorted in ascending order"
+                );
+                if indices[i] == indices[i + 1] {
+                    continue;
+                }
+            }
+            if indices[i] < self.len {
+                unsafe {
+                    let _ = self.data[indices[i]].assume_init_read();
+                    self.len -= 1;
+                    if indices[i] < self.len {
+                        self.data[indices[i]] =
+                            MaybeUninit::new(self.data[self.len].assume_init_read());
+                    }
+                }
+                removed_count += 1;
+            }
+        }
+        removed_count
+    }
+
     /// Returns `true` if any element satisfies the predicate.
     ///
     /// # Arguments

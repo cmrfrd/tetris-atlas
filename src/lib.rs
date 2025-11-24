@@ -45,6 +45,8 @@ pub fn set_global_threadpool() {
 pub fn device() -> Device {
     if cfg!(feature = "candle-cuda") {
         Device::new_cuda(0).unwrap()
+    } else if cfg!(feature = "candle-metal") {
+        Device::new_metal(0).unwrap()
     } else {
         Device::Cpu
     }
