@@ -1,3 +1,9 @@
+# Repo specific
+data/
+checkpoints/
+logdir/
+tensorboard/target/
+
 # Build artifacts
 target/
 build/
