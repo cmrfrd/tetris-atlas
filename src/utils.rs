@@ -188,6 +188,16 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         }
     }
 
+    /// Returns a mutable raw pointer to the vector's buffer.
+    ///
+    /// # Safety
+    ///
+    /// The pointer is only valid for `self.len()` elements and may contain uninitialized data
+    /// for indices `self.len()..N`.
+    pub fn as_mut_ptr(&mut self) -> *mut T {
+        self.data.as_mut_ptr() as *mut T
+    }
+
     /// Returns the maximum number of elements the vector can hold.
     ///
     /// # Returns
@@ -244,6 +254,20 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
             *self.data.get_unchecked_mut(self.len) = MaybeUninit::new(item); // safe because we know the index is in bounds
             self.len += 1;
         }
+    }
+
+    /// Attempts to push an element to the end of the vector.
+    ///
+    /// Returns `true` if the element was pushed, `false` if the vector is full.
+    pub fn try_push(&mut self, item: T) -> bool {
+        if self.len == N {
+            return false;
+        }
+        unsafe {
+            *self.data.get_unchecked_mut(self.len) = MaybeUninit::new(item);
+        }
+        self.len += 1;
+        true
     }
 
     /// Returns a reference to the element at the given index, or `None` if out of bounds.
@@ -986,16 +1010,16 @@ pub const fn rshift_slice_from_mask_u32<const N: usize, const I: usize>(
         }
         let pos = m.trailing_zeros();
         let pivot = 1u32 << pos;
-        let keep = pivot - 1; // Mask for bits below pos
-        let shift_mask = !keep; // Mask for bits at and above pos
+        let keep = pivot - 1; // Mask for bits below pos (0 to pos-1)
+        let above = !pivot & !keep; // Mask for bits above pos (pos+1 to 31)
 
-        // Shift each column: bits above pivot shift down, bits at/below pivot stay
+        // Remove row at pos: keep bits below, shift bits above down by 1
         repeat_idx_generic!(N, I, {
-            xs[I] = ((xs[I] >> 1) & shift_mask) | (xs[I] & keep);
+            xs[I] = (xs[I] & keep) | ((xs[I] & above) >> 1);
         });
 
-        // Clear the processed bit from the mask
-        *m &= !pivot;
+        // Clear the processed bit from the mask and shift mask down too
+        *m = (*m & !pivot) >> 1;
         true
     }
 

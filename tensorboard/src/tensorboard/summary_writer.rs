@@ -19,6 +19,7 @@ pub struct FileWriter {
 }
 
 impl FileWriter {
+    #[allow(dead_code)]
     pub(crate) fn add_global_summary(&mut self, summary: Summary) {
         let mut evn = Event::default();
         evn.what = Some(What::Summary(summary));

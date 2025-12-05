@@ -3,7 +3,7 @@
 // minimal wrappers that register these functions with Criterion.
 
 use crate::tetris::{
-    IsLost, TetrisBoard, TetrisGame, TetrisGameRng, TetrisPiece, TetrisPieceBag,
+    TetrisBoard, TetrisGame, TetrisGameRng, TetrisPiece, TetrisPieceBag,
     TetrisPiecePlacement,
 };
 use crate::utils::rshift_slice_from_mask_u32;

@@ -89,7 +89,7 @@ impl EventFileWriter {
     }
 
     pub fn add_event(&mut self, event: &Event) {
-        let mut data: Vec<u8> = event.encode_to_vec();
+        let data: Vec<u8> = event.encode_to_vec();
         self.writer.send(EventSignal::Data(data)).expect("");
     }
 

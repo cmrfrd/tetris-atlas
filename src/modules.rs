@@ -1,4 +1,4 @@
-use candle_core::{D, DType, Device, IndexOp, Tensor};
+use candle_core::{D, Device, IndexOp, Tensor};
 use candle_nn::Conv2dConfig as CandleConv2dConfig;
 use candle_nn::{Conv2d, GroupNorm, Linear, Module, VarBuilder, conv2d, group_norm, linear};
 
@@ -6,7 +6,7 @@ use anyhow::{Result, ensure};
 use image::{Rgb, RgbImage};
 use serde::{Deserialize, Serialize};
 
-use crate::dtype;
+use crate::fdtype;
 use crate::ops::{masked_fill, triu2d};
 
 fn calculate_default_inv_freq(head_dim: usize, theta: f32) -> Vec<f32> {
@@ -35,14 +35,14 @@ impl RopeEncoding {
         let dim = config.head_dim;
         let theta = Tensor::new(calculate_default_inv_freq(dim, config.theta), vb.device())?;
         let idx_theta = Tensor::arange(0, config.max_position_embeddings as u32, vb.device())?
-            .to_dtype(dtype())?
+            .to_dtype(fdtype())?
             .reshape((config.max_position_embeddings, 1))?
             .matmul(&theta.reshape((1, theta.elem_count()))?)?;
 
         // This is different from the paper, see:
         // https://github.com/huggingface/transformers/blob/6112b1c6442aaf7affd2b0676a1cd4eee30c45cf/src/transformers/models/llama/modeling_llama.py#L112
-        let cos = idx_theta.cos()?.to_dtype(dtype())?;
-        let sin = idx_theta.sin()?.to_dtype(dtype())?;
+        let cos = idx_theta.cos()?.to_dtype(fdtype())?;
+        let sin = idx_theta.sin()?.to_dtype(fdtype())?;
         Ok(Self {
             cos,
             sin,
@@ -521,13 +521,13 @@ pub struct ConvEncoderConfig {
 }
 
 #[derive(Debug, Clone)]
-struct ConvBlock {
+pub struct ConvBlock {
     conv: Conv2d,
     gn: GroupNorm,
 }
 
 impl ConvBlock {
-    fn init(vb: &VarBuilder, spec: &ConvBlockSpec, idx: usize) -> Result<(Self, usize)> {
+    pub fn init(vb: &VarBuilder, spec: &ConvBlockSpec, idx: usize) -> Result<(Self, usize)> {
         assert!(
             spec.out_channels.is_multiple_of(spec.gn_groups),
             "gn_groups must divide out_channels"
@@ -548,7 +548,7 @@ impl ConvBlock {
         Ok((Self { conv, gn }, spec.out_channels))
     }
 
-    fn forward(&self, x: &Tensor) -> Result<Tensor> {
+    pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let x = self.conv.forward(x)?;
         let x = self.gn.forward(&x)?;
         Ok(candle_nn::ops::silu(&x)?)
@@ -556,7 +556,7 @@ impl ConvBlock {
 
     pub fn get_conv_filters(&self) -> Result<RgbImage> {
         let w = self.conv.weight();
-        let w = w.to_dtype(dtype())?;
+        let w = w.to_dtype(fdtype())?;
         let w = w.to_device(&Device::Cpu)?;
         let (out_channels, in_per_group, kh, kw) = w.dims4()?;
 
