@@ -19,6 +19,12 @@ candle-cuda = ["candle-core/cuda", "candle-nn/cuda"]
 candle-metal = ["candle-core/metal", "candle-nn/metal"]
 never-inline = []
 
+# Float dtype selection - choose exactly one
+dtype-f16 = []
+dtype-bf16 = []
+dtype-f32 = []
+dtype-f64 = []
+
 [dependencies]
 anyhow = "1.0.95"
 clap = { version = "4.5.28", features = ["derive"] }
@@ -51,6 +57,8 @@ prost-types = "0.13"
 proc-macros = { path = "proc-macros" }
 tensorboard = { path = "tensorboard" }
 num_cpus = "1.17.0"
+ratatui = "0.29"
+crossterm = "0.28"
 
 [dev-dependencies]
 
@@ -66,14 +74,12 @@ debug = true
 lto = "fat"
 codegen-units = 1
 opt-level = 3
-target-cpu = "native"
 
 [profile.release]
 debug = true
 lto = "fat"
 codegen-units = 1
 opt-level = 3
-target-cpu = "native"
 
 [lints.clippy]
 too_many_arguments = "allow"
