@@ -1,4 +1,4 @@
-use std::sync::RwLock;
+use std::sync::{OnceLock, RwLock};
 
 use crate::{
     grad_accum::get_l2_norm,
@@ -11,33 +11,61 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tracing::instrument;
 
 /// Create the mask over all orientations for a specific piece.
+/// Each piece has 4 possible rotations (indices 0-3), but only canonical/unique rotations are enabled.
+/// The mask is organized as [piece_index][rotation][column], where rotation*10 + column gives the flat index.
 const PIECE_MASK_LOOKUP: [u8; TetrisPiece::NUM_PIECES * TetrisPieceOrientation::NUM_ORIENTATIONS] = [
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, // I
-    1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, // O
-    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, // T
-    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, // L
-    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 0, // J
-    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 0, // Z
-    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 0, // S
+    // O piece (index 0): Only 1 unique rotation
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 0: width=2 → 9 valid columns (0-8)
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 1: DISABLED (duplicate of rotation 0)
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 2: DISABLED (duplicate of rotation 0)
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 3: DISABLED (duplicate of rotation 0)
+    // I piece (index 1): Only 2 unique rotations
+    1, 1, 1, 1, 1, 1, 1, 0, 0, 0, // Rotation 0: width=4 (horizontal) → 7 valid columns (0-6)
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // Rotation 1: width=1 (vertical) → 10 valid columns (0-9)
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 2: DISABLED (duplicate of rotation 0)
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 3: DISABLED (duplicate of rotation 1)
+    // S piece (index 2): Only 2 unique rotations
+    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 0: width=3 → 8 valid columns (0-7)
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 1: width=2 → 9 valid columns (0-8)
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 2: DISABLED (duplicate of rotation 0)
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 3: DISABLED (duplicate of rotation 1)
+    // Z piece (index 3): Only 2 unique rotations
+    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 0: width=3 → 8 valid columns (0-7)
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 1: width=2 → 9 valid columns (0-8)
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 2: DISABLED (duplicate of rotation 0)
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 3: DISABLED (duplicate of rotation 1)
+    // T piece (index 4): All 4 rotations are unique
+    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 0: width=3 → 8 valid columns (0-7)
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 1: width=2 → 9 valid columns (0-8)
+    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 2: width=3 → 8 valid columns (0-7)
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 3: width=2 → 9 valid columns (0-8)
+    // L piece (index 5): All 4 rotations are unique
+    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 0: width=3 → 8 valid columns (0-7)
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 1: width=2 → 9 valid columns (0-8)
+    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 2: width=3 → 8 valid columns (0-7)
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 3: width=2 → 9 valid columns (0-8)
+    // J piece (index 6): All 4 rotations are unique
+    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 0: width=3 → 8 valid columns (0-7)
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 1: width=2 → 9 valid columns (0-8)
+    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 2: width=3 → 8 valid columns (0-7)
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 3: width=2 → 9 valid columns (0-8)
 ];
-#[instrument(level = "debug", skip(pieces))]
+static ORIENTATION_MASK_CACHE: OnceLock<Tensor> = OnceLock::new();
 pub fn create_orientation_mask(pieces: &TetrisPieceTensor) -> Result<Tensor> {
     let device = pieces.device();
-    let masks: Tensor = Tensor::from_slice(
-        &PIECE_MASK_LOOKUP,
-        (
-            TetrisPiece::NUM_PIECES,
-            TetrisPieceOrientation::NUM_ORIENTATIONS,
-        ),
-        &device,
-    )?;
+
+    let masks = ORIENTATION_MASK_CACHE.get_or_try_init(|| {
+        Tensor::from_slice(
+            &PIECE_MASK_LOOKUP,
+            (
+                TetrisPiece::NUM_PIECES,
+                TetrisPieceOrientation::NUM_ORIENTATIONS,
+            ),
+            device,
+        )?
+        .to_dtype(DType::U32)
+    })?;
+
     let result = masks.index_select(&pieces.squeeze(1)?, 0)?;
     Ok(result)
 }
@@ -47,7 +75,6 @@ pub fn create_orientation_mask(pieces: &TetrisPieceTensor) -> Result<Tensor> {
 /// - `mask`: [B, N] (bool/int/float; >0 => keep, 0 => mask)
 /// Returns [B, N] probs; masked entries are exactly 0.
 /// Rows that are fully masked become all-zeros (no NaNs).
-#[instrument(level = "debug", fields(x_shape = ?x.dims(), mask_shape = ?mask.dims()), skip(x, mask))]
 pub fn masked_softmax_2d(x: &Tensor, mask: &Tensor) -> Result<Tensor> {
     if x.dims().len() != 2 || mask.dims().len() != 2 {
         return Err(anyhow::Error::msg(
@@ -59,15 +86,21 @@ pub fn masked_softmax_2d(x: &Tensor, mask: &Tensor) -> Result<Tensor> {
             "masked_softmax_2d: x and mask must have identical shapes",
         ));
     }
-    if x.dtype() != DType::F32 {
-        return Err(anyhow::Error::msg("masked_softmax_2d: x must be f32"));
+    // Accept any floating-point dtype
+    if !matches!(
+        x.dtype(),
+        DType::F16 | DType::BF16 | DType::F32 | DType::F64
+    ) {
+        return Err(anyhow::Error::msg(
+            "masked_softmax_2d: x must be a floating-point type",
+        ));
     }
     let device = x.device();
+    let dtype = x.dtype(); // Capture the input dtype
 
     // build an integer predicate: non-zero => keep
     let zero = mask.zeros_like()?;
     let keep = mask.gt(&zero)?; // integer dtype (u8/u32/i64)
-    let _keep_f32 = keep.to_dtype(DType::F32)?; // kept for potential downstream use
 
     // stable masked max: exclude masked positions by setting them to -inf for the max step
     let neg_inf = Tensor::full(f32::NEG_INFINITY, x.dims(), device)?;
@@ -86,8 +119,8 @@ pub fn masked_softmax_2d(x: &Tensor, mask: &Tensor) -> Result<Tensor> {
     // Optional safeguard: if a row of x is exactly all zeros, force output row to zeros
     // This detects rows with sum(|x|) == 0 and gates the probabilities off for those rows.
     let row_nonzero = x.abs()?.sum_keepdim(1)?.gt(&denom.zeros_like()?)?; // [B,1] int
-    let row_nonzero_f32 = row_nonzero.to_dtype(DType::F32)?; // [B,1]
-    Ok(probs.broadcast_mul(&row_nonzero_f32)?)
+    let row_nonzero_float = row_nonzero.to_dtype(dtype)?; // [B,1] - use input dtype
+    Ok(probs.broadcast_mul(&row_nonzero_float)?)
 }
 
 /// tril - lower triangular part of the matrix
@@ -148,7 +181,6 @@ pub fn kl_div<D: candle_core::shape::Dim>(p: &Tensor, q: &Tensor, dim: D) -> Res
 /// BCE = max(x, 0) - x*y + log(1 + exp(-|x|))
 /// ```
 /// This formulation avoids overflow/underflow issues.
-#[instrument(level = "debug", fields(logits_shape = ?logits.shape(), targets_shape = ?targets.shape()), skip(logits, targets))]
 pub fn binary_cross_entropy_with_logits_stable(
     logits: &Tensor,
     targets: &Tensor,
@@ -158,6 +190,14 @@ pub fn binary_cross_entropy_with_logits_stable(
             "binary_cross_entropy_with_logits: logits and targets must have identical shapes",
         ));
     }
+
+    // Ensure both tensors use the same floating-point dtype
+    let dtype = logits.dtype();
+    let targets = if targets.dtype() != dtype {
+        targets.to_dtype(dtype)? // Use logits' dtype instead of hardcoded F32
+    } else {
+        targets.clone()
+    };
 
     // max(x, 0)
     let zero = logits.zeros_like()?;
@@ -172,7 +212,7 @@ pub fn binary_cross_entropy_with_logits_stable(
         .log()?;
 
     // x * y
-    let xy_term = logits.mul(&targets.to_dtype(DType::F32)?)?;
+    let xy_term = logits.mul(&targets)?; // targets already converted
 
     // BCE = max(x, 0) - x*y + log(1 + exp(-|x|))
     let loss = (max_val - xy_term)?.add(&log_exp_term)?;
@@ -251,7 +291,7 @@ mod tests {
     fn test_create_orientation_mask() -> Result<()> {
         let pieces = TetrisPiece::all();
         let pieces_tensor = TetrisPieceTensor::from_pieces(&pieces, &Device::Cpu)?;
-        let mask = create_orientation_mask(&pieces_tensor)?.to_dtype(DType::F32)?;
+        let mask = create_orientation_mask(&pieces_tensor)?.to_dtype(crate::fdtype())?;
         let expected_mask = vec![
             vec![
                 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -298,14 +338,14 @@ mod tests {
         let reversed_pieces_tensor =
             TetrisPieceTensor::from_pieces(&reversed_pieces, &Device::Cpu)?;
         let reversed_mask =
-            create_orientation_mask(&reversed_pieces_tensor)?.to_dtype(DType::F32)?;
+            create_orientation_mask(&reversed_pieces_tensor)?.to_dtype(crate::fdtype())?;
         let reversed_mask_as_vec = reversed_mask.to_vec2::<f32>().unwrap();
         assert_eq!(reversed_mask_as_vec, expected_mask_reversed);
 
         // test indexing the same piece 100 times
         let pieces = vec![TetrisPiece::O_PIECE; 100];
         let pieces_tensor = TetrisPieceTensor::from_pieces(&pieces, &Device::Cpu)?;
-        let mask = create_orientation_mask(&pieces_tensor)?.to_dtype(DType::F32)?;
+        let mask = create_orientation_mask(&pieces_tensor)?.to_dtype(crate::fdtype())?;
         let mask_as_vec = mask.to_vec2::<f32>().unwrap();
         let expected_mask = vec![
             1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -351,7 +391,7 @@ mod tests {
         assert!(loss_val > 9.0, "Worst predictions should have high loss");
 
         // Test case 3: Neutral predictions (logits = 0)
-        let logits = Tensor::zeros((2, 2), DType::F32, &dev)?;
+        let logits = Tensor::zeros((2, 2), crate::fdtype(), &dev)?;
         let targets = Tensor::from_vec(vec![1.0f32, 0.0, 1.0, 0.0], (2, 2), &dev)?;
         let loss = binary_cross_entropy_with_logits_stable(&logits, &targets)?;
         let loss_val = loss.to_scalar::<f32>()?;
@@ -419,7 +459,7 @@ mod tests {
         let dev = Device::Cpu;
 
         // Even with all mask=1, a row with all-zero inputs should output all zeros
-        let x = Tensor::zeros((1, 4), DType::F32, &dev)?;
+        let x = Tensor::zeros((1, 4), crate::fdtype(), &dev)?;
         let mask = Tensor::from_vec(vec![1u8, 1, 1, 1], (1, 4), &dev)?;
 
         let probs = masked_softmax_2d(&x, &mask)?;
@@ -433,7 +473,7 @@ mod tests {
     fn test_masked_softmax_2d_shape_mismatch_errors() -> Result<()> {
         let dev = Device::Cpu;
 
-        let x = Tensor::zeros((2, 3), DType::F32, &dev)?;
+        let x = Tensor::zeros((2, 3), crate::fdtype(), &dev)?;
         let mask = Tensor::zeros((2, 2), DType::U8, &dev)?;
 
         let res = masked_softmax_2d(&x, &mask);
@@ -451,7 +491,7 @@ mod tests {
         let source = Tensor::arange(0f32, 9., &dev)?.reshape((3, 3))?;
 
         // The tensor to be modified in-place, starts as zeros.
-        let x = Tensor::zeros((3, 3), DType::F32, &dev)?;
+        let x = Tensor::zeros((3, 3), crate::fdtype(), &dev)?;
 
         // We want to permute rows: 0->1, 1->2, 2->0. The indices tensor specifies
         // the destination row for each element of the source.
