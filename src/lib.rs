@@ -21,13 +21,14 @@ pub mod tetris;
 pub mod tetris_evolution_player_model;
 pub mod tetris_exceed_the_mean;
 pub mod tetris_explorer;
-pub mod tetris_simple_imitation;
 pub mod tetris_q_learning;
+pub mod tetris_q_learning_transformer;
+pub mod tetris_simple_imitation;
 pub mod tetris_simple_player_model;
 pub mod tetris_transition_model;
 pub mod tetris_transition_transformer_model;
-pub mod tetris_world_model;
 pub mod tetris_tui;
+pub mod tetris_world_model;
 pub mod utils;
 pub mod wrapped_tensor;
 

@@ -2,9 +2,7 @@ use clap::{Parser, ValueEnum};
 use std::str::FromStr;
 use tetris_atlas::tetris::TetrisGame;
 use tetris_atlas::{
-    set_global_threadpool, tetris_evolution_player_model, tetris_exceed_the_mean,
-    tetris_q_learning, tetris_simple_imitation, tetris_simple_player_model,
-    tetris_transition_model, tetris_transition_transformer_model, tetris_tui, tetris_world_model,
+    set_global_threadpool, tetris_evolution_player_model, tetris_exceed_the_mean, tetris_q_learning, tetris_q_learning_transformer, tetris_simple_imitation, tetris_simple_player_model, tetris_transition_model, tetris_transition_transformer_model, tetris_tui, tetris_world_model
 };
 use time::OffsetDateTime;
 use tracing::{Level, info};
@@ -18,6 +16,7 @@ enum TrainModel {
     ExceedTheMean,
     SimpleImitation,
     QLearning,
+    QLearningTransformer,
     Transition,
     TransitionTransformer,
     WorldGoalPolicy,
@@ -183,6 +182,14 @@ fn main() {
                         logdir.clone(),
                         checkpoint_dir.clone(),
                         *resume,
+                    )
+                    .unwrap();
+                }
+                TrainModel::QLearningTransformer => {
+                    tetris_q_learning_transformer::train_q_learning_policy(
+                        run_name.clone(),
+                        logdir.clone(),
+                        checkpoint_dir.clone(),
                     )
                     .unwrap();
                 }
