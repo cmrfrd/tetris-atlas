@@ -26,7 +26,7 @@ use crate::tensors::{
 };
 use crate::tetris::{TetrisBoard, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement};
 use crate::wrapped_tensor::WrappedTensor;
-use crate::{device, dtype};
+use crate::{device, fdtype};
 
 /// Simple policy over placements using supervised learning on high-performing trajectories.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,7 +35,7 @@ pub struct TetrisGoalPolicyConfig {
 
     pub board_encoder_config: ConvEncoderConfig,
 
-    pub piece_film_config: (FiLMConfig, FiLMConfig),
+    pub piece_film_config: Vec<FiLMConfig>,
 
     pub head_mlp_config: MlpConfig, // outputs logits over orientations
 }
@@ -44,7 +44,7 @@ pub struct TetrisGoalPolicyConfig {
 pub struct TetrisGoalPolicy {
     piece_embedding: Embedding,
     board_encoder: ConvEncoder,
-    piece_film: (FiLM, FiLM),
+    piece_film: Vec<FiLM>,
     head_mlp: Mlp,
 }
 
@@ -56,10 +56,11 @@ impl TetrisGoalPolicy {
             vb.pp("piece_embedding"),
         )?;
         let board_encoder = ConvEncoder::init(&vb.pp("board_encoder"), &cfg.board_encoder_config)?;
-        let piece_film = (
-            FiLM::init(&vb.pp("piece_film"), &cfg.piece_film_config.0)?,
-            FiLM::init(&vb.pp("piece_film"), &cfg.piece_film_config.1)?,
-        );
+        let piece_film = cfg
+            .piece_film_config
+            .iter()
+            .map(|cfg| FiLM::init(&vb.pp("piece_film"), cfg).unwrap())
+            .collect();
         let head_mlp = Mlp::init(&vb.pp("head_mlp"), &cfg.head_mlp_config)?;
         Ok(Self {
             piece_embedding,
@@ -85,8 +86,10 @@ impl TetrisGoalPolicy {
 
         // Condition current on goal and piece
         let piece_embed = self.piece_embedding.forward(current_piece)?.squeeze(1)?; // [B, D]
-        let x = self.piece_film.0.forward(&cur_embed, &piece_embed)?; // [B, D]
-        let x = self.piece_film.1.forward(&x, &piece_embed)?; // [B, D]
+        let x = self
+            .piece_film
+            .iter()
+            .try_fold(cur_embed, |x, film| film.forward(&x, &piece_embed))?; // [B, D]
 
         // Head -> orientation logits [B, NUM_ORIENTATIONS]
         let logits = self.head_mlp.forward(&x)?; // [B, O]
@@ -128,29 +131,34 @@ pub fn train_exceed_the_mean_policy(
     checkpoint_dir: Option<PathBuf>,
 ) -> Result<()> {
     let device = device();
-    let dtype = dtype();
+    let dtype = fdtype();
 
-    // Hyperparameters
-    const NUM_ITERATIONS: usize = 500_000;
+    // Hyperparameters - SIMPLIFIED FOR STABILITY
+    const NUM_ITERATIONS: usize = 100_000;
     const NUM_TRAJECTORIES_PER_BATCH: usize = 512;
-    const PARALLEL_GAMES: usize = 1024;
-    const SAMPLE_PERCENT_TRANSITIONS: f32 = 0.4; // Use 50% of data - don't waste it!
-    const NUM_EPOCHS_PER_BATCH: usize = 1; // Multi-epoch training - reuse data better
-    const MINI_BATCH_SIZE: usize = 256; // Smaller batches = more frequent updates
-    const MAX_NUM_MINI_BATCHES: usize = 100; // Allow more mini-batches
-    const ACCUM_STEPS: usize = 1; // Gradient accumulation for stability
+    const PARALLEL_GAMES: usize = 512;
+    const KEEP_TOP_PERCENT: f32 = 0.25; // Keep best 25% of trajectories by length
+    const MINI_BATCH_SIZE: usize = 512;
     const CHECKPOINT_INTERVAL: usize = 100;
-    const CLIP_GRAD_MAX_VALUE: Option<f64> = Some(10.0);
-    const CLIP_GRAD_MAX_NORM: Option<f64> = Some(1.0); // Increased from 1.0 to allow larger gradients
-    const INITIAL_TEMPERATURE: f32 = 2.5; // Even higher for more initial exploration
-    const FINAL_TEMPERATURE: f32 = 1.2; // Don't go too low - maintain exploration
-    const TEMPERATURE_HALFLIFE_ITERS: f32 = 50_000.0; // Much slower decay for sustained exploration
-    const MAX_WEIGHTED_LOSS: f64 = 10.0; // Allow larger loss values
-    const ENTROPY_WEIGHT: f32 = 0.005; // Reduce entropy penalty - allow more confidence
-    const REWARD_SCALE: f32 = 2.0; // Much stronger gradients for faster learning
-    const LENGTH_EXPONENT: f32 = 1.5; // Exponential scaling power: length^N
-    const LEARNING_RATE: f64 = 0.003; // 3× faster than default 0.001
-    let model_dim = 32; // Increased from 32 for more model capacity
+    const CLIP_GRAD_MAX_NORM: Option<f64> = Some(1.0);
+    const CLIP_GRAD_MAX_VALUE: Option<f64> = Some(5.0);
+    const LEARNING_RATE: f64 = 0.001; // Conservative fixed rate
+    const TEMPERATURE: f32 = 1.5; // Fixed temperature - no decay
+    const ENTROPY_WEIGHT: f32 = 0.01; // Entropy bonus for exploration
+
+    // Reward computation parameters
+    const LENGTH_EXPONENT: f32 = 1.5; // Exponential scaling for trajectory length
+    const LINES_CLEARED_WEIGHT: f32 = 1.0; // Weight for lines cleared score
+    const REWARD_MIN_BOUND: f32 = -1.0; // Min bound for normalized rewards
+    const REWARD_MAX_BOUND: f32 = 1.0; // Max bound for normalized rewards
+
+    // Training loop parameters
+    const NUM_EPOCHS_PER_BATCH: usize = 3; // Number of epochs per batch
+    const SAMPLE_PERCENT_TRANSITIONS: f32 = 0.8; // Percent of transitions to sample per epoch
+    const MAX_NUM_MINI_BATCHES: usize = 100; // Cap on number of mini-batches
+    const MAX_WEIGHTED_LOSS: f32 = 10.0; // Clamp weighted loss to prevent extreme values
+
+    let model_dim = 64;
 
     let model_varmap = VarMap::new();
     let vb = VarBuilder::from_varmap(&model_varmap, dtype, &device);
@@ -211,30 +219,22 @@ pub fn train_exceed_the_mean_policy(
             input_hw: (TetrisBoard::HEIGHT, TetrisBoard::WIDTH),
             mlp: MlpConfig {
                 hidden_size: 8 * TetrisBoard::HEIGHT * TetrisBoard::WIDTH,
-                intermediate_size: 2 * model_dim,
+                intermediate_size: 3 * model_dim,
                 output_size: model_dim,
-                dropout: Some(0.05),
+                dropout: Some(0.01),
             },
         },
-        piece_film_config: (
-            FiLMConfig {
-                cond_dim: model_dim,
-                feat_dim: model_dim,
-                hidden: model_dim,
-                output_dim: model_dim,
-            },
-            FiLMConfig {
-                cond_dim: model_dim,
-                feat_dim: model_dim,
-                hidden: model_dim,
-                output_dim: model_dim,
-            },
-        ),
+        piece_film_config: vec![FiLMConfig {
+            cond_dim: model_dim,
+            feat_dim: model_dim,
+            hidden: 2 * model_dim,
+            output_dim: model_dim,
+        }],
         head_mlp_config: MlpConfig {
             hidden_size: model_dim,
             intermediate_size: 2 * model_dim,
-            output_size: TetrisPieceOrientation::NUM_ORIENTATIONS,
-            dropout: Some(0.05),
+            output_size: TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
+            dropout: Some(0.01),
         },
     };
 
@@ -247,7 +247,7 @@ pub fn train_exceed_the_mean_policy(
             ..ParamsAdamW::default()
         },
     )?;
-    let mut grad_accum = GradientAccumulator::new(ACCUM_STEPS);
+    let mut grad_accum = GradientAccumulator::new(1);
 
     // Summary + checkpointing
     let mut summary_writer = logdir.map(|s| SummaryWriter::new(s));
@@ -265,57 +265,23 @@ pub fn train_exceed_the_mean_policy(
     let mut total_games_completed = 0;
     let mut mean_game_length: f32 = 10.0; // Initial estimate
 
+    println!("\n=== SIMPLIFIED IMITATION LEARNING ===");
     println!(
-        "Starting training: {} iterations, batch size {} (optimized curriculum)",
+        "Starting training: {} iterations, batch size {}",
         NUM_ITERATIONS, NUM_TRAJECTORIES_PER_BATCH
     );
     println!(
-        "Temperature decay: {:.2} → {:.2} (exponential, halflife={:.0} iterations)",
-        INITIAL_TEMPERATURE, FINAL_TEMPERATURE, TEMPERATURE_HALFLIFE_ITERS
+        "Strategy: Keep top {:.0}% longest games, train on their actions",
+        KEEP_TOP_PERCENT * 100.0
     );
-    println!("Supervised learning: Trajectory-length-weighted rewards with exponential scaling");
-    println!(
-        "  - Reward = (length^{:.1}) × ((T-t)/T) → z-score normalized → [0, {:.1}]",
-        LENGTH_EXPONENT, REWARD_SCALE
-    );
-    println!(
-        "  - Exponential scaling (^{:.1}): longer trajectories get much stronger signal",
-        LENGTH_EXPONENT
-    );
-    println!("  - Z-score normalization: preserves relative improvement magnitude");
-    println!(
-        "  - Reward scale {:.1}: controls gradient magnitude",
-        REWARD_SCALE
-    );
-    println!("  - Earlier actions within trajectory weighted higher");
-    println!(
-        "  - {} epochs × {:.0}% transitions = maximum data utilization",
-        NUM_EPOCHS_PER_BATCH,
-        SAMPLE_PERCENT_TRANSITIONS * 100.0
-    );
-    println!("Optimizations:");
-    println!(
-        "  - Learning rate: {:.4} (3× faster than default)",
-        LEARNING_RATE
-    );
-    println!("  - Model capacity: {} dims (2× baseline)", model_dim);
-    println!("  - Dropout: 0.05 (reduced for faster learning)");
-    println!("  - Prioritized sampling: sqrt(length) trajectory weights");
-    println!(
-        "  - Gradient clipping: max_norm={:.1}, max_value={:.1}",
-        CLIP_GRAD_MAX_NORM.unwrap_or(0.0),
-        CLIP_GRAD_MAX_VALUE.unwrap_or(0.0)
-    );
-    println!("Gradient accumulation: {} steps", ACCUM_STEPS);
+    println!("Temperature: {:.2} (fixed, no decay)", TEMPERATURE);
+    println!("Learning rate: {:.4} (fixed)", LEARNING_RATE);
+    println!("Entropy bonus: {:.3}", ENTROPY_WEIGHT);
+    println!("Model capacity: {} dims", model_dim);
+    println!("Mini-batch size: {}", MINI_BATCH_SIZE);
 
     // Main training loop - iteration-based
     for iteration in 0..NUM_ITERATIONS {
-        // === Calculate exponentially decaying temperature ===
-        let decay_factor = (-0.693147 * iteration as f32 / TEMPERATURE_HALFLIFE_ITERS).exp();
-        let temperature = (FINAL_TEMPERATURE
-            + (INITIAL_TEMPERATURE - FINAL_TEMPERATURE) * decay_factor)
-            .max(FINAL_TEMPERATURE);
-
         // === Phase 1: Collect trajectories (curriculum-adaptive batch size) ===
         println!(
             "\n[Iteration {}] Collecting {} game trajectories ({} parallel games)...",
@@ -350,9 +316,9 @@ pub fn train_exceed_the_mean_policy(
             let current_pieces_vec: Vec<TetrisPiece> = active_games.current_pieces().to_vec();
             let current_piece = TetrisPieceTensor::from_pieces(&current_pieces_vec, &device)?;
 
-            // Sample actions for all parallel games
-            let masked_logits = policy.forward_masked(&current_board, &current_piece)?;
-            let sampled_orientations = masked_logits.sample(temperature)?;
+            // Sample actions for all parallel games with mask
+            let logits = policy.forward_logits(&current_board, &current_piece)?;
+            let sampled_orientations = logits.sample(TEMPERATURE, &current_piece)?;
             let orientations = sampled_orientations.into_orientations()?;
 
             // Add to all trajectories in parallel
@@ -438,11 +404,10 @@ pub fn train_exceed_the_mean_policy(
             .into_iter()
             .map(|traj| {
                 let traj_length = traj.game_length as f32;
+                let lines_cleared_score = traj.lines_cleared as f32;
 
-                // Exponential length bonus: reward grows as length^LENGTH_EXPONENT
-                // This creates much stronger signal for longer trajectories
-                // With LENGTH_EXPONENT=2.0: length=10 -> 100, length=100 -> 10000, length=200 -> 40000
                 let length_score = traj_length.powf(LENGTH_EXPONENT);
+                let weighted_lines = lines_cleared_score * LINES_CLEARED_WEIGHT;
 
                 let rewards: Vec<f32> = (0..traj.game_length)
                     .map(|t| {
@@ -450,8 +415,8 @@ pub fn train_exceed_the_mean_policy(
                         // At t=0: decay=1.0, at t=T-1: decay=1/T
                         let decay_factor = (traj_length - t as f32) / traj_length;
 
-                        // Combined reward: exponential length bonus × linear decay
-                        let reward = length_score * decay_factor;
+                        // Combined reward: balanced contribution from both signals
+                        let reward = (weighted_lines + length_score) * decay_factor;
                         reward
                     })
                     .collect();
@@ -463,14 +428,18 @@ pub fn train_exceed_the_mean_policy(
             })
             .collect();
 
-        // Step 2: Standardize rewards using z-score (preserves relative differences)
-        let mean_raw_reward = all_raw_rewards.iter().sum::<f32>() / all_raw_rewards.len() as f32;
-        let variance = all_raw_rewards
+        // Step 2: Min-Max normalization (maps actual range to bounds)
+        let min_raw_reward = all_raw_rewards
             .iter()
-            .map(|r| (r - mean_raw_reward).powi(2))
-            .sum::<f32>()
-            / all_raw_rewards.len() as f32;
-        let std_reward = variance.sqrt().max(1e-8);
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .copied()
+            .unwrap_or(0.0);
+        let max_raw_reward = all_raw_rewards
+            .iter()
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .copied()
+            .unwrap_or(1.0);
+        let raw_range = (max_raw_reward - min_raw_reward).max(1e-8);
 
         let trajectories_with_normalized_rewards: Vec<(Trajectory, Vec<f32>)> =
             trajectories_with_raw_rewards
@@ -479,21 +448,20 @@ pub fn train_exceed_the_mean_policy(
                     let normalized_rewards: Vec<f32> = raw_rewards
                         .into_iter()
                         .map(|r| {
-                            // Z-score normalization: (r - μ) / σ
-                            let z_score = (r - mean_raw_reward) / std_reward;
-                            // Clip to [-3, 3] standard deviations (keeps ~99.7% of data)
-                            // Then shift and scale to [0, REWARD_SCALE]
-                            let clipped = z_score.clamp(-3.0, 3.0);
-                            let normalized = (clipped + 3.0) / 6.0 * REWARD_SCALE; // Maps [-3, 3] -> [0, REWARD_SCALE]
-                            // Ensure final reward is strictly in [0, REWARD_SCALE]
-                            normalized.clamp(0.0, REWARD_SCALE)
+                            // Min-Max normalization: (r - min) / (max - min)
+                            let normalized_01 = (r - min_raw_reward) / raw_range;
+                            // Scale to [REWARD_MIN_BOUND, REWARD_MAX_BOUND]
+                            let reward_range = REWARD_MAX_BOUND - REWARD_MIN_BOUND;
+                            let normalized = REWARD_MIN_BOUND + normalized_01 * reward_range;
+                            // Ensure final reward is strictly in [REWARD_MIN_BOUND, REWARD_MAX_BOUND]
+                            normalized.clamp(REWARD_MIN_BOUND, REWARD_MAX_BOUND)
                         })
                         .collect();
                     (traj, normalized_rewards)
                 })
                 .collect();
 
-        // Track statistics for monitoring
+        // Track statistics for monitoring (before advantage computation)
         let all_normalized_rewards: Vec<f32> = trajectories_with_normalized_rewards
             .iter()
             .flat_map(|(_, rewards)| rewards.iter().copied())
@@ -512,20 +480,78 @@ pub fn train_exceed_the_mean_policy(
             .copied()
             .unwrap_or(1.0);
 
+        // Step 3: Compute advantages (baseline subtraction for variance reduction)
+        // Advantage = reward - baseline, where baseline = mean reward
+        // This centers the gradients around 0, reducing variance
+        let trajectories_with_advantages: Vec<(Trajectory, Vec<f32>)> =
+            trajectories_with_normalized_rewards
+                .iter()
+                .map(|(traj, rewards)| {
+                    let advantages: Vec<f32> = rewards
+                        .iter()
+                        .map(|r| r - mean_reward) // Baseline subtraction
+                        .collect();
+                    (traj.clone(), advantages)
+                })
+                .collect();
+
+        // Track advantage statistics BEFORE standardization
+        let all_advantages: Vec<f32> = trajectories_with_advantages
+            .iter()
+            .flat_map(|(_, advantages)| advantages.iter().copied())
+            .collect();
+
+        // Compute standard deviation of advantages
+        let advantage_variance =
+            all_advantages.iter().map(|a| a.powi(2)).sum::<f32>() / all_advantages.len() as f32;
+        let advantage_std = advantage_variance.sqrt().max(1e-8);
+
+        // Step 4: Standardize advantages to mean=0, std=1 (CRITICAL for stable gradients!)
+        let trajectories_with_standardized_advantages: Vec<(Trajectory, Vec<f32>)> =
+            trajectories_with_advantages
+                .into_iter()
+                .map(|(traj, advantages)| {
+                    let standardized: Vec<f32> = advantages
+                        .into_iter()
+                        .map(|a| a / advantage_std) // Divide by std for unit variance
+                        .collect();
+                    (traj, standardized)
+                })
+                .collect();
+
+        // Track final standardized advantage statistics
+        let all_standardized_advantages: Vec<f32> = trajectories_with_standardized_advantages
+            .iter()
+            .flat_map(|(_, advantages)| advantages.iter().copied())
+            .collect();
+
+        let mean_advantage = all_standardized_advantages.iter().sum::<f32>()
+            / all_standardized_advantages.len() as f32;
+        let min_advantage = all_standardized_advantages
+            .iter()
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .copied()
+            .unwrap_or(0.0);
+        let max_advantage = all_standardized_advantages
+            .iter()
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .copied()
+            .unwrap_or(0.0);
+
         // Track game length and lines cleared for monitoring
-        mean_game_length = trajectories_with_normalized_rewards
+        mean_game_length = trajectories_with_standardized_advantages
             .iter()
             .map(|(t, _)| t.game_length as f32)
             .sum::<f32>()
-            / trajectories_with_normalized_rewards.len() as f32;
+            / trajectories_with_standardized_advantages.len() as f32;
 
-        let mean_lines_cleared = trajectories_with_normalized_rewards
+        let mean_lines_cleared = trajectories_with_standardized_advantages
             .iter()
             .map(|(t, _)| t.lines_cleared as f32)
             .sum::<f32>()
-            / trajectories_with_normalized_rewards.len() as f32;
+            / trajectories_with_standardized_advantages.len() as f32;
 
-        let total_lines_cleared: u32 = trajectories_with_normalized_rewards
+        let total_lines_cleared: u32 = trajectories_with_standardized_advantages
             .iter()
             .map(|(t, _)| t.lines_cleared)
             .sum();
@@ -541,27 +567,32 @@ pub fn train_exceed_the_mean_policy(
             mean_lines_cleared / mean_game_length
         );
         println!(
-            "  Raw rewards: mean={:.1}, std={:.1}",
-            mean_raw_reward, std_reward
+            "  Raw rewards: min={:.1}, max={:.1}, range={:.1}",
+            min_raw_reward, max_raw_reward, raw_range
         );
         println!(
-            "  Normalized rewards [0, {:.1}]: mean={:.3}, range=[{:.3}, {:.3}]",
-            REWARD_SCALE, mean_reward, min_normalized, max_normalized
+            "  Normalized rewards [{:.1}, {:.1}]: mean={:.3}, range=[{:.3}, {:.3}]",
+            REWARD_MIN_BOUND, REWARD_MAX_BOUND, mean_reward, min_normalized, max_normalized
+        );
+        println!(
+            "  Advantages (baseline={:.3}, std={:.3}): mean={:.4}, range=[{:.3}, {:.3}]",
+            mean_reward, advantage_std, mean_advantage, min_advantage, max_advantage
         );
 
         // === Phase 3: Supervised learning with prioritized trajectory sampling ===
         // Step 1: Build per-trajectory transition pools with prioritization weights
+        // Using standardized advantages (mean=0, std=1) for stable gradients
         let trajectory_pools: Vec<Vec<(TetrisBoard, TetrisPiece, TetrisPieceOrientation, f32)>> =
-            trajectories_with_normalized_rewards
+            trajectories_with_standardized_advantages
                 .iter()
-                .map(|(traj, rewards)| {
+                .map(|(traj, advantages)| {
                     (0..traj.game_length)
                         .map(|i| {
                             (
                                 traj.boards[i].clone(),
                                 traj.pieces[i],
                                 traj.orientations[i],
-                                rewards[i],
+                                advantages[i],
                             )
                         })
                         .collect()
@@ -570,7 +601,7 @@ pub fn train_exceed_the_mean_policy(
 
         // Prioritization weights: longer trajectories sampled more often
         // Using sqrt for moderate prioritization (linear would be too aggressive)
-        let trajectory_weights: Vec<f64> = trajectories_with_normalized_rewards
+        let trajectory_weights: Vec<f64> = trajectories_with_standardized_advantages
             .iter()
             .map(|(traj, _)| (traj.game_length as f64).sqrt())
             .collect();
@@ -665,6 +696,21 @@ pub fn train_exceed_the_mean_policy(
                     })
                     .multiunzip();
 
+                // Per-batch advantage normalization (additional stability)
+                // Normalize advantages within this mini-batch to mean=0, std=1
+                let batch_mean = batch_weights.iter().sum::<f32>() / batch_weights.len() as f32;
+                let batch_variance = batch_weights
+                    .iter()
+                    .map(|w| (w - batch_mean).powi(2))
+                    .sum::<f32>()
+                    / batch_weights.len() as f32;
+                let batch_std = batch_variance.sqrt().max(1e-8);
+
+                let normalized_batch_weights: Vec<f32> = batch_weights
+                    .iter()
+                    .map(|w| (w - batch_mean) / batch_std)
+                    .collect();
+
                 // Convert to tensors
                 let boards_u8: Vec<u8> = batch_boards
                     .iter()
@@ -688,29 +734,36 @@ pub fn train_exceed_the_mean_policy(
                 let probs = candle_nn::ops::softmax(logits.inner(), D::Minus1)?;
                 let log_probs = candle_nn::ops::log_softmax(logits.inner(), D::Minus1)?;
 
-                // Policy gradient loss: L(θ) = -∑ w_t log(π_θ(a_t|s_t))
-                // Where w_t ∈ [0, REWARD_SCALE] is the normalized reward with:
-                //   - Length bonus: longer trajectories weighted higher (exponential)
-                //   - Linear decay: earlier actions weighted higher within trajectory
-                //   - REWARD_SCALE: controls gradient magnitude for tuning learning speed
+                // Policy gradient loss: L(θ) = -∑ A_t log(π_θ(a_t|s_t))
+                // Where A_t is the per-batch normalized advantage:
+                //   - Global normalization: (reward - mean) / std across all trajectories
+                //   - Per-batch normalization: (advantage - batch_mean) / batch_std
+                //   - Double normalization ensures mean=0, std=1 within each mini-batch
+                //   - Positive advantage → reinforce this action (better than batch average)
+                //   - Negative advantage → discourage this action (worse than batch average)
                 let target_one_hot = target_tensor.into_dist()?;
                 let sample_log_probs = (&log_probs * target_one_hot.inner())?.sum(D::Minus1)?; // [B] - log π(a|s) for each sample
 
-                // Apply normalized rewards: w_t ∈ [0, 1]
-                // Higher reward → increase log prob → learn to do this action more
-                // Lower reward → smaller gradient → learn this action less
-                let rewards_tensor =
-                    Tensor::from_vec(batch_weights, Shape::from_dims(&[mini_batch_size]), &device)?;
+                // Apply per-batch normalized advantages: A_t (mean=0, std=1 within batch)
+                // Double normalization (global + per-batch) ensures very stable gradients
+                // Positive advantage → increase log prob → reinforce action
+                // Negative advantage → decrease log prob → suppress action
+                let advantages_tensor = Tensor::from_vec(
+                    normalized_batch_weights,
+                    Shape::from_dims(&[mini_batch_size]),
+                    &device,
+                )?;
 
-                let weighted_log_probs = (&sample_log_probs * &rewards_tensor)?;
+                let weighted_log_probs = (&sample_log_probs * &advantages_tensor)?;
 
                 // Clamp weighted values to prevent extreme outliers
                 let clamped_weighted =
                     weighted_log_probs.clamp(-MAX_WEIGHTED_LOSS, MAX_WEIGHTED_LOSS)?;
 
-                // Policy gradient loss: -mean(w_t × log π(a_t|s_t))
-                // w_t ∈ [0, REWARD_SCALE]: higher reward → larger gradient → reinforce this action
-                // Maximizing weighted log probs = minimizing negative weighted log probs
+                // Policy gradient loss: -mean(A_t × log π(a_t|s_t))
+                // A_t is advantage (centered around 0 for variance reduction)
+                // Positive A_t → reinforce action, Negative A_t → suppress action
+                // Maximizing advantage-weighted log probs = minimizing negative weighted log probs
                 let pg_loss = clamped_weighted.neg()?.mean_all()?;
 
                 // Compute entropy regularization
@@ -718,8 +771,8 @@ pub fn train_exceed_the_mean_policy(
                 let avg_entropy = entropy.mean_all()?;
 
                 // Total loss: policy gradient + entropy penalty (negative to encourage higher entropy)
-                let entropy_penalty = avg_entropy.affine(-ENTROPY_WEIGHT as f64, 0.0)?;
-                let loss = (&pg_loss + &entropy_penalty)?;
+                // let entropy_penalty = avg_entropy.affine(-ENTROPY_WEIGHT as f64, 0.0)?;
+                let loss = pg_loss; // + &entropy_penalty)?;
 
                 // Compute accuracy
                 let predicted = logits.inner().argmax(D::Minus1)?;
@@ -813,7 +866,8 @@ pub fn train_exceed_the_mean_policy(
             s.add_scalar("metrics/accuracy", avg_accuracy, iteration);
             s.add_scalar("metrics/entropy", avg_entropy, iteration);
             s.add_scalar("training/grad_norm", avg_grad_norm, iteration);
-            s.add_scalar("training/temperature", temperature, iteration);
+            s.add_scalar("training/learning_rate", LEARNING_RATE as f32, iteration);
+            s.add_scalar("training/temperature", TEMPERATURE, iteration);
             s.add_scalar("curriculum/mean_game_length", mean_game_length, iteration);
             s.add_scalar(
                 "curriculum/mean_lines_cleared",
@@ -821,13 +875,18 @@ pub fn train_exceed_the_mean_policy(
                 iteration,
             );
             s.add_scalar("curriculum/mean_reward", mean_reward, iteration);
+            s.add_scalar("curriculum/mean_advantage", mean_advantage, iteration);
+            s.add_scalar("curriculum/advantage_std", advantage_std, iteration);
+            s.add_scalar("curriculum/min_advantage", min_advantage, iteration);
+            s.add_scalar("curriculum/max_advantage", max_advantage, iteration);
             s.add_scalar(
                 "curriculum/max_trajectory_length",
                 max_trajectory_length,
                 iteration,
             );
-            s.add_scalar("curriculum/mean_raw_reward", mean_raw_reward, iteration);
-            s.add_scalar("curriculum/std_raw_reward", std_reward, iteration);
+            s.add_scalar("curriculum/min_raw_reward", min_raw_reward, iteration);
+            s.add_scalar("curriculum/max_raw_reward", max_raw_reward, iteration);
+            s.add_scalar("curriculum/raw_reward_range", raw_range, iteration);
             s.add_scalar(
                 "curriculum/total_transitions",
                 total_transitions as f32,
@@ -835,7 +894,7 @@ pub fn train_exceed_the_mean_policy(
             );
 
             // Add trajectory length distribution histogram
-            let trajectory_lengths: Vec<f64> = trajectories_with_normalized_rewards
+            let trajectory_lengths: Vec<f64> = trajectories_with_standardized_advantages
                 .iter()
                 .map(|(t, _)| t.game_length as f64)
                 .collect();
@@ -847,7 +906,7 @@ pub fn train_exceed_the_mean_policy(
             );
 
             // Add lines cleared distribution histogram
-            let lines_cleared_dist: Vec<f64> = trajectories_with_normalized_rewards
+            let lines_cleared_dist: Vec<f64> = trajectories_with_standardized_advantages
                 .iter()
                 .map(|(t, _)| t.lines_cleared as f64)
                 .collect();
@@ -858,14 +917,14 @@ pub fn train_exceed_the_mean_policy(
                 iteration,
             );
 
-            // Add reward distribution histogram (flatten all timestep rewards)
-            let all_rewards_hist: Vec<f64> = trajectories_with_normalized_rewards
+            // Add standardized advantage distribution histogram (should be ~N(0,1))
+            let all_advantages_hist: Vec<f64> = trajectories_with_standardized_advantages
                 .iter()
-                .flat_map(|(_, rewards)| rewards.iter().map(|&r| r as f64))
+                .flat_map(|(_, advantages)| advantages.iter().map(|&a| a as f64))
                 .collect();
             s.add_histogram(
-                "curriculum/reward_distribution",
-                &all_rewards_hist,
+                "curriculum/advantage_distribution",
+                &all_advantages_hist,
                 None,
                 iteration,
             );
@@ -907,7 +966,7 @@ pub fn train_exceed_the_mean_policy(
                 "  Rewards: mean={:.3} | Training: lr={:.1e} | temp={:.3}",
                 mean_reward,
                 optimizer.learning_rate(),
-                temperature,
+                TEMPERATURE,
             );
             println!("========================================\n");
 
@@ -925,7 +984,7 @@ pub fn train_exceed_the_mean_policy(
                 mean_lines_cleared / mean_game_length,
                 mean_reward,
                 optimizer.learning_rate(),
-                temperature,
+                TEMPERATURE,
             );
         }
     }

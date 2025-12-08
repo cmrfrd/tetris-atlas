@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use crate::data::TetrisTransition;
 use crate::optim::{AdamW, ParamsAdamW};
 use candle_core::{DType, Device, Tensor};
 use candle_nn::Optimizer;
@@ -24,7 +23,7 @@ use crate::{
         TetrisBoardLogitsTensor, TetrisBoardsTensor, TetrisPieceOrientationTensor,
         TetrisPieceTensor,
     },
-    tetris::{NUM_TETRIS_CELL_STATES, TetrisBoard, TetrisPiece, TetrisPieceOrientation},
+    tetris::{TetrisBoard, TetrisPiece, TetrisPieceOrientation},
     wrapped_tensor::WrappedTensor,
 };
 
@@ -94,7 +93,11 @@ impl TetrisGameTransitionModel {
         );
 
         // Board token + positional embeddings
-        let token_embed = embedding(NUM_TETRIS_CELL_STATES, cfg.d_model, vb.pp("token_embed"))?;
+        let token_embed = embedding(
+            TetrisBoard::NUM_TETRIS_CELL_STATES,
+            cfg.d_model,
+            vb.pp("token_embed"),
+        )?;
         let pos_embed = embedding(TetrisBoard::SIZE, cfg.d_model, vb.pp("pos_embed"))?;
 
         // Conditioning embeddings
@@ -208,11 +211,11 @@ pub fn train_game_transition_model(
     let device = Device::new_cuda(0).unwrap();
 
     let model_varmap = VarMap::new();
-    let model_vs = VarBuilder::from_varmap(&model_varmap, DType::F32, &device);
+    let model_vs = VarBuilder::from_varmap(&model_varmap, crate::fdtype(), &device);
 
     let model_cfg = TetrisGameTransitionModelConfig {
         piece_embedding_config: (TetrisPiece::NUM_PIECES, model_dim),
-        orientation_embedding_config: (TetrisPieceOrientation::NUM_ORIENTATIONS, model_dim),
+        orientation_embedding_config: (TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS, model_dim),
 
         piece_film_config: FiLMConfig {
             cond_dim: model_dim,

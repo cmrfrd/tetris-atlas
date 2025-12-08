@@ -10,7 +10,7 @@ use tensorboard::summary_writer::SummaryWriter;
 use tracing::{debug, info};
 
 use crate::checkpointer::Checkpointer;
-use crate::data::{TetrisDatasetGenerator, TetrisTransitionSequence};
+use crate::data::TetrisDatasetGenerator;
 use crate::grad_accum::{GradientAccumulator, get_l2_norm};
 use crate::modules::{
     Conv2dConfig, ConvBlockSpec, ConvEncoder, ConvEncoderConfig, FiLM, FiLMConfig, Mlp, MlpConfig,
@@ -20,9 +20,7 @@ use crate::tensors::{
     TetrisBoardsTensor, TetrisPieceOrientationDistTensor, TetrisPieceOrientationLogitsTensor,
     TetrisPieceOrientationTensor, TetrisPieceTensor,
 };
-use crate::tetris::{
-    IsLost, TetrisBoard, TetrisGameSet, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement,
-};
+use crate::tetris::{TetrisBoard, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement};
 use crate::wrapped_tensor::WrappedTensor;
 
 /// Simple goal-conditioned policy over placements using policy gradient (REINFORCE).
@@ -177,7 +175,7 @@ pub fn train_goal_policy(
     let model_dim = 32;
 
     let model_varmap = VarMap::new();
-    let vb = VarBuilder::from_varmap(&model_varmap, DType::F32, &device);
+    let vb = VarBuilder::from_varmap(&model_varmap, crate::fdtype(), &device);
 
     let policy_cfg = TetrisGoalPolicyConfig {
         piece_embedding_dim: model_dim,
@@ -255,7 +253,7 @@ pub fn train_goal_policy(
         head_mlp_config: MlpConfig {
             hidden_size: model_dim,
             intermediate_size: 2 * model_dim,
-            output_size: TetrisPieceOrientation::NUM_ORIENTATIONS,
+            output_size: TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
             dropout: None,
         },
         value_mlp_config: MlpConfig {
@@ -350,7 +348,7 @@ pub fn train_goal_policy(
                 let output_orientation_loss = cross_entropy(
                     &output_orientation
                         .inner()
-                        .reshape(&[BATCH_SIZE, TetrisPieceOrientation::NUM_ORIENTATIONS])?,
+                        .reshape(&[BATCH_SIZE, TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS])?,
                     &target_orientation.inner().reshape(&[BATCH_SIZE])?,
                 )?;
                 let output_orientation_loss_value = output_orientation_loss.to_scalar::<f32>()?;
@@ -447,7 +445,7 @@ pub fn train_goal_policy(
             let logp_all = candle_nn::ops::log_softmax(&tempered, D::Minus1)?; // [B,O]
 
             // Sample actions
-            let sampled_orientations = masked_logits.sample(1.0)?; // [B,1]
+            let sampled_orientations = masked_logits.sample(1.0, &current_piece)?; // [B,1]
             let chosen_one_hot = TetrisPieceOrientationDistTensor::from_orientations_tensor(
                 sampled_orientations.clone(),
             )?; // [B,O]
@@ -567,10 +565,10 @@ pub fn train_goal_policy(
         }
 
         // PPO update over multiple epochs (full batch)
-        let mut last_policy_loss_scalar: f32 = 0.0;
-        let mut last_value_loss_scalar: f32 = 0.0;
-        let mut last_entropy_scalar: f32 = 0.0;
-        let mut last_kl_scalar: f32 = 0.0;
+        let mut last_policy_loss_scalar: f32;
+        let mut last_value_loss_scalar: f32;
+        let mut last_entropy_scalar: f32;
+        let mut last_kl_scalar: f32;
 
         for _epoch in 0..PPO_EPOCHS {
             let mut policy_loss_sum = Tensor::zeros((), DType::F32, &device)?;

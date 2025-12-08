@@ -1,5 +1,5 @@
 use crate::repeat_idx_generic;
-use crate::tetris::{TetrisBoard, TetrisBoardBinarySlice, TetrisGame, TetrisPiecePlacement};
+use crate::tetris::{TetrisBoard, TetrisGame, TetrisPiecePlacement};
 use crate::utils::{HeaplessVec, VecPool};
 use rayon::iter::ParallelIterator;
 use rayon::iter::plumbing::{Folder, Reducer, UnindexedConsumer};

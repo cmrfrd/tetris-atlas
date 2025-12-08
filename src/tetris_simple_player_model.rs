@@ -315,7 +315,7 @@ pub fn train_goal_policy(
     let model_dim = 64;
 
     let model_varmap = VarMap::new();
-    let vb = VarBuilder::from_varmap(&model_varmap, DType::F32, &device);
+    let vb = VarBuilder::from_varmap(&model_varmap, crate::fdtype(), &device);
 
     let policy_cfg = TetrisGoalPolicyConfig {
         piece_embedding_dim: model_dim,
@@ -387,7 +387,7 @@ pub fn train_goal_policy(
         head_mlp_config: MlpConfig {
             hidden_size: model_dim,
             intermediate_size: 3 * model_dim,
-            output_size: TetrisPieceOrientation::NUM_ORIENTATIONS,
+            output_size: TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
             dropout: None,
         },
         value_mlp_config: MlpConfig {
@@ -495,7 +495,7 @@ pub fn train_goal_policy(
             values_detached.push(value.detach());
 
             // Sample actions - sampling doesn't need gradients, it's stochastic
-            let sampled_orientations = masked_logits.sample(temperature)?;
+            let sampled_orientations = masked_logits.sample(temperature, &current_piece)?;
             actions.push(sampled_orientations.clone());
 
             // Execute actions

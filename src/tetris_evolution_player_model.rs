@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use candle_core::{D, DType, Device, Tensor};
+use candle_core::{DType, Device, Tensor};
 use candle_nn::VarMap;
 use candle_nn::{VarBuilder, init::Init};
 use rand::RngCore;
@@ -113,7 +113,7 @@ impl TetrisEvolutionPopulation {
             );
         }
 
-        let expected_output = TetrisPieceOrientation::NUM_ORIENTATIONS;
+        let expected_output = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
         if *cfg.layer_dims.last().unwrap() != expected_output {
             anyhow::bail!(
                 "expected last layer dim {} (num orientations), got {}",
@@ -250,7 +250,7 @@ impl TetrisEvolutionPopulation {
                 let output_dim = flatten_dims_product;
 
                 let noise = Self::apply_norm(
-                    Tensor::randn(0.0, 0.01, (num_lost, output_dim), &device)?
+                    Tensor::randn(0.0, 1.0, (num_lost, output_dim), &device)?
                         .to_dtype(param.dtype())?,
                     perturb_norm,
                 )?;
@@ -321,20 +321,24 @@ pub fn train_population(
 ) -> Result<()> {
     let device = Device::new_cuda(0).unwrap();
 
-    const NUM_ITERATIONS: usize = 100_000_000;
-    const POPULATION_SIZE: usize = 256;
-    const SEED: usize = 41;
-    const NOISE_SCALE: f64 = 0.01;
+    const NUM_GENERATIONS: usize = 100_000;
+    const POPULATION_SIZE: usize = 1024;
+    const SEED: usize = 42;
+    const NOISE_SCALE: f64 = 0.0001;
+    const N_GAMES_FOR_FITNESS: usize = 256; // Average fitness over N games per individual
+    const MIN_READY_FOR_EVOLUTION: usize = 32; // Minimum individuals needed to trigger evolution
 
     let model_varmap = VarMap::new();
-    let vb = VarBuilder::from_varmap(&model_varmap, DType::F32, &device);
+    let vb = VarBuilder::from_varmap(&model_varmap, crate::fdtype(), &device);
 
     let population_cfg = TetrisEvolutionPopulationConfig {
         layer_dims: vec![
             TetrisBoard::SIZE + TetrisPiece::NUM_PIECES,
             64,
             64,
-            TetrisPieceOrientation::NUM_ORIENTATIONS,
+            64,
+            64,
+            TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
         ],
         population_size: POPULATION_SIZE,
     };
@@ -348,172 +352,214 @@ pub fn train_population(
     let mut game_set = TetrisGameSet::new_with_seed(SEED as u64, POPULATION_SIZE);
     let mut rng = rand::rng();
 
+    // Track cumulative pieces and game counts for averaging fitness over N games
+    let mut cumulative_pieces: Vec<u64> = vec![0; POPULATION_SIZE];
+    let mut games_completed: Vec<usize> = vec![0; POPULATION_SIZE];
+
     let mut max_num_pieces = 0;
-    let mut transitions_per_second = 0.0f64;
-    let mut iterations_per_second = 0.0f64;
-    let mut last_log_iteration = 0usize;
+    let mut total_steps = 0usize;
     let mut last_log_time = std::time::Instant::now();
-    for i in 0..NUM_ITERATIONS {
-        if i % 50 == 0 {
+    let mut last_log_steps = 0usize;
+
+    for generation in 0..NUM_GENERATIONS {
+        let generation_start_time = std::time::Instant::now();
+        let generation_start_steps = total_steps;
+
+        // Inner loop: play until enough individuals complete N games for evolution
+        let (ready_for_eval, still_running, avg_entropy) = loop {
+            // Forward pass for all individuals
+            let current_board = TetrisBoardsTensor::from_gameset(game_set, &device)?;
+            let current_pieces_array: Vec<TetrisPiece> = game_set.current_pieces().to_vec();
+            let current_pieces_vec: Vec<_> = current_pieces_array[0..game_set.len()].to_vec();
+            let current_piece =
+                TetrisPieceTensor::from_pieces(&current_pieces_vec.as_slice(), &device)?;
+            let masked = population.forward_masked(&current_board, &current_piece)?;
+            let entropy_mean = masked.into_dist()?.entropy()?.mean_all()?;
+
+            // Sample actions and apply
+            let sampled_orientations = masked.sample(0.1, &current_piece)?;
+            let action_orientations = sampled_orientations.into_orientations()?;
+            let lost_flags = game_set.apply_placement_from_orientations(&action_orientations);
+            let piece_counts_array: Vec<u32> = game_set.piece_counts().to_vec();
+            let piece_counts: Vec<_> = piece_counts_array[0..game_set.len()].to_vec();
+
+            // Update max pieces
+            let step_max_pieces = piece_counts.iter().copied().max().unwrap_or(0);
+            max_num_pieces = std::cmp::max(max_num_pieces, step_max_pieces);
+
+            // Update cumulative stats for individuals that lost a game
+            for (idx, (is_lost, &piece_count)) in lost_flags.iter().zip(&piece_counts).enumerate() {
+                if bool::from(*is_lost) {
+                    cumulative_pieces[idx] += piece_count as u64;
+                    games_completed[idx] += 1;
+                    game_set[idx].reset(Some(rng.next_u64()));
+                }
+            }
+
+            total_steps += 1;
+
+            // Check which individuals are ready for evaluation
+            let mut ready_for_eval: Vec<(usize, f64)> = Vec::with_capacity(POPULATION_SIZE);
+            let mut still_running: Vec<usize> = Vec::with_capacity(POPULATION_SIZE);
+
+            for idx in 0..POPULATION_SIZE {
+                if games_completed[idx] >= N_GAMES_FOR_FITNESS {
+                    let avg_pieces = cumulative_pieces[idx] as f64 / games_completed[idx] as f64;
+                    ready_for_eval.push((idx, avg_pieces));
+                } else {
+                    still_running.push(idx);
+                }
+            }
+
+            // Break when we have enough individuals ready for evolution
+            if ready_for_eval.len() >= MIN_READY_FOR_EVOLUTION {
+                break (ready_for_eval, still_running, entropy_mean);
+            }
+        };
+
+        let num_ready = ready_for_eval.len();
+        let steps_this_generation = total_steps - generation_start_steps;
+
+        // Sort ready individuals by fitness (average pieces), descending
+        let mut sorted_ready = ready_for_eval.clone();
+        sorted_ready.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Keep the top half as survivors, replace the bottom half
+        let num_survivors = num_ready / 2;
+        let num_to_replace = num_ready - num_survivors;
+
+        let survivors: Vec<(usize, f64)> = sorted_ready[..num_survivors].to_vec();
+
+        // Compute fitness stats before evolution
+        let avg_fitness: f64 =
+            ready_for_eval.iter().map(|(_, avg)| *avg).sum::<f64>() / num_ready as f64;
+        let best_fitness: f64 = sorted_ready[0].1;
+
+        // Select new parents from survivors using fitness-weighted sampling
+        let survivor_indices: Vec<usize> = survivors.iter().map(|(idx, _)| *idx).collect();
+        let weights: Vec<f64> = survivors
+            .iter()
+            .map(|(_, avg_pieces)| avg_pieces.powf(3.).clamp(0.0, 100_000.0))
+            .collect();
+        let weighted_index = WeightedIndex::new(weights)?;
+        let new_parent_positions: Vec<usize> = weighted_index
+            .sample_iter(&mut rng)
+            .take(num_to_replace)
+            .collect();
+        let new_parents: Vec<usize> = new_parent_positions
+            .iter()
+            .map(|&pos| survivor_indices[pos])
+            .collect();
+
+        // Build permutation: [still_running..., survivors..., new_parents...]
+        let permute_vec: Vec<usize> = still_running
+            .iter()
+            .copied()
+            .chain(survivor_indices.iter().copied())
+            .chain(new_parents.iter().copied())
+            .collect();
+
+        // Update the gameset
+        game_set.permute(&permute_vec);
+
+        // Reset games for replaced individuals
+        for idx in (POPULATION_SIZE - num_to_replace)..POPULATION_SIZE {
+            game_set[idx].reset(Some(rng.next_u64()));
+        }
+
+        // Permute the tracking arrays
+        let old_cumulative = cumulative_pieces.clone();
+        let old_games = games_completed.clone();
+        for (new_idx, &old_idx) in permute_vec.iter().enumerate() {
+            cumulative_pieces[new_idx] = old_cumulative[old_idx];
+            games_completed[new_idx] = old_games[old_idx];
+        }
+
+        // Reset tracking for replaced individuals (they start fresh)
+        for idx in (POPULATION_SIZE - num_to_replace)..POPULATION_SIZE {
+            cumulative_pieces[idx] = 0;
+            games_completed[idx] = 0;
+        }
+
+        // Reset tracking for survivors who completed evaluation (new N-game cycle)
+        for idx in still_running.len()..(still_running.len() + num_survivors) {
+            cumulative_pieces[idx] = 0;
+            games_completed[idx] = 0;
+        }
+
+        // Update the population weights
+        let index_vector: Vec<u32> = permute_vec.iter().map(|&idx| idx as u32).collect();
+        population.permute_population(&index_vector, num_to_replace, Some(NOISE_SCALE))?;
+
+        // Compute timing stats
+        let generation_elapsed = generation_start_time.elapsed().as_secs_f64();
+        let steps_per_second = if generation_elapsed > 0.0 {
+            steps_this_generation as f64 / generation_elapsed
+        } else {
+            0.0
+        };
+
+        // Log to console
+        if generation % 10 == 0 {
             let now = std::time::Instant::now();
             let elapsed = now.duration_since(last_log_time).as_secs_f64();
-            let delta_iterations = i.saturating_sub(last_log_iteration);
-            if elapsed > 0.0 && delta_iterations > 0 {
-                let delta_transitions = (delta_iterations * POPULATION_SIZE) as f64;
-                transitions_per_second = delta_transitions / elapsed;
-                iterations_per_second = delta_iterations as f64 / elapsed;
-            }
+            let delta_steps = total_steps.saturating_sub(last_log_steps);
+            let overall_steps_per_sec = if elapsed > 0.0 {
+                delta_steps as f64 / elapsed
+            } else {
+                0.0
+            };
             last_log_time = now;
-            last_log_iteration = i;
+            last_log_steps = total_steps;
 
             println!(
-                "Iteration {:5} | Max Pieces: {:5} | Transitions/Sec: {:8.1} | Iterations/Sec: {:8.1}",
-                i, max_num_pieces, transitions_per_second, iterations_per_second
+                "Gen {:5} | Steps: {:8} | Best: {:6.1} | Avg: {:6.1} | Replaced: {:4} | Steps/Sec: {:8.1}",
+                generation,
+                total_steps,
+                best_fitness,
+                avg_fitness,
+                num_to_replace,
+                overall_steps_per_sec
             );
         }
 
-        // println!(
-        //     "\nIteration {:5}: {}",
-        //     i,
-        //     (0..POPULATION_SIZE)
-        //         .map(|idx| format!("{:5}", game_set[idx].piece_count))
-        //         .collect::<Vec<_>>()
-        //         .join(" ")
-        // );
-        // println!(
-        //     "Heights: {}",
-        //     (0..POPULATION_SIZE)
-        //         .map(|idx| format!("{:2}", game_set[idx].board().height()))
-        //         .collect::<Vec<_>>()
-        //         .join(" ")
-        // );
-
-        // // println!("Before update");
-        // let weights = population.weight_sample()?;
-        // for weight_vec in weights {
-        //     let rounded = weight_vec
-        //         .iter()
-        //         .map(|x| (x * 100.0).round() / 100.0)
-        //         .collect::<Vec<_>>();
-        //     println!("{:?}", rounded);
-        // }
-
-        let current_board = TetrisBoardsTensor::from_gameset(game_set, &device)?;
-        let current_pieces_array: Vec<TetrisPiece> = game_set.current_pieces().to_vec();
-        let current_pieces_vec: Vec<_> = current_pieces_array[0..game_set.len()].to_vec();
-        let current_piece =
-            TetrisPieceTensor::from_pieces(&current_pieces_vec.as_slice(), &device)?;
-        let masked = population.forward_masked(&current_board, &current_piece)?;
-        let entropy_mean = masked.into_dist()?.entropy()?.mean_all()?;
-
-        let sampled_orientations = masked.sample(0.1)?;
-        let action_orientations = sampled_orientations.into_orientations()?;
-
-        let lost_flags = game_set.apply_placement_from_orientations(&action_orientations);
-        let mut alive = Vec::with_capacity(POPULATION_SIZE);
-        let mut dead = Vec::with_capacity(POPULATION_SIZE);
-        let piece_counts_array: Vec<u32> = game_set.piece_counts().to_vec();
-        let piece_counts: Vec<_> = piece_counts_array[0..game_set.len()].to_vec();
-        for (idx, (is_lost, &piece_count)) in lost_flags.iter().zip(&piece_counts).enumerate() {
-            if bool::from(*is_lost) {
-                dead.push(idx);
-            } else {
-                alive.push((idx, piece_count));
-            }
-        }
-        let num_dead = dead.len();
-
-        let iteration_max_pieces = piece_counts.iter().copied().max().unwrap_or(0);
-        max_num_pieces = std::cmp::max(max_num_pieces, iteration_max_pieces);
-
+        // Log to tensorboard
         if let Some(writer) = summary_writer.as_mut() {
-            let histogram: Vec<f64> = piece_counts.iter().map(|&count| count as f64).collect();
-            writer.add_histogram("population/pieces_distribution", &histogram, None, i);
-            writer.add_scalar("population/max_pieces", max_num_pieces as f32, i);
-            writer.add_scalar("population/deaths", num_dead as f32, i);
+            writer.add_scalar("generation/best_fitness", best_fitness as f32, generation);
+            writer.add_scalar("generation/avg_fitness", avg_fitness as f32, generation);
+            writer.add_scalar("generation/num_replaced", num_to_replace as f32, generation);
+            writer.add_scalar("generation/num_survivors", num_survivors as f32, generation);
             writer.add_scalar(
-                "population/avg_entropy",
-                entropy_mean.to_scalar::<f32>()?,
-                i,
+                "generation/steps_this_gen",
+                steps_this_generation as f32,
+                generation,
+            );
+            writer.add_scalar(
+                "generation/steps_per_second",
+                steps_per_second as f32,
+                generation,
+            );
+            writer.add_scalar("generation/total_steps", total_steps as f32, generation);
+            writer.add_scalar(
+                "generation/max_pieces_ever",
+                max_num_pieces as f32,
+                generation,
+            );
+            writer.add_scalar(
+                "generation/avg_entropy",
+                avg_entropy.to_scalar::<f32>()?,
+                generation,
+            );
+
+            // Histogram of fitness values for ready individuals
+            let fitness_values: Vec<f64> = ready_for_eval.iter().map(|(_, f)| *f).collect();
+            writer.add_histogram(
+                "generation/fitness_distribution",
+                &fitness_values,
+                None,
+                generation,
             );
         }
-
-        if num_dead == 0 {
-            continue;
-        }
-        if alive.len() == 0 {
-            // Reset all games since none survived
-            // game_set.apply_mut(|game| game.reset(None));
-            continue;
-        }
-
-        // select new parents
-        let alive_indices = alive
-            .iter()
-            .map(|(idx, _)| *idx as usize)
-            .collect::<Vec<_>>();
-        let weights = alive
-            .iter()
-            .map(|(_, piece_count)| (*piece_count as f64).powf(3.).clamp(0.0, 100_000.0))
-            .collect::<Vec<_>>();
-        let weighted_index = WeightedIndex::new(weights)?;
-        let new_parent_positions = weighted_index
-            .sample_iter(&mut rng)
-            .take(num_dead)
-            .collect::<Vec<_>>();
-        let new_parents = new_parent_positions
-            .iter()
-            .map(|&pos| alive_indices[pos])
-            .collect::<Vec<_>>();
-        // println!("New parents: {:?}", new_parents);
-
-        // Update the gameset so the lost games, move to the bottom and reset
-        {
-            // permute the gameset using the index vector
-            let permute_vec = alive
-                .iter()
-                .map(|(idx, _)| *idx as usize)
-                .chain(new_parents.iter().map(|idx| *idx as usize))
-                .collect::<Vec<_>>();
-            // println!("Permute vec: {:?}", permute_vec);
-            // let _ = gather_permute_in_place(&mut game_set, &mut permute_vec);
-            game_set.permute(&permute_vec);
-
-            // reset the last len(dead) games
-            for i in (POPULATION_SIZE - dead.len())..POPULATION_SIZE {
-                game_set[i].reset(Some(rng.next_u64()));
-            }
-        }
-
-        // Update the population so the dead citizens are replaced by the new parents + mutation
-        {
-            // generate the index vector
-            let mut index_vector = [0u32; POPULATION_SIZE];
-            for (i, (idx, _)) in alive.iter().enumerate() {
-                index_vector[i] = *idx as u32;
-            }
-            for (i, idx) in new_parents.iter().enumerate() {
-                index_vector[alive.len() + i] = *idx as u32;
-            }
-            // println!("Index vector: {:?}", index_vector);
-
-            population.permute_population(&index_vector, dead.len(), Some(NOISE_SCALE))?;
-        }
-
-        // // println!("After update");
-        // let weights = population.weight_sample()?;
-        // for weight_vec in weights {
-        //     let rounded = weight_vec
-        //         .iter()
-        //         .map(|x| (x * 100.0).round() / 100.0)
-        //         .collect::<Vec<_>>();
-        //     println!("{:?}", rounded);
-        // }
-
-        // println!("--------------------------------");
-        // // Wait for user input before continuing
-        // let mut input = String::new();
-        // std::io::stdin().read_line(&mut input)?;
     }
 
     Ok(())

@@ -10,7 +10,7 @@ use tracing::{debug, info};
 
 use crate::{
     checkpointer::Checkpointer,
-    data::{TetrisDatasetGenerator, TetrisTransition},
+    data::TetrisDatasetGenerator,
     grad_accum::{GradientAccumulator, get_l2_norm},
     modules::{
         Conv2dConfig, ConvBlockSpec, ConvEncoder, ConvEncoderConfig, FiLM, FiLMConfig, Mlp,
@@ -134,11 +134,11 @@ pub fn train_game_transition_model(
     let device = Device::new_cuda(0).unwrap();
 
     let model_varmap = VarMap::new();
-    let model_vs = VarBuilder::from_varmap(&model_varmap, DType::F32, &device);
+    let model_vs = VarBuilder::from_varmap(&model_varmap, crate::fdtype(), &device);
 
     let model_cfg = TetrisGameTransitionModelConfig {
         piece_embedding_config: (TetrisPiece::NUM_PIECES, model_dim),
-        orientation_embedding_config: (TetrisPieceOrientation::NUM_ORIENTATIONS, model_dim),
+        orientation_embedding_config: (TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS, model_dim),
         board_encoder_config: ConvEncoderConfig {
             blocks: vec![
                 ConvBlockSpec {
