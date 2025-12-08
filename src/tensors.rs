@@ -2,8 +2,7 @@ use crate::{
     impl_wrapped_tensor,
     ops::{create_orientation_mask, kl_div},
     tetris::{
-        NUM_TETRIS_CELL_STATES, TetrisBoard, TetrisGameSet, TetrisPiece, TetrisPieceOrientation,
-        TetrisPiecePlacement,
+        TetrisBoard, TetrisGameSet, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement,
     },
     wrapped_tensor::{ShapeDim, WrappedTensor},
 };
@@ -67,7 +66,12 @@ impl TetrisBoardsTensor {
     }
 
     pub fn into_dist(&self) -> Result<TetrisBoardsDistTensor> {
-        let dist = one_hot(self.inner().clone(), NUM_TETRIS_CELL_STATES, 1f32, 0f32)?;
+        let dist = one_hot(
+            self.inner().clone(),
+            TetrisBoard::NUM_TETRIS_CELL_STATES,
+            1f32,
+            0f32,
+        )?;
         TetrisBoardsDistTensor::try_from(dist)
     }
 
@@ -409,12 +413,12 @@ impl TetrisPieceOrientationTensor {
         let (batch_size, _) = self.shape_tuple();
         let dist = one_hot(
             self.0.clone(),
-            TetrisPieceOrientation::NUM_ORIENTATIONS,
+            TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
             1f32,
             0f32,
         )?
         .to_dtype(TetrisPieceOrientationDistTensor::expected_dtype())?
-        .reshape(&[batch_size, TetrisPieceOrientation::NUM_ORIENTATIONS])?;
+        .reshape(&[batch_size, TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS])?;
         TetrisPieceOrientationDistTensor::try_from(dist)
     }
 
@@ -445,7 +449,7 @@ impl_wrapped_tensor!(
     dtype = crate::fdtype(),
     shape_spec = (
         ShapeDim::Any,
-        ShapeDim::Dim(TetrisPieceOrientation::NUM_ORIENTATIONS)
+        ShapeDim::Dim(TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS)
     )
 );
 
@@ -521,7 +525,7 @@ impl_wrapped_tensor!(
     dtype = crate::fdtype(),
     shape_spec = (
         ShapeDim::Any,
-        ShapeDim::Dim(TetrisPieceOrientation::NUM_ORIENTATIONS)
+        ShapeDim::Dim(TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS)
     )
 );
 
@@ -542,12 +546,12 @@ impl TetrisPieceOrientationDistTensor {
         let (batch_size, _) = tensor.shape_tuple();
         let dists = one_hot(
             tensor.inner().clone(),
-            TetrisPieceOrientation::NUM_ORIENTATIONS,
+            TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
             1f32,
             0f32,
         )?
         .to_dtype(dtype)?
-        .reshape(&[batch_size, TetrisPieceOrientation::NUM_ORIENTATIONS])?;
+        .reshape(&[batch_size, TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS])?;
         Self::try_from(dists)
     }
 
@@ -855,7 +859,7 @@ mod tests {
     fn test_masked_orientation_sampling() {
         let device = Device::Cpu;
         let dtype = crate::fdtype();
-        let num_orientations = TetrisPieceOrientation::NUM_ORIENTATIONS;
+        let num_orientations = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
 
         // Get all piece types
 
@@ -1075,7 +1079,7 @@ mod tests {
         let device = Device::Cpu;
         let dtype = crate::fdtype();
         let batch_size = 4;
-        let num_orientations = TetrisPieceOrientation::NUM_ORIENTATIONS;
+        let num_orientations = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
 
         // --- Step 1: Create masked logits ---
         // Generate random logits

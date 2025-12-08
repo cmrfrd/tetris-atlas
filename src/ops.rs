@@ -13,7 +13,7 @@ use tracing::instrument;
 /// Create the mask over all orientations for a specific piece.
 /// Each piece has 4 possible rotations (indices 0-3), but only canonical/unique rotations are enabled.
 /// The mask is organized as [piece_index][rotation][column], where rotation*10 + column gives the flat index.
-const PIECE_MASK_LOOKUP: [u8; TetrisPiece::NUM_PIECES * TetrisPieceOrientation::NUM_ORIENTATIONS] = [
+const PIECE_MASK_LOOKUP: [u8; TetrisPiece::NUM_PIECES * TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS] = [
     // O piece (index 0): Only 1 unique rotation
     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 0: width=2 → 9 valid columns (0-8)
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 1: DISABLED (duplicate of rotation 0)
@@ -59,7 +59,7 @@ pub fn create_orientation_mask(pieces: &TetrisPieceTensor) -> Result<Tensor> {
             &PIECE_MASK_LOOKUP,
             (
                 TetrisPiece::NUM_PIECES,
-                TetrisPieceOrientation::NUM_ORIENTATIONS,
+                TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
             ),
             device,
         )?
