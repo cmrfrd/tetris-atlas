@@ -1,7 +1,6 @@
 use proc_macros::{inline_conditioned, piece_u32_cols};
 use rand::distr::{Distribution, StandardUniform};
 use rand::{Rng, RngCore};
-use rayon::prelude::*;
 
 use std::fmt::Display;
 use std::hash::Hash;
@@ -12,17 +11,23 @@ use crate::repeat_idx_generic;
 use crate::utils::fmix64;
 use crate::utils::{HeaplessVec, rshift_slice_from_mask_u32, trailing_zeros_all};
 
-const ROWS: usize = 20;
-const ACTUAL_ROWS: usize = u32::BITS as usize;
-const COLS: usize = 10;
-const BOARD_SIZE: usize = ROWS * COLS;
-const NUM_TETRIS_PIECES: usize = 7;
+mod constants {
+    pub const ROWS: usize = 20;
+    pub const COLS: usize = 10;
 
-pub const NUM_TETRIS_CELL_STATES: usize = 2;
+    pub const MAX_ROTATION: u8 = 4;
 
-/// A rotation is an orientation of a Tetris piece. For
-/// simplicity, we represent a rotation as a u8. There are
-/// 4 maximum possible rotations for each piece.
+    pub type ColType = u32;
+    pub const ACTUAL_ROWS: usize = ColType::BITS as usize;
+
+    pub const BOARD_SIZE: usize = ROWS * COLS;
+    pub const NUM_TETRIS_PIECES: usize = 7;
+
+    pub const NUM_TETRIS_CELL_STATES: usize = 2;
+}
+
+/// A rotation is the rotation of a Tetris piece around its center.
+/// There are 4 maximum possible rotations for each piece.
 ///
 /// ```text
 /// 0 = 0 degrees
@@ -31,7 +36,8 @@ pub const NUM_TETRIS_CELL_STATES: usize = 2;
 /// 3 = 270 degrees
 /// ```
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
-pub struct Rotation(u8);
+#[repr(transparent)]
+pub struct Rotation(pub u8);
 
 impl Display for Rotation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -40,7 +46,7 @@ impl Display for Rotation {
 }
 
 impl Rotation {
-    const MAX: u8 = 4;
+    pub const MAX: u8 = constants::MAX_ROTATION;
 
     /// Get the next rotation by rotating an additional 90 degrees.
     ///
@@ -53,14 +59,11 @@ impl Rotation {
     pub fn next(&mut self) {
         *self = unsafe { std::mem::transmute((self.0.wrapping_add(1)) % Self::MAX) };
     }
-
-    pub fn is_last(&self) -> bool {
-        self.0 == 3
-    }
 }
 
 /// A column index on the Tetris board.
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Ord, PartialOrd, Default)]
+#[repr(transparent)]
 pub struct Column(u8);
 
 impl Display for Column {
@@ -70,7 +73,7 @@ impl Display for Column {
 }
 
 impl Column {
-    pub const MAX: u8 = COLS as u8;
+    pub const MAX: u8 = constants::COLS as u8;
 }
 
 /// A Tetris piece is a tetromino. There are 7 possible tetrominoes,
@@ -98,12 +101,12 @@ impl Default for TetrisPiece {
 
 impl Distribution<TetrisPiece> for StandardUniform {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> TetrisPiece {
-        TetrisPiece::new(rng.random_range(0..NUM_TETRIS_PIECES) as u8)
+        TetrisPiece::new(rng.random_range(0..constants::NUM_TETRIS_PIECES) as u8)
     }
 }
 
 impl TetrisPiece {
-    pub const NUM_PIECES: usize = NUM_TETRIS_PIECES;
+    pub const NUM_PIECES: usize = constants::NUM_TETRIS_PIECES;
 
     pub const O_PIECE: Self = Self(0b0000_0001);
     pub const I_PIECE: Self = Self(0b0000_0010);
@@ -118,7 +121,7 @@ impl TetrisPiece {
 
     /// Get all pieces as a slice.
     #[inline_conditioned(always)]
-    pub const fn all() -> [Self; NUM_TETRIS_PIECES] {
+    pub const fn all() -> [Self; constants::NUM_TETRIS_PIECES] {
         [
             Self::O_PIECE,
             Self::I_PIECE,
@@ -156,21 +159,6 @@ impl TetrisPiece {
     #[inline_conditioned(always)]
     pub const fn from_index(index: u8) -> Self {
         Self::new(index)
-    }
-
-    #[inline_conditioned(always)]
-    pub const fn is_empty(&self) -> bool {
-        self.0 == 0b1000_0000
-    }
-
-    #[inline_conditioned(always)]
-    pub const fn to_empty(&mut self) {
-        *self = unsafe { std::mem::transmute(0b1000_0000u8) };
-    }
-
-    #[inline_conditioned(always)]
-    pub const fn is_last(&self) -> bool {
-        self.0 == 0b0100_0000
     }
 
     /// Calculate the number of rotations for a Tetris piece.
@@ -358,8 +346,11 @@ impl Display for TetrisPiece {
 }
 
 /// A Tetris orientation is a (rotation, column) pair that defines how a piece is positioned on the board.
-/// Each piece type only allows certain orientations.
-/// The following shows which pieces can be placed in each cell, laid out in row-major order:
+/// Each piece only allows certain valid orientations.
+///
+/// Bellow we show all possible (rotation, column) pairs and which pieces can have such an orientation.
+///
+/// Entries in this table are laid out in row-major order:
 /// First row:  [OIS]
 /// Second row: [ZTL]  
 /// Third row:  [J  ]
@@ -405,26 +396,18 @@ impl Display for TetrisPieceOrientation {
 }
 
 impl TetrisPieceOrientation {
-    pub const NUM_ORIENTATIONS: usize = Rotation::MAX as usize * Column::MAX as usize;
+    pub const TOTAL_NUM_ORIENTATIONS: usize = Rotation::MAX as usize * Column::MAX as usize;
 
     pub const DEFAULT: Self = Self {
         rotation: Rotation(0),
         column: Column(0),
     };
 
-    pub const NULL_ORIENTATION: Self = Self {
-        rotation: Rotation(0),
-        column: Column(Column::MAX),
-    };
-
-    pub const ALL: [Self; Self::NUM_ORIENTATIONS] = {
-        let mut orientations = [Self::DEFAULT; Self::NUM_ORIENTATIONS];
+    pub const ALL: [Self; Self::TOTAL_NUM_ORIENTATIONS] = {
+        let mut orientations = [Self::DEFAULT; Self::TOTAL_NUM_ORIENTATIONS];
         let mut i = 0;
         while i < orientations.len() {
-            orientations[i] = Self {
-                rotation: Rotation(i as u8 / Column::MAX),
-                column: Column(i as u8 % Column::MAX),
-            };
+            orientations[i] = Self::from_index(i as u8);
             i += 1;
         }
         orientations
@@ -474,6 +457,10 @@ impl TetrisPieceOrientation {
     /// This is the inverse of [`index`](TetrisPieceOrientation::index).
     #[inline_conditioned(always)]
     pub const fn from_index(index: u8) -> Self {
+        debug_assert!(
+            index < Self::TOTAL_NUM_ORIENTATIONS as u8,
+            "TetrisPieceOrientation::from_index: index out of bounds"
+        );
         Self {
             rotation: Rotation(index / Column::MAX),
             column: Column(index % Column::MAX),
@@ -483,10 +470,10 @@ impl TetrisPieceOrientation {
     /// Get a binary mask of all orientations for a piece.
     ///
     /// This is useful for creating a mask for a piece in a batch.
-    pub fn binary_mask_from_piece(piece: TetrisPiece) -> [u8; Self::NUM_ORIENTATIONS] {
-        let mut mask = [0u8; Self::NUM_ORIENTATIONS];
+    pub fn binary_mask_from_piece(piece: TetrisPiece) -> [u8; Self::TOTAL_NUM_ORIENTATIONS] {
+        let mut mask = [0u8; Self::TOTAL_NUM_ORIENTATIONS];
         for r in 0..piece.num_rotations() {
-            for c in 0..(COLS as u8) - piece.width(Rotation(r)) + 1 {
+            for c in 0..(constants::COLS as u8) - piece.width(Rotation(r)) + 1 {
                 let orientation = Self::new_from_piece(piece, Rotation(r), Column(c));
                 mask[orientation.index() as usize] = 1;
             }
@@ -532,8 +519,8 @@ impl TetrisPiecePlacement {
 
     // Precompute placement counts per piece
     // This is also the number of orientations for each piece
-    const PIECE_PLACEMENT_COUNTS: [usize; NUM_TETRIS_PIECES] = {
-        let mut counts = [0; NUM_TETRIS_PIECES];
+    const PIECE_PLACEMENT_COUNTS: [usize; constants::NUM_TETRIS_PIECES] = {
+        let mut counts = [0; constants::NUM_TETRIS_PIECES];
         let mut i = 0;
         let all_placements = TetrisPiecePlacement::all_placements();
         while i < all_placements.len() {
@@ -546,10 +533,10 @@ impl TetrisPiecePlacement {
     };
 
     // Precompute start indices for each piece in the global array
-    const PIECE_START_INDICES: [usize; NUM_TETRIS_PIECES] = {
-        let mut indices = [0; NUM_TETRIS_PIECES];
+    const PIECE_START_INDICES: [usize; constants::NUM_TETRIS_PIECES] = {
+        let mut indices = [0; constants::NUM_TETRIS_PIECES];
         let mut i = 1;
-        while i < NUM_TETRIS_PIECES {
+        while i < constants::NUM_TETRIS_PIECES {
             indices[i] = indices[i - 1] + TetrisPiecePlacement::PIECE_PLACEMENT_COUNTS[i - 1];
             i += 1;
         }
@@ -591,7 +578,8 @@ impl TetrisPiecePlacement {
             let piece = all_pieces[i];
             let mut r = 0;
             while r < piece.num_rotations() {
-                total_placements += (((COLS as u8) - piece.width(Rotation(r))) + 1) as usize;
+                total_placements +=
+                    (((constants::COLS as u8) - piece.width(Rotation(r))) + 1) as usize;
                 r += 1;
             }
             i += 1;
@@ -613,7 +601,7 @@ impl TetrisPiecePlacement {
             let mut r = 0;
             while r < piece.num_rotations() {
                 let mut c = 0;
-                while c <= (COLS as u8) - piece.width(Rotation(r)) {
+                while c <= (constants::COLS as u8) - piece.width(Rotation(r)) {
                     placements[placement_id] = Self {
                         piece,
                         orientation: TetrisPieceOrientation {
@@ -790,7 +778,7 @@ impl Default for TetrisPieceBag {
 }
 
 impl TetrisPieceBag {
-    pub const SIZE: usize = NUM_TETRIS_PIECES;
+    pub const SIZE: usize = constants::NUM_TETRIS_PIECES;
     pub const FULL_MASK: u8 = 0b0111_1111;
 
     pub fn new() -> Self {
@@ -839,12 +827,6 @@ impl TetrisPieceBag {
         Self(self.0 | (self.is_empty() as u8).wrapping_neg() & Self::FULL_MASK)
     }
 
-    /// Mutably fill the bag if it's empty.
-    #[inline_conditioned(always)]
-    pub const fn mut_fill_if_empty(&mut self) {
-        *self = self.new_fill_if_empty();
-    }
-
     /// Remove a piece from the bag.
     ///
     /// If the piece is not in the bag, this function will return
@@ -876,7 +858,8 @@ impl TetrisPieceBag {
     /// Uses the provided RNG to select a random piece from the remaining pieces.
     #[inline_conditioned(always)]
     pub const fn rand_next(&mut self, rng: &mut TetrisGameRng) -> TetrisPiece {
-        self.mut_fill_if_empty();
+        // mutate the bag to be filled if empty
+        *self = self.new_fill_if_empty();
 
         // select a random "nth" set bit
         // then eliminate all other set bits
@@ -1084,20 +1067,23 @@ mod tetris_piece_data {
 /// check for collisions and manipulate individual columns.
 /// The memory layout has one u32 per column, with bits representing rows from bottom to top.
 #[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Ord, PartialOrd)]
-pub struct TetrisBoard([u32; COLS]);
+pub struct TetrisBoard([u32; constants::COLS]);
 
-pub type TetrisBoardBinarySlice = [u8; BOARD_SIZE];
+pub type TetrisBoardBinarySlice = [u8; constants::BOARD_SIZE];
 
 impl TetrisBoard {
-    pub const SIZE: usize = BOARD_SIZE;
-    pub const WIDTH: usize = COLS;
-    pub const HEIGHT: usize = ROWS;
-    pub const NUM_TETRIS_CELL_STATES: usize = NUM_TETRIS_CELL_STATES;
+    pub const SIZE: usize = constants::BOARD_SIZE;
+    pub const WIDTH: usize = constants::COLS;
+    pub const HEIGHT: usize = constants::ROWS;
+    pub const NUM_TETRIS_CELL_STATES: usize = constants::NUM_TETRIS_CELL_STATES;
 
-    pub const EMPTY_BOARD: Self = Self([0_u32; COLS]);
-    pub const FULL_BOARD: Self = Self([u32::MAX; COLS]);
+    pub const EMPTY_BOARD: Self = Self([0_u32; constants::COLS]);
+    pub const FULL_BOARD: Self = {
+        let mask = (1u32 << constants::ROWS) - 1; // Only fill playable rows (0..ROWS)
+        Self([mask; constants::COLS])
+    };
 
-    pub const fn as_limbs(&self) -> [u32; COLS] {
+    pub const fn as_limbs(&self) -> [u32; constants::COLS] {
         self.0
     }
 }
@@ -1122,7 +1108,7 @@ impl TetrisBoard {
     /// assert_eq!(board.get_bit(0, 0), false); // Empty cell at bottom-left
     /// ```
     #[inline_conditioned(always)]
-    pub fn get_bit(&self, col: usize, row: usize) -> bool {
+    pub const fn get_bit(&self, col: usize, row: usize) -> bool {
         ((self.0[col] >> row) & 1) != 0
     }
 
@@ -1146,6 +1132,27 @@ impl TetrisBoard {
         self.0[col] |= 1 << row;
     }
 
+    /// Clears a bit at the specified column and row position.
+    ///
+    /// # Arguments
+    ///
+    /// * `col` - The column index (0 to COLS-1)
+    /// * `row` - The row index (0 to ROWS-1)
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::TetrisBoard;
+    /// let mut board = TetrisBoard::new();
+    /// board.set_bit(0, 0);
+    /// board.clear_bit(0, 0);
+    /// assert_eq!(board.get_bit(0, 0), false);
+    /// ```
+    #[inline_conditioned(always)]
+    pub fn clear_bit(&mut self, col: usize, row: usize) {
+        self.0[col] &= !(1 << row);
+    }
+
     /// Sets a specified number of random bits in the board.
     ///
     /// # Arguments
@@ -1165,8 +1172,8 @@ impl TetrisBoard {
     pub fn set_random_bits<R: Rng + ?Sized>(&mut self, num_bits: usize, rng: &mut R) {
         for _ in 0..num_bits {
             let rand = rng.random::<u32>();
-            let col = ((rand >> 16) as u16 % COLS as u16) as usize;
-            let row = ((rand & 0xFFFF) % ROWS as u32) as usize;
+            let col = ((rand >> 16) as u16 % constants::COLS as u16) as usize;
+            let row = ((rand & 0xFFFF) % constants::ROWS as u32) as usize;
             self.set_bit(col, row);
         }
     }
@@ -1176,9 +1183,9 @@ impl Display for TetrisBoard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f)?;
         writeln!(f, " {:2}| board", "r")?;
-        for row in (0..ACTUAL_ROWS).rev() {
+        for row in (0..constants::ACTUAL_ROWS).rev() {
             let mut row_str = String::new();
-            for col in 0..COLS {
+            for col in 0..constants::COLS {
                 let bit = self.get_bit(col, row);
                 row_str.push(if bit { '#' } else { '.' });
             }
@@ -1220,21 +1227,21 @@ impl TetrisBoard {
         let mut result: TetrisBoardBinarySlice = [0u8; Self::SIZE];
         repeat_idx_generic!(Self::SIZE / 8, I, {
             const I1: usize = 8 * I;
-            result[I1] = ((self.0[I1 % COLS] >> (I1 / COLS)) & 1) as u8;
+            result[I1] = ((self.0[I1 % constants::COLS] >> (I1 / constants::COLS)) & 1) as u8;
             const I2: usize = 8 * I + 1;
-            result[I2] = ((self.0[I2 % COLS] >> (I2 / COLS)) & 1) as u8;
+            result[I2] = ((self.0[I2 % constants::COLS] >> (I2 / constants::COLS)) & 1) as u8;
             const I3: usize = 8 * I + 2;
-            result[I3] = ((self.0[I3 % COLS] >> (I3 / COLS)) & 1) as u8;
+            result[I3] = ((self.0[I3 % constants::COLS] >> (I3 / constants::COLS)) & 1) as u8;
             const I4: usize = 8 * I + 3;
-            result[I4] = ((self.0[I4 % COLS] >> (I4 / COLS)) & 1) as u8;
+            result[I4] = ((self.0[I4 % constants::COLS] >> (I4 / constants::COLS)) & 1) as u8;
             const I5: usize = 8 * I + 4;
-            result[I5] = ((self.0[I5 % COLS] >> (I5 / COLS)) & 1) as u8;
+            result[I5] = ((self.0[I5 % constants::COLS] >> (I5 / constants::COLS)) & 1) as u8;
             const I6: usize = 8 * I + 5;
-            result[I6] = ((self.0[I6 % COLS] >> (I6 / COLS)) & 1) as u8;
+            result[I6] = ((self.0[I6 % constants::COLS] >> (I6 / constants::COLS)) & 1) as u8;
             const I7: usize = 8 * I + 6;
-            result[I7] = ((self.0[I7 % COLS] >> (I7 / COLS)) & 1) as u8;
+            result[I7] = ((self.0[I7 % constants::COLS] >> (I7 / constants::COLS)) & 1) as u8;
             const I8: usize = 8 * I + 7;
-            result[I8] = ((self.0[I8 % COLS] >> (I8 / COLS)) & 1) as u8;
+            result[I8] = ((self.0[I8 % constants::COLS] >> (I8 / constants::COLS)) & 1) as u8;
         });
         result
     }
@@ -1261,21 +1268,21 @@ impl TetrisBoard {
         let mut result = Self::EMPTY_BOARD;
         repeat_idx_generic!(Self::SIZE / 8, I, {
             const I1: usize = 8 * I;
-            result.0[I1 % COLS] |= (binary[I1] as u32) << (I1 / COLS);
+            result.0[I1 % constants::COLS] |= (binary[I1] as u32) << (I1 / constants::COLS);
             const I2: usize = 8 * I + 1;
-            result.0[I2 % COLS] |= (binary[I2] as u32) << (I2 / COLS);
+            result.0[I2 % constants::COLS] |= (binary[I2] as u32) << (I2 / constants::COLS);
             const I3: usize = 8 * I + 2;
-            result.0[I3 % COLS] |= (binary[I3] as u32) << (I3 / COLS);
+            result.0[I3 % constants::COLS] |= (binary[I3] as u32) << (I3 / constants::COLS);
             const I4: usize = 8 * I + 3;
-            result.0[I4 % COLS] |= (binary[I4] as u32) << (I4 / COLS);
+            result.0[I4 % constants::COLS] |= (binary[I4] as u32) << (I4 / constants::COLS);
             const I5: usize = 8 * I + 4;
-            result.0[I5 % COLS] |= (binary[I5] as u32) << (I5 / COLS);
+            result.0[I5 % constants::COLS] |= (binary[I5] as u32) << (I5 / constants::COLS);
             const I6: usize = 8 * I + 5;
-            result.0[I6 % COLS] |= (binary[I6] as u32) << (I6 / COLS);
+            result.0[I6 % constants::COLS] |= (binary[I6] as u32) << (I6 / constants::COLS);
             const I7: usize = 8 * I + 6;
-            result.0[I7 % COLS] |= (binary[I7] as u32) << (I7 / COLS);
+            result.0[I7 % constants::COLS] |= (binary[I7] as u32) << (I7 / constants::COLS);
             const I8: usize = 8 * I + 7;
-            result.0[I8 % COLS] |= (binary[I8] as u32) << (I8 / COLS);
+            result.0[I8 % constants::COLS] |= (binary[I8] as u32) << (I8 / constants::COLS);
         });
         result
     }
@@ -1295,24 +1302,6 @@ impl TetrisBoard {
         Self::EMPTY_BOARD
     }
 
-    /// Creates a new Tetris board with random filled cells.
-    ///
-    /// # Arguments
-    ///
-    /// * `rng` - Random number generator implementing the `Rng` trait
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use tetris_atlas::tetris::TetrisBoard;
-    /// use rand::thread_rng;
-    /// let mut rng = thread_rng();
-    /// let board = TetrisBoard::new_rand(&mut rng);
-    /// ```
-    pub fn new_rand<R: Rng + ?Sized>(rng: &mut R) -> Self {
-        Self([rng.random::<u32>(); COLS])
-    }
-
     /// Returns the total number of filled cells in the board.
     ///
     /// # Example
@@ -1326,7 +1315,7 @@ impl TetrisBoard {
     #[inline_conditioned(always)]
     pub fn count(&self) -> u32 {
         let mut acc = 0;
-        repeat_idx_generic!(COLS, I, {
+        repeat_idx_generic!(constants::COLS, I, {
             acc += self.0[I].count_ones();
         });
         acc
@@ -1378,10 +1367,48 @@ impl TetrisBoard {
     #[inline_conditioned(always)]
     pub const fn height(&self) -> u32 {
         let mut acc = 0;
-        repeat_idx_generic!(COLS, I, {
+        repeat_idx_generic!(constants::COLS, I, {
             acc |= self.0[I];
         });
         u32::BITS - acc.leading_zeros()
+    }
+
+    /// Returns an array of the heights of each column (number of occupied cells from the bottom up).
+    ///
+    /// Height in Tetris is defined as 0 if the column is empty, otherwise 1 + the highest row index with a set bit.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::TetrisBoard;
+    /// let mut board = TetrisBoard::new();
+    /// board.set_bit(0, 0);
+    /// board.set_bit(1, 5);
+    /// let heights = board.heights();
+    /// assert_eq!(heights[0], 1);
+    /// assert_eq!(heights[1], 6);
+    /// ```
+    #[inline_conditioned(always)]
+    pub const fn heights(&self) -> [u32; constants::COLS] {
+        let mut out = [0u32; constants::COLS];
+        repeat_idx_generic!(constants::COLS, I, {
+            out[I] = u32::BITS - self.0[I].leading_zeros();
+        });
+        out
+    }
+
+    /// Returns the number of holes in the board.
+    ///
+    /// A "hole" is defined as an empty cell (bit not set) that has at least one filled cell above it in the same column.
+    #[inline_conditioned(always)]
+    pub const fn holes(&self) -> [u32; constants::COLS] {
+        let mut out = [0u32; constants::COLS];
+        repeat_idx_generic!(constants::COLS, I, {
+            let height = u32::BITS - self.0[I].leading_zeros();
+            let filled_cells = self.0[I].count_ones();
+            out[I] = height - filled_cells;
+        });
+        out
     }
 
     /// Returns whether the game is lost by checking if any column exceeds the maximum height.
@@ -1401,7 +1428,7 @@ impl TetrisBoard {
     /// ```
     #[inline_conditioned(always)]
     pub const fn is_lost(&self) -> bool {
-        self.height() > ROWS as u32
+        self.height() > constants::ROWS as u32
     }
 
     /// Clears all completely filled rows and shifts remaining rows down.
@@ -1433,10 +1460,10 @@ impl TetrisBoard {
     #[inline_conditioned(always)]
     pub const fn clear_filled_rows(&mut self) -> u32 {
         let mut filled_rows_mask = u32::MAX;
-        repeat_idx_generic!(COLS, I, {
+        repeat_idx_generic!(constants::COLS, I, {
             filled_rows_mask &= self.0[I];
         });
-        rshift_slice_from_mask_u32::<COLS, 4>(&mut self.0, filled_rows_mask);
+        rshift_slice_from_mask_u32::<{ constants::COLS }, 4>(&mut self.0, filled_rows_mask);
         filled_rows_mask.count_ones()
     }
 
@@ -1544,13 +1571,17 @@ impl TetrisBoard {
             (TetrisPiece::J_PIECE, Rotation(3)) => {
                 place_piece_with_consts!(board_cols, tetris_piece_data::J_PIECE_ROT_3)
             }
-            _ => panic!("Invalid piece or rotation"),
+            _ => {
+                debug_assert!(false, "Invalid piece or rotation");
+                unsafe { std::hint::unreachable_unchecked() }
+            }
         };
 
         let lines_cleared = self.clear_filled_rows();
         let is_lost = self.is_lost();
         if is_lost {
-            self.fill();
+            // Mark board as lost by filling beyond playable area
+            *self = Self([u32::MAX; constants::COLS]);
         }
 
         PlacementResult {
@@ -1564,6 +1595,12 @@ impl TetrisBoard {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct IsLost(bool);
+
+impl Display for IsLost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "IsLost({})", self.0)
+    }
+}
 
 impl IsLost {
     pub const LOST: Self = Self(true);
@@ -1609,8 +1646,8 @@ pub struct PlacementResult {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TetrisGame {
     pub board: TetrisBoard,
+    pub current_piece: TetrisPiece,
     bag: TetrisPieceBag,
-    piece_buf: TetrisPiece,
 
     // Include starting seed for reset reproducibility
     seed: u64,
@@ -1627,7 +1664,7 @@ impl Display for TetrisGame {
         writeln!(f, "  bag:")?;
         writeln!(f, "    {}", self.bag)?;
         writeln!(f, "  piece_buf:")?;
-        writeln!(f, "    {}", self.piece_buf)?;
+        writeln!(f, "    {}", self.current_piece)?;
         writeln!(f, "  lines_cleared:")?;
         writeln!(f, "    {}", self.lines_cleared)?;
         writeln!(f, "  board:")?;
@@ -1650,7 +1687,7 @@ impl TetrisGame {
         Self {
             board,
             bag,
-            piece_buf,
+            current_piece: piece_buf,
             seed,
             rng,
             lines_cleared: 0,
@@ -1666,7 +1703,7 @@ impl TetrisGame {
         Self {
             board,
             bag,
-            piece_buf,
+            current_piece: piece_buf,
             seed,
             rng,
             lines_cleared: 0,
@@ -1674,16 +1711,9 @@ impl TetrisGame {
         }
     }
 
-    /// Get the current piece.
-    ///
-    /// This is the piece that is currently in play.
-    pub const fn current_piece(&self) -> TetrisPiece {
-        self.piece_buf
-    }
-
     /// Get the current placements that can be applied to the current piece.
     pub fn current_placements(&self) -> &[TetrisPiecePlacement] {
-        TetrisPiecePlacement::all_from_piece(self.piece_buf)
+        TetrisPiecePlacement::all_from_piece(self.current_piece)
     }
 
     /// Apply a placement to the board.
@@ -1707,9 +1737,37 @@ impl TetrisGame {
             return IsLost::LOST;
         }
         self.lines_cleared += lines_cleared as u32;
-        self.piece_buf = self.bag.rand_next(&mut self.rng);
+        self.current_piece = self.bag.rand_next(&mut self.rng);
         self.piece_count += 1;
         IsLost::NOT_LOST
+    }
+
+    pub fn next_boards(&self) -> Vec<TetrisBoard> {
+        let placements = TetrisPiecePlacement::all_from_piece(self.current_piece);
+        placements
+            .iter()
+            .map(|placement| {
+                let mut board_copy = self.board;
+                board_copy.apply_piece_placement(*placement);
+                board_copy
+            })
+            .collect()
+    }
+
+    /// Peek at the n-th next piece: n = 0 is the current piece, 1 is the next, etc.
+    /// Returns the piece at offset n in the piece stream (without modifying state).
+    pub fn peek_nth_next_piece(&self, n: usize) -> TetrisPiece {
+        if n == 0 {
+            self.current_piece
+        } else {
+            let mut bag_copy = self.bag;
+            let mut rng_copy = self.rng;
+            let mut next_piece = self.current_piece;
+            for _ in 0..n {
+                next_piece = bag_copy.rand_next(&mut rng_copy);
+            }
+            next_piece
+        }
     }
 
     /// Reset the game to a new board, bag, and piece.
@@ -1717,7 +1775,7 @@ impl TetrisGame {
         self.board.clear();
         self.bag.fill();
         self.rng = TetrisGameRng::new(new_seed.unwrap_or_else(|| self.rng.next_u64()));
-        self.piece_buf = self.bag.rand_next(&mut self.rng);
+        self.current_piece = self.bag.rand_next(&mut self.rng);
         self.lines_cleared = 0;
         self.piece_count = 0;
     }
@@ -1727,12 +1785,12 @@ const MAX_GAMES: usize = 1024;
 
 /// A set of Tetris games.
 #[derive(Clone, Copy, Debug)]
-pub struct TetrisGameSet(HeaplessVec<TetrisGame, MAX_GAMES>);
+pub struct TetrisGameSet(pub HeaplessVec<TetrisGame, MAX_GAMES>);
 
 impl TetrisGameSet {
     /// Create a new TetrisGameSet with N default games.
     pub fn new(num_games: usize) -> Self {
-        debug_assert!(
+        assert!(
             num_games <= MAX_GAMES,
             "Too many games. MAX_GAMES = {}",
             MAX_GAMES
@@ -1773,7 +1831,7 @@ impl TetrisGameSet {
     }
 
     pub fn current_pieces(&self) -> HeaplessVec<TetrisPiece, MAX_GAMES> {
-        self.0.map(|game| game.current_piece())
+        self.0.map(|game| game.current_piece)
     }
 
     pub fn piece_counts(&self) -> HeaplessVec<u32, MAX_GAMES> {
@@ -1800,8 +1858,6 @@ impl TetrisGameSet {
         self.0
             .iter_mut()
             .zip(placements)
-            .par_bridge()
-            .into_par_iter()
             .map(|(game, &placement)| game.apply_placement(placement))
             .collect()
     }
@@ -1819,11 +1875,9 @@ impl TetrisGameSet {
         self.0
             .iter_mut()
             .zip(orientations)
-            .par_bridge()
-            .into_par_iter()
             .map(|(game, &orientation)| {
                 game.apply_placement(TetrisPiecePlacement {
-                    piece: game.current_piece(),
+                    piece: game.current_piece,
                     orientation,
                 })
             })
@@ -1835,7 +1889,6 @@ impl TetrisGameSet {
     pub fn reset_lost_games(&mut self) -> usize {
         self.0
             .iter_mut()
-            .par_bridge()
             .map(|game| {
                 if game.board.is_lost() {
                     let next_seed = game.rng.next_u64();
@@ -1846,6 +1899,10 @@ impl TetrisGameSet {
                 }
             })
             .sum()
+    }
+
+    pub fn reset_all(&mut self) {
+        self.0.iter_mut().for_each(|game| game.reset(None));
     }
 
     /// Permute the gameset using the provided permutation vector.
@@ -1882,29 +1939,61 @@ impl IndexMut<usize> for TetrisGameSet {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use rand::seq::IteratorRandom;
     use std::collections::HashSet;
 
-    use proc_macros::piece_u32_cols;
-    use rand::seq::IteratorRandom;
-
-    use crate::{repeat_exact_idx, repeat_idx_generic};
-
-    use super::*;
-
+    /// Test board cell counting: empty, full, and each position
     #[test]
     fn test_board_count() {
+        // Test empty board
         let mut board = TetrisBoard::new();
-        let mut count = 0;
-        for row in 0..ROWS {
-            for col in 0..COLS {
-                board.set_bit(col, row);
-                count += 1;
+        assert_eq!(board.count(), 0);
 
-                let board_count = board.count();
+        // Test full board (only playable area)
+        board.fill();
+        assert_eq!(board.count(), (constants::ROWS * constants::COLS) as u32);
+
+        // clear and check zero
+        board.clear();
+        assert_eq!(board.count(), 0);
+
+        // Test each position individually counting along the way
+        for row in 0..constants::ROWS {
+            for col in 0..constants::COLS {
+                let expected_count = (row * constants::COLS + col + 1) as u32;
+                board.set_bit(col, row);
                 assert_eq!(
-                    count, board_count,
-                    "Count should be {}, not {}\n{}",
-                    count, board_count, board
+                    board.count(),
+                    expected_count,
+                    "Count mismatch at col={}, row={}: expected {}, got {}",
+                    col,
+                    row,
+                    expected_count,
+                    board.count()
+                );
+            }
+        }
+    }
+
+    // For each cell in the board, set a single bit and assert the height
+    #[test]
+    fn test_height() {
+        let mut board = TetrisBoard::new();
+        assert_eq!(board.height(), 0);
+        for row in 0..constants::ROWS {
+            for col in 0..constants::COLS {
+                board.clear();
+                board.set_bit(col, row);
+                let expected_height = (row + 1) as u32;
+                assert_eq!(
+                    board.height(),
+                    expected_height,
+                    "Failed at col={}, row={}: expected height {}, got {}",
+                    col,
+                    row,
+                    expected_height,
+                    board.height()
                 );
             }
         }
@@ -1913,15 +2002,35 @@ mod tests {
     #[test]
     fn test_set_and_get_bit() {
         let mut board = TetrisBoard::new();
-        board.set_bit(0, 0);
-        assert!(board.get_bit(0, 0));
-        assert!(!board.get_bit(1, 0));
-        assert!(!board.get_bit(0, 1));
+
+        // Set every bit, assert it's set, and others are not
+        for row in 0..constants::ROWS {
+            for col in 0..constants::COLS {
+                board.set_bit(col, row);
+                assert!(
+                    board.get_bit(col, row),
+                    "Bit at (col {}, row {}) should be set",
+                    col,
+                    row
+                );
+            }
+        }
+        // Now unset them one by one and check they're unset
+        for row in 0..constants::ROWS {
+            for col in 0..constants::COLS {
+                board.clear_bit(col, row);
+                assert!(
+                    !board.get_bit(col, row),
+                    "Bit at (col {}, row {}) should be unset",
+                    col,
+                    row
+                );
+            }
+        }
     }
 
     #[test]
     fn test_drop_piece() {
-        // simple case
         let mut board = TetrisBoard::new();
         board.apply_piece_placement(TetrisPiecePlacement {
             piece: TetrisPiece::new(0),
@@ -1938,9 +2047,9 @@ mod tests {
 
         // fuzz test
         for _ in 0..10_000 {
-            let piece = TetrisPiece::new(rand::random::<u8>() % 7);
-            let rotation = Rotation(rand::random::<u8>() % 4);
-            let col = (rand::random::<u8>()) % ((COLS as u8) - piece.width(rotation));
+            let piece = TetrisPiece::new(rand::random::<u8>() % (TetrisPiece::NUM_PIECES as u8));
+            let rotation = Rotation(rand::random::<u8>() % Rotation::MAX);
+            let col = (rand::random::<u8>()) % ((constants::COLS as u8) - piece.width(rotation));
             TetrisBoard::new().apply_piece_placement(TetrisPiecePlacement {
                 piece,
                 orientation: TetrisPieceOrientation {
@@ -1953,19 +2062,23 @@ mod tests {
 
     #[test]
     fn test_piece_rotations() {
-        fn rotations_reference_slow(i: u8) -> u8 {
-            match i {
-                0b0000_0001 => 1,
-                0b0000_0010 | 0b0000_0100 | 0b0000_1000 => 2,
-                0b0001_0000 | 0b0010_0000 | 0b0100_0000 => 4,
+        fn rotations_reference_slow(piece: TetrisPiece) -> u8 {
+            match piece {
+                TetrisPiece::O_PIECE => 1,
+                TetrisPiece::I_PIECE => 2,
+                TetrisPiece::S_PIECE => 2,
+                TetrisPiece::Z_PIECE => 2,
+                TetrisPiece::T_PIECE => 4,
+                TetrisPiece::L_PIECE => 4,
+                TetrisPiece::J_PIECE => 4,
                 _ => panic!("Invalid piece"),
             }
         }
-        for i in 0..7 {
+        for i in 0..(TetrisPiece::NUM_PIECES as u8) {
             let piece = TetrisPiece::new(i);
             assert_eq!(
                 piece.num_rotations(),
-                rotations_reference_slow(piece.0),
+                rotations_reference_slow(piece),
                 "Piece: {}, Rotations: {}",
                 piece,
                 piece.num_rotations()
@@ -2002,8 +2115,8 @@ mod tests {
             }
         }
 
-        for i in 0..7 {
-            for r in 0..4 {
+        for i in 0..(TetrisPiece::NUM_PIECES as u8) {
+            for r in 0..Rotation::MAX {
                 let width = TetrisPiece::new(i).width(Rotation(r));
                 let height = TetrisPiece::new(i).height(Rotation(r));
                 let reference = dimensions_reference_slow(i, r);
@@ -2029,66 +2142,84 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_clear() {
-        let mut board = TetrisBoard::new();
-        board.set_bit(0, 0);
-        board.set_bit(9, 19);
-        assert!(board.get_bit(0, 0));
-        assert!(board.get_bit(9, 19));
-
-        board.clear();
-        assert!(!board.get_bit(0, 0));
-        assert!(!board.get_bit(9, 19));
-
-        // small fuzz test
-        board.set_random_bits(100, &mut rand::rng());
-        assert!(board.count() > 0);
-        board.clear();
-        assert!(board.count() == 0);
-    }
-
-    #[test]
-    fn test_height() {
-        let mut board = TetrisBoard::new();
-        assert_eq!(board.height(), 0);
-
-        // Test each row
-        for row in 0..ROWS {
-            // Test each column in this row
-            for col in 0..COLS {
-                board.clear();
-                board.set_bit(col, row);
-                assert_eq!(
-                    board.height(),
-                    row as u32 + 1,
-                    "Height should be {} when bit set at col {}, row {}",
-                    row + 1,
-                    col,
-                    row
-                );
-            }
-        }
-    }
-
+    /// Test clearing 1, 2, 3, and 4 filled rows at all possible positions
+    /// Summary: This test covers:
+    /// - 1 row:  C(20,1) = 20 combinations
+    /// - 2 rows: C(20,2) = 190 combinations
+    /// - 3 rows: C(20,3) = 1140 combinations
+    /// - 4 rows: C(20,4) = 4845 combinations
+    /// Total: 6195 test cases
     #[test]
     fn test_clear_filled_rows() {
         let mut board = TetrisBoard::new();
-        assert!(board.count() == 0);
 
-        // Test clearing each row
-        for row in 0..ROWS {
-            // Fill entire row
-            for col in 0..COLS {
-                board.set_bit(col, row);
+        // Helper to generate all combinations of size k from 0..ROWS
+        fn combinations(n: usize, k: usize) -> Vec<Vec<usize>> {
+            let mut result = Vec::new();
+            let mut current = Vec::new();
+
+            fn backtrack(
+                start: usize,
+                n: usize,
+                k: usize,
+                current: &mut Vec<usize>,
+                result: &mut Vec<Vec<usize>>,
+            ) {
+                if current.len() == k {
+                    result.push(current.clone());
+                    return;
+                }
+
+                for i in start..n {
+                    current.push(i);
+                    backtrack(i + 1, n, k, current, result);
+                    current.pop();
+                }
             }
-            assert!(board.count() == COLS as u32);
-            board.clear_filled_rows();
-            assert!(
-                board.count() == 0,
-                "count should be 0, not {}",
-                board.count()
-            );
+
+            backtrack(0, n, k, &mut current, &mut result);
+            result
+        }
+
+        // Helper to fill specific rows
+        let fill_rows = |board: &mut TetrisBoard, rows: &[usize]| {
+            board.clear();
+            for &row in rows {
+                for col in 0..constants::COLS {
+                    board.set_bit(col, row);
+                }
+            }
+        };
+
+        // Test all combinations for 1, 2, 3, and 4 filled rows
+        for num_rows in 1..=4 {
+            let all_combinations = combinations(constants::ROWS, num_rows);
+
+            for (idx, rows) in all_combinations.iter().enumerate() {
+                fill_rows(&mut board, rows);
+
+                let cleared = board.clear_filled_rows();
+                assert_eq!(
+                    cleared,
+                    num_rows as u32,
+                    "Failed to clear {} rows at positions {:?} (combination {}/{})",
+                    num_rows,
+                    rows,
+                    idx + 1,
+                    all_combinations.len()
+                );
+
+                assert_eq!(
+                    board.count(),
+                    0,
+                    "Board should be empty after clearing {} rows at {:?}, but has {} cells filled (combination {}/{})",
+                    num_rows,
+                    rows,
+                    board.count(),
+                    idx + 1,
+                    all_combinations.len()
+                );
+            }
         }
     }
 
@@ -2098,7 +2229,7 @@ mod tests {
         assert!(!Into::<bool>::into(board.is_lost()));
 
         // Set a bit in the top 4 rows
-        board.set_bit(0, ROWS + 1);
+        board.set_bit(0, constants::ROWS + 1);
         assert!(Into::<bool>::into(board.is_lost()));
         board.clear();
         assert!(!Into::<bool>::into(board.is_lost()));
@@ -2108,166 +2239,69 @@ mod tests {
         assert!(!Into::<bool>::into(board.is_lost()));
     }
 
+    /// Test bag mechanics: remove, auto-refill, and next_bags iterator
     #[test]
     fn test_bag() {
-        // take individually from the bag
-        let mut bag = TetrisPieceBag::new();
-        bag.remove(TetrisPiece::new(0));
-        assert_eq!(bag.count(), 6);
-        assert!(!bag.contains(TetrisPiece::new(0)));
-        bag.remove(TetrisPiece::new(1));
-        assert_eq!(bag.count(), 5);
-        assert!(!bag.contains(TetrisPiece::new(1)));
-        bag.remove(TetrisPiece::new(2));
-        assert_eq!(bag.count(), 4);
-        assert!(!bag.contains(TetrisPiece::new(2)));
-        bag.remove(TetrisPiece::new(3));
-        assert_eq!(bag.count(), 3);
-        assert!(!bag.contains(TetrisPiece::new(3)));
-        bag.remove(TetrisPiece::new(4));
-        assert_eq!(bag.count(), 2);
-        assert!(!bag.contains(TetrisPiece::new(4)));
-        bag.remove(TetrisPiece::new(5));
-        assert_eq!(bag.count(), 1);
-        assert!(!bag.contains(TetrisPiece::new(5)));
-        bag.remove(TetrisPiece::new(6));
-        assert_eq!(bag.count(), 0);
-        assert!(!bag.contains(TetrisPiece::new(6)));
-
-        // take 6 pieces and check that the bag has reset
         let mut bag = TetrisPieceBag::new();
         assert_eq!(bag.count(), 7);
-        let mut next_bags = bag.next_bags().collect::<Vec<_>>();
+
+        // Remove all pieces one by one
+        for i in 0..7 {
+            bag.remove(TetrisPiece::new(i));
+            assert_eq!(bag.count(), 6 - i);
+            assert!(!bag.contains(TetrisPiece::new(i)));
+        }
+        assert!(bag.is_empty());
+
+        // Test auto-refill
+        let refilled = bag.new_fill_if_empty();
+        assert_eq!(refilled.count(), 7);
+
+        // Test next_bags iterator produces correct transitions
+        let bag = TetrisPieceBag::new();
+        let next_bags: Vec<_> = bag.next_bags().collect();
         assert_eq!(next_bags.len(), 7);
-        next_bags
-            .iter()
-            .for_each(|(bag, _)| assert_eq!(bag.count(), 6));
 
-        bag = next_bags[0].0;
-        assert_eq!(bag.count(), 6);
-        assert!(!bag.contains(next_bags[0].1));
-        next_bags = bag.next_bags().collect::<Vec<_>>();
-        assert_eq!(next_bags.len(), 6);
-        next_bags
-            .iter()
-            .for_each(|(bag, _)| assert_eq!(bag.count(), 5));
-
-        bag = next_bags[0].0;
-        assert_eq!(bag.count(), 5);
-        assert!(!bag.contains(next_bags[0].1));
-        next_bags = bag.next_bags().collect::<Vec<_>>();
-        assert_eq!(next_bags.len(), 5);
-        next_bags
-            .iter()
-            .for_each(|(bag, _)| assert_eq!(bag.count(), 4));
-
-        bag = next_bags[0].0;
-        assert_eq!(bag.count(), 4);
-        assert!(!bag.contains(next_bags[0].1));
-        next_bags = bag.next_bags().collect::<Vec<_>>();
-        assert_eq!(next_bags.len(), 4);
-        next_bags
-            .iter()
-            .for_each(|(bag, _)| assert_eq!(bag.count(), 3));
-
-        bag = next_bags[0].0;
-        assert_eq!(bag.count(), 3);
-        assert!(!bag.contains(next_bags[0].1));
-        next_bags = bag.next_bags().collect::<Vec<_>>();
-        assert_eq!(next_bags.len(), 3);
-        next_bags
-            .iter()
-            .for_each(|(bag, _)| assert_eq!(bag.count(), 2));
-
-        bag = next_bags[0].0;
-        assert_eq!(bag.count(), 2);
-        assert!(!bag.contains(next_bags[0].1));
-        next_bags = bag.next_bags().collect::<Vec<_>>();
-        assert_eq!(next_bags.len(), 2);
-        next_bags
-            .iter()
-            .for_each(|(bag, _)| assert_eq!(bag.count(), 1));
-
-        bag = next_bags[0].0;
-        assert_eq!(bag.count(), 1);
-        assert!(!bag.contains(next_bags[0].1));
-        next_bags = bag.next_bags().collect::<Vec<_>>();
-        assert_eq!(next_bags.len(), 1);
-        next_bags
-            .iter()
-            .for_each(|(bag, _)| assert_eq!(bag.count(), 7));
-
-        bag = next_bags[0].0;
-        assert_eq!(bag.count(), 7);
-        // assert_eq!(bag.contains(next_bags[0].1), false); // don't include
-        next_bags = bag.next_bags().collect::<Vec<_>>();
-        assert_eq!(next_bags.len(), 7);
-        next_bags
-            .iter()
-            .for_each(|(bag, _)| assert_eq!(bag.count(), 6));
-
-        // fuzz test sampling a bunch from the bag
-        let num_bags = 10_000;
-        let mut all_collected_pieces = Vec::new();
-        let mut bag = TetrisPieceBag::new();
-        let mut rng = rand::rng();
-        for _ in 0..(num_bags * NUM_TETRIS_PIECES) {
-            let (next_bag, piece) = bag.next_bags().choose(&mut rng).unwrap();
-            bag = next_bag;
-            all_collected_pieces.push(piece);
+        // Each next bag should have 6 pieces
+        for (next_bag, removed_piece) in &next_bags {
+            assert_eq!(next_bag.count(), 6);
+            assert!(!next_bag.contains(*removed_piece));
         }
 
-        // check that all pieces of the correct are present
-        assert_eq!(all_collected_pieces.len(), num_bags * NUM_TETRIS_PIECES);
+        // Test that empty bag auto-refills via next_bags
+        let empty_bag = TetrisPieceBag(0);
+        assert!(empty_bag.is_empty());
+        let next_bags: Vec<_> = empty_bag.next_bags().collect();
         assert_eq!(
-            all_collected_pieces
-                .iter()
-                .filter(|piece| **piece == TetrisPiece::new(0))
-                .count(),
-            num_bags
+            next_bags.len(),
+            7,
+            "Empty bag should auto-refill to 7 pieces"
         );
-        assert_eq!(
-            all_collected_pieces
-                .iter()
-                .filter(|piece| **piece == TetrisPiece::new(1))
-                .count(),
-            num_bags
-        );
-        assert_eq!(
-            all_collected_pieces
-                .iter()
-                .filter(|piece| **piece == TetrisPiece::new(2))
-                .count(),
-            num_bags
-        );
-        assert_eq!(
-            all_collected_pieces
-                .iter()
-                .filter(|piece| **piece == TetrisPiece::new(3))
-                .count(),
-            num_bags
-        );
-        assert_eq!(
-            all_collected_pieces
-                .iter()
-                .filter(|piece| **piece == TetrisPiece::new(4))
-                .count(),
-            num_bags
-        );
-        assert_eq!(
-            all_collected_pieces
-                .iter()
-                .filter(|piece| **piece == TetrisPiece::new(5))
-                .count(),
-            num_bags
-        );
-        assert_eq!(
-            all_collected_pieces
-                .iter()
-                .filter(|piece| **piece == TetrisPiece::new(6))
-                .count(),
-            num_bags
-        );
+        // Each resulting bag should have 6 pieces (refilled then one removed)
+        for (next_bag, _) in &next_bags {
+            assert_eq!(next_bag.count(), 6);
+        }
+
+        // Test distribution over many bags (ensures fairness)
+        let num_bags = 10_000;
+        let mut piece_counts = [0; 7];
+        let mut bag = TetrisPieceBag::new();
+        let mut rng = rand::rng();
+
+        for _ in 0..(num_bags * 7) {
+            let (next_bag, piece) = bag.next_bags().choose(&mut rng).unwrap();
+            bag = next_bag;
+            piece_counts[piece.index() as usize] += 1;
+        }
+
+        // Each piece should appear exactly num_bags times
+        for (i, &count) in piece_counts.iter().enumerate() {
+            assert_eq!(
+                count, num_bags,
+                "Piece {} appeared {} times instead of {}",
+                i, count, num_bags
+            );
+        }
     }
 
     #[test]
@@ -2277,12 +2311,16 @@ mod tests {
         let mut bag = TetrisPieceBag::new();
         let mut pieces = std::collections::HashSet::new();
 
-        for _ in 0..7 {
+        for _ in 0..(constants::NUM_TETRIS_PIECES as usize) {
             let piece = bag.rand_next(&mut tetris_rng);
             assert!(!bag.contains(piece), "Piece {} should not be in bag", piece);
             pieces.insert(piece);
         }
-        assert_eq!(pieces.len(), 7, "Should get 7 unique pieces");
+        assert_eq!(
+            pieces.len(),
+            constants::NUM_TETRIS_PIECES as usize,
+            "Should get 7 unique pieces"
+        );
 
         // Helper function to perform KS test on a sequence of samples
         fn assert_ks_test(samples: &[f32], num_categories: usize, sample_size: usize) {
@@ -2351,7 +2389,7 @@ mod tests {
         let board = TetrisBoard::new();
 
         let binary_slice = board.to_binary_slice();
-        assert_eq!(binary_slice.len(), BOARD_SIZE);
+        assert_eq!(binary_slice.len(), constants::BOARD_SIZE);
 
         let board2 = TetrisBoard::from_binary_slice(binary_slice);
         assert_eq!(board, board2);
@@ -2367,83 +2405,72 @@ mod tests {
         }
     }
 
+    /// Test placement index bijection: index <-> placement
     #[test]
     fn test_piece_placement_index() {
-        // check that mapping all placement to indices is injective
-        let mut index_set = HashSet::new();
-        for placement in TetrisPiecePlacement::ALL_PLACEMENTS {
-            let index = placement.index();
-            assert!(!index_set.contains(&index));
-            index_set.insert(index);
-        }
-        assert_eq!(index_set.len(), TetrisPiecePlacement::NUM_PLACEMENTS);
-
-        // test to index and from index is bijective
         for placement in TetrisPiecePlacement::ALL_PLACEMENTS {
             let index = placement.index();
             let placement2 = TetrisPiecePlacement::from_index(index);
-            assert_eq!(placement, placement2);
+            assert_eq!(
+                placement, placement2,
+                "Bijection failed for placement {:?}",
+                placement
+            );
         }
     }
 
+    /// Test basic game flow: create, apply placement, piece changes
     #[test]
-    fn test_tetris_piece_orientation() {
-        let mut set = HashSet::new();
-        for orientation in TetrisPieceOrientation::ALL {
-            let index = orientation.index();
-            let orientation2 = TetrisPieceOrientation::from_index(index);
-            assert_eq!(orientation, orientation2);
+    fn test_tetris_game_basic() {
+        let mut game = TetrisGame::new_with_seed(42);
+        let initial_piece = game.current_piece;
 
-            assert!(!set.contains(&index));
-            set.insert(index);
-        }
-        assert_eq!(set.len(), TetrisPieceOrientation::NUM_ORIENTATIONS);
+        let placements = game.current_placements();
+        assert!(!placements.is_empty(), "Game should have valid placements");
 
-        // test that all orientations are present
-        for orientation in TetrisPieceOrientation::ALL {
-            let index = orientation.index();
-            assert!(set.contains(&index));
+        let is_lost = game.apply_placement(placements[0]);
+        assert!(
+            !Into::<bool>::into(is_lost),
+            "Game should not be lost after first move"
+        );
+        assert_ne!(
+            game.current_piece, initial_piece,
+            "Piece should change after placement"
+        );
+        assert_eq!(game.piece_count, 1, "Piece count should be 1");
+
+        // Play a few more moves to ensure game progresses
+        for i in 1..10 {
+            let placements = game.current_placements();
+            assert!(!placements.is_empty());
+            let is_lost = game.apply_placement(placements[0]);
+            if Into::<bool>::into(is_lost) {
+                break;
+            }
+            assert_eq!(game.piece_count, i + 1);
         }
     }
 
+    /// Test that placing pieces to exceed height triggers loss
     #[test]
-    fn test_tetris_board_raw2() {
-        let mut board = TetrisBoard::new();
-        board.apply_piece_placement(TetrisPiecePlacement {
-            piece: TetrisPiece::J_PIECE,
-            orientation: TetrisPieceOrientation {
-                rotation: Rotation(0),
-                column: Column(0),
-            },
-        });
-        board.apply_piece_placement(TetrisPiecePlacement {
-            piece: TetrisPiece::new(0),
-            orientation: TetrisPieceOrientation {
-                rotation: Rotation(0),
-                column: Column(3),
-            },
-        });
-        board.apply_piece_placement(TetrisPiecePlacement {
-            piece: TetrisPiece::new(0),
-            orientation: TetrisPieceOrientation {
-                rotation: Rotation(0),
-                column: Column(5),
-            },
-        });
-        board.apply_piece_placement(TetrisPiecePlacement {
-            piece: TetrisPiece::new(0),
-            orientation: TetrisPieceOrientation {
-                rotation: Rotation(0),
-                column: Column(7),
-            },
-        });
-        board.apply_piece_placement(TetrisPiecePlacement {
-            piece: TetrisPiece::L_PIECE,
-            orientation: TetrisPieceOrientation {
-                rotation: Rotation(3),
-                column: Column(8),
-            },
-        });
-        board.clear_filled_rows();
+    fn test_game_loss_from_placement() {
+        let mut game = TetrisGame::new_with_seed(42);
+
+        // Stack pieces until loss (always place in same column)
+        for _ in 0..100 {
+            let placements = game.current_placements();
+            // Always place in column 0 to guarantee stacking
+            let placement = placements
+                .iter()
+                .find(|p| p.orientation.column.0 == 0)
+                .unwrap_or(&placements[0]);
+
+            let is_lost = game.apply_placement(*placement);
+            if Into::<bool>::into(is_lost) {
+                assert!(game.board.is_lost(), "Board should be in lost state");
+                return;
+            }
+        }
+        panic!("Game should have been lost after 100 pieces in same column");
     }
 }
