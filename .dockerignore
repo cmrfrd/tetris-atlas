@@ -29,6 +29,7 @@ doc/
 
 # IDE and editor files
 .vscode/
+.devcontainer/
 .idea/
 *.swp
 *.swo
