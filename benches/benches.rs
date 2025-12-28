@@ -4,12 +4,13 @@
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use pprof::criterion::{Output, PProfProfiler};
-use tetris_atlas::benches::tetris_game;
+use tetris_atlas::benches::all_benches;
 
 criterion_group! {
     name = benches_prof;
-    config = Criterion::default().with_profiler(PProfProfiler::new(1_000, Output::Flamegraph(None)));
-    targets = tetris_game
+    config = Criterion::default()
+        .with_profiler(PProfProfiler::new(1_000, Output::Flamegraph(None)));
+    targets = all_benches
 }
 
 criterion_main!(benches_prof);
