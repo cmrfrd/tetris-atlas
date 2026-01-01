@@ -79,7 +79,7 @@ impl TetrisDatasetGenerator {
         let mut gameset = self.gen_uniform_sampled_gameset(num_piece_range, batch_size, rng)?;
 
         // Now we generate a transition
-        let current_board = TetrisBoardsTensor::from_gameset(gameset, device)?;
+        let current_board = TetrisBoardsTensor::from_gameset(&gameset, device)?;
         let (placement, orientation, piece) = {
             let placements = gameset
                 .current_placements()
@@ -103,7 +103,7 @@ impl TetrisDatasetGenerator {
                 pieces,
             )
         };
-        let result_board = TetrisBoardsTensor::from_gameset(gameset, device)?;
+        let result_board = TetrisBoardsTensor::from_gameset(&gameset, device)?;
         Ok(TetrisTransition {
             current_gameset: gameset,
             current_board,
@@ -133,7 +133,7 @@ impl TetrisDatasetGenerator {
         let mut pieces: Vec<Vec<TetrisPiece>> = Vec::new();
 
         for _ in 0..sequence_length {
-            let current_board = TetrisBoardsTensor::from_gameset(gameset, device)?;
+            let current_board = TetrisBoardsTensor::from_gameset(&gameset, device)?;
             current_boards.push(current_board);
 
             let (placement, orientation) = {
@@ -159,7 +159,7 @@ impl TetrisDatasetGenerator {
             placements.push(placement);
             orientations.push(orientation);
 
-            let result_board = TetrisBoardsTensor::from_gameset(gameset, device)?;
+            let result_board = TetrisBoardsTensor::from_gameset(&gameset, device)?;
             result_boards.push(result_board);
         }
 
