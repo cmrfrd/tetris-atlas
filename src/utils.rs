@@ -4,36 +4,9 @@ use std::cell::UnsafeCell;
 use std::fmt::Debug;
 use std::hint::spin_loop;
 use std::ops::{Deref, DerefMut};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 
 use proc_macros::inline_conditioned;
-
-/// Applies the MurmurHash3 64-bit finalization mixer to a value.
-///
-/// # Arguments
-///
-/// * `x` - The 64-bit value to mix
-///
-/// # Returns
-///
-/// The mixed 64-bit value with improved bit distribution
-///
-/// # Example
-///
-/// ```
-/// use tetris_atlas::utils::fmix64;
-/// let mut x = 12345u64;
-/// fmix64(&mut x);
-/// assert_eq!(x, 1716623506685013753u64); // known pre-image
-/// ```
-#[inline_conditioned(always)]
-pub const fn fmix64(x: &mut u64) {
-    *x ^= *x >> 33;
-    *x = x.wrapping_mul(0xff51afd7ed558ccd);
-    *x ^= *x >> 33;
-    *x = x.wrapping_mul(0xc4ceb9fe1a85ec53);
-    *x ^= *x >> 33;
-}
 
 /// Converts an array of 8 bit values (0 or 1) into a single byte.
 ///
@@ -53,21 +26,83 @@ pub const fn fmix64(x: &mut u64) {
 ///
 /// ```
 /// use tetris_atlas::utils::bits_to_byte;
-/// let bits = [1, 0, 1, 0, 1, 0, 1, 0];
+/// let bits = [1_u8, 0, 1, 0, 1, 0, 1, 0];
 /// assert_eq!(bits_to_byte(&bits), 0b10101010);
 /// ```
 #[inline_conditioned(always)]
-pub const fn bits_to_byte(bits: &[u8; 8]) -> u8 {
-    let packed = u64::from_le_bytes(*bits);
+pub const fn bits_to_byte(bits: &[u8; u8::BITS as usize]) -> u8 {
+    let x = u64::from_le_bytes(*bits) & 0x0101_0101_0101_0101;
+    ((x.wrapping_mul(0x8040_2010_0804_0201)) >> 56) as u8
+}
 
-    (((packed) & 1) << 7
-        | ((packed >> 8) & 1) << 6
-        | ((packed >> 16) & 1) << 5
-        | ((packed >> 24) & 1) << 4
-        | ((packed >> 32) & 1) << 3
-        | ((packed >> 40) & 1) << 2
-        | ((packed >> 48) & 1) << 1
-        | ((packed >> 56) & 1)) as u8
+/// Expands a packed byte into 8 one-bit lanes (`0`/`1`), MSB-first.
+///
+/// The returned array is ordered such that:
+/// - `bits[0]` is the most-significant bit (bit 7) of `byte`
+/// - `bits[7]` is the least-significant bit (bit 0) of `byte`
+///
+/// This is the inverse of [`bits_to_byte`] (and matches the bit ordering it expects).
+///
+/// ## Example
+///
+/// ```
+/// use tetris_atlas::utils::{bits_to_byte, byte_to_bits};
+/// let byte = 0b1010_1010u8;
+/// let bits = byte_to_bits(byte);
+/// assert_eq!(bits, [1, 0, 1, 0, 1, 0, 1, 0]);
+/// assert_eq!(bits_to_byte(&bits), byte);
+/// ```
+#[inline_conditioned(always)]
+pub const fn byte_to_bits(byte: u8) -> [u8; u8::BITS as usize] {
+    let mut x = (byte as u64) & 0xFF;
+    x = (x | (x << 28)) & 0x0000_000F_0000_000F;
+    x = (x | (x << 14)) & 0x0003_0003_0003_0003;
+    x = (x | (x << 7)) & 0x0101_0101_0101_0101;
+    x.to_be_bytes()
+}
+
+const _: () = {
+    const fn verify_all_u8() -> bool {
+        let mut i: u16 = 0;
+        while i < 256 {
+            let b = i as u8;
+            let bits = byte_to_bits(b);
+            if bits_to_byte(&bits) != b {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+
+    let _ = [()][(!verify_all_u8()) as usize];
+};
+
+pub struct BitMask<const N: usize>(u64);
+
+impl<const N: usize> BitMask<N>
+where
+    [(); N - 1]:,
+    [(); 64 - N]:,
+{
+    #[inline_conditioned(always)]
+    pub const fn new_from_u64(x: u64) -> Self {
+        Self(x)
+    }
+
+    #[inline_conditioned(always)]
+    pub const fn inner(&self) -> u64 {
+        self.0
+    }
+
+    #[inline_conditioned(always)]
+    pub const fn as_slice(&self) -> [u8; N] {
+        let mut out = [0u8; N];
+        crate::repeat_idx_generic!(N, I, {
+            out[I] = ((self.0 >> I) & 1) as u8;
+        });
+        out
+    }
 }
 
 /// A spin lock for shared-mutual exclusion.
@@ -86,7 +121,7 @@ pub struct SpinLockGuard<'a, T> {
 
 impl<'a, T> Drop for SpinLockGuard<'a, T> {
     fn drop(&mut self) {
-        self.lock.store(false, Ordering::Release);
+        self.lock.store(false, AtomicOrdering::Release);
     }
 }
 
@@ -116,7 +151,7 @@ impl<T: Debug> SpinLock<T> {
     ///
     /// A guard that provides mutable access to the protected data
     pub fn lock(&self) -> SpinLockGuard<'_, T> {
-        while self.lock.swap(true, Ordering::Acquire) {
+        while self.lock.swap(true, AtomicOrdering::Acquire) {
             spin_loop();
         }
         let data = unsafe { &mut *self.data.get() };
@@ -137,7 +172,12 @@ impl<T: Debug> SpinLock<T> {
     pub fn try_lock(&self) -> Option<SpinLockGuard<'_, T>> {
         if self
             .lock
-            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .compare_exchange(
+                false,
+                true,
+                AtomicOrdering::Acquire,
+                AtomicOrdering::Relaxed,
+            )
             .is_ok()
         {
             let data = unsafe { &mut *self.data.get() };
@@ -164,15 +204,206 @@ impl<'a, T> DerefMut for SpinLockGuard<'a, T> {
     }
 }
 
+/// BinHeap
+/// /// Fast fixed-capacity MIN-heap (root is the smallest element).
+/// Stack-allocated if you create it on the stack.
+/// Zero allocations.
+///
+/// For beam search "keep best K (higher score is better)":
+/// - Use `FixedMinHeap<Reverse<Item>, K>` if Item::Ord sorts by score ascending,
+///   OR define Item::Ord so that "worst" is smallest and push normally.
+pub struct FixedMinHeap<T: Copy, const N: usize> {
+    len: usize,
+    data: [MaybeUninit<T>; N],
+}
+
+impl<T: Copy, const N: usize> FixedMinHeap<T, N> {
+    #[inline(always)]
+    pub const fn new() -> Self {
+        Self {
+            len: 0,
+            data: [MaybeUninit::uninit(); N],
+        }
+    }
+
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    #[inline(always)]
+    pub fn clear(&mut self) {
+        self.len = 0;
+    }
+
+    #[inline(always)]
+    fn push(&mut self, v: T)
+    where
+        T: Ord,
+    {
+        debug_assert!(self.len < N, "FixedMinHeap::push called when full");
+        let i = self.len;
+        self.len = i + 1;
+        unsafe {
+            self.data.get_unchecked_mut(i).write(v);
+            self.sift_up_min(i);
+        }
+    }
+
+    /// Pop the minimum (root).
+    #[inline(always)]
+    pub fn pop_min(&mut self) -> Option<T>
+    where
+        T: Ord,
+    {
+        if self.len == 0 {
+            return None;
+        }
+        unsafe {
+            let out = self.data.get_unchecked_mut(0).assume_init_read();
+            self.len -= 1;
+            if self.len != 0 {
+                let last = self.data.get_unchecked_mut(self.len).assume_init_read();
+                self.data.get_unchecked_mut(0).write(last);
+                self.sift_down_min(0);
+            }
+            Some(out)
+        }
+    }
+
+    #[inline(always)]
+    fn replace_min(&mut self, v: T)
+    where
+        T: Ord,
+    {
+        debug_assert!(self.len != 0);
+        unsafe {
+            self.data.get_unchecked_mut(0).write(v);
+            self.sift_down_min(0);
+        }
+    }
+
+    /// Beam-search helper: maintain a fixed-size set of the "best K" items.
+    ///
+    /// This assumes your `Ord` is defined so that:
+    /// - "worse" items compare as smaller (so the root is the worst kept),
+    /// - "better" items compare as larger.
+    ///
+    /// Then:
+    /// - if heap not full -> inserts
+    /// - if full and v <= peek_min() -> rejects (not better than worst kept)
+    /// - if full and v > peek_min() -> replaces root
+    ///
+    /// Returns true if inserted/replaced, false if rejected.
+    #[inline(always)]
+    pub fn push_if_better_min_heap(&mut self, v: T) -> bool
+    where
+        T: Ord,
+    {
+        if self.len < N {
+            self.push(v);
+            return true;
+        }
+        // full
+        unsafe {
+            // root is "worst kept"
+            let root = self.get_unchecked(0);
+            if &v <= root {
+                return false;
+            }
+        }
+        self.replace_min(v);
+        true
+    }
+
+    #[inline(always)]
+    pub fn as_slice(&self) -> &[T] {
+        // SAFETY: `FixedMinHeap` maintains the invariant that indices `0..self.len`
+        // are initialized, and `self.len..N` are uninitialized.
+        unsafe { std::slice::from_raw_parts(self.data.as_ptr() as *const T, self.len) }
+    }
+
+    // ----------------- internal fast paths -----------------
+
+    #[inline(always)]
+    unsafe fn get_unchecked(&self, i: usize) -> &T {
+        unsafe { self.data.get_unchecked(i).assume_init_ref() }
+    }
+
+    #[inline(always)]
+    unsafe fn swap_unchecked(&mut self, a: usize, b: usize) {
+        unsafe {
+            core::ptr::swap(
+                self.data.get_unchecked_mut(a).as_mut_ptr(),
+                self.data.get_unchecked_mut(b).as_mut_ptr(),
+            );
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn sift_up_min(&mut self, mut i: usize)
+    where
+        T: Ord,
+    {
+        while i != 0 {
+            let p = (i - 1) >> 1;
+            // min-heap: if child < parent, swap
+            let child = unsafe { self.get_unchecked(i) };
+            let parent = unsafe { self.get_unchecked(p) };
+            if child.cmp(parent) == core::cmp::Ordering::Less {
+                unsafe { self.swap_unchecked(i, p) };
+                i = p;
+            } else {
+                break;
+            }
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn sift_down_min(&mut self, mut i: usize)
+    where
+        T: Ord,
+    {
+        let len = self.len;
+        loop {
+            let l = (i << 1) + 1;
+            if l >= len {
+                break;
+            }
+            let r = l + 1;
+
+            // choose smaller child
+            let mut c = l;
+            if r < len {
+                let left = unsafe { self.get_unchecked(l) };
+                let right = unsafe { self.get_unchecked(r) };
+                if right.cmp(left) == core::cmp::Ordering::Less {
+                    c = r;
+                }
+            }
+
+            // if child < node, swap
+            let child = unsafe { self.get_unchecked(c) };
+            let node = unsafe { self.get_unchecked(i) };
+            if child.cmp(node) == core::cmp::Ordering::Less {
+                unsafe { self.swap_unchecked(c, i) };
+                i = c;
+            } else {
+                break;
+            }
+        }
+    }
+}
+
 /// HeaplessVec
 
 #[derive(Debug, Clone, Copy)]
-pub struct HeaplessVec<T: Copy + Sized + Debug, const N: usize> {
+pub struct HeaplessVec<T: Copy, const N: usize> {
     data: [MaybeUninit<T>; N],
     len: usize,
 }
 
-impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
+impl<T: Copy, const N: usize> HeaplessVec<T, N> {
     const ELEM: MaybeUninit<T> = MaybeUninit::uninit();
     const INIT: [MaybeUninit<T>; N] = [Self::ELEM; N]; // important for optimization of `new`
 
@@ -551,6 +782,38 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
         transfer_count
     }
 
+    /// Fills this vector with elements from a fixed-size slice, taking from the end.
+    ///
+    /// Elements are copied from the end of the array until this vector is full.
+    ///
+    /// # Arguments
+    ///
+    /// * `arr` - The source array to copy elements from
+    ///
+    /// # Returns
+    ///
+    /// The number of elements copied
+    #[inline_conditioned(always)]
+    pub fn fill_from_array(&mut self, arr: &[T; N]) -> usize {
+        let remaining_space = N - self.len;
+        if remaining_space == 0 {
+            return 0;
+        }
+
+        // Since `arr` is `[T; N]`, filling from the end into the remaining capacity is
+        // equivalent to copying `arr[self.len..]` into `self[self.len..]`.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                arr.as_ptr().add(self.len),
+                self.as_mut_ptr().add(self.len),
+                remaining_space,
+            );
+        }
+
+        self.len = N;
+        remaining_space
+    }
+
     /// Fills this vector with all elements from a `Vec`.
     ///
     /// # Arguments
@@ -590,6 +853,25 @@ impl<T: Copy + Sized + Debug, const N: usize> HeaplessVec<T, N> {
             }
         }
         vec
+    }
+
+    /// Returns a reference to the backing buffer as an array **only if** the vector is full.
+    ///
+    /// This avoids reading uninitialized elements (indices `self.len..N`).
+    pub fn as_array(&self) -> Option<&[T; N]> {
+        if self.len != N {
+            return None;
+        }
+        // SAFETY: `len == N` implies all elements `0..N` were initialized.
+        // We reuse the safe slice view and then convert it to an array reference.
+        self.to_slice().try_into().ok()
+    }
+
+    /// Copies the contents into an array **only if** the vector is full.
+    ///
+    /// Returns `None` when `self.len != N`.
+    pub fn to_array(&self) -> Option<[T; N]> {
+        self.as_array().map(|a| *a)
     }
 
     /// Returns a slice containing all elements in the vector.
@@ -697,6 +979,22 @@ macro_rules! rep8_at {
 }
 
 #[macro_export]
+macro_rules! rep16_at {
+    ($start:expr, $i:ident, $b:block) => {{
+        $crate::rep8_at!(($start + 0), $i, $b);
+        $crate::rep8_at!(($start + 8), $i, $b);
+    }};
+}
+
+#[macro_export]
+macro_rules! rep32_at {
+    ($start:expr, $i:ident, $b:block) => {{
+        $crate::rep16_at!(($start + 0), $i, $b);
+        $crate::rep16_at!(($start + 16), $i, $b);
+    }};
+}
+
+#[macro_export]
 macro_rules! repeat_exact_idx {
     (0,  $i:ident, $b:block) => {};
     (1,  $i:ident, $b:block) => {
@@ -762,106 +1060,268 @@ macro_rules! repeat_exact_idx {
         $crate::rep1_at!(14, $i, $b);
     }};
     (16, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
     }};
     (17, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
         $crate::rep1_at!(16, $i, $b);
     }};
     (18, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
         $crate::rep2_at!(16, $i, $b);
     }};
     (19, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
         $crate::rep2_at!(16, $i, $b);
         $crate::rep1_at!(18, $i, $b);
     }};
     (20, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
         $crate::rep4_at!(16, $i, $b);
     }};
     (21, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
         $crate::rep4_at!(16, $i, $b);
         $crate::rep1_at!(20, $i, $b);
     }};
     (22, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
         $crate::rep4_at!(16, $i, $b);
         $crate::rep2_at!(20, $i, $b);
     }};
     (23, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
         $crate::rep4_at!(16, $i, $b);
         $crate::rep2_at!(20, $i, $b);
         $crate::rep1_at!(22, $i, $b);
     }};
     (24, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
         $crate::rep8_at!(16, $i, $b);
     }};
     (25, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
         $crate::rep8_at!(16, $i, $b);
         $crate::rep1_at!(24, $i, $b);
     }};
     (26, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
         $crate::rep8_at!(16, $i, $b);
         $crate::rep2_at!(24, $i, $b);
     }};
     (27, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
         $crate::rep8_at!(16, $i, $b);
         $crate::rep2_at!(24, $i, $b);
         $crate::rep1_at!(26, $i, $b);
     }};
     (28, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
         $crate::rep8_at!(16, $i, $b);
         $crate::rep4_at!(24, $i, $b);
     }};
     (29, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
         $crate::rep8_at!(16, $i, $b);
         $crate::rep4_at!(24, $i, $b);
         $crate::rep1_at!(28, $i, $b);
     }};
     (30, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
         $crate::rep8_at!(16, $i, $b);
         $crate::rep4_at!(24, $i, $b);
         $crate::rep2_at!(28, $i, $b);
     }};
     (31, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
+        $crate::rep16_at!(0, $i, $b);
         $crate::rep8_at!(16, $i, $b);
         $crate::rep4_at!(24, $i, $b);
         $crate::rep2_at!(28, $i, $b);
         $crate::rep1_at!(30, $i, $b);
     }};
     (32, $i:ident, $b:block) => {{
-        $crate::rep8_at!(0, $i, $b);
-        $crate::rep8_at!(8, $i, $b);
-        $crate::rep8_at!(16, $i, $b);
-        $crate::rep8_at!(24, $i, $b);
+        $crate::rep32_at!(0, $i, $b);
+    }};
+    (33, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep1_at!(32, $i, $b);
+    }};
+    (34, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep2_at!(32, $i, $b);
+    }};
+    (35, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep2_at!(32, $i, $b);
+        $crate::rep1_at!(34, $i, $b);
+    }};
+    (36, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep4_at!(32, $i, $b);
+    }};
+    (37, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep4_at!(32, $i, $b);
+        $crate::rep1_at!(36, $i, $b);
+    }};
+    (38, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep4_at!(32, $i, $b);
+        $crate::rep2_at!(36, $i, $b);
+    }};
+    (39, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep4_at!(32, $i, $b);
+        $crate::rep2_at!(36, $i, $b);
+        $crate::rep1_at!(38, $i, $b);
+    }};
+    (40, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep8_at!(32, $i, $b);
+    }};
+    (41, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep8_at!(32, $i, $b);
+        $crate::rep1_at!(40, $i, $b);
+    }};
+    (42, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep8_at!(32, $i, $b);
+        $crate::rep2_at!(40, $i, $b);
+    }};
+    (43, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep8_at!(32, $i, $b);
+        $crate::rep2_at!(40, $i, $b);
+        $crate::rep1_at!(42, $i, $b);
+    }};
+    (44, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep8_at!(32, $i, $b);
+        $crate::rep4_at!(40, $i, $b);
+    }};
+    (45, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep8_at!(32, $i, $b);
+        $crate::rep4_at!(40, $i, $b);
+        $crate::rep1_at!(44, $i, $b);
+    }};
+    (46, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep8_at!(32, $i, $b);
+        $crate::rep4_at!(40, $i, $b);
+        $crate::rep2_at!(44, $i, $b);
+    }};
+    (47, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep8_at!(32, $i, $b);
+        $crate::rep4_at!(40, $i, $b);
+        $crate::rep2_at!(44, $i, $b);
+        $crate::rep1_at!(46, $i, $b);
+    }};
+    (48, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+    }};
+    (49, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep1_at!(48, $i, $b);
+    }};
+    (50, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep2_at!(48, $i, $b);
+    }};
+    (51, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep2_at!(48, $i, $b);
+        $crate::rep1_at!(50, $i, $b);
+    }};
+    (52, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep4_at!(48, $i, $b);
+    }};
+    (53, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep4_at!(48, $i, $b);
+        $crate::rep1_at!(52, $i, $b);
+    }};
+    (54, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep4_at!(48, $i, $b);
+        $crate::rep2_at!(52, $i, $b);
+    }};
+    (55, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep4_at!(48, $i, $b);
+        $crate::rep2_at!(52, $i, $b);
+        $crate::rep1_at!(54, $i, $b);
+    }};
+    (56, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep8_at!(48, $i, $b);
+    }};
+    (57, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep8_at!(48, $i, $b);
+        $crate::rep1_at!(56, $i, $b);
+    }};
+    (58, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep8_at!(48, $i, $b);
+        $crate::rep2_at!(56, $i, $b);
+    }};
+    (59, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep8_at!(48, $i, $b);
+        $crate::rep2_at!(56, $i, $b);
+        $crate::rep1_at!(58, $i, $b);
+    }};
+    (60, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep8_at!(48, $i, $b);
+        $crate::rep4_at!(56, $i, $b);
+    }};
+    (61, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep8_at!(48, $i, $b);
+        $crate::rep4_at!(56, $i, $b);
+        $crate::rep1_at!(60, $i, $b);
+    }};
+    (62, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep8_at!(48, $i, $b);
+        $crate::rep4_at!(56, $i, $b);
+        $crate::rep2_at!(60, $i, $b);
+    }};
+    (63, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep8_at!(48, $i, $b);
+        $crate::rep4_at!(56, $i, $b);
+        $crate::rep2_at!(60, $i, $b);
+        $crate::rep1_at!(62, $i, $b);
+    }};
+    (64, $i:ident, $b:block) => {{
+        $crate::rep32_at!(0, $i, $b);
+        $crate::rep16_at!(32, $i, $b);
+        $crate::rep8_at!(48, $i, $b);
+        $crate::rep4_at!(56, $i, $b);
+        $crate::rep2_at!(60, $i, $b);
+        $crate::rep2_at!(62, $i, $b);
     }};
 }
 
@@ -966,7 +1426,103 @@ macro_rules! repeat_idx_generic {
             32 => {
                 $crate::repeat_exact_idx!(32, $i, $b)
             }
-            _ => panic!("repeat_idx_generic! supports up to N=32"),
+            33 => {
+                $crate::repeat_exact_idx!(33, $i, $b)
+            }
+            34 => {
+                $crate::repeat_exact_idx!(34, $i, $b)
+            }
+            35 => {
+                $crate::repeat_exact_idx!(35, $i, $b)
+            }
+            36 => {
+                $crate::repeat_exact_idx!(36, $i, $b)
+            }
+            37 => {
+                $crate::repeat_exact_idx!(37, $i, $b)
+            }
+            38 => {
+                $crate::repeat_exact_idx!(38, $i, $b)
+            }
+            39 => {
+                $crate::repeat_exact_idx!(39, $i, $b)
+            }
+            40 => {
+                $crate::repeat_exact_idx!(40, $i, $b)
+            }
+            41 => {
+                $crate::repeat_exact_idx!(41, $i, $b)
+            }
+            42 => {
+                $crate::repeat_exact_idx!(42, $i, $b)
+            }
+            43 => {
+                $crate::repeat_exact_idx!(43, $i, $b)
+            }
+            44 => {
+                $crate::repeat_exact_idx!(44, $i, $b)
+            }
+            45 => {
+                $crate::repeat_exact_idx!(45, $i, $b)
+            }
+            46 => {
+                $crate::repeat_exact_idx!(46, $i, $b)
+            }
+            47 => {
+                $crate::repeat_exact_idx!(47, $i, $b)
+            }
+            48 => {
+                $crate::repeat_exact_idx!(48, $i, $b)
+            }
+            49 => {
+                $crate::repeat_exact_idx!(49, $i, $b)
+            }
+            50 => {
+                $crate::repeat_exact_idx!(50, $i, $b)
+            }
+            51 => {
+                $crate::repeat_exact_idx!(51, $i, $b)
+            }
+            52 => {
+                $crate::repeat_exact_idx!(52, $i, $b)
+            }
+            53 => {
+                $crate::repeat_exact_idx!(53, $i, $b)
+            }
+            54 => {
+                $crate::repeat_exact_idx!(54, $i, $b)
+            }
+            55 => {
+                $crate::repeat_exact_idx!(55, $i, $b)
+            }
+            56 => {
+                $crate::repeat_exact_idx!(56, $i, $b)
+            }
+            57 => {
+                $crate::repeat_exact_idx!(57, $i, $b)
+            }
+            58 => {
+                $crate::repeat_exact_idx!(58, $i, $b)
+            }
+            59 => {
+                $crate::repeat_exact_idx!(59, $i, $b)
+            }
+            60 => {
+                $crate::repeat_exact_idx!(60, $i, $b)
+            }
+            61 => {
+                $crate::repeat_exact_idx!(61, $i, $b)
+            }
+            62 => {
+                $crate::repeat_exact_idx!(62, $i, $b)
+            }
+            63 => {
+                $crate::repeat_exact_idx!(63, $i, $b)
+            }
+            64 => {
+                $crate::repeat_exact_idx!(64, $i, $b)
+            }
+            _ => panic!("repeat_idx_generic! supports up to N=64"),
         }
     };
 }
@@ -1108,9 +1664,71 @@ pub const fn trailing_zeros_all<const N: usize>(xs: [u32; N]) -> [u32; N] {
     trailing_zeros
 }
 
+#[inline(always)]
+fn select_kth_u64(mut x: u64, mut k: u32) -> u32 {
+    let mut i = 0u32;
+
+    let c = (x & 0xFFFF_FFFF).count_ones();
+    let g = ((k.wrapping_sub(c) >> 31) ^ 1) & 1;
+    i += g * 32;
+    k -= g * c;
+    x >>= g * 32;
+    let c = (x & 0x0000_FFFF).count_ones();
+    let g = ((k.wrapping_sub(c) >> 31) ^ 1) & 1;
+    i += g * 16;
+    k -= g * c;
+    x >>= g * 16;
+    let c = (x & 0x0000_00FF).count_ones();
+    let g = ((k.wrapping_sub(c) >> 31) ^ 1) & 1;
+    i += g * 8;
+    k -= g * c;
+    x >>= g * 8;
+    let c = (x & 0x0000_000F).count_ones();
+    let g = ((k.wrapping_sub(c) >> 31) ^ 1) & 1;
+    i += g * 4;
+    k -= g * c;
+    x >>= g * 4;
+    let c = (x & 0x0000_0003).count_ones();
+    let g = ((k.wrapping_sub(c) >> 31) ^ 1) & 1;
+    i += g * 2;
+    k -= g * c;
+    x >>= g * 2;
+    let c = (x & 0x0000_0001).count_ones();
+    let g = ((k.wrapping_sub(c) >> 31) ^ 1) & 1;
+    i + g
+}
+
+#[inline(always)]
+pub fn choose_set_bit_u64<R: rand::Rng + ?Sized>(mask: u64, rng: &mut R) -> Option<u32> {
+    (mask != 0).then(|| {
+        let n = mask.count_ones(); // 1..=64, fits in u32
+        let k = (rng.next_u64() % (n as u64)) as u32; // bias acceptable
+        select_kth_u64(mask, k)
+    })
+}
+
 #[cfg(test)]
 mod tests {
+    use rand::Rng;
+
     use super::*;
+
+    #[test]
+    fn test_repeat_idx_generic() {
+        const MAX_N: usize = 64;
+        for n in 0..MAX_N {
+            let mut backing = [0u64; MAX_N];
+            let arr: &mut [u64] = &mut backing[..n];
+            repeat_idx_generic!(n, I, {
+                arr[I] = 1;
+            });
+            let sum = arr.iter().sum::<u64>();
+            assert_eq!(
+                sum, n as u64,
+                "repeat_idx_generic! mismatch: n={n}, sum={sum}, arr={arr:?}"
+            );
+        }
+    }
 
     #[test]
     fn test_rshift_n_from_index() {
@@ -1130,6 +1748,63 @@ mod tests {
             rshift_n_from_index(0b1111_0000_0000_0000_0000_0000_0000_1111, 12, 4),
             0b0000_1111_0000_0000_0000_0000_0000_1111
         );
+    }
+
+    #[test]
+    fn test_select_kth_and_choose_set_bit() {
+        // Reference implementation: kth set bit (0-indexed) scanning from LSB->MSB.
+        fn select_kth_ref(x: u64, k: u32) -> u32 {
+            let mut seen = 0u32;
+            for i in 0..64u32 {
+                if ((x >> i) & 1) == 1 {
+                    if seen == k {
+                        return i;
+                    }
+                    seen += 1;
+                }
+            }
+            panic!("k out of range for x (k={k}, popcnt={})", x.count_ones());
+        }
+
+        // Basic correctness: exact positions across a variety of masks.
+        let masks = [
+            1u64,
+            1u64 << 31,
+            1u64 << 63,
+            0b1011u64,                // bits at 0,1,3
+            0x00FF_0000u64,           // contiguous block
+            0x8000_0001u64,           // ends
+            0b1010_0101_0001_0010u64, // mixed
+            0xFFFF_FFFF_FFFF_FFFFu64, // all bits set
+        ];
+        for &m in &masks {
+            let cnt = m.count_ones();
+            assert!(cnt > 0);
+            for k in 0..cnt {
+                let got = select_kth_u64(m, k);
+                let exp = select_kth_ref(m, k);
+                assert_eq!(got, exp, "mask={m:#034b}, k={k}");
+                assert_eq!(
+                    ((m >> got) & 1),
+                    1,
+                    "returned bit not set: mask={m:#034b}, got={got}"
+                );
+            }
+        }
+
+        // final fuzz
+        let count = 10_000;
+        let mut rng = rand::rng();
+        for _ in 0..count {
+            let mask: u64 = rng.random();
+            let k = rng.random::<u32>() % mask.count_ones();
+            let got = select_kth_u64(mask, k);
+            let expected = select_kth_ref(mask, k);
+            assert_eq!(
+                got, expected,
+                "mask={mask:#066b}, got={got}, expected={expected}"
+            );
+        }
     }
 
     #[test]
@@ -1486,5 +2161,60 @@ mod tests {
         // Test collecting into Vec
         let collected: Vec<i32> = vec.iter().copied().collect();
         assert_eq!(collected, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_bitmask_as_bits_lsb_first_matches_reference() {
+        fn ref_bits<const N: usize>(x: u64) -> [u8; N] {
+            let mut out = [0u8; N];
+            for i in 0..N {
+                out[i] = ((x >> i) & 1) as u8;
+            }
+            out
+        }
+
+        // A few fixed values that exercise patterns + edge cases.
+        let cases = [
+            0u64,
+            1u64,
+            0xFFFF_FFFF_FFFF_FFFFu64,
+            0x8000_0000_0000_0000u64,
+            0x0123_4567_89AB_CDEFu64,
+            0xF0F0_F0F0_F0F0_F0F0u64,
+        ];
+
+        for &x in &cases {
+            macro_rules! assert_bits {
+                ($n:literal) => {{
+                    let got = BitMask::<$n>(x).as_slice();
+                    let expected = ref_bits::<$n>(x);
+                    assert_eq!(
+                        got, expected,
+                        "BitMask::<{}> mismatch\nx        = {:#066b}\nexpected = {:?}\ngot      = {:?}",
+                        $n, x, expected, got
+                    );
+                }};
+            }
+
+            assert_bits!(1);
+            assert_bits!(7);
+            assert_bits!(8);
+            assert_bits!(9);
+            assert_bits!(10);
+            assert_bits!(63);
+            assert_bits!(64);
+        }
+    }
+
+    #[test]
+    fn test_bitmask_as_bits_lsb_first_random_is_0_or_1() {
+        let mut rng = rand::rng();
+        for _ in 0..10_000 {
+            let x: u64 = rng.random();
+            let bits = BitMask::<64>(x).as_slice();
+            for &b in &bits {
+                assert!(b <= 1, "expected 0/1 bit lane, got {b}");
+            }
+        }
     }
 }
