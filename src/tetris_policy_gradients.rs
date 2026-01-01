@@ -17,7 +17,8 @@ use tracing::info;
 use crate::checkpointer::Checkpointer;
 use crate::grad_accum::{GradientAccumulator, get_l2_norm};
 use crate::modules::{
-    Conv2dConfig, ConvBlockSpec, ConvEncoder, ConvEncoderConfig, FiLM, FiLMConfig, Mlp, MlpConfig,
+    CausalSelfAttentionConfig, DynamicTanhConfig, Mlp, MlpConfig, TransformerBlockConfig,
+    TransformerBody, TransformerBodyConfig,
 };
 use crate::ops::create_orientation_mask;
 use crate::tensors::{
@@ -31,43 +32,145 @@ use crate::{device, fdtype};
 /// Simple policy over placements using supervised learning on high-performing trajectories.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TetrisGoalPolicyConfig {
-    pub piece_embedding_dim: usize,
-
-    pub board_encoder_config: ConvEncoderConfig,
-
-    pub piece_film_config: Vec<FiLMConfig>,
-
-    pub head_mlp_config: MlpConfig, // outputs logits over orientations
+    /// Model dimension used throughout the transformer.
+    pub d_model: usize,
+    /// Number of transformer blocks.
+    pub num_blocks: usize,
+    /// Self-attention configuration.
+    pub attn_config: CausalSelfAttentionConfig,
+    /// MLP used inside each transformer block.
+    pub block_mlp_config: MlpConfig,
+    /// Head MLP (pooled embedding -> logits over orientations).
+    pub head_mlp_config: MlpConfig,
+    /// Value head MLP (pooled embedding -> scalar value).
+    pub value_mlp_config: MlpConfig,
+    /// Whether to apply a causal mask in attention (generally false for board evaluation).
+    #[serde(default)]
+    pub with_causal_mask: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct TetrisGoalPolicy {
-    piece_embedding: Embedding,
-    board_encoder: ConvEncoder,
-    piece_film: Vec<FiLM>,
+    // Embeddings
+    token_embed: Embedding, // [0/1] -> D
+    pos_embed: Embedding,   // [0..199] -> D
+    piece_embed: Embedding, // piece id -> D (broadcast-added as conditioning)
+
+    // Transformer body over the 200 board tokens.
+    body: TransformerBody,
+
+    // Head: pooled embedding -> logits over orientations.
     head_mlp: Mlp,
+    // Value head: pooled embedding -> scalar value estimate.
+    value_mlp: Mlp,
+
+    // Config
+    #[allow(dead_code)]
+    d_model: usize,
+    with_causal_mask: bool,
 }
 
 impl TetrisGoalPolicy {
     pub fn init(vb: &VarBuilder, cfg: &TetrisGoalPolicyConfig) -> Result<Self> {
-        let piece_embedding = embedding(
-            TetrisPiece::NUM_PIECES,
-            cfg.piece_embedding_dim,
-            vb.pp("piece_embedding"),
+        // Token embedding: 2 states (empty/filled) -> d_model
+        let token_embed = embedding(
+            TetrisBoard::NUM_TETRIS_CELL_STATES,
+            cfg.d_model,
+            vb.pp("token_embed"),
         )?;
-        let board_encoder = ConvEncoder::init(&vb.pp("board_encoder"), &cfg.board_encoder_config)?;
-        let piece_film = cfg
-            .piece_film_config
-            .iter()
-            .map(|cfg| FiLM::init(&vb.pp("piece_film"), cfg).unwrap())
-            .collect();
+
+        // Positional embedding: 200 positions -> d_model
+        let pos_embed = embedding(TetrisBoard::SIZE, cfg.d_model, vb.pp("pos_embed"))?;
+
+        // Piece embedding: piece id -> d_model (conditioning)
+        let piece_embed = embedding(TetrisPiece::NUM_PIECES, cfg.d_model, vb.pp("piece_embed"))?;
+
+        // Transformer body
+        let body_cfg = TransformerBodyConfig {
+            blocks_config: TransformerBlockConfig {
+                dyn_tanh_config: DynamicTanhConfig {
+                    alpha_init_value: 1.0,
+                    normalized_shape: cfg.d_model,
+                },
+                attn_config: cfg.attn_config.clone(),
+                mlp_config: cfg.block_mlp_config.clone(),
+            },
+            num_blocks: cfg.num_blocks,
+            dyn_tanh_config: DynamicTanhConfig {
+                alpha_init_value: 1.0,
+                normalized_shape: cfg.d_model,
+            },
+        };
+        let body = TransformerBody::init(&vb.pp("transformer_body"), &body_cfg)?;
+
+        // Head MLP
         let head_mlp = Mlp::init(&vb.pp("head_mlp"), &cfg.head_mlp_config)?;
+
+        // Value head MLP
+        let value_mlp = Mlp::init(&vb.pp("value_mlp"), &cfg.value_mlp_config)?;
+
         Ok(Self {
-            piece_embedding,
-            board_encoder,
-            piece_film,
+            token_embed,
+            pos_embed,
+            piece_embed,
+            body,
             head_mlp,
+            value_mlp,
+            d_model: cfg.d_model,
+            with_causal_mask: cfg.with_causal_mask,
         })
+    }
+
+    fn forward_pooled(
+        &self,
+        current_board: &TetrisBoardsTensor,
+        current_piece: &TetrisPieceTensor,
+    ) -> Result<Tensor> {
+        let (b, _t) = current_board.shape_tuple(); // [B, 200]
+
+        // Board tokens: [B, 200] (u8) -> [B, 200] (u32 indices)
+        let tokens = current_board.inner().to_dtype(DType::U32)?;
+
+        // Token + position embeddings: [B, 200, D]
+        let x_tokens = self.token_embed.forward(&tokens)?;
+
+        let device = tokens.device();
+        let pos_ids = Tensor::arange(0, TetrisBoard::SIZE as u32, device)?
+            .to_dtype(DType::U32)?
+            .reshape(&[1, TetrisBoard::SIZE])?
+            .repeat(&[b, 1])?; // [B, 200]
+        let x_pos = self.pos_embed.forward(&pos_ids)?;
+
+        // Piece conditioning: [B, D] -> [B, 200, D] (broadcast)
+        let piece_embed = self.piece_embed.forward(current_piece)?.squeeze(1)?; // [B, D]
+        let piece_b = piece_embed.unsqueeze(1)?.broadcast_as(x_tokens.dims())?;
+
+        // Combine embeddings
+        let x = ((&x_tokens + &x_pos)? + &piece_b)?; // [B, 200, D]
+
+        // Transformer body
+        let x = self.body.forward(x, self.with_causal_mask)?; // [B, 200, D]
+
+        // Mean pool over tokens -> [B, D]
+        Ok(x.mean(1)?)
+    }
+
+    pub fn forward_logits_and_value(
+        &self,
+        current_board: &TetrisBoardsTensor,
+        current_piece: &TetrisPieceTensor,
+    ) -> Result<(TetrisPieceOrientationLogitsTensor, Tensor)> {
+        let pooled = self.forward_pooled(current_board, current_piece)?; // [B, D]
+
+        // Policy head -> orientation logits [B, O]
+        let logits = self.head_mlp.forward(&pooled)?; // [B, O]
+        let logits = TetrisPieceOrientationLogitsTensor::try_from(logits)?;
+
+        // Value head -> scalar [B]
+        let value = self.value_mlp.forward(&pooled)?; // [B, 1] (expected)
+        let value = value.squeeze(1)?; // [B]
+
+        Ok((logits, value))
     }
 
     /// Forward producing unmasked orientation logits [B, NUM_ORIENTATIONS]
@@ -76,24 +179,18 @@ impl TetrisGoalPolicy {
         current_board: &TetrisBoardsTensor,
         current_piece: &TetrisPieceTensor,
     ) -> Result<TetrisPieceOrientationLogitsTensor> {
-        let (b, _t) = current_board.shape_tuple();
+        let (logits, _value) = self.forward_logits_and_value(current_board, current_piece)?;
+        Ok(logits)
+    }
 
-        // Encode boards as images [B,1,H,W] -> [B,D]
-        let cur_img = current_board
-            .reshape(&[b, 1, TetrisBoard::HEIGHT, TetrisBoard::WIDTH])?
-            .to_dtype(DType::F32)?;
-        let cur_embed = self.board_encoder.forward(&cur_img)?; // [B, D]
-
-        // Condition current on goal and piece
-        let piece_embed = self.piece_embedding.forward(current_piece)?.squeeze(1)?; // [B, D]
-        let x = self
-            .piece_film
-            .iter()
-            .try_fold(cur_embed, |x, film| film.forward(&x, &piece_embed))?; // [B, D]
-
-        // Head -> orientation logits [B, NUM_ORIENTATIONS]
-        let logits = self.head_mlp.forward(&x)?; // [B, O]
-        Ok(TetrisPieceOrientationLogitsTensor::try_from(logits)?)
+    /// Forward producing a scalar value estimate [B] for (board, piece).
+    pub fn forward_value(
+        &self,
+        current_board: &TetrisBoardsTensor,
+        current_piece: &TetrisPieceTensor,
+    ) -> Result<Tensor> {
+        let (_logits, value) = self.forward_logits_and_value(current_board, current_piece)?;
+        Ok(value)
     }
 
     /// Compute masked action distribution over orientations, masking to those valid for current piece.
@@ -112,6 +209,22 @@ impl TetrisGoalPolicy {
         let masked = keep.where_cond(logits.inner(), &neg_inf)?;
         TetrisPieceOrientationLogitsTensor::try_from(masked)
     }
+
+    pub fn forward_masked_with_value(
+        &self,
+        current_board: &TetrisBoardsTensor,
+        current_piece: &TetrisPieceTensor,
+    ) -> Result<(TetrisPieceOrientationLogitsTensor, Tensor)> {
+        let (logits, value) = self.forward_logits_and_value(current_board, current_piece)?; // [B,O], [B]
+        let mask = create_orientation_mask(current_piece)?; // [B,O] (0/1)
+        // keep valid, set invalid to -inf
+        let device = logits.device();
+        let zero = mask.zeros_like()?;
+        let keep = mask.gt(&zero)?;
+        let neg_inf = Tensor::new(-1e9f32, &device)?.broadcast_as(logits.dims())?;
+        let masked = keep.where_cond(logits.inner(), &neg_inf)?;
+        Ok((TetrisPieceOrientationLogitsTensor::try_from(masked)?, value))
+    }
 }
 
 /// A single trajectory recording all states and actions for one game
@@ -124,8 +237,8 @@ struct Trajectory {
     lines_cleared: u32,
 }
 
-/// Train a policy using supervised learning on trajectories that exceed the mean game length
-pub fn train_exceed_the_mean_policy(
+/// Train a policy-gradient style policy (historically "exceed the mean" trajectories).
+pub fn train_tetris_policy_gradients(
     run_name: String,
     logdir: Option<PathBuf>,
     checkpoint_dir: Option<PathBuf>,
@@ -141,101 +254,59 @@ pub fn train_exceed_the_mean_policy(
     const MINI_BATCH_SIZE: usize = 512;
     const CHECKPOINT_INTERVAL: usize = 100;
     const CLIP_GRAD_MAX_NORM: Option<f64> = Some(1.0);
-    const CLIP_GRAD_MAX_VALUE: Option<f64> = Some(5.0);
-    const LEARNING_RATE: f64 = 0.001; // Conservative fixed rate
-    const TEMPERATURE: f32 = 1.5; // Fixed temperature - no decay
+    const CLIP_GRAD_MAX_VALUE: Option<f64> = None;
+    const LEARNING_RATE: f64 = 0.0001; // Conservative fixed rate
+    const TEMPERATURE: f32 = 1.0; // Fixed temperature - no decay
     const ENTROPY_WEIGHT: f32 = 0.01; // Entropy bonus for exploration
 
     // Reward computation parameters
     const LENGTH_EXPONENT: f32 = 1.5; // Exponential scaling for trajectory length
     const LINES_CLEARED_WEIGHT: f32 = 1.0; // Weight for lines cleared score
-    const REWARD_MIN_BOUND: f32 = -1.0; // Min bound for normalized rewards
-    const REWARD_MAX_BOUND: f32 = 1.0; // Max bound for normalized rewards
+    const REWARD_TIME_DECAY: f32 = 0.999; // Exponential timestep decay: r_t *= decay^t
+    const REWARD_PER_PIECE: f32 = 0.5; // Constant reward per piece played (per timestep)
 
     // Training loop parameters
-    const NUM_EPOCHS_PER_BATCH: usize = 3; // Number of epochs per batch
+    const NUM_EPOCHS_PER_BATCH: usize = 1; // Number of epochs per batch
     const SAMPLE_PERCENT_TRANSITIONS: f32 = 0.8; // Percent of transitions to sample per epoch
     const MAX_NUM_MINI_BATCHES: usize = 100; // Cap on number of mini-batches
     const MAX_WEIGHTED_LOSS: f32 = 10.0; // Clamp weighted loss to prevent extreme values
+    const VALUE_LOSS_WEIGHT: f64 = 0.5;
 
     let model_dim = 64;
+    let num_blocks = 4;
 
     let model_varmap = VarMap::new();
     let vb = VarBuilder::from_varmap(&model_varmap, dtype, &device);
 
     let policy_cfg = TetrisGoalPolicyConfig {
-        piece_embedding_dim: model_dim,
-        board_encoder_config: ConvEncoderConfig {
-            blocks: vec![
-                ConvBlockSpec {
-                    in_channels: 1,
-                    out_channels: 32,
-                    kernel_size: 3,
-                    conv_cfg: Conv2dConfig {
-                        padding: 1,
-                        stride: 1,
-                        dilation: 1,
-                        groups: 1,
-                    },
-                    gn_groups: 32,
-                },
-                ConvBlockSpec {
-                    in_channels: 32,
-                    out_channels: 32,
-                    kernel_size: 3,
-                    conv_cfg: Conv2dConfig {
-                        padding: 1,
-                        stride: 1,
-                        dilation: 1,
-                        groups: 1,
-                    },
-                    gn_groups: 32,
-                },
-                ConvBlockSpec {
-                    in_channels: 32,
-                    out_channels: 16,
-                    kernel_size: 3,
-                    conv_cfg: Conv2dConfig {
-                        padding: 1,
-                        stride: 1,
-                        dilation: 1,
-                        groups: 1,
-                    },
-                    gn_groups: 16,
-                },
-                ConvBlockSpec {
-                    in_channels: 16,
-                    out_channels: 8,
-                    kernel_size: 3,
-                    conv_cfg: Conv2dConfig {
-                        padding: 1,
-                        stride: 1,
-                        dilation: 1,
-                        groups: 1,
-                    },
-                    gn_groups: 8,
-                },
-            ],
-            input_hw: (TetrisBoard::HEIGHT, TetrisBoard::WIDTH),
-            mlp: MlpConfig {
-                hidden_size: 8 * TetrisBoard::HEIGHT * TetrisBoard::WIDTH,
-                intermediate_size: 3 * model_dim,
-                output_size: model_dim,
-                dropout: Some(0.01),
-            },
+        d_model: model_dim,
+        num_blocks,
+        attn_config: CausalSelfAttentionConfig {
+            d_model: model_dim,
+            n_attention_heads: 8,
+            n_kv_heads: 8,
+            rope_theta: 10_000.0,
+            max_position_embeddings: TetrisBoard::SIZE,
         },
-        piece_film_config: vec![FiLMConfig {
-            cond_dim: model_dim,
-            feat_dim: model_dim,
-            hidden: 2 * model_dim,
-            output_dim: model_dim,
-        }],
+        block_mlp_config: MlpConfig {
+            hidden_size: model_dim,
+            intermediate_size: 2 * model_dim,
+            output_size: model_dim,
+            dropout: None,
+        },
         head_mlp_config: MlpConfig {
             hidden_size: model_dim,
             intermediate_size: 2 * model_dim,
             output_size: TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
-            dropout: Some(0.01),
+            dropout: None,
         },
+        value_mlp_config: MlpConfig {
+            hidden_size: model_dim,
+            intermediate_size: 2 * model_dim,
+            output_size: 1,
+            dropout: None,
+        },
+        with_causal_mask: false,
     };
 
     let policy = TetrisGoalPolicy::init(&vb, &policy_cfg)?;
@@ -350,11 +421,11 @@ pub fn train_exceed_the_mean_policy(
                 .zip(&orientations)
                 .zip(&current_pieces_vec)
                 .map(move |((i, &orientation), &piece)| {
-                    let is_lost = unsafe {
+                    let result = unsafe {
                         let games = &mut *games_ptr.as_ptr();
                         games[i].apply_placement(TetrisPiecePlacement { piece, orientation })
                     };
-                    bool::from(is_lost)
+                    bool::from(result.is_lost)
                 })
                 .collect();
 
@@ -411,12 +482,13 @@ pub fn train_exceed_the_mean_policy(
 
                 let rewards: Vec<f32> = (0..traj.game_length)
                     .map(|t| {
-                        // Linear decay: earlier timesteps matter more
-                        // At t=0: decay=1.0, at t=T-1: decay=1/T
-                        let decay_factor = (traj_length - t as f32) / traj_length;
+                        // Exponential decay: earlier timesteps matter more
+                        // At t=0: decay=1.0, then decay^t.
+                        let decay_factor = REWARD_TIME_DECAY.powi(t as i32);
 
                         // Combined reward: balanced contribution from both signals
-                        let reward = (weighted_lines + length_score) * decay_factor;
+                        let reward =
+                            (REWARD_PER_PIECE + weighted_lines + length_score) * decay_factor;
                         reward
                     })
                     .collect();
@@ -428,7 +500,8 @@ pub fn train_exceed_the_mean_policy(
             })
             .collect();
 
-        // Step 2: Min-Max normalization (maps actual range to bounds)
+        // Track statistics for monitoring (raw reward scale)
+        let mean_reward = all_raw_rewards.iter().sum::<f32>() / all_raw_rewards.len() as f32;
         let min_raw_reward = all_raw_rewards
             .iter()
             .min_by(|a, b| a.partial_cmp(b).unwrap())
@@ -438,120 +511,40 @@ pub fn train_exceed_the_mean_policy(
             .iter()
             .max_by(|a, b| a.partial_cmp(b).unwrap())
             .copied()
-            .unwrap_or(1.0);
-        let raw_range = (max_raw_reward - min_raw_reward).max(1e-8);
-
-        let trajectories_with_normalized_rewards: Vec<(Trajectory, Vec<f32>)> =
-            trajectories_with_raw_rewards
-                .into_iter()
-                .map(|(traj, raw_rewards)| {
-                    let normalized_rewards: Vec<f32> = raw_rewards
-                        .into_iter()
-                        .map(|r| {
-                            // Min-Max normalization: (r - min) / (max - min)
-                            let normalized_01 = (r - min_raw_reward) / raw_range;
-                            // Scale to [REWARD_MIN_BOUND, REWARD_MAX_BOUND]
-                            let reward_range = REWARD_MAX_BOUND - REWARD_MIN_BOUND;
-                            let normalized = REWARD_MIN_BOUND + normalized_01 * reward_range;
-                            // Ensure final reward is strictly in [REWARD_MIN_BOUND, REWARD_MAX_BOUND]
-                            normalized.clamp(REWARD_MIN_BOUND, REWARD_MAX_BOUND)
-                        })
-                        .collect();
-                    (traj, normalized_rewards)
-                })
-                .collect();
-
-        // Track statistics for monitoring (before advantage computation)
-        let all_normalized_rewards: Vec<f32> = trajectories_with_normalized_rewards
-            .iter()
-            .flat_map(|(_, rewards)| rewards.iter().copied())
-            .collect();
-
-        let mean_reward =
-            all_normalized_rewards.iter().sum::<f32>() / all_normalized_rewards.len() as f32;
-        let min_normalized = all_normalized_rewards
-            .iter()
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
-            .copied()
             .unwrap_or(0.0);
-        let max_normalized = all_normalized_rewards
-            .iter()
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-            .copied()
-            .unwrap_or(1.0);
+        let raw_range = max_raw_reward - min_raw_reward;
 
-        // Step 3: Compute advantages (baseline subtraction for variance reduction)
-        // Advantage = reward - baseline, where baseline = mean reward
-        // This centers the gradients around 0, reducing variance
-        let trajectories_with_advantages: Vec<(Trajectory, Vec<f32>)> =
-            trajectories_with_normalized_rewards
-                .iter()
-                .map(|(traj, rewards)| {
-                    let advantages: Vec<f32> = rewards
-                        .iter()
-                        .map(|r| r - mean_reward) // Baseline subtraction
-                        .collect();
-                    (traj.clone(), advantages)
-                })
-                .collect();
-
-        // Track advantage statistics BEFORE standardization
-        let all_advantages: Vec<f32> = trajectories_with_advantages
-            .iter()
-            .flat_map(|(_, advantages)| advantages.iter().copied())
-            .collect();
-
-        // Compute standard deviation of advantages
+        // Advantage stats (for monitoring only). Training uses a learned baseline V(s).
+        let all_advantages: Vec<f32> = all_raw_rewards.iter().map(|r| r - mean_reward).collect();
         let advantage_variance =
             all_advantages.iter().map(|a| a.powi(2)).sum::<f32>() / all_advantages.len() as f32;
         let advantage_std = advantage_variance.sqrt().max(1e-8);
-
-        // Step 4: Standardize advantages to mean=0, std=1 (CRITICAL for stable gradients!)
-        let trajectories_with_standardized_advantages: Vec<(Trajectory, Vec<f32>)> =
-            trajectories_with_advantages
-                .into_iter()
-                .map(|(traj, advantages)| {
-                    let standardized: Vec<f32> = advantages
-                        .into_iter()
-                        .map(|a| a / advantage_std) // Divide by std for unit variance
-                        .collect();
-                    (traj, standardized)
-                })
-                .collect();
-
-        // Track final standardized advantage statistics
-        let all_standardized_advantages: Vec<f32> = trajectories_with_standardized_advantages
-            .iter()
-            .flat_map(|(_, advantages)| advantages.iter().copied())
-            .collect();
-
-        let mean_advantage = all_standardized_advantages.iter().sum::<f32>()
-            / all_standardized_advantages.len() as f32;
-        let min_advantage = all_standardized_advantages
+        let mean_advantage = all_advantages.iter().sum::<f32>() / all_advantages.len() as f32;
+        let min_advantage = all_advantages
             .iter()
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .copied()
             .unwrap_or(0.0);
-        let max_advantage = all_standardized_advantages
+        let max_advantage = all_advantages
             .iter()
             .max_by(|a, b| a.partial_cmp(b).unwrap())
             .copied()
             .unwrap_or(0.0);
 
         // Track game length and lines cleared for monitoring
-        mean_game_length = trajectories_with_standardized_advantages
+        mean_game_length = trajectories_with_raw_rewards
             .iter()
             .map(|(t, _)| t.game_length as f32)
             .sum::<f32>()
-            / trajectories_with_standardized_advantages.len() as f32;
+            / trajectories_with_raw_rewards.len() as f32;
 
-        let mean_lines_cleared = trajectories_with_standardized_advantages
+        let mean_lines_cleared = trajectories_with_raw_rewards
             .iter()
             .map(|(t, _)| t.lines_cleared as f32)
             .sum::<f32>()
-            / trajectories_with_standardized_advantages.len() as f32;
+            / trajectories_with_raw_rewards.len() as f32;
 
-        let total_lines_cleared: u32 = trajectories_with_standardized_advantages
+        let total_lines_cleared: u32 = trajectories_with_raw_rewards
             .iter()
             .map(|(t, _)| t.lines_cleared)
             .sum();
@@ -571,28 +564,24 @@ pub fn train_exceed_the_mean_policy(
             min_raw_reward, max_raw_reward, raw_range
         );
         println!(
-            "  Normalized rewards [{:.1}, {:.1}]: mean={:.3}, range=[{:.3}, {:.3}]",
-            REWARD_MIN_BOUND, REWARD_MAX_BOUND, mean_reward, min_normalized, max_normalized
-        );
-        println!(
             "  Advantages (baseline={:.3}, std={:.3}): mean={:.4}, range=[{:.3}, {:.3}]",
             mean_reward, advantage_std, mean_advantage, min_advantage, max_advantage
         );
 
         // === Phase 3: Supervised learning with prioritized trajectory sampling ===
         // Step 1: Build per-trajectory transition pools with prioritization weights
-        // Using standardized advantages (mean=0, std=1) for stable gradients
+        // Store raw rewards as training targets for the value head.
         let trajectory_pools: Vec<Vec<(TetrisBoard, TetrisPiece, TetrisPieceOrientation, f32)>> =
-            trajectories_with_standardized_advantages
+            trajectories_with_raw_rewards
                 .iter()
-                .map(|(traj, advantages)| {
+                .map(|(traj, rewards)| {
                     (0..traj.game_length)
                         .map(|i| {
                             (
                                 traj.boards[i].clone(),
                                 traj.pieces[i],
                                 traj.orientations[i],
-                                advantages[i],
+                                rewards[i],
                             )
                         })
                         .collect()
@@ -601,7 +590,7 @@ pub fn train_exceed_the_mean_policy(
 
         // Prioritization weights: longer trajectories sampled more often
         // Using sqrt for moderate prioritization (linear would be too aggressive)
-        let trajectory_weights: Vec<f64> = trajectories_with_standardized_advantages
+        let trajectory_weights: Vec<f64> = trajectories_with_raw_rewards
             .iter()
             .map(|(traj, _)| (traj.game_length as f64).sqrt())
             .collect();
@@ -620,6 +609,8 @@ pub fn train_exceed_the_mean_policy(
         // Step 2: Multi-epoch training with fresh prioritized sampling each epoch
         let mut rng = rand::rng();
         let mut epoch_avg_loss = 0.0;
+        let mut epoch_avg_policy_loss = 0.0;
+        let mut epoch_avg_value_loss = 0.0;
         let mut epoch_avg_accuracy = 0.0;
         let mut epoch_avg_entropy = 0.0;
         let mut epoch_avg_grad_norm = 0.0;
@@ -668,6 +659,8 @@ pub fn train_exceed_the_mean_policy(
             }
 
             let mut total_loss_accum = 0.0;
+            let mut total_policy_loss_accum = 0.0;
+            let mut total_value_loss_accum = 0.0;
             let mut total_accuracy_accum = 0.0;
             let mut total_entropy_accum = 0.0;
             let mut total_grad_norm_accum = 0.0;
@@ -683,33 +676,18 @@ pub fn train_exceed_the_mean_policy(
                     continue;
                 }
 
-                // Prepare mini-batch tensors and extract weights
-                let (batch_boards, batch_pieces, batch_targets, batch_weights): (
+                // Prepare mini-batch tensors and extract rewards
+                let (batch_boards, batch_pieces, batch_targets, batch_rewards): (
                     Vec<_>,
                     Vec<_>,
                     Vec<_>,
                     Vec<_>,
                 ) = mini_batch
                     .iter()
-                    .map(|(board, piece, orientation, weight)| {
-                        (board.clone(), *piece, *orientation, *weight)
+                    .map(|(board, piece, orientation, reward)| {
+                        (board.clone(), *piece, *orientation, *reward)
                     })
                     .multiunzip();
-
-                // Per-batch advantage normalization (additional stability)
-                // Normalize advantages within this mini-batch to mean=0, std=1
-                let batch_mean = batch_weights.iter().sum::<f32>() / batch_weights.len() as f32;
-                let batch_variance = batch_weights
-                    .iter()
-                    .map(|w| (w - batch_mean).powi(2))
-                    .sum::<f32>()
-                    / batch_weights.len() as f32;
-                let batch_std = batch_variance.sqrt().max(1e-8);
-
-                let normalized_batch_weights: Vec<f32> = batch_weights
-                    .iter()
-                    .map(|w| (w - batch_mean) / batch_std)
-                    .collect();
 
                 // Convert to tensors
                 let boards_u8: Vec<u8> = batch_boards
@@ -728,51 +706,46 @@ pub fn train_exceed_the_mean_policy(
                     TetrisPieceOrientationTensor::from_orientations(&batch_targets, &device)?;
 
                 // Forward pass
-                let logits = policy.forward_masked(&board_tensor, &piece_tensor)?;
+                let (logits, value_pred) =
+                    policy.forward_masked_with_value(&board_tensor, &piece_tensor)?; // [B,O], [B]
 
                 // Compute probabilities and log probabilities
                 let probs = candle_nn::ops::softmax(logits.inner(), D::Minus1)?;
                 let log_probs = candle_nn::ops::log_softmax(logits.inner(), D::Minus1)?;
 
-                // Policy gradient loss: L(θ) = -∑ A_t log(π_θ(a_t|s_t))
-                // Where A_t is the per-batch normalized advantage:
-                //   - Global normalization: (reward - mean) / std across all trajectories
-                //   - Per-batch normalization: (advantage - batch_mean) / batch_std
-                //   - Double normalization ensures mean=0, std=1 within each mini-batch
-                //   - Positive advantage → reinforce this action (better than batch average)
-                //   - Negative advantage → discourage this action (worse than batch average)
                 let target_one_hot = target_tensor.into_dist()?;
-                let sample_log_probs = (&log_probs * target_one_hot.inner())?.sum(D::Minus1)?; // [B] - log π(a|s) for each sample
+                let sample_log_probs = (&log_probs * target_one_hot.inner())?
+                    .sum(D::Minus1)?
+                    .clamp(-10.0, 0.0)?; // [B] log π(a|s)
 
-                // Apply per-batch normalized advantages: A_t (mean=0, std=1 within batch)
-                // Double normalization (global + per-batch) ensures very stable gradients
-                // Positive advantage → increase log prob → reinforce action
-                // Negative advantage → decrease log prob → suppress action
-                let advantages_tensor = Tensor::from_vec(
-                    normalized_batch_weights,
-                    Shape::from_dims(&[mini_batch_size]),
-                    &device,
-                )?;
+                let rewards_tensor =
+                    Tensor::from_vec(batch_rewards, Shape::from_dims(&[mini_batch_size]), &device)?
+                        .to_dtype(dtype)?;
 
-                let weighted_log_probs = (&sample_log_probs * &advantages_tensor)?;
+                // Raw advantages using learned baseline V(s).
+                // IMPORTANT: detach the baseline in the actor loss (no grads through baseline).
+                let advantages = rewards_tensor.sub(&value_pred.detach())?;
+
+                // Policy gradient loss: -E[ A(s,a) * log π(a|s) ]
+                let weighted_log_probs = (&sample_log_probs * &advantages.neg()?)?;
 
                 // Clamp weighted values to prevent extreme outliers
                 let clamped_weighted =
                     weighted_log_probs.clamp(-MAX_WEIGHTED_LOSS, MAX_WEIGHTED_LOSS)?;
 
-                // Policy gradient loss: -mean(A_t × log π(a_t|s_t))
-                // A_t is advantage (centered around 0 for variance reduction)
-                // Positive A_t → reinforce action, Negative A_t → suppress action
-                // Maximizing advantage-weighted log probs = minimizing negative weighted log probs
-                let pg_loss = clamped_weighted.neg()?.mean_all()?;
+                let policy_loss = clamped_weighted.mean_all()?;
 
                 // Compute entropy regularization
                 let entropy = (&probs * &log_probs)?.sum(D::Minus1)?.neg()?;
                 let avg_entropy = entropy.mean_all()?;
+                let entropy_loss = avg_entropy.affine(-ENTROPY_WEIGHT as f64, 0.0)?;
 
-                // Total loss: policy gradient + entropy penalty (negative to encourage higher entropy)
-                // let entropy_penalty = avg_entropy.affine(-ENTROPY_WEIGHT as f64, 0.0)?;
-                let loss = pg_loss; // + &entropy_penalty)?;
+                // Value loss: train value head to predict the (normalized) reward.
+                let value_loss = (&value_pred - &rewards_tensor)?.sqr()?.mean_all()?;
+                let value_loss_term = value_loss.affine(VALUE_LOSS_WEIGHT, 0.0)?;
+
+                // Total loss
+                let loss = ((&policy_loss + &value_loss_term)? + &entropy_loss)?;
 
                 // Compute accuracy
                 let predicted = logits.inner().argmax(D::Minus1)?;
@@ -792,6 +765,8 @@ pub fn train_exceed_the_mean_policy(
                 // Accumulate metrics
                 let entropy_scalar = avg_entropy.to_scalar::<f32>()?;
                 let loss_scalar = loss.to_scalar::<f32>()?;
+                let policy_loss_scalar = policy_loss.to_scalar::<f32>()?;
+                let value_loss_scalar = value_loss.to_scalar::<f32>()?;
 
                 // Safety check: Skip batch if loss is non-finite
                 if !loss_scalar.is_finite() {
@@ -800,6 +775,8 @@ pub fn train_exceed_the_mean_policy(
                 }
 
                 total_loss_accum += loss_scalar;
+                total_policy_loss_accum += policy_loss_scalar;
+                total_value_loss_accum += value_loss_scalar;
                 total_accuracy_accum += accuracy;
                 total_entropy_accum += entropy_scalar;
                 batches_processed += 1;
@@ -820,22 +797,33 @@ pub fn train_exceed_the_mean_policy(
                 CLIP_GRAD_MAX_VALUE,
             )?;
 
+            if batches_processed == 0 {
+                println!("  WARNING: No batches processed (all skipped), skipping epoch stats");
+                continue;
+            }
+
             // Compute epoch averages
             let avg_loss = total_loss_accum / batches_processed as f32;
+            let avg_policy_loss = total_policy_loss_accum / batches_processed as f32;
+            let avg_value_loss = total_value_loss_accum / batches_processed as f32;
             let avg_accuracy = total_accuracy_accum / batches_processed as f32;
             let avg_entropy = total_entropy_accum / batches_processed as f32;
             let avg_grad_norm = total_grad_norm_accum / batches_processed as f32;
 
             epoch_avg_loss += avg_loss;
+            epoch_avg_policy_loss += avg_policy_loss;
+            epoch_avg_value_loss += avg_value_loss;
             epoch_avg_accuracy += avg_accuracy;
             epoch_avg_entropy += avg_entropy;
             epoch_avg_grad_norm += avg_grad_norm;
 
             println!(
-                "    Epoch {}/{}: Loss={:.4}, Acc={:.2}%, Entropy={:.3}, GradNorm={:.4}",
+                "    Epoch {}/{}: Loss={:.4} (pol={:.4}, val={:.4}), Acc={:.2}%, Entropy={:.3}, GradNorm={:.4}",
                 epoch + 1,
                 NUM_EPOCHS_PER_BATCH,
                 avg_loss,
+                avg_policy_loss,
+                avg_value_loss,
                 avg_accuracy * 100.0,
                 avg_entropy,
                 avg_grad_norm
@@ -844,13 +832,17 @@ pub fn train_exceed_the_mean_policy(
 
         // Average across all epochs
         let avg_loss = epoch_avg_loss / NUM_EPOCHS_PER_BATCH as f32;
+        let avg_policy_loss = epoch_avg_policy_loss / NUM_EPOCHS_PER_BATCH as f32;
+        let avg_value_loss = epoch_avg_value_loss / NUM_EPOCHS_PER_BATCH as f32;
         let avg_accuracy = epoch_avg_accuracy / NUM_EPOCHS_PER_BATCH as f32;
         let avg_entropy = epoch_avg_entropy / NUM_EPOCHS_PER_BATCH as f32;
         let avg_grad_norm = epoch_avg_grad_norm / NUM_EPOCHS_PER_BATCH as f32;
 
         println!(
-            "  Multi-epoch training complete: Avg Loss={:.4}, Avg Accuracy={:.2}%, Avg Entropy={:.3}",
+            "  Multi-epoch training complete: Avg Loss={:.4} (pol={:.4}, val={:.4}), Avg Accuracy={:.2}%, Avg Entropy={:.3}",
             avg_loss,
+            avg_policy_loss,
+            avg_value_loss,
             avg_accuracy * 100.0,
             avg_entropy
         );
@@ -862,7 +854,9 @@ pub fn train_exceed_the_mean_policy(
                 total_games_completed as f32,
                 iteration,
             );
-            s.add_scalar("loss/policy_gradient", avg_loss, iteration);
+            s.add_scalar("loss/total", avg_loss, iteration);
+            s.add_scalar("loss/policy", avg_policy_loss, iteration);
+            s.add_scalar("loss/value", avg_value_loss, iteration);
             s.add_scalar("metrics/accuracy", avg_accuracy, iteration);
             s.add_scalar("metrics/entropy", avg_entropy, iteration);
             s.add_scalar("training/grad_norm", avg_grad_norm, iteration);
@@ -894,7 +888,7 @@ pub fn train_exceed_the_mean_policy(
             );
 
             // Add trajectory length distribution histogram
-            let trajectory_lengths: Vec<f64> = trajectories_with_standardized_advantages
+            let trajectory_lengths: Vec<f64> = trajectories_with_raw_rewards
                 .iter()
                 .map(|(t, _)| t.game_length as f64)
                 .collect();
@@ -906,7 +900,7 @@ pub fn train_exceed_the_mean_policy(
             );
 
             // Add lines cleared distribution histogram
-            let lines_cleared_dist: Vec<f64> = trajectories_with_standardized_advantages
+            let lines_cleared_dist: Vec<f64> = trajectories_with_raw_rewards
                 .iter()
                 .map(|(t, _)| t.lines_cleared as f64)
                 .collect();
@@ -917,11 +911,8 @@ pub fn train_exceed_the_mean_policy(
                 iteration,
             );
 
-            // Add standardized advantage distribution histogram (should be ~N(0,1))
-            let all_advantages_hist: Vec<f64> = trajectories_with_standardized_advantages
-                .iter()
-                .flat_map(|(_, advantages)| advantages.iter().map(|&a| a as f64))
-                .collect();
+            // Add advantage distribution histogram (baseline = mean_reward, monitoring only)
+            let all_advantages_hist: Vec<f64> = all_advantages.iter().map(|&a| a as f64).collect();
             s.add_histogram(
                 "curriculum/advantage_distribution",
                 &all_advantages_hist,

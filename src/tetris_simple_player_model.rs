@@ -479,7 +479,7 @@ pub fn train_goal_policy(
 
         for _t in 0..update_interval {
             // Forward pass (all games regardless of their age)
-            let current_board = TetrisBoardsTensor::from_gameset(current_games, &device)?;
+            let current_board = TetrisBoardsTensor::from_gameset(&current_games, &device)?;
             let current_pieces_vec = current_games.current_pieces().to_vec();
             let current_piece = TetrisPieceTensor::from_pieces(&current_pieces_vec, &device)?;
 
@@ -548,7 +548,7 @@ pub fn train_goal_policy(
         let actual_rollout_steps = actions.len();
 
         // === Bootstrap from current state ===
-        let final_board = TetrisBoardsTensor::from_gameset(current_games, &device)?;
+        let final_board = TetrisBoardsTensor::from_gameset(&current_games, &device)?;
         let final_pieces_vec = current_games.current_pieces().to_vec();
         let final_piece = TetrisPieceTensor::from_pieces(&final_pieces_vec, &device)?;
         let (_, bootstrap_value) = policy.forward_masked_with_value(&final_board, &final_piece)?;

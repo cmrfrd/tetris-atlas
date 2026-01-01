@@ -6,6 +6,7 @@ use crate::tetris::{
     TetrisBoard, TetrisGame, TetrisGameRng, TetrisPiece, TetrisPieceBag, TetrisPiecePlacement,
 };
 use crate::utils::rshift_slice_from_mask_u32;
+use crate::{beam_search::BeamSearch, tetris::TetrisPieceOrientation};
 use criterion::{BenchmarkId, Criterion, black_box};
 use rand::Rng;
 use rand::seq::IndexedRandom;
@@ -386,6 +387,42 @@ tetris_bench! {
                             counter += 1;
                             game.reset(Some(seed));
                         }
+                    }
+                })
+            },
+        );
+    }
+}
+
+tetris_bench! {
+    pub fn bench_beam_search_tetris(c: &mut Criterion) {
+        const BEAM_WIDTH: usize = 128;
+        const MAX_DEPTH: usize = 8;
+        const LOOKAHEAD: usize = 8;
+        const MAX_MOVES: usize = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
+        const STEPS_PER_ITER: usize = 64;
+        const SEED: u64 = 123;
+        use crate::beam_search::BeamTetrisState;
+
+        let mut search = BeamSearch::<BeamTetrisState, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>::new();
+        let mut game = TetrisGame::new_with_seed(SEED);
+
+        c.bench_with_input(
+            BenchmarkId::new("beam_search_tetris", format!("bw{BEAM_WIDTH}_d{LOOKAHEAD}_steps{STEPS_PER_ITER}")),
+            &(BEAM_WIDTH, LOOKAHEAD, STEPS_PER_ITER),
+            |b, _| {
+                b.iter(|| {
+                    // Keep the benchmark steady by resetting on loss.
+                    for _ in 0..STEPS_PER_ITER {
+                        if game.board.is_lost() {
+                            game.reset(Some(SEED));
+                        }
+                        let state = BeamTetrisState(game);
+                        let mv = search
+                            .search_first_action_with_state(black_box(state), LOOKAHEAD)
+                            .unwrap();
+                        let res = game.apply_placement(black_box(mv));
+                        black_box(res);
                     }
                 })
             },

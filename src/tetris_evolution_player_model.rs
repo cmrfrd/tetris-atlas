@@ -1,13 +1,13 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use candle_core::{DType, Device, Tensor};
+use candle_core::Tensor;
 use candle_nn::VarMap;
 use candle_nn::{VarBuilder, init::Init};
+use rand::Rng;
 use rand::RngCore;
 use rand::distr::Distribution;
 use rand::distr::weighted::WeightedIndex;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use tensorboard::summary_writer::SummaryWriter;
 
@@ -18,6 +18,7 @@ use crate::tensors::{
 };
 use crate::tetris::{TetrisBoard, TetrisGameSet, TetrisPiece, TetrisPieceOrientation};
 use crate::wrapped_tensor::WrappedTensor;
+use crate::{device, fdtype};
 
 // /// Reorder `x` in place so that after[i] = before[indices[i]].
 // /// - `indices` must be a permutation of 0..n-1
@@ -177,14 +178,28 @@ impl TetrisEvolutionPopulation {
     ) -> Result<TetrisPieceOrientationLogitsTensor> {
         self.check_dimensions()?;
         let (batch, _) = current_board.shape_tuple();
+        if batch != self.population_size {
+            anyhow::bail!(
+                "forward_logits expects batch == population_size (one game per individual). got batch={}, population_size={}",
+                batch,
+                self.population_size
+            );
+        }
+        if current_piece.shape_tuple().0 != self.population_size {
+            anyhow::bail!(
+                "forward_logits expects current_piece batch == population_size. got {:?}, population_size={}",
+                current_piece.shape_tuple(),
+                self.population_size
+            );
+        }
 
         let board_flat = current_board
-            .to_dtype(DType::F32)?
+            .to_dtype(crate::fdtype())?
             .reshape(&[batch, TetrisBoard::HEIGHT * TetrisBoard::WIDTH])?;
         let piece_one_hot = TetrisPieceOneHotTensor::from_piece_tensor(current_piece.clone())?;
         let input = Tensor::cat(&[&board_flat, &piece_one_hot], 1)?; // [B, input_dim]
 
-        // Input shape: [population, in_dim]
+        // Input shape: [population, in_dim] (one row per individual)
         let mut activations = input;
 
         for (layer_idx, (w, b)) in self.weights.iter().zip(self.biases.iter()).enumerate() {
@@ -211,12 +226,16 @@ impl TetrisEvolutionPopulation {
         let logits = self.forward_logits(current_board, current_piece)?; // [P, O]
 
         // Mask invalid orientations
-        let mask = create_orientation_mask(current_piece)?; // [P, O] (0/1)
+        let mask = create_orientation_mask(current_piece)?; // [B, O] (0/1)
         let device = logits.device();
-        let zero = mask.zeros_like()?;
-        let keep = mask.gt(&zero)?;
-        let neg_inf = Tensor::new(-1e9f32, &device)?.broadcast_as(logits.dims())?;
-        let masked = keep.where_cond(&logits, &neg_inf)?;
+        let dtype = logits.dtype();
+        let keep = mask.gt(0u32)?;
+        // NOTE: Metal backend does not support const-set for f64.
+        // Use f32 and cast to the logits dtype (often f16/f32).
+        let neg_inf = Tensor::full(f32::NEG_INFINITY, logits.dims(), &device)?
+            .to_dtype(dtype)?
+            .broadcast_as(logits.dims())?;
+        let masked = keep.where_cond(logits.inner(), &neg_inf)?;
         Ok(TetrisPieceOrientationLogitsTensor::try_from(masked)?)
     }
 
@@ -239,52 +258,50 @@ impl TetrisEvolutionPopulation {
             .collect::<Vec<_>>();
         let mutation_indices_tensor = Tensor::from_slice(&mutation_indices, (num_lost,), &device)?;
 
-        self.weights
-            .par_iter()
-            .chain(self.biases.par_iter())
-            .try_for_each(|param| -> Result<()> {
-                let dims = param.dims();
-                debug_assert!(dims[0] == self.population_size);
+        // NOTE: Keep this sequential. Dispatching many small CUDA ops from multiple host threads
+        // is often slower and can be unstable depending on the backend.
+        for param in self.weights.iter().chain(self.biases.iter()) {
+            let dims = param.dims();
+            debug_assert!(dims[0] == self.population_size);
 
-                let flatten_dims_product = dims[1..].iter().product();
-                let output_dim = flatten_dims_product;
+            let output_dim: usize = dims[1..].iter().product();
 
-                let noise = Self::apply_norm(
-                    Tensor::randn(0.0, 1.0, (num_lost, output_dim), &device)?
-                        .to_dtype(param.dtype())?,
-                    perturb_norm,
-                )?;
+            let noise = Self::apply_norm(
+                // NOTE: Metal backend does not support randn for f64. Use f32 and cast.
+                Tensor::randn(0f32, 1f32, (num_lost, output_dim), &device)?
+                    .to_dtype(param.dtype())?,
+                perturb_norm,
+            )?;
 
-                let noise = noise
-                    .reshape(
-                        std::iter::once(num_lost)
-                            .chain(dims[1..].iter().copied())
-                            .collect::<Vec<_>>(),
-                    )?
-                    .contiguous()?;
+            let noise = noise
+                .reshape(
+                    std::iter::once(num_lost)
+                        .chain(dims[1..].iter().copied())
+                        .collect::<Vec<_>>(),
+                )?
+                .contiguous()?;
 
-                let mutation_indices_broadcast = mutation_indices_tensor
-                    .reshape(
-                        std::iter::once(num_lost)
-                            .chain(std::iter::repeat(1).take(dims.len() - 1))
-                            .collect::<Vec<_>>(),
-                    )?
-                    .broadcast_as(noise.dims())?
-                    .contiguous()?;
+            let mutation_indices_broadcast = mutation_indices_tensor
+                .reshape(
+                    std::iter::once(num_lost)
+                        .chain(std::iter::repeat(1).take(dims.len() - 1))
+                        .collect::<Vec<_>>(),
+                )?
+                .broadcast_as(noise.dims())?
+                .contiguous()?;
 
-                let original = param.copy()?;
-                let inverse_indices_broadcast = inverse_indices_tensor
-                    .reshape(
-                        std::iter::once(self.population_size)
-                            .chain(std::iter::repeat(1).take(dims.len() - 1))
-                            .collect::<Vec<_>>(),
-                    )?
-                    .broadcast_as(param.shape())?
-                    .contiguous()?;
-                param.scatter_set(&inverse_indices_broadcast, &original, 0)?;
-                param.scatter_add_set(&mutation_indices_broadcast, &noise, 0)?;
-                Ok(())
-            })?;
+            let original = param.copy()?;
+            let inverse_indices_broadcast = inverse_indices_tensor
+                .reshape(
+                    std::iter::once(self.population_size)
+                        .chain(std::iter::repeat(1).take(dims.len() - 1))
+                        .collect::<Vec<_>>(),
+                )?
+                .broadcast_as(param.shape())?
+                .contiguous()?;
+            param.scatter_set(&inverse_indices_broadcast, &original, 0)?;
+            param.scatter_add_set(&mutation_indices_broadcast, &noise, 0)?;
+        }
 
         Ok(())
     }
@@ -295,14 +312,29 @@ impl TetrisEvolutionPopulation {
                 anyhow::bail!("perturb_norm must be positive");
             }
 
+            // Normalize *per individual* (per row), so each mutated individual's noise has the
+            // same L2 norm in the flattened parameter space.
+            //
+            // tensor is expected to be [num_lost, output_dim] here.
+            if tensor.dims().len() != 2 {
+                anyhow::bail!(
+                    "apply_norm expects a 2D tensor [num_lost, output_dim], got dims={:?}",
+                    tensor.dims()
+                );
+            }
             let dims = tensor.dims();
-            let norms = tensor.sqr()?.sum_all()?.sqrt()?;
-            let denom =
-                norms.maximum(&Tensor::full(f32::EPSILON, norms.dims(), tensor.device())?)?;
+            let (num_lost, _output_dim) = tensor.dims2()?;
+
+            // norms: [num_lost, 1]
+            let norms = tensor.sqr()?.sum_keepdim(1)?.sqrt()?;
+            let eps = Tensor::full(f32::EPSILON, norms.dims(), tensor.device())?
+                .to_dtype(tensor.dtype())?;
+            let denom = norms.maximum(&eps)?;
+
             let scaled = tensor
                 .broadcast_div(&denom)?
-                .affine(target_norm as f64, 0.0)?;
-            let scaled = scaled.reshape(dims)?;
+                .affine(target_norm as f64, 0.0)?
+                .reshape((num_lost, dims[1]))?;
             Ok(scaled)
         } else {
             Ok(tensor)
@@ -319,17 +351,30 @@ pub fn train_population(
     logdir: Option<PathBuf>,
     _checkpoint_dir: Option<PathBuf>,
 ) -> Result<()> {
-    let device = Device::new_cuda(0).unwrap();
+    let device = device();
+    let dtype = fdtype();
 
     const NUM_GENERATIONS: usize = 100_000;
     const POPULATION_SIZE: usize = 1024;
     const SEED: usize = 42;
-    const NOISE_SCALE: f64 = 0.0001;
+    // When true, all individuals are evaluated on the exact same game seed.
+    // That means every reset restarts the identical piece sequence from the same start state.
+    // This makes fitness comparisons extremely low-variance, but will heavily overfit to that one
+    // deterministic "game".
+    const USE_SHARED_GAME_SEEDS: bool = true;
+    const NOISE_SCALE: f64 = 0.002; // IMPROVEMENT: Increased from 0.0001 for better exploration
     const N_GAMES_FOR_FITNESS: usize = 256; // Average fitness over N games per individual
     const MIN_READY_FOR_EVOLUTION: usize = 32; // Minimum individuals needed to trigger evolution
+    const SAMPLING_TEMPERATURE: f32 = 0.5; // IMPROVEMENT: Increased from 0.1 for more exploration during training
+
+    #[inline]
+    fn eval_game_seed(base_seed: u64, _game_number: usize) -> u64 {
+        // "Literally the exact same seed": ignore game number and always return base_seed.
+        base_seed
+    }
 
     let model_varmap = VarMap::new();
-    let vb = VarBuilder::from_varmap(&model_varmap, crate::fdtype(), &device);
+    let vb = VarBuilder::from_varmap(&model_varmap, dtype, &device);
 
     let population_cfg = TetrisEvolutionPopulationConfig {
         layer_dims: vec![
@@ -349,7 +394,12 @@ pub fn train_population(
         SummaryWriter::new(dir)
     });
 
-    let mut game_set = TetrisGameSet::new_with_seed(SEED as u64, POPULATION_SIZE);
+    let shared_seed_base = SEED as u64;
+    let mut game_set = if USE_SHARED_GAME_SEEDS {
+        TetrisGameSet::new_with_same_seed(eval_game_seed(shared_seed_base, 0), POPULATION_SIZE)
+    } else {
+        TetrisGameSet::new_with_seed(shared_seed_base, POPULATION_SIZE)
+    };
     let mut rng = rand::rng();
 
     // Track cumulative pieces and game counts for averaging fitness over N games
@@ -368,7 +418,7 @@ pub fn train_population(
         // Inner loop: play until enough individuals complete N games for evolution
         let (ready_for_eval, still_running, avg_entropy) = loop {
             // Forward pass for all individuals
-            let current_board = TetrisBoardsTensor::from_gameset(game_set, &device)?;
+            let current_board = TetrisBoardsTensor::from_gameset(&game_set, &device)?;
             let current_pieces_array: Vec<TetrisPiece> = game_set.current_pieces().to_vec();
             let current_pieces_vec: Vec<_> = current_pieces_array[0..game_set.len()].to_vec();
             let current_piece =
@@ -376,8 +426,8 @@ pub fn train_population(
             let masked = population.forward_masked(&current_board, &current_piece)?;
             let entropy_mean = masked.into_dist()?.entropy()?.mean_all()?;
 
-            // Sample actions and apply
-            let sampled_orientations = masked.sample(0.1, &current_piece)?;
+            // Sample actions and apply (using temperature for exploration)
+            let sampled_orientations = masked.sample(SAMPLING_TEMPERATURE, &current_piece)?;
             let action_orientations = sampled_orientations.into_orientations()?;
             let lost_flags = game_set.apply_placement_from_orientations(&action_orientations);
             let piece_counts_array: Vec<u32> = game_set.piece_counts().to_vec();
@@ -392,7 +442,12 @@ pub fn train_population(
                 if bool::from(*is_lost) {
                     cumulative_pieces[idx] += piece_count as u64;
                     games_completed[idx] += 1;
-                    game_set[idx].reset(Some(rng.next_u64()));
+                    let next_seed = if USE_SHARED_GAME_SEEDS {
+                        eval_game_seed(shared_seed_base, games_completed[idx])
+                    } else {
+                        rng.next_u64()
+                    };
+                    game_set[idx].reset(Some(next_seed));
                 }
             }
 
@@ -436,22 +491,35 @@ pub fn train_population(
         let best_fitness: f64 = sorted_ready[0].1;
 
         // Select new parents from survivors using fitness-weighted sampling
+        // Using squared fitness for selection pressure while maintaining diversity
         let survivor_indices: Vec<usize> = survivors.iter().map(|(idx, _)| *idx).collect();
         let weights: Vec<f64> = survivors
             .iter()
-            .map(|(_, avg_pieces)| avg_pieces.powf(3.).clamp(0.0, 100_000.0))
+            .map(|(_, avg_pieces)| avg_pieces.powf(2.).clamp(0.0, 100_000.0))
             .collect();
-        let weighted_index = WeightedIndex::new(weights)?;
-        let new_parent_positions: Vec<usize> = weighted_index
-            .sample_iter(&mut rng)
-            .take(num_to_replace)
-            .collect();
-        let new_parents: Vec<usize> = new_parent_positions
-            .iter()
-            .map(|&pos| survivor_indices[pos])
-            .collect();
+        let new_parents: Vec<usize> = match WeightedIndex::new(&weights) {
+            Ok(weighted_index) => weighted_index
+                .sample_iter(&mut rng)
+                .take(num_to_replace)
+                .map(|pos| survivor_indices[pos])
+                .collect(),
+            Err(_) => {
+                // Early on it's common for all fitnesses (and thus weights) to be ~0.
+                // In that case, fall back to uniform sampling over survivors.
+                (0..num_to_replace)
+                    .map(|_| {
+                        let pos = rng.random_range(0..survivor_indices.len());
+                        survivor_indices[pos]
+                    })
+                    .collect()
+            }
+        };
 
         // Build permutation: [still_running..., survivors..., new_parents...]
+        // After permutation, the population structure will be:
+        //   [0..still_running.len()]                                     = still_running individuals (continue current N-game cycle)
+        //   [still_running.len()..still_running.len()+num_survivors]     = survivors (top 50%, start new N-game cycle)
+        //   [POPULATION_SIZE-num_to_replace..POPULATION_SIZE]            = new_parents (mutated copies of survivors, start new N-game cycle)
         let permute_vec: Vec<usize> = still_running
             .iter()
             .copied()
@@ -459,15 +527,11 @@ pub fn train_population(
             .chain(new_parents.iter().copied())
             .collect();
 
-        // Update the gameset
+        // === PERMUTATION PHASE ===
+        // Permute game_set to match new population order
         game_set.permute(&permute_vec);
 
-        // Reset games for replaced individuals
-        for idx in (POPULATION_SIZE - num_to_replace)..POPULATION_SIZE {
-            game_set[idx].reset(Some(rng.next_u64()));
-        }
-
-        // Permute the tracking arrays
+        // Permute the tracking arrays to match new population order
         let old_cumulative = cumulative_pieces.clone();
         let old_games = games_completed.clone();
         for (new_idx, &old_idx) in permute_vec.iter().enumerate() {
@@ -475,21 +539,36 @@ pub fn train_population(
             games_completed[new_idx] = old_games[old_idx];
         }
 
-        // Reset tracking for replaced individuals (they start fresh)
-        for idx in (POPULATION_SIZE - num_to_replace)..POPULATION_SIZE {
-            cumulative_pieces[idx] = 0;
-            games_completed[idx] = 0;
-        }
+        // Permute population weights to match new order, adding noise to new_parents
+        let index_vector: Vec<u32> = permute_vec.iter().map(|&idx| idx as u32).collect();
+        population.permute_population(&index_vector, num_to_replace, Some(NOISE_SCALE))?;
 
-        // Reset tracking for survivors who completed evaluation (new N-game cycle)
+        // === RESET PHASE ===
+        // Reset survivors (indices: still_running.len() .. still_running.len()+num_survivors)
+        // They completed N games and need to start a fresh N-game evaluation cycle
         for idx in still_running.len()..(still_running.len() + num_survivors) {
             cumulative_pieces[idx] = 0;
             games_completed[idx] = 0;
+            let reset_seed = if USE_SHARED_GAME_SEEDS {
+                eval_game_seed(shared_seed_base, 0)
+            } else {
+                rng.next_u64()
+            };
+            game_set[idx].reset(Some(reset_seed)); // BUG FIX: Reset games too!
         }
 
-        // Update the population weights
-        let index_vector: Vec<u32> = permute_vec.iter().map(|&idx| idx as u32).collect();
-        population.permute_population(&index_vector, num_to_replace, Some(NOISE_SCALE))?;
+        // Reset new_parents (indices: POPULATION_SIZE-num_to_replace .. POPULATION_SIZE)
+        // These are mutated copies of survivors that need fresh evaluation
+        for idx in (POPULATION_SIZE - num_to_replace)..POPULATION_SIZE {
+            cumulative_pieces[idx] = 0;
+            games_completed[idx] = 0;
+            let reset_seed = if USE_SHARED_GAME_SEEDS {
+                eval_game_seed(shared_seed_base, 0)
+            } else {
+                rng.next_u64()
+            };
+            game_set[idx].reset(Some(reset_seed));
+        }
 
         // Compute timing stats
         let generation_elapsed = generation_start_time.elapsed().as_secs_f64();

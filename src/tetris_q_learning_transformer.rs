@@ -993,8 +993,8 @@ pub fn train_q_learning_policy(
             };
 
             // Apply the chosen placement
-            let is_lost = game.apply_placement(placement);
-            let done = is_lost.into();
+            let result = game.apply_placement(placement);
+            let done = result.is_lost.into();
 
             // Store experience: (current_state, next_state, reward, done, episode)
             replay_buffer.push(

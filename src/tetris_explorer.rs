@@ -279,8 +279,8 @@ impl TetrisExplorerNode {
 
         for placement in self.game.current_placements() {
             let mut next_game = self.game;
-            let is_lost = next_game.apply_placement(*placement);
-            if is_lost.into() || !filter.is_none_or(|f| f(&self)) {
+            let result = next_game.apply_placement(*placement);
+            if result.is_lost.into() || !filter.is_none_or(|f| f(&self)) {
                 continue;
             }
             buf_guard.push(TetrisExplorerItem {

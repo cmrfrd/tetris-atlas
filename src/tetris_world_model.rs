@@ -414,7 +414,7 @@ pub fn train_goal_policy(
         // Sample random goal board and random current board
         let goal_games =
             generator.gen_uniform_sampled_gameset((2..5).into(), BATCH_SIZE, &mut rng)?;
-        let goal_board = TetrisBoardsTensor::from_gameset(goal_games, &device)?; // [B,T]
+        let goal_board = TetrisBoardsTensor::from_gameset(&goal_games, &device)?; // [B,T]
 
         let mut current_games =
             generator.gen_uniform_sampled_gameset((5..5).into(), BATCH_SIZE, &mut rng)?; // start random state
@@ -431,7 +431,7 @@ pub fn train_goal_policy(
         // Rollout loop
         for _t in 0..ROLLOUT_STEPS {
             // State tensors
-            let current_board = TetrisBoardsTensor::from_gameset(current_games, &device)?; // [B,T]
+            let current_board = TetrisBoardsTensor::from_gameset(&current_games, &device)?; // [B,T]
             let current_pieces_vec = current_games.current_pieces().to_vec();
             let current_piece =
                 TetrisPieceTensor::from_pieces(&current_pieces_vec.as_slice(), &device)?; // [B,1]
@@ -468,7 +468,7 @@ pub fn train_goal_policy(
                 .map(|(&piece, orientation)| TetrisPiecePlacement { piece, orientation })
                 .collect();
             let lost_flags = current_games.apply_placement(&placements);
-            let next_board = TetrisBoardsTensor::from_gameset(current_games, &device)?; // [B,T]
+            let next_board = TetrisBoardsTensor::from_gameset(&current_games, &device)?; // [B,T]
 
             // Dense reward: delta similarity + exact-match bonus
             let eq_cur = states_board

@@ -323,7 +323,7 @@ pub fn train_simple_imitation_policy(
                         (cells_before + 4.0 - cells_after) / TetrisBoard::WIDTH as f32;
 
                     // Reward: positive baseline, small hole penalty, line clear bonus
-                    let step_reward = if bool::from(is_lost) {
+                    let step_reward = if bool::from(is_lost.is_lost) {
                         -0.1 // Small death penalty
                     } else {
                         0.1 // Base survival reward
@@ -338,7 +338,7 @@ pub fn train_simple_imitation_policy(
                         step_reward,
                     });
 
-                    if bool::from(is_lost) {
+                    if bool::from(is_lost.is_lost) {
                         let num_pieces = game.piece_count;
 
                         // Use immediate step rewards directly (no temporal accumulation)
