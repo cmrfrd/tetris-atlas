@@ -5,4 +5,6 @@ checkpoints/
 trace/
 traces/
 
+tensorboard/src/tensorboard_generated/
+
 junk/
