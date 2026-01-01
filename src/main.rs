@@ -1,8 +1,13 @@
 use clap::{Parser, ValueEnum};
 use std::str::FromStr;
 use tetris_atlas::tetris::TetrisGame;
+use tetris_atlas::tetris_beam_supervised;
+use tetris_atlas::tetris_policy_gradients;
 use tetris_atlas::{
-    set_global_threadpool, tetris_evolution_player_model, tetris_exceed_the_mean, tetris_q_learning, tetris_q_learning_transformer, tetris_simple_imitation, tetris_simple_player_model, tetris_transition_model, tetris_transition_transformer_model, tetris_tui, tetris_world_model
+    set_global_threadpool, tetris_dqn, tetris_evolution_player_model,
+    tetris_q_learning_transformer, tetris_simple_imitation, tetris_simple_player_model,
+    tetris_transition_model, tetris_transition_transformer_model, tetris_tui,
+    tetris_value_function, tetris_world_model,
 };
 use time::OffsetDateTime;
 use tracing::{Level, info};
@@ -11,11 +16,13 @@ use tracing_subscriber::prelude::*;
 #[derive(Debug, Copy, Clone, Eq, PartialEq, ValueEnum)]
 #[value(rename_all = "kebab-case")]
 enum TrainModel {
+    Dqn,
     Evolution,
     SimpleGoalPolicy,
-    ExceedTheMean,
+    PolicyGradients,
+    BeamSupervised,
     SimpleImitation,
-    QLearning,
+    ValueFunction,
     QLearningTransformer,
     Transition,
     TransitionTransformer,
@@ -144,6 +151,15 @@ fn main() {
                 path
             });
             match model {
+                TrainModel::Dqn => {
+                    tetris_dqn::train_tetris_dqn(
+                        run_name.clone(),
+                        logdir.clone(),
+                        checkpoint_dir.clone(),
+                        *resume,
+                    )
+                    .unwrap();
+                }
                 TrainModel::Evolution => {
                     tetris_evolution_player_model::train_population(
                         run_name.clone(),
@@ -160,11 +176,20 @@ fn main() {
                     )
                     .unwrap();
                 }
-                TrainModel::ExceedTheMean => {
-                    tetris_exceed_the_mean::train_exceed_the_mean_policy(
+                TrainModel::PolicyGradients => {
+                    tetris_policy_gradients::train_tetris_policy_gradients(
                         run_name.clone(),
                         logdir.clone(),
                         checkpoint_dir.clone(),
+                    )
+                    .unwrap();
+                }
+                TrainModel::BeamSupervised => {
+                    tetris_beam_supervised::train_tetris_beam_supervised(
+                        run_name.clone(),
+                        logdir.clone(),
+                        checkpoint_dir.clone(),
+                        *resume,
                     )
                     .unwrap();
                 }
@@ -176,8 +201,8 @@ fn main() {
                     )
                     .unwrap();
                 }
-                TrainModel::QLearning => {
-                    tetris_q_learning::train_q_learning_policy(
+                TrainModel::ValueFunction => {
+                    tetris_value_function::train_value_function_policy(
                         run_name.clone(),
                         logdir.clone(),
                         checkpoint_dir.clone(),
@@ -226,8 +251,11 @@ fn main() {
             let placement = placements[0];
             println!("{}", placement);
 
-            let is_lost = game.apply_placement(placement);
-            println!("{}", is_lost);
+            let result = game.apply_placement(placement);
+            println!(
+                "IsLost: {}, LinesCleared: {}",
+                result.is_lost, result.lines_cleared
+            );
             println!("{}", game);
         }
         // Commands::Explore { atlas_file } => {
