@@ -1,4 +1,4 @@
-use std::sync::{OnceLock, RwLock};
+use std::sync::RwLock;
 
 use crate::{
     grad_accum::get_l2_norm,
@@ -13,61 +13,79 @@ use tracing::instrument;
 /// Create the mask over all orientations for a specific piece.
 /// Each piece has 4 possible rotations (indices 0-3), but only canonical/unique rotations are enabled.
 /// The mask is organized as [piece_index][rotation][column], where rotation*10 + column gives the flat index.
-const PIECE_MASK_LOOKUP: [u8; TetrisPiece::NUM_PIECES * TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS] = [
-    // O piece (index 0): Only 1 unique rotation
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 0: width=2 → 9 valid columns (0-8)
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 1: DISABLED (duplicate of rotation 0)
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 2: DISABLED (duplicate of rotation 0)
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 3: DISABLED (duplicate of rotation 0)
-    // I piece (index 1): Only 2 unique rotations
-    1, 1, 1, 1, 1, 1, 1, 0, 0, 0, // Rotation 0: width=4 (horizontal) → 7 valid columns (0-6)
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // Rotation 1: width=1 (vertical) → 10 valid columns (0-9)
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 2: DISABLED (duplicate of rotation 0)
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 3: DISABLED (duplicate of rotation 1)
-    // S piece (index 2): Only 2 unique rotations
-    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 0: width=3 → 8 valid columns (0-7)
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 1: width=2 → 9 valid columns (0-8)
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 2: DISABLED (duplicate of rotation 0)
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 3: DISABLED (duplicate of rotation 1)
-    // Z piece (index 3): Only 2 unique rotations
-    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 0: width=3 → 8 valid columns (0-7)
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 1: width=2 → 9 valid columns (0-8)
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 2: DISABLED (duplicate of rotation 0)
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 3: DISABLED (duplicate of rotation 1)
-    // T piece (index 4): All 4 rotations are unique
-    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 0: width=3 → 8 valid columns (0-7)
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 1: width=2 → 9 valid columns (0-8)
-    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 2: width=3 → 8 valid columns (0-7)
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 3: width=2 → 9 valid columns (0-8)
-    // L piece (index 5): All 4 rotations are unique
-    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 0: width=3 → 8 valid columns (0-7)
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 1: width=2 → 9 valid columns (0-8)
-    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 2: width=3 → 8 valid columns (0-7)
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 3: width=2 → 9 valid columns (0-8)
-    // J piece (index 6): All 4 rotations are unique
-    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 0: width=3 → 8 valid columns (0-7)
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 1: width=2 → 9 valid columns (0-8)
-    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 2: width=3 → 8 valid columns (0-7)
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 3: width=2 → 9 valid columns (0-8)
-];
-static ORIENTATION_MASK_CACHE: OnceLock<Tensor> = OnceLock::new();
+// const PIECE_MASK_LOOKUP: [u8; TetrisPiece::NUM_PIECES
+//     * TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS] = [
+//     // O piece (index 0): Only 1 unique rotation
+//     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 0: width=2 → 9 valid columns (0-8)
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 1: DISABLED (duplicate of rotation 0)
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 2: DISABLED (duplicate of rotation 0)
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 3: DISABLED (duplicate of rotation 0)
+//     // I piece (index 1): Only 2 unique rotations
+//     1, 1, 1, 1, 1, 1, 1, 0, 0, 0, // Rotation 0: width=4 (horizontal) → 7 valid columns (0-6)
+//     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // Rotation 1: width=1 (vertical) → 10 valid columns (0-9)
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 2: DISABLED (duplicate of rotation 0)
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 3: DISABLED (duplicate of rotation 1)
+//     // S piece (index 2): Only 2 unique rotations
+//     1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 0: width=3 → 8 valid columns (0-7)
+//     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 1: width=2 → 9 valid columns (0-8)
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 2: DISABLED (duplicate of rotation 0)
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 3: DISABLED (duplicate of rotation 1)
+//     // Z piece (index 3): Only 2 unique rotations
+//     1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 0: width=3 → 8 valid columns (0-7)
+//     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 1: width=2 → 9 valid columns (0-8)
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 2: DISABLED (duplicate of rotation 0)
+//     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 3: DISABLED (duplicate of rotation 1)
+//     // T piece (index 4): All 4 rotations are unique
+//     1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 0: width=3 → 8 valid columns (0-7)
+//     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 1: width=2 → 9 valid columns (0-8)
+//     1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 2: width=3 → 8 valid columns (0-7)
+//     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 3: width=2 → 9 valid columns (0-8)
+//     // L piece (index 5): All 4 rotations are unique
+//     1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 0: width=3 → 8 valid columns (0-7)
+//     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 1: width=2 → 9 valid columns (0-8)
+//     1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 2: width=3 → 8 valid columns (0-7)
+//     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 3: width=2 → 9 valid columns (0-8)
+//     // J piece (index 6): All 4 rotations are unique
+//     1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 0: width=3 → 8 valid columns (0-7)
+//     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 1: width=2 → 9 valid columns (0-8)
+//     1, 1, 1, 1, 1, 1, 1, 1, 0, 0, // Rotation 2: width=3 → 8 valid columns (0-7)
+//     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 3: width=2 → 9 valid columns (0-8)
+// ];
+
+const PIECE_MASK_LOOKUP: [u8; TetrisPiece::NUM_PIECES
+    * TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS] = {
+    let mut out = [0u8; TetrisPiece::NUM_PIECES * TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS];
+    let mut piece_idx: usize = 0;
+    while piece_idx < TetrisPiece::NUM_PIECES {
+        let piece = TetrisPiece::from_index(piece_idx as u8);
+        let mask = TetrisPieceOrientation::bitmask_from_piece(piece).as_slice();
+        let mut orientation_idx: usize = 0;
+        while orientation_idx < TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS {
+            out[piece_idx * TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS + orientation_idx] =
+                mask[orientation_idx];
+            orientation_idx += 1;
+        }
+        piece_idx += 1;
+    }
+    out
+};
+
 pub fn create_orientation_mask(pieces: &TetrisPieceTensor) -> Result<Tensor> {
     let device = pieces.device();
+    // NOTE: Do not cache this Tensor globally: the first call would "pin" it to that device,
+    // and subsequent calls on a different device (e.g. Cpu vs Cuda) would error.
+    // This lookup table is tiny (7 x 40), so rebuilding it is negligible and device-safe.
+    let masks = Tensor::from_slice(
+        &PIECE_MASK_LOOKUP,
+        (
+            TetrisPiece::NUM_PIECES,
+            TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
+        ),
+        device,
+    )?
+    .to_dtype(DType::U32)?;
 
-    let masks = ORIENTATION_MASK_CACHE.get_or_try_init(|| {
-        Tensor::from_slice(
-            &PIECE_MASK_LOOKUP,
-            (
-                TetrisPiece::NUM_PIECES,
-                TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
-            ),
-            device,
-        )?
-        .to_dtype(DType::U32)
-    })?;
-
-    let result = masks.index_select(&pieces.squeeze(1)?, 0)?;
-    Ok(result)
+    Ok(masks.index_select(&pieces.squeeze(1)?, 0)?)
 }
 
 /// Masked softmax over the last dim of [B, N].
@@ -292,44 +310,51 @@ mod tests {
         let pieces = TetrisPiece::all();
         let pieces_tensor = TetrisPieceTensor::from_pieces(&pieces, &Device::Cpu)?;
         let mask = create_orientation_mask(&pieces_tensor)?.to_dtype(crate::fdtype())?;
-        let expected_mask = vec![
-            vec![
-                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-            ],
-            vec![
-                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-                1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-            ],
-            vec![
-                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-                1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-            ],
-            vec![
-                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-                1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-            ],
-            vec![
-                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-                1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
-                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0,
-            ],
-            vec![
-                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-                1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
-                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0,
-            ],
-            vec![
-                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-                1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0,
-                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0,
-            ],
-        ];
         let mask_as_vec = mask.to_vec2::<f32>().unwrap();
+        let expected_mask: Vec<Vec<f32>> = vec![
+            TetrisPieceOrientation::bitmask_from_piece(TetrisPiece::O_PIECE)
+                .as_slice()
+                .to_vec()
+                .into_iter()
+                .map(|x| x as f32)
+                .collect(),
+            TetrisPieceOrientation::bitmask_from_piece(TetrisPiece::I_PIECE)
+                .as_slice()
+                .to_vec()
+                .into_iter()
+                .map(|x| x as f32)
+                .collect(),
+            TetrisPieceOrientation::bitmask_from_piece(TetrisPiece::S_PIECE)
+                .as_slice()
+                .to_vec()
+                .into_iter()
+                .map(|x| x as f32)
+                .collect(),
+            TetrisPieceOrientation::bitmask_from_piece(TetrisPiece::Z_PIECE)
+                .as_slice()
+                .to_vec()
+                .into_iter()
+                .map(|x| x as f32)
+                .collect(),
+            TetrisPieceOrientation::bitmask_from_piece(TetrisPiece::T_PIECE)
+                .as_slice()
+                .to_vec()
+                .into_iter()
+                .map(|x| x as f32)
+                .collect(),
+            TetrisPieceOrientation::bitmask_from_piece(TetrisPiece::L_PIECE)
+                .as_slice()
+                .to_vec()
+                .into_iter()
+                .map(|x| x as f32)
+                .collect(),
+            TetrisPieceOrientation::bitmask_from_piece(TetrisPiece::J_PIECE)
+                .as_slice()
+                .to_vec()
+                .into_iter()
+                .map(|x| x as f32)
+                .collect(),
+        ];
         assert_eq!(mask_as_vec, expected_mask);
 
         // Also just check reversed for the heck of it
