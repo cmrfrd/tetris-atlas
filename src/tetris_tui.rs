@@ -299,8 +299,8 @@ impl TetrisTui {
         }
 
         if let Some(&placement) = self.current_placement() {
-            let is_lost = self.game.apply_placement(placement);
-            if is_lost.into() {
+            let result = self.game.apply_placement(placement);
+            if result.is_lost.into() {
                 self.game_over = true;
                 if self.game.lines_cleared > self.high_score {
                     self.high_score = self.game.lines_cleared;
