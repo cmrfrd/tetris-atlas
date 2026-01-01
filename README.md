@@ -16,7 +16,11 @@ cargo expand --lib utils::asdf
 ## Benchmarking
 
 ```shell
-cargo bench --bench benches -- --profile-time 5 && cargo bench --bench benches
+# Generate flamegraph
+cargo bench --bench benches -- --profile-time 5
+
+# Generate critereon report
+cargo bench --bench benches
 ```
 
 ## ASM analysis
