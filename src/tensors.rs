@@ -25,7 +25,7 @@ impl_wrapped_tensor!(
 
 impl TetrisBoardsTensor {
     /// Create a tetris boards tensor from a gameset
-    pub fn from_gameset(games: TetrisGameSet, device: &Device) -> Result<Self> {
+    pub fn from_gameset(games: &TetrisGameSet, device: &Device) -> Result<Self> {
         let mut boards = Vec::with_capacity(games.len() * TetrisBoard::SIZE);
         games.boards().iter().for_each(|board| {
             boards.extend_from_slice(&board.to_binary_slice());
@@ -477,9 +477,10 @@ impl TetrisPieceOrientationLogitsTensor {
 
         let keep_mask = create_orientation_mask(pieces)?.gt(0u32)?;
 
-        let neg_inf = Tensor::full(f64::NEG_INFINITY, (), device)?
+        let neg_inf = Tensor::new(f32::NEG_INFINITY, device)?
             .to_dtype(dtype)?
             .broadcast_as(self.dims())?;
+
         let logits = keep_mask.where_cond(&self.inner(), &neg_inf)?;
 
         if temperature == 0.0 {
