@@ -263,7 +263,13 @@ impl<S: BeamSearchState, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const 
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct BeamTetrisState(pub(crate) TetrisGame);
+pub struct BeamTetrisState(pub(crate) TetrisGame);
+
+impl BeamTetrisState {
+    pub fn new(game: TetrisGame) -> Self {
+        Self(game)
+    }
+}
 
 impl BeamSearchState for BeamTetrisState {
     type Action = TetrisPiecePlacement;
@@ -318,51 +324,6 @@ impl BeamSearchState for BeamTetrisState {
     #[inline]
     fn is_terminal(&self) -> bool {
         self.0.board.is_lost()
-    }
-}
-
-pub struct TetrisGameIter<const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_MOVES: usize> {
-    pub game: TetrisGame,
-    search: BeamSearch<BeamTetrisState, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>,
-}
-
-impl<const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_MOVES: usize>
-    TetrisGameIter<BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
-{
-    pub fn new() -> Self {
-        Self {
-            game: TetrisGame::new(),
-            search: BeamSearch::<BeamTetrisState, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>::new(),
-        }
-    }
-
-    pub fn new_with_seed(seed: u64) -> Self {
-        Self {
-            game: TetrisGame::new_with_seed(seed),
-            search: BeamSearch::<BeamTetrisState, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>::new(),
-        }
-    }
-
-    pub fn reset(&mut self, seed: Option<u64>) {
-        self.game.reset(seed);
-    }
-}
-
-impl<const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_MOVES: usize> Iterator
-    for TetrisGameIter<BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
-{
-    type Item = (TetrisBoard, TetrisPiecePlacement);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.game.board.is_lost() {
-            return None;
-        }
-        let board_before = self.game.board;
-        let action = self
-            .search
-            .search_first_action_with_state(BeamTetrisState(self.game), MAX_DEPTH)?;
-        (self.game.apply_placement(action).is_lost != IsLost::LOST)
-            .then_some((board_before, action))
     }
 }
 
