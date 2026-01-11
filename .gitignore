@@ -1,10 +1,14 @@
+# project files
+# Ignore Rust and build artifacts, output, fs state, logs, traces, temp files
 target/
 build/
 logdir/
 checkpoints/
+checkpoint/
 trace/
 traces/
-
 tensorboard/src/tensorboard_generated/
-
 junk/
+
+# ignore data files
+**/*.csv
