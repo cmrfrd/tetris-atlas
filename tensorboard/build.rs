@@ -104,6 +104,27 @@ fn generate_mod_file(generated_dir: &PathBuf) -> Result<(), Box<dyn std::error::
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed={}", DOWNLOAD_SCRIPT_PATH);
 
+    // If generated bindings already exist (committed in-repo), prefer using them as-is.
+    // This avoids requiring network access at build time.
+    let generated_dir = PathBuf::from(GENERATED_DIR);
+    if generated_dir.exists() {
+        let has_rs_files = std::fs::read_dir(&generated_dir)
+            .map(|mut it| {
+                it.any(|entry| {
+                    entry
+                        .ok()
+                        .and_then(|e| e.path().extension().map(|ext| ext == "rs"))
+                        .unwrap_or(false)
+                })
+            })
+            .unwrap_or(false);
+
+        if has_rs_files {
+            generate_mod_file(&generated_dir)?;
+            return Ok(());
+        }
+    }
+
     let output = Command::new("bash")
         .arg(DOWNLOAD_SCRIPT_PATH)
         .output()
@@ -115,7 +136,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let generated_dir = PathBuf::from(GENERATED_DIR);
     let tensorboard_dir = PathBuf::from(TENSORBOARD_TMP_DIR);
     let proto_path = PROTO_SUBPATH
         .iter()
