@@ -3,6 +3,7 @@ use std::mem::MaybeUninit;
 use std::cell::UnsafeCell;
 use std::fmt::Debug;
 use std::hint::spin_loop;
+use std::ops::Index;
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 
@@ -296,23 +297,23 @@ impl<T: Copy, const N: usize> FixedMinHeap<T, N> {
     ///
     /// Returns true if inserted/replaced, false if rejected.
     #[inline(always)]
-    pub fn push_if_better_min_heap(&mut self, v: T) -> bool
+    pub fn push_if_better_min_heap(&mut self, v: &T) -> bool
     where
         T: Ord,
     {
         if self.len < N {
-            self.push(v);
+            self.push(*v);
             return true;
         }
         // full
         unsafe {
             // root is "worst kept"
             let root = self.get_unchecked(0);
-            if &v <= root {
+            if *v <= *root {
                 return false;
             }
         }
-        self.replace_min(v);
+        self.replace_min(*v);
         true
     }
 
@@ -901,6 +902,13 @@ impl<T: Copy, const N: usize> HeaplessVec<T, N> {
         unsafe {
             std::slice::from_raw_parts_mut(self.data.as_mut_ptr() as *mut T, self.len).iter_mut()
         }
+    }
+}
+
+impl<T: Copy, const N: usize> Index<usize> for HeaplessVec<T, N> {
+    type Output = T;
+    fn index(&self, index: usize) -> &Self::Output {
+        unsafe { &self.data[index].assume_init_ref() }
     }
 }
 
