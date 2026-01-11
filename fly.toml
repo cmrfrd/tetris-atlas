@@ -8,14 +8,13 @@ dockerfile = ".docker/Dockerfile.run"
 PORT = '8080'
 
 [[vm]]
-memory = '8gb'
+memory = '32gb'
 cpu_kind = 'performance'
 cpus = 4
 gpu_kind = "l40s"
 gpus = 1
 
-[mounts]
+[[mounts]]
 source = "data"
 destination = "/data"
-processes = ["disk"]
-initial_size = "8gb"
+processes = ["app"]

@@ -1,6 +1,6 @@
-ARG CUDA_VERSION=12.5.1
-ARG UBUNTU_VERSION=ubuntu24.04
-ARG CUDA_COMPUTE_CAP=86
+ARG CUDA_VERSION=12.3.2
+ARG UBUNTU_VERSION=ubuntu22.04
+ARG CUDA_COMPUTE_CAP=121
 
 FROM nvidia/cuda:${CUDA_VERSION}-devel-${UBUNTU_VERSION} as builder
 
@@ -19,50 +19,59 @@ RUN apt-get update && \
 # Install Rust
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
+    CARGO_BUILD_JOBS=1 \
     PATH=/usr/local/cargo/bin:$PATH
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
-    sh -s -- -y --default-toolchain 1.83.0 --profile minimal
+    sh -s -- -y --default-toolchain nightly --profile minimal
 
 WORKDIR /build
 
 # Copy project files
 COPY . .
 
-# Set CUDA compute capability for compilation
-ARG CUDA_COMPUTE_CAP
-ENV CUDA_COMPUTE_CAP=${CUDA_COMPUTE_CAP}
+# sleep inf
+CMD ["sleep", "infinity"]
 
-# Build tensorboard library with cache mounts
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/build/target \
-    cd ./tensorboard && cargo build --release --lib
+# # Build tensorboard library with cache mounts
+# RUN --mount=type=cache,target=/usr/local/cargo/registry \
+#     --mount=type=cache,target=/usr/local/cargo/git \
+#     --mount=type=cache,target=/build/target \
+#     cd ./tensorboard && cargo build --release --lib
 
-# Build main binary with CUDA support using cache mounts
-# Copy binary out of cache mount so it's available for runtime stage
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/build/target \
-    cargo build --release --features candle-cuda --bin tetris_atlas && \
-    cp /build/target/release/tetris_atlas /usr/local/bin/tetris_atlas
+# # Set CUDA compute capability for compilation
+# ARG CUDA_COMPUTE_CAP
+# ENV CUDA_COMPUTE_CAP=${CUDA_COMPUTE_CAP}
 
-FROM nvidia/cuda:${CUDA_VERSION}-runtime-${UBUNTU_VERSION} as runtime
+# # Build main binary with CUDA support using cache mounts
+# # Copy binary out of cache mount so it's available for runtime stage
+# RUN --mount=type=cache,target=/usr/local/cargo/registry \
+#     --mount=type=cache,target=/usr/local/cargo/git \
+#     --mount=type=cache,target=/build/target \
+#     cargo build --release --features candle-cuda --bin tetris_atlas && \
+#     cp /build/target/release/tetris_atlas /usr/local/bin/tetris_atlas
 
-# Install runtime dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    ca-certificates \
-    libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+# FROM nvidia/cuda:${CUDA_VERSION}-runtime-${UBUNTU_VERSION} as runtime
 
-# Copy compiled binary from builder stage
-COPY --from=builder /usr/local/bin/tetris_atlas /usr/local/bin/tetris_atlas
+# # Install runtime dependencies
+# RUN apt-get update && \
+#     apt-get install -y --no-install-recommends \
+#     ca-certificates \
+#     libgomp1 \
+#     && rm -rf /var/lib/apt/lists/*
 
-# Run as root user (container isolation provides security)
-WORKDIR /data
+# # Copy compiled binary from builder stage
+# COPY --from=builder /usr/local/bin/tetris_atlas /usr/local/bin/tetris_atlas
 
-ENV RUST_LOG=info
-ENV RUST_BACKTRACE=1
+# # Run as root user (container isolation provides security)
+# WORKDIR /data
 
-ENTRYPOINT ["tetris_atlas"]
-CMD ["train", "--run-name", "exceed-the-mean-5", "--model", "exceed-the-mean", "--logdir", "/data/logdir", "--checkpoint-dir", "/data/checkpoint"]
+# ENV RUST_LOG=info
+# ENV RUST_BACKTRACE=1
+
+# ENTRYPOINT ["tetris_atlas"]
+# # CMD ["train", "--run-name", "value-function-v1", "--model", "value-function", "--logdir", "/data/logdir", "--checkpoint-dir", "/data/checkpoint"]
+# # CMD ["train", "--run-name", "evolution-v1", "--model", "evolution", "--logdir", "/data/logdir", "--checkpoint-dir", "/data/checkpoint"]
+# # CMD ["train", "--run-name", "policy-gradients-v1", "--model", "policy-gradients", "--logdir", "/data/logdir", "--checkpoint-dir", "/data/checkpoint"]
+# CMD ["train", "--run-name", "beam-supervised-v1", "--model", "beam-supervised", "--logdir", "/data/logdir", "--checkpoint-dir", "/data/checkpoint"]
+
+# cargo run --release --features candle-cuda --bin tetris_atlas -- train --run-name beam-supervised-v1 --model beam-supervised --logdir /data/logdir --checkpoint-dir /data/checkpoint
