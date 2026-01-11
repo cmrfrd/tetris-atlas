@@ -3,6 +3,7 @@
 #![feature(iter_array_chunks)]
 #![feature(const_index)]
 #![feature(once_cell_try)]
+#![feature(const_convert)]
 #![feature(generic_const_exprs)]
 
 use candle_core::Device;
