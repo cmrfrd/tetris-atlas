@@ -229,6 +229,18 @@ impl Distribution<TetrisPiece> for StandardUniform {
     }
 }
 
+impl const From<TetrisPiece> for u8 {
+    fn from(piece: TetrisPiece) -> Self {
+        piece.0
+    }
+}
+
+impl const From<u8> for TetrisPiece {
+    fn from(value: u8) -> Self {
+        Self(value)
+    }
+}
+
 impl TetrisPiece {
     pub const NUM_PIECES: usize = constants::NUM_TETRIS_PIECES;
 
@@ -468,7 +480,7 @@ impl Display for TetrisPiece {
             val if val == Self::T_PIECE.0 => write!(f, "T"),
             val if val == Self::L_PIECE.0 => write!(f, "L"),
             val if val == Self::J_PIECE.0 => write!(f, "J"),
-            val if val == Self::NULL_PIECE.0 => write!(f, "Empty"),
+            val if val == Self::NULL_PIECE.0 => write!(f, "Null"),
             _ => panic!("Invalid piece"),
         }
     }
@@ -677,15 +689,22 @@ impl TetrisPiecePlacement {
         orientation: TetrisPieceOrientation::DEFAULT,
     };
 
-    // Precompute placement counts per piece
-    // This is also the number of orientations for each piece
+    // Precompute placement counts per piece.
+    // This is also the number of orientations for each piece.
     const PIECE_PLACEMENT_COUNTS: [usize; constants::NUM_TETRIS_PIECES] = {
-        let mut counts = [0; constants::NUM_TETRIS_PIECES];
-        let mut i = 0;
-        while i < Self::ALL_PLACEMENTS.len() {
-            let piece = Self::ALL_PLACEMENTS[i].piece;
-            let piece_idx = piece.index() as usize;
-            counts[piece_idx] += 1;
+        let pieces = TetrisPiece::all();
+        let mut counts = [0usize; constants::NUM_TETRIS_PIECES];
+
+        let mut i = 0usize;
+        while i < constants::NUM_TETRIS_PIECES {
+            let piece = pieces[i];
+            let mut r = 0u8;
+            let mut count = 0usize;
+            while r < piece.num_rotations() {
+                count += (((constants::COLS as u8) - piece.width(Rotation(r))) + 1) as usize;
+                r += 1;
+            }
+            counts[i] = count;
             i += 1;
         }
         counts
@@ -830,6 +849,203 @@ const _: () = assert!(
     "TetrisPiecePlacement::NUM_PLACEMENTS must fit in u8"
 );
 
+////////////
+/// Swap two 3-bit "lanes" inside a packed `u64`.
+///
+/// Treats `x` as a sequence of 3-bit chunks (lane 0 is bits 0..=2, lane 1 is bits 3..=5, etc.)
+/// and returns a copy of `x` with the chunks at indices `i` and `j` swapped.
+///
+/// # Example
+/// ```rust
+/// use tetris_atlas::tetris::swap_3bit_chunks;
+/// // lanes: [1,2,3]
+/// let x = (1u64) | (2u64 << 3) | (3u64 << 6);
+/// // swap lane 0 and lane 2 -> [3,2,1]
+/// let y = swap_3bit_chunks(x, 0, 2);
+/// assert_eq!(y & 0b111, 3);
+/// assert_eq!((y >> 3) & 0b111, 2);
+/// assert_eq!((y >> 6) & 0b111, 1);
+/// ```
+#[inline(always)]
+pub const fn swap_3bit_chunks(x: u64, i: u32, j: u32) -> u64 {
+    let bit_idx_i = i * 3;
+    let bit_idx_j = j * 3;
+    let d = ((x >> bit_idx_i) ^ (x >> bit_idx_j)) & 0b111;
+    x ^ (d << bit_idx_i) ^ (d << bit_idx_j)
+}
+
+pub const ORDERED_7: u64 =
+    (0u64) | (1u64 << 3) | (2u64 << 6) | (3u64 << 9) | (4u64 << 12) | (5u64 << 15) | (6u64 << 18);
+
+#[inline(always)]
+pub const fn fisher_yates_7bag_stream_from_seed(rng: &mut TetrisGameRng) -> u64 {
+    let mut s = ORDERED_7;
+    let r = rng.next_u64();
+
+    // Unrolled Fisher–Yates:
+    // j = floor(byte * m / 256), where m is 7, 6, 5, 4, 3, 2 for i = 6..1.
+    repeat_idx_generic!(6, K, {
+        let i = (6 - K) as u32;
+        let m = (7 - K) as u16;
+        let byte = (r >> ((K * 8) as u32)) as u8;
+        let j = ((byte as u16 * m) >> 8) as u32;
+        s = swap_3bit_chunks(s, i, j);
+    });
+
+    s
+}
+
+/// A Tetris piece bag (7-bag) encoded as a compact `u64` stream.
+///
+/// A bag starts with 7 pieces (one of each tetromino). Pieces are drawn without replacement;
+/// once the bag is empty, it is refilled with a new random permutation.
+///
+/// This bag stores the current permutation as **7 packed 3-bit chunks** in a `u64`:
+///
+/// ```text
+/// bit index:  ... 20 19 18 17 16 15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0
+/// chunks:     ... [ 6 ] [ 5 ] [ 4 ] [ 3 ] [ 2 ] [ 1 ] [ 0 ]
+///                each chunk is a 3-bit piece index in 0..=6 (TetrisPiece::index()).
+/// ```
+///
+/// - `stream & 0b111` is the **next** piece to draw.
+/// - `rand_next()` / `next_piece()` consumes by shifting `stream >>= 3` and decrementing `remaining`.
+/// - When `remaining == 0`, the bag is refilled with a fresh Fisher–Yates-shuffled 7-bag stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub struct TetrisPieceBag {
+    stream: u64,
+    remaining: u8,
+}
+
+impl Default for TetrisPieceBag {
+    fn default() -> Self {
+        Self::new_ordered()
+    }
+}
+
+impl Display for TetrisPieceBag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut pieces = Vec::new();
+        for i in 0..(self.remaining as u32) {
+            let idx = ((self.stream >> (i * 3)) & 0b111) as u8;
+            pieces.push(TetrisPiece::new(idx).to_string());
+        }
+        write!(f, "{:?}", pieces)
+    }
+}
+
+impl TetrisPieceBag {
+    pub const fn new_ordered() -> Self {
+        Self {
+            stream: ORDERED_7,
+            remaining: 7,
+        }
+    }
+
+    pub const fn new_rand(rng: &mut TetrisGameRng) -> Self {
+        Self {
+            stream: fisher_yates_7bag_stream_from_seed(rng),
+            remaining: 7,
+        }
+    }
+
+    #[inline_conditioned(always)]
+    pub const fn rand_fill(&mut self, rng: &mut TetrisGameRng) {
+        self.stream = fisher_yates_7bag_stream_from_seed(rng);
+        self.remaining = 7;
+    }
+
+    #[inline_conditioned(always)]
+    pub const fn from_bag_state(bag_state: TetrisPieceBagState) -> Self {
+        let m: u8 = (u8::from(bag_state)) & TetrisPieceBagState::FULL_MASK;
+
+        let mut stream: u64 = 0;
+        let mut out_k: u32 = 0;
+
+        repeat_idx_generic!(7, K, {
+            let present: u32 = ((m >> K) & 1) as u32; // 0 or 1
+            let mask: u64 = 0u64.wrapping_sub(present as u64); // 0x0 or 0xFFFF...
+
+            // If present==0, mask clears it; if present==1, it writes into lane out_k.
+            stream |= ((K as u64) << (out_k * 3)) & mask;
+
+            // Only advances when present==1
+            out_k += present;
+        });
+
+        Self {
+            stream,
+            remaining: out_k as u8,
+        }
+    }
+
+    /// Shuffles the remaining pieces in the bag using a Fisher–Yates algorithm.
+    ///
+    /// This performs an in-place shuffle of the current bag (encoded in `self.stream`) so that
+    /// all permutations are equally likely, using random bits drawn from the given RNG.
+    ///
+    /// Only the currently remaining pieces (up to 7) are shuffled; the rest of the stream is untouched.
+    /// The algorithm is fully unrolled for performance and works even if there are fewer than 7 pieces remaining.
+    #[inline_conditioned(always)]
+    pub const fn shuffle(&mut self, rng: &mut TetrisGameRng) {
+        let rem: u32 = self.remaining as u32;
+        let r: u64 = rng.next_u64();
+
+        let mut s = self.stream;
+
+        // Fisher–Yates over lanes [0..rem):
+        // for i in 0..rem-1: j = i + rand(0..rem-i); swap(i,j)
+        //
+        // Unrolled to 6 steps (enough for max rem=7), and masked to no-op when m<=1.
+        repeat_idx_generic!(6, K, {
+            let m: u32 = rem.saturating_sub(K as u32);
+            let active: u32 = (m > 1) as u32;
+            let byte: u8 = (r >> ((K * 8) as u32)) as u8;
+            let j_off: u32 = ((((byte as u16) * (m as u16)) >> 8) as u32) * active;
+            s = swap_3bit_chunks(s, K as u32, (K as u32) + j_off);
+        });
+
+        self.stream = s;
+    }
+
+    #[inline_conditioned(always)]
+    pub fn contains(&self, piece: TetrisPiece) -> bool {
+        // Broadcast the lowest 3 bits of the piece index across the u64, repeating
+        // the 3-bit pattern in each 3-bit lane.
+        //
+        // Example (piece_idx = 0b101):
+        // lanes: [101][101][101]...
+        const LANE_LSB_MASK: u64 = 0x9249_2492_4924_9249; // bits set at positions 0, 3, 6, ...
+
+        // Broadcast the piece index across the u64 by 3-bit chunks.
+        // Then XOR the broadcasted piece index with the stream.
+        let p_idx = piece.index() as u8 & 0b111;
+        let y = self.stream ^ (p_idx as u64).wrapping_mul(LANE_LSB_MASK);
+
+        // Compare each 3-bit lane against `piece_idx` in parallel:
+        // - XOR yields 0 in a lane iff that lane equals piece_idx
+        // - `z = y | (y>>1) | (y>>2)` collapses each lane to its LSB position
+        // - lane is equal iff the collapsed bit at the lane's LSB is 0
+        let z = y | (y >> 1) | (y >> 2);
+
+        // Only consider the first `remaining` lanes (avoid counting unused lanes).
+        let used = ((1u64 << (self.remaining as u32 * 3)) - 1) & LANE_LSB_MASK; // works for remaining=0 too
+        ((!z) & used) != 0
+    }
+
+    #[inline_conditioned(always)]
+    pub fn rand_next(&mut self, rng: &mut TetrisGameRng) -> TetrisPiece {
+        if self.remaining == 0 {
+            self.rand_fill(rng);
+        }
+
+        let piece = TetrisPiece::new(self.stream as u8 & 0b111);
+        self.stream >>= 3;
+        self.remaining -= 1;
+        piece
+    }
+}
+
 /// A Tetris piece bag is a random selection algorithm to prevent
 /// sequences of pieces that guarantee losses (e.g., long runs of
 /// S and Z pieces).
@@ -846,206 +1062,184 @@ const _: () = assert!(
 /// +---+---+---+---+---+---+---+---+
 /// | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
 /// +---+---+---+---+---+---+---+---+
-/// | - | J | L | T | Z | S | I | O |
+/// | J | L | T | Z | S | I | O | - |
 /// +---+---+---+---+---+---+---+---+
 /// ```
 ///
 /// The '-' bit is unused.
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
-pub struct TetrisPieceBag(u8);
+pub struct TetrisPieceBagState(u8);
 
-impl Display for TetrisPieceBag {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut pieces = Vec::new();
-        for i in 0..7 {
-            if (self.0 & (1 << i)) != 0 {
-                pieces.push(TetrisPiece::new(i).to_string());
-            }
-        }
-        write!(f, "{:?}", pieces)
+impl const From<TetrisPieceBagState> for u8 {
+    fn from(state: TetrisPieceBagState) -> Self {
+        state.0
     }
 }
 
-/// Default to a full bag.
-///
-/// We do this because when playing we 'start' with a full
-/// bag, hence it's the default case.
-impl Default for TetrisPieceBag {
-    fn default() -> Self {
-        Self(Self::FULL_MASK)
-    }
-}
-
-impl TetrisPieceBag {
+impl TetrisPieceBagState {
     pub const SIZE: usize = constants::NUM_TETRIS_PIECES;
     pub const FULL_MASK: u8 = 0b0111_1111;
 
-    pub fn new() -> Self {
-        Self::default()
+    /// Creates a new bag containing all 7 standard Tetris pieces.
+    ///
+    /// The bag is initialized with all pieces (O, I, S, Z, T, L, J) present,
+    /// represented internally as a bitmask where each bit corresponds to a piece.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::TetrisPieceBagState;
+    ///
+    /// let bag = TetrisPieceBagState::new();
+    /// assert_eq!(bag.count(), 7);
+    /// ```
+    pub const fn new() -> Self {
+        Self(Self::FULL_MASK)
     }
 
-    #[inline_conditioned(always)]
-    pub fn inc(&mut self) -> Self {
-        self.0 += 1;
-        *self
-    }
-
-    /// Count the number of pieces in the bag.
+    /// Returns the number of pieces remaining in the bag.
+    ///
+    /// This operation counts the set bits in the internal bitmask representation,
+    /// where each set bit represents a piece that is still in the bag.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::{TetrisPieceBagState, TetrisPiece};
+    ///
+    /// let mut bag = TetrisPieceBagState::new();
+    /// assert_eq!(bag.count(), 7);
+    ///
+    /// bag.remove(TetrisPiece::O_PIECE);
+    /// assert_eq!(bag.count(), 6);
+    /// ```
     #[inline_conditioned(always)]
     pub const fn count(&self) -> u8 {
         self.0.count_ones() as u8
     }
 
-    /// Check if the bag contains a given piece.
+    /// Checks if the bag contains a specific piece.
+    ///
+    /// Returns `true` if the piece is still in the bag, `false` otherwise.
+    /// This operation uses a bitwise AND to check if the piece's bit is set
+    /// in the internal bitmask.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::{TetrisPieceBagState, TetrisPiece};
+    ///
+    /// let mut bag = TetrisPieceBagState::new();
+    /// assert!(bag.contains(TetrisPiece::I_PIECE));
+    ///
+    /// bag.remove(TetrisPiece::I_PIECE);
+    /// assert!(!bag.contains(TetrisPiece::I_PIECE));
+    /// ```
     #[inline_conditioned(always)]
     pub const fn contains(&self, piece: TetrisPiece) -> bool {
-        (self.0 & piece.0) > 0
+        let mask: u8 = piece.into();
+        (self.0 & mask) != 0
     }
 
-    /// Check if the bag is empty.
-    #[inline_conditioned(always)]
-    pub const fn is_empty(&self) -> bool {
-        self.0 == 0
-    }
-
-    /// Check if the bag is full.
-    #[inline_conditioned(always)]
-    pub const fn is_full(&self) -> bool {
-        self.0 == Self::FULL_MASK
-    }
-
-    /// Fill the bag with all pieces.
+    /// Refills the bag with all 7 standard Tetris pieces.
+    ///
+    /// This operation resets the bag to its initial state, containing all pieces
+    /// (O, I, S, Z, T, L, J). Any previously removed pieces are restored.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::{TetrisPieceBagState, TetrisPiece};
+    ///
+    /// let mut bag = TetrisPieceBagState::new();
+    /// bag.remove(TetrisPiece::O_PIECE);
+    /// bag.remove(TetrisPiece::I_PIECE);
+    /// assert_eq!(bag.count(), 5);
+    ///
+    /// bag.fill();
+    /// assert_eq!(bag.count(), 7);
+    /// assert!(bag.contains(TetrisPiece::O_PIECE));
+    /// assert!(bag.contains(TetrisPiece::I_PIECE));
+    /// ```
     #[inline_conditioned(always)]
     pub const fn fill(&mut self) {
         self.0 = Self::FULL_MASK;
     }
 
-    /// Get a new bag filled if it's empty.
-    #[inline_conditioned(always)]
-    pub const fn new_fill_if_empty(&self) -> Self {
-        Self(self.0 | (self.is_empty() as u8).wrapping_neg() & Self::FULL_MASK)
-    }
-
-    /// Remove a piece from the bag.
+    /// Removes a specific piece from the bag.
     ///
-    /// If the piece is not in the bag, this function will return
-    /// the bag unchanged.
-    #[inline_conditioned(always)]
+    /// This operation clears the bit corresponding to the specified piece using
+    /// a bitwise AND with the inverted piece mask. If the piece is not in the bag,
+    /// this operation has no effect.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::{TetrisPieceBagState, TetrisPiece};
+    ///
+    /// let mut bag = TetrisPieceBagState::new();
+    /// assert_eq!(bag.count(), 7);
+    ///
+    /// bag.remove(TetrisPiece::T_PIECE);
+    /// assert_eq!(bag.count(), 6);
+    /// assert!(!bag.contains(TetrisPiece::T_PIECE));
+    ///
+    /// // Removing again has no effect
+    /// bag.remove(TetrisPiece::T_PIECE);
+    /// assert_eq!(bag.count(), 6);
+    /// ```
     pub const fn remove(&mut self, piece: TetrisPiece) {
-        self.0 &= !(piece.0);
+        let mask: u8 = piece.into();
+        self.0 &= !mask;
     }
 
-    /// Merge two bags together. Duplicate pieces are not added.
-    #[inline_conditioned(always)]
-    pub const fn merge(&mut self, other: &Self) {
-        self.0 |= other.0;
-    }
-
-    /// Get all possible next bags if we were to remove any one piece.
+    /// Removes and returns the lowest-index piece from the bag.
     ///
-    /// Once a bag is empty, we need to 'restart' the bag with a new
-    /// set of pieces.
-    #[inline_conditioned(always)]
-    pub const fn next_bags(&self) -> NextBagsIter {
-        // Check if there are no pieces left in the bag
-        // If so, return the full bag
-        NextBagsIter::new(self.new_fill_if_empty())
-    }
-
-    /// Get a random piece from the bag and remove it.
+    /// This operation finds the lowest set bit in the internal bitmask using
+    /// `trailing_zeros()`, removes that piece from the bag, and returns it.
+    /// The piece order is: O(0), I(1), S(2), Z(3), T(4), L(5), J(6).
     ///
-    /// If the bag is empty, refill it, then pick a random piece using the provided RNG.
-    /// Efficiently selects and removes one random set bit (piece) from the bag.
-    #[inline_conditioned(always)]
-    pub const fn rand_next(&mut self, rng: &mut TetrisGameRng) -> TetrisPiece {
-        // mutate the bag to be filled if empty
-        *self = self.new_fill_if_empty();
-
-        // select a random "nth" set bit
-        // then eliminate all other set bits
-        let count = self.count();
-        let n = (rng.next_u64() % count as u64) as usize;
-        let mut x = self.0;
-        repeat_idx_generic!(7, I, {
-            let mask = ((I < n) as i8).wrapping_neg() as u8;
-            x &= !(mask) | (x - 1);
-        });
-        x &= x.wrapping_neg();
-
-        // get, then remove the piece
-        let piece = TetrisPiece::new(x.trailing_zeros() as u8);
+    /// When the bag is empty, returns [`TetrisPiece::NULL_PIECE`] without
+    /// modifying the bag. This is implemented using branchless bit manipulation
+    /// for optimal performance.
+    ///
+    /// # Returns
+    ///
+    /// * The lowest-index piece still in the bag, or
+    /// * [`TetrisPiece::NULL_PIECE`] if the bag is empty
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tetris_atlas::tetris::{TetrisPieceBagState, TetrisPiece};
+    ///
+    /// let mut bag = TetrisPieceBagState::new();
+    ///
+    /// // Pop pieces in order: O, I, S, Z, T, L, J
+    /// assert_eq!(bag.pop(), TetrisPiece::O_PIECE);
+    /// assert_eq!(bag.count(), 6);
+    ///
+    /// assert_eq!(bag.pop(), TetrisPiece::I_PIECE);
+    /// assert_eq!(bag.count(), 5);
+    ///
+    /// // Remove all remaining pieces
+    /// for _ in 0..5 {
+    ///     bag.pop();
+    /// }
+    ///
+    /// // Empty bag returns NULL_PIECE
+    /// assert_eq!(bag.pop(), TetrisPiece::NULL_PIECE);
+    /// assert_eq!(bag.count(), 0);
+    /// ```
+    pub const fn pop(&mut self) -> TetrisPiece {
+        let tz = self.0.trailing_zeros() as u8;
+        let tz = tz - (tz >> 3);
+        let piece = TetrisPiece::new(tz);
         self.remove(piece);
         piece
     }
 }
-
-/// An iterator over all possible next bags if we were to remove any one piece.
-///
-/// When a piece is chosen to be played, we use this iterator to get the
-/// resulting bag without said piece. This iterator makes it convenient
-/// to calculate all possible next bags.
-#[derive(Debug)]
-pub struct NextBagsIter {
-    current_bag: TetrisPieceBag,
-    next_bags: u64,
-}
-
-impl NextBagsIter {
-    /// Creates a new iterator over all possible next bags, each corresponding to removing one piece from the current bag.
-    ///
-    /// Uses bit manipulation to efficiently precompute all possible next bags in a single operation.
-    const fn new(current_bag: TetrisPieceBag) -> Self {
-        Self {
-            current_bag,
-            // This is a bit of magic hackery.
-            // broadcast the current bag to a u64 (all possible next future bags)
-            // then use a mask to remove the bit that represents each
-            // piece from it's respective future bag. Byte 1 represents removing
-            // the O piece, byte 2 represents the I piece, etc.
-            //
-            // This lets us 'pre-calculate' all possible next bags before iteration.
-            next_bags: ((current_bag.0 as u64) * 0x0101_0101_0101_0100_u64)
-                & !0x40_20_10_08_04_02_01_FF_u64,
-        }
-    }
-}
-
-impl Iterator for NextBagsIter {
-    type Item = (TetrisPieceBag, TetrisPiece);
-
-    /// Get the next bag and the respective piece that was removed.
-    #[inline_conditioned(always)]
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.current_bag.is_empty() {
-            return None;
-        }
-
-        // Get the position of the least significant '1' in the byte.
-        // This is the same as getting the next piece we want to remove.
-        let pos = self.current_bag.0.trailing_zeros();
-
-        // Remove the piece from the bag.
-        self.current_bag.0 &= !(1 << pos);
-
-        // Get the next bag by shifting the pre-calculated bags
-        // to the right by the appropriate amount.
-        //
-        // If the bag is empty, fill it up.
-        let mut next_bag = (self.next_bags >> ((pos << 3) + 8)) as u8;
-        next_bag |= (0u8.wrapping_sub((next_bag == 0) as u8)) & 0b0111_1111;
-
-        Some((TetrisPieceBag(next_bag), TetrisPiece::new(pos as u8)))
-    }
-
-    /// The size of the iterator is the remaining number of 'ones' in the byte.
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.current_bag.0.count_ones() as usize;
-        (remaining, Some(remaining))
-    }
-}
-
-impl ExactSizeIterator for NextBagsIter {}
 
 /// A Tetris board represented as an array of columns, where each column is a u32.
 ///
@@ -1756,8 +1950,8 @@ pub struct TetrisGame {
     pub current_piece: TetrisPiece,
 
     // Include starting seed for reset reproducibility
-    rng: TetrisGameRng,
-    bag: TetrisPieceBag,
+    pub rng: TetrisGameRng,
+    pub bag: TetrisPieceBag,
 
     // stats
     pub lines_cleared: u32,
@@ -1787,11 +1981,11 @@ impl TetrisGame {
     /// popped from the bag.
     pub fn new() -> Self {
         let mut rng = TetrisGameRng::default();
-        let mut bag = TetrisPieceBag::new();
-        let piece_buf = bag.rand_next(&mut rng);
+        let mut bag = TetrisPieceBag::new_rand(&mut rng);
+        let current_piece = bag.rand_next(&mut rng);
         Self {
             board: TetrisBoard::new(),
-            current_piece: piece_buf,
+            current_piece,
             rng,
             bag,
             lines_cleared: 0,
@@ -1802,11 +1996,38 @@ impl TetrisGame {
 
     pub fn new_with_seed(seed: u64) -> Self {
         let mut rng = TetrisGameRng::new(seed);
-        let mut bag = TetrisPieceBag::new();
-        let piece_buf = bag.rand_next(&mut rng);
+        let mut bag = TetrisPieceBag::new_rand(&mut rng);
+        let current_piece = bag.rand_next(&mut rng);
         Self {
             board: TetrisBoard::new(),
-            current_piece: piece_buf,
+            current_piece,
+            rng,
+            bag,
+            lines_cleared: 0,
+            recent_lines_cleared: 0,
+            piece_count: 0,
+        }
+    }
+
+    pub fn new_with_board_bag_piece_seeded(
+        board: TetrisBoard,
+        bag_state: TetrisPieceBagState,
+        current_piece: TetrisPiece,
+        seed: u64,
+    ) -> Self {
+        // assert!(
+        //     !bag_state.contains(piece),
+        //     "Piece {} is not in bag state",
+        //     piece
+        // );
+
+        let mut rng = TetrisGameRng::new(seed);
+        let mut bag = TetrisPieceBag::from_bag_state(bag_state);
+        bag.shuffle(&mut rng);
+
+        Self {
+            board,
+            current_piece,
             rng,
             bag,
             lines_cleared: 0,
@@ -1853,6 +2074,17 @@ impl TetrisGame {
         }
     }
 
+    pub fn play_random(&mut self) -> PlacementResult {
+        let placements = self.current_placements();
+
+        let n = placements.len() as u64;
+        let x = (self.rng.peek_n(1) >> 32) as u64;
+        let idx = ((x * n) >> 32) as usize;
+        let placement = placements[idx];
+
+        self.apply_placement(placement)
+    }
+
     pub fn next_boards(&self) -> Vec<TetrisBoard> {
         let placements = TetrisPiecePlacement::all_from_piece(self.current_piece);
         placements
@@ -1884,10 +2116,10 @@ impl TetrisGame {
     /// Reset the game to a new board, bag, and piece.
     pub fn reset(&mut self, new_seed: Option<u64>) {
         self.board.clear();
-        self.bag.fill();
         new_seed
             .map(|s| self.rng.reseed(s))
             .unwrap_or_else(|| self.rng.reset());
+        self.bag.rand_fill(&mut self.rng);
         self.current_piece = self.bag.rand_next(&mut self.rng);
         self.lines_cleared = 0;
         self.piece_count = 0;
@@ -2384,76 +2616,130 @@ mod tests {
         assert!(!Into::<bool>::into(board.is_lost()));
     }
 
-    /// Test bag mechanics: remove, auto-refill, and next_bags iterator
     #[test]
-    fn test_bag() {
-        let mut bag = TetrisPieceBag::new();
-        assert_eq!(bag.count(), 7);
+    fn test_bag_state() {
+        let mut bag = TetrisPieceBagState::new();
+        assert_eq!(bag.count(), 7, "Bag should have 7 pieces");
 
-        // Remove all pieces one by one
-        for i in 0..7 {
-            bag.remove(TetrisPiece::new(i));
-            assert_eq!(bag.count(), 6 - i);
-            assert!(!bag.contains(TetrisPiece::new(i)));
-        }
-        assert!(bag.is_empty());
-
-        // Test auto-refill
-        let refilled = bag.new_fill_if_empty();
-        assert_eq!(refilled.count(), 7);
-
-        // Test next_bags iterator produces correct transitions
-        let bag = TetrisPieceBag::new();
-        let next_bags: Vec<_> = bag.next_bags().collect();
-        assert_eq!(next_bags.len(), 7);
-
-        // Each next bag should have 6 pieces
-        for (next_bag, removed_piece) in &next_bags {
-            assert_eq!(next_bag.count(), 6);
-            assert!(!next_bag.contains(*removed_piece));
+        // New bag should have all pieces
+        for piece in TetrisPiece::all() {
+            assert!(bag.contains(piece), "Bag should contain piece {}", piece);
         }
 
-        // Test that empty bag auto-refills via next_bags
-        let empty_bag = TetrisPieceBag(0);
-        assert!(empty_bag.is_empty());
-        let next_bags: Vec<_> = empty_bag.next_bags().collect();
-        assert_eq!(
-            next_bags.len(),
-            7,
-            "Empty bag should auto-refill to 7 pieces"
-        );
-        // Each resulting bag should have 6 pieces (refilled then one removed)
-        for (next_bag, _) in &next_bags {
-            assert_eq!(next_bag.count(), 6);
-        }
-
-        // Test distribution over many bags (ensures fairness)
-        let num_bags = 10_000;
-        let mut piece_counts = [0; 7];
-        let mut bag = TetrisPieceBag::new();
-        let mut rng = rand::rng();
-
-        for _ in 0..(num_bags * 7) {
-            let (next_bag, piece) = bag.next_bags().choose(&mut rng).unwrap();
-            bag = next_bag;
-            piece_counts[piece.index() as usize] += 1;
-        }
-
-        // Each piece should appear exactly num_bags times
-        for (i, &count) in piece_counts.iter().enumerate() {
-            assert_eq!(
-                count, num_bags,
-                "Piece {} appeared {} times instead of {}",
-                i, count, num_bags
+        // Popping all pieces should empty the bag
+        for _ in 0..7 {
+            let piece = bag.pop();
+            assert!(
+                !bag.contains(piece),
+                "Bag should not contain piece {}",
+                piece
             );
         }
+        assert_eq!(bag.count(), 0, "Bag should be empty");
+
+        // popping an empty bag should result in a null piece
+        let piece = bag.pop();
+        assert_eq!(
+            piece,
+            TetrisPiece::NULL_PIECE,
+            "Popping an empty bag should result in a null piece"
+        );
+
+        // check we can gofrom bag state to tetris piece bag
+        let rng = TetrisGameRng::new(42);
+        let mut bag_state = TetrisPieceBagState::new();
+
+        let bag = TetrisPieceBag::from_bag_state(bag_state);
+        assert_eq!(bag.remaining, 7, "Bag should have 7 pieces");
+
+        for i in 1..=7 {
+            let piece = bag_state.pop();
+            assert!(
+                !bag_state.contains(piece),
+                "Bag state should not contain piece {}",
+                piece
+            );
+            assert_eq!(
+                bag_state.count(),
+                7 - i,
+                "Bag state should have {} pieces",
+                7 - i
+            );
+
+            let bag = TetrisPieceBag::from_bag_state(bag_state);
+            assert_eq!(bag.remaining, 7 - i, "Bag should have {} pieces", 7 - i);
+            assert!(!bag.contains(piece), "Bag should contain piece {}", piece);
+        }
+    }
+
+    #[test]
+    fn test_bag_shuffle_is_deterministic_for_seed() {
+        let bag_state = TetrisPieceBagState::new(); // full bag
+        let mut a = TetrisPieceBag::from_bag_state(bag_state);
+        let mut b = TetrisPieceBag::from_bag_state(bag_state);
+
+        let mut rng1 = TetrisGameRng::new(123);
+        let mut rng2 = TetrisGameRng::new(123);
+
+        a.shuffle(&mut rng1);
+        b.shuffle(&mut rng2);
+
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_bag_shuffle_preserves_multiset() {
+        let bag_state = TetrisPieceBagState::new();
+        let mut bag = TetrisPieceBag::from_bag_state(bag_state);
+
+        let mut rng = TetrisGameRng::new(999);
+        bag.shuffle(&mut rng);
+
+        // Draw everything and ensure exactly one of each piece.
+        let mut seen = [0u8; 7];
+        let mut rng_draw = TetrisGameRng::new(0); // unused if bag.remaining>0
+        for _ in 0..7 {
+            let p = bag.rand_next(&mut rng_draw);
+            let idx = p.index() as usize;
+            assert!(idx < 7);
+            seen[idx] += 1;
+        }
+
+        assert_eq!(seen, [1, 1, 1, 1, 1, 1, 1]);
+    }
+
+    #[test]
+    fn test_bag_shuffle_respects_remaining() {
+        // Only {O,I,T} present (bits 0,1,4)
+        let mut bag_state = TetrisPieceBagState::new();
+        bag_state.remove(TetrisPiece::S_PIECE);
+        bag_state.remove(TetrisPiece::Z_PIECE);
+        bag_state.remove(TetrisPiece::L_PIECE);
+        bag_state.remove(TetrisPiece::J_PIECE);
+
+        let mut bag = TetrisPieceBag::from_bag_state(bag_state);
+        assert_eq!(bag.remaining, 3);
+
+        let mut rng = TetrisGameRng::new(42);
+        bag.shuffle(&mut rng);
+
+        let mut rng_draw = TetrisGameRng::new(0);
+        let mut drawn = [0u8; 7];
+        for _ in 0..3 {
+            let p = bag.rand_next(&mut rng_draw);
+            drawn[p.index() as usize] += 1;
+        }
+
+        assert_eq!(drawn[0], 1); // O
+        assert_eq!(drawn[1], 1); // I
+        assert_eq!(drawn[4], 1); // T
+        assert_eq!(drawn.iter().sum::<u8>(), 3);
     }
 
     #[test]
     fn test_rand_next() {
         let mut tetris_rng = TetrisGameRng::new(42);
-
-        let mut bag = TetrisPieceBag::new();
+        let mut bag = TetrisPieceBag::new_rand(&mut tetris_rng);
         let mut pieces = std::collections::HashSet::new();
 
         for _ in 0..(constants::NUM_TETRIS_PIECES as usize) {
@@ -2513,7 +2799,7 @@ mod tests {
             Vec::new(),
         ];
         for _ in 0..1000 {
-            let mut bag = TetrisPieceBag::new();
+            let mut bag = TetrisPieceBag::new_rand(&mut tetris_rng);
             (0..7).for_each(|nth_sample| {
                 let ith_piece = bag.rand_next(&mut tetris_rng);
                 samples[nth_sample].push(ith_piece.index() as f32);
@@ -2631,10 +2917,23 @@ mod tests {
         let choice_placement = placements[0];
         let _ = game.apply_placement(choice_placement);
 
+        // After a single placement, the rng should stay the same
+        let next_rng = game.rng;
+        assert_eq!(
+            original_rng, next_rng,
+            "RNG should have changed after placement"
+        );
+
+        // After 7 placements, the rng should have changed
+        for _ in 0..7 {
+            let placements = game.current_placements();
+            let choice_placement = placements[0];
+            let _ = game.apply_placement(choice_placement);
+        }
         let next_rng = game.rng;
         assert_ne!(
             original_rng, next_rng,
-            "RNG should have changed after placement"
+            "RNG should have changed after 7 placements"
         );
 
         game.reset(None);
