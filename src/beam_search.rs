@@ -1,4 +1,4 @@
-use crate::tetris::{IsLost, TetrisBoard, TetrisGame, TetrisPiecePlacement};
+use crate::tetris::{TetrisGame, TetrisPiecePlacement};
 use crate::utils::{FixedMinHeap, HeaplessVec};
 use proc_macros::inline_conditioned;
 
@@ -49,11 +49,11 @@ pub trait BeamSearchState: Copy {
 /// This is optimized for receding-horizon control (like Tetris), where we only
 /// ever execute the first move of the best plan each step.
 #[derive(Clone, Copy)]
-struct ScoredState<S: BeamSearchState, const MAX_DEPTH: usize> {
-    state: S,
-    score: f32,
-    first_action: Option<S::Action>,
-    depth: usize,
+pub struct ScoredState<S: BeamSearchState, const MAX_DEPTH: usize> {
+    pub state: S,
+    pub score: f32,
+    pub first_action: Option<S::Action>,
+    pub depth: usize,
 }
 
 // Total ordering by score using `f32::total_cmp` so we can store `ScoredState` directly
@@ -171,24 +171,23 @@ impl<S: BeamSearchState, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const 
         self.next_heap.clear();
 
         let beam_len = self.current_beam.len();
-        for i in 0..beam_len {
-            // Copy element from the current beam
+        for beam_idx in 0..beam_len {
+            let scored_state = self.current_beam[beam_idx];
+
             // Exit if terminal
-            let scored_state = self.current_beam.to_slice()[i];
             if scored_state.state.is_terminal() {
                 continue;
             }
 
             // Get all actions from the single beam state
-            self.action_buffer.clear();
-            let action_count = scored_state
+            let _action_count = scored_state
                 .state
                 .generate_actions::<MAX_MOVES>(&mut self.action_buffer);
-            debug_assert_eq!(action_count, self.action_buffer.len());
 
             // For each action, apply it to the state and insert the new state into the next heap
-            for j in 0..action_count {
-                let action = self.action_buffer.to_slice()[j];
+            let action_buffer_len = self.action_buffer.len();
+            for action_idx in 0..action_buffer_len {
+                let action = self.action_buffer[action_idx];
                 let new_state = scored_state.state.apply_action(&action);
 
                 // Filter out terminal states immediately
@@ -198,7 +197,7 @@ impl<S: BeamSearchState, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const 
                 }
 
                 let new_scored = scored_state.with_action(action, new_state);
-                self.insert_next(new_scored);
+                self.insert_next(&new_scored);
             }
         }
 
@@ -217,21 +216,21 @@ impl<S: BeamSearchState, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const 
     }
 
     #[inline_conditioned(always)]
-    fn insert_next(&mut self, cand: ScoredState<S, MAX_DEPTH>) {
+    fn insert_next(&mut self, cand: &ScoredState<S, MAX_DEPTH>) {
         // Maintain `next_heap` as a min-heap on `score` (root is the worst).
-        self.next_heap.push_if_better_min_heap(cand);
+        self.next_heap.push_if_better_min_heap(&cand);
     }
 
     /// Search to specified depth and return the *first move* of the best plan.
     ///
     /// This avoids heap allocation and avoids copying full move histories.
     #[inline_conditioned(always)]
-    pub fn search_first_action(&mut self, depth: usize) -> Option<S::Action> {
+    pub fn search_first_action(&mut self, depth: usize) -> Option<ScoredState<S, MAX_DEPTH>> {
         assert!(
             depth <= MAX_DEPTH,
             "search depth ({depth}) exceeds MAX_DEPTH ({MAX_DEPTH}); increase MAX_DEPTH or pass a smaller depth"
         );
-        for _ in 0..depth {
+        for _d in 0..depth {
             let beam_size = self.expand_level();
             if beam_size == 0 {
                 return None;
@@ -239,16 +238,11 @@ impl<S: BeamSearchState, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const 
         }
 
         // Find best state in current beam
-        let mut best_score = f32::NEG_INFINITY;
-        let mut best_action: Option<S::Action> = None;
-        for state in self.current_beam.to_slice() {
-            if state.score > best_score {
-                best_score = state.score;
-                best_action = state.first_action;
-            }
-        }
-
-        best_action
+        self.current_beam
+            .to_slice()
+            .iter()
+            .max()
+            .map(|state| *state)
     }
 
     /// Load `state` as the only root node, then run `search_first_action(depth)`.
@@ -256,7 +250,11 @@ impl<S: BeamSearchState, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const 
     /// This is the recommended API for receding-horizon control loops (e.g. Tetris)
     /// since it avoids heap allocation.
     #[inline_conditioned(always)]
-    pub fn search_first_action_with_state(&mut self, state: S, depth: usize) -> Option<S::Action> {
+    pub fn search_first_action_with_state(
+        &mut self,
+        state: S,
+        depth: usize,
+    ) -> Option<ScoredState<S, MAX_DEPTH>> {
         self.load_state(state);
         self.search_first_action(depth)
     }
@@ -307,18 +305,35 @@ impl BeamSearchState for BeamTetrisState {
             return f32::NEG_INFINITY;
         }
 
-        // Simple heuristic: prefer more lines, fewer holes, lower height.
-        // You can tune these weights aggressively.
-        let lines = self.0.lines_cleared as f32;
-        let lines_coeff = 10.0;
-
-        let height = self.0.board.height() as f32;
-        let height_coeff = -2.0;
-
+        // Classic 4-feature Tetris heuristic (widely used in many simple "near-perfect" bots):
+        // score = 0.760666 * lines_cleared
+        //       - 0.510066 * aggregate_height
+        //       - 0.35663  * holes
+        //       - 0.184483 * bumpiness
+        //
+        // Notes:
+        // - We use `recent_lines_cleared` (lines cleared by the *last* placement), not lifetime
+        //   `lines_cleared`, so the search correctly prefers line-clearing actions at each step.
+        // - `aggregate_height` is the sum of per-column heights.
+        let lines = self.0.recent_lines_cleared as f32;
         let holes = self.0.board.total_holes() as f32;
-        let holes_coeff = -3.0;
 
-        lines_coeff * lines + height_coeff * height + holes_coeff * holes
+        let heights = self.0.board.heights();
+        let mut aggregate_height = 0.0;
+        for h in heights.iter() {
+            aggregate_height += *h as f32;
+        }
+
+        // Bumpiness = sum of absolute differences between adjacent column heights.
+        let mut bumpiness = 0.0;
+        for i in 0..heights.len() - 1 {
+            bumpiness += (heights[i] as f32 - heights[i + 1] as f32).abs();
+        }
+
+        0.760666 * lines
+            + (-0.510066) * aggregate_height
+            + (-0.35663) * holes
+            + (-0.184483) * bumpiness
     }
 
     #[inline]
@@ -472,10 +487,10 @@ mod tests {
             let mut made = 0usize;
             let mut s = initial;
             while (made < ITERS) && (s.position != goal) {
-                let Some(action) = search.search_first_action_with_state(s, 5) else {
+                let Some(state) = search.search_first_action_with_state(s, 5) else {
                     continue;
                 };
-                s = s.apply_action(&action);
+                s = s.apply_action(&state.first_action.unwrap());
                 assert!(GridState::<N>::in_bounds(s.position), "moved out of bounds");
 
                 made += 1;
