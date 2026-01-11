@@ -1,4 +1,5 @@
 use clap::{Parser, ValueEnum};
+use std::path::PathBuf;
 use std::str::FromStr;
 use tetris_atlas::tetris::TetrisGame;
 use tetris_atlas::tetris_beam_supervised;
@@ -27,6 +28,13 @@ enum TrainModel {
     Transition,
     TransitionTransformer,
     WorldGoalPolicy,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, ValueEnum)]
+#[value(rename_all = "kebab-case")]
+enum InferenceModel {
+    #[value(name = "tetris_beam_supervised")]
+    TetrisBeamSupervised,
 }
 
 #[derive(Debug, Parser)]
@@ -59,6 +67,13 @@ enum Commands {
 
         #[arg(long, help = "Resume training from latest checkpoint")]
         resume: bool,
+    },
+    Inference {
+        #[arg(long, help = "Path to a .safetensors checkpoint file")]
+        checkpoint: PathBuf,
+
+        #[arg(long, value_enum, help = "Select which inference routine to run")]
+        model: InferenceModel,
     },
 }
 
@@ -240,6 +255,12 @@ fn main() {
                 }
             }
         }
+        Commands::Inference { checkpoint, model } => match model {
+            InferenceModel::TetrisBeamSupervised => {
+                tetris_beam_supervised::inference_tetris_beam_supervised(checkpoint.clone())
+                    .unwrap();
+            }
+        },
         Commands::Play {} => {
             tetris_tui::run().expect("Failed to run TUI");
         }

@@ -147,14 +147,15 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_bag_iter(c: &mut Criterion) {
-        let mut bag = TetrisPieceBag::new();
+        let mut rng = TetrisGameRng::new(42);
+        let mut bag = TetrisPieceBag::new_rand(&mut rng);
         c.bench_with_input(
             BenchmarkId::new("bag_iter", NUM_ELEMS),
             &NUM_ELEMS,
             |b, _| {
                 b.iter(|| {
                     for _ in 0..NUM_ELEMS {
-                        bag = bag.next_bags().next().unwrap().0;
+                        black_box(bag.rand_next(&mut rng));
                     }
                 })
             },
@@ -164,11 +165,11 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_bag_rand_next(c: &mut Criterion) {
+        let mut rng = TetrisGameRng::new(42);
+        let mut bag = TetrisPieceBag::new_rand(&mut rng);
         c.bench_with_input(BenchmarkId::new("bag_rand_next", 1), &1, |b, _| {
-            let mut bag = TetrisPieceBag::new();
-            let mut tetris_rng = TetrisGameRng::new(42);
             b.iter(|| {
-                bag.rand_next(&mut tetris_rng);
+                bag.rand_next(&mut rng);
             })
         });
     }
@@ -407,26 +408,26 @@ tetris_bench! {
         let mut search = BeamSearch::<BeamTetrisState, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>::new();
         let mut game = TetrisGame::new_with_seed(SEED);
 
-        c.bench_with_input(
-            BenchmarkId::new("beam_search_tetris", format!("bw{BEAM_WIDTH}_d{LOOKAHEAD}_steps{STEPS_PER_ITER}")),
-            &(BEAM_WIDTH, LOOKAHEAD, STEPS_PER_ITER),
-            |b, _| {
-                b.iter(|| {
-                    // Keep the benchmark steady by resetting on loss.
-                    for _ in 0..STEPS_PER_ITER {
-                        if game.board.is_lost() {
-                            game.reset(Some(SEED));
-                        }
-                        let state = BeamTetrisState(game);
-                        let mv = search
-                            .search_first_action_with_state(black_box(state), LOOKAHEAD)
-                            .unwrap();
-                        let res = game.apply_placement(black_box(mv));
-                        black_box(res);
-                    }
-                })
-            },
-        );
+        // c.bench_with_input(
+        //     BenchmarkId::new("beam_search_tetris", format!("bw{BEAM_WIDTH}_d{LOOKAHEAD}_steps{STEPS_PER_ITER}")),
+        //     &(BEAM_WIDTH, LOOKAHEAD, STEPS_PER_ITER),
+        //     |b, _| {
+        //         b.iter(|| {
+        //             // Keep the benchmark steady by resetting on loss.
+        //             for _ in 0..STEPS_PER_ITER {
+        //                 if game.board.is_lost() {
+        //                     game.reset(Some(SEED));
+        //                 }
+        //                 let state = BeamTetrisState(game);
+        //                 let mv = search
+        //                     .search_first_action_with_state(black_box(state), LOOKAHEAD)
+        //                     .unwrap();
+        //                 let res = game.apply_placement(black_box(mv));
+        //                 black_box(res);
+        //             }
+        //         })
+        //     },
+        // );
     }
 }
 
