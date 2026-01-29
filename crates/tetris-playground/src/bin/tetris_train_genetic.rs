@@ -117,6 +117,61 @@ impl BeamTetrisStateGenetic {
     pub fn new(game: TetrisGame, coefficients: EvalCoefficients) -> Self {
         Self { game, coefficients }
     }
+
+    /// Evolved heuristic using genetic algorithm coefficients
+    #[inline_conditioned(always)]
+    pub fn score(&self) -> f32 {
+        if self.game.board.is_lost() {
+            return f32::NEG_INFINITY;
+        }
+
+        let lines = self.game.lines_cleared as f32;
+        let height = self.game.board.height() as f32;
+
+        // Calculate bumpiness (sum of absolute differences between adjacent column heights)
+        let heights = self.game.board.heights();
+        let mut bumpiness = 0.0;
+        for i in 0..heights.len() - 1 {
+            bumpiness += (heights[i] as f32 - heights[i + 1] as f32).abs();
+        }
+
+        // Calculate weighted holes (holes weighted by their depth)
+        // Deeper holes are much worse than shallow ones
+        let holes_per_column = self.game.board.holes();
+        let mut weighted_holes = 0.0;
+        for col in 0..10 {
+            // Weight each hole by the height of blocks above it
+            weighted_holes += holes_per_column[col] as f32 * heights[col] as f32;
+        }
+
+        self.coefficients.lines_cleared * lines
+            + self.coefficients.height * height
+            + self.coefficients.bumpiness * bumpiness
+            + self.coefficients.weighted_holes * weighted_holes
+    }
+}
+
+impl PartialEq for BeamTetrisStateGenetic {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.score().total_cmp(&other.score()).is_eq()
+    }
+}
+
+impl Eq for BeamTetrisStateGenetic {}
+
+impl PartialOrd for BeamTetrisStateGenetic {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for BeamTetrisStateGenetic {
+    #[inline]
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.score().total_cmp(&other.score())
+    }
 }
 
 impl BeamSearchState for BeamTetrisStateGenetic {
@@ -150,43 +205,6 @@ impl BeamSearchState for BeamTetrisStateGenetic {
 
         buffer.fill_from_slice(placements);
         n
-    }
-
-    #[inline_conditioned(always)]
-    fn evaluate(&self) -> f32 {
-        if self.game.board.is_lost() {
-            return f32::NEG_INFINITY;
-        }
-
-        // Evolved heuristic using genetic algorithm coefficients
-        let lines = self.game.lines_cleared as f32;
-        let height = self.game.board.height() as f32;
-
-        // Calculate bumpiness (sum of absolute differences between adjacent column heights)
-        let heights = self.game.board.heights();
-        let mut bumpiness = 0.0;
-        for i in 0..heights.len() - 1 {
-            bumpiness += (heights[i] as f32 - heights[i + 1] as f32).abs();
-        }
-
-        // Calculate weighted holes (holes weighted by their depth)
-        // Deeper holes are much worse than shallow ones
-        let holes_per_column = self.game.board.holes();
-        let mut weighted_holes = 0.0;
-        for col in 0..10 {
-            // Weight each hole by the height of blocks above it
-            weighted_holes += holes_per_column[col] as f32 * heights[col] as f32;
-        }
-
-        self.coefficients.lines_cleared * lines
-            + self.coefficients.height * height
-            + self.coefficients.bumpiness * bumpiness
-            + self.coefficients.weighted_holes * weighted_holes
-    }
-
-    #[inline]
-    fn is_terminal(&self) -> bool {
-        self.game.board.is_lost()
     }
 }
 
@@ -266,7 +284,7 @@ impl<const N: usize, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_
                 // Run search and extract first action + score
                 search
                     .search_top_with_state(state, MAX_DEPTH)
-                    .and_then(|scored| scored.root_action.map(|action| (action, scored.score)))
+                    .and_then(|scored| scored.root_action.map(|action| (action, scored.state.score())))
             })
             .fold(
                 HashMap::new,

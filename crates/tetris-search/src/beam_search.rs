@@ -6,7 +6,7 @@ use tetris_game::{
 };
 
 /// Trait for states that can be used in beam search
-pub trait BeamSearchState: Copy {
+pub trait BeamSearchState: Copy + Ord {
     /// Type representing an action in the search space
     type Action: Copy + Default;
 
@@ -19,49 +19,22 @@ pub trait BeamSearchState: Copy {
         &self,
         buffer: &mut HeaplessVec<Self::Action, MAX_ACTIONS>,
     ) -> usize;
-
-    /// Evaluate this state (higher is better)
-    fn evaluate(&self) -> f32;
-
-    /// Check if this state is terminal (game over, no valid moves, etc.)
-    /// Terminal states will be completely filtered from the beam
-    ///
-    /// Returns true if the state is terminal (dead/game-over)
-    /// Default implementation: state is terminal if it has no valid moves
-    ///
-    /// NOTE: This should detect FAILURE terminals (game over, death, etc.)
-    /// For SUCCESS terminals (reached goal), you may want to handle differently:
-    /// - Option A: is_terminal() = true (stops search at goal)
-    /// - Option B: is_terminal() = false (allows search to continue past goal)
-    /// Choose based on your problem domain.
-    fn is_terminal(&self) -> bool {
-        // Safe default: assume non-terminal.
-        //
-        // IMPORTANT: BeamSearch uses `is_terminal()` to *filter* states during expansion.
-        // A bad default here can silently prune valid states or even panic if an impl of
-        // `generate_moves` expects the buffer to be "large enough".
-        //
-        // You should override this with a fast, correct failure-terminal check
-        // (e.g. game-over, dead-end, out-of-bounds).
-        false
-    }
 }
 
 /// Lightweight scored state for heap operations (lives in next_beam)
 #[derive(Clone, Copy)]
 pub struct ScoredState<S: BeamSearchState> {
     pub state: S,
-    pub score: f32,
     pub action: S::Action,              // Action from parent to this state
     pub root_action: Option<S::Action>, // First action from root (None for root, Some for descendants)
     pub depth: usize,
 }
 
-// Total ordering by score for heap operations
+// Total ordering delegated to the state's Ord implementation
 impl<S: BeamSearchState> PartialEq for ScoredState<S> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.score.total_cmp(&other.score).is_eq()
+        self.state.eq(&other.state)
     }
 }
 
@@ -77,22 +50,15 @@ impl<S: BeamSearchState> PartialOrd for ScoredState<S> {
 impl<S: BeamSearchState> Ord for ScoredState<S> {
     #[inline]
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.score.total_cmp(&other.score)
+        self.state.cmp(&other.state)
     }
 }
 
 impl<S: BeamSearchState> ScoredState<S> {
     #[inline]
-    pub fn new(
-        state: S,
-        score: f32,
-        action: S::Action,
-        root_action: Option<S::Action>,
-        depth: usize,
-    ) -> Self {
+    pub fn new(state: S, action: S::Action, root_action: Option<S::Action>, depth: usize) -> Self {
         Self {
             state,
-            score,
             action,
             root_action,
             depth,
@@ -180,7 +146,6 @@ impl<S: BeamSearchState, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const 
 
                 let child = ScoredState {
                     state: new_state,
-                    score: new_state.evaluate(),
                     action,
                     root_action: parent.root_action.or(Some(action)), // Branchless: propagate or set at depth 1
                     depth: parent.depth + 1,
@@ -189,7 +154,7 @@ impl<S: BeamSearchState, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const 
                 // Track best state (only update when needed)
                 match self.best_state {
                     None => self.best_state = Some(child),
-                    Some(best) if child.score > best.score => self.best_state = Some(child),
+                    Some(ref best) if child.state > best.state => self.best_state = Some(child),
                     _ => {}
                 }
 
@@ -232,7 +197,6 @@ impl<S: BeamSearchState, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const 
         self.beams[self.current_idx].clear();
         let root = ScoredState::new(
             state,
-            state.evaluate(),
             S::Action::default(),
             None, // Root has no root_action
             0,
@@ -289,7 +253,6 @@ impl<S: BeamSearchState, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const 
         self.beams[self.current_idx].clear();
         let root = ScoredState::new(
             state,
-            state.evaluate(),
             S::Action::default(),
             None, // Root has no root_action
             0,
@@ -378,6 +341,7 @@ impl<
         base_seed: u64,
         depth: usize,
     ) -> Option<TetrisPiecePlacement> {
+        #[inline_conditioned(always)]
         const fn fold_func(
             mut acc: [usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS],
             action: TetrisPiecePlacement,
@@ -385,6 +349,7 @@ impl<
             acc[action.orientation.index() as usize] += 1;
             acc
         }
+        #[inline_conditioned(always)]
         const fn reduce_func(
             mut a: [usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS],
             b: [usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS],
@@ -458,42 +423,23 @@ impl BeamTetrisState {
     pub fn new(game: TetrisGame) -> Self {
         Self(game)
     }
-}
 
-impl BeamSearchState for BeamTetrisState {
-    type Action = TetrisPiecePlacement;
-
+    /// Classic 4-feature Tetris heuristic (widely used in many simple "near-perfect" bots):
+    /// score = 0.760666 * lines_cleared
+    ///       - 0.510066 * aggregate_height
+    ///       - 0.35663  * holes
+    ///       - 0.184483 * bumpiness
+    ///
+    /// Notes:
+    /// - We use `recent_lines_cleared` (lines cleared by the *last* placement), not lifetime
+    ///   `lines_cleared`, so the search correctly prefers line-clearing actions at each step.
+    /// - `aggregate_height` is the sum of per-column heights.
     #[inline_conditioned(always)]
-    fn apply_action(&self, action: &Self::Action) -> Self {
-        let mut g = self.0;
-        let _res = g.apply_placement(*action);
-        Self(g)
-    }
-
-    #[inline_conditioned(always)]
-    fn generate_actions<const M: usize>(&self, buffer: &mut HeaplessVec<Self::Action, M>) -> usize {
-        if self.0.board.is_lost() {
-            return 0;
-        }
-        buffer.fill_from_slice(self.0.current_placements())
-    }
-
-    #[inline_conditioned(always)]
-    fn evaluate(&self) -> f32 {
+    fn score(&self) -> f32 {
         if self.0.board.is_lost() {
             return f32::NEG_INFINITY;
         }
 
-        // Classic 4-feature Tetris heuristic (widely used in many simple "near-perfect" bots):
-        // score = 0.760666 * lines_cleared
-        //       - 0.510066 * aggregate_height
-        //       - 0.35663  * holes
-        //       - 0.184483 * bumpiness
-        //
-        // Notes:
-        // - We use `recent_lines_cleared` (lines cleared by the *last* placement), not lifetime
-        //   `lines_cleared`, so the search correctly prefers line-clearing actions at each step.
-        // - `aggregate_height` is the sum of per-column heights.
         let lines = self.0.recent_lines_cleared as f32;
         let holes = self.0.board.total_holes() as f32;
 
@@ -514,10 +460,47 @@ impl BeamSearchState for BeamTetrisState {
             + (-0.35663) * holes
             + (-0.184483) * bumpiness
     }
+}
 
+impl PartialEq for BeamTetrisState {
     #[inline]
-    fn is_terminal(&self) -> bool {
-        self.0.board.is_lost()
+    fn eq(&self, other: &Self) -> bool {
+        self.score().total_cmp(&other.score()).is_eq()
+    }
+}
+
+impl Eq for BeamTetrisState {}
+
+impl PartialOrd for BeamTetrisState {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for BeamTetrisState {
+    #[inline]
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.score().total_cmp(&other.score())
+    }
+}
+
+impl BeamSearchState for BeamTetrisState {
+    type Action = TetrisPiecePlacement;
+
+    #[inline_conditioned(always)]
+    fn apply_action(&self, action: &Self::Action) -> Self {
+        let mut g = self.0;
+        let _res = g.apply_placement(*action);
+        Self(g)
+    }
+
+    #[inline_conditioned(always)]
+    fn generate_actions<const M: usize>(&self, buffer: &mut HeaplessVec<Self::Action, M>) -> usize {
+        if self.0.board.is_lost() {
+            return 0;
+        }
+        buffer.fill_from_slice(self.0.current_placements())
     }
 }
 
@@ -555,6 +538,38 @@ mod tests {
             let mut rng = rand::rng();
             let mask = rng.random_range(0..16);
             mask as u8 & 0b1111
+        }
+
+        /// Score: negative Manhattan distance to goal (higher is better)
+        #[inline]
+        fn score(&self) -> f32 {
+            let (x, y) = self.position;
+            let (gx, gy) = self.goal;
+            let distance = (x - gx).abs() + (y - gy).abs();
+            -(distance as f32)
+        }
+    }
+
+    impl<const N: usize> PartialEq for GridState<N> {
+        #[inline]
+        fn eq(&self, other: &Self) -> bool {
+            self.score().total_cmp(&other.score()).is_eq()
+        }
+    }
+
+    impl<const N: usize> Eq for GridState<N> {}
+
+    impl<const N: usize> PartialOrd for GridState<N> {
+        #[inline]
+        fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+
+    impl<const N: usize> Ord for GridState<N> {
+        #[inline]
+        fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+            self.score().total_cmp(&other.score())
         }
     }
 
@@ -624,18 +639,6 @@ mod tests {
             }
 
             buffer.len()
-        }
-
-        fn evaluate(&self) -> f32 {
-            let (x, y) = self.position;
-            let (gx, gy) = self.goal;
-            let distance = (x - gx).abs() + (y - gy).abs();
-            -(distance as f32)
-        }
-
-        fn is_terminal(&self) -> bool {
-            // Failure-only terminal: keep stable behavior (don't depend on stochastic blocking).
-            !Self::in_bounds(self.position)
         }
     }
 

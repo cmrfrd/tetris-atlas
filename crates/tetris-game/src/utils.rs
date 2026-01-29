@@ -1405,6 +1405,7 @@ macro_rules! repeat_idx_unroll {
             6_usize => $crate::repeat_exact_idx!(6, $i, $b),
             7_usize => $crate::repeat_exact_idx!(7, $i, $b),
             8_usize => $crate::repeat_exact_idx!(8, $i, $b),
+            9_usize => $crate::repeat_exact_idx!(9, $i, $b),
             10_usize => $crate::repeat_exact_idx!(10, $i, $b),
             16_usize => $crate::repeat_exact_idx!(16, $i, $b),
             25_usize => $crate::repeat_exact_idx!(25, $i, $b),

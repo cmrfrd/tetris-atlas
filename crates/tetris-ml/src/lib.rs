@@ -20,7 +20,7 @@ pub use tensor::*;
 pub use tetris_search::beam_search;
 pub use tetris_search::{
     BeamSearch, BeamSearchState, BeamTetrisState, MultiBeamSearch, ScoredState,
-    set_global_threadpool,
+    set_global_threadpool, set_global_threadpool_with_stack_size, DEFAULT_RAYON_STACK_SIZE,
 };
 
 use candle_core::Device;
