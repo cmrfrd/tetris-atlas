@@ -15,12 +15,14 @@ cargo expand --lib utils::asdf
 
 ## Benchmarking
 
-```shell
-# Generate flamegraph
-cargo bench --bench benches -- --profile-time 5
+All benchmarks are located in the `tetris-benches` crate.
 
-# Generate critereon report
-cargo bench --bench benches
+```shell
+# Run all benchmarks with criterion reports
+cargo bench -p tetris-benches
+
+# Generate flamegraph (5 second profiling)
+cargo bench -p tetris-benches -- --profile-time 5
 ```
 
 ## ASM analysis

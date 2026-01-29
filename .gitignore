@@ -1,14 +1,16 @@
 # project files
-# Ignore Rust and build artifacts, output, fs state, logs, traces, temp files
+# Ignore Rust and build artifacts
 target/
 build/
-logdir/
-checkpoints/
-checkpoint/
 trace/
 traces/
 tensorboard/src/tensorboard_generated/
 junk/
 
-# ignore data files
-**/*.csv
+# vendored dependencies
+vendor/
+!vendor/.gitkeep
+
+# runtime artifacts (checkpoints, logs, data, output, databases)
+artifacts/
+!artifacts/.gitkeep
