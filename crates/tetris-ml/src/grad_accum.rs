@@ -5,7 +5,7 @@ use candle_nn::Optimizer;
 
 use anyhow::Result;
 
-use tetris_tensor::ops::{clip_grad_norm, get_l2_norm};
+use crate::{clip_grad_norm, get_l2_norm};
 
 /// Gradient accumulator:
 /// Accumulates gradients for individual parameters using their tensor IDs as keys

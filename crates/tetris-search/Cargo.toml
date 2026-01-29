@@ -1,0 +1,25 @@
+[package]
+name = "tetris-search"
+version = "0.1.0"
+edition = "2024"
+authors = ["Alex Comerford <alex@taoa.io>"]
+publish = false
+description = "Search algorithms for Tetris (beam search, state space exploration)"
+
+[lib]
+name = "tetris_search"
+path = "src/lib.rs"
+
+[features]
+default = []
+never-inline = []
+
+[dependencies]
+tetris-game = { path = "../tetris-game" }
+proc-macros = { path = "../proc-macros" }
+rayon = "1.10.0"
+rand = { version = "0.9.2", features = ["small_rng"] }
+num_cpus = "1.17.0"
+
+[lints]
+workspace = true

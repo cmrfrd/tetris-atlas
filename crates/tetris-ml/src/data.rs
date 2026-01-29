@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::thread;
 
-use tetris_tensor::tensors::{TetrisBoardsTensor, TetrisPieceOrientationTensor, TetrisPiecePlacementTensor};
+use crate::{TetrisBoardsTensor, TetrisPieceOrientationTensor, TetrisPiecePlacementTensor};
 use tetris_game::{TetrisGame, TetrisGameSet, TetrisPiece};
 use anyhow::Result;
 use candle_core::Device;

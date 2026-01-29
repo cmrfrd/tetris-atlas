@@ -6,8 +6,8 @@ use anyhow::{Result, ensure};
 use image::{Rgb, RgbImage};
 use serde::{Deserialize, Serialize};
 
-use tetris_tensor::fdtype;
-use tetris_tensor::ops::{masked_fill, triu2d};
+use crate::fdtype;
+use crate::{masked_fill, triu2d};
 
 fn calculate_default_inv_freq(head_dim: usize, theta: f32) -> Vec<f32> {
     (0..head_dim)

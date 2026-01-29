@@ -4,12 +4,11 @@ version = "0.1.0"
 edition = "2024"
 authors = ["Alex Comerford <alex@taoa.io>"]
 publish = false
+description = "ML building blocks for Tetris: modules, optimizers, tensors, data generation"
 
 [lib]
 name = "tetris_ml"
 path = "src/lib.rs"
-
-# Binaries are auto-discovered from src/bin/*.rs
 
 [features]
 default = []
@@ -24,48 +23,35 @@ dtype-f32 = []
 dtype-f64 = []
 
 [dependencies]
+# Internal crates
 tetris-game = { path = "../tetris-game" }
-tetris-tensor = { path = "../tetris-tensor" }
+tetris-search = { path = "../tetris-search" }
 proc-macros = { path = "../proc-macros" }
-tensorboard = { path = "../tensorboard" }
 
+# Core
 anyhow = "1.0.95"
-clap = { version = "4.5.28", features = ["derive"] }
 rand = { version = "0.9.2", features = ["small_rng"] }
+
+# Logging
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-time = { version = "0.3", features = ["formatting"] }
+
+# Parallelism
 rayon = "1.10.0"
 crossbeam = "0.8.4"
-crossbeam-queue = "0.3.12"
-crossbeam-skiplist = "0.1.3"
-dashmap = "6.1.0"
-bincode = "1.3.3"
-itertools = "0.14.0"
-ruint = "1.15.0"
+
+# Serialization
+serde = { version = "1.0.226", features = ["derive"] }
+
+# ML
 candle-core = "0.9.2-alpha.2"
 candle-nn = "0.9.2-alpha.2"
-gethostname = "1.0.2"
+
+# Utilities
 image = "0.25.8"
-ulid = "1.2.1"
-serde = { version = "1.0.226", features = ["derive"] }
-serde_json = "1.0.145"
-serde_yaml = "0.9.34"
-prost = "0.13"
-prost-types = "0.13"
-num_cpus = "1.17.0"
+
+# TUI (for tetris_tui module)
 ratatui = "0.29"
 crossterm = "0.28"
-tokio = { version = "1.42.0", features = ["full"] }
-rocksdb = { version = "0.22.0", features = ["multi-threaded-cf"] }
-backoff = "0.4.0"
-feoxdb = { path = "../../vendor/feoxdb" }
-crossbeam-channel = "0.5.15"
-ctrlc = "3.4"
-heed = "0.22.0"
-
-[build-dependencies]
-prost-build = "0.13"
 
 [lints]
 workspace = true
