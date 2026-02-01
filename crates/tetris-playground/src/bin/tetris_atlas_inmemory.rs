@@ -3,36 +3,31 @@
 //! # Tetris Atlas Builder - In-Memory Implementation
 //!
 //! This binary builds a comprehensive lookup table (atlas) of optimal Tetris moves by exhaustively
-//! exploring the game state space using tiered beam search. Unlike the RocksDB version,
-//! this keeps everything in memory for maximum speed.
+//! exploring the game state space using beam search. Uses a channel-based architecture for
+//! strict priority ordering.
 //!
 //! ## Approach
 //!
-//! 1. **Parallel Workers**: Multiple worker threads claim board states from a height-prioritized frontier queue
-//! 2. **Tiered Beam Search**: Uses different beam parameters (Low/Med/High) based on board height
-//! 3. **Priority Frontier**: Processes lower-height boards first for optimal exploration
-//! 4. **In-Memory Storage**: DashMap for lookup table, height-indexed queues for frontier - no serialization overhead
-//! 5. **Lock-Free Concurrency**: All data structures are lock-free for maximum throughput
+//! 1. **Dispatcher Thread**: Single thread pops from priority frontier in strict height order
+//! 2. **Bounded Channel**: Connects dispatcher to workers with backpressure
+//! 3. **Worker Pool**: rayon::scope workers process items in parallel
+//! 4. **Priority Frontier**: Lower-height boards processed first (strict ordering)
+//! 5. **In-Memory Storage**: DashMap for lookup table, SkipMap for priority frontier
 //!
-//! ## Performance Benefits
+//! ## Benefits
 //!
-//! - No disk I/O overhead
-//! - No serialization/deserialization
-//! - Lock-free concurrent data structures
-//! - Better cache locality
-//! - Height-based prioritization for efficient space exploration
-//!
-//! ## Limitations
-//!
-//! - Limited by RAM (no persistence)
-//! - State lost on crash (no recovery)
+//! - Strict priority ordering (dispatcher controls pop order)
+//! - No contention on priority queue pop (single dispatcher)
+//! - Natural backpressure via bounded channel
+//! - Parallel processing via rayon workers
 
 use clap::{Parser, Subcommand};
+use crossbeam_channel::{Sender, bounded};
 use crossbeam_skiplist::SkipMap;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
-use std::fs::File;
-use std::io::{BufReader, BufWriter};
+use std::fs::{File, OpenOptions};
+use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -43,47 +38,23 @@ use tetris_game::{
     repeat_idx_unroll,
 };
 use tetris_search::{BeamTetrisState, MultiBeamSearch};
-use tetris_search::set_global_threadpool;
 
-// --- Tiered Beam Search Parameters ---
-const LOW_N: usize = 16;
-const LOW_TOP_N_PER_BEAM: usize = 16;
-const LOW_BEAM_WIDTH: usize = 16;
-const LOW_MAX_DEPTH: usize = 4;
-
-const MED_N: usize = 32;
-const MED_TOP_N_PER_BEAM: usize = 8;
-const MED_BEAM_WIDTH: usize = 32;
-const MED_MAX_DEPTH: usize = 7;
-
-const HIGH_N: usize = 64;
-const HIGH_TOP_N_PER_BEAM: usize = 32;
-const HIGH_BEAM_WIDTH: usize = 64;
-const HIGH_MAX_DEPTH: usize = 7;
-
+// --- Beam Search Parameters ---
+const N: usize = 16;
+const TOP_N_PER_BEAM: usize = 32;
+const BEAM_WIDTH: usize = 64;
+const MAX_DEPTH: usize = 4;
 const MAX_MOVES: usize = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
-const NUM_WORKERS: usize = 8;
+
+// --- Channel & Threading ---
+const CHANNEL_CAPACITY: usize = 64;
+
+// --- Persistence ---
 const LOG_EVERY_SECS: u64 = 3;
 const SAVE_EVERY_SECS: u64 = 600;
 const SAVE_FILE: &str = "tetris_atlas_inmemory.bin";
+const CSV_FILE: &str = "tetris_atlas_inmemory.csv";
 const BASE_SEED: u64 = 42;
-// ---------------
-
-#[derive(Clone, Copy, Debug)]
-enum BeamTier {
-    Low,
-    Med,
-    High,
-}
-
-#[inline(always)]
-fn select_tier(height: u32) -> BeamTier {
-    match height {
-        0..=2 => BeamTier::Low,
-        3..=4 => BeamTier::Med,
-        _ => BeamTier::High,
-    }
-}
 
 #[derive(Parser)]
 #[command(name = "tetris-atlas-inmemory")]
@@ -118,22 +89,22 @@ impl FrontierValue {
 /// Frontier key that orders by height (lowest first), then by hash for uniqueness
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct FrontierKey {
-    height: u32,
+    cost: u32,
     hash: u64,
 }
 
 impl FrontierKey {
     fn new(board: TetrisBoard, bag: TetrisPieceBagState) -> Self {
-        let height = board.height();
+        let cost = board.height() + board.total_holes();
         let hash = hash_board_bag(board, bag);
-        Self { height, hash }
+        Self { cost, hash }
     }
 }
 
 impl Ord for FrontierKey {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // First compare by height (lower is better)
-        match self.height.cmp(&other.height) {
+        match self.cost.cmp(&other.cost) {
             std::cmp::Ordering::Equal => {
                 // If heights are equal, compare by hash for deterministic ordering
                 self.hash.cmp(&other.hash)
@@ -186,6 +157,7 @@ impl PriorityFrontier {
     fn push(&self, board: TetrisBoard, bag: TetrisPieceBagState) {
         let key = FrontierKey::new(board, bag);
         let value = FrontierValue::new(board, bag);
+
         if !self.map.contains_key(&key) {
             self.map.insert(key, value);
             self.enqueued_count.fetch_add(1, Ordering::Relaxed);
@@ -207,27 +179,19 @@ impl PriorityFrontier {
     }
 }
 
-/// Shared state between all threads
+/// Shared state for save/load and core data structures
 #[derive(Clone)]
 struct SharedState {
     /// Concurrent hashmap for (board, piece) -> orientation lookup
     lookup: Arc<DashMap<(TetrisBoard, TetrisPiece), TetrisPieceOrientation>>,
     /// Priority frontier: height-indexed sorted set for (board, bag) states
     frontier: Arc<PriorityFrontier>,
-
-    // Performance counters
-    lookup_hits: Arc<AtomicU64>,
-    lookup_misses: Arc<AtomicU64>,
-    lookup_inserts: Arc<AtomicU64>,
+    /// Counter for frontier enqueued (used by PriorityFrontier)
     frontier_enqueued: Arc<AtomicU64>,
-    frontier_consumed: Arc<AtomicU64>,
-    games_lost: Arc<AtomicU64>,
-    boards_expanded: Arc<AtomicU64>,
-
     /// Shutdown signal
     shutdown: Arc<AtomicBool>,
-    /// Start time
-    start: Instant,
+    /// Shutdown request (Ctrl+C)
+    shutdown_requested: Arc<AtomicBool>,
 }
 
 impl SharedState {
@@ -236,15 +200,9 @@ impl SharedState {
         Self {
             lookup: Arc::new(DashMap::new()),
             frontier: Arc::new(PriorityFrontier::new(frontier_enqueued.clone())),
-            lookup_hits: Arc::new(AtomicU64::new(0)),
-            lookup_misses: Arc::new(AtomicU64::new(0)),
-            lookup_inserts: Arc::new(AtomicU64::new(0)),
             frontier_enqueued,
-            frontier_consumed: Arc::new(AtomicU64::new(0)),
-            games_lost: Arc::new(AtomicU64::new(0)),
-            boards_expanded: Arc::new(AtomicU64::new(0)),
             shutdown: Arc::new(AtomicBool::new(false)),
-            start: Instant::now(),
+            shutdown_requested: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -252,10 +210,6 @@ impl SharedState {
         let empty_board = TetrisBoard::new();
         let bag = TetrisPieceBagState::new();
         self.frontier.push(empty_board, bag);
-    }
-
-    fn frontier_size(&self) -> usize {
-        self.frontier.len()
     }
 
     fn lookup_size(&self) -> usize {
@@ -353,168 +307,279 @@ impl SharedState {
     }
 }
 
-/// Worker thread: processes frontier items using tiered beam search
-fn worker_thread(state: SharedState, worker_id: usize) {
-    // Create three beam searchers for different height tiers
-    let mut beam_search_low = MultiBeamSearch::<
-        BeamTetrisState,
-        LOW_N,
-        LOW_TOP_N_PER_BEAM,
-        LOW_BEAM_WIDTH,
-        LOW_MAX_DEPTH,
-        MAX_MOVES,
-    >::new();
-    let mut beam_search_med = MultiBeamSearch::<
-        BeamTetrisState,
-        MED_N,
-        MED_TOP_N_PER_BEAM,
-        MED_BEAM_WIDTH,
-        MED_MAX_DEPTH,
-        MAX_MOVES,
-    >::new();
-    let mut beam_search_high = MultiBeamSearch::<
-        BeamTetrisState,
-        HIGH_N,
-        HIGH_TOP_N_PER_BEAM,
-        HIGH_BEAM_WIDTH,
-        HIGH_MAX_DEPTH,
-        MAX_MOVES,
-    >::new();
+/// Dispatcher thread: pops from priority frontier in strict order, sends to channel
+fn dispatcher_thread(
+    frontier: Arc<PriorityFrontier>,
+    sender: Sender<(TetrisBoard, TetrisPieceBagState)>,
+    shutdown_requested: Arc<AtomicBool>,
+    frontier_consumed: Arc<AtomicU64>,
+) {
+    println!("Dispatcher: started");
 
-    let mut game = tetris_game::TetrisGame::new();
-    let mut last_work_time = Instant::now();
-    const IDLE_TIMEOUT: Duration = Duration::from_secs(15);
-
-    println!("Worker {worker_id}: started");
-
-    while !state.shutdown.load(Ordering::Relaxed) {
-        // Try to pop one item from the frontier
-        let Some((board, bag)) = state.frontier.pop() else {
-            // No work available - check if we've been idle too long
-            if last_work_time.elapsed() > IDLE_TIMEOUT {
-                println!("Worker {worker_id}: no work for {IDLE_TIMEOUT:?}, exiting");
-                break;
+    while !shutdown_requested.load(Ordering::Relaxed) {
+        match frontier.pop() {
+            Some((board, bag)) => {
+                frontier_consumed.fetch_add(1, Ordering::Relaxed);
+                // Send to workers - blocks if channel is full (backpressure)
+                if sender.send((board, bag)).is_err() {
+                    break; // Channel closed
+                }
             }
-            // Backoff to avoid CPU spinning
-            thread::sleep(Duration::from_millis(100));
-            continue;
-        };
-
-        // Found work - reset idle timer
-        last_work_time = Instant::now();
-        state.frontier_consumed.fetch_add(1, Ordering::Relaxed);
-        state.boards_expanded.fetch_add(1, Ordering::Relaxed);
-
-        // Process all pieces for this board state
-        for (piece, bag_state) in bag.iter_next_states() {
-            // Check if we've already computed this (board, piece) combination
-            if state.lookup.contains_key(&(board, piece)) {
-                state.lookup_hits.fetch_add(1, Ordering::Relaxed);
-                continue;
-            }
-
-            // Cache miss - run tiered beam search
-            state.lookup_misses.fetch_add(1, Ordering::Relaxed);
-
-            game.board = board;
-            game.set_bag_piece_seeded(bag_state, piece, BASE_SEED);
-
-            let tier = select_tier(board.height());
-            let game_state = BeamTetrisState::new(game);
-            let search_result = match tier {
-                BeamTier::Low => {
-                    beam_search_low.search_with_seeds(game_state, BASE_SEED, LOW_MAX_DEPTH)
-                }
-                BeamTier::Med => {
-                    beam_search_med.search_with_seeds(game_state, BASE_SEED, MED_MAX_DEPTH)
-                }
-                BeamTier::High => {
-                    beam_search_high.search_with_seeds(game_state, BASE_SEED, HIGH_MAX_DEPTH)
-                }
-            };
-
-            let best_placement = match search_result {
-                Some(result) => result,
-                None => {
-                    // Beam search failed (no valid placements at all)
-                    state.games_lost.fetch_add(1, Ordering::Relaxed);
-                    continue;
-                }
-            };
-
-            // Apply placement and check if game is lost
-            if game.apply_placement(best_placement).is_lost == IsLost::LOST {
-                state.games_lost.fetch_add(1, Ordering::Relaxed);
-                continue;
-            }
-
-            // Try to insert the new lookup entry - only add to frontier if we actually inserted
-            match state.lookup.entry((board, piece)) {
-                Entry::Vacant(vacant) => {
-                    // We won the race - insert our result
-                    vacant.insert(best_placement.orientation);
-                    state.lookup_inserts.fetch_add(1, Ordering::Relaxed);
-
-                    // Add resulting board to frontier (only for new entries!)
-                    state.frontier.push(game.board, bag_state);
-                }
-                Entry::Occupied(_) => {
-                    // Another worker already inserted this entry - don't add to frontier
-                    // (the other worker already added it)
-                }
+            None => {
+                // Frontier empty - brief sleep to avoid spinning
+                thread::sleep(Duration::from_millis(10));
             }
         }
     }
 
-    println!("Worker {worker_id}: exiting cleanly");
+    // Close channel to signal workers to exit
+    drop(sender);
+    println!("Dispatcher: exiting");
 }
 
-/// Logger thread: periodically prints statistics and saves to disk
-fn logger_thread(state: SharedState) {
+/// Process a single (board, bag) state - returns new states to add to frontier
+fn process_board_state(
+    board: TetrisBoard,
+    bag: TetrisPieceBagState,
+    lookup: &DashMap<(TetrisBoard, TetrisPiece), TetrisPieceOrientation>,
+    beam_search: &mut MultiBeamSearch<
+        BeamTetrisState,
+        N,
+        TOP_N_PER_BEAM,
+        BEAM_WIDTH,
+        MAX_DEPTH,
+        MAX_MOVES,
+    >,
+    stats: &SharedStats,
+) -> Vec<(TetrisBoard, TetrisPieceBagState)> {
+    let mut new_states = Vec::new();
+    let mut game = tetris_game::TetrisGame::new();
+
+    stats.boards_expanded.fetch_add(1, Ordering::Relaxed);
+
+    for (piece, bag_state) in bag.iter_next_states() {
+        // Check if already computed
+        if lookup.contains_key(&(board, piece)) {
+            stats.lookup_hits.fetch_add(1, Ordering::Relaxed);
+            continue;
+        }
+        stats.lookup_misses.fetch_add(1, Ordering::Relaxed);
+
+        // Setup game state
+        game.board = board;
+        game.set_bag_piece_seeded(bag_state, piece, BASE_SEED);
+
+        // Run beam search
+        let game_state = BeamTetrisState::new(game);
+        let best_placement = beam_search.search_with_seeds(game_state, BASE_SEED, MAX_DEPTH);
+        let Some(placement) = best_placement else {
+            stats.games_lost.fetch_add(1, Ordering::Relaxed);
+            continue;
+        };
+
+        // Apply placement
+        if game.apply_placement(placement).is_lost == IsLost::LOST {
+            stats.games_lost.fetch_add(1, Ordering::Relaxed);
+            continue;
+        }
+
+        // Try to insert - only add to frontier if we won the race
+        match lookup.entry((board, piece)) {
+            Entry::Vacant(vacant) => {
+                vacant.insert(placement.orientation);
+                stats.lookup_inserts.fetch_add(1, Ordering::Relaxed);
+                new_states.push((game.board, bag_state));
+            }
+            Entry::Occupied(_) => {
+                // Another worker beat us - skip
+            }
+        }
+    }
+
+    new_states
+}
+
+/// Shared statistics for workers
+struct SharedStats {
+    lookup_hits: AtomicU64,
+    lookup_misses: AtomicU64,
+    lookup_inserts: AtomicU64,
+    games_lost: AtomicU64,
+    boards_expanded: AtomicU64,
+}
+
+impl SharedStats {
+    fn new() -> Self {
+        Self {
+            lookup_hits: AtomicU64::new(0),
+            lookup_misses: AtomicU64::new(0),
+            lookup_inserts: AtomicU64::new(0),
+            games_lost: AtomicU64::new(0),
+            boards_expanded: AtomicU64::new(0),
+        }
+    }
+}
+
+/// Logger context for statistics printing
+struct LoggerContext {
+    lookup: Arc<DashMap<(TetrisBoard, TetrisPiece), TetrisPieceOrientation>>,
+    frontier: Arc<PriorityFrontier>,
+    stats: Arc<SharedStats>,
+    frontier_enqueued: Arc<AtomicU64>,
+    frontier_consumed: Arc<AtomicU64>,
+    shutdown: Arc<AtomicBool>,
+    shutdown_requested: Arc<AtomicBool>,
+    start: Instant,
+}
+
+/// CSV writer for statistics logging
+struct CsvLogger {
+    file: BufWriter<File>,
+}
+
+impl CsvLogger {
+    fn new(path: &str) -> std::io::Result<Self> {
+        let file_exists = Path::new(path).exists();
+        let file = OpenOptions::new().create(true).append(true).open(path)?;
+        let mut writer = BufWriter::new(file);
+
+        // Write header if file is new
+        if !file_exists {
+            writeln!(
+                writer,
+                "timestamp_secs,boards_expanded,lookup_size,frontier_size,\
+                boards_per_sec,lookup_inserts,games_lost,lookup_hits,lookup_misses,\
+                cache_hit_rate,frontier_enqueued,frontier_consumed,\
+                frontier_in_rate,frontier_out_rate,frontier_ratio"
+            )?;
+        }
+
+        Ok(Self { file: writer })
+    }
+
+    fn log(&mut self, ctx: &LoggerContext) -> std::io::Result<()> {
+        let secs = ctx.start.elapsed().as_secs_f64();
+
+        let lookup_hits = ctx.stats.lookup_hits.load(Ordering::Relaxed);
+        let lookup_misses = ctx.stats.lookup_misses.load(Ordering::Relaxed);
+        let lookup_inserts = ctx.stats.lookup_inserts.load(Ordering::Relaxed);
+        let frontier_enqueued = ctx.frontier_enqueued.load(Ordering::Relaxed);
+        let frontier_consumed = ctx.frontier_consumed.load(Ordering::Relaxed);
+        let games_lost = ctx.stats.games_lost.load(Ordering::Relaxed);
+        let boards_expanded = ctx.stats.boards_expanded.load(Ordering::Relaxed);
+
+        let frontier_size = ctx.frontier.len();
+        let lookup_size = ctx.lookup.len();
+
+        let boards_per_sec = boards_expanded as f64 / secs.max(1e-9);
+
+        let total_lookups = lookup_hits + lookup_misses;
+        let cache_hit_rate = if total_lookups > 0 {
+            (lookup_hits as f64 / total_lookups as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        let frontier_in_rate = frontier_enqueued as f64 / secs.max(1e-9);
+        let frontier_out_rate = frontier_consumed as f64 / secs.max(1e-9);
+        let frontier_ratio = frontier_enqueued as f64 / frontier_consumed.max(1) as f64;
+
+        writeln!(
+            self.file,
+            "{:.3},{},{},{},{:.2},{},{},{},{},{:.2},{},{},{:.2},{:.2},{:.4}",
+            secs,
+            boards_expanded,
+            lookup_size,
+            frontier_size,
+            boards_per_sec,
+            lookup_inserts,
+            games_lost,
+            lookup_hits,
+            lookup_misses,
+            cache_hit_rate,
+            frontier_enqueued,
+            frontier_consumed,
+            frontier_in_rate,
+            frontier_out_rate,
+            frontier_ratio
+        )?;
+
+        self.file.flush()?;
+        Ok(())
+    }
+}
+
+/// Logger thread: periodically prints statistics, logs to CSV, and saves to disk
+fn logger_thread(ctx: LoggerContext, state_for_save: SharedState) {
     let mut last_logged = Instant::now();
     let mut last_saved = Instant::now();
 
-    loop {
+    // Initialize CSV logger
+    let mut csv_logger = match CsvLogger::new(CSV_FILE) {
+        Ok(logger) => {
+            println!("CSV logging to: {CSV_FILE}");
+            Some(logger)
+        }
+        Err(e) => {
+            eprintln!("Failed to create CSV logger: {e}");
+            None
+        }
+    };
+
+    while !ctx.shutdown.load(Ordering::Relaxed) {
         thread::sleep(Duration::from_secs(1));
 
-        // Check shutdown signal
-        if state.shutdown.load(Ordering::Relaxed) {
-            println!("Logger thread: shutdown signal received, printing final stats...");
-            print_stats(&state);
-            break;
-        }
-
         if last_logged.elapsed() >= Duration::from_secs(LOG_EVERY_SECS) {
-            print_stats(&state);
+            print_stats(&ctx);
+
+            // Log to CSV
+            if let Some(ref mut logger) = csv_logger {
+                if let Err(e) = logger.log(&ctx) {
+                    eprintln!("Failed to write CSV: {e}");
+                }
+            }
+
             last_logged = Instant::now();
         }
 
         // Periodic save to disk
-        if last_saved.elapsed() >= Duration::from_secs(SAVE_EVERY_SECS) {
-            if let Err(e) = state.save_to_disk(SAVE_FILE) {
-                eprintln!("Failed to save to disk: {}", e);
+        if !ctx.shutdown_requested.load(Ordering::Relaxed)
+            && last_saved.elapsed() >= Duration::from_secs(SAVE_EVERY_SECS)
+        {
+            if let Err(e) = state_for_save.save_to_disk(SAVE_FILE) {
+                eprintln!("Failed to save to disk: {e}");
             }
             last_saved = Instant::now();
         }
     }
 
-    println!("Logger thread: exiting cleanly");
+    println!("Logger: final stats...");
+    print_stats(&ctx);
+
+    // Final CSV log
+    if let Some(ref mut logger) = csv_logger {
+        if let Err(e) = logger.log(&ctx) {
+            eprintln!("Failed to write final CSV: {e}");
+        }
+    }
+
+    println!("Logger: exiting");
 }
 
 /// Print current statistics
-fn print_stats(state: &SharedState) {
-    let secs = state.start.elapsed().as_secs_f64().max(1e-9);
+fn print_stats(ctx: &LoggerContext) {
+    let secs = ctx.start.elapsed().as_secs_f64().max(1e-9);
 
-    let lookup_hits = state.lookup_hits.load(Ordering::Relaxed);
-    let lookup_misses = state.lookup_misses.load(Ordering::Relaxed);
-    let lookup_inserts = state.lookup_inserts.load(Ordering::Relaxed);
-    let frontier_enqueued = state.frontier_enqueued.load(Ordering::Relaxed);
-    let frontier_consumed = state.frontier_consumed.load(Ordering::Relaxed);
-    let games_lost = state.games_lost.load(Ordering::Relaxed);
-    let boards_expanded = state.boards_expanded.load(Ordering::Relaxed);
+    let lookup_hits = ctx.stats.lookup_hits.load(Ordering::Relaxed);
+    let lookup_misses = ctx.stats.lookup_misses.load(Ordering::Relaxed);
+    let lookup_inserts = ctx.stats.lookup_inserts.load(Ordering::Relaxed);
+    let frontier_enqueued = ctx.frontier_enqueued.load(Ordering::Relaxed);
+    let frontier_consumed = ctx.frontier_consumed.load(Ordering::Relaxed);
+    let games_lost = ctx.stats.games_lost.load(Ordering::Relaxed);
+    let boards_expanded = ctx.stats.boards_expanded.load(Ordering::Relaxed);
 
-    let frontier_size = state.frontier_size();
-    let lookup_size = state.lookup_size();
+    let frontier_size = ctx.frontier.len();
+    let lookup_size = ctx.lookup.len();
 
     let boards_per_sec = boards_expanded as f64 / secs;
 
@@ -532,9 +597,9 @@ fn print_stats(state: &SharedState) {
 
     println!(
         "t={secs:.1}s boards={boards_expanded} lookup={lookup_size} frontier={frontier_size} | \
-        boards_rate={boards_per_sec:.1}/s inserts={lookup_inserts} lost={games_lost} | \
-        cache_hit={cache_hit_rate:.1}% ({lookup_hits}/{total_lookups}) | \
-        f_consume={frontier_consumption_rate:.1}/s f_expand={frontier_expansion_rate:.1}/s f_ratio={frontier_expansion_ratio:.2}"
+        rate={boards_per_sec:.1}/s inserts={lookup_inserts} lost={games_lost} | \
+        cache={cache_hit_rate:.1}% | \
+        f_in={frontier_expansion_rate:.1}/s f_out={frontier_consumption_rate:.1}/s ratio={frontier_expansion_ratio:.2}"
     );
 }
 
@@ -548,20 +613,17 @@ fn main() {
     }
 }
 
-/// Run the in-memory atlas builder with parallel workers and multi-beam search
+/// Run the in-memory atlas builder with channel-based priority dispatch
 pub fn run_tetris_atlas_create() {
-    set_global_threadpool();
+    let num_workers = num_cpus::get().saturating_sub(2).max(1);
 
-    println!("Starting in-memory atlas builder with tiered beam search:");
-    println!("  NUM_WORKERS: {NUM_WORKERS}");
-    println!("  Low tier (height 0-1): N={LOW_N}, WIDTH={LOW_BEAM_WIDTH}, DEPTH={LOW_MAX_DEPTH}");
-    println!("  Med tier (height 2): N={MED_N}, WIDTH={MED_BEAM_WIDTH}, DEPTH={MED_MAX_DEPTH}");
-    println!(
-        "  High tier (height 3+): N={HIGH_N}, WIDTH={HIGH_BEAM_WIDTH}, DEPTH={HIGH_MAX_DEPTH}"
-    );
+    println!("Starting atlas builder with channel-based priority dispatch:");
+    println!("  Workers: {num_workers}");
+    println!("  Channel capacity: {CHANNEL_CAPACITY}");
+    println!("  Beam: WIDTH={BEAM_WIDTH}, DEPTH={MAX_DEPTH}");
     println!("Press Ctrl+C to stop gracefully...");
 
-    // Create shared state
+    // Create shared state (for save/load compatibility)
     let state = SharedState::new();
 
     // Try to load from disk if file exists
@@ -573,7 +635,6 @@ pub fn run_tetris_atlas_create() {
                     lookup_count, frontier_count
                 );
             } else {
-                // No checkpoint found, seed with starting state
                 println!("No checkpoint found, starting fresh");
                 state.seed_starting_state();
             }
@@ -584,45 +645,101 @@ pub fn run_tetris_atlas_create() {
         }
     }
 
+    // Extract components for the new architecture
+    let lookup = state.lookup.clone();
+    let frontier = state.frontier.clone();
+    let frontier_enqueued = state.frontier_enqueued.clone();
+    let frontier_consumed = Arc::new(AtomicU64::new(0));
+    let stats = Arc::new(SharedStats::new());
+    let shutdown = state.shutdown.clone();
+    let shutdown_requested = state.shutdown_requested.clone();
+    let start = Instant::now();
+
+    // Create bounded channel
+    let (tx, rx) = bounded::<(TetrisBoard, TetrisPieceBagState)>(CHANNEL_CAPACITY);
+
     // Setup Ctrl+C handler
-    let shutdown_state = state.clone();
+    let shutdown_requested_clone = shutdown_requested.clone();
     ctrlc::set_handler(move || {
         println!("\nCtrl+C received! Initiating graceful shutdown...");
-        shutdown_state.shutdown.store(true, Ordering::Relaxed);
+        shutdown_requested_clone.store(true, Ordering::Relaxed);
     })
     .expect("Error setting Ctrl+C handler");
 
-    // Spawn worker threads
-    let mut worker_handles = Vec::new();
-    for worker_id in 0..NUM_WORKERS {
-        let worker_state = state.clone();
-        let handle = thread::spawn(move || {
-            worker_thread(worker_state, worker_id);
-        });
-        worker_handles.push(handle);
-    }
-
-    // Spawn logger thread
-    let logger_state = state.clone();
-    let logger_handle = thread::spawn(move || {
-        logger_thread(logger_state);
+    // Spawn dispatcher thread
+    let dispatcher_frontier = frontier.clone();
+    let dispatcher_shutdown = shutdown_requested.clone();
+    let dispatcher_consumed = frontier_consumed.clone();
+    let dispatcher_handle = thread::spawn(move || {
+        dispatcher_thread(
+            dispatcher_frontier,
+            tx,
+            dispatcher_shutdown,
+            dispatcher_consumed,
+        );
     });
 
-    // Wait for workers to finish (either via Ctrl+C or natural completion after 10s idle)
-    println!("Main thread: waiting for worker threads to finish...");
-    for (i, handle) in worker_handles.into_iter().enumerate() {
-        handle.join().expect("Worker thread panicked");
-        println!("Main thread: worker {i} finished");
-    }
+    // Spawn logger thread
+    let logger_ctx = LoggerContext {
+        lookup: lookup.clone(),
+        frontier: frontier.clone(),
+        stats: stats.clone(),
+        frontier_enqueued: frontier_enqueued.clone(),
+        frontier_consumed: frontier_consumed.clone(),
+        shutdown: shutdown.clone(),
+        shutdown_requested: shutdown_requested.clone(),
+        start,
+    };
+    let logger_state = state.clone();
+    let logger_handle = thread::spawn(move || {
+        logger_thread(logger_ctx, logger_state);
+    });
 
-    // All workers finished - trigger shutdown for logger
-    if !state.shutdown.load(Ordering::Relaxed) {
-        println!("All workers finished naturally. Shutting down logger...");
-        state.shutdown.store(true, Ordering::Relaxed);
-    }
+    // Run workers via rayon::scope
+    println!("Starting {num_workers} workers...");
+    rayon::scope(|s| {
+        for worker_id in 0..num_workers {
+            let rx = rx.clone();
+            let lookup = lookup.clone();
+            let frontier = frontier.clone();
+            let stats = stats.clone();
+            let shutdown = shutdown.clone();
 
-    println!("Waiting for logger thread to finish...");
-    logger_handle.join().expect("Logger thread panicked");
+            s.spawn(move |_| {
+                println!("Worker {worker_id}: started");
+
+                // Thread-local beam search
+                let mut beam_search = MultiBeamSearch::<
+                    BeamTetrisState,
+                    N,
+                    TOP_N_PER_BEAM,
+                    BEAM_WIDTH,
+                    MAX_DEPTH,
+                    MAX_MOVES,
+                >::new();
+
+                // Process items from channel
+                while let Ok((board, bag)) = rx.recv() {
+                    let new_states =
+                        process_board_state(board, bag, &lookup, &mut beam_search, &stats);
+
+                    // Push new states to frontier (maintains priority)
+                    for (new_board, new_bag) in new_states {
+                        frontier.push(new_board, new_bag);
+                    }
+                }
+
+                println!("Worker {worker_id}: exiting");
+            });
+        }
+    });
+
+    // Workers finished - shutdown dispatcher and logger
+    println!("All workers finished. Shutting down...");
+    shutdown.store(true, Ordering::Relaxed);
+
+    dispatcher_handle.join().expect("Dispatcher panicked");
+    logger_handle.join().expect("Logger panicked");
 
     // Save final state to disk
     println!("\nSaving final state to disk...");
@@ -632,7 +749,7 @@ pub fn run_tetris_atlas_create() {
 
     println!("\nAll threads exited cleanly.");
     println!("Final lookup table size: {}", state.lookup_size());
-    println!("Total time: {:.2}s", state.start.elapsed().as_secs_f64());
+    println!("Total time: {:.2}s", start.elapsed().as_secs_f64());
 }
 
 /// Explore an existing atlas interactively using a TUI
