@@ -7,6 +7,11 @@ tensorboard/target/
 # Build artifacts
 target/
 build/
+trace/
+traces/
+tensorboard/src/tensorboard_generated/
+junk/
+vendor/
 
 # Git
 .git/
@@ -18,6 +23,8 @@ Dockerfile*
 .dockerignore
 
 # Training artifacts
+artifacts/
+!artifacts/.gitkeep
 checkpoint/
 logdir/
 traces/
@@ -40,8 +47,11 @@ doc/
 serve.py
 __pycache__/
 *.pyc
+vendor/
+!vendor/.gitkeep
 venv/
 .venv/
 
 # Fly
 fly.toml
+fly.*.toml
