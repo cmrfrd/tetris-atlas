@@ -5,6 +5,59 @@ use tetris_game::{
     utils::{FixedBinMinHeap, HeaplessVec},
 };
 
+/// Counts of actions by orientation index
+#[derive(Clone, Copy)]
+pub struct OrientationCounts([usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS]);
+
+impl Default for OrientationCounts {
+    fn default() -> Self {
+        Self([0; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS])
+    }
+}
+
+impl OrientationCounts {
+    #[inline_conditioned(always)]
+    pub fn inner(&self) -> [usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS] {
+        self.0
+    }
+
+    #[inline_conditioned(always)]
+    pub fn merge(&mut self, other: Self) -> &mut Self {
+        repeat_idx_unroll!(TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS, I, {
+            self.0[I] += other.0[I];
+        });
+        self
+    }
+
+    #[inline_conditioned(always)]
+    pub fn add_action(&mut self, action: TetrisPiecePlacement) -> &mut Self {
+        self.0[action.orientation.index() as usize] += 1;
+        self
+    }
+
+    #[inline_conditioned(always)]
+    pub fn top_orientation(&self) -> (TetrisPieceOrientation, usize) {
+        let (max_idx, &max_count) = self
+            .0
+            .iter()
+            .enumerate()
+            .max_by_key(|&(_, &count)| count)
+            .unwrap_or((0, &0));
+        (TetrisPieceOrientation::from_index(max_idx as u8), max_count)
+    }
+
+    #[inline_conditioned(always)]
+    pub fn nonzero_orientations(
+        &self,
+    ) -> impl Iterator<Item = (TetrisPieceOrientation, usize)> + '_ {
+        self.0
+            .iter()
+            .enumerate()
+            .filter(|&(_, &count)| count > 0)
+            .map(|(i, &count)| (TetrisPieceOrientation::from_index(i as u8), count))
+    }
+}
+
 /// Trait for states that can be used in beam search
 pub trait BeamSearchState: Copy + Ord {
     /// Type representing an action in the search space
@@ -284,7 +337,7 @@ pub struct MultiBeamSearch<
 > where
     S::Action: Eq + std::hash::Hash,
 {
-    searches: Vec<BeamSearch<S, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>>,
+    pub searches: Vec<BeamSearch<S, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>>,
 }
 
 impl<
@@ -317,6 +370,65 @@ impl<
     const MAX_MOVES: usize,
 > MultiBeamSearch<BeamTetrisState, NUM_BEAMS, TOP_N_PER_BEAM, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
 {
+    pub fn search_count_actions_with_seeds(
+        &mut self,
+        base_state: BeamTetrisState,
+        base_seed: u64,
+        depth: usize,
+    ) -> OrientationCounts {
+        let base_par_iter = self.searches.par_iter_mut().enumerate();
+        let counts: OrientationCounts = match TOP_N_PER_BEAM {
+            1 => base_par_iter
+                .filter_map(|(i, search)| {
+                    let mut game = base_state.0;
+                    game.rng = TetrisGameRng::new(base_seed + i as u64);
+                    search
+                        .search_top_with_state(BeamTetrisState(game), depth)
+                        .and_then(|scored| scored.root_action)
+                })
+                .fold(
+                    || OrientationCounts::default(),
+                    |mut acc, action| {
+                        acc.add_action(action);
+                        acc
+                    },
+                )
+                .reduce(
+                    || OrientationCounts::default(),
+                    |mut a, b| {
+                        a.merge(b);
+                        a
+                    },
+                ),
+            _ => base_par_iter
+                .flat_map(|(i, search)| {
+                    let mut game = base_state.0;
+                    game.rng = TetrisGameRng::new(base_seed + i as u64);
+                    search
+                        .search_top_n_with_state::<TOP_N_PER_BEAM>(BeamTetrisState(game), depth)
+                        .into_par_iter()
+                        .flatten()
+                        .filter_map(|scored| scored.root_action)
+                })
+                .fold(
+                    || OrientationCounts::default(),
+                    |mut acc, action| {
+                        acc.add_action(action);
+                        acc
+                    },
+                )
+                .reduce(
+                    || OrientationCounts::default(),
+                    |mut a, b| {
+                        a.merge(b);
+                        a
+                    },
+                ),
+        };
+
+        counts
+    }
+
     /// Search with N different seeds applied to the same base game state.
     ///
     /// This creates N variants of the base game with identical board/bag/piece state
@@ -341,76 +453,17 @@ impl<
         base_seed: u64,
         depth: usize,
     ) -> Option<TetrisPiecePlacement> {
-        #[inline_conditioned(always)]
-        const fn fold_func(
-            mut acc: [usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS],
-            action: TetrisPiecePlacement,
-        ) -> [usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS] {
-            acc[action.orientation.index() as usize] += 1;
-            acc
-        }
-        #[inline_conditioned(always)]
-        const fn reduce_func(
-            mut a: [usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS],
-            b: [usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS],
-        ) -> [usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS] {
-            repeat_idx_unroll!(TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS, I, {
-                a[I] += b[I];
-            });
-            a
-        }
-
-        let base_par_iter = self.searches.par_iter_mut().enumerate();
-        let counts = match TOP_N_PER_BEAM {
-            1 => base_par_iter
-                .filter_map(|(i, search)| {
-                    let mut game = base_state.0;
-                    game.rng = TetrisGameRng::new(base_seed + i as u64);
-                    search
-                        .search_top_with_state(BeamTetrisState(game), depth)
-                        .and_then(|scored| scored.root_action)
-                })
-                .fold(
-                    || [0usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS],
-                    fold_func,
-                )
-                .reduce(
-                    || [0usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS],
-                    reduce_func,
-                ),
-            _ => base_par_iter
-                .flat_map(|(i, search)| {
-                    let mut game = base_state.0;
-                    game.rng = TetrisGameRng::new(base_seed + i as u64);
-                    search
-                        .search_top_n_with_state::<TOP_N_PER_BEAM>(BeamTetrisState(game), depth)
-                        .into_par_iter()
-                        .flatten()
-                        .filter_map(|scored| scored.root_action)
-                })
-                .fold(
-                    || [0usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS],
-                    fold_func,
-                )
-                .reduce(
-                    || [0usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS],
-                    reduce_func,
-                ),
-        };
+        let counts = self.search_count_actions_with_seeds(base_state, base_seed, depth);
 
         // Find best orientation by vote count
-        let (best_idx, &best_count) = counts
-            .iter()
-            .enumerate()
-            .max_by_key(|&(_i, &count)| count)?;
-
+        let (best_orientation, best_count) = counts.top_orientation();
         if best_count == 0 {
             return None;
         }
 
         Some(TetrisPiecePlacement {
             piece: base_state.0.current_piece,
-            orientation: TetrisPieceOrientation::from_index(best_idx as u8),
+            orientation: best_orientation,
         })
     }
 }
@@ -455,10 +508,15 @@ impl BeamTetrisState {
             bumpiness += (heights[i] as f32 - heights[i + 1] as f32).abs();
         }
 
+        let cell_count = self.0.board.count() as f32;
+
         0.760666 * lines
             + (-0.510066) * aggregate_height
             + (-0.35663) * holes
             + (-0.184483) * bumpiness
+            + (-0.05) * cell_count
+
+        // 1.0 * lines + -0.5 * aggregate_height + -0.3 * holes + -0.2 * bumpiness + -0.5 * cell_count
     }
 }
 
