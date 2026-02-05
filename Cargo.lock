@@ -810,6 +810,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b94f61472cee1439c0b966b47e3aca9ae07e45d070759512cd390ea2bebc6675"
 
 [[package]]
+name = "coin_cbc"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d602045cd2e7ad02608a71492af94357f493a6f3c934ce854c03bf10fddc5780"
+dependencies = [
+ "coin_cbc_sys",
+ "lazy_static",
+]
+
+[[package]]
+name = "coin_cbc_sys"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "085619f8bdc38e24e25c6336ecc3f2e6c0543d67566dff6daef0e32f7ac20f76"
+dependencies = [
+ "pkg-config",
+]
+
+[[package]]
 name = "color_quant"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -919,7 +938,7 @@ dependencies = [
  "cast",
  "ciborium",
  "clap",
- "criterion-plot 0.5.0",
+ "criterion-plot",
  "is-terminal",
  "itertools 0.10.5",
  "num-traits",
@@ -936,29 +955,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "criterion"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1c047a62b0cc3e145fa84415a3191f628e980b194c2755aa12300a4e6cbd928"
-dependencies = [
- "anes",
- "cast",
- "ciborium",
- "clap",
- "criterion-plot 0.6.0",
- "itertools 0.13.0",
- "num-traits",
- "oorandom",
- "plotters",
- "rayon",
- "regex",
- "serde",
- "serde_json",
- "tinytemplate",
- "walkdir",
-]
-
-[[package]]
 name = "criterion-plot"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -966,16 +962,6 @@ checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
 dependencies = [
  "cast",
  "itertools 0.10.5",
-]
-
-[[package]]
-name = "criterion-plot"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b1bcc0dc7dfae599d84ad0b1a55f80cde8af3725da8313b528da95ef783e338"
-dependencies = [
- "cast",
- "itertools 0.13.0",
 ]
 
 [[package]]
@@ -1427,11 +1413,11 @@ dependencies = [
 [[package]]
 name = "feoxdb"
 version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "078af3615035addadc90739f669632643d646a4dd493a48da185fd54f0a892e7"
 dependencies = [
  "ahash",
  "bytes",
- "clap",
- "criterion 0.7.0",
  "crossbeam-channel",
  "crossbeam-epoch",
  "crossbeam-skiplist",
@@ -1447,7 +1433,6 @@ dependencies = [
  "rand 0.9.2",
  "scc",
  "serde_json",
- "tempfile",
  "thiserror 2.0.16",
  "tikv-jemallocator",
 ]
@@ -1763,6 +1748,17 @@ name = "glob"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
+
+[[package]]
+name = "good_lp"
+version = "1.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "776aa1ba88ac058e78408c17f4dbff826a51ae08ed6642f71ca0edd7fe9383f3"
+dependencies = [
+ "coin_cbc",
+ "fnv",
+ "microlp",
+]
 
 [[package]]
 name = "half"
@@ -2393,6 +2389,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "matrixmultiply"
+version = "0.3.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06de3016e9fae57a36fd14dba131fccf49f74b40b7fbdb472f96e361ec71a08"
+dependencies = [
+ "autocfg",
+ "rawpointer",
+]
+
+[[package]]
 name = "maybe-rayon"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2443,6 +2449,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "microlp"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51d1790c73b93164ff65868f63164497cb32339458a9297e17e212d91df62258"
+dependencies = [
+ "log",
+ "sprs",
+]
+
+[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2485,6 +2501,21 @@ name = "multimap"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
+
+[[package]]
+name = "ndarray"
+version = "0.17.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "520080814a7a6b4a6e9070823bb24b4531daac8c4627e08ba5de8c5ef2f2752d"
+dependencies = [
+ "matrixmultiply",
+ "num-complex",
+ "num-integer",
+ "num-traits",
+ "portable-atomic",
+ "portable-atomic-util",
+ "rawpointer",
+]
 
 [[package]]
 name = "new_debug_unreachable"
@@ -2963,6 +2994,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "portable-atomic"
+version = "1.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f89776e4d69bb58bc6993e99ffa1d11f228b839984854c7daeb5d37f87cbe950"
+
+[[package]]
+name = "portable-atomic-util"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8a2f0d8d040d7848a709caf78912debcc3f33ee4b3cac47d73d1e1069e83507"
+dependencies = [
+ "portable-atomic",
+]
+
+[[package]]
 name = "potential_utf"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2986,7 +3032,7 @@ dependencies = [
  "aligned-vec",
  "backtrace",
  "cfg-if",
- "criterion 0.5.1",
+ "criterion",
  "findshlibs",
  "inferno",
  "libc",
@@ -3425,6 +3471,12 @@ checksum = "498cd0dc59d73224351ee52a95fee0f1a617a2eae0e7d9d720cc622c73a54186"
 dependencies = [
  "bitflags 2.9.4",
 ]
+
+[[package]]
+name = "rawpointer"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60a357793950651c4ed0f3f52338f53b2f809f32d83a07f72909fa13e4c6c1e3"
 
 [[package]]
 name = "rayon"
@@ -3881,6 +3933,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sprs"
+version = "0.11.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6dca58a33be2188d4edc71534f8bafa826e787cc28ca1c47f31be3423f0d6e55"
+dependencies = [
+ "ndarray",
+ "num-complex",
+ "num-traits",
+ "smallvec",
+]
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4060,7 +4124,7 @@ dependencies = [
 name = "tetris-benches"
 version = "0.1.0"
 dependencies = [
- "criterion 0.5.1",
+ "criterion",
  "inventory",
  "pprof",
  "rand 0.9.2",
@@ -4072,12 +4136,8 @@ dependencies = [
 name = "tetris-game"
 version = "0.1.0"
 dependencies = [
- "bincode",
- "itertools 0.14.0",
  "proc-macros",
  "rand 0.9.2",
- "ruint",
- "serde",
 ]
 
 [[package]]
@@ -4119,6 +4179,7 @@ dependencies = [
  "dashmap",
  "feoxdb",
  "gethostname",
+ "good_lp",
  "heed",
  "image",
  "itertools 0.14.0",
