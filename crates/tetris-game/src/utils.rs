@@ -77,7 +77,8 @@ const _: () = {
         true
     }
 
-    let _ = [()][(!verify_all_u8()) as usize];
+    // Compile-time assertion: index out of bounds if verify_all_u8() returns false
+    [()][(!verify_all_u8()) as usize];
 };
 
 pub struct BitMask<const N: usize>(u64);
@@ -206,11 +207,8 @@ impl<'a, T> DerefMut for SpinLockGuard<'a, T> {
     }
 }
 
-/// /////////////////////////////////////////////////////////////////
-/// FixedBinMinHeap - Fixed-capacity binary min-heap
+/// Fast fixed-capacity binary MIN-heap.
 ///
-
-/// Fast fixed-capacity binary MIN-heap
 /// - Stack-allocated, zero heap allocations
 /// - Compile-time loop unrolling with early exit
 /// - Optimized for beam search (keep best K items)
@@ -923,7 +921,7 @@ impl<T: Copy, const N: usize> HeaplessVec<T, N> {
     ///
     /// Returns `None` when `self.len != N`.
     pub fn to_array(&self) -> Option<[T; N]> {
-        self.as_array().map(|a| *a)
+        self.as_array().copied()
     }
 
     /// Returns a slice containing all elements in the vector.
