@@ -2,7 +2,6 @@ use std::ops::Range;
 use std::thread;
 
 use crate::{TetrisBoardsTensor, TetrisPieceOrientationTensor, TetrisPiecePlacementTensor};
-use tetris_game::{TetrisGame, TetrisGameSet, TetrisPiece};
 use anyhow::Result;
 use candle_core::Device;
 use crossbeam::channel::{Receiver, bounded};
@@ -11,6 +10,7 @@ use rand::{
     distr::{Distribution, Uniform},
     seq::IndexedRandom,
 };
+use tetris_game::{TetrisGame, TetrisGameSet, TetrisPiece};
 
 pub struct TetrisTransition {
     pub current_gameset: TetrisGameSet,
