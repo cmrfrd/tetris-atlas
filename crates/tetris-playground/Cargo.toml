@@ -57,7 +57,7 @@ num_cpus = "1.17.0"
 # Storage backends
 rocksdb = { version = "0.22.0", features = ["multi-threaded-cf"] }
 heed = "0.22.0"
-feoxdb = { path = "../../vendor/feoxdb" }
+feoxdb = "0.5.0"
 
 # Serialization
 bincode = "1.3.3"
