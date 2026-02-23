@@ -1,14 +1,15 @@
-use crate::impl_wrapped_tensor;
 use super::{
     ops::{create_orientation_mask, kl_div},
     wrapped_tensor::{ShapeDim, WrappedTensor},
 };
-use tetris_game::{
-    TetrisBoard, TetrisGameSet, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement,
-};
+use crate::impl_wrapped_tensor;
 use anyhow::Result;
 use candle_core::{D, DType, Device, IndexOp, Shape, Tensor};
 use candle_nn::{encoding::one_hot, ops::softmax};
+use tetris_game::{
+    TetrisBoard, TetrisGameSet, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement,
+};
+use tetris_search::OrientationCounts;
 
 /// Tensor wrapper for Tetris boards.
 /// Shape: (num_games, TetrisBoard::SIZE)
@@ -27,7 +28,7 @@ impl TetrisBoardsTensor {
     /// Create a tetris boards tensor from a gameset
     pub fn from_gameset(games: &TetrisGameSet, device: &Device) -> Result<Self> {
         let mut boards = Vec::with_capacity(games.len() * TetrisBoard::SIZE);
-        games.boards().iter().for_each(|board| {
+        games.boards().into_iter().for_each(|board| {
             boards.extend_from_slice(&board.to_binary_slice());
         });
         let shape = Shape::from_dims(&[games.len(), TetrisBoard::SIZE]);
@@ -553,6 +554,27 @@ impl TetrisPieceOrientationDistTensor {
         )?
         .to_dtype(dtype)?
         .reshape(&[batch_size, TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS])?;
+        Self::try_from(dists)
+    }
+
+    pub fn from_orientation_counts(
+        orientation_counts: &[OrientationCounts],
+        device: &Device,
+    ) -> Result<Self> {
+        let dtype = Self::expected_dtype();
+        let batch_size = orientation_counts.len();
+
+        let counts = Tensor::from_vec(
+            orientation_counts
+                .iter()
+                .flat_map(|c| c.inner().into_iter().map(|x| x as u32))
+                .collect::<Vec<u32>>(),
+            &[batch_size, TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS],
+            device,
+        )?;
+
+        // Convert counts to distribution using softmax
+        let dists = softmax(&counts.to_dtype(dtype)?, D::Minus1)?;
         Self::try_from(dists)
     }
 
@@ -1207,5 +1229,201 @@ mod tests {
             "Cross-entropy loss should be non-negative, got: {}",
             loss_val
         );
+    }
+
+    /// Test that from_orientation_counts correctly converts vote counts to softmax distribution
+    ///
+    /// This test verifies:
+    /// 1. Counts are converted to a valid probability distribution (sums to 1)
+    /// 2. Higher counts get higher probabilities (softmax preserves order)
+    /// 3. All values are finite (no NaN/Inf)
+    /// 4. Works with various count patterns (uniform, skewed, single vote)
+    #[test]
+    fn test_from_orientation_counts() {
+        let device = Device::Cpu;
+
+        // --- Test 1: Simple case with clear winner ---
+        let mut counts1 = OrientationCounts::default();
+        // Simulate 10 votes for orientation 0, 3 votes for orientation 1, 1 vote for orientation 2
+        for _ in 0..10 {
+            counts1.add_action(TetrisPiecePlacement {
+                piece: TetrisPiece::I_PIECE,
+                orientation: TetrisPieceOrientation::from_index(0),
+            });
+        }
+        for _ in 0..3 {
+            counts1.add_action(TetrisPiecePlacement {
+                piece: TetrisPiece::I_PIECE,
+                orientation: TetrisPieceOrientation::from_index(1),
+            });
+        }
+        counts1.add_action(TetrisPiecePlacement {
+            piece: TetrisPiece::I_PIECE,
+            orientation: TetrisPieceOrientation::from_index(2),
+        });
+
+        let dist = TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts1], &device)
+            .unwrap();
+        let dist_vec = dist.inner().flatten_all().unwrap().to_vec1::<f32>().unwrap();
+
+        // Check all values are finite
+        for (i, &val) in dist_vec.iter().enumerate() {
+            assert!(
+                val.is_finite(),
+                "Distribution value at index {} is not finite: {}",
+                i,
+                val
+            );
+        }
+
+        // Check sum to 1 (within floating point tolerance)
+        let sum: f32 = dist_vec.iter().sum();
+        assert!(
+            (sum - 1.0).abs() < 1e-5,
+            "Distribution should sum to 1.0, got {}",
+            sum
+        );
+
+        // Check that higher counts -> higher probabilities (softmax preserves order)
+        // orientation 0 (10 votes) should have highest probability
+        // orientation 1 (3 votes) should have second highest
+        // orientation 2 (1 vote) should have third highest
+        assert!(
+            dist_vec[0] > dist_vec[1],
+            "Orientation with 10 votes should have higher prob than orientation with 3 votes"
+        );
+        assert!(
+            dist_vec[1] > dist_vec[2],
+            "Orientation with 3 votes should have higher prob than orientation with 1 vote"
+        );
+
+        // --- Test 2: Uniform counts (all equal) ---
+        let mut counts2 = OrientationCounts::default();
+        for ori_idx in 0..4 {
+            for _ in 0..5 {
+                counts2.add_action(TetrisPiecePlacement {
+                    piece: TetrisPiece::I_PIECE,
+                    orientation: TetrisPieceOrientation::from_index(ori_idx),
+                });
+            }
+        }
+
+        let dist2 =
+            TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts2], &device)
+                .unwrap();
+        let dist2_vec = dist2
+            .inner()
+            .flatten_all()
+            .unwrap()
+            .to_vec1::<f32>()
+            .unwrap();
+
+        // With uniform counts, softmax should produce roughly equal probabilities for the first 4
+        for i in 0..4 {
+            for j in 0..4 {
+                assert!(
+                    (dist2_vec[i] - dist2_vec[j]).abs() < 1e-5,
+                    "Uniform counts should produce uniform distribution, got {} and {}",
+                    dist2_vec[i],
+                    dist2_vec[j]
+                );
+            }
+        }
+
+        // --- Test 3: Single vote (edge case) ---
+        let mut counts3 = OrientationCounts::default();
+        counts3.add_action(TetrisPiecePlacement {
+            piece: TetrisPiece::O_PIECE,
+            orientation: TetrisPieceOrientation::from_index(4),
+        });
+
+        let dist3 =
+            TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts3], &device)
+                .unwrap();
+        let dist3_vec = dist3
+            .inner()
+            .flatten_all()
+            .unwrap()
+            .to_vec1::<f32>()
+            .unwrap();
+
+        // Should still be valid distribution
+        let sum3: f32 = dist3_vec.iter().sum();
+        assert!(
+            (sum3 - 1.0).abs() < 1e-5,
+            "Single vote distribution should sum to 1.0, got {}",
+            sum3
+        );
+        assert!(
+            dist3_vec.iter().all(|&x| x.is_finite()),
+            "Single vote distribution should have all finite values"
+        );
+
+        // --- Test 4: Batch of multiple counts ---
+        let counts_batch = vec![counts1, counts2, counts3];
+        let dist_batch =
+            TetrisPieceOrientationDistTensor::from_orientation_counts(&counts_batch, &device)
+                .unwrap();
+
+        let (batch_size, num_orientations) = dist_batch.shape_tuple();
+        assert_eq!(batch_size, 3, "Batch size should be 3");
+        assert_eq!(
+            num_orientations,
+            TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
+            "Should have all orientations"
+        );
+
+        // Check each row sums to 1
+        for i in 0..batch_size {
+            let row = dist_batch
+                .inner()
+                .i(i)
+                .unwrap()
+                .flatten_all()
+                .unwrap()
+                .to_vec1::<f32>()
+                .unwrap();
+            let row_sum: f32 = row.iter().sum();
+            assert!(
+                (row_sum - 1.0).abs() < 1e-5,
+                "Row {} should sum to 1.0, got {}",
+                i,
+                row_sum
+            );
+            assert!(
+                row.iter().all(|&x| x.is_finite()),
+                "Row {} should have all finite values",
+                i
+            );
+        }
+
+        // --- Test 5: All zeros (edge case that might cause issues) ---
+        let counts_zero = OrientationCounts::default(); // No votes
+        let dist_zero =
+            TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts_zero], &device)
+                .unwrap();
+        let dist_zero_vec = dist_zero
+            .inner()
+            .flatten_all()
+            .unwrap()
+            .to_vec1::<f32>()
+            .unwrap();
+
+        // Softmax of all zeros should be uniform distribution
+        let expected_uniform = 1.0 / TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS as f32;
+        for (i, &val) in dist_zero_vec.iter().enumerate() {
+            assert!(
+                val.is_finite(),
+                "Zero counts distribution value at index {} should be finite",
+                i
+            );
+            assert!(
+                (val - expected_uniform).abs() < 1e-5,
+                "Zero counts should produce uniform distribution, got {} at index {}, expected {}",
+                val,
+                i,
+                expected_uniform
+            );
+        }
     }
 }

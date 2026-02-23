@@ -2477,7 +2477,7 @@ impl TetrisGameSet {
     #[must_use]
     pub fn current_placements(&self) -> Vec<&[TetrisPiecePlacement]> {
         self.0
-            .iter()
+            .into_iter()
             .map(|game| game.current_placements())
             .collect()
     }
@@ -2490,7 +2490,7 @@ impl TetrisGameSet {
     /// If the game is not lost, the current piece is replaced with a new random piece.
     pub fn apply_placement(&mut self, placements: &[TetrisPiecePlacement]) -> Vec<IsLost> {
         self.0
-            .iter_mut()
+            .into_iter_mut()
             .zip(placements)
             .map(|(game, &placement)| game.apply_placement(placement).is_lost)
             .collect()
@@ -2507,7 +2507,7 @@ impl TetrisGameSet {
         orientations: &[TetrisPieceOrientation],
     ) -> Vec<IsLost> {
         self.0
-            .iter_mut()
+            .into_iter_mut()
             .zip(orientations)
             .map(|(game, &orientation)| {
                 game.apply_placement(TetrisPiecePlacement {
@@ -2525,7 +2525,7 @@ impl TetrisGameSet {
     /// Returns the number of games that were reset.
     pub fn reset_lost_games(&mut self) -> usize {
         self.0
-            .iter_mut()
+            .into_iter_mut()
             .map(|game| {
                 if game.board.is_lost() {
                     let next_seed = game.rng.next_u64();
@@ -2540,7 +2540,7 @@ impl TetrisGameSet {
 
     /// Resets all games to their initial state (original seeds).
     pub fn reset_all(&mut self) {
-        self.0.iter_mut().for_each(|game| game.reset(None));
+        self.0.into_iter_mut().for_each(|game| game.reset(None));
     }
 
     /// Permute the gameset using the provided permutation vector.

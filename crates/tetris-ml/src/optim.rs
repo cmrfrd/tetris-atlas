@@ -31,6 +31,7 @@ pub struct VarAdamW {
     pub var: Var,
     pub first_moment: Var,
     pub second_moment: Var,
+    pub name: Option<String>,
 }
 
 #[derive(Debug)]
@@ -57,6 +58,7 @@ impl Optimizer for AdamW {
                     var,
                     first_moment,
                     second_moment,
+                    name: None,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -106,6 +108,35 @@ impl Optimizer for AdamW {
 }
 
 impl AdamW {
+    /// Create an AdamW optimizer with named parameters for deterministic checkpointing.
+    ///
+    /// Use `sorted_named_vars()` from tetris_ml to get a deterministically-ordered
+    /// list of (name, var) pairs from a VarMap.
+    pub fn new_named(named_vars: Vec<(String, Var)>, params: ParamsAdamW) -> Result<Self> {
+        let vars = named_vars
+            .into_iter()
+            .filter(|(_, var)| var.dtype().is_float())
+            .map(|(name, var)| {
+                let dtype = var.dtype();
+                let shape = var.shape();
+                let device = var.device();
+                let first_moment = Var::zeros(shape, dtype, device)?;
+                let second_moment = Var::zeros(shape, dtype, device)?;
+                Ok(VarAdamW {
+                    var,
+                    first_moment,
+                    second_moment,
+                    name: Some(name),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Self {
+            vars,
+            params,
+            step_t: 0,
+        })
+    }
+
     pub fn new_lr(vars: Vec<Var>, learning_rate: f64) -> Result<Self> {
         let params = ParamsAdamW {
             lr: learning_rate,
@@ -188,6 +219,12 @@ pub struct AdamWState {
     pub second_moments: Vec<Tensor>,
 }
 
+impl AdamW {
+    fn has_names(&self) -> bool {
+        self.vars.first().is_some_and(|v| v.name.is_some())
+    }
+}
+
 impl Checkpointable for AdamW {
     fn save_to_path(&self, path: &Path) -> candle_core::Result<()> {
         let state = self.export_state()?;
@@ -196,48 +233,82 @@ impl Checkpointable for AdamW {
             "step_t".to_string(),
             Tensor::new(state.step_t as i64, &Device::Cpu)?,
         );
-        for (i, t) in state.first_moments.iter().enumerate() {
-            map.insert(format!("first_moment_{}", i), t.clone());
+
+        if self.has_names() {
+            // Named format: keys are "m1.<param_name>" / "m2.<param_name>"
+            for (v, (m1, m2)) in self.vars.iter().zip(
+                state
+                    .first_moments
+                    .iter()
+                    .zip(state.second_moments.iter()),
+            ) {
+                let name = v.name.as_ref().unwrap();
+                map.insert(format!("m1.{}", name), m1.clone());
+                map.insert(format!("m2.{}", name), m2.clone());
+            }
+        } else {
+            // Legacy positional format
+            for (i, t) in state.first_moments.iter().enumerate() {
+                map.insert(format!("first_moment_{}", i), t.clone());
+            }
+            for (i, t) in state.second_moments.iter().enumerate() {
+                map.insert(format!("second_moment_{}", i), t.clone());
+            }
         }
-        for (i, t) in state.second_moments.iter().enumerate() {
-            map.insert(format!("second_moment_{}", i), t.clone());
-        }
+
         safetensors::save(&map, path)?;
         Ok(())
     }
 
     fn load_from_path(&mut self, path: &Path) -> candle_core::Result<()> {
         let first_device = self
-            .vars.first()
+            .vars
+            .first()
             .map(|v| v.var.device())
             .unwrap_or(&Device::Cpu);
-        let map = candle_core::safetensors::load(path, &first_device)?;
+        let map = candle_core::safetensors::load(path, first_device)?;
 
         let step_t = map
             .get("step_t")
             .ok_or_else(|| candle_core::Error::Msg("missing step_t in optimizer state".into()))?
             .to_scalar::<i64>()? as usize;
 
+        // Detect format: named keys start with "m1." / "m2.", legacy uses "first_moment_N"
+        let is_named_format = map.keys().any(|k| k.starts_with("m1."));
+
         let mut first_moments = Vec::with_capacity(self.vars.len());
         let mut second_moments = Vec::with_capacity(self.vars.len());
-        for i in 0..self.vars.len() {
-            let m_name = format!("first_moment_{}", i);
-            let v_name = format!("second_moment_{}", i);
-            let m = map
-                .get(&m_name)
-                .ok_or_else(|| {
+
+        if is_named_format && self.has_names() {
+            for v in &self.vars {
+                let name = v.name.as_ref().unwrap();
+                let m1_key = format!("m1.{}", name);
+                let m2_key = format!("m2.{}", name);
+                let m1 = map.get(&m1_key).ok_or_else(|| {
+                    candle_core::Error::Msg(format!("missing {} in optimizer state", m1_key))
+                })?;
+                let m2 = map.get(&m2_key).ok_or_else(|| {
+                    candle_core::Error::Msg(format!("missing {} in optimizer state", m2_key))
+                })?;
+                first_moments.push(m1.clone());
+                second_moments.push(m2.clone());
+            }
+        } else {
+            // Legacy positional format
+            for i in 0..self.vars.len() {
+                let m_name = format!("first_moment_{}", i);
+                let v_name = format!("second_moment_{}", i);
+                let m = map.get(&m_name).ok_or_else(|| {
                     candle_core::Error::Msg(format!("missing {} in optimizer state", m_name))
-                })?
-                .clone();
-            let v = map
-                .get(&v_name)
-                .ok_or_else(|| {
+                })?;
+                let v = map.get(&v_name).ok_or_else(|| {
                     candle_core::Error::Msg(format!("missing {} in optimizer state", v_name))
-                })?
-                .clone();
-            first_moments.push(m);
-            second_moments.push(v);
+                })?;
+                first_moments.push(m.clone());
+                second_moments.push(v.clone());
+            }
         }
+
         let state = AdamWState {
             step_t,
             first_moments,

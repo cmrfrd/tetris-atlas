@@ -407,7 +407,11 @@ impl<T: Copy + Ord, const SIZE: usize> FixedBinMinHeap<T, SIZE> {
                 // Both children exist - find minimum
                 let vl = unsafe { *ptr.add(left) };
                 let vr = unsafe { *ptr.add(right) };
-                if vr < vl { (vr, right) } else { (vl, left) }
+                if vr < vl {
+                    (vr, right)
+                } else {
+                    (vl, left)
+                }
             };
 
             // Swap if child < parent
@@ -938,7 +942,7 @@ impl<T: Copy, const N: usize> HeaplessVec<T, N> {
     /// # Returns
     ///
     /// An iterator yielding immutable references to each element
-    pub fn iter(&self) -> std::slice::Iter<'_, T> {
+    pub fn into_iter(&self) -> std::slice::Iter<'_, T> {
         self.to_slice().iter()
     }
 
@@ -947,7 +951,7 @@ impl<T: Copy, const N: usize> HeaplessVec<T, N> {
     /// # Returns
     ///
     /// An iterator yielding mutable references to each element
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
+    pub fn into_iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
         unsafe {
             std::slice::from_raw_parts_mut(self.data.as_mut_ptr() as *mut T, self.len).iter_mut()
         }
@@ -2021,7 +2025,7 @@ mod tests {
         let mut vec: HeaplessVec<i32, 5> = HeaplessVec::new();
 
         // Test empty vec iteration
-        assert_eq!(vec.iter().count(), 0);
+        assert_eq!(vec.into_iter().count(), 0);
 
         // Add some elements
         vec.push(1);
@@ -2029,17 +2033,17 @@ mod tests {
         vec.push(3);
 
         // Test iteration count
-        assert_eq!(vec.iter().count(), 3);
+        assert_eq!(vec.into_iter().count(), 3);
 
         // Test iteration values
-        let mut iter = vec.iter();
+        let mut iter = vec.into_iter();
         assert_eq!(Some(&1), iter.next());
         assert_eq!(Some(&2), iter.next());
         assert_eq!(Some(&3), iter.next());
         assert_eq!(None, iter.next());
 
         // Test collecting into Vec
-        let collected: Vec<i32> = vec.iter().copied().collect();
+        let collected: Vec<i32> = vec.into_iter().copied().collect();
         assert_eq!(collected, vec![1, 2, 3]);
     }
 

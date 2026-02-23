@@ -230,6 +230,10 @@ pub struct MlpConfig {
     pub output_size: usize,
     #[serde(default)]
     pub dropout: Option<f32>,
+    /// When true, adds a residual (skip) connection around each layer whose input
+    /// and output dimensions match (i.e. `x = x + layer(x)`).
+    #[serde(default)]
+    pub residual: bool,
 }
 
 /// Standard MLP with arbitrary depth: input -> hidden1 -> hidden2 -> ... -> output
@@ -238,6 +242,8 @@ pub struct MlpConfig {
 pub struct Mlp {
     layers: Vec<Linear>,
     dropout: Option<candle_nn::Dropout>,
+    /// Per-layer flag: true when input dim == output dim and residual is enabled
+    residual_mask: Vec<bool>,
     span: tracing::Span,
 }
 
@@ -250,17 +256,20 @@ impl Mlp {
         layer_sizes.extend(&cfg.hidden_sizes);
         layer_sizes.push(cfg.output_size);
 
-        // Create linear layers
+        // Create linear layers and compute per-layer residual eligibility
         let mut layers = Vec::new();
+        let mut residual_mask = Vec::new();
         for (i, window) in layer_sizes.windows(2).enumerate() {
             let layer = linear(window[0], window[1], vb.pp(format!("layer_{}", i)))?;
             layers.push(layer);
+            residual_mask.push(cfg.residual && window[0] == window[1]);
         }
 
         let dropout = cfg.dropout.map(candle_nn::Dropout::new);
         Ok(Self {
             layers,
             dropout,
+            residual_mask,
             span,
         })
     }
@@ -271,6 +280,12 @@ impl Mlp {
 
         // Apply all layers except the last with activation and dropout
         for (i, layer) in self.layers.iter().enumerate() {
+            let residual = if self.residual_mask[i] {
+                Some(x.clone())
+            } else {
+                None
+            };
+
             x = layer.forward(&x)?;
 
             // Apply activation and dropout to all but the last layer
@@ -280,6 +295,10 @@ impl Mlp {
                 if let Some(ref dropout) = self.dropout {
                     x = dropout.forward(&x, true)?;
                 }
+            }
+
+            if let Some(r) = residual {
+                x = (x + r)?;
             }
         }
 

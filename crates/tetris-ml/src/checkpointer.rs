@@ -1,7 +1,28 @@
 use anyhow::Result;
+use candle_core::Var;
 use candle_nn::VarMap;
 use std::{fs, path::Path, path::PathBuf};
 use tracing::info;
+
+/// Returns VarMap variables sorted by name for deterministic ordering.
+///
+/// `VarMap::all_vars()` iterates over an internal HashMap whose order is
+/// non-deterministic across runs. This causes optimizer checkpoint mismatches
+/// when save and load see different parameter orderings.
+pub fn sorted_vars(varmap: &VarMap) -> Vec<Var> {
+    let data = varmap.data().lock().unwrap();
+    let mut named: Vec<_> = data.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    named.sort_by(|a, b| a.0.cmp(&b.0));
+    named.into_iter().map(|(_, v)| v).collect()
+}
+
+/// Returns VarMap variables as (name, var) pairs sorted by name.
+pub fn sorted_named_vars(varmap: &VarMap) -> Vec<(String, Var)> {
+    let data = varmap.data().lock().unwrap();
+    let mut named: Vec<_> = data.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    named.sort_by(|a, b| a.0.cmp(&b.0));
+    named
+}
 
 /// Manages periodic saving of model parameters to disk during training.
 ///
@@ -313,11 +334,16 @@ impl Checkpointer {
         }
     }
 
-    /// Removes old checkpoints, keeping only the most recent `max_checkpoints`.
+    /// Removes old checkpoints, keeping only the most recent `max_checkpoints` iterations.
+    ///
+    /// Groups all files (model, optimizer, etc.) by iteration number and deletes
+    /// entire groups beyond the retention limit. This prevents orphaned files when
+    /// multiple checkpoint files exist per iteration.
     ///
     /// Called automatically by `checkpoint_item` when `keep_all` is false.
     fn cleanup_old_checkpoints(&self, _current_iteration: usize) -> Result<()> {
-        let mut checkpoints = Vec::new();
+        let mut checkpoints: std::collections::HashMap<usize, Vec<PathBuf>> =
+            std::collections::HashMap::new();
 
         for entry in fs::read_dir(&self.checkpoint_dir)? {
             let entry = entry?;
@@ -337,19 +363,21 @@ impl Checkpointer {
                 if !digits.is_empty()
                     && let Ok(iteration) = digits.parse::<usize>()
                 {
-                    checkpoints.push((iteration, path.clone()));
+                    checkpoints.entry(iteration).or_default().push(path.clone());
                 }
             }
         }
 
-        // Sort by iteration number (newest first)
-        checkpoints.sort_by(|a, b| b.0.cmp(&a.0));
+        let mut iterations: Vec<usize> = checkpoints.keys().copied().collect();
+        iterations.sort_unstable_by(|a, b| b.cmp(a));
 
-        // Remove old checkpoints beyond max_checkpoints
-        if checkpoints.len() > self.max_checkpoints {
-            for (_, path) in checkpoints.iter().skip(self.max_checkpoints) {
-                if let Err(e) = fs::remove_file(path) {
-                    eprintln!("Warning: Failed to remove old checkpoint {:?}: {}", path, e);
+        // Remove all files belonging to iterations beyond max_checkpoints
+        for &iter in iterations.iter().skip(self.max_checkpoints) {
+            if let Some(paths) = checkpoints.get(&iter) {
+                for path in paths {
+                    if let Err(e) = fs::remove_file(path) {
+                        eprintln!("Warning: Failed to remove old checkpoint {:?}: {}", path, e);
+                    }
                 }
             }
         }
