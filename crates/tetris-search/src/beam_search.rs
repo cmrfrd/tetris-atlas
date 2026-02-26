@@ -7,7 +7,7 @@ use tetris_game::{
 
 /// Counts of actions by orientation index
 #[derive(Clone, Copy)]
-pub struct OrientationCounts([usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS]);
+pub struct OrientationCounts([u32; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS]);
 
 impl Default for OrientationCounts {
     fn default() -> Self {
@@ -17,7 +17,7 @@ impl Default for OrientationCounts {
 
 impl OrientationCounts {
     #[inline_conditioned(always)]
-    pub fn inner(&self) -> [usize; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS] {
+    pub fn inner(&self) -> [u32; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS] {
         self.0
     }
 
@@ -36,7 +36,7 @@ impl OrientationCounts {
     }
 
     #[inline_conditioned(always)]
-    pub fn top_orientation(&self) -> (TetrisPieceOrientation, usize) {
+    pub fn top_orientation(&self) -> (TetrisPieceOrientation, u32) {
         let (max_idx, &max_count) = self
             .0
             .iter()
@@ -47,9 +47,7 @@ impl OrientationCounts {
     }
 
     #[inline_conditioned(always)]
-    pub fn nonzero_orientations(
-        &self,
-    ) -> impl Iterator<Item = (TetrisPieceOrientation, usize)> + '_ {
+    pub fn nonzero_orientations(&self) -> impl Iterator<Item = (TetrisPieceOrientation, u32)> + '_ {
         self.0
             .iter()
             .enumerate()
@@ -127,18 +125,19 @@ impl<S: BeamSearchState> ScoredState<S> {
 /// 3. Predictable branches (pipeline-friendly)
 ///
 /// Const generics:
-/// - BEAM_WIDTH: Number of states to keep per level
+/// - MAX_BEAM_WIDTH: Maximum number of states to keep per level
 /// - MAX_DEPTH: Maximum search depth (for move history)
 /// - MAX_MOVES: Maximum moves per state
 pub struct BeamSearch<
     S: BeamSearchState,
-    const BEAM_WIDTH: usize,
+    const MAX_BEAM_WIDTH: usize,
     const MAX_DEPTH: usize,
     const MAX_MOVES: usize,
 > {
     // Two heaps instead of current_beam + next_beam
-    beams: [FixedBinMinHeap<ScoredState<S>, BEAM_WIDTH>; 2],
+    beams: [FixedBinMinHeap<ScoredState<S>, MAX_BEAM_WIDTH>; 2],
     current_idx: usize, // 0 or 1 - tracks which beam is "current"
+    beam_width: usize,  // Runtime beam width (bounded by MAX_BEAM_WIDTH)
 
     // Action generation scratch buffer (unchanged)
     action_buffer: HeaplessVec<S::Action, MAX_MOVES>,
@@ -148,17 +147,36 @@ pub struct BeamSearch<
     best_state: Option<ScoredState<S>>,
 }
 
-impl<S: BeamSearchState, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_MOVES: usize>
-    BeamSearch<S, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
+impl<
+        S: BeamSearchState,
+        const MAX_BEAM_WIDTH: usize,
+        const MAX_DEPTH: usize,
+        const MAX_MOVES: usize,
+    > BeamSearch<S, MAX_BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
 {
     /// Create a new beam search
     pub fn new() -> Self {
         Self {
             beams: [FixedBinMinHeap::new(), FixedBinMinHeap::new()],
             current_idx: 0,
+            beam_width: MAX_BEAM_WIDTH,
             action_buffer: HeaplessVec::new(),
             best_state: None,
         }
+    }
+
+    #[inline_conditioned(always)]
+    pub fn beam_width(&self) -> usize {
+        self.beam_width
+    }
+
+    #[inline_conditioned(always)]
+    pub fn set_beam_width(&mut self, beam_width: usize) {
+        assert!(
+            beam_width > 0 && beam_width <= MAX_BEAM_WIDTH,
+            "beam_width must be in range [1, MAX_BEAM_WIDTH]; got beam_width={beam_width}, MAX_BEAM_WIDTH={MAX_BEAM_WIDTH}"
+        );
+        self.beam_width = beam_width;
     }
 
     /// Expand one level of the search tree
@@ -171,30 +189,26 @@ impl<S: BeamSearchState, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const 
     /// Terminal states are filtered out during expansion to avoid wasting beam slots
     #[inline_conditioned(always)]
     fn expand_level(&mut self) -> usize {
+        // Determine the current+next beam and clear the next beam for filling
         let next_idx = 1 - self.current_idx;
-        let current_beam: &FixedBinMinHeap<ScoredState<S>, BEAM_WIDTH> =
+        let active_beam_width = self.beam_width;
+        let current_beam: &FixedBinMinHeap<ScoredState<S>, MAX_BEAM_WIDTH> =
             unsafe { &*(&self.beams[self.current_idx] as *const _) };
-        let next_beam: &mut FixedBinMinHeap<ScoredState<S>, BEAM_WIDTH> =
+        let next_beam: &mut FixedBinMinHeap<ScoredState<S>, MAX_BEAM_WIDTH> =
             unsafe { &mut *(&mut self.beams[next_idx] as *mut _) };
         next_beam.clear();
-
-        // Reset best_state for this level
         self.best_state = None;
 
-        // Expansion: read from current, write to next
-        let current_len = current_beam.len();
-        for beam_idx in 0..current_len {
-            // SAFETY: We're reading from the current beam which won't be modified
+        for beam_idx in 0..current_beam.len() {
+            // Fill action buffer from parent beam state
             let parent = unsafe { current_beam.as_slice().get_unchecked(beam_idx) };
-
-            // Generate actions
             self.action_buffer.clear();
             let _action_count = parent
                 .state
                 .generate_actions::<MAX_MOVES>(&mut self.action_buffer);
 
             // For each action, create lightweight child and insert into NEXT beam
-            for &action in self.action_buffer.iter() {
+            for &action in self.action_buffer.into_iter() {
                 let new_state = parent.state.apply_action(&action);
 
                 let child = ScoredState {
@@ -211,7 +225,15 @@ impl<S: BeamSearchState, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const 
                     _ => {}
                 }
 
-                next_beam.push_if_better_min_heap(child);
+                if active_beam_width == MAX_BEAM_WIDTH {
+                    next_beam.push_if_better_min_heap(child);
+                } else if next_beam.len() < active_beam_width {
+                    next_beam.push(child);
+                } else if let Some(min_kept) = next_beam.peek_min()
+                    && child > min_kept
+                {
+                    next_beam.replace_min(child);
+                }
             }
         }
 
@@ -262,13 +284,14 @@ impl<S: BeamSearchState, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const 
     /// Search to specified depth and return the top N states (unordered).
     ///
     /// Returns None if the search fails (beam becomes empty) or if fewer than N states exist.
-    /// Uses partial selection to extract the top N in O(BEAM_WIDTH) time.
+    /// Uses partial selection to extract the top N in O(active_beam_width) time.
     /// Results are not sorted - use this when you only need the best N states, not their order.
     #[inline_conditioned(always)]
     pub fn search_top_n<const N: usize>(&mut self, depth: usize) -> Option<[ScoredState<S>; N]> {
         assert!(
-            N > 0 && N <= BEAM_WIDTH,
-            "N must be in range (0, BEAM_WIDTH]; got N={N}, BEAM_WIDTH={BEAM_WIDTH}"
+            N > 0 && N <= self.beam_width,
+            "N must be in range (0, beam_width]; got N={N}, beam_width={}",
+            self.beam_width
         );
         assert!(
             depth <= MAX_DEPTH,
@@ -326,28 +349,28 @@ impl<S: BeamSearchState, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const 
 ///
 /// Const generics:
 /// - N: Number of parallel searches to run
-/// - BEAM_WIDTH, MAX_DEPTH, MAX_MOVES: Same as BeamSearch
+/// - MAX_BEAM_WIDTH, MAX_DEPTH, MAX_MOVES: Same as BeamSearch
 pub struct MultiBeamSearch<
     S: BeamSearchState,
     const NUM_BEAMS: usize,
     const TOP_N_PER_BEAM: usize,
-    const BEAM_WIDTH: usize,
+    const MAX_BEAM_WIDTH: usize,
     const MAX_DEPTH: usize,
     const MAX_MOVES: usize,
 > where
     S::Action: Eq + std::hash::Hash,
 {
-    pub searches: Vec<BeamSearch<S, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>>,
+    pub searches: Vec<BeamSearch<S, MAX_BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>>,
 }
 
 impl<
     S: BeamSearchState + Send + Sync,
     const NUM_BEAMS: usize,
     const TOP_N_PER_BEAM: usize,
-    const BEAM_WIDTH: usize,
+    const MAX_BEAM_WIDTH: usize,
     const MAX_DEPTH: usize,
     const MAX_MOVES: usize,
-> MultiBeamSearch<S, NUM_BEAMS, TOP_N_PER_BEAM, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
+> MultiBeamSearch<S, NUM_BEAMS, TOP_N_PER_BEAM, MAX_BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
 where
     S::Action: Eq + std::hash::Hash + Send + Sync,
 {
@@ -365,23 +388,40 @@ where
 impl<
     const NUM_BEAMS: usize,
     const TOP_N_PER_BEAM: usize,
-    const BEAM_WIDTH: usize,
+    const MAX_BEAM_WIDTH: usize,
     const MAX_DEPTH: usize,
     const MAX_MOVES: usize,
-> MultiBeamSearch<BeamTetrisState, NUM_BEAMS, TOP_N_PER_BEAM, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
+> MultiBeamSearch<BeamTetrisState, NUM_BEAMS, TOP_N_PER_BEAM, MAX_BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
 {
     pub fn search_count_actions_with_seeds(
         &mut self,
         base_state: BeamTetrisState,
         base_seed: u64,
         depth: usize,
+        beam_width: usize,
     ) -> OrientationCounts {
+        assert!(
+            depth <= MAX_DEPTH,
+            "search depth ({depth}) exceeds MAX_DEPTH ({MAX_DEPTH}); increase MAX_DEPTH or pass a smaller depth"
+        );
+        assert!(
+            beam_width > 0 && beam_width <= MAX_BEAM_WIDTH,
+            "beam_width must be in range [1, MAX_BEAM_WIDTH]; got beam_width={beam_width}, MAX_BEAM_WIDTH={MAX_BEAM_WIDTH}"
+        );
+        if TOP_N_PER_BEAM > 1 {
+            assert!(
+                TOP_N_PER_BEAM <= beam_width,
+                "TOP_N_PER_BEAM ({TOP_N_PER_BEAM}) exceeds beam_width ({beam_width}); increase beam_width or lower TOP_N_PER_BEAM"
+            );
+        }
+
         let base_par_iter = self.searches.par_iter_mut().enumerate();
         let counts: OrientationCounts = match TOP_N_PER_BEAM {
             1 => base_par_iter
                 .filter_map(|(i, search)| {
                     let mut game = base_state.0;
                     game.rng = TetrisGameRng::new(base_seed + i as u64);
+                    search.set_beam_width(beam_width);
                     search
                         .search_top_with_state(BeamTetrisState(game), depth)
                         .and_then(|scored| scored.root_action)
@@ -404,6 +444,7 @@ impl<
                 .flat_map(|(i, search)| {
                     let mut game = base_state.0;
                     game.rng = TetrisGameRng::new(base_seed + i as u64);
+                    search.set_beam_width(beam_width);
                     search
                         .search_top_n_with_state::<TOP_N_PER_BEAM>(BeamTetrisState(game), depth)
                         .into_par_iter()
@@ -452,8 +493,9 @@ impl<
         base_state: BeamTetrisState,
         base_seed: u64,
         depth: usize,
+        beam_width: usize,
     ) -> Option<TetrisPiecePlacement> {
-        let counts = self.search_count_actions_with_seeds(base_state, base_seed, depth);
+        let counts = self.search_count_actions_with_seeds(base_state, base_seed, depth, beam_width);
 
         // Find best orientation by vote count
         let (best_orientation, best_count) = counts.top_orientation();
@@ -508,13 +550,12 @@ impl BeamTetrisState {
             bumpiness += (heights[i] as f32 - heights[i + 1] as f32).abs();
         }
 
-        let cell_count = self.0.board.count() as f32;
+        // let cell_count = self.0.board.count() as f32;
 
         0.760666 * lines
             + (-0.510066) * aggregate_height
             + (-0.35663) * holes
             + (-0.184483) * bumpiness
-            + (-0.05) * cell_count
 
         // 1.0 * lines + -0.5 * aggregate_height + -0.3 * holes + -0.2 * bumpiness + -0.5 * cell_count
     }
