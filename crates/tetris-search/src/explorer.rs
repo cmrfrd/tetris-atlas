@@ -3,16 +3,14 @@
 //! This module provides `TetrisExplorer`, a parallel BFS-based explorer for
 //! enumerating game states efficiently.
 
-use tetris_game::{
-    repeat_idx_unroll,
-    tetris::{TetrisBoard, TetrisGame, TetrisPiecePlacement},
-    utils::{HeaplessVec, VecPool},
-};
 use rayon::iter::ParallelIterator;
 use rayon::iter::plumbing::{Folder, Reducer, UnindexedConsumer};
 use rayon::{current_num_threads, join_context};
 use std::iter::Iterator;
 use std::{collections::VecDeque, sync::Arc};
+use tetris_game::{
+    HeaplessVec, TetrisBoard, TetrisGame, TetrisPiecePlacement, VecPool, repeat_idx_unroll,
+};
 
 use std::sync::atomic::{AtomicU64, Ordering};
 

@@ -1,12 +1,12 @@
 [package]
-name = "tetris-game"
+name = "tetris-utils"
 version = "0.1.0"
 edition = "2021"
 authors = ["Alex Comerford <alex@taoa.io>"]
 publish = false
 
 [lib]
-name = "tetris_game"
+name = "tetris_utils"
 path = "src/lib.rs"
 
 [features]
@@ -16,7 +16,6 @@ never-inline = []
 [dependencies]
 rand = { version = "0.9.2", features = ["small_rng"] }
 proc-macros = { path = "../proc-macros" }
-tetris-utils = { path = "../tetris-utils" }
 
 [lints]
 workspace = true

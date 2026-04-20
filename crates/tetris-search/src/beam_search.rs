@@ -1,8 +1,8 @@
 use proc_macros::inline_conditioned;
 use rayon::prelude::*;
 use tetris_game::{
-    TetrisGame, TetrisGameRng, TetrisPieceOrientation, TetrisPiecePlacement, repeat_idx_unroll,
-    utils::{FixedBinMinHeap, HeaplessVec},
+    FixedBinMinHeap, HeaplessVec, TetrisGame, TetrisGameRng, TetrisPieceOrientation,
+    TetrisPiecePlacement, repeat_idx_unroll,
 };
 
 /// Counts of actions by orientation index
@@ -148,11 +148,11 @@ pub struct BeamSearch<
 }
 
 impl<
-        S: BeamSearchState,
-        const MAX_BEAM_WIDTH: usize,
-        const MAX_DEPTH: usize,
-        const MAX_MOVES: usize,
-    > BeamSearch<S, MAX_BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
+    S: BeamSearchState,
+    const MAX_BEAM_WIDTH: usize,
+    const MAX_DEPTH: usize,
+    const MAX_MOVES: usize,
+> BeamSearch<S, MAX_BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
 {
     /// Create a new beam search
     pub fn new() -> Self {
@@ -391,7 +391,15 @@ impl<
     const MAX_BEAM_WIDTH: usize,
     const MAX_DEPTH: usize,
     const MAX_MOVES: usize,
-> MultiBeamSearch<BeamTetrisState, NUM_BEAMS, TOP_N_PER_BEAM, MAX_BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
+>
+    MultiBeamSearch<
+        BeamTetrisState,
+        NUM_BEAMS,
+        TOP_N_PER_BEAM,
+        MAX_BEAM_WIDTH,
+        MAX_DEPTH,
+        MAX_MOVES,
+    >
 {
     pub fn search_count_actions_with_seeds(
         &mut self,
@@ -607,7 +615,7 @@ impl BeamSearchState for BeamTetrisState {
 mod tests {
     use super::*;
     use rand::Rng;
-    use tetris_game::utils::HeaplessVec;
+    use tetris_game::HeaplessVec;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
     enum Direction {
@@ -721,7 +729,7 @@ mod tests {
                             Direction::Down => 1,
                             Direction::Left => 2,
                             Direction::Right => 3,
-                            _ => unreachable!(),
+                            Direction::Stay => continue,
                         };
                         if (blocked & (1u8 << dir_idx)) != 0 {
                             continue;

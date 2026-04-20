@@ -6,8 +6,7 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::ops::{Index, IndexMut};
 
-use crate::repeat_idx_unroll;
-use crate::utils::{rshift_slice_from_mask_u32, BitMask, HeaplessVec};
+use tetris_utils::{repeat_idx_unroll, rshift_slice_from_mask_u32, BitMask, HeaplessVec};
 
 /// Core constants for Tetris game dimensions and pieces.
 pub mod constants {
@@ -570,7 +569,7 @@ impl TetrisPieceOrientation {
         rng: &mut R,
     ) -> TetrisPieceOrientation {
         let mask = Self::ORIENTATION_MASKS_BY_PIECE[piece.index() as usize];
-        let rand_idx = crate::utils::choose_set_bit_u64(mask, rng)
+        let rand_idx = tetris_utils::choose_set_bit_u64(mask, rng)
             .expect("rand_orientation_from_piece: piece orientation mask is empty");
         TetrisPieceOrientation::from_index(rand_idx as u8)
     }
@@ -2621,7 +2620,13 @@ mod tests {
                 TetrisPiece::T_PIECE => 4,
                 TetrisPiece::L_PIECE => 4,
                 TetrisPiece::J_PIECE => 4,
-                _ => panic!("Invalid piece"),
+                invalid_piece => {
+                    assert!(
+                        invalid_piece.0 < TetrisPiece::NUM_PIECES as u8,
+                        "Invalid piece: {invalid_piece}"
+                    );
+                    0
+                }
             }
         }
         for i in 0..(TetrisPiece::NUM_PIECES as u8) {
@@ -2661,7 +2666,13 @@ mod tests {
                 (6, 0 | 2) => (3, 2), // J (flat)
                 (6, 1 | 3) => (2, 3), // J (tall)
 
-                _ => panic!("Invalid piece or rotation"),
+                _ => {
+                    assert!(
+                        i < TetrisPiece::NUM_PIECES as u8 && r < Rotation::MAX,
+                        "Invalid piece or rotation: piece={i}, rotation={r}"
+                    );
+                    (0, 0)
+                }
             }
         }
 
@@ -2847,7 +2858,7 @@ mod tests {
     /// - 2 rows: C(20,2) = 190 combinations
     /// - 3 rows: C(20,3) = 1140 combinations
     /// - 4 rows: C(20,4) = 4845 combinations
-    /// Total: 6195 test cases
+    ///   Total: 6195 test cases
     #[test]
     fn test_clear_filled_rows() {
         let mut board = TetrisBoard::new();
@@ -3223,7 +3234,10 @@ mod tests {
                 return;
             }
         }
-        panic!("Game should have been lost after 100 pieces in same column");
+        assert!(
+            game.board.is_lost(),
+            "Game should have been lost after 100 pieces in same column"
+        );
     }
 
     #[test]
@@ -3272,12 +3286,10 @@ mod tests {
             }
 
             let result = game.apply_placement(best_placement);
-            if result.is_lost.into() {
-                panic!(
-                    "Game was lost after {} pieces, but test needs {} pieces to trigger bag refill",
-                    pieces_drawn, target_pieces
-                );
-            }
+            assert_ne!(
+                result.is_lost, IsLost::LOST,
+                "Game was lost after {pieces_drawn} pieces, but test needs {target_pieces} pieces to trigger bag refill"
+            );
             pieces_drawn += 1;
         }
 

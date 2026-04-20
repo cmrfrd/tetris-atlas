@@ -1,3 +1,12 @@
+#![feature(generic_const_exprs)]
+#![feature(const_trait_impl)]
+#![feature(const_convert)]
+#![feature(const_index)]
+#![allow(incomplete_features)]
+#![allow(clippy::expect_used)]
+#![allow(clippy::needless_return)]
+#![allow(clippy::out_of_bounds_indexing)]
+
 use std::mem::MaybeUninit;
 use std::ptr;
 
@@ -27,7 +36,7 @@ use proc_macros::inline_conditioned;
 /// # Example
 ///
 /// ```
-/// use tetris_game::utils::bits_to_byte;
+/// use tetris_utils::bits_to_byte;
 /// let bits = [1_u8, 0, 1, 0, 1, 0, 1, 0];
 /// assert_eq!(bits_to_byte(&bits), 0b10101010);
 /// ```
@@ -48,7 +57,7 @@ pub const fn bits_to_byte(bits: &[u8; u8::BITS as usize]) -> u8 {
 /// ## Example
 ///
 /// ```
-/// use tetris_game::utils::{bits_to_byte, byte_to_bits};
+/// use tetris_utils::{bits_to_byte, byte_to_bits};
 /// let byte = 0b1010_1010u8;
 /// let bits = byte_to_bits(byte);
 /// assert_eq!(bits, [1, 0, 1, 0, 1, 0, 1, 0]);
@@ -340,7 +349,7 @@ impl<T: Copy + Ord, const SIZE: usize> FixedBinMinHeap<T, SIZE> {
         true
     }
 
-    // ----------------- unrolled sift-up/down with early exit -----------------
+    // ----------------- bounded sift-up/down with early exit -----------------
 
     #[inline_conditioned(always)]
     unsafe fn sift_up_min_unrolled(&mut self, start: usize) {
@@ -371,11 +380,13 @@ impl<T: Copy + Ord, const SIZE: usize> FixedBinMinHeap<T, SIZE> {
             do_swap != 0
         }
 
-        crate::repeat_idx_unroll!(Self::STEPS, _I, {
+        let mut step = 0usize;
+        while step < Self::STEPS {
             if !unsafe { step_up::<T>(ptr, &mut i) } {
                 return; // Early exit when no swap happened
             }
-        });
+            step += 1;
+        }
     }
 
     #[inline(always)]
@@ -426,11 +437,13 @@ impl<T: Copy + Ord, const SIZE: usize> FixedBinMinHeap<T, SIZE> {
             }
         }
 
-        crate::repeat_idx_unroll!(Self::STEPS, _I, {
+        let mut step = 0usize;
+        while step < Self::STEPS {
             if !unsafe { step_down::<T>(ptr, len, &mut i) } {
                 return; // Early exit when no swap happened
             }
-        });
+            step += 1;
+        }
     }
 }
 
@@ -1415,6 +1428,7 @@ macro_rules! repeat_idx_unroll {
             14_usize => $crate::repeat_exact_idx!(14, $i, $b),
             15_usize => $crate::repeat_exact_idx!(15, $i, $b),
             16_usize => $crate::repeat_exact_idx!(16, $i, $b),
+            18_usize => $crate::repeat_exact_idx!(18, $i, $b),
             25_usize => $crate::repeat_exact_idx!(25, $i, $b),
             32_usize => $crate::repeat_exact_idx!(32, $i, $b),
             40_usize => $crate::repeat_exact_idx!(40, $i, $b),
@@ -1446,7 +1460,7 @@ macro_rules! repeat_idx_unroll {
 ///
 /// # Example
 /// ```rust
-/// use tetris_game::utils::rshift_slice_from_mask_u32;
+/// use tetris_utils::rshift_slice_from_mask_u32;
 /// let mut arr = [0b1111_0000_0000_0000_0000_0000_0000_0000_u32; 2];
 /// let mask = 0b0000_0000_0000_0000_0000_0000_0000_1111_u32;
 /// rshift_slice_from_mask_u32::<2, 4>(&mut arr, mask);
@@ -1486,75 +1500,20 @@ pub const fn rshift_slice_from_mask_u32<const N: usize, const I: usize>(
     });
 }
 
-/// Right shifts a slice of u32s by `n` bits starting from a given index.
+/// Returns the bit index of the `k`-th set bit in `x` (0-indexed).
 ///
-/// For each u32 in the slice:
-/// - Bits before `idx` are kept unchanged
-/// - Bits after `idx` are shifted right by `n` positions
+/// The ranking is from least-significant bit to most-significant bit:
+/// `k = 0` selects the lowest set bit, `k = 1` the next one, and so on.
 ///
-/// # Arguments
+/// This implementation is branchless and performs a binary partition over
+/// 32/16/8/4/2/1-bit chunks, using `count_ones()` to decide whether the target
+/// set bit is in the lower chunk of the current window.
 ///
-/// * `xs` - Array of u32s to shift
-/// * `idx` - Starting bit index for the shift
-/// * `n` - Number of positions to shift right
+/// # Preconditions
 ///
-/// # Example
-/// ```rust
-/// use tetris_game::utils::rshift_slice_n_from_index_u32;
-/// let mut arr = [0b1111_0000_0000_0000_0000_0000_0000_0000_u32; 1];
-/// let expected = 0b0000_1111_0000_0000_0000_0000_0000_0000;
-/// rshift_slice_n_from_index_u32(&mut arr, 8, 4);
-/// assert_eq!(
-///     arr[0], expected,
-///     "\nExpected {:032b},\n     got {:032b}",
-///     expected,
-///     arr[0]
-/// );
-/// ```
-#[inline_conditioned(always)]
-pub const fn rshift_slice_n_from_index_u32<const N: usize>(
-    xs: &mut [u32; N],
-    idx: usize,
-    n: usize,
-) {
-    let mask = u32::MAX >> idx;
-    repeat_idx_unroll!(N, I, {
-        let shifted = (xs[I] >> n) & !mask;
-        let kept = xs[I] & mask;
-        xs[I] = shifted | kept;
-    });
-}
-
-/// Right shifts a u32 by `n` bits starting from a given index.
+/// * `k < x.count_ones()`
 ///
-/// Bits before `idx` are kept unchanged, while bits from `idx` onward are shifted right.
-///
-/// # Arguments
-///
-/// * `x` - The u32 value to shift
-/// * `idx` - Starting bit index for the shift (0 = MSB)
-/// * `n` - Number of positions to shift right
-///
-/// # Returns
-///
-/// The shifted u32 value
-///
-/// # Example
-///
-/// ```
-/// use tetris_game::utils::rshift_n_from_index;
-/// let x = 0b1111_0000_0000_0000_0000_0000_0000_0000u32;
-/// let result = rshift_n_from_index(x, 8, 4);
-/// assert_eq!(result, 0b0000_1111_0000_0000_0000_0000_0000_0000u32);
-/// ```
-#[inline_conditioned(always)]
-pub const fn rshift_n_from_index(x: u32, idx: usize, n: usize) -> u32 {
-    let mask = u32::MAX >> idx;
-    let shifted = (x >> n) & !mask;
-    let kept = x & mask;
-    shifted | kept
-}
-
+/// Violating the precondition yields an unspecified index.
 #[inline(always)]
 fn select_kth_u64(mut x: u64, mut k: u32) -> u32 {
     let mut i = 0u32;
@@ -1615,26 +1574,6 @@ mod tests {
     }
 
     #[test]
-    fn test_rshift_n_from_index() {
-        assert_eq!(
-            rshift_n_from_index(0b1111_0000_0000_0000_0000_0000_0000_0000, 0, 4),
-            0b1111_0000_0000_0000_0000_0000_0000_0000
-        );
-        assert_eq!(
-            rshift_n_from_index(0b1111_0000_0000_0000_0000_0000_0000_0000, 4, 4),
-            0b0000_0000_0000_0000_0000_0000_0000_0000
-        );
-        assert_eq!(
-            rshift_n_from_index(0b1111_0000_0000_0000_0000_0000_0000_0000, 8, 4),
-            0b0000_1111_0000_0000_0000_0000_0000_0000
-        );
-        assert_eq!(
-            rshift_n_from_index(0b1111_0000_0000_0000_0000_0000_0000_1111, 12, 4),
-            0b0000_1111_0000_0000_0000_0000_0000_1111
-        );
-    }
-
-    #[test]
     fn test_select_kth_and_choose_set_bit() {
         // Reference implementation: kth set bit (0-indexed) scanning from LSB->MSB.
         fn select_kth_ref(x: u64, k: u32) -> u32 {
@@ -1647,7 +1586,12 @@ mod tests {
                     seen += 1;
                 }
             }
-            panic!("k out of range for x (k={k}, popcnt={})", x.count_ones());
+            assert!(
+                k < x.count_ones(),
+                "k out of range for x (k={k}, popcnt={})",
+                x.count_ones()
+            );
+            0
         }
 
         // Basic correctness: exact positions across a variety of masks.
