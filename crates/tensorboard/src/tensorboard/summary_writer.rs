@@ -21,8 +21,10 @@ pub struct FileWriter {
 impl FileWriter {
     #[allow(dead_code)]
     pub(crate) fn add_global_summary(&mut self, summary: Summary) {
-        let mut evn = Event::default();
-        evn.what = Some(What::Summary(summary));
+        let evn = Event {
+            what: Some(What::Summary(summary)),
+            ..Event::default()
+        };
         self.writer.add_event(&evn);
     }
 }
@@ -53,23 +55,30 @@ impl FileWriter {
     }
 
     pub fn add_summary(&mut self, summary: Summary, step: usize) {
-        let mut evn = Event::default();
-        evn.what = Some(What::Summary(summary));
+        let evn = Event {
+            what: Some(What::Summary(summary)),
+            ..Event::default()
+        };
         self.add_event(&evn, step)
     }
 
     pub fn add_graph(&mut self, graph: GraphDef, meta: RunMetadata) {
         let graph_vec = graph.encode_to_vec();
-        let mut graph_evn = Event::default();
-        graph_evn.what = Some(What::GraphDef(graph_vec));
+        let graph_evn = Event {
+            what: Some(What::GraphDef(graph_vec)),
+            ..Event::default()
+        };
         self.writer.add_event(&graph_evn);
 
         let meta_vec = meta.encode_to_vec();
-        let mut tagged_meta = TaggedRunMetadata::default();
-        tagged_meta.tag = "profiler".to_string();
-        tagged_meta.run_metadata = meta_vec;
-        let mut meta_evn = Event::default();
-        meta_evn.what = Some(What::TaggedRunMetadata(tagged_meta));
+        let tagged_meta = TaggedRunMetadata {
+            tag: "profiler".to_string(),
+            run_metadata: meta_vec,
+        };
+        let meta_evn = Event {
+            what: Some(What::TaggedRunMetadata(tagged_meta)),
+            ..Event::default()
+        };
         self.writer.add_event(&meta_evn);
     }
 
@@ -119,7 +128,7 @@ impl SummaryWriter {
 
         // For very small datasets, use simple rules
         if n < 10 {
-            return n.min(5).max(1);
+            return n.clamp(1, 5);
         }
 
         // Sturges' rule as baseline (works well for normal distributions)
@@ -149,9 +158,7 @@ impl SummaryWriter {
         let fd_buckets = (range / bin_width).ceil() as usize;
 
         // Clamp to reasonable range (10-100) and prefer FD rule but consider Sturges too
-        let buckets = fd_buckets.max(sturges).clamp(10, 100);
-
-        buckets
+        fd_buckets.max(sturges).clamp(10, 100)
     }
 
     pub fn add_histogram_raw(
@@ -269,14 +276,14 @@ impl SummaryWriter {
     }
 
     pub fn add_graph(&mut self, node_list: &[NodeDef]) {
-        let mut graph = GraphDef::default();
-
-        let nodes = node_list.to_vec();
-        graph.node = nodes;
-
-        let mut version = VersionDef::default();
-        version.producer = 22;
-        graph.versions = Some(version);
+        let graph = GraphDef {
+            node: node_list.to_vec(),
+            versions: Some(VersionDef {
+                producer: 22,
+                ..VersionDef::default()
+            }),
+            ..GraphDef::default()
+        };
 
         let stats = RunMetadata::default();
 
