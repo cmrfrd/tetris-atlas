@@ -1137,7 +1137,10 @@ mod tests {
                 .unwrap(),
             DType::F32 => Tensor::full(f32::NEG_INFINITY, logits.dims(), &device).unwrap(),
             DType::F64 => Tensor::full(f64::NEG_INFINITY, logits.dims(), &device).unwrap(),
-            _ => panic!("Unsupported dtype for masking"),
+            other => {
+                assert_eq!(other, DType::F32, "Unsupported dtype for masking");
+                Tensor::full(f32::NEG_INFINITY, logits.dims(), &device).unwrap()
+            }
         };
         let masked_logits = keep_mask.where_cond(&logits, &neg_inf).unwrap();
 
@@ -1262,9 +1265,14 @@ mod tests {
             orientation: TetrisPieceOrientation::from_index(2),
         });
 
-        let dist = TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts1], &device)
+        let dist =
+            TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts1], &device).unwrap();
+        let dist_vec = dist
+            .inner()
+            .flatten_all()
+            .unwrap()
+            .to_vec1::<f32>()
             .unwrap();
-        let dist_vec = dist.inner().flatten_all().unwrap().to_vec1::<f32>().unwrap();
 
         // Check all values are finite
         for (i, &val) in dist_vec.iter().enumerate() {
@@ -1309,8 +1317,7 @@ mod tests {
         }
 
         let dist2 =
-            TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts2], &device)
-                .unwrap();
+            TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts2], &device).unwrap();
         let dist2_vec = dist2
             .inner()
             .flatten_all()
@@ -1338,8 +1345,7 @@ mod tests {
         });
 
         let dist3 =
-            TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts3], &device)
-                .unwrap();
+            TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts3], &device).unwrap();
         let dist3_vec = dist3
             .inner()
             .flatten_all()

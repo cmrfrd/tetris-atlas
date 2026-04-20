@@ -236,12 +236,11 @@ impl Checkpointable for AdamW {
 
         if self.has_names() {
             // Named format: keys are "m1.<param_name>" / "m2.<param_name>"
-            for (v, (m1, m2)) in self.vars.iter().zip(
-                state
-                    .first_moments
-                    .iter()
-                    .zip(state.second_moments.iter()),
-            ) {
+            for (v, (m1, m2)) in self
+                .vars
+                .iter()
+                .zip(state.first_moments.iter().zip(state.second_moments.iter()))
+            {
                 let name = v.name.as_ref().unwrap();
                 map.insert(format!("m1.{}", name), m1.clone());
                 map.insert(format!("m2.{}", name), m2.clone());
