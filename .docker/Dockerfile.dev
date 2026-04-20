@@ -45,16 +45,6 @@ RUN chown -R $USER:$USER /usr/local/cargo
 ## Install uv
 RUN python3 -m pip install uv
 
-## Install flyctl
-RUN curl -L https://fly.io/install.sh | sh && \
-    mkdir -p /usr/local/fly && \
-    cp -r /root/.fly/* /usr/local/fly/ && \
-    rm -rf /root/.fly && \
-    ln -sf /usr/local/fly/bin/flyctl /usr/local/bin/fly && \
-    chown -R $USER:$USER /usr/local/fly && \
-    chmod +x /usr/local/bin/fly && \
-    chmod -R +x /usr/local/fly/bin
-
 # Change to non-privileged user
 USER $USER
 

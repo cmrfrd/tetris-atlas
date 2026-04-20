@@ -1,0 +1,38 @@
+FROM ubuntu:22.04 as builder
+
+# Install build dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    protobuf-compiler \
+    libprotobuf-dev \
+    clang \
+    libclang-dev \
+    build-essential \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    CARGO_BUILD_JOBS=1 \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --default-toolchain nightly --profile minimal
+
+WORKDIR /build
+
+# Copy project files
+COPY . .
+
+# Build the CPU atlas binary.
+RUN cargo build --release -p tetris-playground --bin tetris_atlas_inmemory
+
+FROM ubuntu:22.04
+
+# Run the in-memory atlas creator using the CPU build.
+WORKDIR /data
+COPY --from=builder /build/target/release/tetris_atlas_inmemory /tetris_atlas_inmemory
+CMD ["/tetris_atlas_inmemory", "create"]
