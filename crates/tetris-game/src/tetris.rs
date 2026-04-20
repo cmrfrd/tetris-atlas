@@ -1716,6 +1716,32 @@ impl TetrisBoard {
         out
     }
 
+    /// Returns the surface roughness of the board.
+    ///
+    /// Roughness is defined as the sum of absolute height differences
+    /// between adjacent columns.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_game::TetrisBoard;
+    /// let mut board = TetrisBoard::new();
+    /// board.set_bit(0, 0); // col 0 height = 1
+    /// board.set_bit(1, 2); // col 1 height = 3
+    /// // |1 - 3| + |3 - 0| across columns 0..2, then zeros afterward.
+    /// assert_eq!(board.roughness(), 5);
+    /// ```
+    #[inline_conditioned(always)]
+    pub const fn roughness(&self) -> u32 {
+        let mut sum = 0;
+        repeat_idx_unroll!(constants::COLS - 1, I, {
+            let left = u32::BITS - self.0[I].leading_zeros();
+            let right = u32::BITS - self.0[I + 1].leading_zeros();
+            sum += left.abs_diff(right);
+        });
+        sum
+    }
+
     /// Returns the total number of holes across all columns in the board.
     ///
     /// # Example
