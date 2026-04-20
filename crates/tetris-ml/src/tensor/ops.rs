@@ -1,10 +1,10 @@
 use std::sync::RwLock;
 
 use super::tensors::TetrisPieceTensor;
-use tetris_game::{TetrisPiece, TetrisPieceOrientation};
 use anyhow::Result;
 use candle_core::{DType, Device, Tensor, Var, backprop::GradStore};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator, ParallelBridge};
+use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
+use tetris_game::{TetrisPiece, TetrisPieceOrientation};
 use tracing::instrument;
 
 /// Calculate the L2 norm of all gradients in the gradient store

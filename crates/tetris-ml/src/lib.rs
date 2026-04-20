@@ -1,5 +1,18 @@
 #![feature(generic_const_exprs)]
 #![feature(const_convert)]
+#![allow(incomplete_features)]
+#![allow(clippy::absurd_extreme_comparisons)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::doc_lazy_continuation)]
+#![allow(clippy::empty_line_after_doc_comments)]
+#![allow(clippy::expect_used)]
+#![allow(clippy::explicit_auto_deref)]
+#![allow(clippy::from_over_into)]
+#![allow(clippy::manual_range_contains)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::same_item_push)]
+#![allow(clippy::unwrap_used)]
+#![allow(unused_imports)]
 
 pub mod checkpointer;
 pub mod data;
@@ -19,8 +32,8 @@ pub use tensor::*;
 // Re-export beam search from tetris-search for backward compatibility
 pub use tetris_search::beam_search;
 pub use tetris_search::{
-    BeamSearch, BeamSearchState, BeamTetrisState, MultiBeamSearch, ScoredState,
-    set_global_threadpool, set_global_threadpool_with_stack_size, DEFAULT_RAYON_STACK_SIZE,
+    BeamSearch, BeamSearchState, BeamTetrisState, DEFAULT_RAYON_STACK_SIZE, MultiBeamSearch,
+    ScoredState, set_global_threadpool, set_global_threadpool_with_stack_size,
 };
 
 use candle_core::Device;

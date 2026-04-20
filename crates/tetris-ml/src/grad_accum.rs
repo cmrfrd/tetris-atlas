@@ -242,7 +242,7 @@ mod tests {
         let grads = create_grads_for_var(&var, 2.0)?;
 
         let mut accum = GradientAccumulator::new(4);
-        accum.accumulate(grads, &[var.clone()])?;
+        accum.accumulate(grads, std::slice::from_ref(&var))?;
 
         assert_eq!(accum.step_count, 1);
         assert!(accum.accumulated_grads.contains_key(&var.id()));
@@ -267,7 +267,7 @@ mod tests {
         // Accumulate 4 identical gradients
         for _ in 0..4 {
             let grads = create_grads_for_var(&var, 1.0)?;
-            accum.accumulate(grads, &[var.clone()])?;
+            accum.accumulate(grads, std::slice::from_ref(&var))?;
         }
 
         assert_eq!(accum.step_count, 4);
@@ -294,11 +294,11 @@ mod tests {
 
         // First gradient: scale 2.0
         let grads1 = create_grads_for_var(&var, 2.0)?;
-        accum.accumulate(grads1, &[var.clone()])?;
+        accum.accumulate(grads1, std::slice::from_ref(&var))?;
 
         // Second gradient: scale 4.0
         let grads2 = create_grads_for_var(&var, 4.0)?;
-        accum.accumulate(grads2, &[var.clone()])?;
+        accum.accumulate(grads2, std::slice::from_ref(&var))?;
 
         // Expected: (2.0/2 + 4.0/2) = 1.0 + 2.0 = 3.0
         let accumulated = accum.accumulated_grads.get(&var.id()).unwrap();
@@ -443,7 +443,7 @@ mod tests {
         let scales = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
         for scale in scales {
             let grads = create_grads_for_var(&var, scale)?;
-            accum.accumulate(grads, &[var.clone()])?;
+            accum.accumulate(grads, std::slice::from_ref(&var))?;
         }
 
         // Expected average: (1+2+3+4+5+6+7+8)/8 = 36/8 = 4.5
@@ -495,7 +495,7 @@ mod tests {
 
         for _ in 0..2 {
             let grads = create_grads_for_var(&var, 1.0)?;
-            accum.accumulate(grads, &[var.clone()])?;
+            accum.accumulate(grads, std::slice::from_ref(&var))?;
         }
 
         // The accumulated gradient should not track operations

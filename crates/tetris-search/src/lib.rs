@@ -16,6 +16,9 @@
 //! ```
 
 #![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
+#![allow(clippy::out_of_bounds_indexing)]
+#![allow(clippy::unwrap_used)]
 
 pub mod beam_search;
 pub mod explorer;

@@ -228,6 +228,8 @@ pub struct MlpConfig {
     /// Sizes of hidden layers. For example, [256, 128] creates: input -> 256 -> 128 -> output
     pub hidden_sizes: Vec<usize>,
     pub output_size: usize,
+    #[serde(default = "default_mlp_leaky_relu_negative_slope")]
+    pub leaky_relu_negative_slope: f64,
     #[serde(default)]
     pub dropout: Option<f32>,
     /// When true, adds a residual (skip) connection around each layer whose input
@@ -242,9 +244,14 @@ pub struct MlpConfig {
 pub struct Mlp {
     layers: Vec<Linear>,
     dropout: Option<candle_nn::Dropout>,
+    leaky_relu_negative_slope: f64,
     /// Per-layer flag: true when input dim == output dim and residual is enabled
     residual_mask: Vec<bool>,
     span: tracing::Span,
+}
+
+const fn default_mlp_leaky_relu_negative_slope() -> f64 {
+    0.1
 }
 
 impl Mlp {
@@ -269,6 +276,7 @@ impl Mlp {
         Ok(Self {
             layers,
             dropout,
+            leaky_relu_negative_slope: cfg.leaky_relu_negative_slope,
             residual_mask,
             span,
         })
@@ -290,7 +298,7 @@ impl Mlp {
 
             // Apply activation and dropout to all but the last layer
             if i < self.layers.len() - 1 {
-                x = candle_nn::ops::silu(&x)?;
+                x = candle_nn::ops::leaky_relu(&x, self.leaky_relu_negative_slope)?;
 
                 if let Some(ref dropout) = self.dropout {
                     x = dropout.forward(&x, true)?;
