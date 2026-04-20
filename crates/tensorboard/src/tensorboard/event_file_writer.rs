@@ -72,9 +72,11 @@ impl EventFileWriter {
             child: Some(child),
         };
 
-        let mut evn = Event::default();
-        evn.wall_time = time_full;
-        evn.what = Some(What::FileVersion("brain.Event:2".to_string()));
+        let evn = Event {
+            wall_time: time_full,
+            what: Some(What::FileVersion("brain.Event:2".to_string())),
+            ..Event::default()
+        };
 
         ret.add_event(&evn);
         ret.flush();

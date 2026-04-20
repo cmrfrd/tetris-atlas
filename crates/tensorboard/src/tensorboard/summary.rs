@@ -11,14 +11,13 @@ use crate::tensorboard_generated::tensorboard::{
 use image::{DynamicImage, ImageFormat, RgbImage};
 
 pub fn scalar(name: &str, scalar_value: f32) -> Summary {
-    let mut value = SummaryValue::default();
-    value.tag = name.to_string();
-    value.value = Some(value::Value::SimpleValue(scalar_value));
+    let value = SummaryValue {
+        tag: name.to_string(),
+        value: Some(value::Value::SimpleValue(scalar_value)),
+        ..SummaryValue::default()
+    };
 
-    let mut summary = Summary::default();
-    summary.value = vec![value];
-
-    summary
+    Summary { value: vec![value] }
 }
 
 pub fn histogram_raw(
@@ -31,23 +30,23 @@ pub fn histogram_raw(
     bucket_limits: &[f64],
     bucket_counts: &[f64],
 ) -> Summary {
-    let mut hist = HistogramProto::default();
-    hist.min = min;
-    hist.max = max;
-    hist.num = num;
-    hist.sum = sum;
-    hist.sum_squares = sum_squares;
-    hist.bucket_limit = bucket_limits.to_vec();
-    hist.bucket = bucket_counts.to_vec();
+    let hist = HistogramProto {
+        min,
+        max,
+        num,
+        sum,
+        sum_squares,
+        bucket_limit: bucket_limits.to_vec(),
+        bucket: bucket_counts.to_vec(),
+    };
 
-    let mut value = SummaryValue::default();
-    value.tag = name.to_string();
-    value.value = Some(value::Value::Histo(hist));
+    let value = SummaryValue {
+        tag: name.to_string(),
+        value: Some(value::Value::Histo(hist)),
+        ..SummaryValue::default()
+    };
 
-    let mut summary = Summary::default();
-    summary.value = vec![value];
-
-    summary
+    Summary { value: vec![value] }
 }
 
 /// dim is in CHW
@@ -69,17 +68,17 @@ pub fn image(tag: &str, data: &[u8], dim: &[usize]) -> Summary {
     let mut c = Cursor::new(output_buf);
     dimg.write_to(&mut c, ImageFormat::Png).expect("");
 
-    let mut output_image = SummaryImage::default();
-    output_image.height = dim[1] as i32;
-    output_image.width = dim[2] as i32;
-    output_image.colorspace = 3;
-    output_image.encoded_image_string = c.into_inner();
-    let mut value = SummaryValue::default();
-    value.tag = tag.to_string();
-    value.value = Some(value::Value::Image(output_image));
-    let values = vec![value];
-    let mut summary = Summary::default();
-    summary.value = values;
+    let output_image = SummaryImage {
+        height: dim[1] as i32,
+        width: dim[2] as i32,
+        colorspace: 3,
+        encoded_image_string: c.into_inner(),
+    };
+    let value = SummaryValue {
+        tag: tag.to_string(),
+        value: Some(value::Value::Image(output_image)),
+        ..SummaryValue::default()
+    };
 
-    summary
+    Summary { value: vec![value] }
 }
