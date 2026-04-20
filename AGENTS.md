@@ -174,6 +174,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 Benchmarks live in `tetris-benches` using Criterion + pprof:
 
 ```sh
+# Run all benchmarks
 cargo bench -p tetris-benches
 
 # Profiling mode (reduced noise, generate flamegraphs)
@@ -181,6 +182,29 @@ cargo bench -p tetris-benches -- --profile-time 5
 ```
 
 Criterion HTML reports go to `target/criterion/`. Flamegraphs are emitted via the pprof integration.
+
+### Historical baselines
+
+Criterion baselines are archived in `benchmarks/baselines/<commit-sha>/` so
+performance can be compared across commits. The workflow:
+
+```sh
+# 1. Save a baseline for the current commit
+SHA=$(git rev-parse --short HEAD)
+cargo bench -p tetris-benches -- --save-baseline "$SHA"
+cp -r target/criterion/*/"$SHA" benchmarks/baselines/"$SHA"/
+
+# 2. Compare the current code against a previous baseline
+OLD=a1b2c3d
+cp -r benchmarks/baselines/"$OLD"/ target/criterion/  # restore old data
+cargo bench -p tetris-benches -- --baseline "$OLD"     # Criterion prints % change
+
+# 3. List saved baselines
+ls benchmarks/baselines/
+```
+
+When saving baselines, commit them to the repo so they persist across machines.
+Prune old baselines you no longer need to keep the repo lean.
 
 ### ASM analysis
 
