@@ -139,7 +139,7 @@ pub fn piece_u32_cols(input: TokenStream) -> TokenStream {
 
     // Convert to u32[num_cols] - compute column values at macro expansion time
     let mut cols = vec![0u32; num_cols];
-    for col_idx in 0..num_cols {
+    for (col_idx, col) in cols.iter_mut().enumerate().take(num_cols) {
         let mut col_val = 0u32;
         for (row_idx, line) in lines.iter().enumerate() {
             let bit = line.chars().nth(col_idx).unwrap();
@@ -147,7 +147,7 @@ pub fn piece_u32_cols(input: TokenStream) -> TokenStream {
                 col_val |= 1u32 << (31 - row_idx); // Shift to high bits since we want to match the example usage
             }
         }
-        cols[col_idx] = col_val;
+        *col = col_val;
     }
 
     let result = quote! {
