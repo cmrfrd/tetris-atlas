@@ -4040,6 +4040,7 @@ version = "0.1.0"
 dependencies = [
  "proc-macros",
  "rand 0.9.2",
+ "tetris-utils",
 ]
 
 [[package]]
@@ -4116,6 +4117,14 @@ dependencies = [
  "rand 0.9.2",
  "rayon",
  "tetris-game",
+]
+
+[[package]]
+name = "tetris-utils"
+version = "0.1.0"
+dependencies = [
+ "proc-macros",
+ "rand 0.9.2",
 ]
 
 [[package]]

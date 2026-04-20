@@ -5,9 +5,9 @@
 use criterion::{BenchmarkId, Criterion, black_box};
 use rand::Rng;
 use rand::seq::IndexedRandom;
-use tetris_game::utils::rshift_slice_from_mask_u32;
 use tetris_game::{
     TetrisBoard, TetrisGame, TetrisGameRng, TetrisPiece, TetrisPieceBag, TetrisPiecePlacement,
+    rshift_slice_from_mask_u32,
 };
 
 /// Registered benchmark entrypoint.
@@ -56,7 +56,7 @@ tetris_bench! {
     /// Benchmark push_if_better - the key beam search operation
     /// Tests inserting 1000 candidates into a heap of size 100
     pub fn bench_heap_push_if_better(c: &mut Criterion) {
-        use tetris_game::utils::FixedBinMinHeap;
+        use tetris_game::FixedBinMinHeap;
 
         const HEAP_SIZE: usize = 100;
         const NUM_CANDIDATES: usize = 1000;
@@ -84,7 +84,7 @@ tetris_bench! {
     /// Benchmark mixed operations (realistic beam search workload)
     /// Simulates 100 iterations of adding 50 candidates each
     pub fn bench_heap_mixed_workload(c: &mut Criterion) {
-        use tetris_game::utils::FixedBinMinHeap;
+        use tetris_game::FixedBinMinHeap;
 
         const HEAP_SIZE: usize = 64;
         const NUM_ITERATIONS: usize = 100;
@@ -124,7 +124,7 @@ tetris_bench! {
 tetris_bench! {
     /// Benchmark scaling with different heap sizes
     pub fn bench_heap_size_scaling(c: &mut Criterion) {
-        use tetris_game::utils::FixedBinMinHeap;
+        use tetris_game::FixedBinMinHeap;
 
         let mut rng = rand::rng();
 
@@ -170,7 +170,12 @@ tetris_bench! {
                         })
                     });
                 }
-                _ => unreachable!(),
+                _ => {
+                    assert!(
+                        matches!(size, 8 | 16 | 32 | 64 | 128),
+                        "unsupported heap size: {size}"
+                    );
+                }
             }
 
             group.finish();
@@ -395,7 +400,8 @@ tetris_bench! {
         c.bench_with_input(BenchmarkId::new("clear", NUM_ELEMS), &NUM_ELEMS, |b, _| {
             b.iter(|| {
                 for board in boards.iter_mut() {
-                    black_box(board.clear());
+                    board.clear();
+                    black_box(board);
                 }
             })
         });
@@ -520,7 +526,7 @@ tetris_bench! {
         c.bench_with_input(
             BenchmarkId::new("bits_to_byte", NUM_ELEMS),
             &NUM_ELEMS,
-            |b, _| b.iter(|| bits.iter().map(|bits| tetris_game::utils::bits_to_byte(bits)).collect::<Vec<_>>()),
+            |b, _| b.iter(|| bits.iter().map(|bits| tetris_game::bits_to_byte(bits)).collect::<Vec<_>>()),
         );
     }
 }
@@ -536,7 +542,7 @@ tetris_bench! {
         c.bench_with_input(
             BenchmarkId::new("byte_to_bits", NUM_ELEMS),
             &NUM_ELEMS,
-            |b, _| b.iter(|| bytes.iter().map(|b| tetris_game::utils::byte_to_bits(*b)).collect::<Vec<_>>()),
+            |b, _| b.iter(|| bytes.iter().map(|b| tetris_game::byte_to_bits(*b)).collect::<Vec<_>>()),
         );
     }
 }
@@ -553,7 +559,7 @@ tetris_bench! {
         c.bench_with_input(
             BenchmarkId::new(format!("bitmask_as_slice_{N}"), NUM_ELEMS),
             &NUM_ELEMS,
-            |b, _| b.iter(|| bits.iter().map(|bits| tetris_game::utils::BitMask::<N>::new_from_u64(*bits).as_slice()).collect::<Vec<_>>()),
+            |b, _| b.iter(|| bits.iter().map(|bits| tetris_game::BitMask::<N>::new_from_u64(*bits).as_slice()).collect::<Vec<_>>()),
         );
     }
 }
