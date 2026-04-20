@@ -118,7 +118,7 @@ Agents are humans, automated scripts, or LLM-based contributors. Each must produ
 | **ML Engineer** | Learned models, training loops, dataset generation, hybrid agents | `tetris-ml`, `tetris-playground` (train bins) |
 | **Engine Engineer** | Core game logic correctness, performance, new features | `tetris-game`, `proc-macros` |
 | **Benchmarking Engineer** | Performance evidence, flamegraphs, regression detection | `tetris-benches` |
-| **Infra Engineer** | CI, Docker builds, Fly.io deploys, toolchain stability | `.docker/`, `fly.*.toml` |
+| **Infra Engineer** | CI, Docker builds, Fly.io deploys, toolchain stability | `.docker/`, `.fly/*.toml` |
 
 ---
 

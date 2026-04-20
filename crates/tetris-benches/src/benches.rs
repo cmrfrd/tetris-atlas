@@ -5,10 +5,10 @@
 use criterion::{BenchmarkId, Criterion, black_box};
 use rand::Rng;
 use rand::seq::IndexedRandom;
+use tetris_game::utils::rshift_slice_from_mask_u32;
 use tetris_game::{
     TetrisBoard, TetrisGame, TetrisGameRng, TetrisPiece, TetrisPieceBag, TetrisPiecePlacement,
 };
-use tetris_game::utils::rshift_slice_from_mask_u32;
 
 /// Registered benchmark entrypoint.
 ///

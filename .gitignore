@@ -4,7 +4,6 @@ target/
 build/
 trace/
 traces/
-tensorboard/src/tensorboard_generated/
 junk/
 
 # vendored dependencies
@@ -14,3 +13,15 @@ vendor/
 # runtime artifacts (checkpoints, logs, data, output, databases)
 artifacts/
 !artifacts/.gitkeep
+
+# generated protobuf bindings
+crates/tensorboard/src/tensorboard_generated/
+
+# generated local outputs
+*.bin
+*.csv
+*.png
+data/
+
+# local scripts
+scripts/*.py
