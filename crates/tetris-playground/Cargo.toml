@@ -10,7 +10,52 @@ description = "Demos, experiments, and reference implementations for Tetris atla
 name = "tetris_playground"
 path = "src/lib.rs"
 
-# Binaries are auto-discovered from src/bin/*.rs
+# Binaries are grouped under src/bin/<category>/ and listed explicitly so
+# archived files outside src/bin are never built as Cargo targets.
+
+[[bin]]
+name = "tetris_demo_single"
+path = "src/bin/examples/tetris_demo_single.rs"
+
+[[bin]]
+name = "tetris_demo_multi"
+path = "src/bin/examples/tetris_demo_multi.rs"
+
+[[bin]]
+name = "tetris_demo_adaptive_multi"
+path = "src/bin/examples/tetris_demo_adaptive_multi.rs"
+
+[[bin]]
+name = "tetris_atlas_inmemory"
+path = "src/bin/atlas/tetris_atlas_inmemory.rs"
+
+[[bin]]
+name = "tetris_atlas_rocksdb"
+path = "src/bin/atlas/tetris_atlas_rocksdb.rs"
+
+[[bin]]
+name = "tetris_cli"
+path = "src/bin/tools/tetris_cli.rs"
+
+[[bin]]
+name = "tetris_train_beam_supervised"
+path = "src/bin/training/tetris_train_beam_supervised.rs"
+
+[[bin]]
+name = "tetris_train_genetic"
+path = "src/bin/training/tetris_train_genetic.rs"
+
+[[bin]]
+name = "tetris_invariant_synthesis"
+path = "src/bin/research/tetris_invariant_synthesis.rs"
+
+[[bin]]
+name = "tetris_safe_set"
+path = "src/bin/research/tetris_safe_set.rs"
+
+[[bin]]
+name = "tetris_success_set_solver"
+path = "src/bin/research/tetris_success_set_solver/main.rs"
 
 [features]
 default = []

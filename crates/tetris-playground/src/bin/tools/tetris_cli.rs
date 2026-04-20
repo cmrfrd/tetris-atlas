@@ -159,7 +159,28 @@ fn main() {
                 std::fs::create_dir_all(&path).expect("Failed to create checkpoint directory");
                 path
             });
-            unimplemented!();
+            eprintln!(
+                "Training from tetris_cli is not implemented yet. model={model:?} resume={resume} \
+logdir={logdir:?} checkpoint_dir={checkpoint_dir:?}"
+            );
+            std::process::exit(1);
+        }
+        Commands::Run {
+            save_file,
+            max_depth,
+        } => {
+            eprintln!("Run is not implemented yet. save_file={save_file:?} max_depth={max_depth}");
+            std::process::exit(1);
+        }
+        Commands::Explore { atlas_file } => {
+            eprintln!("Explore is not implemented yet. atlas_file={atlas_file}");
+            std::process::exit(1);
+        }
+        Commands::Inference { checkpoint, model } => {
+            eprintln!(
+                "Inference is not implemented yet. model={model:?} checkpoint={checkpoint:?}"
+            );
+            std::process::exit(1);
         }
         Commands::Play {} => {
             tetris_tui::run().expect("Failed to run TUI");
@@ -178,46 +199,44 @@ fn main() {
                 result.is_lost, result.lines_cleared
             );
             println!("{}", game);
-        }
-        // Commands::Explore { atlas_file } => {
-        //     let atlas = Atlas::load_atlas(atlas_file);
-        //     atlas.interactive_traverse();
-        // }
+        } // Commands::Explore { atlas_file } => {
+          //     let atlas = Atlas::load_atlas(atlas_file);
+          //     atlas.interactive_traverse();
+          // }
 
-        // Commands::Run {
-        //     max_depth,
-        //     save_file,
-        // } => {
-        //     let max_depth: Option<usize> = Some(*max_depth);
-        //     let root: AtlasNode = AtlasNode::default();
-        //     let atlas_search = AtlasSearch::new(root, max_depth);
+          // Commands::Run {
+          //     max_depth,
+          //     save_file,
+          // } => {
+          //     let max_depth: Option<usize> = Some(*max_depth);
+          //     let root: AtlasNode = AtlasNode::default();
+          //     let atlas_search = AtlasSearch::new(root, max_depth);
 
-        //     let stats = Stats::new(64, atlas_search.visited.clone(), atlas_search.atlas.clone());
+          //     let stats = Stats::new(64, atlas_search.visited.clone(), atlas_search.atlas.clone());
 
-        //     // Launch a background thread to print progress every second
-        //     let also_stats = stats.clone();
-        //     let progress_running = Arc::new(AtomicBool::new(true));
-        //     let also_progress_running = progress_running.clone();
-        //     let handle = std::thread::spawn(move || {
-        //         while also_progress_running.load(Ordering::Relaxed) {
-        //             std::thread::sleep(std::time::Duration::from_secs(3));
-        //             also_stats.print_stats();
-        //         }
-        //     });
+          //     // Launch a background thread to print progress every second
+          //     let also_stats = stats.clone();
+          //     let progress_running = Arc::new(AtomicBool::new(true));
+          //     let also_progress_running = progress_running.clone();
+          //     let handle = std::thread::spawn(move || {
+          //         while also_progress_running.load(Ordering::Relaxed) {
+          //             std::thread::sleep(std::time::Duration::from_secs(3));
+          //             also_stats.print_stats();
+          //         }
+          //     });
 
-        //     let also_stats = stats.clone();
-        //     atlas_search.clone().into_par_iter().for_each(|n| {
-        //         also_stats.update(&n.node);
-        //     });
+          //     let also_stats = stats.clone();
+          //     atlas_search.clone().into_par_iter().for_each(|n| {
+          //         also_stats.update(&n.node);
+          //     });
 
-        //     // Signal the thread to exit and wait for it to finish
-        //     progress_running.store(false, Ordering::Relaxed);
-        //     handle.join().unwrap();
+          //     // Signal the thread to exit and wait for it to finish
+          //     progress_running.store(false, Ordering::Relaxed);
+          //     handle.join().unwrap();
 
-        //     if let Some(save_file) = save_file {
-        //         atlas_search.atlas.write().unwrap().save_atlas(save_file);
-        //     }
-        // }
-        _ => unreachable!(),
+          //     if let Some(save_file) = save_file {
+          //         atlas_search.atlas.write().unwrap().save_atlas(save_file);
+          //     }
+          // }
     }
 }
