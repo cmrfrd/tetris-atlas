@@ -82,7 +82,7 @@ tetris-atlas/
 │   ├── tensorboard/        # TensorBoard event-file writer
 │   └── proc-macros/        # Conditional inlining and loop unrolling macros
 ├── scripts/                # Plotting and data download scripts (Python)
-├── .docker/                # Dockerfiles for CPU and GPU builds
+├── .docker/                # Dockerfiles for CPU runs and local dev images
 ├── artifacts/              # Runtime outputs (checkpoints, logdir, databases, data)
 │   ├── checkpoints/
 │   ├── logdir/
@@ -118,7 +118,7 @@ Agents are humans, automated scripts, or LLM-based contributors. Each must produ
 | **ML Engineer** | Learned models, training loops, dataset generation, hybrid agents | `tetris-ml`, `tetris-playground` (train bins) |
 | **Engine Engineer** | Core game logic correctness, performance, new features | `tetris-game`, `proc-macros` |
 | **Benchmarking Engineer** | Performance evidence, flamegraphs, regression detection | `tetris-benches` |
-| **Infra Engineer** | CI, Docker builds, Fly.io deploys, toolchain stability | `.docker/`, `.fly/*.toml` |
+| **Infra Engineer** | CI, Docker builds, toolchain stability | `.docker/` |
 
 ---
 
@@ -208,8 +208,8 @@ cargo run --release -p tetris-playground --bin tetris_demo_single
 # Multi-beam voting
 cargo run --release -p tetris-playground --bin tetris_demo_multi
 
-# Tiered multi-beam (adaptive by board difficulty)
-cargo run --release -p tetris-playground --bin tetris_demo_multi_tiered
+# Adaptive multi-beam
+cargo run --release -p tetris-playground --bin tetris_demo_adaptive_multi
 ```
 
 ### Atlas builders
@@ -223,8 +223,6 @@ cargo run --release -p tetris-playground --bin tetris_atlas_inmemory -- explore
 cargo run --release -p tetris-playground --bin tetris_atlas_rocksdb -- -d ./artifacts/databases/rocksdb create
 cargo run --release -p tetris-playground --bin tetris_atlas_rocksdb -- -d ./artifacts/databases/rocksdb explore
 
-# A* cycle search
-cargo run --release -p tetris-playground --bin tetris_atlas_astar -- --max-states 2000000 --top-k 3
 ```
 
 ### ML training
@@ -235,16 +233,8 @@ RAYON_STACK_SIZE_MB=64 cargo run --release -p tetris-playground --features candl
   --bin tetris_train_beam_supervised -- train \
   --run-name my-run --logdir ./artifacts/logdir --checkpoint-dir ./artifacts/checkpoints
 
-# Policy gradients
-cargo run --release -p tetris-playground --bin tetris_train_policy_gradients -- \
-  --run-name pg-v1 --logdir ./artifacts/logdir --checkpoint-dir ./artifacts/checkpoints
-
 # Genetic algorithm over heuristic weights
 cargo run --release -p tetris-playground --bin tetris_train_genetic
-
-# DQN
-cargo run --release -p tetris-playground --bin tetris_train_dqn -- \
-  --run-name dqn-v1 --logdir ./artifacts/logdir --checkpoint-dir ./artifacts/checkpoints
 
 # Inference from a checkpoint
 cargo run --release -p tetris-playground --features candle-metal \
@@ -271,8 +261,6 @@ Default stack size is 64MB.
 # CPU build (in-memory atlas)
 docker build -f .docker/Dockerfile.cpu.run -t tetris-atlas-cpu .
 
-# GPU build (beam-supervised training, requires CUDA)
-docker build -f .docker/Dockerfile.gpu.run -t tetris-atlas-gpu .
 ```
 
 ---
@@ -314,14 +302,9 @@ Per-run and aggregate:
 |---|---|---|
 | Single beam search | Working | `tetris_demo_single` |
 | Multi-beam voting | Working | `tetris_demo_multi` |
-| Tiered multi-beam | Working | `tetris_demo_multi_tiered` |
+| Adaptive multi-beam | Working | `tetris_demo_adaptive_multi` |
 | Genetic heuristic tuning | Working | `tetris_train_genetic` |
 | Beam-supervised learning | Active | `tetris_train_beam_supervised` |
-| Policy gradients | Experimental | `tetris_train_policy_gradients` |
-| DQN | Experimental | `tetris_train_dqn` |
-| Evolution strategies | Experimental | `tetris_train_evolution` |
-| Value function | Experimental | `tetris_train_value_function` |
-| Transition models | Experimental | `tetris_train_transition`, `_transformer` |
 
 #### M1 — Empirically infinite play
 
@@ -333,11 +316,11 @@ Per-run and aggregate:
 
 | Approach | Status | Binary |
 |---|---|---|
-| A* cycle search | Working | `tetris_atlas_astar` |
 | In-memory atlas (BFS expansion) | Working | `tetris_atlas_inmemory` |
-| In-memory closed subgraph | Working | `tetris_atlas_inmemory_closed` |
-| RocksDB/LMDB/FeoxDB atlas | Working | `tetris_atlas_rocksdb`, `_lmdb`, `_feoxdb` |
-| Empty-board cycle analysis | Working | `tetris_empty_cycles` |
+| RocksDB atlas | Working | `tetris_atlas_rocksdb` |
+| Controlled-invariant synthesis | Research | `tetris_invariant_synthesis` |
+| Safe-set certification | Research | `tetris_safe_set` |
+| Success-set solving | Research | `tetris_success_set_solver` |
 
 Key techniques:
 - **DAG expansion with backward death propagation**: expand the reachable state graph from a root, identify dead-end states, propagate death backward, and extract the surviving subgraph.
