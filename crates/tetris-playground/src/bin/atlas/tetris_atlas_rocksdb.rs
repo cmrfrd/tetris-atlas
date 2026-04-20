@@ -2,6 +2,7 @@
 #![feature(const_trait_impl)]
 #![feature(impl_trait_in_bindings)]
 #![feature(const_index)]
+#![feature(const_cmp)]
 //! # Tetris Atlas Builder - RocksDB Implementation
 //!
 //! This binary builds a comprehensive lookup table (atlas) of optimal Tetris moves by exhaustively
@@ -41,52 +42,26 @@ use tetris_game::{
     IsLost, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPieceOrientation,
     repeat_idx_unroll,
 };
-use tetris_search::{BeamTetrisState, MultiBeamSearch};
 use tetris_search::set_global_threadpool;
+use tetris_search::{BeamTetrisState, MultiBeamSearch};
 
-const LOW_N: usize = 16;
-const LOW_TOP_N_PER_BEAM: usize = 16;
-const LOW_BEAM_WIDTH: usize = 16;
-const LOW_MAX_DEPTH: usize = 4;
-
-const MED_N: usize = 64;
-const MED_TOP_N_PER_BEAM: usize = 8;
-const MED_BEAM_WIDTH: usize = 64;
-const MED_MAX_DEPTH: usize = 7;
-
-const HIGH_N: usize = 256;
-const HIGH_TOP_N_PER_BEAM: usize = 64;
-const HIGH_BEAM_WIDTH: usize = 256;
-const HIGH_MAX_DEPTH: usize = 7;
+const N: usize = 16;
+const TOP_N_PER_BEAM: usize = 32;
+const BEAM_WIDTH: usize = 256;
+const MAX_DEPTH: usize = 4;
 const MAX_MOVES: usize = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
 
 const STATS_CSV_PATH: &str = "tetris_atlas_stats_rocksdb.csv";
 const LOG_EVERY_SECS: u64 = 3;
 
 const NUM_WORKERS: usize = 16;
-const WORKER_FRONTIER_BATCH_SIZE: usize = 64;
+const WORKER_FRONTIER_BATCH_SIZE: usize = 512;
 const WORKER_STACK_BYTES: usize = 256 * 1024 * 1024;
 
 // Column family names
 const CF_LOOKUP: &str = "lookup";
 const CF_FRONTIER: &str = "frontier";
 const CF_META: &str = "meta";
-
-#[derive(Clone, Copy, Debug)]
-enum BeamTier {
-    Low,
-    Med,
-    High,
-}
-
-#[inline(always)]
-fn select_tier(height: u32) -> BeamTier {
-    match height {
-        0..=1 => BeamTier::Low,
-        2..=2 => BeamTier::Med,
-        _ => BeamTier::High,
-    }
-}
 
 #[derive(Parser)]
 #[command(name = "tetris-atlas-rocksdb")]
@@ -183,10 +158,12 @@ impl TetrisAtlasFrontierKeyValue {
 
     #[inline(always)]
     const fn key_bytes(&self) -> [u8; 9] {
-        let height = self.board.height() as u8;
+        let height = self.board.height();
+        let holes = self.board.total_holes();
+        let cost = (height + holes).min(255) as u8;
         let hash = hash_board_bag(self.board, self.bag);
         let mut key = [0u8; 9];
-        key[0] = height;
+        key[0] = cost;
         key[1..9].copy_from_slice(&hash.to_be_bytes());
         key
     }
@@ -301,9 +278,7 @@ impl TetrisAtlasDB {
 
     #[inline(always)]
     fn cf_handle(&self, name: &str) -> Arc<rocksdb::BoundColumnFamily<'_>> {
-        self.db
-            .cf_handle(name)
-            .unwrap_or_else(|| panic!("missing {} cf", name))
+        self.db.cf_handle(name).expect("missing column family")
     }
 
     pub fn stop(&self) {
@@ -323,7 +298,7 @@ impl TetrisAtlasDB {
         let key = TetrisAtlasLookupKeyValue::new(board, piece, TetrisPieceOrientation::default())
             .key_bytes();
         let cf_lookup = self.cf_handle(CF_LOOKUP);
-        self.db.get_cf(&cf_lookup, &key).ok().flatten().is_some()
+        self.db.get_cf(&cf_lookup, key).ok().flatten().is_some()
     }
 
     /// Get the optimal orientation for a board+piece combination
@@ -336,7 +311,7 @@ impl TetrisAtlasDB {
             .key_bytes();
         let cf_lookup = self.cf_handle(CF_LOOKUP);
 
-        match self.db.get_cf(&cf_lookup, &key) {
+        match self.db.get_cf(&cf_lookup, key) {
             Ok(Some(value)) => {
                 if value.len() == 1 {
                     Some(TetrisPieceOrientation::from_index(value[0]))
@@ -356,8 +331,8 @@ impl TetrisAtlasDB {
         let cf_frontier = self.cf_handle(CF_FRONTIER);
         self.db.put_cf(
             &cf_frontier,
-            &frontier_item.key_bytes(),
-            &frontier_item.value_bytes(),
+            frontier_item.key_bytes(),
+            frontier_item.value_bytes(),
         )?;
         self.frontier_enqueued.fetch_add(1, Ordering::Relaxed);
         Ok(())
@@ -397,28 +372,12 @@ impl TetrisAtlasDB {
                     .spawn(move || {
                         const BASE_SEED: u64 = 42;
 
-                        let mut beam_search_low = MultiBeamSearch::<
+                        let mut beam_search = MultiBeamSearch::<
                             BeamTetrisState,
-                            LOW_N,
-                            LOW_TOP_N_PER_BEAM,
-                            LOW_BEAM_WIDTH,
-                            LOW_MAX_DEPTH,
-                            MAX_MOVES,
-                        >::new();
-                        let mut beam_search_med = MultiBeamSearch::<
-                            BeamTetrisState,
-                            MED_N,
-                            MED_TOP_N_PER_BEAM,
-                            MED_BEAM_WIDTH,
-                            MED_MAX_DEPTH,
-                            MAX_MOVES,
-                        >::new();
-                        let mut beam_search_high = MultiBeamSearch::<
-                            BeamTetrisState,
-                            HIGH_N,
-                            HIGH_TOP_N_PER_BEAM,
-                            HIGH_BEAM_WIDTH,
-                            HIGH_MAX_DEPTH,
+                            N,
+                            TOP_N_PER_BEAM,
+                            BEAM_WIDTH,
+                            MAX_DEPTH,
                             MAX_MOVES,
                         >::new();
 
@@ -510,7 +469,7 @@ impl TetrisAtlasDB {
                                             // Skip beam search if already in lookup table (cache hit)
                                             let should_skip = match db.key_may_exist_cf_opt_value(
                                                 &cf_lookup,
-                                                &lookup_key,
+                                                lookup_key,
                                                 &lookup_read_opts,
                                             ) {
                                                 // definitely exists with value
@@ -523,7 +482,7 @@ impl TetrisAtlasDB {
                                                     if db
                                                         .get_cf_opt(
                                                             &cf_lookup,
-                                                            &lookup_key,
+                                                            lookup_key,
                                                             &lookup_read_opts,
                                                         )
                                                         .ok()
@@ -550,27 +509,10 @@ impl TetrisAtlasDB {
                                             game.board = current_frontier_item.board;
                                             game.set_bag_piece_seeded(bag_state, piece, BASE_SEED);
 
-                                            let tier =
-                                                select_tier(current_frontier_item.board.height());
                                             let state = BeamTetrisState::new(game);
-                                            let search_result = match tier {
-                                                BeamTier::Low => beam_search_low.search_with_seeds(
-                                                    state,
-                                                    BASE_SEED,
-                                                    LOW_MAX_DEPTH,
-                                                ),
-                                                BeamTier::Med => beam_search_med.search_with_seeds(
-                                                    state,
-                                                    BASE_SEED,
-                                                    MED_MAX_DEPTH,
-                                                ),
-                                                BeamTier::High => beam_search_high
-                                                    .search_with_seeds(
-                                                        state,
-                                                        BASE_SEED,
-                                                        HIGH_MAX_DEPTH,
-                                                    ),
-                                            };
+                                            let search_result = beam_search.search_with_seeds(
+                                                state, BASE_SEED, MAX_DEPTH, BEAM_WIDTH,
+                                            );
 
                                             let best_placement = match search_result {
                                                 Some(result) => result,
@@ -625,8 +567,7 @@ impl TetrisAtlasDB {
                                 })
                                 .last();
 
-                            let _ = db
-                                .write_opt(wb, &write_opts)
+                            db.write_opt(wb, &write_opts)
                                 .expect("failed to write batch");
 
                             // Backoff when frontier is empty to avoid CPU spinning

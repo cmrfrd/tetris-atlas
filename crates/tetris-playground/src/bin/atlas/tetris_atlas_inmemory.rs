@@ -27,7 +27,7 @@ use crossbeam_skiplist::SkipMap;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use std::fs::{File, OpenOptions};
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -41,17 +41,18 @@ use tetris_search::{BeamTetrisState, MultiBeamSearch};
 
 // --- Beam Search Parameters ---
 const N: usize = 16;
-const TOP_N_PER_BEAM: usize = 32;
-const BEAM_WIDTH: usize = 64;
-const MAX_DEPTH: usize = 4;
+const TOP_N_PER_BEAM: usize = 16;
+const BEAM_WIDTH: usize = 2048;
+const MAX_DEPTH: usize = 8;
 const MAX_MOVES: usize = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
 
 // --- Channel & Threading ---
-const CHANNEL_CAPACITY: usize = 64;
+const CHANNEL_CAPACITY: usize = 256;
 
 // --- Persistence ---
 const LOG_EVERY_SECS: u64 = 3;
 const SAVE_EVERY_SECS: u64 = 600;
+const FIRST_SAVE_DELAY_SECS: u64 = 3600; // Wait 60 minutes (1 hour) before first save
 const SAVE_FILE: &str = "tetris_atlas_inmemory.bin";
 const CSV_FILE: &str = "tetris_atlas_inmemory.csv";
 const BASE_SEED: u64 = 42;
@@ -62,6 +63,9 @@ const BASE_SEED: u64 = 42;
 struct Cli {
     #[command(subcommand)]
     mode: Mode,
+    /// Directory path where files will be saved (default: current directory)
+    #[arg(short, long, default_value = ".")]
+    path: String,
 }
 
 #[derive(Subcommand)]
@@ -89,22 +93,22 @@ impl FrontierValue {
 /// Frontier key that orders by height (lowest first), then by hash for uniqueness
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct FrontierKey {
-    cost: u32,
+    priority: u32,
     hash: u64,
 }
 
 impl FrontierKey {
     fn new(board: TetrisBoard, bag: TetrisPieceBagState) -> Self {
-        let cost = board.height() + board.total_holes();
+        let priority = board.count();
         let hash = hash_board_bag(board, bag);
-        Self { cost, hash }
+        Self { priority, hash }
     }
 }
 
 impl Ord for FrontierKey {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // First compare by height (lower is better)
-        match self.cost.cmp(&other.cost) {
+        match self.priority.cmp(&other.priority) {
             std::cmp::Ordering::Equal => {
                 // If heights are equal, compare by hash for deterministic ordering
                 self.hash.cmp(&other.hash)
@@ -192,6 +196,10 @@ struct SharedState {
     shutdown: Arc<AtomicBool>,
     /// Shutdown request (Ctrl+C)
     shutdown_requested: Arc<AtomicBool>,
+    /// Pause dispatch flag for safe saves
+    pause_dispatch: Arc<AtomicBool>,
+    /// Count of in-flight items (in channel or being processed)
+    processing_count: Arc<AtomicU64>,
 }
 
 impl SharedState {
@@ -203,6 +211,8 @@ impl SharedState {
             frontier_enqueued,
             shutdown: Arc::new(AtomicBool::new(false)),
             shutdown_requested: Arc::new(AtomicBool::new(false)),
+            pause_dispatch: Arc::new(AtomicBool::new(false)),
+            processing_count: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -221,44 +231,73 @@ impl SharedState {
         let start = Instant::now();
         println!("Saving state to {}...", path);
 
-        // Collect lookup table entries and convert to bytes
-        let lookup_entries: Vec<(Vec<u8>, u8, u8)> = self
-            .lookup
-            .iter()
-            .map(|entry| {
+        // Pause dispatch and wait for channel to drain (ensures no items lost)
+        println!("Pausing dispatch to ensure clean save...");
+        self.pause_dispatch.store(true, Ordering::SeqCst);
+
+        // Wait for all in-flight items to be processed
+        let wait_start = Instant::now();
+        while self.processing_count.load(Ordering::SeqCst) > 0 {
+            thread::sleep(Duration::from_millis(10));
+
+            // Safety: timeout after 30 seconds to avoid deadlock
+            if wait_start.elapsed() > Duration::from_secs(30) {
+                eprintln!("Warning: Timeout waiting for channel drain, saving anyway");
+                break;
+            }
+        }
+        println!(
+            "Channel drained in {:.2}s, proceeding with save...",
+            wait_start.elapsed().as_secs_f64()
+        );
+
+        // Get counts first (for logging and format)
+        let lookup_count = self.lookup.len();
+        let frontier_count = self.frontier.len();
+
+        // Stream write to disk (no memory spike from collect)
+        let save_result = (|| -> Result<(), Box<dyn std::error::Error>> {
+            let file = File::create(path)?;
+            let mut writer = BufWriter::new(file);
+
+            // Write lookup count as u64
+            writer.write_all(&(lookup_count as u64).to_le_bytes())?;
+
+            // Stream lookup entries: each is [40 bytes board][1 byte piece][1 byte orientation]
+            for entry in self.lookup.iter() {
                 let ((board, piece), orientation) = (*entry.key(), *entry.value());
                 let board_bytes: [u8; 40] = board.into();
-                let piece_byte: u8 = piece.into();
-                let orientation_byte: u8 = orientation.index();
-                (board_bytes.to_vec(), piece_byte, orientation_byte)
-            })
-            .collect();
+                writer.write_all(&board_bytes)?;
+                writer.write_all(&[piece.into()])?;
+                writer.write_all(&[orientation.index()])?;
+            }
 
-        // Collect frontier entries from SkipMap
-        let frontier_entries: Vec<(Vec<u8>, u8)> = self
-            .frontier
-            .map
-            .iter()
-            .map(|entry_ref| {
+            // Write frontier count as u64
+            writer.write_all(&(frontier_count as u64).to_le_bytes())?;
+
+            // Stream frontier entries: each is [40 bytes board][1 byte bag]
+            for entry_ref in self.frontier.map.iter() {
                 let value: &FrontierValue = entry_ref.value();
                 let board_bytes: [u8; 40] = value.board.into();
-                let bag_byte: u8 = value.bag.into();
-                (board_bytes.to_vec(), bag_byte)
-            })
-            .collect();
+                writer.write_all(&board_bytes)?;
+                writer.write_all(&[value.bag.into()])?;
+            }
 
-        // Package both together
-        let snapshot = (lookup_entries, frontier_entries);
+            writer.flush()?;
+            Ok(())
+        })();
 
-        // Serialize to disk using bincode
-        let file = File::create(path)?;
-        let writer = BufWriter::new(file);
-        bincode::serialize_into(writer, &snapshot)?;
+        // ALWAYS resume dispatch, even if save failed
+        self.pause_dispatch.store(false, Ordering::Relaxed);
+        println!("Dispatch resumed");
+
+        // Propagate any save error after resuming
+        save_result?;
 
         println!(
             "Saved {} lookup entries and {} frontier items in {:.2}s",
-            snapshot.0.len(),
-            snapshot.1.len(),
+            lookup_count,
+            frontier_count,
             start.elapsed().as_secs_f64()
         );
         Ok(())
@@ -274,26 +313,41 @@ impl SharedState {
         println!("Loading state from {}...", path);
 
         let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        let (lookup_entries, frontier_entries): (Vec<(Vec<u8>, u8, u8)>, Vec<(Vec<u8>, u8)>) =
-            bincode::deserialize_from(reader)?;
+        let mut reader = BufReader::new(file);
 
-        // Insert all lookup entries into the DashMap (converting from bytes)
-        let lookup_count = lookup_entries.len();
-        for (board_vec, piece_byte, orientation_byte) in lookup_entries {
-            let board_bytes: [u8; 40] = board_vec.try_into().map_err(|_| "Invalid board bytes")?;
+        // Read lookup count
+        let mut count_buf = [0u8; 8];
+        reader.read_exact(&mut count_buf)?;
+        let lookup_count = u64::from_le_bytes(count_buf) as usize;
+
+        // Stream read lookup entries: [40 bytes board][1 byte piece][1 byte orientation]
+        for _ in 0..lookup_count {
+            let mut board_bytes = [0u8; 40];
+            reader.read_exact(&mut board_bytes)?;
+            let mut piece_byte = [0u8; 1];
+            reader.read_exact(&mut piece_byte)?;
+            let mut orientation_byte = [0u8; 1];
+            reader.read_exact(&mut orientation_byte)?;
+
             let board = TetrisBoard::from(board_bytes);
-            let piece = TetrisPiece::from(piece_byte);
-            let orientation = TetrisPieceOrientation::from_index(orientation_byte);
+            let piece = TetrisPiece::from(piece_byte[0]);
+            let orientation = TetrisPieceOrientation::from_index(orientation_byte[0]);
             self.lookup.insert((board, piece), orientation);
         }
 
-        // Insert all frontier entries into the priority frontier (converting from bytes)
-        let frontier_count = frontier_entries.len();
-        for (board_vec, bag_byte) in frontier_entries {
-            let board_bytes: [u8; 40] = board_vec.try_into().map_err(|_| "Invalid board bytes")?;
+        // Read frontier count
+        reader.read_exact(&mut count_buf)?;
+        let frontier_count = u64::from_le_bytes(count_buf) as usize;
+
+        // Stream read frontier entries: [40 bytes board][1 byte bag]
+        for _ in 0..frontier_count {
+            let mut board_bytes = [0u8; 40];
+            reader.read_exact(&mut board_bytes)?;
+            let mut bag_byte = [0u8; 1];
+            reader.read_exact(&mut bag_byte)?;
+
             let board = TetrisBoard::from(board_bytes);
-            let bag = TetrisPieceBagState::from(bag_byte);
+            let bag = TetrisPieceBagState::from(bag_byte[0]);
             self.frontier.push(board, bag);
         }
 
@@ -313,20 +367,39 @@ fn dispatcher_thread(
     sender: Sender<(TetrisBoard, TetrisPieceBagState)>,
     shutdown_requested: Arc<AtomicBool>,
     frontier_consumed: Arc<AtomicU64>,
+    pause_dispatch: Arc<AtomicBool>,
+    processing_count: Arc<AtomicU64>,
 ) {
     println!("Dispatcher: started");
 
     while !shutdown_requested.load(Ordering::Relaxed) {
+        // CRITICAL: Reserve processing slot BEFORE popping to prevent race with saver
+        // This ensures item is counted even during the pop operation
+        processing_count.fetch_add(1, Ordering::SeqCst);
+
+        // Check if paused (after reserving slot, before popping)
+        if pause_dispatch.load(Ordering::SeqCst) {
+            // Release the reserved slot
+            processing_count.fetch_sub(1, Ordering::Relaxed);
+            thread::sleep(Duration::from_millis(10));
+            continue;
+        }
+
+        // Try to pop (we hold a processing slot reservation)
         match frontier.pop() {
             Some((board, bag)) => {
+                // Successfully got an item (slot is already reserved)
                 frontier_consumed.fetch_add(1, Ordering::Relaxed);
+
                 // Send to workers - blocks if channel is full (backpressure)
                 if sender.send((board, bag)).is_err() {
+                    processing_count.fetch_sub(1, Ordering::Relaxed); // Undo if send failed
                     break; // Channel closed
                 }
             }
             None => {
-                // Frontier empty - brief sleep to avoid spinning
+                // Frontier empty - release the reserved slot
+                processing_count.fetch_sub(1, Ordering::Relaxed);
                 thread::sleep(Duration::from_millis(10));
             }
         }
@@ -357,6 +430,14 @@ fn process_board_state(
 
     stats.boards_expanded.fetch_add(1, Ordering::Relaxed);
 
+    let (depth, beam_width) = match board.count() {
+        0..=8 => (2, 64),
+        10..=12 => (4, 256),
+        14..=16 => (6, 512),
+        18..=22 => (8, 1024),
+        _ => (10, 2048),
+    };
+
     for (piece, bag_state) in bag.iter_next_states() {
         // Check if already computed
         if lookup.contains_key(&(board, piece)) {
@@ -371,7 +452,8 @@ fn process_board_state(
 
         // Run beam search
         let game_state = BeamTetrisState::new(game);
-        let best_placement = beam_search.search_with_seeds(game_state, BASE_SEED, MAX_DEPTH);
+        let best_placement =
+            beam_search.search_with_seeds(game_state, BASE_SEED, depth, beam_width);
         let Some(placement) = best_placement else {
             stats.games_lost.fetch_add(1, Ordering::Relaxed);
             continue;
@@ -510,14 +592,20 @@ impl CsvLogger {
 }
 
 /// Logger thread: periodically prints statistics, logs to CSV, and saves to disk
-fn logger_thread(ctx: LoggerContext, state_for_save: SharedState) {
+fn logger_thread(
+    ctx: LoggerContext,
+    state_for_save: SharedState,
+    save_file: String,
+    csv_file: String,
+) {
     let mut last_logged = Instant::now();
     let mut last_saved = Instant::now();
+    let mut first_save_done = false;
 
     // Initialize CSV logger
-    let mut csv_logger = match CsvLogger::new(CSV_FILE) {
+    let mut csv_logger = match CsvLogger::new(&csv_file) {
         Ok(logger) => {
-            println!("CSV logging to: {CSV_FILE}");
+            println!("CSV logging to: {}", csv_file);
             Some(logger)
         }
         Err(e) => {
@@ -542,14 +630,21 @@ fn logger_thread(ctx: LoggerContext, state_for_save: SharedState) {
             last_logged = Instant::now();
         }
 
-        // Periodic save to disk
+        // Periodic save to disk (first save after 5min, subsequent saves every 10min)
+        let save_interval = if !first_save_done {
+            FIRST_SAVE_DELAY_SECS
+        } else {
+            SAVE_EVERY_SECS
+        };
+
         if !ctx.shutdown_requested.load(Ordering::Relaxed)
-            && last_saved.elapsed() >= Duration::from_secs(SAVE_EVERY_SECS)
+            && last_saved.elapsed() >= Duration::from_secs(save_interval)
         {
-            if let Err(e) = state_for_save.save_to_disk(SAVE_FILE) {
+            if let Err(e) = state_for_save.save_to_disk(&save_file) {
                 eprintln!("Failed to save to disk: {e}");
             }
             last_saved = Instant::now();
+            first_save_done = true;
         }
     }
 
@@ -608,26 +703,31 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.mode {
-        Mode::Create => run_tetris_atlas_create(),
-        Mode::Explore => run_tetris_atlas_explore(),
+        Mode::Create => run_tetris_atlas_create(&cli.path),
+        Mode::Explore => run_tetris_atlas_explore(&cli.path),
     }
 }
 
 /// Run the in-memory atlas builder with channel-based priority dispatch
-pub fn run_tetris_atlas_create() {
+pub fn run_tetris_atlas_create(base_path: &str) {
     let num_workers = num_cpus::get().saturating_sub(2).max(1);
+
+    // Construct full file paths
+    let save_file = format!("{}/{}", base_path, SAVE_FILE);
+    let csv_file = format!("{}/{}", base_path, CSV_FILE);
 
     println!("Starting atlas builder with channel-based priority dispatch:");
     println!("  Workers: {num_workers}");
     println!("  Channel capacity: {CHANNEL_CAPACITY}");
     println!("  Beam: WIDTH={BEAM_WIDTH}, DEPTH={MAX_DEPTH}");
+    println!("  Save path: {}", base_path);
     println!("Press Ctrl+C to stop gracefully...");
 
     // Create shared state (for save/load compatibility)
     let state = SharedState::new();
 
     // Try to load from disk if file exists
-    match state.load_from_disk(SAVE_FILE) {
+    match state.load_from_disk(&save_file) {
         Ok((lookup_count, frontier_count)) => {
             if lookup_count > 0 || frontier_count > 0 {
                 println!(
@@ -653,6 +753,8 @@ pub fn run_tetris_atlas_create() {
     let stats = Arc::new(SharedStats::new());
     let shutdown = state.shutdown.clone();
     let shutdown_requested = state.shutdown_requested.clone();
+    let pause_dispatch = state.pause_dispatch.clone();
+    let processing_count = state.processing_count.clone();
     let start = Instant::now();
 
     // Create bounded channel
@@ -670,12 +772,16 @@ pub fn run_tetris_atlas_create() {
     let dispatcher_frontier = frontier.clone();
     let dispatcher_shutdown = shutdown_requested.clone();
     let dispatcher_consumed = frontier_consumed.clone();
+    let dispatcher_pause = pause_dispatch.clone();
+    let dispatcher_processing = processing_count.clone();
     let dispatcher_handle = thread::spawn(move || {
         dispatcher_thread(
             dispatcher_frontier,
             tx,
             dispatcher_shutdown,
             dispatcher_consumed,
+            dispatcher_pause,
+            dispatcher_processing,
         );
     });
 
@@ -691,8 +797,10 @@ pub fn run_tetris_atlas_create() {
         start,
     };
     let logger_state = state.clone();
+    let logger_save_file = save_file.clone();
+    let logger_csv_file = csv_file.clone();
     let logger_handle = thread::spawn(move || {
-        logger_thread(logger_ctx, logger_state);
+        logger_thread(logger_ctx, logger_state, logger_save_file, logger_csv_file);
     });
 
     // Run workers via rayon::scope
@@ -703,7 +811,7 @@ pub fn run_tetris_atlas_create() {
             let lookup = lookup.clone();
             let frontier = frontier.clone();
             let stats = stats.clone();
-            let shutdown = shutdown.clone();
+            let processing_count = processing_count.clone();
 
             s.spawn(move |_| {
                 println!("Worker {worker_id}: started");
@@ -727,6 +835,9 @@ pub fn run_tetris_atlas_create() {
                     for (new_board, new_bag) in new_states {
                         frontier.push(new_board, new_bag);
                     }
+
+                    // Decrement processing count (item is now accounted for)
+                    processing_count.fetch_sub(1, Ordering::Relaxed);
                 }
 
                 println!("Worker {worker_id}: exiting");
@@ -743,7 +854,7 @@ pub fn run_tetris_atlas_create() {
 
     // Save final state to disk
     println!("\nSaving final state to disk...");
-    if let Err(e) = state.save_to_disk(SAVE_FILE) {
+    if let Err(e) = state.save_to_disk(&save_file) {
         eprintln!("Failed to save final state: {}", e);
     }
 
@@ -753,7 +864,7 @@ pub fn run_tetris_atlas_create() {
 }
 
 /// Explore an existing atlas interactively using a TUI
-pub fn run_tetris_atlas_explore() {
+pub fn run_tetris_atlas_explore(base_path: &str) {
     use crossterm::{
         event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
         execute,
@@ -768,9 +879,12 @@ pub fn run_tetris_atlas_explore() {
     };
     use std::io;
 
+    // Construct full file path
+    let save_file = format!("{}/{}", base_path, SAVE_FILE);
+
     // Load lookup table from disk
     let state = SharedState::new();
-    match state.load_from_disk(SAVE_FILE) {
+    match state.load_from_disk(&save_file) {
         Ok((lookup_count, _)) => {
             if lookup_count == 0 {
                 eprintln!("No atlas found! Please run 'create' mode first.");

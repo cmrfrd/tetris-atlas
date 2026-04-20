@@ -21,7 +21,7 @@
 //! - **Console**: Periodic progress updates with performance metrics
 
 use rand::Rng;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::time::Instant;
@@ -37,6 +37,9 @@ python3 -c "import matplotlib.pyplot as plt; import numpy as np; data = [line.st
 
 /// Output file path for multi-beam search results
 const OUTPUT_FILE: &str = "artifacts/data/beam_search_multisearch_output.csv";
+
+/// Output file path for per-board metrics
+const BOARD_METRICS_FILE: &str = "artifacts/data/beam_search_multisearch_board_metrics.csv";
 
 pub struct TetrisGameMultiSearchIter<
     const N: usize,
@@ -108,6 +111,7 @@ impl<
             BeamTetrisState::new(self.game),
             self.step_counter, // Base seed derived from step counter
             MAX_DEPTH,
+            BEAM_WIDTH,
         )?;
 
         self.step_counter += 1;
@@ -129,9 +133,9 @@ pub fn run_tetris_beam_multisearch() {
     set_global_threadpool();
 
     // --- Tunables ---
-    const N: usize = 256;
+    const N: usize = 16;
     const TOP_N_PER_BEAM: usize = 64;
-    const BEAM_WIDTH: usize = 1024;
+    const BEAM_WIDTH: usize = 256;
     const MAX_DEPTH: usize = 8;
     const MAX_MOVES: usize = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
     const LOG_EVERY: usize = 16;
@@ -151,9 +155,22 @@ pub fn run_tetris_beam_multisearch() {
     let file = File::create(OUTPUT_FILE).expect("Failed to create output file");
     let mut writer = BufWriter::new(file);
 
+    // Open board metrics file with buffering
+    let board_metrics_file =
+        File::create(BOARD_METRICS_FILE).expect("Failed to create board metrics file");
+    let mut board_metrics_writer = BufWriter::new(board_metrics_file);
+
+    // Write CSV header for board metrics
+    writeln!(board_metrics_writer, "height,holes,cells")
+        .expect("Failed to write board metrics CSV header");
+
     let mut steps = 0usize;
     let mut height_counts: HashMap<u32, usize> = HashMap::new();
     let mut holes_counts: HashMap<u32, usize> = HashMap::new();
+    let mut cell_counts: HashMap<u32, usize> = HashMap::new();
+    let mut board_cache: HashSet<TetrisBoard> = HashSet::new();
+    let mut cache_hits = 0usize;
+    let mut cache_misses = 0usize;
     let mut iter =
         TetrisGameMultiSearchIter::<N, TOP_N_PER_BEAM, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>::new();
     let start = Instant::now();
@@ -165,16 +182,26 @@ pub fn run_tetris_beam_multisearch() {
             iter.kink();
         }
 
-        let Some((_board_before, _mv)) = iter.next() else {
+        let Some((board_before, _mv)) = iter.next() else {
             let secs = start.elapsed().as_secs_f64().max(1e-9);
             let rate = steps as f64 / secs;
             println!(
                 "No plan found at step={steps} (all searches failed). avg_pieces_per_sec={rate:.2}"
             );
             writer.flush().expect("Failed to flush output file");
+            board_metrics_writer
+                .flush()
+                .expect("Failed to flush board metrics file");
             break;
         };
         steps += 1;
+
+        // Track cache hits/misses
+        if board_cache.insert(board_before) {
+            cache_misses += 1;
+        } else {
+            cache_hits += 1;
+        }
 
         let height = iter.game.board.height();
         *height_counts.entry(height).or_insert(0) += 1;
@@ -182,12 +209,37 @@ pub fn run_tetris_beam_multisearch() {
         let holes = iter.game.board.total_holes();
         *holes_counts.entry(holes).or_insert(0) += 1;
 
+        let cells = iter.game.board.count();
+        *cell_counts.entry(cells).or_insert(0) += 1;
+
+        // Write board metrics to separate CSV
+        writeln!(board_metrics_writer, "{},{},{}", height, holes, cells)
+            .expect("Failed to write to board metrics CSV");
+
         if steps % LOG_EVERY == 0 {
+            // Flush CSV outputs periodically
+            writer.flush().expect("Failed to flush CSV output");
+            board_metrics_writer
+                .flush()
+                .expect("Failed to flush board metrics CSV");
+
             let secs = start.elapsed().as_secs_f64().max(1e-9);
             let rate = steps as f64 / secs;
+            let cache_hit_rate = if (cache_hits + cache_misses) > 0 {
+                cache_hits as f64 / (cache_hits + cache_misses) as f64
+            } else {
+                0.0
+            };
             println!(
                 "step={steps} total_lines={} avg_pieces_per_sec={rate:.2}",
                 iter.game.lines_cleared
+            );
+            println!(
+                "unique_boards={} cache_hits={} cache_misses={} cache_hit_rate={:.4}",
+                board_cache.len(),
+                cache_hits,
+                cache_misses,
+                cache_hit_rate
             );
 
             let mut sorted_heights: Vec<_> = height_counts.iter().collect();
@@ -200,6 +252,12 @@ pub fn run_tetris_beam_multisearch() {
             sorted_holes.sort_by_key(|(holes, _)| *holes);
             for (holes, count) in sorted_holes {
                 println!("holes={holes} count={count}");
+            }
+
+            let mut sorted_cells: Vec<_> = cell_counts.iter().collect();
+            sorted_cells.sort_by_key(|(cells, _)| *cells);
+            for (cells, count) in sorted_cells {
+                println!("cells={cells:02} count={count}");
             }
 
             // let mut normalized_heights = height_counts
