@@ -63,6 +63,7 @@
 //! - `verified = true`: The atlas is self-consistent.
 
 mod config;
+mod demand;
 mod graph;
 mod retrograde;
 mod state;
@@ -109,6 +110,11 @@ struct Cli {
     /// After solving, replay adversarially from root for this many steps (0 = skip).
     #[arg(long, default_value_t = 0)]
     replay_steps: usize,
+
+    /// After initial capped solve, iteratively verify the winning strategy
+    /// by expanding only the states it depends on.
+    #[arg(long)]
+    demand_verify: bool,
 }
 
 fn main() {
@@ -136,12 +142,12 @@ fn main() {
 
     // Phase 1: Build state graph
     let build_start = Instant::now();
-    let universe = Universe::build(&config);
+    let mut universe = Universe::build(&config);
     let build_time = build_start.elapsed().as_secs_f64();
 
     // Phase 2: AND-OR retrograde elimination
     let retro_start = Instant::now();
-    let result = retrograde::solve(&universe);
+    let mut result = retrograde::solve(&universe);
     let retro_time = retro_start.elapsed().as_secs_f64();
 
     // Phase 3: Verification
@@ -158,7 +164,7 @@ fn main() {
     let total_states = universe.state_count();
 
     println!();
-    println!("--- results ---");
+    println!("--- initial solve ---");
     println!("boards          = {}", universe.boards.len());
     println!("states          = {}", total_states);
     println!("edges           = {}", universe.edge_count());
@@ -174,6 +180,37 @@ fn main() {
     println!("retrograde_time = {:.3}s", retro_time);
     println!("verify_time     = {:.3}s", verify_time);
     println!("total_time      = {:.3}s", total_time);
+
+    // Phase 4: Demand-driven verification (optional)
+    if cli.demand_verify && root_winning {
+        println!();
+        println!("--- demand verification ---");
+        let demand_start = Instant::now();
+        let demand_result = demand::demand_verify(&mut universe, &mut result);
+        let demand_time = demand_start.elapsed().as_secs_f64();
+
+        match demand_result {
+            demand::DemandResult::Verified { rounds, verified_states } => {
+                println!("status          = VERIFIED");
+                println!("rounds          = {}", rounds);
+                println!("strategy_states = {}", verified_states);
+                println!("universe_states = {}", universe.state_count());
+                println!("demand_time     = {:.3}s", demand_time);
+            }
+            demand::DemandResult::Disproved { rounds } => {
+                println!("status          = DISPROVED");
+                println!("rounds          = {}", rounds);
+                println!("universe_states = {}", universe.state_count());
+                println!("demand_time     = {:.3}s", demand_time);
+            }
+            demand::DemandResult::RootNotWinning => {
+                println!("status          = ROOT_NOT_WINNING");
+            }
+        }
+    }
+
+    // Recompute root_winning after potential demand verification
+    let root_winning = result.alive[universe.root_state_id as usize];
 
     // Optional replay
     if cli.replay_steps > 0 && root_winning {

@@ -182,6 +182,85 @@ impl Universe {
         let range = &self.pred_ranges[sid as usize];
         &self.predecessors[range.start as usize..(range.start + range.len) as usize]
     }
+
+    /// Check whether a state has been expanded (has a real StateIndex, not default).
+    pub fn is_expanded(&self, sid: StateId) -> bool {
+        let key = &self.states[sid as usize];
+        let index = &self.state_indices[sid as usize];
+        index.bag == key.bag
+    }
+
+    /// Expand a set of previously-unexpanded states on demand.
+    /// Returns the number of new states discovered.
+    pub fn expand_states(&mut self, state_ids: &[StateId]) -> usize {
+        let initial_state_count = self.states.len();
+
+        for &sid in state_ids {
+            let key = self.states[sid as usize];
+            let board = self.boards[key.board_id as usize];
+
+            let mut index = StateIndex {
+                bag: key.bag,
+                piece_ranges: [EdgeRange::EMPTY; 7],
+            };
+
+            for branch in piece_branches(key.bag) {
+                let pidx = branch.piece.index() as usize;
+                let piece_edge_start = self.edges.len() as u32;
+
+                for &placement in TetrisPiecePlacement::all_from_piece(branch.piece) {
+                    let mut new_board = board;
+                    let result = new_board.apply_piece_placement(placement);
+
+                    if result.is_lost.into() {
+                        continue;
+                    }
+                    if !board_is_admissible(&new_board, &self.config.admissibility) {
+                        continue;
+                    }
+
+                    let new_board_id =
+                        intern_board(&mut self.boards, &mut self.board_to_id, &new_board);
+                    let succ_key = StateKey::new(new_board_id, branch.next_bag);
+
+                    let succ_id = if let Some(&id) = self.state_to_id.get(&succ_key) {
+                        id
+                    } else {
+                        let id = intern_state(
+                            &mut self.states,
+                            &mut self.state_to_id,
+                            succ_key,
+                        );
+                        self.state_indices.push(StateIndex::default());
+                        id
+                    };
+
+                    self.edges.push(FlatEdge {
+                        succ: succ_id,
+                        placement: pack_placement(placement),
+                    });
+                }
+
+                let piece_edge_len = self.edges.len() as u32 - piece_edge_start;
+                index.piece_ranges[pidx] = EdgeRange {
+                    start: piece_edge_start,
+                    len: piece_edge_len,
+                };
+            }
+
+            self.state_indices[sid as usize] = index;
+        }
+
+        self.states.len() - initial_state_count
+    }
+
+    /// Rebuild predecessor arrays from the current state_indices and edges.
+    pub fn rebuild_predecessors(&mut self) {
+        let (pred_ranges, predecessors) =
+            build_predecessors(self.states.len(), &self.state_indices, &self.edges);
+        self.pred_ranges = pred_ranges;
+        self.predecessors = predecessors;
+    }
 }
 
 // --- Helpers ---
