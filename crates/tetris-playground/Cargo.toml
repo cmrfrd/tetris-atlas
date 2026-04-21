@@ -61,6 +61,10 @@ path = "src/bin/research/tetris_success_set_solver/main.rs"
 name = "tetris_fixed_bag_atlas"
 path = "src/bin/research/tetris_fixed_bag_atlas/main.rs"
 
+[[bin]]
+name = "tetris_7bag_atlas"
+path = "src/bin/research/tetris_7bag_atlas/main.rs"
+
 
 [features]
 default = []
