@@ -15,6 +15,28 @@ impl StateKey {
     pub const fn new(board_id: BoardId, bag: TetrisPieceBagState) -> Self {
         Self { board_id, bag }
     }
+
+    /// Pack into a `StateKeyPacked` for fast hashing.
+    #[inline]
+    pub fn pack(self) -> StateKeyPacked {
+        StateKeyPacked((self.board_id as u64) << 8 | u8::from(self.bag) as u64)
+    }
+}
+
+/// Packed representation of `StateKey` as a single u64 for fast hashing.
+/// Layout: `[board_id (56 bits) | bag (8 bits)]`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct StateKeyPacked(u64);
+
+impl StateKeyPacked {
+    /// Unpack back to a `StateKey`.
+    #[inline]
+    pub fn unpack(self) -> StateKey {
+        StateKey {
+            board_id: (self.0 >> 8) as BoardId,
+            bag: TetrisPieceBagState::from((self.0 & 0xFF) as u8),
+        }
+    }
 }
 
 /// One branch of the adversary's choice: a drawable piece and the resulting bag.
@@ -84,6 +106,24 @@ mod tests {
         let bag = TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE));
         let next = next_bag_state(bag, TetrisPiece::O_PIECE).expect("piece in bag");
         assert_eq!(next, TetrisPieceBagState::new());
+    }
+
+    #[test]
+    fn state_key_pack_round_trips() {
+        let key = StateKey::new(12345, TetrisPieceBagState::new());
+        let packed = key.pack();
+        let unpacked = packed.unpack();
+        assert_eq!(unpacked.board_id, key.board_id);
+        assert_eq!(unpacked.bag, key.bag);
+    }
+
+    #[test]
+    fn state_key_pack_single_piece_bag() {
+        let bag = TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE));
+        let key = StateKey::new(u32::MAX >> 8, bag);
+        let unpacked = key.pack().unpack();
+        assert_eq!(unpacked.board_id, key.board_id);
+        assert_eq!(unpacked.bag, key.bag);
     }
 
     #[test]

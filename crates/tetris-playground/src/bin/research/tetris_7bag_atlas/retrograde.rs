@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::time::Instant;
 
 use crate::state::{PackedPlacement, StateId, piece_branches};
@@ -36,8 +35,9 @@ pub fn solve(universe: &Universe) -> SolveResult {
 
     // Per-(state, piece_idx) alive placement count.
     // Pieces IN the bag: initialized to edge count for that piece branch.
-    // Pieces NOT in the bag: u32::MAX sentinel (never triggers death).
-    let mut alive_placement_count: Vec<u32> = vec![u32::MAX; n * 7];
+    // Pieces NOT in the bag: u16::MAX sentinel (never triggers death).
+    // Max placements per piece is 34 (L/J), so u16 is more than sufficient.
+    let mut alive_placement_count: Vec<u16> = vec![u16::MAX; n * 7];
     let mut alive = vec![true; n];
 
     // Initialize counters from the graph
@@ -45,7 +45,7 @@ pub fn solve(universe: &Universe) -> SolveResult {
         let index = &universe.state_indices[sid];
         for branch in piece_branches(index.bag) {
             let pidx = branch.piece.index() as usize;
-            alive_placement_count[sid * 7 + pidx] = index.piece_ranges[pidx].len;
+            alive_placement_count[sid * 7 + pidx] = index.piece_ranges[pidx].len as u16;
         }
     }
 
@@ -53,14 +53,14 @@ pub fn solve(universe: &Universe) -> SolveResult {
     // Note: unexpanded states (hit max_states cap) have default StateIndex with
     // bag=0, so piece_branches returns nothing and they stay alive. This is
     // intentional — it gives an optimistic result for capped runs.
-    let mut dead_queue: VecDeque<StateId> = VecDeque::new();
+    let mut dead_queue: Vec<StateId> = Vec::new();
     for sid in 0..n {
         let index = &universe.state_indices[sid];
         for branch in piece_branches(index.bag) {
             let pidx = branch.piece.index() as usize;
             if alive_placement_count[sid * 7 + pidx] == 0 {
                 alive[sid] = false;
-                dead_queue.push_back(sid as StateId);
+                dead_queue.push(sid as StateId);
                 break;
             }
         }
@@ -72,11 +72,16 @@ pub fn solve(universe: &Universe) -> SolveResult {
         initial_dead,
     );
 
-    // Propagate death backward
+    // Propagate death backward using Vec + read cursor (better cache locality
+    // than VecDeque for this pattern).
     let mut propagated = 0u64;
+    let mut dead_idx: usize = 0;
     let mut last_report = Instant::now();
 
-    while let Some(dead_state) = dead_queue.pop_front() {
+    while dead_idx < dead_queue.len() {
+        let dead_state = dead_queue[dead_idx];
+        dead_idx += 1;
+
         for pred_ref in universe.predecessors_of(dead_state) {
             let parent = pred_ref.parent as usize;
             if !alive[parent] {
@@ -88,7 +93,7 @@ pub fn solve(universe: &Universe) -> SolveResult {
 
             // Sentinel check (piece not in parent's bag — shouldn't happen
             // with a correct graph, but defensive)
-            if *counter == u32::MAX {
+            if *counter == u16::MAX {
                 continue;
             }
 
@@ -97,7 +102,7 @@ pub fn solve(universe: &Universe) -> SolveResult {
                 // All placements for this piece lead to dead states.
                 // Adversary can pick this piece -> parent is dead.
                 alive[parent] = false;
-                dead_queue.push_back(parent as StateId);
+                dead_queue.push(parent as StateId);
             }
         }
 
@@ -111,7 +116,7 @@ pub fn solve(universe: &Universe) -> SolveResult {
                 propagated,
                 current_dead,
                 n,
-                dead_queue.len(),
+                dead_queue.len() - dead_idx,
             );
             last_report = Instant::now();
         }

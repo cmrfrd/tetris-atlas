@@ -33,7 +33,7 @@ impl Default for StateIndex {
 }
 
 /// A successor edge: the resulting state and the placement that produced it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct FlatEdge {
     pub succ: StateId,
     pub placement: PackedPlacement,
