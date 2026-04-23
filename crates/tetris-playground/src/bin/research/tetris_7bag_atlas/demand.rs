@@ -9,15 +9,10 @@ use crate::universe::Universe;
 pub enum DemandResult {
     /// The strategy is fully verified — every state it touches is expanded
     /// and confirmed winning. This constitutes a proof of infinite play.
-    Verified {
-        rounds: u32,
-        verified_states: usize,
-    },
+    Verified { rounds: u32, verified_states: usize },
     /// The root was disproved — after expanding needed states, retrograde
     /// killed the root. No winning strategy exists in this state space.
-    Disproved {
-        rounds: u32,
-    },
+    Disproved { rounds: u32 },
     /// The initial solve didn't find root winning (nothing to verify).
     RootNotWinning,
 }
@@ -77,10 +72,7 @@ pub fn demand_verify(universe: &mut Universe, result: &mut SolveResult) -> Deman
 
         if !result.alive[universe.root_state_id as usize] {
             let elapsed = start.elapsed().as_secs_f64();
-            eprintln!(
-                "[demand] DISPROVED in {:.2}s ({} rounds)",
-                elapsed, round,
-            );
+            eprintln!("[demand] DISPROVED in {:.2}s ({} rounds)", elapsed, round,);
             return DemandResult::Disproved { rounds: round };
         }
     }
@@ -93,10 +85,7 @@ pub fn demand_verify(universe: &mut Universe, result: &mut SolveResult) -> Deman
 ///
 /// For each alive state, follows `best_action[state][piece]` for every piece
 /// in the bag. Returns (total traced count, list of unexpanded state IDs).
-fn trace_strategy(
-    universe: &Universe,
-    result: &SolveResult,
-) -> (usize, Vec<StateId>) {
+fn trace_strategy(universe: &Universe, result: &SolveResult) -> (usize, Vec<StateId>) {
     let mut visited = vec![false; universe.state_count()];
     let mut queue: VecDeque<StateId> = VecDeque::new();
     let mut unexpanded: Vec<StateId> = Vec::new();

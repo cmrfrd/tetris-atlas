@@ -190,7 +190,10 @@ fn main() {
         let demand_time = demand_start.elapsed().as_secs_f64();
 
         match demand_result {
-            demand::DemandResult::Verified { rounds, verified_states } => {
+            demand::DemandResult::Verified {
+                rounds,
+                verified_states,
+            } => {
                 println!("status          = VERIFIED");
                 println!("rounds          = {}", rounds);
                 println!("strategy_states = {}", verified_states);

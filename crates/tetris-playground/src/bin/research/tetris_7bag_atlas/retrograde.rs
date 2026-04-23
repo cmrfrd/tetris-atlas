@@ -141,10 +141,7 @@ pub fn solve(universe: &Universe) -> SolveResult {
 /// among alive successors.
 ///
 /// Heuristic: prefer the successor with the lowest `height * 16 + total_holes`.
-fn extract_best_actions(
-    universe: &Universe,
-    alive: &[bool],
-) -> Vec<[Option<PackedPlacement>; 7]> {
+fn extract_best_actions(universe: &Universe, alive: &[bool]) -> Vec<[Option<PackedPlacement>; 7]> {
     let n = universe.state_count();
     let mut best_action: Vec<[Option<PackedPlacement>; 7]> = vec![[None; 7]; n];
 

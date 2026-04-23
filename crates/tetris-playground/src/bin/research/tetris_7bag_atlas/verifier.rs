@@ -141,7 +141,11 @@ pub fn replay_from_root(universe: &Universe, result: &SolveResult, max_steps: us
         if index.bag != key.bag {
             println!(
                 "step {:>4}: UNEXPANDED (state {}, bag={}, height={} holes={})",
-                step, current, key.bag, board.height(), board.total_holes(),
+                step,
+                current,
+                key.bag,
+                board.height(),
+                board.total_holes(),
             );
             return;
         }

@@ -32,11 +32,7 @@ pub fn solve(universe: &Universe) -> SolveResult {
     let n = universe.state_count();
 
     let mut alive = vec![true; n];
-    let mut alive_succ_count: Vec<u32> = universe
-        .edge_ranges
-        .iter()
-        .map(|r| r.len)
-        .collect();
+    let mut alive_succ_count: Vec<u32> = universe.edge_ranges.iter().map(|r| r.len).collect();
 
     // Seed the dead queue with states that have no successors at all
     let mut dead_queue: VecDeque<StateId> = VecDeque::new();
@@ -106,10 +102,7 @@ pub fn solve(universe: &Universe) -> SolveResult {
 ///
 /// Heuristic: prefer the successor with the lowest board height, breaking
 /// ties by fewest holes.
-fn extract_best_actions(
-    universe: &Universe,
-    alive: &[bool],
-) -> Vec<Option<PackedPlacement>> {
+fn extract_best_actions(universe: &Universe, alive: &[bool]) -> Vec<Option<PackedPlacement>> {
     let n = universe.state_count();
     let mut best_action: Vec<Option<PackedPlacement>> = vec![None; n];
 

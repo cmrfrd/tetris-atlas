@@ -9,7 +9,9 @@ use tetris_game::{TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPiecePlac
 
 use crate::config::{BoardAdmissibility, SolverConfig};
 use crate::graph::{EdgeRange, FlatEdge, PredecessorRef, StateIndex};
-use crate::state::{BoardId, PackedPlacement, StateId, StateKey, StateKeyPacked, pack_placement, piece_branches};
+use crate::state::{
+    BoardId, PackedPlacement, StateId, StateKey, StateKeyPacked, pack_placement, piece_branches,
+};
 
 /// A precomputed board-level successor: the resulting board and one representative placement.
 #[derive(Clone, Copy)]
@@ -47,8 +49,15 @@ impl<T> UnsafeSlice<T> {
     #[inline]
     unsafe fn write(&self, index: usize, value: T) {
         #[cfg(debug_assertions)]
-        debug_assert!(index < self.len, "UnsafeSlice::write out of bounds: {} >= {}", index, self.len);
-        unsafe { self.ptr.add(index).write(value); }
+        debug_assert!(
+            index < self.len,
+            "UnsafeSlice::write out of bounds: {} >= {}",
+            index,
+            self.len
+        );
+        unsafe {
+            self.ptr.add(index).write(value);
+        }
     }
 }
 
@@ -134,8 +143,7 @@ impl Universe {
                     }
 
                     let prev_board_count = boards.len();
-                    let new_board_id =
-                        intern_board(&mut boards, &mut board_to_id, &new_board);
+                    let new_board_id = intern_board(&mut boards, &mut board_to_id, &new_board);
 
                     // New board? Extend successor storage and add to frontier.
                     if boards.len() > prev_board_count {
@@ -236,12 +244,18 @@ impl Universe {
             frontier_idx = batch_end;
 
             // Step A: Compute per-state edge counts (parallel, read-only)
-            let edge_counts: Vec<u32> = batch.par_iter().map(|&sid| {
-                let key = &states[sid as usize];
-                piece_branches(key.bag).map(|branch| {
-                    board_succ_ranges[key.board_id as usize][branch.piece.index() as usize].len
-                }).sum()
-            }).collect();
+            let edge_counts: Vec<u32> = batch
+                .par_iter()
+                .map(|&sid| {
+                    let key = &states[sid as usize];
+                    piece_branches(key.bag)
+                        .map(|branch| {
+                            board_succ_ranges[key.board_id as usize][branch.piece.index() as usize]
+                                .len
+                        })
+                        .sum()
+                })
+                .collect();
 
             // Step B: Prefix sum for edge start offsets (sequential)
             let edge_base = edges.len() as u32;
@@ -261,7 +275,8 @@ impl Universe {
                 let edges_unsafe = UnsafeSlice::new(&mut edges);
                 let indices_unsafe = UnsafeSlice::new(&mut state_indices);
 
-                batch.par_iter()
+                batch
+                    .par_iter()
                     .enumerate()
                     .map(|(i, &sid)| {
                         let key = states[sid as usize];
@@ -296,10 +311,13 @@ impl Universe {
                                 // SAFETY: Each thread writes to its own pre-allocated slice
                                 // (disjoint ranges computed via prefix sum in Step B).
                                 unsafe {
-                                    edges_unsafe.write(write_pos, FlatEdge {
-                                        succ: succ_id,
-                                        placement: bse.placement,
-                                    });
+                                    edges_unsafe.write(
+                                        write_pos,
+                                        FlatEdge {
+                                            succ: succ_id,
+                                            placement: bse.placement,
+                                        },
+                                    );
                                 }
                                 write_pos += 1;
                             }
@@ -312,7 +330,9 @@ impl Universe {
                         }
 
                         // SAFETY: Each batch entry has a unique sid, so writes are disjoint.
-                        unsafe { indices_unsafe.write(sid as usize, index); }
+                        unsafe {
+                            indices_unsafe.write(sid as usize, index);
+                        }
 
                         local_new
                     })
@@ -356,12 +376,10 @@ impl Universe {
         );
 
         // Convert DashMap to FxHashMap for the struct (used by expand_states)
-        let state_to_id: FxHashMap<StateKeyPacked, StateId> =
-            state_to_id_par.into_iter().collect();
+        let state_to_id: FxHashMap<StateKeyPacked, StateId> = state_to_id_par.into_iter().collect();
 
         // Build predecessor arrays
-        let (pred_ranges, predecessors) =
-            build_predecessors(states.len(), &state_indices, &edges);
+        let (pred_ranges, predecessors) = build_predecessors(states.len(), &state_indices, &edges);
 
         let total_time = total_start.elapsed().as_secs_f64();
         eprintln!("[build] total {:.2}s", total_time);
@@ -436,11 +454,7 @@ impl Universe {
                     let succ_id = if let Some(&id) = self.state_to_id.get(&packed) {
                         id
                     } else {
-                        let id = intern_state(
-                            &mut self.states,
-                            &mut self.state_to_id,
-                            succ_key,
-                        );
+                        let id = intern_state(&mut self.states, &mut self.state_to_id, succ_key);
                         self.state_indices.push(StateIndex::default());
                         id
                     };

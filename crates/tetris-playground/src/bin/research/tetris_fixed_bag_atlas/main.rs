@@ -209,7 +209,15 @@ fn main() {
 
     // Optional JSON export
     if let Some(path) = &cli.export_path {
-        export_json(path, &universe, &result, &cycle_str, build_time, retro_time, verify_time);
+        export_json(
+            path,
+            &universe,
+            &result,
+            &cycle_str,
+            build_time,
+            retro_time,
+            verify_time,
+        );
     }
 
     if !root_winning {
@@ -239,7 +247,10 @@ fn parse_cycle(pieces: &[String]) -> [TetrisPiece; 7] {
             "L" => TetrisPiece::L_PIECE,
             "J" => TetrisPiece::J_PIECE,
             _ => {
-                eprintln!("error: unknown piece name '{}' (expected O,I,S,Z,T,L,J)", name);
+                eprintln!(
+                    "error: unknown piece name '{}' (expected O,I,S,Z,T,L,J)",
+                    name
+                );
                 std::process::exit(2);
             }
         };

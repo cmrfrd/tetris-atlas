@@ -3,7 +3,7 @@ use std::time::Instant;
 use tetris_game::TetrisPiecePlacement;
 
 use crate::retrograde::SolveResult;
-use crate::state::{unpack_placement, StateId};
+use crate::state::{StateId, unpack_placement};
 use crate::universe::Universe;
 
 /// Verify the retrograde solution by replaying every state.
@@ -97,8 +97,8 @@ pub fn replay_from_root(universe: &Universe, result: &SolveResult, max_steps: us
         let board = &universe.boards[key.board_id as usize];
         let piece = universe.config.cycle[key.cycle_pos as usize];
 
-        let packed = result.best_action[current as usize]
-            .expect("winning state must have best_action");
+        let packed =
+            result.best_action[current as usize].expect("winning state must have best_action");
         let placement = unpack_placement(packed);
 
         println!(

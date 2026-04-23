@@ -4,7 +4,9 @@ use rustc_hash::FxHashMap;
 use tetris_game::{TetrisBoard, TetrisPiecePlacement};
 
 use crate::config::{BoardAdmissibility, SolverConfig};
-use crate::state::{BoardId, EdgeRange, FlatEdge, PredecessorRef, StateId, StateKey, pack_placement};
+use crate::state::{
+    BoardId, EdgeRange, FlatEdge, PredecessorRef, StateId, StateKey, pack_placement,
+};
 
 /// The complete state graph for a fixed-cycle Tetris game.
 ///
@@ -140,8 +142,7 @@ impl Universe {
         );
 
         // Build predecessor arrays
-        let (pred_ranges, predecessors) =
-            build_predecessors(states.len(), &edge_ranges, &edges);
+        let (pred_ranges, predecessors) = build_predecessors(states.len(), &edge_ranges, &edges);
 
         Universe {
             config: *config,
@@ -251,10 +252,7 @@ fn build_predecessors(
     }
 
     // Pass 2: fill predecessor array
-    let mut predecessors = vec![
-        PredecessorRef { parent: 0 };
-        offset as usize
-    ];
+    let mut predecessors = vec![PredecessorRef { parent: 0 }; offset as usize];
     let mut write_pos = vec![0u32; state_count];
 
     for sid in 0..state_count {

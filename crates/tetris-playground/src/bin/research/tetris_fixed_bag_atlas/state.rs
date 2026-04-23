@@ -14,7 +14,10 @@ pub struct StateKey {
 
 impl StateKey {
     pub const fn new(board_id: BoardId, cycle_pos: u8) -> Self {
-        Self { board_id, cycle_pos }
+        Self {
+            board_id,
+            cycle_pos,
+        }
     }
 }
 
