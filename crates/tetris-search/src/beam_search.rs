@@ -1,9 +1,7 @@
 use proc_macros::inline_conditioned;
 use rayon::prelude::*;
-use tetris_game::{
-    FixedBinMinHeap, HeaplessVec, TetrisGame, TetrisGameRng, TetrisPieceOrientation,
-    TetrisPiecePlacement, repeat_idx_unroll,
-};
+use tetris_game::{TetrisGame, TetrisGameRng, TetrisPieceOrientation, TetrisPiecePlacement};
+use tetris_utils::{FixedBinMinHeap, HeaplessVec, repeat_idx_unroll};
 
 /// Counts of actions by orientation index
 #[derive(Clone, Copy)]
@@ -615,7 +613,7 @@ impl BeamSearchState for BeamTetrisState {
 mod tests {
     use super::*;
     use rand::Rng;
-    use tetris_game::HeaplessVec;
+    use tetris_utils::HeaplessVec;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
     enum Direction {

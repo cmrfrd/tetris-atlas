@@ -31,10 +31,8 @@ use clap::Parser;
 use crossbeam_queue::SegQueue;
 use dashmap::{DashMap, mapref::entry::Entry};
 use itertools::Itertools;
-use tetris_game::{
-    FixedBinMinHeap, HeaplessVec, IsLost, TetrisBoard, TetrisPiece, TetrisPiecePlacement,
-    repeat_idx_unroll,
-};
+use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPiecePlacement};
+use tetris_utils::{FixedBinMinHeap, HeaplessVec, repeat_idx_unroll};
 
 type ForcedBag = [TetrisPiece; PIECES_PER_BAG];
 type PlacementScript = [TetrisPiecePlacement; PIECES_PER_BAG];

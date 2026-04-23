@@ -7,14 +7,12 @@
 #![allow(clippy::needless_return)]
 #![allow(clippy::out_of_bounds_indexing)]
 
-use std::mem::MaybeUninit;
-use std::ptr;
-
 use std::cell::UnsafeCell;
 use std::fmt::Debug;
 use std::hint::spin_loop;
-use std::ops::Index;
-use std::ops::{Deref, DerefMut};
+use std::mem::MaybeUninit;
+use std::ops::{Deref, DerefMut, Index};
+use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 
 use proc_macros::inline_conditioned;
@@ -118,6 +116,8 @@ where
 }
 
 /// A spin lock for shared-mutual exclusion.
+///
+/// Used internally by [`VecPool`] for low-contention synchronization.
 #[derive(Debug)]
 pub struct SpinLock<T: Debug> {
     lock: AtomicBool,
@@ -138,15 +138,6 @@ impl<'a, T> Drop for SpinLockGuard<'a, T> {
 }
 
 impl<T: Debug> SpinLock<T> {
-    /// Creates a new `SpinLock` containing the given data.
-    ///
-    /// # Arguments
-    ///
-    /// * `data` - The value to protect with the spin lock
-    ///
-    /// # Returns
-    ///
-    /// A new `SpinLock` instance in the unlocked state
     pub const fn new(data: T) -> Self {
         SpinLock {
             lock: AtomicBool::new(false),
@@ -154,14 +145,6 @@ impl<T: Debug> SpinLock<T> {
         }
     }
 
-    /// Acquires the lock, blocking the current thread until it becomes available.
-    ///
-    /// This method will spin in a tight loop until the lock is acquired. The returned
-    /// guard will release the lock when dropped.
-    ///
-    /// # Returns
-    ///
-    /// A guard that provides mutable access to the protected data
     pub fn lock(&self) -> SpinLockGuard<'_, T> {
         while self.lock.swap(true, AtomicOrdering::Acquire) {
             spin_loop();
@@ -173,14 +156,6 @@ impl<T: Debug> SpinLock<T> {
         }
     }
 
-    /// Attempts to acquire the lock without blocking.
-    ///
-    /// If the lock is currently held by another thread, this method returns `None`
-    /// immediately instead of spinning.
-    ///
-    /// # Returns
-    ///
-    /// `Some(guard)` if the lock was successfully acquired, `None` otherwise
     pub fn try_lock(&self) -> Option<SpinLockGuard<'_, T>> {
         if self
             .lock

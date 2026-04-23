@@ -8,9 +8,8 @@ use rayon::iter::plumbing::{Folder, Reducer, UnindexedConsumer};
 use rayon::{current_num_threads, join_context};
 use std::iter::Iterator;
 use std::{collections::VecDeque, sync::Arc};
-use tetris_game::{
-    HeaplessVec, TetrisBoard, TetrisGame, TetrisPiecePlacement, VecPool, repeat_idx_unroll,
-};
+use tetris_game::{TetrisBoard, TetrisGame, TetrisPiecePlacement};
+use tetris_utils::{HeaplessVec, VecPool, repeat_idx_unroll};
 
 use std::sync::atomic::{AtomicU64, Ordering};
 

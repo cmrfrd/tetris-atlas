@@ -32,11 +32,11 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::time::Instant;
 use tetris_game::{
-    HeaplessVec, IsLost, TetrisBoard, TetrisGame, TetrisGameRng, TetrisPieceOrientation,
-    TetrisPiecePlacement,
+    IsLost, TetrisBoard, TetrisGame, TetrisGameRng, TetrisPieceOrientation, TetrisPiecePlacement,
 };
 use tetris_ml::beam_search::{BeamSearch, BeamSearchState};
 use tetris_ml::set_global_threadpool;
+use tetris_utils::HeaplessVec;
 
 /// Output file path for genetic algorithm results
 const OUTPUT_FILE: &str = "beam_genetic_output.csv";

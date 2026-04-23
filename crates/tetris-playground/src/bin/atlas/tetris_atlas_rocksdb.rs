@@ -38,12 +38,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use tetris_game::{
-    IsLost, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPieceOrientation,
-    repeat_idx_unroll,
-};
+use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPieceOrientation};
 use tetris_search::set_global_threadpool;
 use tetris_search::{BeamTetrisState, MultiBeamSearch};
+use tetris_utils::repeat_idx_unroll;
 
 const N: usize = 16;
 const TOP_N_PER_BEAM: usize = 32;

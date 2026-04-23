@@ -25,9 +25,10 @@
 // Re-export common types for bin convenience
 pub use tetris_game::{
     IsLost, PlacementResult, TetrisBoard, TetrisGame, TetrisPiece, TetrisPieceBagState,
-    TetrisPieceOrientation, TetrisPiecePlacement, repeat_idx_unroll,
+    TetrisPieceOrientation, TetrisPiecePlacement,
 };
 pub use tetris_ml::{
     BeamSearch, BeamSearchState, BeamTetrisState, MultiBeamSearch, ScoredState, device,
     set_global_threadpool,
 };
+pub use tetris_utils::repeat_idx_unroll;

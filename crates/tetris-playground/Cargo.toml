@@ -65,6 +65,10 @@ path = "src/bin/research/tetris_fixed_bag_atlas/main.rs"
 name = "tetris_7bag_atlas"
 path = "src/bin/research/tetris_7bag_atlas/main.rs"
 
+[[bin]]
+name = "tetris_bag_cycle_solver"
+path = "src/bin/research/tetris_bag_cycle_solver/main.rs"
+
 
 [features]
 default = []
@@ -81,6 +85,7 @@ dtype-f64 = []
 [dependencies]
 # Internal crates
 tetris-game = { path = "../tetris-game" }
+tetris-utils = { path = "../tetris-utils" }
 tetris-search = { path = "../tetris-search" }
 tetris-ml = { path = "../tetris-ml" }
 proc-macros = { path = "../proc-macros" }

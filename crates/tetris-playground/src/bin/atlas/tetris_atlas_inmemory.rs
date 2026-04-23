@@ -33,11 +33,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
-use tetris_game::{
-    IsLost, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPieceOrientation,
-    repeat_idx_unroll,
-};
+use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPieceOrientation};
 use tetris_search::{BeamTetrisState, MultiBeamSearch};
+use tetris_utils::repeat_idx_unroll;
 
 // --- Beam Search Parameters ---
 const N: usize = 16;

@@ -15,6 +15,7 @@ harness = false
 
 [dependencies]
 tetris-game = { path = "../tetris-game" }
+tetris-utils = { path = "../tetris-utils" }
 tetris-ml = { path = "../tetris-ml" }
 rand = { version = "0.9.2", features = ["small_rng"] }
 inventory = "0.3"
