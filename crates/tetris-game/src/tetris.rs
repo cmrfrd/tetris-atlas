@@ -377,6 +377,102 @@ impl TetrisPiece {
             3_u8 + b
         }
     }
+
+    /// Returns the column bitmasks for this piece at the given rotation.
+    ///
+    /// Returns `(cols, width)` where `cols[0..width]` contains the shape data.
+    /// Each `u32` column has bits set at the rows the piece occupies
+    /// (bit 0 = bottom of the piece's bounding box after gravity).
+    pub fn shape_cols(&self, rotation: Rotation) -> ([u32; 4], u8) {
+        let mut cols = [0u32; 4];
+        let w = self.width(rotation) as usize;
+        match (*self, rotation) {
+            (Self::O_PIECE, _) => cols[..w].copy_from_slice(&tetris_piece_data::O_PIECE_ROT_0),
+            (Self::I_PIECE, Rotation(0) | Rotation(2)) => {
+                cols[..w].copy_from_slice(&tetris_piece_data::I_PIECE_ROT_0)
+            }
+            (Self::I_PIECE, _) => cols[..w].copy_from_slice(&tetris_piece_data::I_PIECE_ROT_1),
+            (Self::S_PIECE, Rotation(0) | Rotation(2)) => {
+                cols[..w].copy_from_slice(&tetris_piece_data::S_PIECE_ROT_0)
+            }
+            (Self::S_PIECE, _) => cols[..w].copy_from_slice(&tetris_piece_data::S_PIECE_ROT_1),
+            (Self::Z_PIECE, Rotation(0) | Rotation(2)) => {
+                cols[..w].copy_from_slice(&tetris_piece_data::Z_PIECE_ROT_0)
+            }
+            (Self::Z_PIECE, _) => cols[..w].copy_from_slice(&tetris_piece_data::Z_PIECE_ROT_1),
+            (Self::T_PIECE, Rotation(0)) => {
+                cols[..w].copy_from_slice(&tetris_piece_data::T_PIECE_ROT_0)
+            }
+            (Self::T_PIECE, Rotation(1)) => {
+                cols[..w].copy_from_slice(&tetris_piece_data::T_PIECE_ROT_1)
+            }
+            (Self::T_PIECE, Rotation(2)) => {
+                cols[..w].copy_from_slice(&tetris_piece_data::T_PIECE_ROT_2)
+            }
+            (Self::T_PIECE, Rotation(3)) => {
+                cols[..w].copy_from_slice(&tetris_piece_data::T_PIECE_ROT_3)
+            }
+            (Self::L_PIECE, Rotation(0)) => {
+                cols[..w].copy_from_slice(&tetris_piece_data::L_PIECE_ROT_0)
+            }
+            (Self::L_PIECE, Rotation(1)) => {
+                cols[..w].copy_from_slice(&tetris_piece_data::L_PIECE_ROT_1)
+            }
+            (Self::L_PIECE, Rotation(2)) => {
+                cols[..w].copy_from_slice(&tetris_piece_data::L_PIECE_ROT_2)
+            }
+            (Self::L_PIECE, Rotation(3)) => {
+                cols[..w].copy_from_slice(&tetris_piece_data::L_PIECE_ROT_3)
+            }
+            (Self::J_PIECE, Rotation(0)) => {
+                cols[..w].copy_from_slice(&tetris_piece_data::J_PIECE_ROT_0)
+            }
+            (Self::J_PIECE, Rotation(1)) => {
+                cols[..w].copy_from_slice(&tetris_piece_data::J_PIECE_ROT_1)
+            }
+            (Self::J_PIECE, Rotation(2)) => {
+                cols[..w].copy_from_slice(&tetris_piece_data::J_PIECE_ROT_2)
+            }
+            (Self::J_PIECE, Rotation(3)) => {
+                cols[..w].copy_from_slice(&tetris_piece_data::J_PIECE_ROT_3)
+            }
+            _ => {}
+        }
+        (cols, w as u8)
+    }
+}
+
+/// Writes a visual grid for piece shape columns.
+///
+/// Renders only the occupied rows, top-to-bottom, using `#` for filled and `.` for empty.
+fn fmt_shape_cols(cols: &[u32; 4], width: u8, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let w = width as usize;
+    let max_bit = cols[..w]
+        .iter()
+        .map(|c| u32::BITS - c.leading_zeros())
+        .max()
+        .unwrap_or(0);
+    let min_bit = cols[..w]
+        .iter()
+        .filter(|&&c| c != 0)
+        .map(|c| c.trailing_zeros())
+        .min()
+        .unwrap_or(0);
+    for row in (min_bit..max_bit).rev() {
+        writeln!(f)?;
+        for col in 0..w {
+            write!(
+                f,
+                "{}",
+                if (cols[col] >> row) & 1 == 1 {
+                    '#'
+                } else {
+                    '.'
+                }
+            )?;
+        }
+    }
+    Ok(())
 }
 
 impl Display for TetrisPiece {
@@ -437,11 +533,7 @@ pub struct TetrisPieceOrientation {
 
 impl Display for TetrisPieceOrientation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "TetrisPieceOrientation(rotation: {}, column: {})",
-            self.rotation, self.column
-        )
+        write!(f, "rot={} col={}", self.rotation, self.column.0)
     }
 }
 
@@ -590,11 +682,9 @@ pub struct TetrisPiecePlacement {
 
 impl Display for TetrisPiecePlacement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "TetrisPiecePlacement(piece: {}, orientation: {})",
-            self.piece, self.orientation
-        )
+        write!(f, "{} {}", self.piece, self.orientation)?;
+        let (cols, w) = self.piece.shape_cols(self.orientation.rotation);
+        fmt_shape_cols(&cols, w, f)
     }
 }
 
@@ -3341,6 +3431,48 @@ mod tests {
                 board, reconstructed,
                 "Board should roundtrip correctly through bytes"
             );
+        }
+    }
+
+    #[test]
+    fn test_placement_display() {
+        fn find(piece: TetrisPiece, rot: u8) -> TetrisPiecePlacement {
+            *TetrisPiecePlacement::ALL_PLACEMENTS
+                .iter()
+                .find(|p| {
+                    p.piece == piece
+                        && p.orientation.rotation == Rotation(rot)
+                        && p.orientation.column == Column(0)
+                })
+                .expect("placement must exist")
+        }
+
+        let s = format!("{}", find(TetrisPiece::T_PIECE, 0));
+        assert!(s.contains("T rot=0 col=0"), "header: {s}");
+        assert!(s.contains("###"), "T top row: {s}");
+        assert!(s.contains(".#."), "T bottom row: {s}");
+
+        let s = format!("{}", find(TetrisPiece::I_PIECE, 0));
+        assert!(s.contains("####"), "I horizontal: {s}");
+
+        let s = format!("{}", find(TetrisPiece::I_PIECE, 1));
+        assert!(
+            s.lines().filter(|l| l.trim() == "#").count() == 4,
+            "I vertical: {s}"
+        );
+
+        let s = format!("{}", find(TetrisPiece::O_PIECE, 0));
+        assert!(
+            s.lines().filter(|l| l.trim() == "##").count() == 2,
+            "O shape: {s}"
+        );
+    }
+
+    #[test]
+    fn test_all_placements_display() {
+        for p in &TetrisPiecePlacement::ALL_PLACEMENTS {
+            let s = format!("{p}");
+            assert!(!s.is_empty());
         }
     }
 }
