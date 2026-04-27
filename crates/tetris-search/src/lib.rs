@@ -7,11 +7,11 @@
 //! # Example
 //!
 //! ```ignore
-//! use tetris_search::{BeamSearch, BeamTetrisState};
+//! use tetris_search::{BeamTetrisState, TetrisBeamSearch, height_mse_beam_tetris_score};
 //! use tetris_game::TetrisGame;
 //!
 //! let game = TetrisGame::new();
-//! let mut search = BeamSearch::<BeamTetrisState, 32, 8, 40>::new();
+//! let mut search = TetrisBeamSearch::<32, 8, 40>::new(height_mse_beam_tetris_score);
 //! let result = search.search_top_with_state(BeamTetrisState::new(game), 8);
 //! ```
 
@@ -22,9 +22,11 @@
 
 pub mod beam_search;
 pub mod explorer;
+pub mod sequence_planner;
 
 pub use beam_search::*;
 pub use explorer::*;
+pub use sequence_planner::*;
 
 use rayon::ThreadPoolBuilder;
 

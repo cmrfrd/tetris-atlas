@@ -32,7 +32,9 @@ use tetris_ml::{
     optim::{AdamW, ParamsAdamW},
     set_global_threadpool,
 };
-use tetris_search::{BeamTetrisState, MultiBeamSearch, OrientationCounts};
+use tetris_search::{
+    BeamTetrisState, OrientationCounts, TetrisMultiBeamSearch, height_mse_beam_tetris_score,
+};
 
 fn board_health(board: &TetrisBoard) -> f64 {
     let max_height = board.height() as f64;
@@ -76,14 +78,7 @@ pub struct TetrisGameIter<
     pub loss_resets: u64,
     pub completed_games: u64,
     pub completed_game_pieces_sum: u64,
-    search: MultiBeamSearch<
-        BeamTetrisState,
-        NUM_BEAMS,
-        TOP_N_PER_BEAM,
-        BEAM_WIDTH,
-        MAX_DEPTH,
-        MAX_MOVES,
-    >,
+    search: TetrisMultiBeamSearch<NUM_BEAMS, TOP_N_PER_BEAM, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>,
     step_counter: u64,
     current_game_idx: usize, // Round-robin index for batch diversity
 }
@@ -107,7 +102,7 @@ impl<
             loss_resets: 0,
             completed_games: 0,
             completed_game_pieces_sum: 0,
-            search: MultiBeamSearch::new(),
+            search: TetrisMultiBeamSearch::new(height_mse_beam_tetris_score),
             step_counter: 0,
             current_game_idx: 0,
         }
@@ -123,7 +118,7 @@ impl<
             loss_resets: 0,
             completed_games: 0,
             completed_game_pieces_sum: 0,
-            search: MultiBeamSearch::new(),
+            search: TetrisMultiBeamSearch::new(height_mse_beam_tetris_score),
             step_counter: seed,
             current_game_idx: 0,
         }

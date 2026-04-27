@@ -34,7 +34,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPieceOrientation};
-use tetris_search::{BeamTetrisState, MultiBeamSearch};
+use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetris_score};
 use tetris_utils::repeat_idx_unroll;
 
 // --- Beam Search Parameters ---
@@ -413,14 +413,7 @@ fn process_board_state(
     board: TetrisBoard,
     bag: TetrisPieceBagState,
     lookup: &DashMap<(TetrisBoard, TetrisPiece), TetrisPieceOrientation>,
-    beam_search: &mut MultiBeamSearch<
-        BeamTetrisState,
-        N,
-        TOP_N_PER_BEAM,
-        BEAM_WIDTH,
-        MAX_DEPTH,
-        MAX_MOVES,
-    >,
+    beam_search: &mut TetrisMultiBeamSearch<N, TOP_N_PER_BEAM, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>,
     stats: &SharedStats,
 ) -> Vec<(TetrisBoard, TetrisPieceBagState)> {
     let mut new_states = Vec::new();
@@ -815,14 +808,13 @@ pub fn run_tetris_atlas_create(base_path: &str) {
                 println!("Worker {worker_id}: started");
 
                 // Thread-local beam search
-                let mut beam_search = MultiBeamSearch::<
-                    BeamTetrisState,
+                let mut beam_search = TetrisMultiBeamSearch::<
                     N,
                     TOP_N_PER_BEAM,
                     BEAM_WIDTH,
                     MAX_DEPTH,
                     MAX_MOVES,
-                >::new();
+                >::new(height_mse_beam_tetris_score);
 
                 // Process items from channel
                 while let Ok((board, bag)) = rx.recv() {

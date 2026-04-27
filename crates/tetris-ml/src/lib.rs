@@ -33,7 +33,11 @@ pub use tensor::*;
 pub use tetris_search::beam_search;
 pub use tetris_search::{
     BeamSearch, BeamSearchState, BeamTetrisState, DEFAULT_RAYON_STACK_SIZE, MultiBeamSearch,
-    ScoredState, set_global_threadpool, set_global_threadpool_with_stack_size,
+    ScoredState, TetrisBeamSearch, TetrisBoardScoreState, TetrisMultiBeamSearch,
+    TetrisPlanScoreState, TetrisSequencePlanOutcome, TetrisSequencePlanner, TetrisSequenceWitness,
+    best_first_capacity, height_mse_beam_tetris_score, height_mse_board_score,
+    height_mse_distance_from_empty, height_mse_plan_score, set_global_threadpool,
+    set_global_threadpool_with_stack_size,
 };
 
 use candle_core::Device;

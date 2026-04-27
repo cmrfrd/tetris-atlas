@@ -170,28 +170,19 @@ impl BeamTetrisStateGenetic {
     }
 }
 
-impl PartialEq for BeamTetrisStateGenetic {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        self.score().total_cmp(&other.score()).is_eq()
-    }
+#[inline_conditioned(always)]
+fn genetic_score(state: &BeamTetrisStateGenetic) -> f32 {
+    state.score()
 }
 
-impl Eq for BeamTetrisStateGenetic {}
-
-impl PartialOrd for BeamTetrisStateGenetic {
-    #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for BeamTetrisStateGenetic {
-    #[inline]
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.score().total_cmp(&other.score())
-    }
-}
+type GeneticBeamSearch<const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_MOVES: usize> =
+    BeamSearch<
+        BeamTetrisStateGenetic,
+        BEAM_WIDTH,
+        MAX_DEPTH,
+        MAX_MOVES,
+        fn(&BeamTetrisStateGenetic) -> f32,
+    >;
 
 impl BeamSearchState for BeamTetrisStateGenetic {
     type Action = TetrisPiecePlacement;
@@ -235,7 +226,7 @@ pub struct TetrisGameIterGenetic<
 > {
     pub game: TetrisGame,
     /// N parallel beam searches for voting
-    searches: Vec<BeamSearch<BeamTetrisStateGenetic, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>>,
+    searches: Vec<GeneticBeamSearch<BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>>,
     pub coefficients: EvalCoefficients,
     step_counter: u64,
 }
@@ -247,7 +238,9 @@ impl<const N: usize, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_
         assert!(N > 0, "N must be greater than 0");
         let mut searches = Vec::with_capacity(N);
         for _ in 0..N {
-            searches.push(BeamSearch::new());
+            searches.push(BeamSearch::new(
+                genetic_score as fn(&BeamTetrisStateGenetic) -> f32,
+            ));
         }
         Self {
             game: TetrisGame::new(),
@@ -261,7 +254,9 @@ impl<const N: usize, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_
         assert!(N > 0, "N must be greater than 0");
         let mut searches = Vec::with_capacity(N);
         for _ in 0..N {
-            searches.push(BeamSearch::new());
+            searches.push(BeamSearch::new(
+                genetic_score as fn(&BeamTetrisStateGenetic) -> f32,
+            ));
         }
         Self {
             game: TetrisGame::new_with_seed(seed),
@@ -304,11 +299,7 @@ impl<const N: usize, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_
                 // Run search and extract first action + score
                 search
                     .search_top_with_state(state, MAX_DEPTH)
-                    .and_then(|scored| {
-                        scored
-                            .root_action
-                            .map(|action| (action, scored.state.score()))
-                    })
+                    .and_then(|scored| scored.root_action.map(|action| (action, scored.score)))
             })
             .fold(
                 HashMap::new,

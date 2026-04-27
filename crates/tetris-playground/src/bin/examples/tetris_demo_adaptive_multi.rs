@@ -15,7 +15,7 @@ use tetris_game::{
     IsLost, PlacementResult, TetrisBoard, TetrisGame, TetrisPieceOrientation, TetrisPiecePlacement,
 };
 use tetris_search::set_global_threadpool;
-use tetris_search::{BeamTetrisState, MultiBeamSearch};
+use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetris_score};
 
 /// Output file path for adaptive multi-beam search results
 const OUTPUT_FILE: &str = "beam_search_multisearch_adaptive_output.csv";
@@ -61,14 +61,13 @@ pub fn run_tetris_beam_multisearch_adaptive() {
     let mut game = TetrisGame::new();
     let mut step_counter = 0u64;
 
-    let mut multi_beam_search: MultiBeamSearch<
-        BeamTetrisState,
+    let mut multi_beam_search: TetrisMultiBeamSearch<
         N_BEAMS,
         TOP_N_PER_BEAM,
         BEAM_WIDTH,
         MAX_DEPTH,
         MAX_MOVES,
-    > = MultiBeamSearch::new();
+    > = TetrisMultiBeamSearch::new(height_mse_beam_tetris_score);
 
     let start = Instant::now();
     let mut rng = rand::rng();

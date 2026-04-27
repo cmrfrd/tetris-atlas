@@ -40,7 +40,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPieceOrientation};
 use tetris_search::set_global_threadpool;
-use tetris_search::{BeamTetrisState, MultiBeamSearch};
+use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetris_score};
 use tetris_utils::repeat_idx_unroll;
 
 const N: usize = 16;
@@ -370,14 +370,14 @@ impl TetrisAtlasDB {
                     .spawn(move || {
                         const BASE_SEED: u64 = 42;
 
-                        let mut beam_search = MultiBeamSearch::<
-                            BeamTetrisState,
-                            N,
-                            TOP_N_PER_BEAM,
-                            BEAM_WIDTH,
-                            MAX_DEPTH,
-                            MAX_MOVES,
-                        >::new();
+                        let mut beam_search =
+                            TetrisMultiBeamSearch::<
+                                N,
+                                TOP_N_PER_BEAM,
+                                BEAM_WIDTH,
+                                MAX_DEPTH,
+                                MAX_MOVES,
+                            >::new(height_mse_beam_tetris_score);
 
                         let mut game = tetris_game::TetrisGame::new();
 

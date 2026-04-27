@@ -8,6 +8,9 @@ use rand::seq::IndexedRandom;
 use tetris_game::{
     TetrisBoard, TetrisGame, TetrisGameRng, TetrisPiece, TetrisPieceBag, TetrisPiecePlacement,
 };
+use tetris_search::{
+    TetrisBoardScoreState, height_mse_board_score, height_mse_distance_from_empty,
+};
 use tetris_utils::rshift_slice_from_mask_u32;
 
 /// Registered benchmark entrypoint.
@@ -560,6 +563,69 @@ tetris_bench! {
             BenchmarkId::new(format!("bitmask_as_slice_{N}"), NUM_ELEMS),
             &NUM_ELEMS,
             |b, _| b.iter(|| bits.iter().map(|bits| tetris_utils::BitMask::<N>::new_from_u64(*bits).as_slice()).collect::<Vec<_>>()),
+        );
+    }
+}
+
+// ============================================================================
+// Scoring Function Benchmarks
+// ============================================================================
+
+tetris_bench! {
+    /// Benchmark height_mse_distance_from_empty on boards with varying fill levels.
+    pub fn bench_height_mse_distance_from_empty(c: &mut Criterion) {
+        let mut rng = rand::rng();
+        let boards = black_box(
+            (0..NUM_ELEMS)
+                .map(|_| {
+                    let mut b = TetrisBoard::new();
+                    b.set_random_bits(50, &mut rng);
+                    b
+                })
+                .collect::<Vec<_>>(),
+        );
+        c.bench_with_input(
+            BenchmarkId::new("height_mse_distance_from_empty", NUM_ELEMS),
+            &NUM_ELEMS,
+            |b, _| {
+                b.iter(|| {
+                    boards
+                        .iter()
+                        .map(|board| height_mse_distance_from_empty(black_box(*board)))
+                        .collect::<Vec<_>>()
+                })
+            },
+        );
+    }
+}
+
+tetris_bench! {
+    /// Benchmark height_mse_board_score (the default beam search scorer).
+    pub fn bench_height_mse_board_score(c: &mut Criterion) {
+        let mut rng = rand::rng();
+        let states = black_box(
+            (0..NUM_ELEMS)
+                .map(|_| {
+                    let mut b = TetrisBoard::new();
+                    b.set_random_bits(50, &mut rng);
+                    TetrisBoardScoreState {
+                        board: b,
+                        recent_lines_cleared: 0,
+                    }
+                })
+                .collect::<Vec<_>>(),
+        );
+        c.bench_with_input(
+            BenchmarkId::new("height_mse_board_score", NUM_ELEMS),
+            &NUM_ELEMS,
+            |b, _| {
+                b.iter(|| {
+                    states
+                        .iter()
+                        .map(|state| height_mse_board_score(black_box(state)))
+                        .collect::<Vec<_>>()
+                })
+            },
         );
     }
 }
