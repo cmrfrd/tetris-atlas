@@ -4,7 +4,11 @@
 
 use criterion::{BenchmarkId, Criterion, black_box};
 use rand::Rng;
+use rand::SeedableRng;
+use rand::rngs::SmallRng;
 use rand::seq::IndexedRandom;
+
+const BENCH_SEED: u64 = 0xDEAD_BEEF_CAFE;
 use tetris_game::{
     TetrisBoard, TetrisGame, TetrisGameRng, TetrisPiece, TetrisPieceBag, TetrisPiecePlacement,
 };
@@ -63,7 +67,7 @@ tetris_bench! {
 
         const HEAP_SIZE: usize = 100;
         const NUM_CANDIDATES: usize = 1000;
-        let mut rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let candidates: Vec<i32> = (0..NUM_CANDIDATES).map(|_| rng.random::<i32>()).collect();
 
         let mut group = c.benchmark_group("fixed_bin_min_heap");
@@ -93,7 +97,7 @@ tetris_bench! {
         const NUM_ITERATIONS: usize = 100;
         const CANDIDATES_PER_ITER: usize = 50;
 
-        let mut rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let all_candidates: Vec<Vec<i32>> = (0..NUM_ITERATIONS)
             .map(|_| {
                 (0..CANDIDATES_PER_ITER)
@@ -129,7 +133,7 @@ tetris_bench! {
     pub fn bench_heap_size_scaling(c: &mut Criterion) {
         use tetris_utils::FixedBinMinHeap;
 
-        let mut rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
 
         for size in [16, 64, 128] {
             let candidates: Vec<i32> = (0..size * 10).map(|_| rng.random::<i32>()).collect();
@@ -194,7 +198,7 @@ const NUM_ELEMS: usize = 10_000;
 
 tetris_bench! {
     pub fn bench_rshift_slice_from_mask_u32(c: &mut Criterion) {
-        let mut rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
 
         const N: usize = 10;
         const ITERS: usize = 4;
@@ -234,7 +238,7 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_num_rotations(c: &mut Criterion) {
-        let rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let pieces = black_box(
             rng.random_iter::<TetrisPiece>()
                 .take(NUM_ELEMS)
@@ -250,7 +254,7 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_width(c: &mut Criterion) {
-        let rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let placements = black_box(
             rng.random_iter::<TetrisPiecePlacement>()
                 .take(NUM_ELEMS)
@@ -269,7 +273,7 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_height(c: &mut Criterion) {
-        let rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let placements = black_box(
             rng.random_iter::<TetrisPiecePlacement>()
                 .take(NUM_ELEMS)
@@ -318,7 +322,7 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_is_lost(c: &mut Criterion) {
-        let mut rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let single_bit_boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
@@ -345,7 +349,7 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_count(c: &mut Criterion) {
-        let mut rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
@@ -363,7 +367,7 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_clear_filled_rows(c: &mut Criterion) {
-        let mut rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let mut boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
@@ -390,7 +394,7 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_clear(c: &mut Criterion) {
-        let mut rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let mut boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
@@ -413,7 +417,7 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_apply_piece_placement(c: &mut Criterion) {
-        let rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let mut empty_boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| TetrisBoard::new())
@@ -442,7 +446,7 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_from_binary_slice(c: &mut Criterion) {
-        let mut rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
@@ -475,7 +479,7 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_placement_index(c: &mut Criterion) {
-        let rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let placements = black_box(
             rng.random_iter::<TetrisPiecePlacement>()
                 .take(NUM_ELEMS)
@@ -491,7 +495,7 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_play_placements(c: &mut Criterion) {
-        let mut rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let num_games: usize = 1_000;
         let seed = 123;
         c.bench_with_input(
@@ -520,7 +524,7 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_bits_to_byte(c: &mut Criterion) {
-        let rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let bits = black_box(
             rng.random_iter::<[u8; 8]>()
                 .take(NUM_ELEMS)
@@ -536,7 +540,7 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_byte_to_bits(c: &mut Criterion) {
-        let rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let bytes = black_box(
             rng.random_iter::<u8>()
                 .take(NUM_ELEMS)
@@ -553,7 +557,7 @@ tetris_bench! {
 tetris_bench! {
     pub fn bitmask_as_slice(c: &mut Criterion) {
         const N: usize = 40;
-        let rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let bits = black_box(
             rng.random_iter::<u64>()
                 .take(NUM_ELEMS)
@@ -574,7 +578,7 @@ tetris_bench! {
 tetris_bench! {
     /// Benchmark height_mse_distance_from_empty on boards with varying fill levels.
     pub fn bench_height_mse_distance_from_empty(c: &mut Criterion) {
-        let mut rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
@@ -602,7 +606,7 @@ tetris_bench! {
 tetris_bench! {
     /// Benchmark height_mse_board_score (the default beam search scorer).
     pub fn bench_height_mse_board_score(c: &mut Criterion) {
-        let mut rng = rand::rng();
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let states = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {

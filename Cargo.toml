@@ -18,6 +18,44 @@ lto = "fat"
 codegen-units = 1
 opt-level = 3
 
+[workspace.dependencies]
+# Internal crates
+proc-macros = { path = "crates/proc-macros" }
+tetris-utils = { path = "crates/tetris-utils" }
+tetris-game = { path = "crates/tetris-game" }
+tetris-search = { path = "crates/tetris-search" }
+tetris-ml = { path = "crates/tetris-ml" }
+tensorboard = { path = "crates/tensorboard" }
+
+# Core
+rand = { version = "0.9.2", features = ["small_rng"] }
+anyhow = "1.0.95"
+
+# Logging
+tracing = "0.1.41"
+
+# Parallelism
+rayon = "1.10.0"
+crossbeam = "0.8.4"
+num_cpus = "1.17.0"
+
+# Serialization
+serde = { version = "1.0.226", features = ["derive"] }
+prost = "0.13"
+prost-types = "0.13"
+
+# ML
+candle-core = "0.9.2-alpha.2"
+candle-nn = "0.9.2-alpha.2"
+
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Utilities
+image = "0.25.8"
+gethostname = "1.0.2"
+
 [workspace.lints.clippy]
 too_many_arguments = "allow"
 needless_pass_by_value = "allow"

@@ -14,8 +14,8 @@ default = []
 never-inline = []
 
 [dependencies]
-rand = { version = "0.9.2", features = ["small_rng"] }
-proc-macros = { path = "../proc-macros" }
+rand.workspace = true
+proc-macros.workspace = true
 
 [lints]
 workspace = true

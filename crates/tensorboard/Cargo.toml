@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.95"
-prost = "0.13"
-prost-types = "0.13"
-image = "0.25.8"
-gethostname = "1.0.2"
+anyhow.workspace = true
+prost.workspace = true
+prost-types.workspace = true
+image.workspace = true
+gethostname.workspace = true
 crc32fast = "1.4.2"
 
 [build-dependencies]
