@@ -22,11 +22,26 @@
 
 pub mod beam_search;
 pub mod explorer;
+pub mod scoring;
 pub mod sequence_planner;
 
-pub use beam_search::*;
-pub use explorer::*;
-pub use sequence_planner::*;
+pub use beam_search::{
+    BeamScoreMode, BeamSearch, BeamSearchState, BeamTetrisState, MultiBeamSearch,
+    OrientationCounts, ScoredState, TetrisBeamSearch, TetrisMultiBeamSearch,
+};
+pub use explorer::{
+    IntoParallelIterator, ParallelSplittableIterator, SplittableIterator, TetrisBloom1,
+    TetrisExplorer, TetrisExplorerItem, TetrisExplorerItemBatch, TetrisExplorerItemMegaBatch,
+    TetrisExplorerNode,
+};
+pub use scoring::{
+    HEIGHT_MSE_ROW_PENALTY_BASE, TetrisBoardScoreState, height_mse_beam_tetris_score,
+    height_mse_board_score, height_mse_distance_from_empty,
+};
+pub use sequence_planner::{
+    TetrisPlanScoreState, TetrisSequencePlanOutcome, TetrisSequencePlanner, TetrisSequenceWitness,
+    best_first_capacity, height_mse_plan_score,
+};
 
 use rayon::ThreadPoolBuilder;
 
