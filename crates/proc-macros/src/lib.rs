@@ -2,75 +2,82 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Ident, ItemFn, parse_macro_input};
 
+/// Helper: convert a fallible macro body into a compile_error on failure.
+fn try_macro(f: impl FnOnce() -> Result<TokenStream, String>) -> TokenStream {
+    match f() {
+        Ok(ts) => ts,
+        Err(msg) => {
+            let msg = msg.as_str();
+            quote! { compile_error!(#msg); }.into()
+        }
+    }
+}
+
 /// Converts a visual tetris piece representation into a byte array.
 /// Each line must be exactly COLS characters of 1s and 0s.
 /// The number of rows must be exactly ROW_CHUNK.
 #[proc_macro]
 pub fn piece_bytes(input: TokenStream) -> TokenStream {
-    let input = input.to_string();
-    let lines: Vec<&str> = input.split_whitespace().collect();
-    if lines.len() != 4 {
-        panic!("Only {} lines provided, expected 4", lines.len());
-    }
-
-    // Validate line lengths
-    for line in &lines {
-        if line.len() != 10 {
-            panic!("Each line must be exactly 10 characters");
+    try_macro(|| {
+        let input = input.to_string();
+        let lines: Vec<&str> = input.split_whitespace().collect();
+        if lines.len() != 4 {
+            return Err(format!("expected 4 lines, got {}", lines.len()));
         }
-    }
 
-    // merge into one string
-    let mut value = String::new();
-    for line in &lines {
-        value.push_str(line);
-    }
+        for line in &lines {
+            if line.len() != 10 {
+                return Err(format!(
+                    "each line must be exactly 10 characters, got {} in '{line}'",
+                    line.len()
+                ));
+            }
+        }
 
-    // read every 8 bits, turn to a u8 and add to a slice
-    let mut bytes = Vec::with_capacity(5);
-    for i in 0..5 {
-        let byte =
-            u8::from_str_radix(&value[i * 8..(i + 1) * 8], 2).expect("Invalid binary string");
-        bytes.push(byte);
-    }
+        let mut value = String::new();
+        for line in &lines {
+            value.push_str(line);
+        }
 
-    let result = quote! {
-        [
-            #(#bytes),*
-        ]
-    };
+        let mut bytes = Vec::with_capacity(5);
+        for i in 0..5 {
+            let byte = u8::from_str_radix(&value[i * 8..(i + 1) * 8], 2)
+                .map_err(|e| format!("invalid binary string: {e}"))?;
+            bytes.push(byte);
+        }
 
-    result.into()
+        Ok(quote! { [#(#bytes),*] }.into())
+    })
 }
 
 /// Converts a visual tetris piece representation into a u64.
 #[proc_macro]
 pub fn piece_u64(input: TokenStream) -> TokenStream {
-    let input = input.to_string();
-    let lines: Vec<&str> = input.split_whitespace().collect();
-    if lines.len() != 4 {
-        panic!("Only {} lines provided, expected 4", lines.len());
-    }
-
-    // Validate line lengths
-    for line in &lines {
-        if line.len() != 10 {
-            panic!("Each line must be exactly 10 characters");
+    try_macro(|| {
+        let input = input.to_string();
+        let lines: Vec<&str> = input.split_whitespace().collect();
+        if lines.len() != 4 {
+            return Err(format!("expected 4 lines, got {}", lines.len()));
         }
-    }
 
-    // Convert to u64
-    let mut result: u64 = 0;
-    result |= (u64::from_str_radix(lines[0], 2).expect("Invalid binary string")) << 30;
-    result |= (u64::from_str_radix(lines[1], 2).expect("Invalid binary string")) << 20;
-    result |= (u64::from_str_radix(lines[2], 2).expect("Invalid binary string")) << 10;
-    result |= u64::from_str_radix(lines[3], 2).expect("Invalid binary string");
+        for line in &lines {
+            if line.len() != 10 {
+                return Err(format!(
+                    "each line must be exactly 10 characters, got {} in '{line}'",
+                    line.len()
+                ));
+            }
+        }
 
-    let result = quote! {
-        #result
-    };
+        let mut result: u64 = 0;
+        for (i, line) in lines.iter().enumerate() {
+            let val = u64::from_str_radix(line, 2)
+                .map_err(|e| format!("invalid binary in line {i}: {e}"))?;
+            result |= val << (30 - i * 10);
+        }
 
-    result.into()
+        Ok(quote! { #result }.into())
+    })
 }
 
 /// Converts a visual representation of a Tetris piece into an array of u32s, where each u32 represents a column.
@@ -117,44 +124,35 @@ pub fn piece_u64(input: TokenStream) -> TokenStream {
 ///     0b1000_0000_0000_0000_0000_0000_0000_0000
 /// ]);
 /// ```
-///
-/// # Panics
-///
-/// * If input does not contain exactly 4 rows
-/// * If rows are not all the same length
 #[proc_macro]
 pub fn piece_u32_cols(input: TokenStream) -> TokenStream {
-    let input = input.to_string();
-    let lines: Vec<&str> = input.split_whitespace().collect();
-    if lines.len() != 4 {
-        panic!("Only {} lines provided, expected 4", lines.len());
-    }
-
-    // Validate line lengths all equal
-    let first_row_len = lines[0].len();
-    if !lines.iter().all(|line| line.len() == first_row_len) {
-        panic!("All lines must have the same length");
-    }
-    let num_cols = first_row_len;
-
-    // Convert to u32[num_cols] - compute column values at macro expansion time
-    let mut cols = vec![0u32; num_cols];
-    for (col_idx, col) in cols.iter_mut().enumerate().take(num_cols) {
-        let mut col_val = 0u32;
-        for (row_idx, line) in lines.iter().enumerate() {
-            let bit = line.chars().nth(col_idx).unwrap();
-            if bit == '1' {
-                col_val |= 1u32 << (31 - row_idx); // Shift to high bits since we want to match the example usage
-            }
+    try_macro(|| {
+        let input = input.to_string();
+        let lines: Vec<&str> = input.split_whitespace().collect();
+        if lines.len() != 4 {
+            return Err(format!("expected 4 lines, got {}", lines.len()));
         }
-        *col = col_val;
-    }
 
-    let result = quote! {
-        [#(#cols),*]
-    };
+        let first_row_len = lines[0].len();
+        if !lines.iter().all(|line| line.len() == first_row_len) {
+            return Err("all lines must have the same length".to_string());
+        }
+        let num_cols = first_row_len;
 
-    result.into()
+        let mut cols = vec![0u32; num_cols];
+        for (col_idx, col) in cols.iter_mut().enumerate().take(num_cols) {
+            let mut col_val = 0u32;
+            for (row_idx, line) in lines.iter().enumerate() {
+                let bit = line.chars().nth(col_idx).unwrap();
+                if bit == '1' {
+                    col_val |= 1u32 << (31 - row_idx);
+                }
+            }
+            *col = col_val;
+        }
+
+        Ok(quote! { [#(#cols),*] }.into())
+    })
 }
 
 /// Conditional inline attribute that respects the `never-inline` feature flag.
