@@ -393,11 +393,7 @@ impl<T: Copy + Ord, const SIZE: usize> FixedBinMinHeap<T, SIZE> {
                 // Both children exist - find minimum
                 let vl = unsafe { *ptr.add(left) };
                 let vr = unsafe { *ptr.add(right) };
-                if vr < vl {
-                    (vr, right)
-                } else {
-                    (vl, left)
-                }
+                if vr < vl { (vr, right) } else { (vl, left) }
             };
 
             // Swap if child < parent

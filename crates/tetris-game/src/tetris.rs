@@ -1,12 +1,12 @@
 use proc_macros::{inline_conditioned, piece_u32_cols};
-use rand::distr::{Distribution, StandardUniform};
 use rand::Rng;
+use rand::distr::{Distribution, StandardUniform};
 
 use std::fmt::Display;
 use std::hash::Hash;
 use std::ops::{Index, IndexMut};
 
-use tetris_utils::{repeat_idx_unroll, rshift_slice_from_mask_u32, BitMask, HeaplessVec};
+use tetris_utils::{BitMask, HeaplessVec, repeat_idx_unroll, rshift_slice_from_mask_u32};
 
 /// Core constants for Tetris game dimensions and pieces.
 pub mod constants {
@@ -3377,7 +3377,8 @@ mod tests {
 
             let result = game.apply_placement(best_placement);
             assert_ne!(
-                result.is_lost, IsLost::LOST,
+                result.is_lost,
+                IsLost::LOST,
                 "Game was lost after {pieces_drawn} pieces, but test needs {target_pieces} pieces to trigger bag refill"
             );
             pieces_drawn += 1;
