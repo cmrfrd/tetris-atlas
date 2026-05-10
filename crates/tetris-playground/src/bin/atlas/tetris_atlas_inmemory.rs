@@ -38,11 +38,16 @@ use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetr
 use tetris_utils::repeat_idx_unroll;
 
 // --- Beam Search Parameters ---
-const N: usize = 16;
-const TOP_N_PER_BEAM: usize = 16;
-const BEAM_WIDTH: usize = 2048;
-const MAX_DEPTH: usize = 8;
+const N: usize = 8;
+const TOP_N_PER_BEAM: usize = 64;
+const BEAM_WIDTH: usize = 64;
+const MAX_DEPTH: usize = 6;
 const MAX_MOVES: usize = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
+
+const fn filter_fn(state: &BeamTetrisState) -> bool {
+    // state.0.board.count() <= 32
+    true
+}
 
 // --- Channel & Threading ---
 const CHANNEL_CAPACITY: usize = 256;
@@ -421,14 +426,6 @@ fn process_board_state(
 
     stats.boards_expanded.fetch_add(1, Ordering::Relaxed);
 
-    let (depth, beam_width) = match board.count() {
-        0..=8 => (2, 64),
-        10..=12 => (4, 256),
-        14..=16 => (6, 512),
-        18..=22 => (8, 1024),
-        _ => (10, 2048),
-    };
-
     for (piece, bag_state) in bag.iter_next_states() {
         // Check if already computed
         if lookup.contains_key(&(board, piece)) {
@@ -444,7 +441,7 @@ fn process_board_state(
         // Run beam search
         let game_state = BeamTetrisState::new(game);
         let best_placement =
-            beam_search.search_with_seeds(game_state, BASE_SEED, depth, beam_width);
+            beam_search.search_with_seeds(game_state, BASE_SEED, MAX_DEPTH, BEAM_WIDTH);
         let Some(placement) = best_placement else {
             stats.games_lost.fetch_add(1, Ordering::Relaxed);
             continue;
@@ -814,7 +811,8 @@ pub fn run_tetris_atlas_create(base_path: &str) {
                     BEAM_WIDTH,
                     MAX_DEPTH,
                     MAX_MOVES,
-                >::new(height_mse_beam_tetris_score);
+                >::new(height_mse_beam_tetris_score)
+                .with_filter(filter_fn);
 
                 // Process items from channel
                 while let Ok((board, bag)) = rx.recv() {

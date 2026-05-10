@@ -26,12 +26,24 @@ name = "tetris_demo_adaptive_multi"
 path = "src/bin/examples/tetris_demo_adaptive_multi.rs"
 
 [[bin]]
+name = "tetris_five_bag_empty"
+path = "src/bin/examples/tetris_five_bag_empty.rs"
+
+[[bin]]
+name = "tetris_five_bag_bench"
+path = "src/bin/examples/tetris_five_bag_bench.rs"
+
+[[bin]]
 name = "tetris_atlas_inmemory"
 path = "src/bin/atlas/tetris_atlas_inmemory.rs"
 
 [[bin]]
 name = "tetris_atlas_rocksdb"
 path = "src/bin/atlas/tetris_atlas_rocksdb.rs"
+
+[[bin]]
+name = "tetris_atlas_bagstate"
+path = "src/bin/atlas/tetris_atlas_bagstate.rs"
 
 [[bin]]
 name = "tetris_cli"
@@ -52,6 +64,10 @@ path = "src/bin/research/tetris_invariant_synthesis/main.rs"
 [[bin]]
 name = "tetris_safe_set"
 path = "src/bin/research/tetris_safe_set/main.rs"
+
+[[bin]]
+name = "tetris_mcgs"
+path = "src/bin/research/tetris_mcgs/main.rs"
 
 [[bin]]
 name = "tetris_success_set_solver"
@@ -84,6 +100,10 @@ path = "src/bin/research/tetris_nbag_solver/main.rs"
 [[bin]]
 name = "tetris_bag_checkpoint"
 path = "src/bin/research/tetris_bag_checkpoint/main.rs"
+
+[[bin]]
+name = "tetris_five_bag_chain"
+path = "src/bin/research/tetris_five_bag_chain/main.rs"
 
 [[bin]]
 name = "tetris_cycle_atlas"

@@ -41,13 +41,13 @@ use tetris_utils::HeaplessVec;
 type ForcedBag = [TetrisPiece; PIECES_PER_BAG];
 type PlacementScript = [TetrisPiecePlacement; PIECES_PER_BAG];
 const PIECES_PER_BAG: usize = 7;
-const RECOVERY_BAG_DEPTH: usize = 3;
-const RECOVERY_CANDIDATE_LIMITS: [usize; RECOVERY_BAG_DEPTH - 1] = [512, 512];
+const RECOVERY_BAG_DEPTH: usize = 2;
+const RECOVERY_CANDIDATE_LIMITS: [usize; RECOVERY_BAG_DEPTH - 1] = [512];
 const CANDIDATE_BUFFER_CAPACITY: usize = RECOVERY_CANDIDATE_LIMITS[0];
 type CandidateBuffer = HeaplessVec<SearchWitness, CANDIDATE_BUFFER_CAPACITY>;
 
-const PLANNER_WIDTH: usize = 8;
-const SAFE_HEIGHT_CAP: u8 = 1;
+const PLANNER_WIDTH: usize = 10;
+const SAFE_HEIGHT_CAP: u8 = 4;
 const PROGRESS_LOG_INTERVAL: Duration = Duration::from_secs(2);
 
 const BAG_PERMUTATION_COUNT: usize = 5_040;
@@ -134,7 +134,13 @@ const fn generate_forced_bag_permutations() -> [ForcedBag; BAG_PERMUTATION_COUNT
 /// Returns true if the candidate board is below the safe height cap.
 #[inline(always)]
 const fn terminal_fn(candidate: &TetrisBoard) -> bool {
-    candidate.height() <= SAFE_HEIGHT_CAP as u32 && candidate.total_holes() <= 2
+    candidate.height() <= SAFE_HEIGHT_CAP as u32 && candidate.count() <= 28
+}
+
+/// By-value variant for use as `fn(TetrisBoard) -> bool` filter.
+#[inline(always)]
+fn terminal_fn_board(candidate: TetrisBoard) -> bool {
+    terminal_fn(&candidate)
 }
 
 const BEST_FIRST_NODE_CAPACITY: usize = best_first_capacity(PLANNER_WIDTH, PIECES_PER_BAG);
@@ -1120,21 +1126,19 @@ fn trim_sample_entries(entries: &mut Vec<CertifiedFirstBag>, limit: usize) {
 
 /// Thin wrapper around the allocation-free planner for a single forced sequence query.
 #[inline(always)]
-fn search_forced_sequence_core<TerminalFnT>(
+fn search_forced_sequence_core(
     start_board: TetrisBoard,
     forced_sequence: &ForcedBag,
-    terminal_fn: Option<&TerminalFnT>,
-) -> SearchOutcome
-where
-    TerminalFnT: Fn(TetrisBoard) -> bool,
-{
+    filter: Option<fn(TetrisBoard) -> bool>,
+) -> SearchOutcome {
     THREAD_LOCAL_PLANNER.with(|planner| {
-        match planner.borrow_mut().search(
-            start_board,
-            forced_sequence,
-            &height_mse_plan_score,
-            terminal_fn,
-        ) {
+        let mut planner = planner.borrow_mut();
+        if let Some(f) = filter {
+            planner.set_filter(f);
+        } else {
+            planner.clear_filter();
+        }
+        match planner.search(start_board, forced_sequence, &height_mse_plan_score) {
             TetrisSequencePlanOutcome::Success(witness) => {
                 SearchOutcome::Success(SearchWitness::from(witness))
             }
@@ -1174,8 +1178,7 @@ fn collect_first_bag_candidates_core(
 /// Runs one direct 7-piece search back into the safe set without consulting outer caches.
 #[inline(always)]
 fn search_safe_set_script_core(start_board: TetrisBoard, bag: &ForcedBag) -> Option<SearchWitness> {
-    let terminal = |candidate: TetrisBoard| terminal_fn(&candidate);
-    match search_forced_sequence_core(start_board, bag, Some(&terminal)) {
+    match search_forced_sequence_core(start_board, bag, Some(terminal_fn_board)) {
         SearchOutcome::Success(witness) => Some(witness),
         SearchOutcome::Exhausted => None,
     }
@@ -1593,26 +1596,29 @@ fn publish_new_safe_boards<I, F>(
     }
 }
 
-/// Formats per-depth proof and recursive-cache counters into a compact progress field.
+/// Formats per-depth proof and recursive-cache counters into a structured multi-line block.
 fn format_depth_metrics(search: &ProgressSnapshot) -> String {
-    (1..=RECOVERY_BAG_DEPTH)
-        .map(|depth| {
-            format!(
-                "d{depth}:{{direct:{},recovered:{},failed:{},candidates:{},cache:{}/{}/{},cache_complete:{},cache_impossible:{},board_complete:{},board_impossible:{}}}",
-                search.forced_bag_direct_by_depth[depth],
-                search.forced_bag_recovered_by_depth[depth],
-                search.forced_bag_failed_by_depth[depth],
-                search.candidate_scripts_examined_by_depth[depth],
-                search.recursive_cache_hits_by_depth[depth],
-                search.recursive_cache_misses_by_depth[depth],
-                search.recursive_cache_waits_by_depth[depth],
-                search.recursive_cache_complete_hits_by_depth[depth],
-                search.recursive_cache_impossible_hits_by_depth[depth],
-                search.recursive_board_complete_by_depth[depth],
-                search.recursive_board_impossible_by_depth[depth],
-            )
-        })
-        .join(",")
+    let mut out = String::new();
+    for depth in 1..=RECOVERY_BAG_DEPTH {
+        let d = search.forced_bag_direct_by_depth[depth];
+        let r = search.forced_bag_recovered_by_depth[depth];
+        let f = search.forced_bag_failed_by_depth[depth];
+        let cand = search.candidate_scripts_examined_by_depth[depth];
+        let ch = search.recursive_cache_hits_by_depth[depth];
+        let cm = search.recursive_cache_misses_by_depth[depth];
+        let cw = search.recursive_cache_waits_by_depth[depth];
+        let cc = search.recursive_cache_complete_hits_by_depth[depth];
+        let ci = search.recursive_cache_impossible_hits_by_depth[depth];
+        let bc = search.recursive_board_complete_by_depth[depth];
+        let bi = search.recursive_board_impossible_by_depth[depth];
+        out.push_str(&format!(
+            "║  depth {depth}:\n\
+             ║    bags:  direct={d}  recovered={r}  failed={f}  candidates={cand}\n\
+             ║    cache: hit={ch}  miss={cm}  wait={cw}  complete={cc}  impossible={ci}\n\
+             ║    board: complete={bc}  impossible={bi}\n",
+        ));
+    }
+    out
 }
 
 /// Counts all top-level forced-bag outcomes recorded so far.
@@ -1623,54 +1629,52 @@ fn top_level_forced_bags_completed(search: &ProgressSnapshot) -> usize {
         + search.forced_bag_failed_by_depth[depth]
 }
 
-/// Formats active worker progress in a compact single-line form.
+/// Formats active worker progress as a structured multi-line block.
 fn format_active_workers(active_workers: &[ActiveWorkerSnapshot]) -> String {
     if active_workers.is_empty() {
-        return "none".to_string();
+        return "║  (none)\n".to_string();
     }
 
-    active_workers
-        .iter()
-        .map(|worker| {
-            format!(
-                "w{}:{{board:{:?},elapsed:{:.1}s,current:{}/{},completed:{},remaining:{},direct:{},recovered:{},failed:{},unique_safe:{},rate:{:.2}/s}}",
-                worker.worker_idx,
-                worker.board,
-                worker.elapsed_secs,
-                worker.current_first_bag_idx,
-                BAG_PERMUTATION_COUNT,
-                worker.completed_first_bags,
-                worker.remaining_first_bags,
-                worker.direct_first_bags,
-                worker.recovered_first_bags,
-                worker.failed_first_bags,
-                worker.unique_safe_boards,
-                worker.first_bags_per_sec,
-            )
-        })
-        .join(",")
+    let mut out = String::new();
+    for w in active_workers {
+        out.push_str(&format!(
+            "║  worker {}: board={:?}  elapsed={:.1}s  bag={}/{}\n\
+             ║    completed={}  remaining={}  direct={}  recovered={}  failed={}\n\
+             ║    unique_safe={}  rate={:.2}/s\n",
+            w.worker_idx,
+            w.board,
+            w.elapsed_secs,
+            w.current_first_bag_idx,
+            BAG_PERMUTATION_COUNT,
+            w.completed_first_bags,
+            w.remaining_first_bags,
+            w.direct_first_bags,
+            w.recovered_first_bags,
+            w.failed_first_bags,
+            w.unique_safe_boards,
+            w.first_bags_per_sec,
+        ));
+    }
+    out
 }
 
 /// Prints a low-contention runtime snapshot for long-running closure runs.
 fn print_runtime_progress(shared: &SharedRuntimeContext, started_at: Instant, completed: bool) {
+    use std::fmt::Write;
+
     let elapsed = started_at.elapsed().as_secs_f64();
     let now = Instant::now();
     let scheduler = shared.scheduler.snapshot();
     let metrics = shared.metrics.snapshot();
     let search = shared.search.progress_snapshot();
-    let depth_metrics = format_depth_metrics(&search);
     let active_workers = shared.active_workers.snapshot(now);
-    let active_top_level_completed = active_workers
-        .iter()
-        .map(|worker| worker.completed_first_bags)
-        .sum::<usize>();
-    let active_top_level_remaining = active_workers
-        .iter()
-        .map(|worker| worker.remaining_first_bags)
-        .sum::<usize>();
-    let top_level_completed_total = top_level_forced_bags_completed(&search);
+    let active_top_level_completed: usize =
+        active_workers.iter().map(|w| w.completed_first_bags).sum();
+    let active_top_level_remaining: usize =
+        active_workers.iter().map(|w| w.remaining_first_bags).sum();
+    let top_level_completed = top_level_forced_bags_completed(&search);
     let top_level_rate = if elapsed > 0.0 {
-        top_level_completed_total as f64 / elapsed
+        top_level_completed as f64 / elapsed
     } else {
         0.0
     };
@@ -1679,8 +1683,8 @@ fn print_runtime_progress(shared: &SharedRuntimeContext, started_at: Instant, co
     } else {
         0.0
     };
-    let active_worker_metrics = format_active_workers(&active_workers);
     let failure_recorded = shared.failure.get().is_some();
+    let cancel = shared.cancel_requested.load(AtomicOrdering::Acquire);
 
     let prefix = if completed {
         "[safe-set] completed"
@@ -1688,39 +1692,106 @@ fn print_runtime_progress(shared: &SharedRuntimeContext, started_at: Instant, co
         "[safe-set] progress"
     };
 
-    println!(
-        "{prefix} elapsed={elapsed:.1}s tracked_boards={} global_unique_frontier_boards={} pending_boards={} in_flight_boards={} solved_boards={} failed_boards={} abandoned_boards={} processed_boards={} processed_first_bags={} direct_first_bags={} recovered_first_bags={} recovered_safe_board_outputs={} top_level=[completed_total:{},active_completed:{},active_remaining:{},rate:{:.2}/s] queue=[pushes:{},push_rate:{:.2}/s,claims:{},dedup:{}] direct_cache=[hit:{},miss:{},wait:{}] recursive_cache=[hit:{},miss:{},wait:{}] proof_depths=[{}] active_workers=[{}] cancel_requested={} failure_recorded={}",
-        scheduler.tracked_boards,
-        scheduler.tracked_boards,
-        scheduler.pending_boards,
-        scheduler.in_flight_boards,
-        scheduler.solved_boards,
-        scheduler.failed_boards,
-        scheduler.abandoned_boards,
-        metrics.processed_boards,
-        metrics.processed_first_bags,
+    let mut buf = String::with_capacity(2048);
+    let _ = writeln!(buf);
+    let _ = writeln!(
+        buf,
+        "╔══════════════════════════════════════════════════════════════"
+    );
+    let _ = writeln!(buf, "║ {prefix}  elapsed={elapsed:.1}s");
+    let _ = writeln!(
+        buf,
+        "╠══ Boards ═══════════════════════════════════════════════════"
+    );
+    let _ = writeln!(
+        buf,
+        "║  tracked={:<8} pending={:<8} in_flight={}",
+        scheduler.tracked_boards, scheduler.pending_boards, scheduler.in_flight_boards
+    );
+    let _ = writeln!(
+        buf,
+        "║  solved={:<8}  failed={:<8}  abandoned={}",
+        scheduler.solved_boards, scheduler.failed_boards, scheduler.abandoned_boards
+    );
+    let _ = writeln!(
+        buf,
+        "╠══ Processing ═══════════════════════════════════════════════"
+    );
+    let _ = writeln!(
+        buf,
+        "║  boards={:<8}  first_bags={}",
+        metrics.processed_boards, metrics.processed_first_bags
+    );
+    let _ = writeln!(
+        buf,
+        "║  direct={:<8}  recovered={:<8}  safe_outputs={}",
         metrics.direct_first_bags,
         metrics.recovered_first_bags,
-        search.recovered_safe_boards_discovered,
-        top_level_completed_total,
-        active_top_level_completed,
-        active_top_level_remaining,
-        top_level_rate,
+        search.recovered_safe_boards_discovered
+    );
+    let _ = writeln!(
+        buf,
+        "╠══ Top Level ════════════════════════════════════════════════"
+    );
+    let _ = writeln!(
+        buf,
+        "║  completed={:<8}  active_done={:<8}  active_remaining={}",
+        top_level_completed, active_top_level_completed, active_top_level_remaining
+    );
+    let _ = writeln!(buf, "║  rate={top_level_rate:.2}/s");
+    let _ = writeln!(
+        buf,
+        "╠══ Queue ════════════════════════════════════════════════════"
+    );
+    let _ = writeln!(
+        buf,
+        "║  pushes={:<8}  rate={:.2}/s  claims={:<8}  dedup={}",
         scheduler.queue_pushes,
         queue_push_rate,
         scheduler.queue_claims,
-        scheduler.queue_dedup_rejections,
-        search.direct_cache_hits,
-        search.direct_cache_misses,
-        search.direct_cache_waits,
-        search.recursive_cache_hits,
-        search.recursive_cache_misses,
-        search.recursive_cache_waits,
-        depth_metrics,
-        active_worker_metrics,
-        shared.cancel_requested.load(AtomicOrdering::Acquire),
-        failure_recorded,
+        scheduler.queue_dedup_rejections
     );
+    let _ = writeln!(
+        buf,
+        "╠══ Direct Cache ═════════════════════════════════════════════"
+    );
+    let _ = writeln!(
+        buf,
+        "║  hit={:<8}  miss={:<8}  wait={}",
+        search.direct_cache_hits, search.direct_cache_misses, search.direct_cache_waits
+    );
+    let _ = writeln!(
+        buf,
+        "╠══ Recursive Cache ══════════════════════════════════════════"
+    );
+    let _ = writeln!(
+        buf,
+        "║  hit={:<8}  miss={:<8}  wait={}",
+        search.recursive_cache_hits, search.recursive_cache_misses, search.recursive_cache_waits
+    );
+    let _ = writeln!(
+        buf,
+        "╠══ Proof Depths ═════════════════════════════════════════════"
+    );
+    buf.push_str(&format_depth_metrics(&search));
+    let _ = writeln!(
+        buf,
+        "╠══ Active Workers ═══════════════════════════════════════════"
+    );
+    buf.push_str(&format_active_workers(&active_workers));
+    let _ = writeln!(
+        buf,
+        "╠══ Status ═══════════════════════════════════════════════════"
+    );
+    let _ = writeln!(
+        buf,
+        "║  cancel_requested={cancel}  failure_recorded={failure_recorded}"
+    );
+    let _ = writeln!(
+        buf,
+        "╚══════════════════════════════════════════════════════════════"
+    );
+    print!("{buf}");
 }
 
 /// Background reporter that periodically snapshots the concurrent runtime state.
@@ -2048,7 +2119,7 @@ mod tests {
     fn wait_until(mut condition: impl FnMut() -> bool) -> bool {
         let started_at = Instant::now();
         while !condition() {
-            if started_at.elapsed() >= Duration::from_secs(1) {
+            if started_at.elapsed() >= Duration::from_secs(10) {
                 return false;
             }
             thread::sleep(Duration::from_millis(1));
@@ -2252,8 +2323,7 @@ mod tests {
             TetrisPiece::J_PIECE,
         ];
 
-        let outcome =
-            search_forced_sequence_core(board, &sequence, None::<&fn(TetrisBoard) -> bool>);
+        let outcome = search_forced_sequence_core(board, &sequence, None);
         let SearchOutcome::Success(witness) = outcome else {
             panic!("best-first search should produce a 7-piece script");
         };

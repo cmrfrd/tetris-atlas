@@ -174,37 +174,97 @@ cargo clippy --workspace --all-targets -- -D warnings
 Benchmarks live in `tetris-benches` using Criterion + pprof:
 
 ```sh
-# Run all benchmarks
-cargo bench -p tetris-benches
+# Run all Criterion benchmarks
+cargo bench -p tetris-benches --bench benches
 
 # Profiling mode (reduced noise, generate flamegraphs)
-cargo bench -p tetris-benches -- --profile-time 5
+cargo bench -p tetris-benches --bench benches -- --profile-time 5
 ```
 
 Criterion HTML reports go to `target/criterion/`. Flamegraphs are emitted via the pprof integration.
 
-### Historical baselines
+### Baseline comparisons
 
-Criterion baselines are archived in `benchmarks/baselines/<commit-sha>/` so
-performance can be compared across commits. The workflow:
+Use Criterion named baselines when a change may affect performance. This is a
+process requirement, not a custom script requirement. There are two supported
+comparison modes.
+
+**Before/after baseline for the current change**
+
+Use this when you are about to modify performance-sensitive code and want a
+local baseline from the same checkout/environment.
 
 ```sh
-# 1. Save a baseline for the current commit
-SHA=$(git rev-parse --short HEAD)
-cargo bench -p tetris-benches -- --save-baseline "$SHA"
-cp -r target/criterion/*/"$SHA" benchmarks/baselines/"$SHA"/
+# 1. Before the change, save a local baseline.
+cargo bench -p tetris-benches --bench benches -- --save-baseline before-change
 
-# 2. Compare the current code against a previous baseline
-OLD=a1b2c3d
-cp -r benchmarks/baselines/"$OLD"/ target/criterion/  # restore old data
-cargo bench -p tetris-benches -- --baseline "$OLD"     # Criterion prints % change
-
-# 3. List saved baselines
-ls benchmarks/baselines/
+# 2. After the change, compare against that baseline.
+cargo bench -p tetris-benches --bench benches -- --baseline before-change
 ```
 
-When saving baselines, commit them to the repo so they persist across machines.
-Prune old baselines you no longer need to keep the repo lean.
+**Per-commit benchmark artifact**
+
+For every commit an agent prepares, try to leave a local benchmark artifact
+under `artifacts/benchmarks/<commit-sha>/`. This directory is inside the repo
+but gitignored, so it preserves local history without bloating source control.
+If a benchmark is too expensive for the current task, record that it was not run
+and why in the final report.
+
+```sh
+SHA=$(git rev-parse --short HEAD)
+OUT="artifacts/benchmarks/$SHA"
+mkdir -p "$OUT"
+
+git rev-parse HEAD > "$OUT/commit.txt"
+git status --short > "$OUT/git-status.txt"
+rustc -Vv > "$OUT/rustc.txt"
+cargo bench -p tetris-benches --bench benches -- --save-baseline "$SHA" 2>&1 | tee "$OUT/cargo-bench.log"
+cp -R target/criterion "$OUT/criterion"
+```
+
+**Historical/ref baseline comparison**
+
+Use this when comparing against a known branch, tag, or commit. Good baseline
+names are branch/commit based: `main`, `pre-heap-change`, `abc1234`.
+
+```sh
+# 1. On the historical reference implementation, save a named baseline.
+cargo bench -p tetris-benches --bench benches -- --save-baseline main
+
+# 2. On the candidate implementation, compare against the historical baseline.
+cargo bench -p tetris-benches --bench benches -- --baseline main
+
+# 3. If restoring a local per-commit artifact on a fresh checkout:
+rm -rf target/criterion
+cp -R artifacts/benchmarks/<baseline-sha>/criterion target/criterion
+
+# 4. For either mode, open the detailed local report if needed.
+open target/criterion/report/index.html
+```
+
+Active Criterion data lives under `target/criterion/`. Per-commit snapshots live
+under `artifacts/benchmarks/`. Both are local, gitignored build artifacts. Do
+not commit Criterion output to the repo unless the user explicitly asks for a
+benchmark artifact.
+
+When comparing against another git ref, only switch commits if the worktree is
+clean or the user has approved the workflow. If the tree is dirty, prefer a
+same-checkout before/after comparison around the change being made, or report
+that a cross-ref benchmark was not run.
+
+Benchmark definitions must be stable across baseline and candidate runs:
+- Use fixed seeds and fixed board/search fixtures.
+- Keep benchmark names unchanged unless intentionally replacing a benchmark.
+- Avoid benchmarking unbounded demos or exploratory binaries.
+- Prefer `crates/tetris-benches` over ad-hoc playground binaries.
+
+Every performance claim must report:
+- Baseline name and commit SHA
+- Candidate commit SHA or dirty-worktree note
+- Benchmark command and feature flags
+- Hardware/OS and `rustc -Vv`
+- Criterion percentage delta and whether the change is statistically significant
+- Any known noise source, such as thermal throttling, background load, or changed benchmark definitions
 
 ### ASM analysis
 
@@ -299,6 +359,7 @@ All runtime outputs go under `artifacts/` (gitignored):
 - `artifacts/databases/` — atlas DB files (RocksDB, LMDB, etc.)
 - `artifacts/data/` — generated datasets
 - `artifacts/output/` — CSV metrics, plots
+- `artifacts/benchmarks/<commit-sha>/` — local Criterion benchmark snapshots and metadata
 
 ### Determinism
 

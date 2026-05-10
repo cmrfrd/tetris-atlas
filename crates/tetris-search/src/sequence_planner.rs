@@ -3,7 +3,7 @@ use std::cmp::{Ordering, Reverse};
 use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPiecePlacement};
 use tetris_utils::{FixedBinMinHeap, HeaplessVec};
 
-use crate::{TetrisBoardScoreState, height_mse_board_score};
+use crate::scoring::{TetrisBoardScoreState, height_mse_board_score};
 
 #[derive(Debug, Clone, Copy)]
 pub struct TetrisPlanScoreState {
@@ -141,6 +141,8 @@ pub struct TetrisSequencePlanner<const WIDTH: usize, const DEPTH: usize, const N
     frontier: FixedBinMinHeap<Reverse<FrontierEntry>, NODE_CAPACITY>,
     nodes_expanded: usize,
     terminal_candidates_examined: usize,
+    // Optional predicate applied to full-depth boards. Return `true` to accept.
+    filter_fn: Option<fn(TetrisBoard) -> bool>,
 }
 
 impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
@@ -152,7 +154,22 @@ impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
             frontier: FixedBinMinHeap::new(),
             nodes_expanded: 0,
             terminal_candidates_examined: 0,
+            filter_fn: None,
         }
+    }
+
+    /// Set a terminal filter. Full-depth boards where `f(board)` returns `false` are rejected.
+    pub fn with_filter(mut self, f: fn(TetrisBoard) -> bool) -> Self {
+        self.filter_fn = Some(f);
+        self
+    }
+
+    pub fn set_filter(&mut self, f: fn(TetrisBoard) -> bool) {
+        self.filter_fn = Some(f);
+    }
+
+    pub fn clear_filter(&mut self) {
+        self.filter_fn = None;
     }
 
     #[inline]
@@ -163,16 +180,14 @@ impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
         self.terminal_candidates_examined = 0;
     }
 
-    pub fn search<ScoreFn, TerminalFn>(
+    pub fn search<ScoreFn>(
         &mut self,
         start_board: TetrisBoard,
         forced_sequence: &[TetrisPiece; DEPTH],
         score_fn: &ScoreFn,
-        terminal_fn: Option<&TerminalFn>,
     ) -> TetrisSequencePlanOutcome<DEPTH>
     where
         ScoreFn: Fn(&TetrisPlanScoreState) -> f32,
-        TerminalFn: Fn(TetrisBoard) -> bool,
     {
         self.reset();
         self.push_root(start_board);
@@ -182,7 +197,7 @@ impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
             if node.depth as usize == DEPTH {
                 self.terminal_candidates_examined =
                     self.terminal_candidates_examined.saturating_add(1);
-                if terminal_fn.is_none_or(|terminal| terminal(node.board)) {
+                if self.filter_fn.is_none_or(|f| f(node.board)) {
                     return TetrisSequencePlanOutcome::Success(self.build_witness(entry.node_idx));
                 }
                 continue;
@@ -227,10 +242,12 @@ impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
             if node.depth as usize == DEPTH {
                 self.terminal_candidates_examined =
                     self.terminal_candidates_examined.saturating_add(1);
-                let pushed = witnesses.try_push(self.build_witness(entry.node_idx));
-                debug_assert!(pushed, "witness buffer capacity must cover limit");
-                if witnesses.len() >= limit {
-                    break;
+                if self.filter_fn.is_none_or(|f| f(node.board)) {
+                    let pushed = witnesses.try_push(self.build_witness(entry.node_idx));
+                    debug_assert!(pushed, "witness buffer capacity must cover limit");
+                    if witnesses.len() >= limit {
+                        break;
+                    }
                 }
                 continue;
             }
@@ -403,12 +420,7 @@ mod tests {
     #[test]
     fn best_first_search_returns_full_depth_plan() {
         let mut planner = TetrisSequencePlanner::<WIDTH, DEPTH, NODE_CAPACITY>::new();
-        let outcome = planner.search(
-            TetrisBoard::new(),
-            &sequence(),
-            &height_mse_plan_score,
-            None::<&fn(TetrisBoard) -> bool>,
-        );
+        let outcome = planner.search(TetrisBoard::new(), &sequence(), &height_mse_plan_score);
         assert!(
             matches!(outcome, TetrisSequencePlanOutcome::Success(_)),
             "sequence planner should produce a full script"
@@ -421,18 +433,13 @@ mod tests {
     }
 
     #[test]
-    fn terminal_predicate_can_reject_all_full_depth_plans() {
-        let mut planner = TetrisSequencePlanner::<WIDTH, DEPTH, NODE_CAPACITY>::new();
-        let reject_all = |_board: TetrisBoard| false;
-        let outcome = planner.search(
-            TetrisBoard::new(),
-            &sequence(),
-            &height_mse_plan_score,
-            Some(&reject_all),
-        );
+    fn filter_can_reject_all_full_depth_plans() {
+        let mut planner =
+            TetrisSequencePlanner::<WIDTH, DEPTH, NODE_CAPACITY>::new().with_filter(|_board| false);
+        let outcome = planner.search(TetrisBoard::new(), &sequence(), &height_mse_plan_score);
         assert!(
             matches!(outcome, TetrisSequencePlanOutcome::Exhausted { .. }),
-            "terminal predicate should reject every full-depth script"
+            "filter should reject every full-depth script"
         );
         if let TetrisSequencePlanOutcome::Exhausted {
             terminal_candidates_examined,
@@ -458,12 +465,7 @@ mod tests {
     #[test]
     fn tiny_node_capacity_exhausts() {
         let mut planner = TetrisSequencePlanner::<WIDTH, DEPTH, 1>::new();
-        let outcome = planner.search(
-            TetrisBoard::new(),
-            &sequence(),
-            &height_mse_plan_score,
-            None::<&fn(TetrisBoard) -> bool>,
-        );
+        let outcome = planner.search(TetrisBoard::new(), &sequence(), &height_mse_plan_score);
         assert!(matches!(
             outcome,
             TetrisSequencePlanOutcome::Exhausted {

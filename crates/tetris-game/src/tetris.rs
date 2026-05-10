@@ -200,6 +200,10 @@ impl Display for Column {
 
 impl Column {
     pub const MAX: u8 = constants::COLS as u8;
+
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
 }
 
 /// A Tetris piece is a tetromino. There are 7 possible tetrominoes,

@@ -26,7 +26,8 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::time::Instant;
 use tetris_game::{
-    IsLost, PlacementResult, TetrisBoard, TetrisGame, TetrisPieceOrientation, TetrisPiecePlacement,
+    IsLost, PlacementResult, TetrisBoard, TetrisGame, TetrisPiece, TetrisPieceOrientation,
+    TetrisPiecePlacement,
 };
 use tetris_search::set_global_threadpool;
 use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetris_score};
@@ -34,6 +35,12 @@ use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetr
 /*
 python3 -c "import matplotlib.pyplot as plt; import numpy as np; data = [line.strip().split(',') for line in open('/Users/cmrfrd/Desktop/repos/cmrfrd/tetris-atlas/beam_search_output.csv') if line.strip() and ',' in line]; data = [(int(row[0]), int(row[1])) for row in data if len(row) >= 2]; x, y = zip(*data); x, y = np.array(x), np.array(y); ratios = y / x; diffs_y = np.diff(y); diffs_x = np.diff(x); rates = diffs_y / diffs_x; fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12)); ax1.plot(x, ratios, 'b-', linewidth=2); ax1.set_xlabel('Number of Pieces Placed'); ax1.set_ylabel('Ratio (Unique Boards / Pieces)'); ax1.set_title('Board Uniqueness Ratio Over Pieces Placed'); ax1.grid(True, alpha=0.3); ax1.text(0.95, 0.05, f'{ratios[-1]:.4f}', transform=ax1.transAxes, bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.8), ha='right'); ax2.plot(x, y, 'g-', linewidth=3, label='Unique Boards'); ax2.plot(x, x, 'r-', linewidth=3, label='Total Pieces'); ax2.set_xlabel('Number of Pieces Placed'); ax2.set_ylabel('Count'); ax2.set_title('Unique Boards vs Total Pieces Placed'); ax2.legend(); ax2.grid(True, alpha=0.3); ax2.text(0.95, 0.05, f'{y[-1]:,}', transform=ax2.transAxes, bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.8), ha='right'); ax3.plot(x[1:], rates, 'm-', linewidth=1, marker='o', markersize=2); ax3.set_xlabel('Number of Pieces Placed'); ax3.set_ylabel('Discovery Rate (New Unique / Pieces per Interval)'); ax3.set_title('Rate of New Unique Board Discovery'); ax3.grid(True, alpha=0.3); ax3.text(0.95, 0.05, f'{rates[-1]:.4f}', transform=ax3.transAxes, bbox=dict(boxstyle='round', facecolor='pink', alpha=0.8), ha='right'); plt.tight_layout(); plt.show()"
  */
+
+const fn filter_fn(state: &BeamTetrisState) -> bool {
+    // state.0.board.height() <= 4
+    // state.0.board.count() <= 36
+    true
+}
 
 /// Output file path for multi-beam search results
 const OUTPUT_FILE: &str = "artifacts/data/beam_search_multisearch_output.csv";
@@ -64,7 +71,8 @@ impl<
     pub fn new() -> Self {
         Self {
             game: TetrisGame::new(),
-            multi_search: TetrisMultiBeamSearch::new(height_mse_beam_tetris_score),
+            multi_search: TetrisMultiBeamSearch::new(height_mse_beam_tetris_score)
+                .with_filter(filter_fn),
             step_counter: 0,
         }
     }
@@ -72,7 +80,8 @@ impl<
     pub fn new_with_seed(seed: u64) -> Self {
         Self {
             game: TetrisGame::new_with_seed(seed),
-            multi_search: TetrisMultiBeamSearch::new(height_mse_beam_tetris_score),
+            multi_search: TetrisMultiBeamSearch::new(height_mse_beam_tetris_score)
+                .with_filter(filter_fn),
             step_counter: seed,
         }
     }
@@ -132,9 +141,9 @@ pub fn run_tetris_beam_multisearch() {
     set_global_threadpool();
 
     // --- Tunables ---
-    const N: usize = 16;
+    const N: usize = 8;
     const TOP_N_PER_BEAM: usize = 64;
-    const BEAM_WIDTH: usize = 256;
+    const BEAM_WIDTH: usize = 64;
     const MAX_DEPTH: usize = 6;
     const MAX_MOVES: usize = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
     const LOG_EVERY: usize = 1024;
@@ -167,7 +176,7 @@ pub fn run_tetris_beam_multisearch() {
     let mut height_counts: HashMap<u32, usize> = HashMap::new();
     let mut holes_counts: HashMap<u32, usize> = HashMap::new();
     let mut cell_counts: HashMap<u32, usize> = HashMap::new();
-    let mut board_cache: HashSet<TetrisBoard> = HashSet::new();
+    let mut board_cache: HashSet<(TetrisBoard, TetrisPiece)> = HashSet::new();
     let mut cache_hits = 0usize;
     let mut cache_misses = 0usize;
     let mut iter =
@@ -181,7 +190,7 @@ pub fn run_tetris_beam_multisearch() {
             iter.kink();
         }
 
-        let Some((board_before, _mv)) = iter.next() else {
+        let Some((board_before, mv)) = iter.next() else {
             let secs = start.elapsed().as_secs_f64().max(1e-9);
             let rate = steps as f64 / secs;
             println!(
@@ -195,8 +204,8 @@ pub fn run_tetris_beam_multisearch() {
         };
         steps += 1;
 
-        // Track cache hits/misses
-        if board_cache.insert(board_before) {
+        // Track cache hits/misses on (board, piece) pairs
+        if board_cache.insert((board_before, mv.piece)) {
             cache_misses += 1;
         } else {
             cache_hits += 1;
@@ -234,7 +243,7 @@ pub fn run_tetris_beam_multisearch() {
                 iter.game.lines_cleared
             );
             println!(
-                "unique_boards={} cache_hits={} cache_misses={} cache_hit_rate={:.4}",
+                "unique_board_piece_pairs={} cache_hits={} cache_misses={} cache_hit_rate={:.4}",
                 board_cache.len(),
                 cache_hits,
                 cache_misses,
