@@ -1434,38 +1434,27 @@ impl TetrisBoard {
 /// ```
 /// use tetris_game::TetrisBoard;
 /// let board = TetrisBoard::new();
-/// let bytes: [u8; 40] = board.into();
-/// // or
-/// let bytes = <[u8; 40]>::from(board);
+/// let bytes: [u8; TetrisBoard::WIDTH * 4] = board.into();
 /// ```
-impl const From<TetrisBoard> for [u8; 40] {
+impl const From<TetrisBoard> for [u8; constants::COLS * 4] {
     #[inline(always)]
     fn from(board: TetrisBoard) -> Self {
         unsafe { std::mem::transmute(board.0) }
     }
 }
 
-/// Converts a 40-byte array to TetrisBoard (column-major u32 native-endian limbs).
+/// Converts a byte array to TetrisBoard (column-major u32 native-endian limbs).
 ///
 /// This is a zero-cost operation using `transmute`. The byte representation must be
 /// in the platform's native endianness.
-///
-/// # Examples
-/// ```
-/// use tetris_game::TetrisBoard;
-/// let bytes = [0u8; 40];
-/// let board: TetrisBoard = bytes.into();
-/// // or
-/// let board = TetrisBoard::from(bytes);
-/// ```
-impl const From<[u8; 40]> for TetrisBoard {
+impl const From<[u8; constants::COLS * 4]> for TetrisBoard {
     #[inline(always)]
-    fn from(bytes: [u8; 40]) -> Self {
-        // SAFETY: [u8; 40] and [u32; 10] have the same size and alignment requirements
+    fn from(bytes: [u8; constants::COLS * 4]) -> Self {
         unsafe {
-            Self(std::mem::transmute::<[u8; 40], [u32; constants::COLS]>(
-                bytes,
-            ))
+            Self(std::mem::transmute::<
+                [u8; constants::COLS * 4],
+                [u32; constants::COLS],
+            >(bytes))
         }
     }
 }
@@ -1667,6 +1656,107 @@ impl TetrisBoard {
             result.0[I8 % constants::COLS] |= (binary[I8] as u32) << (I8 / constants::COLS);
         });
         result
+    }
+}
+
+/// RFC 4648 base32 alphabet used for board ID encoding.
+const BASE32_ALPHABET: &[u8; 32] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+impl TetrisBoard {
+    /// Encodes the board as a compact base32 board ID string.
+    ///
+    /// The encoding packs the 200 board cells (10 cols × 20 rows) into a
+    /// bit stream in row-major order (row 0 / bottom first, col 0 first),
+    /// groups into 5-bit chunks (MSB first within each chunk), maps each
+    /// chunk to an RFC 4648 base32 character, and truncates trailing 'A's.
+    ///
+    /// An empty board encodes to the empty string `""`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_game::tetris::TetrisBoard;
+    /// let mut board = TetrisBoard::new();
+    /// // Set some cells to create board ID "PXDHAE"
+    /// // Row 0: cols 1,2,3,4,5,7,8,9
+    /// for c in [1,2,3,4,5,7,8,9] { board.set_bit(c, 0); }
+    /// // Row 1: cols 3,4,7,8,9
+    /// for c in [3,4,7,8,9] { board.set_bit(c, 1); }
+    /// // Row 2: col 7
+    /// board.set_bit(7, 2);
+    /// assert_eq!(board.to_board_id(), "PXDHAE");
+    /// ```
+    #[must_use]
+    pub fn to_board_id(&self) -> String {
+        const NUM_CHUNKS: usize = constants::BOARD_SIZE / 5; // 200 / 5 = 40
+        let mut chars = [b'A'; NUM_CHUNKS];
+
+        for chunk_idx in 0..NUM_CHUNKS {
+            let mut value: u8 = 0;
+            for bit in 0..5 {
+                let bit_idx = chunk_idx * 5 + bit;
+                let row = bit_idx / constants::COLS;
+                let col = bit_idx % constants::COLS;
+                if self.get_bit(col, row) {
+                    value |= 1 << (4 - bit);
+                }
+            }
+            chars[chunk_idx] = BASE32_ALPHABET[value as usize];
+        }
+
+        let len = chars.iter().rposition(|&c| c != b'A').map_or(0, |i| i + 1);
+        // SAFETY: BASE32_ALPHABET contains only valid ASCII/UTF-8 bytes
+        unsafe { String::from_utf8_unchecked(chars[..len].to_vec()) }
+    }
+
+    /// Decodes a board ID string back into a `TetrisBoard`.
+    ///
+    /// Returns `None` if the string contains invalid base32 characters
+    /// or is longer than 40 characters.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_game::tetris::TetrisBoard;
+    /// let board = TetrisBoard::from_board_id("PXDHAE").unwrap();
+    /// assert_eq!(board.get_bit(1, 0), true);
+    /// assert_eq!(board.get_bit(0, 0), false);
+    /// assert_eq!(board.to_board_id(), "PXDHAE");
+    /// ```
+    #[must_use]
+    pub fn from_board_id(id: &str) -> Option<Self> {
+        const NUM_CHUNKS: usize = constants::BOARD_SIZE / 5;
+        if id.len() > NUM_CHUNKS {
+            return None;
+        }
+
+        let id_bytes = id.as_bytes();
+        let mut board = Self::EMPTY_BOARD;
+
+        for chunk_idx in 0..NUM_CHUNKS {
+            let ch = if chunk_idx < id_bytes.len() {
+                id_bytes[chunk_idx]
+            } else {
+                b'A' // implicit trailing zeros
+            };
+
+            let value = match ch {
+                b'A'..=b'Z' => ch - b'A',
+                b'2'..=b'7' => ch - b'2' + 26,
+                _ => return None,
+            };
+
+            for bit in 0..5 {
+                if (value >> (4 - bit)) & 1 != 0 {
+                    let bit_idx = chunk_idx * 5 + bit;
+                    let row = bit_idx / constants::COLS;
+                    let col = bit_idx % constants::COLS;
+                    board.set_bit(col, row);
+                }
+            }
+        }
+
+        Some(board)
     }
 }
 
@@ -3416,6 +3506,54 @@ mod tests {
     }
 
     #[test]
+    fn test_board_id_known_value() {
+        let mut board = TetrisBoard::new();
+        // Row 0: cols 1,2,3,4,5,7,8,9
+        for c in [1, 2, 3, 4, 5, 7, 8, 9] {
+            board.set_bit(c, 0);
+        }
+        // Row 1: cols 3,4,7,8,9
+        for c in [3, 4, 7, 8, 9] {
+            board.set_bit(c, 1);
+        }
+        // Row 2: col 7
+        board.set_bit(7, 2);
+        assert_eq!(board.to_board_id(), "PXDHAE");
+    }
+
+    #[test]
+    fn test_board_id_roundtrip() {
+        const NUM_BOARDS: usize = 1000;
+        let mut rng = rand::rng();
+        for _ in 0..NUM_BOARDS {
+            let limbs: [u32; constants::COLS] =
+                std::array::from_fn(|_| rng.random::<u32>() & ((1 << constants::ROWS) - 1));
+            let board = TetrisBoard(limbs);
+            let id = board.to_board_id();
+            let reconstructed = TetrisBoard::from_board_id(&id)
+                .expect("valid board ID should decode");
+            assert_eq!(board, reconstructed, "board ID roundtrip failed for {id}");
+        }
+    }
+
+    #[test]
+    fn test_board_id_empty() {
+        let board = TetrisBoard::new();
+        assert_eq!(board.to_board_id(), "");
+        let decoded = TetrisBoard::from_board_id("").expect("empty string is valid");
+        assert_eq!(decoded, board);
+    }
+
+    #[test]
+    fn test_board_id_invalid() {
+        assert!(TetrisBoard::from_board_id("!!!").is_none());
+        assert!(TetrisBoard::from_board_id("01").is_none()); // '0' and '1' not in base32
+        // Too long
+        let long = "A".repeat(41);
+        assert!(TetrisBoard::from_board_id(&long).is_none());
+    }
+
+    #[test]
     fn test_tetris_board_bytes_roundtrip() {
         const NUM_BOARDS: usize = 1000;
         let mut rng = rand::rng();
@@ -3426,7 +3564,7 @@ mod tests {
             let board = TetrisBoard(limbs);
 
             // Convert to bytes using Into trait
-            let bytes: [u8; 40] = board.into();
+            let bytes: [u8; constants::COLS * 4] = board.into();
 
             // Convert back using From trait
             let reconstructed = TetrisBoard::from(bytes);
