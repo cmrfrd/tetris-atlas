@@ -1659,10 +1659,12 @@ impl TetrisBoard {
     }
 }
 
-/// RFC 4648 base32 alphabet used for board ID encoding.
-const BASE32_ALPHABET: &[u8; 32] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-
 impl TetrisBoard {
+    const NUM_BOARD_ID_CHUNKS: usize = constants::BOARD_SIZE / 5;
+
+    /// RFC 4648 base32 alphabet used for board ID encoding.
+    const BASE32_ALPHABET: &[u8; 32] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
     /// Encodes the board as a compact base32 board ID string.
     ///
     /// The encoding packs the 200 board cells (10 cols × 20 rows) into a
@@ -1688,10 +1690,9 @@ impl TetrisBoard {
     /// ```
     #[must_use]
     pub fn to_board_id(&self) -> String {
-        const NUM_CHUNKS: usize = constants::BOARD_SIZE / 5; // 200 / 5 = 40
-        let mut chars = [b'A'; NUM_CHUNKS];
+        let mut chars = [b'A'; Self::NUM_BOARD_ID_CHUNKS];
 
-        for chunk_idx in 0..NUM_CHUNKS {
+        for chunk_idx in 0..Self::NUM_BOARD_ID_CHUNKS {
             let mut value: u8 = 0;
             for bit in 0..5 {
                 let bit_idx = chunk_idx * 5 + bit;
@@ -1701,7 +1702,7 @@ impl TetrisBoard {
                     value |= 1 << (4 - bit);
                 }
             }
-            chars[chunk_idx] = BASE32_ALPHABET[value as usize];
+            chars[chunk_idx] = Self::BASE32_ALPHABET[value as usize];
         }
 
         let len = chars.iter().rposition(|&c| c != b'A').map_or(0, |i| i + 1);
@@ -1725,15 +1726,14 @@ impl TetrisBoard {
     /// ```
     #[must_use]
     pub fn from_board_id(id: &str) -> Option<Self> {
-        const NUM_CHUNKS: usize = constants::BOARD_SIZE / 5;
-        if id.len() > NUM_CHUNKS {
+        if id.len() > Self::NUM_BOARD_ID_CHUNKS {
             return None;
         }
 
         let id_bytes = id.as_bytes();
         let mut board = Self::EMPTY_BOARD;
 
-        for chunk_idx in 0..NUM_CHUNKS {
+        for chunk_idx in 0..Self::NUM_BOARD_ID_CHUNKS {
             let ch = if chunk_idx < id_bytes.len() {
                 id_bytes[chunk_idx]
             } else {
@@ -3530,8 +3530,8 @@ mod tests {
                 std::array::from_fn(|_| rng.random::<u32>() & ((1 << constants::ROWS) - 1));
             let board = TetrisBoard(limbs);
             let id = board.to_board_id();
-            let reconstructed = TetrisBoard::from_board_id(&id)
-                .expect("valid board ID should decode");
+            let reconstructed =
+                TetrisBoard::from_board_id(&id).expect("valid board ID should decode");
             assert_eq!(board, reconstructed, "board ID roundtrip failed for {id}");
         }
     }
