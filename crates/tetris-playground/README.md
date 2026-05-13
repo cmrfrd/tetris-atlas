@@ -127,13 +127,6 @@ Each approach may relax or strengthen the problem along these axes:
 - **Status:** In development
 - **README:** [Yes](src/bin/research/tetris_invariant_smt/README.md)
 
-#### `tetris_program_synthesis`
-- **Strategy:** Searches for compact bitvector VM programs via Z3 SMT + CEGIS counterexample loop
-- **Opponent:** Adversarial (CEGIS verifies against counterexamples)
-- **Constraints:** Fixed VM instruction set, configurable h/holes/roughness invariant
-- **Status:** No programs found that maintain invariants across all transitions
-- **README:** [Yes](src/bin/research/tetris_program_synthesis/README.md)
-
 #### `tetris_invariant_synthesis`
 - **Strategy:** Fixed-point elimination on sampled concrete states + refinement rounds
 - **Opponent:** Non-adversarial (falsification via rollouts)

@@ -90,10 +90,6 @@ name = "tetris_invariant_smt"
 path = "src/bin/research/tetris_invariant_smt/main.rs"
 
 [[bin]]
-name = "tetris_program_synthesis"
-path = "src/bin/research/tetris_program_synthesis/main.rs"
-
-[[bin]]
 name = "tetris_nbag_solver"
 path = "src/bin/research/tetris_nbag_solver/main.rs"
 
