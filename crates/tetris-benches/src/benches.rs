@@ -639,43 +639,8 @@ tetris_bench! {
     pub fn bench_transpose_bits(c: &mut Criterion) {
         let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
 
-        // 8x8 (1 byte per row, 8 bytes total)
-        let matrices_8x8: Vec<[u8; 8]> = (0..NUM_ELEMS)
-            .map(|_| std::array::from_fn(|_| rng.random()))
-            .collect();
-        c.bench_with_input(
-            BenchmarkId::new("transpose_bits_8x8", NUM_ELEMS),
-            &matrices_8x8,
-            |b, data| {
-                b.iter(|| {
-                    let mut out = data.clone();
-                    for m in out.iter_mut() {
-                        transpose_bits::<8, 8, 8>(black_box(m));
-                    }
-                    out
-                })
-            },
-        );
-
-        // 4x4 (16 bits = 2 bytes)
-        let matrices_4x4: Vec<[u8; 2]> = (0..NUM_ELEMS)
-            .map(|_| std::array::from_fn(|_| rng.random()))
-            .collect();
-        c.bench_with_input(
-            BenchmarkId::new("transpose_bits_4x4", NUM_ELEMS),
-            &matrices_4x4,
-            |b, data| {
-                b.iter(|| {
-                    let mut out = data.clone();
-                    for m in out.iter_mut() {
-                        transpose_bits::<4, 4, 2>(black_box(m));
-                    }
-                    out
-                })
-            },
-        );
-
-        // 10x20 (200 bits = 25 bytes)
+        // 10x20 — canonical Tetris board (200 bits = 25 bytes), row-major
+        // <-> column-major bit transpose used in board serialization.
         let matrices_10x20: Vec<[u8; 25]> = (0..NUM_ELEMS)
             .map(|_| std::array::from_fn(|_| rng.random()))
             .collect();
@@ -687,6 +652,44 @@ tetris_bench! {
                     let mut out = data.clone();
                     for m in out.iter_mut() {
                         transpose_bits::<10, 20, 25>(black_box(m));
+                    }
+                    out
+                })
+            },
+        );
+
+        // 10x32 — TetrisBoard.to_bytes(Major::Row): the internal
+        // `[u32; 10]` columns (20 used bits + 12 pad) become a row-major
+        // 32-row bit grid. 320 bits = 40 bytes.
+        let matrices_10x32: Vec<[u8; 40]> = (0..NUM_ELEMS)
+            .map(|_| std::array::from_fn(|_| rng.random()))
+            .collect();
+        c.bench_with_input(
+            BenchmarkId::new("transpose_bits_10x32", NUM_ELEMS),
+            &matrices_10x32,
+            |b, data| {
+                b.iter(|| {
+                    let mut out = data.clone();
+                    for m in out.iter_mut() {
+                        transpose_bits::<10, 32, 40>(black_box(m));
+                    }
+                    out
+                })
+            },
+        );
+
+        // 32x10 — TetrisBoard.from_bytes(Major::Row): inverse of 10x32.
+        let matrices_32x10: Vec<[u8; 40]> = (0..NUM_ELEMS)
+            .map(|_| std::array::from_fn(|_| rng.random()))
+            .collect();
+        c.bench_with_input(
+            BenchmarkId::new("transpose_bits_32x10", NUM_ELEMS),
+            &matrices_32x10,
+            |b, data| {
+                b.iter(|| {
+                    let mut out = data.clone();
+                    for m in out.iter_mut() {
+                        transpose_bits::<32, 10, 40>(black_box(m));
                     }
                     out
                 })

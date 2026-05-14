@@ -88,129 +88,20 @@ const _: () = {
     [()][(!verify_all_u8()) as usize];
 };
 
-/// Transposes an `ROWS × COLS` bit matrix stored in `[u8; N]` in-place.
-///
-/// The buffer holds a tightly packed bit grid: bit at linear index
-/// `row * COLS + col` represents cell `(row, col)`. After transposition
-/// the bit at that position holds what was cell `(col, row)` — i.e. the
-/// matrix is now `COLS × ROWS`, packed into the same `N` bytes.
-///
-/// # Compile-time checks
-///
-/// Fails to compile if `N * 8 < ROWS * COLS` (buffer too small).
-///
-/// # Specialization
-///
-/// When `ROWS == 8 && COLS == 8`, dispatches to a branchless 3-round
-/// shift-mask-xor implementation (9 bitops on a single `u64`).
-///
-/// # Example
-///
-/// ```
-/// use tetris_utils::transpose_bits;
-///
-/// // 8×8: row 0 all ones → after transpose, bit 0 of every byte is set
-/// let mut m = [0xFFu8, 0, 0, 0, 0, 0, 0, 0];
-/// transpose_bits::<8, 8, 8>(&mut m);
-/// for i in 0..8 { assert_eq!(m[i], 0x01); }
-///
-/// // 4×4 in 2 bytes (16 bits, 16 used):
-/// // Row-major: row0=1111, row1=0000, row2=0000, row3=0000
-/// // = bits 0-3 set = 0x0F, 0x00
-/// let mut m = [0x0Fu8, 0x00];
-/// transpose_bits::<4, 4, 2>(&mut m);
-/// // After transpose: col0 = 1000, col1 = 1000, col2 = 1000, col3 = 1000
-/// // = bit 0 of each nibble set = row0 bit0=1, row1 bit0=1, ...
-/// assert_eq!(m, [0x11, 0x11]);
-/// ```
-/// Smallest power of two >= `x` (returns 1 for `x` in {0, 1}).
+/// True when `max(rows, cols) <= 32` — the cut-off for using the unified
+/// `[u32; 32]` lane-array Hacker's Delight path in [`transpose_bits`].
 #[inline_conditioned(always)]
-pub const fn next_pow2_usize(x: usize) -> usize {
-    if x <= 1 {
-        return 1;
-    }
-    let mut p: usize = 1;
-    while p < x {
-        p *= 2;
-    }
-    p
+const fn fits_in_32x32(rows: usize, cols: usize) -> bool {
+    rows <= 32 && cols <= 32
 }
 
-/// Padded dimension W for an `ROWS × COLS` matrix: smallest power of two
-/// that is `>= max(ROWS, COLS)`. Used to choose the HD transpose flavor.
-#[inline_conditioned(always)]
-pub const fn transpose_pad_width(rows: usize, cols: usize) -> usize {
-    next_pow2_usize(if rows > cols { rows } else { cols })
-}
-
-/// Mask for round `bs` of an `N×N` Hacker's Delight bit-matrix transpose
-/// packed into a `u64` (bits laid row-major, bit `N*r + c` for cell `(r, c)`).
-///
-/// Selects bits at the "lower-right `bs×bs` block within each `2bs×2bs`
-/// sub-grid" — i.e. `(r % 2bs) < bs && (c % 2bs) >= bs`. Equivalent for `N=8`
-/// gives the classic constants `0x00AA00AA00AA00AA`, `0x0000CCCC0000CCCC`,
-/// `0x00000000F0F0F0F0`.
-#[inline_conditioned(always)]
-const fn packed_round_mask_u64(n: usize, bs: usize) -> u64 {
-    let mut mask: u64 = 0;
-    let mut r: usize = 0;
-    while r < n {
-        let mut c: usize = 0;
-        while c < n {
-            if (r % (2 * bs)) < bs && (c % (2 * bs)) >= bs {
-                mask |= 1u64 << (((n * r + c) & 63) as u32);
-            }
-            c += 1;
-        }
-        r += 1;
-    }
-    mask
-}
-
-/// Hacker's Delight bit-matrix transpose for an `N×N` matrix packed into a
-/// `u64` (cell `(r, c)` at bit position `N*r + c`). `N` must be a power of
-/// two and `N*N <= 64`. Runs `log2(N)` rounds of shift-mask-xor.
-///
-/// Per-round `(mask, shift)` is computed at compile time via const exprs so
-/// LLVM sees the same instructions a hand-rolled N=8 or N=4 version would.
-#[inline_conditioned(always)]
-const fn transpose_packed_u64<const N: usize>(mut x: u64) -> u64 {
-    // Hardcoded round counts per N keep all masks/shifts as compile-time
-    // constants. (The macro `repeat_idx_unroll!` would also work but
-    // requires log2(N) as a separate const, which complicates dispatch.)
-    if N == 8 {
-        const M0: u64 = packed_round_mask_u64(8, 1);
-        const M1: u64 = packed_round_mask_u64(8, 2);
-        const M2: u64 = packed_round_mask_u64(8, 4);
-        let t = (x ^ (x >> 7)) & M0;
-        x ^= t ^ (t << 7);
-        let t = (x ^ (x >> 14)) & M1;
-        x ^= t ^ (t << 14);
-        let t = (x ^ (x >> 28)) & M2;
-        x ^= t ^ (t << 28);
-    } else if N == 4 {
-        const M0: u64 = packed_round_mask_u64(4, 1);
-        const M1: u64 = packed_round_mask_u64(4, 2);
-        let t = (x ^ (x >> 3)) & M0;
-        x ^= t ^ (t << 3);
-        let t = (x ^ (x >> 6)) & M1;
-        x ^= t ^ (t << 6);
-    } else if N == 2 {
-        const M0: u64 = packed_round_mask_u64(2, 1);
-        let t = (x ^ (x >> 1)) & M0;
-        x ^= t ^ (t << 1);
-    }
-    x
-}
-
-/// LSB-is-col-0 Hacker's Delight bit-matrix transpose on a `[u32; 32]` lane
-/// array (each lane is one row, bit `c` is column `c`). 5 rounds; mirrors the
-/// classical algorithm so the high half of `a[k]` swaps with the low half of
-/// `a[k+j]` (matches our LSB convention).
+/// LSB-is-col-0 Hacker's Delight transpose on a `[u32; 32]` lane array
+/// (each lane is one row, bit `c` is column `c`). The classic
+/// `t = (a[k] ^ (a[k+j] >> j)) & m` is mirrored to operate on `a[k]`'s high
+/// half and `a[k+j]`'s low half, matching our LSB convention.
 #[inline_conditioned(always)]
 const fn transpose_lane_array_u32x32(a: &mut [u32; 32]) {
-    let mut j: usize = 16;
-    let mut mask: u32 = 0x0000_FFFF;
+    let (mut j, mut mask): (usize, u32) = (16, 0x0000_FFFF);
     while j > 0 {
         let mut k: usize = 0;
         while k < 32 {
@@ -227,37 +118,26 @@ const fn transpose_lane_array_u32x32(a: &mut [u32; 32]) {
 /// Transposes an `ROWS × COLS` bit matrix stored in `[u8; N]` in-place.
 ///
 /// The buffer holds a tightly packed bit grid: bit at linear index
-/// `row * COLS + col` represents cell `(row, col)`. After transposition
-/// the bit at that position holds what was cell `(col, row)` — i.e. the
-/// matrix is now `COLS × ROWS`, packed into the same `N` bytes.
+/// `row * COLS + col` represents cell `(row, col)`. After transposition the
+/// matrix is `COLS × ROWS`, packed into the same `N` bytes.
 ///
-/// # Algorithm
-///
-/// Dispatches on `W = next_pow2(max(ROWS, COLS))` (const-evaluated, so only
-/// one branch survives monomorphization):
-/// - `W ≤ 8`  → pad to `W×W`, transpose in a packed `u64`.
-/// - `W = 32` → pad to `32×32`, transpose on a `[u32; 32]` lane array.
-/// - else     → bit-scatter fallback.
-///
-/// Each branch keeps a hand-tuned load/store for the common
-/// `(ROWS, COLS, N)` tuple in that size class; other tuples fall through
-/// to a generic bit-by-bit load/store with the same algorithmic core.
-///
-/// # Compile-time checks
-///
-/// Fails to compile if `N * 8 < ROWS * COLS` (buffer too small).
+/// Generic Hacker's Delight transpose padded to `32 × 32` on a `[u32; 32]`
+/// lane array (see [`transpose_lane_array_u32x32`]). Works for any
+/// `(ROWS, COLS)` with `max(ROWS, COLS) ≤ 32` — covering all Tetris-board
+/// shapes (10×20, 10×32, 32×10) plus 8×8, 4×4, 16×16, etc. Larger matrices
+/// fall through to a bit-scatter loop. Compile-time check: fails when
+/// `N * 8 < ROWS * COLS` or when `ROWS`/`COLS`/`N` aren't in the supported
+/// `repeat_idx_unroll!` arities ({0..16, 18, 20, 25, 32, 40, 64}).
 ///
 /// # Example
 ///
 /// ```
 /// use tetris_utils::transpose_bits;
 ///
-/// // 8×8: row 0 all ones → after transpose, bit 0 of every byte is set
 /// let mut m = [0xFFu8, 0, 0, 0, 0, 0, 0, 0];
 /// transpose_bits::<8, 8, 8>(&mut m);
 /// for i in 0..8 { assert_eq!(m[i], 0x01); }
 ///
-/// // 4×4 in 2 bytes (16 bits, 16 used):
 /// let mut m = [0x0Fu8, 0x00];
 /// transpose_bits::<4, 4, 2>(&mut m);
 /// assert_eq!(m, [0x11, 0x11]);
@@ -269,184 +149,76 @@ pub const fn transpose_bits<const ROWS: usize, const COLS: usize, const N: usize
         "byte array too small for ROWS * COLS bits"
     );
 
-    // Choose the smallest power-of-two square that covers max(ROWS, COLS).
-    // The matrix transpose is naturally a W×W operation; HD requires W to be
-    // a power of two. `const { ... }` blocks capture the generic params and
-    // ensure the dispatch monomorphizes — only the matching branch survives
-    // compilation. Inline `const { transpose_pad_width(ROWS, COLS) }` at each
-    // comparison instead of a `let`-bound alias so LLVM sees `if 8 == 8`
-    // unconditionally, not `if w == 8` with a register-resident `w`.
-
-    if const { transpose_pad_width(ROWS, COLS) <= 8 } {
-        // Packed form: pack ROWS rows × W bits each into the low W*W bits of
-        // a u64, run log2(W) HD rounds, unpack to COLS rows × ROWS bits.
-        let mut x: u64 = 0;
-        // Fast-path loads for the two byte-aligned cases we ship.
-        if ROWS == 8 && COLS == 8 && N == 8 {
-            x = u64::from_le_bytes([m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7]]);
-        } else if ROWS == 4 && COLS == 4 && N == 2 {
-            x = u16::from_le_bytes([m[0], m[1]]) as u64;
-        } else {
-            // Generic bit-by-bit load: place source bit (r, c) at position
-            // W*r + c in `x`. Padding bits (c >= COLS or r >= ROWS) stay zero.
-            let mut r: usize = 0;
-            while r < ROWS {
-                let mut c: usize = 0;
-                while c < COLS {
-                    let src = r * COLS + c;
-                    let bit = ((m[src >> 3] >> ((src & 7) as u32)) & 1) as u64;
-                    x |= bit << ((((const { transpose_pad_width(ROWS, COLS) }) * r + c) & 63) as u32);
-                    c += 1;
-                }
-                r += 1;
-            }
-        }
-
-        // Dispatch HD to the right W. Const-eval picks one branch; the others
-        // monomorphize away.
-        let y = if const { transpose_pad_width(ROWS, COLS) == 8 } {
-            transpose_packed_u64::<8>(x)
-        } else if const { transpose_pad_width(ROWS, COLS) == 4 } {
-            transpose_packed_u64::<4>(x)
-        } else if const { transpose_pad_width(ROWS, COLS) == 2 } {
-            transpose_packed_u64::<2>(x)
-        } else {
-            x
-        };
-
-        // Fast-path stores.
-        if ROWS == 8 && COLS == 8 && N == 8 {
-            let out = y.to_le_bytes();
-            m[0] = out[0];
-            m[1] = out[1];
-            m[2] = out[2];
-            m[3] = out[3];
-            m[4] = out[4];
-            m[5] = out[5];
-            m[6] = out[6];
-            m[7] = out[7];
-        } else if ROWS == 4 && COLS == 4 && N == 2 {
-            let out = (y as u16).to_le_bytes();
-            m[0] = out[0];
-            m[1] = out[1];
-        } else {
-            // Generic bit-by-bit store. Result matrix is COLS × ROWS; cell
-            // (r', c') is at bit W*r' + c' in `y` and bit r'*ROWS + c' in m.
-            let mut b: usize = 0;
-            while b < N {
-                m[b] = 0;
-                b += 1;
-            }
-            let mut r: usize = 0;
-            while r < COLS {
-                let mut c: usize = 0;
-                while c < ROWS {
-                    let bit = ((y >> ((((const { transpose_pad_width(ROWS, COLS) }) * r + c) & 63) as u32)) & 1) as u8;
-                    let dst = r * ROWS + c;
-                    m[dst >> 3] |= bit << ((dst & 7) as u32);
-                    c += 1;
-                }
-                r += 1;
-            }
-        }
-        return;
-    } else if const { transpose_pad_width(ROWS, COLS) <= 32 } {
-        // Lane-array form: pack ROWS rows × COLS bits each into low bits of a
-        // [u32; 32] lane array (zero-padded), run 5 HD rounds, unpack.
+    // Generic lane-u32 path: pad to 32×32, HD-transpose, spill via a u32
+    // scratch. Const-block dispatch monomorphizes — only this branch
+    // survives compilation when max(ROWS, COLS) ≤ 32.
+    if const { fits_in_32x32(ROWS, COLS) } {
+        let orig = *m;
         let mut a = [0u32; 32];
 
-        // Fast-path load for the canonical 10×20 board.
-        if ROWS == 10 && COLS == 20 && N == 25 {
-            let orig = *m;
-            crate::repeat_idx_unroll!(10, R, {
-                const BIT_START: usize = 20 * R;
-                const BYTE_START: usize = BIT_START / 8;
-                const SHIFT: u32 = (BIT_START % 8) as u32;
-                const NEED4: bool = BYTE_START + 3 < 25;
-                let b0 = orig[BYTE_START % 25] as u32;
-                let b1 = orig[(BYTE_START + 1) % 25] as u32;
-                let b2 = orig[(BYTE_START + 2) % 25] as u32;
-                let b3 = if NEED4 {
-                    orig[(BYTE_START + 3) % 25] as u32
-                } else {
-                    0
-                };
-                let combined = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
-                a[R % 32] = (combined >> SHIFT) & 0xF_FFFF;
-            });
-        } else {
-            // Generic bit-by-bit load into low COLS bits of each lane.
-            let mut r: usize = 0;
-            while r < ROWS {
-                let mut c: usize = 0;
-                let mut row_val: u32 = 0;
-                while c < COLS {
-                    let src = r * COLS + c;
-                    let bit = ((m[src >> 3] >> ((src & 7) as u32)) & 1) as u32;
-                    row_val |= bit << ((c & 31) as u32);
-                    c += 1;
-                }
-                a[r & 31] = row_val;
-                r += 1;
-            }
-        }
+        // Load ROWS rows: row R occupies bits [R*COLS, R*COLS+COLS-1],
+        // spanning up to 4 source bytes from byte `R*COLS/8` with shift
+        // `(R*COLS) % 8`. Reads 4 bytes unconditionally; out-of-bounds bytes
+        // contribute 0 (compile-time masked).
+        crate::repeat_idx_unroll!(ROWS, R, {
+            // `R` is a `const` item from the macro, but `COLS` is an outer
+            // generic param — so anything derived from both must be a `let`
+            // (const items can't use outer generics). All these values are
+            // compile-time constants per monomorphization, so LLVM folds them.
+            let bs: usize = (R * COLS) / 8;
+            let sh: u32 = ((R * COLS) % 8) as u32;
+            let row_mask: u32 = if COLS >= 32 {
+                u32::MAX
+            } else {
+                1u32.wrapping_shl(COLS as u32).wrapping_sub(1)
+            };
+            let combined = orig[bs % N] as u32
+                | ((if bs + 1 < N { orig[(bs + 1) % N] } else { 0 } as u32) << 8)
+                | ((if bs + 2 < N { orig[(bs + 2) % N] } else { 0 } as u32) << 16)
+                | ((if bs + 3 < N { orig[(bs + 3) % N] } else { 0 } as u32) << 24);
+            a[R % 32] = (combined >> sh) & row_mask;
+        });
 
         transpose_lane_array_u32x32(&mut a);
 
-        // Fast-path store for 10×20.
-        if ROWS == 10 && COLS == 20 && N == 25 {
-            let mut out_u32 = [0u32; 7];
-            crate::repeat_idx_unroll!(20, D, {
-                const BIT_POS: usize = 10 * D;
-                const WORD_IDX: usize = BIT_POS / 32;
-                const BIT_IDX: u32 = (BIT_POS % 32) as u32;
-                const SPANS_WORD: bool = BIT_IDX + 10 > 32;
-                let v = a[D % 32] & 0x3FF;
-                out_u32[WORD_IDX % 7] |= v << (BIT_IDX & 31);
-                if SPANS_WORD {
-                    out_u32[(WORD_IDX + 1) % 7] |= v >> ((32 - BIT_IDX) & 31);
-                }
-            });
-            crate::repeat_idx_unroll!(25, B, {
-                const WORD: usize = B / 4;
-                const SHIFT: u32 = ((B % 4) * 8) as u32;
-                m[B % 25] = (out_u32[WORD % 7] >> (SHIFT & 31)) as u8;
-            });
-        } else {
-            // Generic bit-by-bit store. After transpose, a[r'] (r' in 0..COLS)
-            // is the new row, with bits 0..ROWS valid.
-            let mut b: usize = 0;
-            while b < N {
-                m[b] = 0;
-                b += 1;
+        // Pack COLS transposed rows (each ROWS bits) into a u32 scratch, then
+        // spill to bytes. The scratch keeps writes word-wide; spilling is
+        // pure byte writes (no R-M-W).
+        let mut out_u32 = [0u32; 32];
+        crate::repeat_idx_unroll!(COLS, D, {
+            // Same const-vs-generic constraint as the load loop: everything
+            // derived from `ROWS` (outer generic) is `let`, folded by LLVM.
+            let bit: usize = D * ROWS;
+            let w: usize = bit / 32;
+            let sh: u32 = (bit % 32) as u32;
+            let row_mask: u32 = if ROWS >= 32 {
+                u32::MAX
+            } else {
+                1u32.wrapping_shl(ROWS as u32).wrapping_sub(1)
+            };
+            let spans: bool = sh + (ROWS as u32) > 32;
+            let v = a[D % 32] & row_mask;
+            out_u32[w % 32] |= v << (sh & 31);
+            if spans {
+                out_u32[(w + 1) % 32] |= v >> ((32 - sh) & 31);
             }
-            let mut r: usize = 0;
-            while r < COLS {
-                let mut c: usize = 0;
-                while c < ROWS {
-                    let bit = ((a[r & 31] >> ((c & 31) as u32)) & 1) as u8;
-                    let dst = r * ROWS + c;
-                    m[dst >> 3] |= bit << ((dst & 7) as u32);
-                    c += 1;
-                }
-                r += 1;
-            }
-        }
+        });
+        crate::repeat_idx_unroll!(N, B, {
+            m[B % N] = (out_u32[(B / 4) % 32] >> (((B % 4) * 8) as u32 & 31)) as u8;
+        });
         return;
     }
 
-    // Fallback for W > 32: bit-scatter loop (correct but slow).
+    // Fallback: bit-scatter loop for max(ROWS, COLS) > 32.
     let orig = *m;
     let mut b = 0;
     while b < N {
         m[b] = 0;
         b += 1;
     }
-    let mut src: usize = 0;
-    let mut row = 0;
+    let (mut src, mut row) = (0usize, 0usize);
     while row < ROWS {
-        let mut dst = row;
-        let mut col = 0;
+        let (mut dst, mut col) = (row, 0usize);
         while col < COLS {
             let bit = (orig[src >> 3] >> (src & 7)) & 1;
             m[dst >> 3] |= bit << (dst & 7);
