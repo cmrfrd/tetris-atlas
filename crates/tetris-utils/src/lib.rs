@@ -165,6 +165,34 @@ pub const fn transpose_bits<const ROWS: usize, const COLS: usize, const N: usize
         return;
     }
 
+    // Fast path: 10x20 (canonical Tetris board). Use a gather pattern — for
+    // each destination byte, OR-fold its 8 source bits and write the byte once
+    // (vs. 200 strided read-modify-writes in the generic scatter loop).
+    //
+    // The `& 7`/`% N` masks keep dead match arms inside `repeat_idx_unroll!`
+    // (which expands for every supported N up to 64) from tripping const-eval
+    // overflow/bounds checks. The 25/8 arms still see the natural values.
+    if ROWS == 10 && COLS == 20 && N == 25 {
+        #[inline_conditioned(always)]
+        const fn gather_bit<const M: usize>(orig: &[u8; M], src: usize) -> u8 {
+            (orig[(src >> 3) % M] >> ((src & 7) as u32)) & 1
+        }
+
+        let orig = *m;
+        crate::repeat_idx_unroll!(25, B, {
+            let mut out_byte: u8 = 0;
+            crate::repeat_idx_unroll!(8, I, {
+                const P: usize = 8 * B + I;
+                // Inverse permutation: dest bit P holds source bit at
+                //   (P % 10) * 20 + (P / 10)
+                const SRC: usize = (P % 10) * 20 + (P / 10);
+                out_byte |= gather_bit(&orig, SRC) << ((I & 7) as u32);
+            });
+            m[B % 25] = out_byte;
+        });
+        return;
+    }
+
     let orig = *m;
 
     let mut b = 0;
