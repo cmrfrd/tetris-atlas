@@ -1637,10 +1637,14 @@ impl TetrisBoard {
         match order {
             Major::Col => bytes,
             Major::Row => {
-                // Each column is a 32-bit limb (20 used bits + 12 zero padding).
-                // Transpose the full 32×10 bit grid; padding bits are zero
-                // so they harmlessly transpose to zero positions.
-                transpose_bits::<32, { constants::COLS }, { constants::COLS * 4 }>(&mut bytes);
+                // The transmuted bytes form a `10-row × 32-col` row-major bit
+                // grid: bit `q` represents board cell `(col = q/32, row = q%32)`
+                // (each column limb occupies 32 consecutive bits). Transposing
+                // this `10 × 32` → `32 × 10` produces the natural row-major byte
+                // layout where bit `p` = board cell `(row = p/10, col = p%10)`.
+                // Padding bits (board rows 20..31) are zero in the input and
+                // remain zero in the output's high rows.
+                transpose_bits::<{ constants::COLS }, 32, { constants::COLS * 4 }>(&mut bytes);
                 bytes
             }
         }
@@ -1673,10 +1677,12 @@ impl TetrisBoard {
                 }
             }
             Major::Row => {
-                // Reverse the transpose, then transmute
+                // Inverse of `to_bytes(Row)`: the input is a `32 × 10`
+                // row-major bit grid (bit `p` = cell `(row=p/10, col=p%10)`).
+                // Transpose back to `10 × 32` so bit `q` = cell
+                // `(col=q/32, row=q%32)` — matching the transmuted limb layout.
                 let mut bytes = bytes;
-                // Transpose back: 10×32 → 32×10
-                transpose_bits::<{ constants::COLS }, 32, { constants::COLS * 4 }>(&mut bytes);
+                transpose_bits::<32, { constants::COLS }, { constants::COLS * 4 }>(&mut bytes);
                 unsafe {
                     Self(std::mem::transmute::<
                         [u8; constants::COLS * 4],
@@ -3656,6 +3662,80 @@ mod tests {
         // But both should roundtrip
         assert_eq!(board, TetrisBoard::from_bytes(col_bytes, Major::Col));
         assert_eq!(board, TetrisBoard::from_bytes(row_bytes, Major::Row));
+    }
+
+    /// Independent oracle: the bits in `to_bytes(Major::Row)` must, in
+    /// row-major bit-packed order, equal `to_cell_array(Major::Row)`. This
+    /// uses `to_cell_array` (which does not call `transpose_bits`) as the
+    /// ground truth, catching symmetric bugs that would round-trip cleanly.
+    #[test]
+    fn test_to_bytes_row_matches_cell_array() {
+        let mut rng = rand::rng();
+        for _ in 0..1000 {
+            let limbs: [u32; constants::COLS] =
+                std::array::from_fn(|_| rng.random::<u32>() & ((1 << constants::ROWS) - 1));
+            let board = TetrisBoard(limbs);
+
+            let row_bytes = board.to_bytes(Major::Row);
+            let row_cells = board.to_cell_array(Major::Row);
+
+            // The byte stream from `to_bytes(Row)` represents a 32-row ×
+            // 10-col bit grid (320 bits) where the first 20 rows hold real
+            // data and rows 20..31 are padding zeros. Cell `(r, c)` lives at
+            // bit position `r * COLS + c`. The cell array only covers the
+            // first ROWS * COLS = 200 bits.
+            for r in 0..constants::ROWS {
+                for c in 0..constants::COLS {
+                    let bit_pos = r * constants::COLS + c;
+                    let from_bytes = (row_bytes[bit_pos / 8] >> (bit_pos % 8)) & 1;
+                    let from_cells = row_cells[bit_pos];
+                    assert_eq!(
+                        from_bytes, from_cells,
+                        "mismatch at (r={r}, c={c}): bytes={from_bytes}, cells={from_cells}"
+                    );
+                }
+            }
+
+            // Padding rows (20..32) of the row-major stream must be zero
+            // — the column limbs only hold ROWS valid bits.
+            for r in constants::ROWS..32 {
+                for c in 0..constants::COLS {
+                    let bit_pos = r * constants::COLS + c;
+                    let from_bytes = (row_bytes[bit_pos / 8] >> (bit_pos % 8)) & 1;
+                    assert_eq!(
+                        from_bytes, 0,
+                        "padding bit set at (r={r}, c={c})"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Symmetric oracle for the inverse direction: build a row-major byte
+    /// stream from a cell-array, decode via `from_bytes(Row)`, and verify it
+    /// reconstructs the same board that `from_cell_array(Row)` produces.
+    #[test]
+    fn test_from_bytes_row_matches_cell_array() {
+        let mut rng = rand::rng();
+        for _ in 0..1000 {
+            let limbs: [u32; constants::COLS] =
+                std::array::from_fn(|_| rng.random::<u32>() & ((1 << constants::ROWS) - 1));
+            let board = TetrisBoard(limbs);
+
+            // Pack `to_cell_array(Row)` into a 40-byte bit-stream (rows
+            // 20..32 are zero-padded).
+            let row_cells = board.to_cell_array(Major::Row);
+            let mut row_bytes = [0u8; constants::COLS * 4];
+            for r in 0..constants::ROWS {
+                for c in 0..constants::COLS {
+                    let bit_pos = r * constants::COLS + c;
+                    row_bytes[bit_pos / 8] |= row_cells[bit_pos] << (bit_pos % 8);
+                }
+            }
+
+            let decoded = TetrisBoard::from_bytes(row_bytes, Major::Row);
+            assert_eq!(decoded, board, "from_bytes(Row) of manually packed cells must reconstruct the board");
+        }
     }
 
     #[test]
