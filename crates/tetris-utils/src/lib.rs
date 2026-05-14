@@ -165,50 +165,28 @@ pub const fn transpose_bits<const ROWS: usize, const COLS: usize, const N: usize
         return;
     }
 
-    // Fast path: 10x20 (canonical Tetris board). Pre-pack the 10 source rows
-    // into u32s (each holds 20 bits in lanes 0..19), then for each destination
-    // byte gather its 8 bits from those u32s and write the byte once.
-    //
-    // Each `(src >> d) & 1` becomes a register-resident lane extract once the
-    // source rows are u32s, vs. 200 strided byte reads in the original scatter.
+    // Fast path: 10x20 (canonical Tetris board). Use a gather pattern — for
+    // each destination byte, OR-fold its 8 source bits and write the byte once
+    // (vs. 200 strided read-modify-writes in the generic scatter loop).
     //
     // The `& 7`/`% N` masks keep dead match arms inside `repeat_idx_unroll!`
     // (which expands for every supported N up to 64) from tripping const-eval
     // overflow/bounds checks. The 25/8 arms still see the natural values.
     if ROWS == 10 && COLS == 20 && N == 25 {
+        #[inline_conditioned(always)]
+        const fn gather_bit<const M: usize>(orig: &[u8; M], src: usize) -> u8 {
+            (orig[(src >> 3) % M] >> ((src & 7) as u32)) & 1
+        }
+
         let orig = *m;
-
-        // Load 25 source bytes into u32 row-packs. Row r occupies bits
-        //   [20*r, 20*r+19] of the bitstream → bytes [bit_start/8 .. +3].
-        let mut src_rows = [0u32; 10];
-        crate::repeat_idx_unroll!(10, R, {
-            const BIT_START: usize = 20 * R;
-            const BYTE_START: usize = BIT_START / 8;
-            const SHIFT: u32 = (BIT_START % 8) as u32;
-            // Load up to 4 bytes; the last row needs only 3 (200 bits total).
-            const NEED4: bool = BYTE_START + 3 < 25;
-            let b0 = orig[BYTE_START % 25] as u32;
-            let b1 = orig[(BYTE_START + 1) % 25] as u32;
-            let b2 = orig[(BYTE_START + 2) % 25] as u32;
-            let b3 = if NEED4 {
-                orig[(BYTE_START + 3) % 25] as u32
-            } else {
-                0
-            };
-            let combined = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
-            src_rows[R % 10] = (combined >> SHIFT) & 0xF_FFFF;
-        });
-
         crate::repeat_idx_unroll!(25, B, {
             let mut out_byte: u8 = 0;
             crate::repeat_idx_unroll!(8, I, {
                 const P: usize = 8 * B + I;
                 // Inverse permutation: dest bit P holds source bit at
-                //   row = P % 10, col = P / 10.
-                const ROW: usize = P % 10;
-                const COL: u32 = (P / 10) as u32;
-                let bit = ((src_rows[ROW % 10] >> (COL & 31)) & 1) as u8;
-                out_byte |= bit << ((I & 7) as u32);
+                //   (P % 10) * 20 + (P / 10)
+                const SRC: usize = (P % 10) * 20 + (P / 10);
+                out_byte |= gather_bit(&orig, SRC) << ((I & 7) as u32);
             });
             m[B % 25] = out_byte;
         });
