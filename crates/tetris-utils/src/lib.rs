@@ -130,6 +130,28 @@ pub const fn transpose_bits<const ROWS: usize, const COLS: usize, const N: usize
         "byte array too small for ROWS * COLS bits"
     );
 
+    // Fast path: 8x8 bit transpose via Hacker's Delight three-round shift-mask-xor.
+    if ROWS == 8 && COLS == 8 && N == 8 {
+        let bytes = [m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7]];
+        let mut x = u64::from_le_bytes(bytes);
+        let t = (x ^ (x >> 7)) & 0x00AA_00AA_00AA_00AA;
+        x ^= t ^ (t << 7);
+        let t = (x ^ (x >> 14)) & 0x0000_CCCC_0000_CCCC;
+        x ^= t ^ (t << 14);
+        let t = (x ^ (x >> 28)) & 0x0000_0000_F0F0_F0F0;
+        x ^= t ^ (t << 28);
+        let out = x.to_le_bytes();
+        m[0] = out[0];
+        m[1] = out[1];
+        m[2] = out[2];
+        m[3] = out[3];
+        m[4] = out[4];
+        m[5] = out[5];
+        m[6] = out[6];
+        m[7] = out[7];
+        return;
+    }
+
     let orig = *m;
 
     let mut b = 0;
