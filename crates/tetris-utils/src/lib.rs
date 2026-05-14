@@ -165,30 +165,78 @@ pub const fn transpose_bits<const ROWS: usize, const COLS: usize, const N: usize
         return;
     }
 
-    // Fast path: 10x20 (canonical Tetris board). Use a gather pattern — for
-    // each destination byte, OR-fold its 8 source bits and write the byte once
-    // (vs. 200 strided read-modify-writes in the generic scatter loop).
+    // Fast path: 10x20 (canonical Tetris board). Pad to 32x32, run Hacker's
+    // Delight bit-matrix transpose (5 rounds of shift-mask-xor on u32 lanes),
+    // then unpack the first 20 transposed lanes into 25 output bytes.
     //
-    // The `& 7`/`% N` masks keep dead match arms inside `repeat_idx_unroll!`
-    // (which expands for every supported N up to 64) from tripping const-eval
-    // overflow/bounds checks. The 25/8 arms still see the natural values.
+    // Cost: 80 lane-pair ops + scatter/gather. Trades the 200-iter scatter for
+    // bulk u32 operations.
     if ROWS == 10 && COLS == 20 && N == 25 {
-        #[inline_conditioned(always)]
-        const fn gather_bit<const M: usize>(orig: &[u8; M], src: usize) -> u8 {
-            (orig[(src >> 3) % M] >> ((src & 7) as u32)) & 1
+        let orig = *m;
+
+        // Load 10 source rows into u32s (low 20 bits used). Each row spans
+        // 3-4 source bytes; pad the rest of the lane array with zeros.
+        let mut a = [0u32; 32];
+        crate::repeat_idx_unroll!(10, R, {
+            const BIT_START: usize = 20 * R;
+            const BYTE_START: usize = BIT_START / 8;
+            const SHIFT: u32 = (BIT_START % 8) as u32;
+            const NEED4: bool = BYTE_START + 3 < 25;
+            let b0 = orig[BYTE_START % 25] as u32;
+            let b1 = orig[(BYTE_START + 1) % 25] as u32;
+            let b2 = orig[(BYTE_START + 2) % 25] as u32;
+            let b3 = if NEED4 {
+                orig[(BYTE_START + 3) % 25] as u32
+            } else {
+                0
+            };
+            let combined = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+            a[R % 32] = (combined >> SHIFT) & 0xF_FFFF;
+        });
+
+        // Hacker's Delight 32x32 bit-matrix transpose — Fig. 7-3, adapted
+        // for LSB-is-col-0 convention (HD uses MSB-is-col-0). The original
+        // operation `t = (a[k] ^ (a[k+j] >> j)) & m; a[k] ^= t; a[k+j] ^= t<<j`
+        // is mirrored to `t = ((a[k] >> j) ^ a[k+j]) & m; a[k+j] ^= t;
+        // a[k] ^= t << j`, swapping the high half of a[k] with the low half
+        // of a[k+j] instead of vice-versa.
+        // 5 rounds (j = 16, 8, 4, 2, 1), each does 16 lane-pair swaps.
+        let mut j: usize = 16;
+        let mut mask: u32 = 0x0000_FFFF;
+        while j > 0 {
+            let mut k: usize = 0;
+            while k < 32 {
+                let t = ((a[k] >> j) ^ a[k + j]) & mask;
+                a[k + j] ^= t;
+                a[k] ^= t << j;
+                k = ((k | j) + 1) & !j;
+            }
+            j >>= 1;
+            mask ^= mask << j;
         }
 
-        let orig = *m;
+        // After transpose: a[c] is the c-th transposed row, with bits 0..10
+        // holding row data (bits 10..32 are from padded source rows = 0).
+        // Pack new rows into the 25-byte output via a u32[8] scratch buffer
+        // (200 bits = 6.25 u32s; use 7 to cover all writes safely).
+        let mut out_u32 = [0u32; 7];
+        crate::repeat_idx_unroll!(20, D, {
+            const BIT_POS: usize = 10 * D;
+            const WORD_IDX: usize = BIT_POS / 32;
+            const BIT_IDX: u32 = (BIT_POS % 32) as u32;
+            const SPANS_WORD: bool = BIT_IDX + 10 > 32;
+            let v = a[D % 32] & 0x3FF;
+            out_u32[WORD_IDX % 7] |= v << (BIT_IDX & 31);
+            if SPANS_WORD {
+                out_u32[(WORD_IDX + 1) % 7] |= v >> ((32 - BIT_IDX) & 31);
+            }
+        });
+
+        // Spill u32 scratch back to bytes.
         crate::repeat_idx_unroll!(25, B, {
-            let mut out_byte: u8 = 0;
-            crate::repeat_idx_unroll!(8, I, {
-                const P: usize = 8 * B + I;
-                // Inverse permutation: dest bit P holds source bit at
-                //   (P % 10) * 20 + (P / 10)
-                const SRC: usize = (P % 10) * 20 + (P / 10);
-                out_byte |= gather_bit(&orig, SRC) << ((I & 7) as u32);
-            });
-            m[B % 25] = out_byte;
+            const WORD: usize = B / 4;
+            const SHIFT: u32 = ((B % 4) * 8) as u32;
+            m[B % 25] = (out_u32[WORD % 7] >> (SHIFT & 31)) as u8;
         });
         return;
     }
