@@ -88,33 +88,6 @@ const _: () = {
     [()][(!verify_all_u8()) as usize];
 };
 
-/// True when `max(rows, cols) <= 32` — the cut-off for using the unified
-/// `[u32; 32]` lane-array Hacker's Delight path in [`transpose_bits`].
-#[inline_conditioned(always)]
-const fn fits_in_32x32(rows: usize, cols: usize) -> bool {
-    rows <= 32 && cols <= 32
-}
-
-/// LSB-is-col-0 Hacker's Delight transpose on a `[u32; 32]` lane array
-/// (each lane is one row, bit `c` is column `c`). The classic
-/// `t = (a[k] ^ (a[k+j] >> j)) & m` is mirrored to operate on `a[k]`'s high
-/// half and `a[k+j]`'s low half, matching our LSB convention.
-#[inline_conditioned(always)]
-const fn transpose_lane_array_u32x32(a: &mut [u32; 32]) {
-    let (mut j, mut mask): (usize, u32) = (16, 0x0000_FFFF);
-    while j > 0 {
-        let mut k: usize = 0;
-        while k < 32 {
-            let t = ((a[k] >> j) ^ a[k + j]) & mask;
-            a[k + j] ^= t;
-            a[k] ^= t << j;
-            k = ((k | j) + 1) & !j;
-        }
-        j >>= 1;
-        mask ^= mask << j;
-    }
-}
-
 /// Transposes an `ROWS × COLS` bit matrix stored in `[u8; N]` in-place.
 ///
 /// The buffer holds a tightly packed bit grid: bit at linear index
@@ -122,12 +95,12 @@ const fn transpose_lane_array_u32x32(a: &mut [u32; 32]) {
 /// matrix is `COLS × ROWS`, packed into the same `N` bytes.
 ///
 /// Generic Hacker's Delight transpose padded to `32 × 32` on a `[u32; 32]`
-/// lane array (see [`transpose_lane_array_u32x32`]). Works for any
-/// `(ROWS, COLS)` with `max(ROWS, COLS) ≤ 32` — covering all Tetris-board
-/// shapes (10×20, 10×32, 32×10) plus 8×8, 4×4, 16×16, etc. Larger matrices
-/// fall through to a bit-scatter loop. Compile-time check: fails when
-/// `N * 8 < ROWS * COLS` or when `ROWS`/`COLS`/`N` aren't in the supported
-/// `repeat_idx_unroll!` arities ({0..16, 18, 20, 25, 32, 40, 64}).
+/// lane array. Works for any `(ROWS, COLS)` with `max(ROWS, COLS) ≤ 32` —
+/// covering all Tetris-board shapes (10×20, 10×32, 32×10) plus 8×8, 4×4,
+/// 16×16, etc. Larger matrices fall through to a bit-scatter loop.
+/// Compile-time check: fails when `N * 8 < ROWS * COLS` or when
+/// `ROWS`/`COLS`/`N` aren't in the supported `repeat_idx_unroll!` arities
+/// ({0..16, 18, 20, 25, 32, 40, 64}).
 ///
 /// # Example
 ///
@@ -150,9 +123,13 @@ pub const fn transpose_bits<const ROWS: usize, const COLS: usize, const N: usize
     );
 
     // Generic lane-u32 path: pad to 32×32, HD-transpose, spill via a u32
-    // scratch. Const-block dispatch monomorphizes — only this branch
-    // survives compilation when max(ROWS, COLS) ≤ 32.
-    if const { fits_in_32x32(ROWS, COLS) } {
+    // scratch. The two `const { ... }` blocks each evaluate to a bool at
+    // compile time; the `&&` between them is a regular runtime expression
+    // over two compile-time constants, so LLVM folds the whole dispatch and
+    // only the matching branch survives monomorphization. (A single
+    // `const { ROWS <= 32 && COLS <= 32 }` block is rejected — `&&` is
+    // short-circuiting "control flow" inside a generic const expression.)
+    if const { ROWS <= 32 } && const { COLS <= 32 } {
         let orig = *m;
         let mut a = [0u32; 32];
 
@@ -160,11 +137,13 @@ pub const fn transpose_bits<const ROWS: usize, const COLS: usize, const N: usize
         // spanning up to 4 source bytes from byte `R*COLS/8` with shift
         // `(R*COLS) % 8`. Reads 4 bytes unconditionally; out-of-bounds bytes
         // contribute 0 (compile-time masked).
+        //
+        // `R` comes from the macro as a `const` item, but `COLS` is an outer
+        // generic param — so anything derived from both must be a `let`
+        // (Rust forbids inner `const` items from referencing outer generics).
+        // After monomorphization every value here is a compile-time literal
+        // and LLVM folds it away.
         crate::repeat_idx_unroll!(ROWS, R, {
-            // `R` is a `const` item from the macro, but `COLS` is an outer
-            // generic param — so anything derived from both must be a `let`
-            // (const items can't use outer generics). All these values are
-            // compile-time constants per monomorphization, so LLVM folds them.
             let bs: usize = (R * COLS) / 8;
             let sh: u32 = ((R * COLS) % 8) as u32;
             let row_mask: u32 = if COLS >= 32 {
@@ -179,15 +158,28 @@ pub const fn transpose_bits<const ROWS: usize, const COLS: usize, const N: usize
             a[R % 32] = (combined >> sh) & row_mask;
         });
 
-        transpose_lane_array_u32x32(&mut a);
+        // Inlined LSB-is-col-0 Hacker's Delight transpose on the [u32; 32]
+        // lane array. The classic `t = (a[k] ^ (a[k+j] >> j)) & m` is
+        // mirrored to swap `a[k]`'s high half with `a[k+j]`'s low half,
+        // matching our LSB convention.
+        let (mut j, mut mask): (usize, u32) = (16, 0x0000_FFFF);
+        while j > 0 {
+            let mut k: usize = 0;
+            while k < 32 {
+                let t = ((a[k] >> j) ^ a[k + j]) & mask;
+                a[k + j] ^= t;
+                a[k] ^= t << j;
+                k = ((k | j) + 1) & !j;
+            }
+            j >>= 1;
+            mask ^= mask << j;
+        }
 
         // Pack COLS transposed rows (each ROWS bits) into a u32 scratch, then
         // spill to bytes. The scratch keeps writes word-wide; spilling is
         // pure byte writes (no R-M-W).
         let mut out_u32 = [0u32; 32];
         crate::repeat_idx_unroll!(COLS, D, {
-            // Same const-vs-generic constraint as the load loop: everything
-            // derived from `ROWS` (outer generic) is `let`, folded by LLVM.
             let bit: usize = D * ROWS;
             let w: usize = bit / 32;
             let sh: u32 = (bit % 32) as u32;
