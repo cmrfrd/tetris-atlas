@@ -24,9 +24,19 @@ pub mod constants {
     /// Column representation for the board: each `u32` bit is a row (0 = bottom, 19 = top, 20-31 = overflow).
     pub type BackingColType = u32;
     pub const ACTUAL_ROWS: usize = BackingColType::BITS as usize;
+    /// Bytes per column limb — derived from the backing type rather than
+    /// hard-coding `4`. Update [`BackingColType`] and this follows.
+    pub const BYTES_PER_LIMB: usize = std::mem::size_of::<BackingColType>();
+    /// Total byte size of the packed-limbs board representation
+    /// (equivalent to `COLS * BYTES_PER_LIMB`).
+    pub const BOARD_BYTES: usize = COLS * BYTES_PER_LIMB;
     const _: () = assert!(
         super::constants::ACTUAL_ROWS > super::constants::ROWS,
         "ACTUAL_ROWS must be greater than ROWS"
+    );
+    const _: () = assert!(
+        super::constants::BYTES_PER_LIMB * 8 == super::constants::ACTUAL_ROWS,
+        "BYTES_PER_LIMB must match BackingColType bit-width"
     );
 
     /// Number of possible cell states (0 = empty, 1 = filled).
@@ -1624,33 +1634,41 @@ impl TetrisBoard {
     /// # Example
     ///
     /// ```
-    /// use tetris_game::tetris::{TetrisBoard, Major};
+    /// use tetris_game::tetris::{TetrisBoard, Major, constants};
     /// let board = TetrisBoard::new();
     /// let bytes = board.to_bytes(Major::Col);
-    /// assert_eq!(bytes.len(), TetrisBoard::WIDTH * 4);
+    /// assert_eq!(bytes.len(), constants::BOARD_BYTES);
     /// assert_eq!(TetrisBoard::from_bytes(bytes, Major::Col), board);
     /// ```
     #[inline(always)]
-    pub const fn to_bytes(&self, order: Major) -> [u8; constants::COLS * 4] {
-        // SAFETY: [u32; COLS] and [u8; COLS*4] have the same size
-        let mut bytes: [u8; constants::COLS * 4] = unsafe { std::mem::transmute(self.0) };
+    pub const fn to_bytes(&self, order: Major) -> [u8; constants::BOARD_BYTES] {
+        // SAFETY: [BackingColType; COLS] and [u8; BOARD_BYTES] have the
+        // same size (asserted via the `BYTES_PER_LIMB * 8 == ACTUAL_ROWS`
+        // const-check in `constants`).
+        let mut bytes: [u8; constants::BOARD_BYTES] = unsafe { std::mem::transmute(self.0) };
         match order {
             Major::Col => bytes,
             Major::Row => {
-                // The transmuted bytes form a `10-row × 32-col` row-major bit
-                // grid: bit `q` represents board cell `(col = q/32, row = q%32)`
-                // (each column limb occupies 32 consecutive bits). Transposing
-                // this `10 × 32` → `32 × 10` produces the natural row-major byte
-                // layout where bit `p` = board cell `(row = p/10, col = p%10)`.
-                // Padding bits (board rows 20..31) are zero in the input and
-                // remain zero in the output's high rows.
-                transpose_bits::<{ constants::COLS }, 32, { constants::COLS * 4 }>(&mut bytes);
+                // The transmuted bytes form a `COLS-row × ACTUAL_ROWS-col`
+                // row-major bit grid: bit `q` represents board cell
+                // `(col = q/ACTUAL_ROWS, row = q%ACTUAL_ROWS)` (each column
+                // limb occupies ACTUAL_ROWS consecutive bits). Transposing
+                // `COLS × ACTUAL_ROWS` → `ACTUAL_ROWS × COLS` produces the
+                // natural row-major byte layout where bit `p` = board cell
+                // `(row = p/COLS, col = p%COLS)`. Padding bits (board rows
+                // ROWS..ACTUAL_ROWS) are zero on the input and remain zero
+                // on the output's high rows.
+                transpose_bits::<
+                    { constants::COLS },
+                    { constants::ACTUAL_ROWS },
+                    { constants::BOARD_BYTES },
+                >(&mut bytes);
                 bytes
             }
         }
     }
 
-    /// Deserializes a board from packed bytes (u32 limbs as native-endian bytes).
+    /// Deserializes a board from packed bytes (limbs as native-endian bytes).
     ///
     /// Inverse of [`to_bytes`]. The `order` parameter must match what was used
     /// to produce the bytes.
@@ -1665,28 +1683,32 @@ impl TetrisBoard {
     /// assert_eq!(TetrisBoard::from_bytes(bytes, Major::Col), board);
     /// ```
     #[inline(always)]
-    pub const fn from_bytes(bytes: [u8; constants::COLS * 4], order: Major) -> Self {
+    pub const fn from_bytes(bytes: [u8; constants::BOARD_BYTES], order: Major) -> Self {
         match order {
             Major::Col => {
-                // SAFETY: [u8; COLS*4] and [u32; COLS] have the same size
+                // SAFETY: same size, asserted in `constants`.
                 unsafe {
                     Self(std::mem::transmute::<
-                        [u8; constants::COLS * 4],
-                        [u32; constants::COLS],
+                        [u8; constants::BOARD_BYTES],
+                        [constants::BackingColType; constants::COLS],
                     >(bytes))
                 }
             }
             Major::Row => {
-                // Inverse of `to_bytes(Row)`: the input is a `32 × 10`
-                // row-major bit grid (bit `p` = cell `(row=p/10, col=p%10)`).
-                // Transpose back to `10 × 32` so bit `q` = cell
-                // `(col=q/32, row=q%32)` — matching the transmuted limb layout.
+                // Inverse of `to_bytes(Row)`: input is `ACTUAL_ROWS × COLS`
+                // row-major. Transpose back to `COLS × ACTUAL_ROWS` so bit
+                // `q` = cell `(col=q/ACTUAL_ROWS, row=q%ACTUAL_ROWS)` —
+                // matching the transmuted limb layout.
                 let mut bytes = bytes;
-                transpose_bits::<32, { constants::COLS }, { constants::COLS * 4 }>(&mut bytes);
+                transpose_bits::<
+                    { constants::ACTUAL_ROWS },
+                    { constants::COLS },
+                    { constants::BOARD_BYTES },
+                >(&mut bytes);
                 unsafe {
                     Self(std::mem::transmute::<
-                        [u8; constants::COLS * 4],
-                        [u32; constants::COLS],
+                        [u8; constants::BOARD_BYTES],
+                        [constants::BackingColType; constants::COLS],
                     >(bytes))
                 }
             }
@@ -3725,7 +3747,7 @@ mod tests {
             // Pack `to_cell_array(Row)` into a 40-byte bit-stream (rows
             // 20..32 are zero-padded).
             let row_cells = board.to_cell_array(Major::Row);
-            let mut row_bytes = [0u8; constants::COLS * 4];
+            let mut row_bytes = [0u8; constants::BOARD_BYTES];
             for r in 0..constants::ROWS {
                 for c in 0..constants::COLS {
                     let bit_pos = r * constants::COLS + c;
