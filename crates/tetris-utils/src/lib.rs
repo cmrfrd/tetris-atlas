@@ -152,6 +152,19 @@ pub const fn transpose_bits<const ROWS: usize, const COLS: usize, const N: usize
         return;
     }
 
+    // Fast path: 4x4 bit transpose via two-round shift-mask-xor on a u16.
+    if ROWS == 4 && COLS == 4 && N == 2 {
+        let mut x = u16::from_le_bytes([m[0], m[1]]);
+        let t = (x ^ (x >> 3)) & 0x0A0A;
+        x ^= t ^ (t << 3);
+        let t = (x ^ (x >> 6)) & 0x00CC;
+        x ^= t ^ (t << 6);
+        let out = x.to_le_bytes();
+        m[0] = out[0];
+        m[1] = out[1];
+        return;
+    }
+
     let orig = *m;
 
     let mut b = 0;
