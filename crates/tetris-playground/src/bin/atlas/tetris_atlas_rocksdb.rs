@@ -38,7 +38,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPieceOrientation};
+use tetris_game::{
+    IsLost, Major, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPieceOrientation,
+};
 use tetris_search::set_global_threadpool;
 use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetris_score};
 use tetris_utils::repeat_idx_unroll;
@@ -116,7 +118,7 @@ impl TetrisAtlasLookupKeyValue {
 
     #[inline(always)]
     const fn key_bytes(&self) -> [u8; 41] {
-        let board_bytes: [u8; 40] = self.board.into();
+        let board_bytes = self.board.to_bytes(Major::Col);
         let piece_byte: u8 = self.piece.into();
         let mut key = [0u8; 41];
         key[0..40].copy_from_slice(&board_bytes);
@@ -168,7 +170,7 @@ impl TetrisAtlasFrontierKeyValue {
 
     #[inline(always)]
     const fn value_bytes(&self) -> [u8; 41] {
-        let board_bytes: [u8; 40] = self.board.into();
+        let board_bytes = self.board.to_bytes(Major::Col);
         let mut out = [0u8; 41];
         out[0..40].copy_from_slice(&board_bytes);
         out[40] = u8::from(self.bag);
@@ -180,7 +182,7 @@ impl TetrisAtlasFrontierKeyValue {
         let board_bytes: [u8; 40] = unsafe { *(v.as_ptr() as *const [u8; 40]) };
         let bag_byte = v[40];
         Self {
-            board: TetrisBoard::from(board_bytes),
+            board: TetrisBoard::from_bytes(board_bytes, Major::Col),
             bag: TetrisPieceBagState::from(bag_byte),
         }
     }

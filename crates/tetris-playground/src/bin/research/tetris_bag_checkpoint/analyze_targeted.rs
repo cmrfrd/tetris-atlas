@@ -9,7 +9,7 @@ use rayon::prelude::*;
 use rusqlite::{Connection, params};
 use rustc_hash::FxHashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use tetris_game::TetrisBoard;
+use tetris_game::{Major, TetrisBoard};
 
 use crate::common::*;
 
@@ -108,7 +108,7 @@ pub fn run(args: AnalyzeTargetedArgs) -> Result<()> {
                 )
             })?;
         let arr: [u8; 200] = blob.as_slice().try_into().unwrap_or([0u8; 200]);
-        TetrisBoard::from_binary_slice(arr)
+        TetrisBoard::from_cell_array(arr, Major::Row)
     } else {
         TetrisBoard::new()
     };
@@ -347,7 +347,7 @@ pub fn run(args: AnalyzeTargetedArgs) -> Result<()> {
             for (hash, board, cells, perms) in &cover_boards_to_save {
                 stmt.execute(params![
                     *hash as i64,
-                    &board.to_binary_slice() as &[u8],
+                    &board.to_cell_array(Major::Row) as &[u8],
                     *cells as i64,
                     *perms as i64,
                 ])?;

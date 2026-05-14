@@ -9,7 +9,7 @@ use dashmap::DashMap;
 use rayon::prelude::*;
 use rusqlite::{Connection, params};
 use rustc_hash::FxHashSet;
-use tetris_game::TetrisBoard;
+use tetris_game::{Major, TetrisBoard};
 
 use crate::common::*;
 
@@ -403,7 +403,7 @@ pub fn run(args: DiscoverArgs) -> Result<()> {
         for (hash, bits) in &entries {
             let count = bitset_count(bits) as i64;
             if let Some(board) = board_examples.get(hash) {
-                let blob = board.to_binary_slice();
+                let blob = board.to_cell_array(Major::Row);
                 stmt.execute(params![
                     *hash as i64,
                     blob.as_slice(),

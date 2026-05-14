@@ -19,7 +19,9 @@ use anyhow::Result;
 use clap::Parser;
 use rusqlite::{Connection, OpenFlags, TransactionBehavior, params};
 use rustc_hash::FxHashMap;
-use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPiecePlacement};
+use tetris_game::{
+    IsLost, Major, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPiecePlacement,
+};
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -152,7 +154,7 @@ impl StateKey {
             ]);
         }
         Self {
-            board: TetrisBoard::from(unsafe { std::mem::transmute::<[u32; 10], [u8; 40]>(limbs) }),
+            board: TetrisBoard::from_bytes(unsafe { std::mem::transmute::<[u32; 10], [u8; 40]>(limbs) }, Major::Col),
             bag: TetrisPieceBagState::from(bag),
         }
     }

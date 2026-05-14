@@ -31,7 +31,7 @@ use clap::Parser;
 use crossbeam_queue::SegQueue;
 use dashmap::{DashMap, mapref::entry::Entry};
 use itertools::Itertools;
-use tetris_game::{TetrisBoard, TetrisPiece, TetrisPiecePlacement};
+use tetris_game::{Major, TetrisBoard, TetrisPiece, TetrisPiecePlacement};
 use tetris_search::{
     TetrisSequencePlanOutcome, TetrisSequencePlanner, TetrisSequenceWitness, best_first_capacity,
     height_mse_plan_score,
@@ -2104,7 +2104,7 @@ mod tests {
             let start = idx * std::mem::size_of::<u32>();
             bytes[start..start + std::mem::size_of::<u32>()].copy_from_slice(&limb.to_ne_bytes());
         }
-        TetrisBoard::from(bytes)
+        TetrisBoard::from_bytes(bytes, Major::Col)
     }
 
     /// Renders a fixed placement script in the same format used by runtime error reporting.

@@ -33,7 +33,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
-use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPieceOrientation};
+use tetris_game::{
+    IsLost, Major, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPieceOrientation,
+};
 use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetris_score};
 use tetris_utils::repeat_idx_unroll;
 
@@ -269,7 +271,7 @@ impl SharedState {
             // Stream lookup entries: each is [40 bytes board][1 byte piece][1 byte orientation]
             for entry in self.lookup.iter() {
                 let ((board, piece), orientation) = (*entry.key(), *entry.value());
-                let board_bytes: [u8; 40] = board.into();
+                let board_bytes = board.to_bytes(Major::Col);
                 writer.write_all(&board_bytes)?;
                 writer.write_all(&[piece.into()])?;
                 writer.write_all(&[orientation.index()])?;
@@ -281,7 +283,7 @@ impl SharedState {
             // Stream frontier entries: each is [40 bytes board][1 byte bag]
             for entry_ref in self.frontier.map.iter() {
                 let value: &FrontierValue = entry_ref.value();
-                let board_bytes: [u8; 40] = value.board.into();
+                let board_bytes = value.board.to_bytes(Major::Col);
                 writer.write_all(&board_bytes)?;
                 writer.write_all(&[value.bag.into()])?;
             }
@@ -332,7 +334,7 @@ impl SharedState {
             let mut orientation_byte = [0u8; 1];
             reader.read_exact(&mut orientation_byte)?;
 
-            let board = TetrisBoard::from(board_bytes);
+            let board = TetrisBoard::from_bytes(board_bytes, Major::Col);
             let piece = TetrisPiece::from(piece_byte[0]);
             let orientation = TetrisPieceOrientation::from_index(orientation_byte[0]);
             self.lookup.insert((board, piece), orientation);
@@ -349,7 +351,7 @@ impl SharedState {
             let mut bag_byte = [0u8; 1];
             reader.read_exact(&mut bag_byte)?;
 
-            let board = TetrisBoard::from(board_bytes);
+            let board = TetrisBoard::from_bytes(board_bytes, Major::Col);
             let bag = TetrisPieceBagState::from(bag_byte[0]);
             self.frontier.push(board, bag);
         }

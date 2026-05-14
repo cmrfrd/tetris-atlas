@@ -9,7 +9,7 @@ use dashmap::DashMap;
 use rayon::prelude::*;
 use rusqlite::{Connection, params};
 use rustc_hash::FxHashSet;
-use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPiecePlacement};
+use tetris_game::{IsLost, Major, TetrisBoard, TetrisPiece, TetrisPiecePlacement};
 use tetris_search::scoring::height_mse_distance_from_empty;
 
 use crate::common::*;
@@ -367,7 +367,7 @@ pub fn run(args: ConstructArgs) -> Result<()> {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         )?;
         for (board, _) in &targets {
-            let blob = board.to_binary_slice();
+            let blob = board.to_cell_array(Major::Row);
             stmt.execute(params![
                 args.target_step,
                 board_hash(board) as i64,

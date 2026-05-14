@@ -9,7 +9,7 @@ use dashmap::DashMap;
 use rayon::prelude::*;
 use rusqlite::{Connection, params};
 use rustc_hash::FxHashSet;
-use tetris_game::TetrisBoard;
+use tetris_game::{Major, TetrisBoard};
 
 use crate::common::*;
 
@@ -121,7 +121,7 @@ pub fn run(args: ChainArgs) -> Result<()> {
             .filter_map(|r| r.ok())
             .map(|(hash, blob)| {
                 let arr: [u8; 200] = blob.as_slice().try_into().unwrap_or([0u8; 200]);
-                (hash, TetrisBoard::from_binary_slice(arr))
+                (hash, TetrisBoard::from_cell_array(arr, Major::Row))
             })
             .collect();
         ((step + 1) as usize, boards)
@@ -138,7 +138,7 @@ pub fn run(args: ChainArgs) -> Result<()> {
             .filter_map(|r| r.ok())
             .map(|(hash, blob)| {
                 let arr: [u8; 200] = blob.as_slice().try_into().unwrap_or([0u8; 200]);
-                (hash, TetrisBoard::from_binary_slice(arr))
+                (hash, TetrisBoard::from_cell_array(arr, Major::Row))
             })
             .collect();
 
@@ -155,7 +155,7 @@ pub fn run(args: ChainArgs) -> Result<()> {
                  VALUES (0, ?1, ?2, ?3, ?4, ?5, ?6)",
             )?;
             for (hash, board) in &boards {
-                let blob = board.to_binary_slice();
+                let blob = board.to_cell_array(Major::Row);
                 ins.execute(params![
                     *hash as i64,
                     blob.as_slice(),
@@ -752,7 +752,7 @@ pub fn run(args: ChainArgs) -> Result<()> {
         )?;
         for (hash, _) in &cover {
             if let Some(board) = board_examples.get(hash) {
-                let blob = board.to_binary_slice();
+                let blob = board.to_cell_array(Major::Row);
                 stmt.execute(params![
                     current_step as i64,
                     *hash as i64,

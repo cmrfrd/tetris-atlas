@@ -10,12 +10,13 @@ use rand::seq::IndexedRandom;
 
 const BENCH_SEED: u64 = 0xDEAD_BEEF_CAFE;
 use tetris_game::{
-    TetrisBoard, TetrisGame, TetrisGameRng, TetrisPiece, TetrisPieceBag, TetrisPiecePlacement,
+    Major, TetrisBoard, TetrisGame, TetrisGameRng, TetrisPiece, TetrisPieceBag,
+    TetrisPiecePlacement,
 };
 use tetris_search::{
     TetrisBoardScoreState, height_mse_board_score, height_mse_distance_from_empty,
 };
-use tetris_utils::rshift_slice_from_mask_u32;
+use tetris_utils::{rshift_slice_from_mask_u32, transpose_bits};
 
 /// Registered benchmark entrypoint.
 ///
@@ -445,7 +446,7 @@ tetris_bench! {
 }
 
 tetris_bench! {
-    pub fn bench_from_binary_slice(c: &mut Criterion) {
+    pub fn bench_from_cell_array(c: &mut Criterion) {
         let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let boards = black_box(
             (0..NUM_ELEMS)
@@ -456,20 +457,20 @@ tetris_bench! {
                 })
                 .collect::<Vec<_>>(),
         );
-        let binary_slices = black_box(
+        let cell_arrays = black_box(
             boards
                 .iter()
-                .map(|b| b.to_binary_slice())
+                .map(|b| b.to_cell_array(Major::Row))
                 .collect::<Vec<_>>(),
         );
         c.bench_with_input(
-            BenchmarkId::new("from_binary_slice", NUM_ELEMS),
+            BenchmarkId::new("from_cell_array", NUM_ELEMS),
             &NUM_ELEMS,
             |b, _| {
                 b.iter(|| {
-                    binary_slices
+                    cell_arrays
                         .iter()
-                        .map(|b| TetrisBoard::from_binary_slice(*b))
+                        .map(|b| TetrisBoard::from_cell_array(*b, Major::Row))
                         .collect::<Vec<_>>()
                 })
             },
@@ -628,6 +629,66 @@ tetris_bench! {
                         .iter()
                         .map(|state| height_mse_board_score(black_box(state)))
                         .collect::<Vec<_>>()
+                })
+            },
+        );
+    }
+}
+
+tetris_bench! {
+    pub fn bench_transpose_bits(c: &mut Criterion) {
+        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
+
+        // 8x8 (1 byte per row, 8 bytes total)
+        let matrices_8x8: Vec<[u8; 8]> = (0..NUM_ELEMS)
+            .map(|_| std::array::from_fn(|_| rng.random()))
+            .collect();
+        c.bench_with_input(
+            BenchmarkId::new("transpose_bits_8x8", NUM_ELEMS),
+            &matrices_8x8,
+            |b, data| {
+                b.iter(|| {
+                    let mut out = data.clone();
+                    for m in out.iter_mut() {
+                        transpose_bits::<8, 8, 8>(black_box(m));
+                    }
+                    out
+                })
+            },
+        );
+
+        // 4x4 (16 bits = 2 bytes)
+        let matrices_4x4: Vec<[u8; 2]> = (0..NUM_ELEMS)
+            .map(|_| std::array::from_fn(|_| rng.random()))
+            .collect();
+        c.bench_with_input(
+            BenchmarkId::new("transpose_bits_4x4", NUM_ELEMS),
+            &matrices_4x4,
+            |b, data| {
+                b.iter(|| {
+                    let mut out = data.clone();
+                    for m in out.iter_mut() {
+                        transpose_bits::<4, 4, 2>(black_box(m));
+                    }
+                    out
+                })
+            },
+        );
+
+        // 10x20 (200 bits = 25 bytes)
+        let matrices_10x20: Vec<[u8; 25]> = (0..NUM_ELEMS)
+            .map(|_| std::array::from_fn(|_| rng.random()))
+            .collect();
+        c.bench_with_input(
+            BenchmarkId::new("transpose_bits_10x20", NUM_ELEMS),
+            &matrices_10x20,
+            |b, data| {
+                b.iter(|| {
+                    let mut out = data.clone();
+                    for m in out.iter_mut() {
+                        transpose_bits::<10, 20, 25>(black_box(m));
+                    }
+                    out
                 })
             },
         );

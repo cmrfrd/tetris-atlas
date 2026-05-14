@@ -88,6 +88,73 @@ const _: () = {
     [()][(!verify_all_u8()) as usize];
 };
 
+/// Transposes an `ROWS × COLS` bit matrix stored in `[u8; N]` in-place.
+///
+/// The buffer holds a tightly packed bit grid: bit at linear index
+/// `row * COLS + col` represents cell `(row, col)`. After transposition
+/// the bit at that position holds what was cell `(col, row)` — i.e. the
+/// matrix is now `COLS × ROWS`, packed into the same `N` bytes.
+///
+/// # Compile-time checks
+///
+/// Fails to compile if `N * 8 < ROWS * COLS` (buffer too small).
+///
+/// # Specialization
+///
+/// When `ROWS == 8 && COLS == 8`, dispatches to a branchless 3-round
+/// shift-mask-xor implementation (9 bitops on a single `u64`).
+///
+/// # Example
+///
+/// ```
+/// use tetris_utils::transpose_bits;
+///
+/// // 8×8: row 0 all ones → after transpose, bit 0 of every byte is set
+/// let mut m = [0xFFu8, 0, 0, 0, 0, 0, 0, 0];
+/// transpose_bits::<8, 8, 8>(&mut m);
+/// for i in 0..8 { assert_eq!(m[i], 0x01); }
+///
+/// // 4×4 in 2 bytes (16 bits, 16 used):
+/// // Row-major: row0=1111, row1=0000, row2=0000, row3=0000
+/// // = bits 0-3 set = 0x0F, 0x00
+/// let mut m = [0x0Fu8, 0x00];
+/// transpose_bits::<4, 4, 2>(&mut m);
+/// // After transpose: col0 = 1000, col1 = 1000, col2 = 1000, col3 = 1000
+/// // = bit 0 of each nibble set = row0 bit0=1, row1 bit0=1, ...
+/// assert_eq!(m, [0x11, 0x11]);
+/// ```
+#[inline_conditioned(always)]
+pub const fn transpose_bits<const ROWS: usize, const COLS: usize, const N: usize>(m: &mut [u8; N]) {
+    assert!(
+        N * 8 >= ROWS * COLS,
+        "byte array too small for ROWS * COLS bits"
+    );
+
+    let orig = *m;
+
+    let mut b = 0;
+    while b < N {
+        m[b] = 0;
+        b += 1;
+    }
+
+    // Row-first scatter: source bit row*COLS+col → dest bit col*ROWS+row.
+    // Sequential source reads, strided destination writes.
+    let mut src: usize = 0;
+    let mut row = 0;
+    while row < ROWS {
+        let mut dst = row;
+        let mut col = 0;
+        while col < COLS {
+            let bit = (orig[src >> 3] >> (src & 7)) & 1;
+            m[dst >> 3] |= bit << (dst & 7);
+            src += 1;
+            dst += ROWS;
+            col += 1;
+        }
+        row += 1;
+    }
+}
 pub struct BitMask<const N: usize>(u64);
 
 impl<const N: usize> BitMask<N>
@@ -1400,6 +1467,7 @@ macro_rules! repeat_idx_unroll {
             15_usize => $crate::repeat_exact_idx!(15, $i, $b),
             16_usize => $crate::repeat_exact_idx!(16, $i, $b),
             18_usize => $crate::repeat_exact_idx!(18, $i, $b),
+            20_usize => $crate::repeat_exact_idx!(20, $i, $b),
             25_usize => $crate::repeat_exact_idx!(25, $i, $b),
             32_usize => $crate::repeat_exact_idx!(32, $i, $b),
             40_usize => $crate::repeat_exact_idx!(40, $i, $b),
@@ -2012,5 +2080,136 @@ mod tests {
                 assert!(b <= 1, "expected 0/1 bit lane, got {b}");
             }
         }
+    }
+
+    // ---- transpose_bits tests ----
+
+    /// Naive reference transpose for verification.
+    fn naive_transpose<const ROWS: usize, const COLS: usize, const N: usize>(
+        m: &[u8; N],
+    ) -> [u8; N] {
+        let mut out = [0u8; N];
+        for row in 0..ROWS {
+            for col in 0..COLS {
+                let src = row * COLS + col;
+                let dst = col * ROWS + row;
+                let bit = (m[src / 8] >> (src % 8)) & 1;
+                out[dst / 8] |= bit << (dst % 8);
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn test_transpose_8x8_involution() {
+        let mut rng = rand::rng();
+        for _ in 0..1000 {
+            let orig: [u8; 8] = std::array::from_fn(|_| rng.random());
+            let mut m = orig;
+            transpose_bits::<8, 8, 8>(&mut m);
+            transpose_bits::<8, 8, 8>(&mut m);
+            assert_eq!(m, orig);
+        }
+    }
+
+    #[test]
+    fn test_transpose_8x8_matches_naive() {
+        let mut rng = rand::rng();
+        for _ in 0..1000 {
+            let orig: [u8; 8] = std::array::from_fn(|_| rng.random());
+            let mut m = orig;
+            transpose_bits::<8, 8, 8>(&mut m);
+            assert_eq!(m, naive_transpose::<8, 8, 8>(&orig));
+        }
+    }
+
+    #[test]
+    fn test_transpose_4x4_involution() {
+        for val in 0..=u16::MAX {
+            let orig = val.to_le_bytes();
+            let mut m = orig;
+            transpose_bits::<4, 4, 2>(&mut m);
+            transpose_bits::<4, 4, 2>(&mut m);
+            assert_eq!(m, orig, "4x4 involution failed for {val:#06x}");
+        }
+    }
+
+    #[test]
+    fn test_transpose_4x4_matches_naive() {
+        for val in 0..=u16::MAX {
+            let orig = val.to_le_bytes();
+            let mut m = orig;
+            transpose_bits::<4, 4, 2>(&mut m);
+            assert_eq!(
+                m,
+                naive_transpose::<4, 4, 2>(&orig),
+                "4x4 naive mismatch for {val:#06x}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_transpose_nonsquare_2x4() {
+        let mut rng = rand::rng();
+        for _ in 0..1000 {
+            let orig: [u8; 1] = [rng.random()];
+            let mut m = orig;
+            transpose_bits::<2, 4, 1>(&mut m);
+            assert_eq!(m, naive_transpose::<2, 4, 1>(&orig));
+            // Transpose back with swapped dims
+            transpose_bits::<4, 2, 1>(&mut m);
+            assert_eq!(m, orig);
+        }
+    }
+
+    #[test]
+    fn test_transpose_10x20_involution() {
+        let mut rng = rand::rng();
+        for _ in 0..100 {
+            let mut orig = [0u8; 25];
+            for b in orig.iter_mut() {
+                *b = rng.random();
+            }
+            let mut m = orig;
+            transpose_bits::<10, 20, 25>(&mut m);
+            transpose_bits::<20, 10, 25>(&mut m);
+            assert_eq!(m, orig);
+        }
+    }
+
+    #[test]
+    fn test_transpose_10x20_matches_naive() {
+        let mut rng = rand::rng();
+        for _ in 0..100 {
+            let mut orig = [0u8; 25];
+            for b in orig.iter_mut() {
+                *b = rng.random();
+            }
+            let mut m = orig;
+            transpose_bits::<10, 20, 25>(&mut m);
+            assert_eq!(m, naive_transpose::<10, 20, 25>(&orig));
+        }
+    }
+
+    #[test]
+    fn test_transpose_identity_1x1() {
+        let mut m = [0x01u8];
+        transpose_bits::<1, 1, 1>(&mut m);
+        assert_eq!(m, [0x01]);
+    }
+
+    #[test]
+    fn test_transpose_all_zeros() {
+        let mut m = [0u8; 8];
+        transpose_bits::<8, 8, 8>(&mut m);
+        assert_eq!(m, [0u8; 8]);
+    }
+
+    #[test]
+    fn test_transpose_all_ones_row() {
+        // Row 0 all set in 8x8 → after transpose, bit 0 of every byte set
+        let mut m = [0xFFu8, 0, 0, 0, 0, 0, 0, 0];
+        transpose_bits::<8, 8, 8>(&mut m);
+        assert_eq!(m, [0x01; 8]);
     }
 }

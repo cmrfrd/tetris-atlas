@@ -21,7 +21,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPieceOrientation};
+use tetris_game::{
+    IsLost, Major, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPieceOrientation,
+};
 use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetris_score};
 use tetris_utils::repeat_idx_unroll;
 
@@ -142,7 +144,7 @@ const fn hash_board_perm(board: TetrisBoard, perm_index: u16) -> u64 {
 }
 
 fn make_lookup_key(board: TetrisBoard, perm_index: u16) -> [u8; LOOKUP_KEY_LEN] {
-    let board_bytes: [u8; 40] = board.into();
+    let board_bytes = board.to_bytes(Major::Col);
     let mut key = [0u8; LOOKUP_KEY_LEN];
     key[0..40].copy_from_slice(&board_bytes);
     key[40..42].copy_from_slice(&perm_index.to_le_bytes());
@@ -169,7 +171,7 @@ fn make_frontier_value(board: TetrisBoard, perm_index: u16) -> [u8; LOOKUP_KEY_L
 fn parse_frontier_value(v: &[u8]) -> (TetrisBoard, u16) {
     let board_bytes: [u8; 40] = v[0..40].try_into().unwrap_or([0u8; 40]);
     let perm_index = u16::from_le_bytes([v[40], v[41]]);
-    (TetrisBoard::from(board_bytes), perm_index)
+    (TetrisBoard::from_bytes(board_bytes, Major::Col), perm_index)
 }
 
 // ---------------------------------------------------------------------------
@@ -290,7 +292,7 @@ impl AtlasDB {
 
     /// Seed the empty board with all 5040 bag permutations.
     fn seed_board(&self, board: TetrisBoard) -> Result<bool, Box<dyn std::error::Error>> {
-        let board_bytes: [u8; 40] = board.into();
+        let board_bytes = board.to_bytes(Major::Col);
         let cf_seeded = self.cf_handle(CF_SEEDED);
         let cf_frontier = self.cf_handle(CF_FRONTIER);
 
@@ -322,7 +324,7 @@ impl AtlasDB {
     }
 
     fn is_board_seeded(&self, board: TetrisBoard) -> bool {
-        let board_bytes: [u8; 40] = board.into();
+        let board_bytes = board.to_bytes(Major::Col);
         let cf_seeded = self.cf_handle(CF_SEEDED);
         self.db
             .get_cf(&cf_seeded, &board_bytes)
@@ -539,7 +541,7 @@ impl AtlasDB {
                                             game.board = sim_board; // restore after BeamTetrisState consumed it
                                             let passes_filter = filter_fn(&seed_state);
 
-                                            let board_bytes: [u8; 40] = sim_board.into();
+                                            let board_bytes = sim_board.to_bytes(Major::Col);
                                             let cf_seeded =
                                                 db.cf_handle(CF_SEEDED).expect("missing seeded cf");
                                             let already = db

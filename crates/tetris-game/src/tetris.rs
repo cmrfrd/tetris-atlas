@@ -6,7 +6,9 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::ops::{Index, IndexMut};
 
-use tetris_utils::{BitMask, HeaplessVec, repeat_idx_unroll, rshift_slice_from_mask_u32};
+use tetris_utils::{
+    BitMask, HeaplessVec, repeat_idx_unroll, rshift_slice_from_mask_u32, transpose_bits,
+};
 
 /// Core constants for Tetris game dimensions and pieces.
 pub mod constants {
@@ -1399,8 +1401,6 @@ impl TetrisPieceBagState {
 #[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Ord, PartialOrd)]
 pub struct TetrisBoard([u32; constants::COLS]);
 
-pub type TetrisBoardBinarySlice = [u8; constants::BOARD_SIZE];
-
 impl Default for TetrisBoard {
     fn default() -> Self {
         Self::EMPTY_BOARD
@@ -1425,39 +1425,6 @@ impl TetrisBoard {
     }
 }
 
-/// Converts TetrisBoard to a 40-byte array (column-major u32 native-endian limbs).
-///
-/// This is a zero-cost operation using `transmute`. The byte representation is in
-/// the platform's native endianness.
-///
-/// # Examples
-/// ```
-/// use tetris_game::TetrisBoard;
-/// let board = TetrisBoard::new();
-/// let bytes: [u8; TetrisBoard::WIDTH * 4] = board.into();
-/// ```
-impl const From<TetrisBoard> for [u8; constants::COLS * 4] {
-    #[inline(always)]
-    fn from(board: TetrisBoard) -> Self {
-        unsafe { std::mem::transmute(board.0) }
-    }
-}
-
-/// Converts a byte array to TetrisBoard (column-major u32 native-endian limbs).
-///
-/// This is a zero-cost operation using `transmute`. The byte representation must be
-/// in the platform's native endianness.
-impl const From<[u8; constants::COLS * 4]> for TetrisBoard {
-    #[inline(always)]
-    fn from(bytes: [u8; constants::COLS * 4]) -> Self {
-        unsafe {
-            Self(std::mem::transmute::<
-                [u8; constants::COLS * 4],
-                [u32; constants::COLS],
-            >(bytes))
-        }
-    }
-}
 
 impl TetrisBoard {
     /// Gets the value of a single bit at the specified column and row position.
@@ -1566,96 +1533,158 @@ impl Display for TetrisBoard {
     }
 }
 
-impl TetrisBoard {
-    /// Converts the board to a binary slice representation in row-major order.
-    /// Each cell is represented as a single bit (0 or 1).
-    ///
-    /// # Memory Layout
-    ///
-    /// The output is in row-major order, meaning the array is laid out as:
-    /// - Indices 0-9: Row 0 (columns 0-9)
-    /// - Indices 10-19: Row 1 (columns 0-9)
-    /// - ...
-    /// - Indices 190-199: Row 19 (columns 0-9)
-    ///
-    /// This layout is compatible with standard tensor reshape operations that
-    /// expect row-major ordering (e.g., reshaping to [HEIGHT, WIDTH]).
-    ///
-    /// # Returns
-    ///
-    /// A fixed-size array of u8 representing the board state in row-major order
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use tetris_game::tetris::TetrisBoard;
-    /// let mut board = TetrisBoard::new();
-    /// let binary = board.to_binary_slice();
-    /// assert!(binary.iter().all(|&x| x == 0));
-    /// ```
-    #[inline_conditioned(always)]
-    pub const fn to_binary_slice(&self) -> TetrisBoardBinarySlice {
-        let mut result: TetrisBoardBinarySlice = [0u8; Self::SIZE];
-        repeat_idx_unroll!(Self::SIZE / 8, I, {
-            const I1: usize = 8 * I;
-            result[I1] = ((self.0[I1 % constants::COLS] >> (I1 / constants::COLS)) & 1) as u8;
-            const I2: usize = 8 * I + 1;
-            result[I2] = ((self.0[I2 % constants::COLS] >> (I2 / constants::COLS)) & 1) as u8;
-            const I3: usize = 8 * I + 2;
-            result[I3] = ((self.0[I3 % constants::COLS] >> (I3 / constants::COLS)) & 1) as u8;
-            const I4: usize = 8 * I + 3;
-            result[I4] = ((self.0[I4 % constants::COLS] >> (I4 / constants::COLS)) & 1) as u8;
-            const I5: usize = 8 * I + 4;
-            result[I5] = ((self.0[I5 % constants::COLS] >> (I5 / constants::COLS)) & 1) as u8;
-            const I6: usize = 8 * I + 5;
-            result[I6] = ((self.0[I6 % constants::COLS] >> (I6 / constants::COLS)) & 1) as u8;
-            const I7: usize = 8 * I + 6;
-            result[I7] = ((self.0[I7 % constants::COLS] >> (I7 / constants::COLS)) & 1) as u8;
-            const I8: usize = 8 * I + 7;
-            result[I8] = ((self.0[I8 % constants::COLS] >> (I8 / constants::COLS)) & 1) as u8;
-        });
-        result
-    }
+/// Specifies the memory layout order for flat cell array conversions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Major {
+    /// Row-major: indices 0..WIDTH are row 0 (columns left-to-right),
+    /// then row 1, etc. Compatible with tensor reshape to [HEIGHT, WIDTH].
+    Row,
+    /// Column-major: indices 0..HEIGHT are column 0 (rows bottom-to-top),
+    /// then column 1, etc. Matches the internal `[u32; COLS]` storage order.
+    Col,
+}
 
-    /// Creates a board from a binary slice representation in row-major order.
+impl TetrisBoard {
+    /// Converts the board to a flat cell array where each byte is 0 or 1.
     ///
     /// # Arguments
     ///
-    /// * `binary` - Fixed-size array of u8 representing the board state in row-major order
-    ///              (see `to_binary_slice` for memory layout details)
+    /// * `order` - Layout order for the output array:
+    ///   - `Major::Row`: indices 0..WIDTH are row 0, then row 1, etc.
+    ///     Compatible with tensor reshape to [HEIGHT, WIDTH].
+    ///   - `Major::Col`: indices 0..HEIGHT are col 0, then col 1, etc.
+    ///     Matches the internal column-major storage.
     ///
     /// # Example
     ///
     /// ```
-    /// use tetris_game::tetris::TetrisBoard;
+    /// use tetris_game::tetris::{TetrisBoard, Major};
     /// let mut board = TetrisBoard::new();
-    /// board.set_bit(0, 0);
-    /// let binary = board.to_binary_slice();
-    /// let board2 = TetrisBoard::from_binary_slice(binary);
-    /// assert_eq!(board2.get_bit(0, 0), true);
+    /// board.set_bit(3, 5);
+    /// let cells = board.to_cell_array(Major::Row);
+    /// assert_eq!(cells[5 * 10 + 3], 1); // row 5, col 3
+    /// let cells = board.to_cell_array(Major::Col);
+    /// assert_eq!(cells[3 * 20 + 5], 1); // col 3, row 5
     /// ```
     #[inline_conditioned(always)]
-    pub const fn from_binary_slice(binary: TetrisBoardBinarySlice) -> Self {
-        let mut result = Self::EMPTY_BOARD;
-        repeat_idx_unroll!(Self::SIZE / 8, I, {
-            const I1: usize = 8 * I;
-            result.0[I1 % constants::COLS] |= (binary[I1] as u32) << (I1 / constants::COLS);
-            const I2: usize = 8 * I + 1;
-            result.0[I2 % constants::COLS] |= (binary[I2] as u32) << (I2 / constants::COLS);
-            const I3: usize = 8 * I + 2;
-            result.0[I3 % constants::COLS] |= (binary[I3] as u32) << (I3 / constants::COLS);
-            const I4: usize = 8 * I + 3;
-            result.0[I4 % constants::COLS] |= (binary[I4] as u32) << (I4 / constants::COLS);
-            const I5: usize = 8 * I + 4;
-            result.0[I5 % constants::COLS] |= (binary[I5] as u32) << (I5 / constants::COLS);
-            const I6: usize = 8 * I + 5;
-            result.0[I6 % constants::COLS] |= (binary[I6] as u32) << (I6 / constants::COLS);
-            const I7: usize = 8 * I + 6;
-            result.0[I7 % constants::COLS] |= (binary[I7] as u32) << (I7 / constants::COLS);
-            const I8: usize = 8 * I + 7;
-            result.0[I8 % constants::COLS] |= (binary[I8] as u32) << (I8 / constants::COLS);
-        });
+    pub const fn to_cell_array(&self, order: Major) -> [u8; Self::SIZE] {
+        let mut result = [0u8; Self::SIZE];
+        let mut i = 0;
+        while i < Self::SIZE {
+            let (col, row) = match order {
+                Major::Row => (i % Self::WIDTH, i / Self::WIDTH),
+                Major::Col => (i / Self::HEIGHT, i % Self::HEIGHT),
+            };
+            result[i] = ((self.0[col] >> row) & 1) as u8;
+            i += 1;
+        }
         result
+    }
+
+    /// Creates a board from a flat cell array where each byte is 0 or 1.
+    ///
+    /// # Arguments
+    ///
+    /// * `cells` - Fixed-size array of u8 (0 or 1) representing cell states
+    /// * `order` - Layout order of the input array (see [`to_cell_array`])
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_game::tetris::{TetrisBoard, Major};
+    /// let mut board = TetrisBoard::new();
+    /// board.set_bit(0, 0);
+    /// let cells = board.to_cell_array(Major::Row);
+    /// let board2 = TetrisBoard::from_cell_array(cells, Major::Row);
+    /// assert_eq!(board, board2);
+    /// ```
+    #[inline_conditioned(always)]
+    pub const fn from_cell_array(cells: [u8; Self::SIZE], order: Major) -> Self {
+        let mut board = Self::EMPTY_BOARD;
+        let mut i = 0;
+        while i < Self::SIZE {
+            let (col, row) = match order {
+                Major::Row => (i % Self::WIDTH, i / Self::WIDTH),
+                Major::Col => (i / Self::HEIGHT, i % Self::HEIGHT),
+            };
+            board.0[col] |= (cells[i] as u32) << row;
+            i += 1;
+        }
+        board
+    }
+
+    /// Serializes the board to packed bytes (u32 limbs as native-endian bytes).
+    ///
+    /// Returns `WIDTH * 4` bytes. The internal `[u32; WIDTH]` column limbs are
+    /// transmuted directly to bytes.
+    ///
+    /// - `Major::Col`: direct transmute (zero-cost), column `c` is at bytes `4c..4c+4`
+    /// - `Major::Row`: transmute then transpose the packed bits via [`transpose_bits`]
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_game::tetris::{TetrisBoard, Major};
+    /// let board = TetrisBoard::new();
+    /// let bytes = board.to_bytes(Major::Col);
+    /// assert_eq!(bytes.len(), TetrisBoard::WIDTH * 4);
+    /// assert_eq!(TetrisBoard::from_bytes(bytes, Major::Col), board);
+    /// ```
+    #[inline(always)]
+    pub const fn to_bytes(&self, order: Major) -> [u8; constants::COLS * 4] {
+        // SAFETY: [u32; COLS] and [u8; COLS*4] have the same size
+        let mut bytes: [u8; constants::COLS * 4] = unsafe { std::mem::transmute(self.0) };
+        match order {
+            Major::Col => bytes,
+            Major::Row => {
+                // Each column is a 32-bit limb (20 used bits + 12 zero padding).
+                // Transpose the full 32×10 bit grid; padding bits are zero
+                // so they harmlessly transpose to zero positions.
+                transpose_bits::<32, { constants::COLS }, { constants::COLS * 4 }>(&mut bytes);
+                bytes
+            }
+        }
+    }
+
+    /// Deserializes a board from packed bytes (u32 limbs as native-endian bytes).
+    ///
+    /// Inverse of [`to_bytes`]. The `order` parameter must match what was used
+    /// to produce the bytes.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetris_game::tetris::{TetrisBoard, Major};
+    /// let mut board = TetrisBoard::new();
+    /// board.set_bit(3, 5);
+    /// let bytes = board.to_bytes(Major::Col);
+    /// assert_eq!(TetrisBoard::from_bytes(bytes, Major::Col), board);
+    /// ```
+    #[inline(always)]
+    pub const fn from_bytes(bytes: [u8; constants::COLS * 4], order: Major) -> Self {
+        match order {
+            Major::Col => {
+                // SAFETY: [u8; COLS*4] and [u32; COLS] have the same size
+                unsafe {
+                    Self(std::mem::transmute::<
+                        [u8; constants::COLS * 4],
+                        [u32; constants::COLS],
+                    >(bytes))
+                }
+            }
+            Major::Row => {
+                // Reverse the transpose, then transmute
+                let mut bytes = bytes;
+                // Transpose back: 10×32 → 32×10
+                transpose_bits::<{ constants::COLS }, 32, { constants::COLS * 4 }>(&mut bytes);
+                unsafe {
+                    Self(std::mem::transmute::<
+                        [u8; constants::COLS * 4],
+                        [u32; constants::COLS],
+                    >(bytes))
+                }
+            }
+        }
     }
 }
 
@@ -3332,24 +3361,51 @@ mod tests {
     }
 
     #[test]
-    fn test_to_from_binary_slice() {
+    fn test_to_from_cell_array_row_major() {
         let board = TetrisBoard::new();
-
-        let binary_slice = board.to_binary_slice();
-        assert_eq!(binary_slice.len(), constants::BOARD_SIZE);
-
-        let board2 = TetrisBoard::from_binary_slice(binary_slice);
+        let cells = board.to_cell_array(Major::Row);
+        assert_eq!(cells.len(), constants::BOARD_SIZE);
+        let board2 = TetrisBoard::from_cell_array(cells, Major::Row);
         assert_eq!(board, board2);
 
-        // fuzz test
         let mut rng = rand::rng();
         for _ in 0..100 {
             let mut board = TetrisBoard::new();
             board.set_random_bits(1024, &mut rng);
-            let binary_slice = board.to_binary_slice();
-            let board2 = TetrisBoard::from_binary_slice(binary_slice);
+            let cells = board.to_cell_array(Major::Row);
+            let board2 = TetrisBoard::from_cell_array(cells, Major::Row);
             assert_eq!(board, board2);
         }
+    }
+
+    #[test]
+    fn test_to_from_cell_array_col_major() {
+        let board = TetrisBoard::new();
+        let cells = board.to_cell_array(Major::Col);
+        assert_eq!(cells.len(), constants::BOARD_SIZE);
+        let board2 = TetrisBoard::from_cell_array(cells, Major::Col);
+        assert_eq!(board, board2);
+
+        let mut rng = rand::rng();
+        for _ in 0..100 {
+            let mut board = TetrisBoard::new();
+            board.set_random_bits(1024, &mut rng);
+            let cells = board.to_cell_array(Major::Col);
+            let board2 = TetrisBoard::from_cell_array(cells, Major::Col);
+            assert_eq!(board, board2);
+        }
+    }
+
+    #[test]
+    fn test_cell_array_order_indexing() {
+        let mut board = TetrisBoard::new();
+        board.set_bit(3, 5);
+
+        let row_major = board.to_cell_array(Major::Row);
+        assert_eq!(row_major[5 * constants::COLS + 3], 1);
+
+        let col_major = board.to_cell_array(Major::Col);
+        assert_eq!(col_major[3 * constants::ROWS + 5], 1);
     }
 
     /// Test placement index bijection: index <-> placement
@@ -3563,11 +3619,8 @@ mod tests {
             let limbs: [u32; constants::COLS] = std::array::from_fn(|_| rng.random());
             let board = TetrisBoard(limbs);
 
-            // Convert to bytes using Into trait
-            let bytes: [u8; constants::COLS * 4] = board.into();
-
-            // Convert back using From trait
-            let reconstructed = TetrisBoard::from(bytes);
+            let bytes = board.to_bytes(Major::Col);
+            let reconstructed = TetrisBoard::from_bytes(bytes, Major::Col);
 
             // Verify roundtrip
             assert_eq!(
@@ -3575,6 +3628,34 @@ mod tests {
                 "Board should roundtrip correctly through bytes"
             );
         }
+    }
+
+    #[test]
+    fn test_tetris_board_bytes_row_major_roundtrip() {
+        let mut rng = rand::rng();
+        for _ in 0..1000 {
+            // Only set bits in the valid row range (0..ROWS) to avoid padding issues
+            let limbs: [u32; constants::COLS] =
+                std::array::from_fn(|_| rng.random::<u32>() & ((1 << constants::ROWS) - 1));
+            let board = TetrisBoard(limbs);
+
+            let bytes = board.to_bytes(Major::Row);
+            let reconstructed = TetrisBoard::from_bytes(bytes, Major::Row);
+            assert_eq!(board, reconstructed, "Row-major bytes roundtrip failed");
+        }
+    }
+
+    #[test]
+    fn test_tetris_board_bytes_row_col_different() {
+        let mut board = TetrisBoard::new();
+        board.set_bit(3, 5);
+        let col_bytes = board.to_bytes(Major::Col);
+        let row_bytes = board.to_bytes(Major::Row);
+        // Col and row major should differ for non-trivial boards
+        assert_ne!(col_bytes, row_bytes);
+        // But both should roundtrip
+        assert_eq!(board, TetrisBoard::from_bytes(col_bytes, Major::Col));
+        assert_eq!(board, TetrisBoard::from_bytes(row_bytes, Major::Row));
     }
 
     #[test]

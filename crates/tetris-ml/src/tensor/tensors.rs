@@ -7,7 +7,7 @@ use anyhow::Result;
 use candle_core::{D, DType, Device, IndexOp, Shape, Tensor};
 use candle_nn::{encoding::one_hot, ops::softmax};
 use tetris_game::{
-    TetrisBoard, TetrisGameSet, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement,
+    Major, TetrisBoard, TetrisGameSet, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement,
 };
 use tetris_search::OrientationCounts;
 
@@ -29,7 +29,7 @@ impl TetrisBoardsTensor {
     pub fn from_gameset(games: &TetrisGameSet, device: &Device) -> Result<Self> {
         let mut boards = Vec::with_capacity(games.len() * TetrisBoard::SIZE);
         games.boards().into_iter().for_each(|board| {
-            boards.extend_from_slice(&board.to_binary_slice());
+            boards.extend_from_slice(&board.to_cell_array(Major::Row));
         });
         let shape = Shape::from_dims(&[games.len(), TetrisBoard::SIZE]);
         let boards = Tensor::from_vec(boards, &shape, device)?;
@@ -41,7 +41,7 @@ impl TetrisBoardsTensor {
         let shape = Shape::from_dims(&[boards.len(), TetrisBoard::SIZE]);
         let mut flattened: Vec<u8> = Vec::with_capacity(boards.len() * TetrisBoard::SIZE);
         for board in boards.iter() {
-            flattened.extend(board.to_binary_slice().iter());
+            flattened.extend(board.to_cell_array(Major::Row).iter());
         }
         let boards = Tensor::from_vec(flattened, &shape, device)?;
         Self::try_from(boards)
@@ -59,7 +59,7 @@ impl TetrisBoardsTensor {
                     .flatten_all()?
                     .to_dtype(DType::U8)?
                     .to_vec1::<u8>()?;
-                boards.push(TetrisBoard::from_binary_slice(board.try_into().unwrap()));
+                boards.push(TetrisBoard::from_cell_array(board.try_into().unwrap(), Major::Row));
             }
             boards
         };

@@ -10,8 +10,8 @@
 pub mod tetris;
 
 pub use tetris::{
-    Column, IsLost, MAX_GAMES, ORDERED_7, PlacementResult, Rotation, TetrisBoard,
-    TetrisBoardBinarySlice, TetrisGame, TetrisGameRng, TetrisGameSet, TetrisGameSetError,
-    TetrisPiece, TetrisPieceBag, TetrisPieceBagState, TetrisPieceOrientation, TetrisPiecePlacement,
-    constants, fisher_yates_7bag_stream_from_seed, swap_3bit_chunks,
+    Column, IsLost, MAX_GAMES, Major, ORDERED_7, PlacementResult, Rotation, TetrisBoard,
+    TetrisGame, TetrisGameRng, TetrisGameSet, TetrisGameSetError, TetrisPiece, TetrisPieceBag,
+    TetrisPieceBagState, TetrisPieceOrientation, TetrisPiecePlacement, constants,
+    fisher_yates_7bag_stream_from_seed, swap_3bit_chunks,
 };

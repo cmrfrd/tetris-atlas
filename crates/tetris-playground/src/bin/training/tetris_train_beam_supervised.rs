@@ -16,7 +16,8 @@ use tracing::{Level, info};
 use tracing_subscriber::prelude::*;
 
 use tetris_game::{
-    IsLost, TetrisBoard, TetrisGame, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement,
+    IsLost, Major, TetrisBoard, TetrisGame, TetrisPiece, TetrisPieceOrientation,
+    TetrisPiecePlacement,
 };
 use tetris_ml::fdtype;
 use tetris_ml::ops::{create_orientation_mask, get_l2_norm};
@@ -279,7 +280,7 @@ impl TetrisBeamSupervisedPolicyMLP {
         let mut features_vec = Vec::with_capacity(batch_size * TetrisBoard::SIZE);
 
         for board in boards {
-            let binary = board.to_binary_slice();
+            let binary = board.to_cell_array(Major::Row);
             for &cell in binary.iter() {
                 features_vec.push(cell as f32);
             }

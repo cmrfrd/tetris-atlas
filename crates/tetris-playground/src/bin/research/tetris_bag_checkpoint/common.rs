@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 
 use anyhow::{Result, bail};
 use rustc_hash::{FxHashSet, FxHasher};
-use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPiecePlacement};
+use tetris_game::{IsLost, Major, TetrisBoard, TetrisPiece, TetrisPiecePlacement};
 
 const BOARD_KEY_BYTES: usize = 40;
 
@@ -38,7 +38,7 @@ impl BoardKey {
             TetrisBoard::SIZE => {
                 let mut bytes = [0u8; TetrisBoard::SIZE];
                 bytes.copy_from_slice(blob);
-                Ok(Self::from_board(&TetrisBoard::from_binary_slice(bytes)))
+                Ok(Self::from_board(&TetrisBoard::from_cell_array(bytes, Major::Row)))
             }
             n => bail!(
                 "unsupported board blob length {n}; expected {} or {} bytes",
@@ -60,7 +60,7 @@ impl BoardKey {
             ]);
             native_bytes[start..start + 4].copy_from_slice(&limb.to_ne_bytes());
         }
-        TetrisBoard::from(native_bytes)
+        TetrisBoard::from_bytes(native_bytes, Major::Col)
     }
 
     pub fn as_bytes(&self) -> &[u8; BOARD_KEY_BYTES] {
@@ -569,7 +569,7 @@ mod tests {
         assert_eq!(key.to_board(), board);
         assert_eq!(BoardKey::from_blob(key.as_bytes()).ok(), Some(key));
         assert_eq!(
-            BoardKey::from_blob(&board.to_binary_slice()).ok(),
+            BoardKey::from_blob(&board.to_cell_array(Major::Row)).ok(),
             Some(key)
         );
     }

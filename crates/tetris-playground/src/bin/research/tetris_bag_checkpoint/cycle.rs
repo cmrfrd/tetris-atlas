@@ -8,7 +8,7 @@ use clap::Args;
 use rayon::prelude::*;
 use rusqlite::{Connection, params};
 use rustc_hash::FxHashSet;
-use tetris_game::TetrisBoard;
+use tetris_game::{Major, TetrisBoard};
 
 use crate::common::*;
 
@@ -68,7 +68,7 @@ pub fn run(args: CycleArgs) -> Result<()> {
             .filter_map(|r| r.ok())
             .map(|(hash, blob)| {
                 let arr: [u8; 200] = blob.as_slice().try_into().unwrap_or([0u8; 200]);
-                (hash, TetrisBoard::from_binary_slice(arr))
+                (hash, TetrisBoard::from_cell_array(arr, Major::Row))
             })
             .collect();
         rows

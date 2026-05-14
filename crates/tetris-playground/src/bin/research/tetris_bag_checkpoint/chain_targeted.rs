@@ -9,7 +9,7 @@ use dashmap::DashMap;
 use rayon::prelude::*;
 use rusqlite::{Connection, params};
 use rustc_hash::FxHashSet;
-use tetris_game::TetrisBoard;
+use tetris_game::{Major, TetrisBoard};
 
 use crate::common::*;
 
@@ -269,7 +269,7 @@ pub fn run(args: ChainTargetedArgs) -> Result<()> {
                     Ok((h as u64, blob))
                 }) {
                     let arr: [u8; 200] = row.1.as_slice().try_into().unwrap_or([0u8; 200]);
-                    boards.push((row.0, TetrisBoard::from_binary_slice(arr)));
+                    boards.push((row.0, TetrisBoard::from_cell_array(arr, Major::Row)));
                     break;
                 }
             }
@@ -289,7 +289,7 @@ pub fn run(args: ChainTargetedArgs) -> Result<()> {
         .filter_map(|r| r.ok())
         .map(|(hash, blob)| {
             let arr: [u8; 200] = blob.as_slice().try_into().unwrap_or([0u8; 200]);
-            (hash, TetrisBoard::from_binary_slice(arr))
+            (hash, TetrisBoard::from_cell_array(arr, Major::Row))
         })
         .collect()
     };
@@ -969,7 +969,7 @@ pub fn run(args: ChainTargetedArgs) -> Result<()> {
                     let total_perms = { *cover_perm_counts.get(hash).unwrap_or(&0) };
                     stmt.execute(params![
                         *hash as i64,
-                        &board.to_binary_slice() as &[u8],
+                        &board.to_cell_array(Major::Row) as &[u8],
                         board.count() as i64,
                         total_perms as i64,
                     ])?;
