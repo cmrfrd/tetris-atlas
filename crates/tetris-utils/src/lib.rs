@@ -165,6 +165,35 @@ pub const fn transpose_bits<const ROWS: usize, const COLS: usize, const N: usize
         return;
     }
 
+    // Fast path: 10x20 row-first scatter with full compile-time unrolling
+    // (canonical Tetris-board layout). Wrap the per-bit work in an inlined
+    // helper so the macro produces 200 short call sites rather than 200 fully
+    // expanded bit-shuffle blocks — keeps rustc compile time bounded while
+    // still letting LLVM inline+constant-propagate at -O.
+    if ROWS == 10 && COLS == 20 && N == 25 {
+        #[inline_conditioned(always)]
+        const fn move_bit<const M: usize>(
+            orig: &[u8; M],
+            out: &mut [u8; M],
+            src: usize,
+            dst: usize,
+        ) {
+            let bit = (orig[src >> 3] >> (src & 7)) & 1;
+            out[dst >> 3] |= bit << (dst & 7);
+        }
+
+        let orig = *m;
+        crate::repeat_idx_unroll!(25, I, {
+            m[I] = 0;
+        });
+        crate::repeat_idx_unroll!(10, ROW, {
+            crate::repeat_idx_unroll!(20, COL, {
+                move_bit(&orig, m, ROW * 20 + COL, COL * 10 + ROW);
+            });
+        });
+        return;
+    }
+
     let orig = *m;
 
     let mut b = 0;
