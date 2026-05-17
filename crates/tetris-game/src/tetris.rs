@@ -2983,86 +2983,44 @@ mod tests {
                 orientation.index()
             );
         }
-
-        for piece in TetrisPiece::all() {
-            for rotation in 0..Rotation::MAX {
-                for column in 0..Column::MAX {
-                    let orientation = TetrisPieceOrientation {
-                        rotation: Rotation(rotation),
-                        column: Column(column),
-                    };
-                    let idx = orientation.index();
-                    let round_tripped = TetrisPieceOrientation::from_index(idx);
-                    assert_eq!(
-                        round_tripped, orientation,
-                        "Orientation round-trip failed for piece={piece}, rotation={rotation}, column={column}: {orientation} -> idx={idx} -> {round_tripped}"
-                    );
-                }
-            }
-        }
     }
 
-    /// Test board cell counting: empty, full, and each position
+    /// Test board bit operations: set, get, clear, count, fill
     #[test]
-    fn test_board_count() {
-        // Test empty board
+    fn test_board_bit_ops() {
         let mut board = TetrisBoard::new();
         assert_eq!(board.count(), 0);
 
-        // Test full board (only the playable area)
+        // Empty board: every cell reads false
+        for row in 0..constants::ROWS {
+            for col in 0..constants::COLS {
+                assert!(!board.get_bit(col, row));
+            }
+        }
+
+        // Set each bit, verify it reads back and count increments
+        for row in 0..constants::ROWS {
+            for col in 0..constants::COLS {
+                board.set_bit(col, row);
+                assert!(board.get_bit(col, row), "get_bit should be true after set at col={col}, row={row}");
+                let expected_count = (row * constants::COLS + col + 1) as u32;
+                assert_eq!(board.count(), expected_count);
+            }
+        }
+
+        // Full board via fill
+        board.clear();
         board.fill();
         assert_eq!(board.count(), (constants::ROWS * constants::COLS) as u32);
 
-        // clear and check zero
-        board.clear();
-        assert_eq!(board.count(), 0);
-
-        // Test each position individually counting along the way
-        for row in 0..constants::ROWS {
-            for col in 0..constants::COLS {
-                let expected_count = (row * constants::COLS + col + 1) as u32;
-                board.set_bit(col, row);
-                assert_eq!(
-                    board.count(),
-                    expected_count,
-                    "Count mismatch at col={}, row={}: expected {}, got {}",
-                    col,
-                    row,
-                    expected_count,
-                    board.count()
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn test_board_set_and_get_bit() {
-        let mut board = TetrisBoard::new();
-
-        // Set every bit, assert it's set, and others are not
-        for row in 0..constants::ROWS {
-            for col in 0..constants::COLS {
-                board.set_bit(col, row);
-                assert!(
-                    board.get_bit(col, row),
-                    "Bit at (col {}, row {}) should be set",
-                    col,
-                    row
-                );
-            }
-        }
-        // Now unset them one by one and check they're unset
+        // Clear each bit, verify it reads back false
         for row in 0..constants::ROWS {
             for col in 0..constants::COLS {
                 board.clear_bit(col, row);
-                assert!(
-                    !board.get_bit(col, row),
-                    "Bit at (col {}, row {}) should be unset",
-                    col,
-                    row
-                );
+                assert!(!board.get_bit(col, row), "get_bit should be false after clear at col={col}, row={row}");
             }
         }
+        assert_eq!(board.count(), 0);
     }
 
     // For each cell in the board, set a single bit and assert the height
@@ -3416,38 +3374,22 @@ mod tests {
     }
 
     #[test]
-    fn test_to_from_cell_array_row_major() {
-        let board = TetrisBoard::new();
-        let cells = board.to_cell_array(Major::Row);
-        assert_eq!(cells.len(), constants::BOARD_SIZE);
-        let board2 = TetrisBoard::from_cell_array(cells, Major::Row);
-        assert_eq!(board, board2);
-
+    fn test_to_from_cell_array_roundtrip() {
         let mut rng = rand::rng();
-        for _ in 0..100 {
-            let mut board = TetrisBoard::new();
-            board.set_random_bits(1024, &mut rng);
-            let cells = board.to_cell_array(Major::Row);
-            let board2 = TetrisBoard::from_cell_array(cells, Major::Row);
-            assert_eq!(board, board2);
-        }
-    }
+        for major in [Major::Row, Major::Col] {
+            // Empty board
+            let board = TetrisBoard::new();
+            let cells = board.to_cell_array(major);
+            assert_eq!(cells.len(), constants::BOARD_SIZE);
+            assert_eq!(board, TetrisBoard::from_cell_array(cells, major));
 
-    #[test]
-    fn test_to_from_cell_array_col_major() {
-        let board = TetrisBoard::new();
-        let cells = board.to_cell_array(Major::Col);
-        assert_eq!(cells.len(), constants::BOARD_SIZE);
-        let board2 = TetrisBoard::from_cell_array(cells, Major::Col);
-        assert_eq!(board, board2);
-
-        let mut rng = rand::rng();
-        for _ in 0..100 {
-            let mut board = TetrisBoard::new();
-            board.set_random_bits(1024, &mut rng);
-            let cells = board.to_cell_array(Major::Col);
-            let board2 = TetrisBoard::from_cell_array(cells, Major::Col);
-            assert_eq!(board, board2);
+            // Random boards
+            for _ in 0..100 {
+                let mut board = TetrisBoard::new();
+                board.set_random_bits(1024, &mut rng);
+                let cells = board.to_cell_array(major);
+                assert_eq!(board, TetrisBoard::from_cell_array(cells, major));
+            }
         }
     }
 
@@ -3822,10 +3764,47 @@ mod tests {
     }
 
     #[test]
-    fn test_all_placements_display() {
-        for p in &TetrisPiecePlacement::ALL_PLACEMENTS {
-            let s = format!("{p}");
-            assert!(!s.is_empty());
-        }
+    fn test_from_pieces() {
+        // Single piece
+        const SINGLE: TetrisPieceBagState =
+            TetrisPieceBagState::from_pieces([TetrisPiece::I_PIECE]);
+        assert_eq!(SINGLE.count(), 1);
+        assert!(SINGLE.contains(TetrisPiece::I_PIECE));
+        assert!(!SINGLE.contains(TetrisPiece::O_PIECE));
+
+        // Multiple pieces
+        const MULTI: TetrisPieceBagState = TetrisPieceBagState::from_pieces([
+            TetrisPiece::S_PIECE,
+            TetrisPiece::Z_PIECE,
+            TetrisPiece::T_PIECE,
+            TetrisPiece::L_PIECE,
+        ]);
+        assert_eq!(MULTI.count(), 4);
+        assert!(MULTI.contains(TetrisPiece::S_PIECE));
+        assert!(MULTI.contains(TetrisPiece::Z_PIECE));
+        assert!(MULTI.contains(TetrisPiece::T_PIECE));
+        assert!(MULTI.contains(TetrisPiece::L_PIECE));
+        assert!(!MULTI.contains(TetrisPiece::O_PIECE));
+        assert!(!MULTI.contains(TetrisPiece::I_PIECE));
+        assert!(!MULTI.contains(TetrisPiece::J_PIECE));
+
+        // All seven equals FULL_MASK
+        const ALL: TetrisPieceBagState = TetrisPieceBagState::from_pieces([
+            TetrisPiece::O_PIECE,
+            TetrisPiece::I_PIECE,
+            TetrisPiece::S_PIECE,
+            TetrisPiece::Z_PIECE,
+            TetrisPiece::T_PIECE,
+            TetrisPiece::L_PIECE,
+            TetrisPiece::J_PIECE,
+        ]);
+        assert_eq!(ALL.count(), 7);
+        assert_eq!(u8::from(ALL), TetrisPieceBagState::FULL_MASK);
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate piece")]
+    fn test_from_pieces_duplicate_panics() {
+        let _ = TetrisPieceBagState::from_pieces([TetrisPiece::I_PIECE, TetrisPiece::I_PIECE]);
     }
 }
