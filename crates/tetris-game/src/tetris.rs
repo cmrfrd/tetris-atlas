@@ -1188,6 +1188,33 @@ impl TetrisPieceBagState {
         Self(Self::FULL_MASK)
     }
 
+    /// Creates a bag state from a fixed-size array of pieces.
+    ///
+    /// Enforces at compile time that `N <= NUM_TETRIS_PIECES` and that
+    /// there are no duplicate pieces (checked via assert in const context).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tetris_game::tetris::{TetrisPieceBagState, TetrisPiece};
+    ///
+    /// const I_ONLY: TetrisPieceBagState = TetrisPieceBagState::from_pieces([TetrisPiece::I_PIECE]);
+    /// assert_eq!(I_ONLY.count(), 1);
+    /// assert!(I_ONLY.contains(TetrisPiece::I_PIECE));
+    ///
+    /// const TWO: TetrisPieceBagState = TetrisPieceBagState::from_pieces([TetrisPiece::S_PIECE, TetrisPiece::Z_PIECE]);
+    /// assert_eq!(TWO.count(), 2);
+    /// ```
+    pub const fn from_pieces<const N: usize>(pieces: [TetrisPiece; N]) -> Self {
+        assert!(N <= constants::NUM_TETRIS_PIECES);
+        let mut mask = 0u8;
+        repeat_idx_unroll!(N, K, {
+            assert!(mask & pieces[K].0 == 0, "duplicate piece in from_pieces");
+            mask |= pieces[K].0;
+        });
+        Self(mask)
+    }
+
     /// Returns the number of pieces remaining in the bag.
     ///
     /// This operation counts the set bits in the internal bitmask representation,
