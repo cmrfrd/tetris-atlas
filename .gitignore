@@ -24,6 +24,7 @@ crates/tensorboard/src/tensorboard_generated/
 # generated local outputs
 *.bin
 *.csv
+*.tsv
 *.png
 data/
 
