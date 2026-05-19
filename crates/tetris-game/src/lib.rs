@@ -7,11 +7,12 @@
 #![allow(clippy::needless_return)]
 #![allow(clippy::out_of_bounds_indexing)]
 
+pub mod game_set;
 pub mod tetris;
 
+pub use game_set::{MAX_GAMES, TetrisGameSet, TetrisGameSetError};
 pub use tetris::{
-    Column, IsLost, MAX_GAMES, Major, ORDERED_7, PlacementResult, Rotation, TetrisBoard,
-    TetrisGame, TetrisGameRng, TetrisGameSet, TetrisGameSetError, TetrisPiece, TetrisPieceBag,
-    TetrisPieceBagState, TetrisPieceOrientation, TetrisPiecePlacement, constants,
-    fisher_yates_7bag_stream_from_seed, swap_3bit_chunks,
+    Column, IsLost, Major, ORDERED_7, PlacementResult, Rotation, TetrisBoard, TetrisGame,
+    TetrisGameRng, TetrisPiece, TetrisPieceBag, TetrisPieceBagState, TetrisPieceOrientation,
+    TetrisPiecePlacement, constants, fisher_yates_7bag_stream_from_seed, swap_3bit_chunks,
 };
