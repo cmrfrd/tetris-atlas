@@ -1462,6 +1462,29 @@ impl TetrisBoard {
     }
 }
 
+/// Converts TetrisBoard to a column-major limb-as-bytes array.
+///
+/// Zero-cost via `transmute`. Uses `BOARD_BYTES` so the layout follows
+/// `BackingColType` automatically.
+impl const From<TetrisBoard> for [u8; constants::BOARD_BYTES] {
+    #[inline(always)]
+    fn from(board: TetrisBoard) -> Self {
+        unsafe { std::mem::transmute(board.0) }
+    }
+}
+
+/// Converts a column-major limb-as-bytes array to TetrisBoard.
+impl const From<[u8; constants::BOARD_BYTES]> for TetrisBoard {
+    #[inline(always)]
+    fn from(bytes: [u8; constants::BOARD_BYTES]) -> Self {
+        unsafe {
+            Self(std::mem::transmute::<
+                [u8; constants::BOARD_BYTES],
+                [constants::BackingColType; constants::COLS],
+            >(bytes))
+        }
+    }
+}
 
 impl TetrisBoard {
     /// Gets the value of a single bit at the specified column and row position.
@@ -1595,13 +1618,15 @@ impl TetrisBoard {
     /// # Example
     ///
     /// ```
-    /// use tetris_game::tetris::{TetrisBoard, Major};
+    /// use tetris_game::tetris::{TetrisBoard, Major, constants};
+    /// let col = constants::COLS.min(4).saturating_sub(1);
+    /// let row = constants::ROWS.min(6).saturating_sub(1);
     /// let mut board = TetrisBoard::new();
-    /// board.set_bit(3, 5);
+    /// board.set_bit(col, row);
     /// let cells = board.to_cell_array(Major::Row);
-    /// assert_eq!(cells[5 * 10 + 3], 1); // row 5, col 3
+    /// assert_eq!(cells[row * constants::COLS + col], 1);
     /// let cells = board.to_cell_array(Major::Col);
-    /// assert_eq!(cells[3 * 20 + 5], 1); // col 3, row 5
+    /// assert_eq!(cells[col * constants::ROWS + row], 1);
     /// ```
     #[inline_conditioned(always)]
     pub const fn to_cell_array(&self, order: Major) -> [u8; Self::SIZE] {
@@ -1762,15 +1787,10 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::tetris::TetrisBoard;
-    /// let mut board = TetrisBoard::new();
-    /// // Set some cells to create board ID "PXDHAE"
-    /// // Row 0: cols 1,2,3,4,5,7,8,9
-    /// for c in [1,2,3,4,5,7,8,9] { board.set_bit(c, 0); }
-    /// // Row 1: cols 3,4,7,8,9
-    /// for c in [3,4,7,8,9] { board.set_bit(c, 1); }
-    /// // Row 2: col 7
-    /// board.set_bit(7, 2);
-    /// assert_eq!(board.to_board_id(), "PXDHAE");
+    /// // Round-trip: encode then decode any board.
+    /// let board = TetrisBoard::new();
+    /// let id = board.to_board_id();
+    /// assert_eq!(TetrisBoard::from_board_id(&id), Some(board));
     /// ```
     #[must_use]
     pub fn to_board_id(&self) -> String {
@@ -2074,10 +2094,10 @@ impl TetrisBoard {
     /// # Examples
     ///
     /// ```
-    /// use tetris_game::tetris::TetrisBoard;
+    /// use tetris_game::tetris::{TetrisBoard, constants};
     /// let mut board = TetrisBoard::new();
-    /// // Fill an entire row
-    /// for col in 0..10 {
+    /// // Fill an entire row at the current board width.
+    /// for col in 0..constants::COLS {
     ///     board.set_bit(col, 0);
     /// }
     /// assert_eq!(board.clear_filled_rows(), 1);
@@ -2372,6 +2392,7 @@ impl TetrisGameRng {
         self.n = 0;
     }
 }
+
 
 /// The result of applying a piece placement to a board.
 ///
@@ -3002,7 +3023,10 @@ mod tests {
         for row in 0..constants::ROWS {
             for col in 0..constants::COLS {
                 board.set_bit(col, row);
-                assert!(board.get_bit(col, row), "get_bit should be true after set at col={col}, row={row}");
+                assert!(
+                    board.get_bit(col, row),
+                    "get_bit should be true after set at col={col}, row={row}"
+                );
                 let expected_count = (row * constants::COLS + col + 1) as u32;
                 assert_eq!(board.count(), expected_count);
             }
@@ -3017,7 +3041,10 @@ mod tests {
         for row in 0..constants::ROWS {
             for col in 0..constants::COLS {
                 board.clear_bit(col, row);
-                assert!(!board.get_bit(col, row), "get_bit should be false after clear at col={col}, row={row}");
+                assert!(
+                    !board.get_bit(col, row),
+                    "get_bit should be false after clear at col={col}, row={row}"
+                );
             }
         }
         assert_eq!(board.count(), 0);
@@ -3065,12 +3092,20 @@ mod tests {
 
     #[test]
     fn test_drop_piece_fuzz() {
-        // fuzz test
         for _ in 0..10_000 {
             let piece = TetrisPiece::new(rand::random::<u8>() % (TetrisPiece::NUM_PIECES as u8));
             let rotation = Rotation(rand::random::<u8>() % Rotation::MAX);
-            let column =
-                Column((rand::random::<u8>()) % ((constants::COLS as u8) - piece.width(rotation)));
+            let piece_width = piece.width(rotation);
+            // Skip orientations that don't fit on the current board width
+            if (piece_width as usize) > constants::COLS {
+                continue;
+            }
+            let slack = (constants::COLS as u8) - piece_width;
+            let column = if slack == 0 {
+                Column(0)
+            } else {
+                Column(rand::random::<u8>() % (slack + 1))
+            };
             TetrisBoard::new().apply_piece_placement(TetrisPiecePlacement {
                 piece,
                 orientation: TetrisPieceOrientation { rotation, column },
@@ -3560,17 +3595,24 @@ mod tests {
 
     #[test]
     fn test_board_id_known_value() {
+        // The expected ID "PXDHAE" is only valid at COLS == 10.
+        if constants::COLS != 10 {
+            return;
+        }
         let mut board = TetrisBoard::new();
-        // Row 0: cols 1,2,3,4,5,7,8,9
         for c in [1, 2, 3, 4, 5, 7, 8, 9] {
-            board.set_bit(c, 0);
+            if c < constants::COLS {
+                board.set_bit(c, 0);
+            }
         }
-        // Row 1: cols 3,4,7,8,9
         for c in [3, 4, 7, 8, 9] {
-            board.set_bit(c, 1);
+            if c < constants::COLS {
+                board.set_bit(c, 1);
+            }
         }
-        // Row 2: col 7
-        board.set_bit(7, 2);
+        if 7 < constants::COLS {
+            board.set_bit(7, 2);
+        }
         assert_eq!(board.to_board_id(), "PXDHAE");
     }
 
@@ -3600,9 +3642,8 @@ mod tests {
     #[test]
     fn test_board_id_invalid() {
         assert!(TetrisBoard::from_board_id("!!!").is_none());
-        assert!(TetrisBoard::from_board_id("01").is_none()); // '0' and '1' not in base32
-        // Too long
-        let long = "A".repeat(41);
+        assert!(TetrisBoard::from_board_id("01").is_none());
+        let long = "A".repeat(constants::BOARD_SIZE / 5 + 1);
         assert!(TetrisBoard::from_board_id(&long).is_none());
     }
 
@@ -3693,10 +3734,7 @@ mod tests {
                 for c in 0..constants::COLS {
                     let bit_pos = r * constants::COLS + c;
                     let from_bytes = (row_bytes[bit_pos / 8] >> (bit_pos % 8)) & 1;
-                    assert_eq!(
-                        from_bytes, 0,
-                        "padding bit set at (r={r}, c={c})"
-                    );
+                    assert_eq!(from_bytes, 0, "padding bit set at (r={r}, c={c})");
                 }
             }
         }
@@ -3725,7 +3763,10 @@ mod tests {
             }
 
             let decoded = TetrisBoard::from_bytes(row_bytes, Major::Row);
-            assert_eq!(decoded, board, "from_bytes(Row) of manually packed cells must reconstruct the board");
+            assert_eq!(
+                decoded, board,
+                "from_bytes(Row) of manually packed cells must reconstruct the board"
+            );
         }
     }
 
