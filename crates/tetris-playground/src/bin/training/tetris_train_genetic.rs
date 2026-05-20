@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 //! # Tetris Training - Genetic Algorithm
 //!
 //! Evolves optimal heuristic coefficients for Tetris board evaluation using a genetic algorithm.

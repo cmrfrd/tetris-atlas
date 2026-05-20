@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 //! # Tetris Controlled-Invariant Synthesis (MVP)
 //!
 //! Builds an abstract safety game from sampled concrete states and solves for a
@@ -12,7 +14,10 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::time::Instant;
-use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPiecePlacement};
+use tetris_game::{
+    IsLost, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
+    TetrisPiecePlacement, constants,
+};
 
 #[derive(Parser, Debug, Clone)]
 #[command(name = "tetris-invariant-synthesis")]
@@ -165,7 +170,7 @@ struct IncrementalState {
 impl IncrementalState {
     fn new() -> Self {
         let root = ConcreteState {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             bag: TetrisPieceBagState::new(),
         };
         let mut visited = HashSet::new();
@@ -318,7 +323,7 @@ fn run_tetris_invariant_incremental(cli: Cli) {
         let sccs = strongly_connected_components(&graph, solved.kept_states.len());
         let empty_abs = abstract_state(
             ConcreteState {
-                board: TetrisBoard::new(),
+                board: TetrisBoard::EMPTY_BOARD,
                 bag: TetrisPieceBagState::new(),
             },
             &best_round_cfg,
@@ -565,7 +570,7 @@ fn run_tetris_invariant_synthesis(cli: Cli) {
         );
 
         let empty = ConcreteState {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             bag: TetrisPieceBagState::new(),
         };
         let empty_abs = abstract_state(empty, &abstraction);
@@ -607,7 +612,7 @@ fn run_tetris_invariant_synthesis(cli: Cli) {
     if let Some((cfg, solved, falsify)) = best_result {
         let empty_abs = abstract_state(
             ConcreteState {
-                board: TetrisBoard::new(),
+                board: TetrisBoard::EMPTY_BOARD,
                 bag: TetrisPieceBagState::new(),
             },
             &cfg,
@@ -657,7 +662,7 @@ fn run_tetris_invariant_synthesis(cli: Cli) {
 
 fn sample_reachable_concrete_states(max_states: usize, max_depth: usize) -> Vec<ConcreteState> {
     let root = ConcreteState {
-        board: TetrisBoard::new(),
+        board: TetrisBoard::EMPTY_BOARD,
         bag: TetrisPieceBagState::new(),
     };
     let mut visited: HashSet<ConcreteState> = HashSet::with_capacity(max_states.min(1_000_000));
@@ -751,7 +756,7 @@ fn abstract_state(state: ConcreteState, cfg: &AbstractionConfig) -> AbstractStat
 
     let mut roughness = 0u32;
     let mut i = 0usize;
-    while i + 1 < TetrisBoard::WIDTH {
+    while i + 1 < StandardTetris::COLS {
         roughness += heights[i].abs_diff(heights[i + 1]);
         i += 1;
     }

@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 //! # Bag-Aware Inductive Invariant Checker via SMT (CEGIS)
 //!
 //! Uses Z3 to find per-bag-state inductive invariants P_B(board) under
@@ -62,7 +64,7 @@ fn main() {
         max_roughness: FULL_BAG_MAX_ROUGHNESS,
         min_flat_block: 4,
     };
-    let empty = tetris_game::TetrisBoard::new();
+    let empty = tetris_game::TetrisBoard::EMPTY_BOARD;
     let empty_ok = encoding::board_satisfies_invariant_with_params(&empty, &full_bag_base);
     info!("empty board in P  = {}", empty_ok);
     if !empty_ok {

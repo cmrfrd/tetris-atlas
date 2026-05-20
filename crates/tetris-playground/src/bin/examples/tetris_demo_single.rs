@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 //! # Tetris Demo - Single Beam Search
 //!
 //! Demonstrates that a single beam search agent can play Tetris indefinitely (or up to N pieces)

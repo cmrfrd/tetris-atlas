@@ -2,7 +2,10 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::time::Instant;
 
-use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPiecePlacement};
+use tetris_game::{
+    IsLost, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPiecePlacement,
+    constants,
+};
 use tetris_utils::repeat_idx_unroll;
 
 #[derive(Debug, Clone, Copy)]
@@ -18,12 +21,12 @@ fn score_board(state: &ScoreState) -> f32 {
     let heights = state.board.heights();
 
     let mut aggregate_height = 0.0;
-    repeat_idx_unroll!(TetrisBoard::WIDTH, I, {
+    repeat_idx_unroll!(StandardTetris::COLS, I, {
         aggregate_height += heights[I] as f32;
     });
 
     let mut bumpiness = 0.0;
-    repeat_idx_unroll!(TetrisBoard::WIDTH - 1, I, {
+    repeat_idx_unroll!(StandardTetris::COLS - 1, I, {
         bumpiness += (heights[I] as f32 - heights[I + 1] as f32).abs();
     });
 
@@ -99,7 +102,7 @@ struct CandidateNode {
 impl Default for CandidateNode {
     fn default() -> Self {
         Self {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             placement: TetrisPiecePlacement::default().index(),
             score: f32::NEG_INFINITY,
             lines_cleared: 0,
@@ -158,7 +161,7 @@ pub fn search(
     let mut frontier: BinaryHeap<FrontierEntry> = BinaryHeap::new();
 
     let root = SearchNode {
-        board: TetrisBoard::new(),
+        board: TetrisBoard::EMPTY_BOARD,
         depth: 0,
         parent_slot: u32::MAX,
         placement: TetrisPiecePlacement::default().index(),

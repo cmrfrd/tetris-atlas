@@ -1,3 +1,6 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
+use tetris_game::TetrisGameConfig;
 mod config;
 mod graph;
 mod policy;
@@ -147,24 +150,24 @@ fn parse_nonzero_bag_mask(value: &str) -> Result<u8, String> {
 
 fn parse_root_board_rows(value: Option<&str>) -> Result<tetris_game::TetrisBoard> {
     let Some(value) = value else {
-        return Ok(tetris_game::TetrisBoard::new());
+        return Ok(tetris_game::TetrisBoard::EMPTY_BOARD);
     };
 
     let rows = value.split('/').collect::<Vec<_>>();
     ensure!(
-        rows.len() == tetris_game::TetrisBoard::HEIGHT,
+        rows.len() == tetris_game::StandardTetris::ROWS,
         "root board must contain exactly {} slash-separated rows",
-        tetris_game::TetrisBoard::HEIGHT
+        tetris_game::StandardTetris::ROWS
     );
 
-    let mut board = tetris_game::TetrisBoard::new();
+    let mut board = tetris_game::TetrisBoard::EMPTY_BOARD;
     for (row_idx_from_top, row) in rows.iter().enumerate() {
         ensure!(
-            row.len() == tetris_game::TetrisBoard::WIDTH,
+            row.len() == tetris_game::StandardTetris::COLS,
             "each root-board row must contain exactly {} cells",
-            tetris_game::TetrisBoard::WIDTH
+            tetris_game::StandardTetris::COLS
         );
-        let board_row = tetris_game::TetrisBoard::HEIGHT - 1 - row_idx_from_top;
+        let board_row = tetris_game::StandardTetris::ROWS - 1 - row_idx_from_top;
         for (col, ch) in row.chars().enumerate() {
             match ch {
                 '#' => board.set_bit(col, board_row),
@@ -555,10 +558,10 @@ fn run_solver(
 }
 
 fn board_to_rows(board: tetris_game::TetrisBoard) -> String {
-    (0..tetris_game::TetrisBoard::HEIGHT)
+    (0..tetris_game::StandardTetris::ROWS)
         .rev()
         .map(|row| {
-            (0..tetris_game::TetrisBoard::WIDTH)
+            (0..tetris_game::StandardTetris::COLS)
                 .map(|col| if board.get_bit(col, row) { '#' } else { '.' })
                 .collect::<String>()
         })

@@ -93,7 +93,7 @@ impl UniverseBuilder {
             "root board must be admissible"
         );
 
-        let empty_board = TetrisBoard::new();
+        let empty_board = TetrisBoard::EMPTY_BOARD;
         let empty_board_id = builder.intern_board(empty_board);
         ensure!(empty_board_id == 0, "empty board should be interned first");
         let root_board_id = builder.intern_board(builder.config.root.board);
@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn board_admissibility_is_inclusive() {
-        let mut board = TetrisBoard::new();
+        let mut board = TetrisBoard::EMPTY_BOARD;
         board.set_bit(0, 1);
         assert!(board_is_admissible(
             board,
@@ -500,7 +500,7 @@ mod tests {
 
     #[test]
     fn inadmissible_root_is_rejected() {
-        let mut root_board = TetrisBoard::new();
+        let mut root_board = TetrisBoard::EMPTY_BOARD;
         root_board.set_bit(0, 1);
         let result = UniverseBuilder::build(SolverConfig {
             admissibility: BoardAdmissibility {

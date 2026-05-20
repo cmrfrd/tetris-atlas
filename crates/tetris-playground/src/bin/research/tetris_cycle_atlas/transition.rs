@@ -91,7 +91,7 @@ mod tests {
     #[test]
     fn transition_cache_reuses_board_piece_successors() {
         let mut cache = TransitionCache::new(BoardAdmissibility::default());
-        let board = TetrisBoard::new();
+        let board = TetrisBoard::EMPTY_BOARD;
 
         let first_count = cache.successors(board, TetrisPiece::O_PIECE).len();
         let after_first = cache.stats();

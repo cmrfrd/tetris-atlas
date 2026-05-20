@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 //! # State Trajectory Recorder
 //!
 //! Plays Tetris using single beam search and records the trajectory of
@@ -36,7 +38,10 @@
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::time::Instant;
-use tetris_game::{IsLost, TetrisBoard, TetrisGame, TetrisPieceOrientation};
+use tetris_game::{
+    IsLost, StandardTetris, TetrisBoard, TetrisGame, TetrisGameConfig, TetrisPieceOrientation,
+    constants,
+};
 use tetris_search::{BeamTetrisState, ScoredState, TetrisBeamSearch, height_mse_beam_tetris_score};
 
 const BEAM_WIDTH: usize = 1024;
@@ -59,8 +64,8 @@ fn board_to_flat_array(board: TetrisBoard) -> [u8; 200] {
     let limbs = board.as_limbs();
     let mut flat = [0u8; 200];
     let mut i = 0;
-    for col in 0..TetrisBoard::WIDTH {
-        for row in 0..TetrisBoard::HEIGHT {
+    for col in 0..StandardTetris::COLS {
+        for row in 0..StandardTetris::ROWS {
             flat[i] = ((limbs[col] >> row) & 1) as u8;
             i += 1;
         }

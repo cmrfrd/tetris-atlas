@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 //! 5-bag empty-board witness search.
 //!
 //! This binary enumerates fixed 5-bag sequences and runs a direct PUCT/MCTS search
@@ -13,7 +15,10 @@ use std::time::Instant;
 use anyhow::{Context, Result, bail};
 use clap::Parser;
 use rustc_hash::{FxHashMap, FxHasher};
-use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPiecePlacement};
+use tetris_game::{
+    IsLost, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPiecePlacement,
+    constants,
+};
 use tetris_search::{
     TetrisBoardScoreState, height_mse_board_score, height_mse_distance_from_empty,
 };
@@ -31,7 +36,7 @@ const DEFAULT_MCTS_PRIOR_TEMPERATURE: f32 = 64.0;
 const DEFAULT_MCTS_PRIOR_NOISE: f32 = 0.0;
 const DEFAULT_MCTS_MAX_CHILDREN: usize = TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT;
 const DEFAULT_MCTS_PROGRESS_EVERY: u64 = 25_000;
-const DEFAULT_MAX_HEIGHT: u32 = TetrisBoard::HEIGHT as u32;
+const DEFAULT_MAX_HEIGHT: u32 = StandardTetris::ROWS as u32;
 
 type ForcedBag = [TetrisPiece; PIECES_PER_BAG];
 
@@ -41,7 +46,7 @@ static ALL_BAG_PERMUTATIONS: [ForcedBag; BAG_PERMUTATION_COUNT] =
 const DEFAULT_PLACEMENT: TetrisPiecePlacement = TetrisPiecePlacement::from_index(0);
 const DEFAULT_CANDIDATE: Candidate = Candidate {
     placement: DEFAULT_PLACEMENT,
-    board: TetrisBoard::new(),
+    board: TetrisBoard::EMPTY_BOARD,
     prior_score: f32::NEG_INFINITY,
 };
 
@@ -288,7 +293,7 @@ struct PuctSearch<'a> {
 impl<'a> PuctSearch<'a> {
     fn new(pieces: &'a [TetrisPiece], config: PuctConfig) -> Self {
         let root_state = SearchState {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             step: 0,
         };
         let mut index = FxHashMap::default();
@@ -705,8 +710,8 @@ fn validate_cli(cli: &Cli) -> Result<()> {
     if !cli.mcts_prior_noise.is_finite() || cli.mcts_prior_noise < 0.0 {
         bail!("--mcts-prior-noise must be finite and non-negative");
     }
-    if cli.max_height > TetrisBoard::HEIGHT as u32 {
-        bail!("--max-height must be <= {}", TetrisBoard::HEIGHT);
+    if cli.max_height > StandardTetris::ROWS as u32 {
+        bail!("--max-height must be <= {}", StandardTetris::ROWS);
     }
     Ok(())
 }
@@ -1045,7 +1050,7 @@ fn replay_witness(
     placements: &[TetrisPiecePlacement; TOTAL_PIECES],
     max_height: u32,
 ) -> Option<FiveBagWitness> {
-    let mut board = TetrisBoard::new();
+    let mut board: TetrisBoard = TetrisBoard::EMPTY_BOARD;
     let mut lines_cleared = 0u32;
     let mut observed_max_height = 0u32;
 
@@ -1198,7 +1203,7 @@ fn print_witness(
     print_placement_indices("placement_indices", &witness.placements, TOTAL_PIECES);
     println!("placements:");
 
-    let mut board = TetrisBoard::new();
+    let mut board = TetrisBoard::EMPTY_BOARD;
     for (idx, placement) in witness.placements.iter().copied().enumerate() {
         let result = board.apply_piece_placement(placement);
         println!(
@@ -1237,7 +1242,7 @@ fn print_failure_prefix(pieces: &[TetrisPiece; TOTAL_PIECES], failure: &PuctFail
     }
 
     println!("placement_prefix:");
-    let mut board = TetrisBoard::new();
+    let mut board = TetrisBoard::EMPTY_BOARD;
     for (idx, placement) in failure
         .placements
         .iter()
@@ -1300,7 +1305,7 @@ mod tests {
 
     fn test_config() -> PuctConfig {
         PuctConfig {
-            max_height: TetrisBoard::HEIGHT as u32,
+            max_height: StandardTetris::ROWS as u32,
             iterations: Some(8),
             exploration: 1.4,
             prior_temperature: 64.0,
@@ -1363,8 +1368,8 @@ mod tests {
 
     #[test]
     fn scorer_prefers_empty_board() {
-        let empty = TetrisBoard::new();
-        let mut occupied = TetrisBoard::new();
+        let empty = TetrisBoard::EMPTY_BOARD;
+        let mut occupied = TetrisBoard::EMPTY_BOARD;
         let placement = TetrisPiecePlacement::all_from_piece(TetrisPiece::O_PIECE)[0];
         let result = occupied.apply_piece_placement(placement);
         assert_eq!(result.is_lost, IsLost::NOT_LOST);

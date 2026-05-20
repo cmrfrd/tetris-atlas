@@ -314,7 +314,7 @@ pub fn run(args: ProveChainArgs) -> Result<()> {
     let mut witness_rows = Vec::new();
 
     if verify_empty_entry {
-        let empty_sources = [BoardKey::from_board(&TetrisBoard::new())];
+        let empty_sources = [BoardKey::from_board(&TetrisBoard::EMPTY_BOARD)];
         let spec = TransitionSpec {
             transition_step: -1,
             label: "empty->S0".to_string(),

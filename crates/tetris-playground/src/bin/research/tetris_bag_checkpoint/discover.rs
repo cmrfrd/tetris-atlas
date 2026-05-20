@@ -102,7 +102,7 @@ pub fn run(args: DiscoverArgs) -> Result<()> {
         let mut hashes = FxHashSet::default();
         let mut nodes = 0u64;
         collect_reachable_hashes(
-            TetrisBoard::new(),
+            TetrisBoard::EMPTY_BOARD,
             perm,
             0,
             args.max_height,
@@ -197,7 +197,7 @@ pub fn run(args: DiscoverArgs) -> Result<()> {
         let mut hits: Vec<(u64, TetrisBoard)> = Vec::new();
         let mut nodes = 0u64;
         collect_reachable_filtered(
-            TetrisBoard::new(),
+            TetrisBoard::EMPTY_BOARD,
             perm,
             0,
             args.max_height,

@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn board_cache_deduplicates() {
         let mut cache = BoardCache::new();
-        let board = TetrisBoard::new();
+        let board = TetrisBoard::EMPTY_BOARD;
         let id1 = cache.get_or_insert(board);
         let id2 = cache.get_or_insert(board);
         assert_eq!(id1, id2);

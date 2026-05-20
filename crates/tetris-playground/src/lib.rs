@@ -1,3 +1,6 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
+
 //! Tetris Playground - runnable demos, atlas builders, training jobs, and research tools.
 //!
 //! This crate contains all runnable binaries for:

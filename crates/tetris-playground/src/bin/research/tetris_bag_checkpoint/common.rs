@@ -2,7 +2,10 @@ use std::hash::{Hash, Hasher};
 
 use anyhow::{Result, bail};
 use rustc_hash::{FxHashSet, FxHasher};
-use tetris_game::{IsLost, Major, TetrisBoard, TetrisPiece, TetrisPiecePlacement};
+use tetris_game::{
+    IsLost, Major, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece,
+    TetrisPiecePlacement, constants,
+};
 
 const BOARD_KEY_BYTES: usize = 40;
 
@@ -35,22 +38,25 @@ impl BoardKey {
                 bytes.copy_from_slice(blob);
                 Ok(Self(bytes))
             }
-            TetrisBoard::SIZE => {
-                let mut bytes = [0u8; TetrisBoard::SIZE];
+            StandardTetris::BOARD_SIZE => {
+                let mut bytes = [0u8; StandardTetris::BOARD_SIZE];
                 bytes.copy_from_slice(blob);
-                Ok(Self::from_board(&TetrisBoard::from_cell_array(bytes, Major::Row)))
+                Ok(Self::from_board(&TetrisBoard::from_cell_array(
+                    bytes,
+                    Major::Row,
+                )))
             }
             n => bail!(
                 "unsupported board blob length {n}; expected {} or {} bytes",
                 BOARD_KEY_BYTES,
-                TetrisBoard::SIZE
+                StandardTetris::BOARD_SIZE
             ),
         }
     }
 
     pub fn to_board(self) -> TetrisBoard {
         let mut native_bytes = [0u8; BOARD_KEY_BYTES];
-        for idx in 0..TetrisBoard::WIDTH {
+        for idx in 0..StandardTetris::COLS {
             let start = idx * 4;
             let limb = u32::from_le_bytes([
                 self.0[start],
@@ -560,7 +566,7 @@ mod tests {
 
     #[test]
     fn board_key_round_trips_exact_board() {
-        let mut board = TetrisBoard::new();
+        let mut board = TetrisBoard::EMPTY_BOARD;
         board.set_bit(0, 0);
         board.set_bit(9, 19);
 
@@ -577,7 +583,7 @@ mod tests {
     #[test]
     fn witness_replay_reaches_exact_target() {
         let perm = generate_permutations()[0];
-        let mut target = TetrisBoard::new();
+        let mut target = TetrisBoard::EMPTY_BOARD;
         let mut expected_placements = [0u8; 7];
 
         for (idx, piece) in perm.iter().enumerate() {
@@ -591,9 +597,9 @@ mod tests {
         let targets = FxHashSet::from_iter([target_key]);
         let mut nodes = 0;
         let witness = find_bag_witness(
-            TetrisBoard::new(),
+            TetrisBoard::EMPTY_BOARD,
             &perm,
-            TetrisBoard::HEIGHT as u32,
+            StandardTetris::ROWS as u32,
             u32::MAX,
             &targets,
             &mut nodes,
@@ -604,9 +610,9 @@ mod tests {
         assert_eq!(found_key, target_key);
         assert_eq!(
             replay_bag(
-                TetrisBoard::new(),
+                TetrisBoard::EMPTY_BOARD,
                 &placements,
-                TetrisBoard::HEIGHT as u32,
+                StandardTetris::ROWS as u32,
                 u32::MAX
             ),
             Some(target)
@@ -616,7 +622,7 @@ mod tests {
 
     #[test]
     fn witness_cell_feasibility_uses_count_and_residue() {
-        let board = TetrisBoard::new();
+        let board = TetrisBoard::EMPTY_BOARD;
 
         assert!(any_target_cell_feasible(board, 0, &[18]));
         assert!(!any_target_cell_feasible(board, 0, &[17]));

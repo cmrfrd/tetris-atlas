@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 //! # Full 7-Bag Adversarial Atlas Solver
 //!
 //! Solves the full 7-bag Tetris survival problem where the bag ordering is

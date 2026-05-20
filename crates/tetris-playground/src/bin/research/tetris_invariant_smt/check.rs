@@ -59,7 +59,7 @@ pub fn check_piece_inductive(
         SatResult::Unsat => PieceCheckResult::Safe,
         SatResult::Sat => {
             let model = solver.get_model().unwrap();
-            let mut tb = TetrisBoard::new();
+            let mut tb = TetrisBoard::EMPTY_BOARD;
             for (i, col_bv) in board.iter().enumerate() {
                 if let Some(val) = model.eval(col_bv, true) {
                     if let Some(bits) = val.as_u64() {

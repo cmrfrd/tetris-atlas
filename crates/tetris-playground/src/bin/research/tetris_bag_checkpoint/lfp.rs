@@ -127,9 +127,9 @@ pub fn run(args: LfpArgs) -> Result<()> {
     let num_perms = perms.len();
 
     // Start with the empty board
-    let mut boards: Vec<TetrisBoard> = vec![TetrisBoard::new()];
+    let mut boards: Vec<TetrisBoard> = vec![TetrisBoard::EMPTY_BOARD];
     let mut board_hashes: FxHashSet<u64> = FxHashSet::default();
-    board_hashes.insert(board_hash(&TetrisBoard::new()));
+    board_hashes.insert(board_hash(&TetrisBoard::EMPTY_BOARD));
 
     let mut verified_up_to = 0usize;
     let overall_start = Instant::now();
@@ -387,7 +387,7 @@ pub fn run(args: LfpArgs) -> Result<()> {
     let total_time = overall_start.elapsed().as_secs_f64();
 
     if !live_hashes.is_empty() {
-        let empty_hash = board_hash(&TetrisBoard::new());
+        let empty_hash = board_hash(&TetrisBoard::EMPTY_BOARD);
         let live_boards: Vec<&TetrisBoard> = boards
             .iter()
             .filter(|b| live_hashes.contains(&board_hash(b)))

@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 #![feature(const_convert)]
 #![feature(const_trait_impl)]
 #![feature(impl_trait_in_bindings)]
@@ -22,7 +24,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use tetris_game::{
-    IsLost, Major, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPieceOrientation,
+    IsLost, Major, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
+    TetrisPieceOrientation, constants,
 };
 use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetris_score};
 use tetris_utils::repeat_idx_unroll;
@@ -132,9 +135,9 @@ const LOOKUP_KEY_LEN: usize = 42;
 const fn hash_board_perm(board: TetrisBoard, perm_index: u16) -> u64 {
     const FNV_OFFSET: u64 = 0xcbf29ce484222325;
     const FNV_PRIME: u64 = 0x100000001b3;
-    let board_bytes: [u32; TetrisBoard::WIDTH] = board.as_limbs();
+    let board_bytes: [u32; StandardTetris::COLS] = board.as_limbs();
     let mut hash = FNV_OFFSET;
-    repeat_idx_unroll!(TetrisBoard::WIDTH, I, {
+    repeat_idx_unroll!(StandardTetris::COLS, I, {
         hash ^= board_bytes[I] as u64;
         hash = hash.wrapping_mul(FNV_PRIME);
     });
@@ -316,7 +319,7 @@ impl AtlasDB {
     }
 
     fn seed_starting_state(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let empty = TetrisBoard::new();
+        let empty = TetrisBoard::EMPTY_BOARD;
         println!("Seeding {} permutations from empty board...", NUM_PERMS);
         self.seed_board(empty)?;
         println!("Seeded.");
@@ -668,7 +671,7 @@ fn run_explore(db_path: &str) {
     println!("Atlas explore mode. Lookup size ≈ {}", atlas.lookup_size());
     println!("Checking empty board coverage...");
 
-    let empty = TetrisBoard::new();
+    let empty = TetrisBoard::EMPTY_BOARD;
     let mut covered = 0u32;
     for perm_idx in 0..NUM_PERMS as u16 {
         let lk = make_lookup_key(empty, perm_idx);

@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 //! # Bag-Cycle Reset Solver
 //!
 //! Depth-bounded AND-OR search proving the player can force a configured

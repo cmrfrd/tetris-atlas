@@ -55,7 +55,7 @@ fn discover_boards(max_height: u32, max_holes: u32, max_boards: usize) -> Vec<Te
     let mut boards: Vec<TetrisBoard> = Vec::new();
     let mut board_set: FxHashSet<TetrisBoard> = FxHashSet::default();
 
-    let empty = TetrisBoard::new();
+    let empty = TetrisBoard::EMPTY_BOARD;
     boards.push(empty);
     board_set.insert(empty);
 
@@ -421,7 +421,7 @@ pub fn run(args: Gfp2Args) -> Result<()> {
 
     let gfp_time = overall_gfp_start.elapsed().as_secs_f64();
 
-    let empty_hash = board_hash(&TetrisBoard::new());
+    let empty_hash = board_hash(&TetrisBoard::EMPTY_BOARD);
     let empty_in_inner = inner_hashes.contains(&empty_hash);
 
     println!();

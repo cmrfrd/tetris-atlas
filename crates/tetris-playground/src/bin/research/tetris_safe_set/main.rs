@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 //! Minimal safe-set certifier built around an allocation-free best-first backtracker.
 //!
 //! Goal:
@@ -31,7 +33,10 @@ use clap::Parser;
 use crossbeam_queue::SegQueue;
 use dashmap::{DashMap, mapref::entry::Entry};
 use itertools::Itertools;
-use tetris_game::{Major, TetrisBoard, TetrisPiece, TetrisPiecePlacement};
+use tetris_game::{
+    Major, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPiecePlacement,
+    constants,
+};
 use tetris_search::{
     TetrisSequencePlanOutcome, TetrisSequencePlanner, TetrisSequenceWitness, best_first_capacity,
     height_mse_plan_score,
@@ -1906,7 +1911,7 @@ fn run_worker(worker_idx: usize, shared: &Arc<SharedRuntimeContext>) {
 /// CLI entrypoint that certifies all 5040 first bags from the empty start board.
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let start_board = TetrisBoard::new();
+    let start_board = TetrisBoard::EMPTY_BOARD;
     let worker_count = cli.workers.max(1);
 
     println!("tetris_safe_set");
@@ -2092,13 +2097,13 @@ mod tests {
 
     /// Constructs a board with exactly one occupied cell.
     fn board_with_bit(col: usize, row: usize) -> TetrisBoard {
-        let mut board = TetrisBoard::new();
+        let mut board = TetrisBoard::EMPTY_BOARD;
         board.set_bit(col, row);
         board
     }
 
     /// Constructs a board directly from its column-major limb representation.
-    fn board_from_limbs(limbs: [u32; TetrisBoard::WIDTH]) -> TetrisBoard {
+    fn board_from_limbs(limbs: [u32; StandardTetris::COLS]) -> TetrisBoard {
         let mut bytes = [0u8; 40];
         for (idx, limb) in limbs.into_iter().enumerate() {
             let start = idx * std::mem::size_of::<u32>();
@@ -2312,7 +2317,7 @@ mod tests {
     #[test]
     /// Smoke test that the best-first planner can produce a full 7-piece script from empty.
     fn best_first_search_returns_full_depth_plan() {
-        let board = TetrisBoard::new();
+        let board = TetrisBoard::EMPTY_BOARD;
         let sequence = [
             TetrisPiece::O_PIECE,
             TetrisPiece::I_PIECE,
@@ -2342,10 +2347,10 @@ mod tests {
             TetrisPiece::L_PIECE,
             TetrisPiece::J_PIECE,
         ];
-        let direct = test_witness([0, 1, 2, 3, 4, 5, 6], TetrisBoard::new());
+        let direct = test_witness([0, 1, 2, 3, 4, 5, 6], TetrisBoard::EMPTY_BOARD);
 
         let result = certify_first_bag_with(
-            TetrisBoard::new(),
+            TetrisBoard::EMPTY_BOARD,
             &first_bag,
             &ALL_FORCED_BAG_PERMUTATIONS,
             |_, bag| {
@@ -2399,16 +2404,16 @@ mod tests {
             TetrisPiece::J_PIECE,
         ];
 
-        let mut intermediate = TetrisBoard::new();
+        let mut intermediate = TetrisBoard::EMPTY_BOARD;
         intermediate.set_bit(0, 3);
         intermediate.set_bit(1, 2);
         intermediate.set_bit(2, 1);
 
         let candidate = test_witness([0, 1, 2, 3, 4, 5, 6], intermediate);
-        let recovered_terminal = test_witness([6, 5, 4, 3, 2, 1, 0], TetrisBoard::new());
+        let recovered_terminal = test_witness([6, 5, 4, 3, 2, 1, 0], TetrisBoard::EMPTY_BOARD);
 
         let result = certify_first_bag_with(
-            TetrisBoard::new(),
+            TetrisBoard::EMPTY_BOARD,
             &first_bag,
             &[second_a, second_b],
             |board, bag| {
@@ -2436,7 +2441,7 @@ mod tests {
             .copied()
             .collect::<Vec<_>>();
         safe_boards.sort();
-        assert_eq!(safe_boards, vec![TetrisBoard::new()]);
+        assert_eq!(safe_boards, vec![TetrisBoard::EMPTY_BOARD]);
     }
 
     #[test]
@@ -2470,17 +2475,17 @@ mod tests {
             TetrisPiece::J_PIECE,
         ];
 
-        let mut bad_intermediate = TetrisBoard::new();
+        let mut bad_intermediate = TetrisBoard::EMPTY_BOARD;
         bad_intermediate.set_bit(0, 3);
-        let mut good_intermediate = TetrisBoard::new();
+        let mut good_intermediate = TetrisBoard::EMPTY_BOARD;
         good_intermediate.set_bit(1, 3);
 
         let bad_candidate = test_witness([0, 1, 2, 3, 4, 5, 6], bad_intermediate);
         let good_candidate = test_witness([6, 5, 4, 3, 2, 1, 0], good_intermediate);
-        let direct_recovery = test_witness([1, 1, 1, 1, 1, 1, 1], TetrisBoard::new());
+        let direct_recovery = test_witness([1, 1, 1, 1, 1, 1, 1], TetrisBoard::EMPTY_BOARD);
 
         let result = certify_first_bag_with(
-            TetrisBoard::new(),
+            TetrisBoard::EMPTY_BOARD,
             &first_bag,
             &[second_a, second_b],
             |board, bag| {
@@ -2507,7 +2512,7 @@ mod tests {
     #[test]
     /// A cached `Complete` intermediate board should immediately certify future hits on that board.
     fn certify_first_bag_reuses_complete_intermediate_board() {
-        let mut intermediate = TetrisBoard::new();
+        let mut intermediate = TetrisBoard::EMPTY_BOARD;
         intermediate.set_bit(0, 3);
 
         let context = SharedSearchContext::new();
@@ -2517,7 +2522,7 @@ mod tests {
                 remaining_depth: 1,
             },
             RecursiveBoardStatus::Complete {
-                safe_boards: Arc::from([TetrisBoard::new()]),
+                safe_boards: Arc::from([TetrisBoard::EMPTY_BOARD]),
             },
         );
 
@@ -2525,7 +2530,7 @@ mod tests {
         assert_eq!(
             result,
             RecursiveBoardCertification::Complete {
-                safe_boards: Arc::from([TetrisBoard::new()]),
+                safe_boards: Arc::from([TetrisBoard::EMPTY_BOARD]),
             }
         );
         let progress = context.progress_snapshot();
@@ -2545,7 +2550,7 @@ mod tests {
             TetrisPiece::I_PIECE,
             TetrisPiece::O_PIECE,
         ];
-        let mut intermediate = TetrisBoard::new();
+        let mut intermediate = TetrisBoard::EMPTY_BOARD;
         intermediate.set_bit(0, 3);
 
         let context = SharedSearchContext::new();
@@ -2609,7 +2614,7 @@ mod tests {
         let context = SharedSearchContext::new();
         let board = board_with_bit(0, SAFE_HEIGHT_CAP as usize + 1);
         let failing_bag = ALL_FORCED_BAG_PERMUTATIONS[0];
-        let safe_board = TetrisBoard::new();
+        let safe_board = TetrisBoard::EMPTY_BOARD;
 
         context.recursive_board_cache.insert(
             RecursiveBoardCacheKey {
@@ -2655,7 +2660,7 @@ mod tests {
         let context = SharedSearchContext::new();
         let board = board_with_bit(0, SAFE_HEIGHT_CAP as usize + 1);
         let forced_bag = ALL_FORCED_BAG_PERMUTATIONS[0];
-        let safe_a = TetrisBoard::new();
+        let safe_a = TetrisBoard::EMPTY_BOARD;
         let safe_b = board_with_bit(1, 0);
 
         context.direct_cache.insert(
@@ -2814,7 +2819,7 @@ mod tests {
         let context = SharedSearchContext::new();
         let complete_board = board_with_bit(0, 4);
         let impossible_board = board_with_bit(1, 4);
-        let safe_board = TetrisBoard::new();
+        let safe_board = TetrisBoard::EMPTY_BOARD;
         let failing_bag = ALL_FORCED_BAG_PERMUTATIONS[0];
         let complete_depth = RECOVERY_BAG_DEPTH;
         let impossible_depth = complete_depth - 1;
@@ -2996,7 +3001,7 @@ mod tests {
     #[test]
     /// The scheduler should claim pending work once and track transitions to solved.
     fn scheduler_claim_lifecycle_and_metrics() {
-        let start_board = TetrisBoard::new();
+        let start_board = TetrisBoard::EMPTY_BOARD;
         let scheduler = Scheduler::new(start_board);
 
         assert_eq!(scheduler.pending_board_count(), 1);
@@ -3022,7 +3027,7 @@ mod tests {
     #[test]
     /// Newly discovered boards should deduplicate across repeated enqueue attempts.
     fn scheduler_enqueue_discovered_board_deduplicates() {
-        let start_board = TetrisBoard::new();
+        let start_board = TetrisBoard::EMPTY_BOARD;
         let scheduler = Scheduler::new(start_board);
         let discovered_a = board_with_bit(0, 0);
         let discovered_b = board_with_bit(1, 0);
@@ -3069,7 +3074,7 @@ mod tests {
     #[test]
     /// Scheduler accounting should maintain tracked = pending + in_flight + solved + failed + abandoned.
     fn scheduler_accounting_invariant_holds() {
-        let start_board = TetrisBoard::new();
+        let start_board = TetrisBoard::EMPTY_BOARD;
         let scheduler = Scheduler::new(start_board);
         let discovered_a = board_with_bit(0, 0);
         let discovered_b = board_with_bit(1, 0);
@@ -3111,7 +3116,7 @@ mod tests {
     #[test]
     /// Abandoned boards should release in-flight accounting without being marked solved or failed.
     fn scheduler_abandoned_board_releases_inflight_slot() {
-        let start_board = TetrisBoard::new();
+        let start_board = TetrisBoard::EMPTY_BOARD;
         let scheduler = Scheduler::new(start_board);
 
         let ClaimDecision::Claimed(board) = scheduler.claim_next_board() else {
@@ -3129,7 +3134,7 @@ mod tests {
     #[test]
     /// Once all work is drained and nothing is in flight, the scheduler should report exhaustion.
     fn scheduler_reports_exhausted_after_draining_work() {
-        let start_board = TetrisBoard::new();
+        let start_board = TetrisBoard::EMPTY_BOARD;
         let scheduler = Scheduler::new(start_board);
 
         let ClaimDecision::Claimed(board) = scheduler.claim_next_board() else {
@@ -3146,7 +3151,7 @@ mod tests {
     #[test]
     /// Newly discovered boards must be published before the last in-flight board is released.
     fn scheduler_can_claim_published_work_before_last_inflight_finishes() {
-        let start_board = TetrisBoard::new();
+        let start_board = TetrisBoard::EMPTY_BOARD;
         let discovered = board_with_bit(2, 0);
         let scheduler = Scheduler::new(start_board);
 
@@ -3230,7 +3235,7 @@ mod tests {
     /// Board processing should stop before more first-bag work once global cancellation is observed.
     fn process_board_stops_before_work_when_cancelled() {
         let context = SharedSearchContext::new();
-        let board = TetrisBoard::new();
+        let board = TetrisBoard::EMPTY_BOARD;
         let mut progress_updates = 0usize;
         let mut published_boards = 0usize;
 
@@ -3273,7 +3278,7 @@ mod tests {
     /// Sample collector should keep only the globally strongest bounded witness set.
     fn sample_collector_keeps_bounded_best_entries() {
         let collector = SampleCollector::new(2);
-        let board = TetrisBoard::new();
+        let board = TetrisBoard::EMPTY_BOARD;
 
         collector.merge_entries(vec![
             CertifiedFirstBag {
@@ -3309,7 +3314,7 @@ mod tests {
     #[test]
     /// Workers should exit immediately when cancellation is already requested.
     fn worker_exits_immediately_when_cancel_requested() {
-        let shared = Arc::new(SharedRuntimeContext::new(TetrisBoard::new(), 4));
+        let shared = Arc::new(SharedRuntimeContext::new(TetrisBoard::EMPTY_BOARD, 4));
         shared.cancel_requested.store(true, AtomicOrdering::Release);
 
         let worker_shared = Arc::clone(&shared);
@@ -3487,9 +3492,9 @@ mod tests {
     /// Concurrent direct-cache lookups should execute the underlying search only once.
     fn direct_cache_deduplicates_in_progress_searches() {
         let context = Arc::new(SharedSearchContext::new());
-        let board = TetrisBoard::new();
+        let board = TetrisBoard::EMPTY_BOARD;
         let bag = ALL_FORCED_BAG_PERMUTATIONS[0];
-        let witness = test_witness([0, 1, 2, 3, 4, 5, 6], TetrisBoard::new());
+        let witness = test_witness([0, 1, 2, 3, 4, 5, 6], TetrisBoard::EMPTY_BOARD);
         let calls = Arc::new(AtomicUsize::new(0));
 
         thread::scope(|scope| {
@@ -3514,7 +3519,7 @@ mod tests {
     /// Concurrent direct-cache failures should also be computed only once and shared across waiters.
     fn direct_cache_deduplicates_in_progress_failures() {
         let context = Arc::new(SharedSearchContext::new());
-        let board = TetrisBoard::new();
+        let board = TetrisBoard::EMPTY_BOARD;
         let bag = ALL_FORCED_BAG_PERMUTATIONS[3];
         let calls = Arc::new(AtomicUsize::new(0));
 
@@ -3540,9 +3545,9 @@ mod tests {
     /// Direct-cache wait metrics should increment when a second worker joins in-progress work.
     fn direct_cache_wait_metrics_record_in_progress_waiter() {
         let context = Arc::new(SharedSearchContext::new());
-        let board = TetrisBoard::new();
+        let board = TetrisBoard::EMPTY_BOARD;
         let bag = ALL_FORCED_BAG_PERMUTATIONS[0];
-        let witness = test_witness([0, 1, 2, 3, 4, 5, 6], TetrisBoard::new());
+        let witness = test_witness([0, 1, 2, 3, 4, 5, 6], TetrisBoard::EMPTY_BOARD);
         let calls = Arc::new(AtomicUsize::new(0));
         let (started_tx, started_rx) = std::sync::mpsc::channel();
         let (release_tx, release_rx) = std::sync::mpsc::channel();
@@ -3598,7 +3603,7 @@ mod tests {
     fn intermediate_cache_deduplicates_in_progress_sweeps() {
         let context = Arc::new(SharedSearchContext::new());
         let board = board_with_bit(0, 3);
-        let safe_boards = Arc::from([TetrisBoard::new()]);
+        let safe_boards = Arc::from([TetrisBoard::EMPTY_BOARD]);
         let calls = Arc::new(AtomicUsize::new(0));
 
         thread::scope(|scope| {
@@ -3617,7 +3622,7 @@ mod tests {
                     assert_eq!(
                         result,
                         RecursiveBoardCertification::Complete {
-                            safe_boards: Arc::from([TetrisBoard::new()])
+                            safe_boards: Arc::from([TetrisBoard::EMPTY_BOARD])
                         }
                     );
                 });
@@ -3665,7 +3670,7 @@ mod tests {
     fn recursive_board_cache_wait_metrics_record_in_progress_depth() {
         let context = Arc::new(SharedSearchContext::new());
         let board = board_with_bit(3, 4);
-        let safe_boards = Arc::from([TetrisBoard::new()]);
+        let safe_boards = Arc::from([TetrisBoard::EMPTY_BOARD]);
         let calls = Arc::new(AtomicUsize::new(0));
         let remaining_depth = RECOVERY_BAG_DEPTH;
         let (started_tx, started_rx) = std::sync::mpsc::channel();
@@ -3696,7 +3701,7 @@ mod tests {
                 assert_eq!(
                     result,
                     RecursiveBoardCertification::Complete {
-                        safe_boards: Arc::from([TetrisBoard::new()])
+                        safe_boards: Arc::from([TetrisBoard::EMPTY_BOARD])
                     }
                 );
             });
@@ -3720,7 +3725,7 @@ mod tests {
                 assert_eq!(
                     result,
                     RecursiveBoardCertification::Complete {
-                        safe_boards: Arc::from([TetrisBoard::new()])
+                        safe_boards: Arc::from([TetrisBoard::EMPTY_BOARD])
                     }
                 );
             });
@@ -3758,7 +3763,7 @@ mod tests {
     fn recursive_board_cache_deduplicates_in_progress_max_depth_work() {
         let context = Arc::new(SharedSearchContext::new());
         let board = board_with_bit(2, 4);
-        let safe_boards = Arc::from([TetrisBoard::new()]);
+        let safe_boards = Arc::from([TetrisBoard::EMPTY_BOARD]);
         let calls = Arc::new(AtomicUsize::new(0));
         let remaining_depth = RECOVERY_BAG_DEPTH;
 
@@ -3783,7 +3788,7 @@ mod tests {
                     assert_eq!(
                         result,
                         RecursiveBoardCertification::Complete {
-                            safe_boards: Arc::from([TetrisBoard::new()])
+                            safe_boards: Arc::from([TetrisBoard::EMPTY_BOARD])
                         }
                     );
                 });
@@ -3797,7 +3802,7 @@ mod tests {
     #[ignore = "expensive end-to-end certification over all 5040 first bags from the empty board"]
     /// End-to-end regression that checks empty-board certification across all first bags and reports frontier growth.
     fn empty_board_certifies_all_first_bags() {
-        let start_board = TetrisBoard::new();
+        let start_board = TetrisBoard::EMPTY_BOARD;
         let context = SharedSearchContext::new();
         let mut discovered_intermediate_boards = HashSet::new();
 

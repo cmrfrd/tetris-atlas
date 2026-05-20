@@ -4693,7 +4693,7 @@ mod tests {
                 max_height_spread: u32::MAX,
             },
             root: RootStateConfig {
-                board: TetrisBoard::new(),
+                board: TetrisBoard::EMPTY_BOARD,
                 bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
             },
         }
@@ -4708,7 +4708,7 @@ mod tests {
             bag: config.root.bag,
         };
         let child_key = BagKey {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             bag: TetrisPieceBagState::new(),
         };
         let packed = pack_placement(placement);
@@ -4812,7 +4812,7 @@ mod tests {
 
     #[test]
     fn closed_winning_set_reports_precise_failing_root_pieces() {
-        let mut board = TetrisBoard::new();
+        let mut board = TetrisBoard::EMPTY_BOARD;
         for col in 4..10 {
             board.set_bit(col, 0);
         }
@@ -4897,7 +4897,7 @@ mod tests {
 
     #[test]
     fn closed_winning_set_differs_from_recovery_semantics() {
-        let mut board = TetrisBoard::new();
+        let mut board = TetrisBoard::EMPTY_BOARD;
         for col in 4..10 {
             board.set_bit(col, 0);
         }
@@ -5059,7 +5059,7 @@ mod tests {
             root: crate::config::RootStateConfig::default(),
         });
 
-        let board = TetrisBoard::new();
+        let board = TetrisBoard::EMPTY_BOARD;
         let first_len = solver.geometry_children(board, TetrisPiece::I_PIECE).len();
         assert_eq!(solver.geometry_cache.len(), 1);
         let second_len = solver.geometry_children(board, TetrisPiece::I_PIECE).len();
@@ -5070,7 +5070,7 @@ mod tests {
 
     #[test]
     fn geometry_cache_dedups_duplicate_successor_boards_and_keeps_smallest_placement() {
-        let mut board = TetrisBoard::new();
+        let mut board = TetrisBoard::EMPTY_BOARD;
         for &col in &[0usize, 1, 2, 3, 4, 5, 9] {
             board.set_bit(col, 0);
             board.set_bit(col, 1);
@@ -5080,7 +5080,7 @@ mod tests {
         }
         board.set_bit(4, 3);
 
-        let mut dup_board = TetrisBoard::new();
+        let mut dup_board = TetrisBoard::EMPTY_BOARD;
         for &col in &[0usize, 1, 2, 3, 4, 5, 7, 9] {
             dup_board.set_bit(col, 0);
         }
@@ -5128,8 +5128,8 @@ mod tests {
         });
         solver.expand_queue = BinaryHeap::new();
 
-        let short_board = TetrisBoard::new();
-        let mut tall_board = TetrisBoard::new();
+        let short_board = TetrisBoard::EMPTY_BOARD;
+        let mut tall_board = TetrisBoard::EMPTY_BOARD;
         tall_board.set_bit(0, 0);
         tall_board.set_bit(0, 1);
 
@@ -5565,12 +5565,12 @@ mod tests {
             ProofSolver::new_with_mode(config, SolveMode::Optimistic, FrontierMode::StableFirst);
 
         let live0 = solver.intern_bag(BagKey {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
         });
         let doomed = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::new();
+                let mut board = TetrisBoard::EMPTY_BOARD;
                 board.set_bit(0, 0);
                 board
             },
@@ -5578,7 +5578,7 @@ mod tests {
         });
         let live2 = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::new();
+                let mut board = TetrisBoard::EMPTY_BOARD;
                 board.set_bit(1, 0);
                 board
             },
@@ -5789,12 +5789,12 @@ mod tests {
             FrontierMode::StableFirst,
         );
         let succ0 = solver.intern_bag(BagKey {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
         });
         let succ1 = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::new();
+                let mut board = TetrisBoard::EMPTY_BOARD;
                 board.set_bit(0, 0);
                 board
             },
@@ -5802,7 +5802,7 @@ mod tests {
         });
         let succ2 = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::new();
+                let mut board = TetrisBoard::EMPTY_BOARD;
                 board.set_bit(1, 0);
                 board
             },
@@ -5852,12 +5852,12 @@ mod tests {
             FrontierMode::StableFirst,
         );
         let low_pop = solver.intern_bag(BagKey {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
         });
         let high_pop = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::new();
+                let mut board = TetrisBoard::EMPTY_BOARD;
                 board.set_bit(0, 0);
                 board
             },
@@ -5865,7 +5865,7 @@ mod tests {
         });
         let tail = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::new();
+                let mut board = TetrisBoard::EMPTY_BOARD;
                 board.set_bit(1, 0);
                 board
             },
@@ -5923,12 +5923,12 @@ mod tests {
             FrontierMode::StableFirst,
         );
         let activated = solver.intern_bag(BagKey {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
         });
         let dormant = solver.intern_bag_dormant(BagKey {
             board: {
-                let mut board = TetrisBoard::new();
+                let mut board = TetrisBoard::EMPTY_BOARD;
                 board.set_bit(0, 0);
                 board
             },
@@ -5985,12 +5985,12 @@ mod tests {
             ProofSolver::new_with_mode(config, SolveMode::Optimistic, FrontierMode::StableFirst);
 
         let doomed = solver.intern_bag(BagKey {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
         });
         let replacement = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::new();
+                let mut board = TetrisBoard::EMPTY_BOARD;
                 board.set_bit(2, 0);
                 board
             },
@@ -6060,12 +6060,12 @@ mod tests {
             ProofSolver::new_with_mode(config, SolveMode::Optimistic, FrontierMode::StableFirst);
 
         let doomed = solver.intern_bag(BagKey {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
         });
         let activated_replacement = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::new();
+                let mut board = TetrisBoard::EMPTY_BOARD;
                 board.set_bit(1, 0);
                 board
             },
@@ -6073,7 +6073,7 @@ mod tests {
         });
         let dormant_replacement = solver.intern_bag_dormant(BagKey {
             board: {
-                let mut board = TetrisBoard::new();
+                let mut board = TetrisBoard::EMPTY_BOARD;
                 board.set_bit(2, 0);
                 board
             },
@@ -6149,12 +6149,12 @@ mod tests {
             ProofSolver::new_with_mode(config, SolveMode::Optimistic, FrontierMode::StableFirst);
 
         let doomed = solver.intern_bag(BagKey {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
         });
         let novel_key = BagKey {
             board: {
-                let mut board = TetrisBoard::new();
+                let mut board = TetrisBoard::EMPTY_BOARD;
                 board.set_bit(3, 0);
                 board
             },

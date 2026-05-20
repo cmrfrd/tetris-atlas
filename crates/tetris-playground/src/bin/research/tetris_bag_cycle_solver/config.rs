@@ -79,7 +79,7 @@ impl SolverConfig {
     #[inline]
     pub fn target_contains(self, board: &TetrisBoard) -> bool {
         match self.target_mode {
-            TargetMode::Empty => *board == TetrisBoard::new(),
+            TargetMode::Empty => *board == TetrisBoard::EMPTY_BOARD,
             TargetMode::LowClean => self.closed_set_admissibility.contains(board),
         }
     }

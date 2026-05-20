@@ -1,6 +1,8 @@
 use std::cmp::{Ordering, Reverse};
 
-use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPiecePlacement};
+use tetris_game::{
+    IsLost, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPiecePlacement,
+};
 use tetris_utils::{FixedBinMinHeap, HeaplessVec};
 
 use crate::scoring::{TetrisBoardScoreState, height_mse_board_score};
@@ -62,7 +64,7 @@ struct FrontierEntry {
     node_idx: u32,
     priority: OrderedF32,
     depth: u16,
-    board_limbs: [u32; TetrisBoard::WIDTH],
+    board_limbs: [u32; StandardTetris::COLS],
 }
 
 impl FrontierEntry {
@@ -106,7 +108,7 @@ struct CandidateNode {
 impl Default for CandidateNode {
     fn default() -> Self {
         Self {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             placement: TetrisPiecePlacement::default(),
             score: f32::NEG_INFINITY,
             recent_lines_cleared: 0,
@@ -420,7 +422,11 @@ mod tests {
     #[test]
     fn best_first_search_returns_full_depth_plan() {
         let mut planner = TetrisSequencePlanner::<WIDTH, DEPTH, NODE_CAPACITY>::new();
-        let outcome = planner.search(TetrisBoard::new(), &sequence(), &height_mse_plan_score);
+        let outcome = planner.search(
+            TetrisBoard::EMPTY_BOARD,
+            &sequence(),
+            &height_mse_plan_score,
+        );
         assert!(
             matches!(outcome, TetrisSequencePlanOutcome::Success(_)),
             "sequence planner should produce a full script"
@@ -436,7 +442,11 @@ mod tests {
     fn filter_can_reject_all_full_depth_plans() {
         let mut planner =
             TetrisSequencePlanner::<WIDTH, DEPTH, NODE_CAPACITY>::new().with_filter(|_board| false);
-        let outcome = planner.search(TetrisBoard::new(), &sequence(), &height_mse_plan_score);
+        let outcome = planner.search(
+            TetrisBoard::EMPTY_BOARD,
+            &sequence(),
+            &height_mse_plan_score,
+        );
         assert!(
             matches!(outcome, TetrisSequencePlanOutcome::Exhausted { .. }),
             "filter should reject every full-depth script"
@@ -454,7 +464,7 @@ mod tests {
     fn collect_witnesses_respects_limit() {
         let mut planner = TetrisSequencePlanner::<WIDTH, DEPTH, NODE_CAPACITY>::new();
         let witnesses = planner.collect_witnesses::<_, 4>(
-            TetrisBoard::new(),
+            TetrisBoard::EMPTY_BOARD,
             &sequence(),
             &height_mse_plan_score,
             3,
@@ -465,7 +475,11 @@ mod tests {
     #[test]
     fn tiny_node_capacity_exhausts() {
         let mut planner = TetrisSequencePlanner::<WIDTH, DEPTH, 1>::new();
-        let outcome = planner.search(TetrisBoard::new(), &sequence(), &height_mse_plan_score);
+        let outcome = planner.search(
+            TetrisBoard::EMPTY_BOARD,
+            &sequence(),
+            &height_mse_plan_score,
+        );
         assert!(matches!(
             outcome,
             TetrisSequencePlanOutcome::Exhausted {

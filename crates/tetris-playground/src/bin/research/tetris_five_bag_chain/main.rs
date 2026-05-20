@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 //! 5-bag chain solver: solve one 5-bag, then swap the last bag and reuse
 //! the MCTS tree to solve the next sequence, chaining through as many
 //! sequences as possible.
@@ -23,7 +25,10 @@ use crossterm::{
     terminal,
 };
 use rustc_hash::FxHasher;
-use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPiecePlacement};
+use tetris_game::{
+    IsLost, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPiecePlacement,
+    constants,
+};
 use tetris_search::{
     TetrisBoardScoreState, height_mse_board_score, height_mse_distance_from_empty,
 };
@@ -124,7 +129,7 @@ fn build_sequence(bag_indices: &[usize; BAG_COUNT]) -> [TetrisPiece; TOTAL_PIECE
 // --- PUCT/MCTS search (same as bench, but with tree-pruning support) ---
 
 const MCTS_EXPLORATION: f32 = 0.8;
-const MAX_HEIGHT: u32 = TetrisBoard::HEIGHT as u32;
+const MAX_HEIGHT: u32 = StandardTetris::ROWS as u32;
 const MAX_CHILDREN: usize = 64;
 const PRIOR_NOISE_AMPLITUDE: f32 = 0.2;
 
@@ -163,7 +168,7 @@ const RANK_PRIORS: [f32; MAX_CHILDREN] = {
 const DEFAULT_PLACEMENT: TetrisPiecePlacement = TetrisPiecePlacement::from_index(0);
 const DEFAULT_CANDIDATE: Candidate = Candidate {
     placement: DEFAULT_PLACEMENT,
-    board: TetrisBoard::new(),
+    board: TetrisBoard::EMPTY_BOARD,
     prior_score: f32::NEG_INFINITY,
 };
 
@@ -233,7 +238,7 @@ struct PuctSearch {
 impl PuctSearch {
     fn new(pieces: [TetrisPiece; TOTAL_PIECES]) -> Self {
         let root_state = SearchState {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             step: 0u8,
         };
         let mut nodes = Vec::with_capacity(NODE_BUDGET);
@@ -261,7 +266,7 @@ impl PuctSearch {
         self.nodes.clear();
         self.edges.clear();
         self.nodes.push(SearchNode::new(SearchState {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             step: 0u8,
         }));
         self.pieces = pieces;
@@ -368,7 +373,7 @@ impl PuctSearch {
         self.edges.clear();
         self.free_list.clear();
         self.nodes.push(SearchNode::new(SearchState {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             step: 0u8,
         }));
         self.witness_placements = None;
@@ -669,7 +674,7 @@ fn replay_witness(
     pieces: &[TetrisPiece; TOTAL_PIECES],
     placements: &[TetrisPiecePlacement; TOTAL_PIECES],
 ) -> bool {
-    let mut board = TetrisBoard::new();
+    let mut board: TetrisBoard = TetrisBoard::EMPTY_BOARD;
     let mut lines_cleared = 0u32;
     for (idx, placement) in placements.iter().copied().enumerate() {
         if placement.piece != pieces[idx] {
@@ -881,7 +886,7 @@ fn interactive_viewer(
     placements: &[TetrisPiecePlacement; TOTAL_PIECES],
 ) {
     // Pre-compute all board states
-    let mut boards = [TetrisBoard::new(); TOTAL_PIECES + 1];
+    let mut boards: [TetrisBoard; TOTAL_PIECES + 1] = [TetrisBoard::EMPTY_BOARD; TOTAL_PIECES + 1];
     let mut lines_at_step = [0u32; TOTAL_PIECES];
     for (step, placement) in placements.iter().copied().enumerate() {
         let mut board = boards[step];
@@ -1001,7 +1006,7 @@ fn cmd_spotcheck(bag_indices: [usize; BAG_COUNT], log_every: u64) {
                 );
                 eprintln!();
                 // Print summary, then launch interactive viewer
-                let mut board = TetrisBoard::new();
+                let mut board: TetrisBoard = TetrisBoard::EMPTY_BOARD;
                 for (step, placement) in p.iter().copied().enumerate() {
                     let result = board.apply_piece_placement(placement);
                     eprintln!(

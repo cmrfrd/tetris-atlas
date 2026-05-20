@@ -152,7 +152,7 @@ mod tests {
     use super::*;
 
     fn single_i_clear_board() -> TetrisBoard {
-        let mut board = TetrisBoard::new();
+        let mut board = TetrisBoard::EMPTY_BOARD;
         for col in 4..10 {
             board.set_bit(col, 0);
         }

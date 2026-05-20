@@ -11,7 +11,7 @@ use rand::seq::IndexedRandom;
 const BENCH_SEED: u64 = 0xDEAD_BEEF_CAFE;
 use tetris_game::{
     Major, TetrisBoard, TetrisGame, TetrisGameRng, TetrisPiece, TetrisPieceBag,
-    TetrisPiecePlacement,
+    TetrisPieceBagState, TetrisPiecePlacement,
 };
 use tetris_search::{
     TetrisBoardScoreState, height_mse_board_score, height_mse_distance_from_empty,
@@ -294,7 +294,7 @@ tetris_bench! {
 tetris_bench! {
     pub fn bench_bag_iter(c: &mut Criterion) {
         let mut rng = TetrisGameRng::new(42);
-        let mut bag = TetrisPieceBag::new_rand(&mut rng);
+        let mut bag = TetrisPieceBag::new_rand(&mut rng, TetrisPieceBagState::new());
         c.bench_with_input(
             BenchmarkId::new("bag_iter", NUM_ELEMS),
             &NUM_ELEMS,
@@ -312,7 +312,7 @@ tetris_bench! {
 tetris_bench! {
     pub fn bench_bag_rand_next(c: &mut Criterion) {
         let mut rng = TetrisGameRng::new(42);
-        let mut bag = TetrisPieceBag::new_rand(&mut rng);
+        let mut bag = TetrisPieceBag::new_rand(&mut rng, TetrisPieceBagState::new());
         c.bench_with_input(BenchmarkId::new("bag_rand_next", 1), &1, |b, _| {
             b.iter(|| {
                 bag.rand_next(&mut rng);
@@ -327,7 +327,7 @@ tetris_bench! {
         let single_bit_boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
-                    let mut b = TetrisBoard::new();
+                    let mut b: TetrisBoard = TetrisBoard::new();
                     b.set_random_bits(1, &mut rng);
                     b
                 })
@@ -354,7 +354,7 @@ tetris_bench! {
         let boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
-                    let mut b = TetrisBoard::new();
+                    let mut b: TetrisBoard = TetrisBoard::new();
                     b.set_random_bits(1024, &mut rng);
                     b
                 })
@@ -372,7 +372,7 @@ tetris_bench! {
         let mut boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
-                    let mut b = TetrisBoard::new();
+                    let mut b: TetrisBoard = TetrisBoard::new();
                     b.set_random_bits(1024, &mut rng);
                     b
                 })
@@ -399,7 +399,7 @@ tetris_bench! {
         let mut boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
-                    let mut b = TetrisBoard::new();
+                    let mut b: TetrisBoard = TetrisBoard::new();
                     b.set_random_bits(1024, &mut rng);
                     b
                 })
@@ -421,7 +421,7 @@ tetris_bench! {
         let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let mut empty_boards = black_box(
             (0..NUM_ELEMS)
-                .map(|_| TetrisBoard::new())
+                .map(|_| -> TetrisBoard { TetrisBoard::EMPTY_BOARD })
                 .collect::<Vec<_>>(),
         );
         let placements = black_box(
@@ -451,7 +451,7 @@ tetris_bench! {
         let boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
-                    let mut b = TetrisBoard::new();
+                    let mut b: TetrisBoard = TetrisBoard::new();
                     b.set_random_bits(1024, &mut rng);
                     b
                 })
@@ -504,7 +504,7 @@ tetris_bench! {
             &num_games,
             |b, &num_games| {
                 let mut counter = 0usize;
-                let mut game = TetrisGame::new_with_seed(seed);
+                let mut game: TetrisGame = TetrisGame::new_with_seed(seed);
                 b.iter(|| {
                     counter = 0;
                     game.reset(Some(seed));
@@ -583,7 +583,7 @@ tetris_bench! {
         let boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
-                    let mut b = TetrisBoard::new();
+                    let mut b: TetrisBoard = TetrisBoard::new();
                     b.set_random_bits(50, &mut rng);
                     b
                 })
@@ -611,7 +611,7 @@ tetris_bench! {
         let states = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
-                    let mut b = TetrisBoard::new();
+                    let mut b: TetrisBoard = TetrisBoard::new();
                     b.set_random_bits(50, &mut rng);
                     TetrisBoardScoreState {
                         board: b,

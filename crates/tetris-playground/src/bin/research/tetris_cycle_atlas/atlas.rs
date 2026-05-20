@@ -140,7 +140,7 @@ pub fn load(path: &Path) -> Result<CycleAtlas> {
 
 /// Reconstruct a TetrisBoard from column limbs.
 fn board_from_limbs(limbs: [u32; 10]) -> TetrisBoard {
-    let mut board = TetrisBoard::new();
+    let mut board = TetrisBoard::EMPTY_BOARD;
     for (col, mut limb) in limbs.into_iter().enumerate() {
         while limb != 0 {
             let row = limb.trailing_zeros() as usize;
@@ -172,7 +172,7 @@ mod tests {
 
     #[test]
     fn extract_records_bag_cycles() {
-        let boards = vec![TetrisBoard::new()];
+        let boards = vec![TetrisBoard::EMPTY_BOARD];
         let mut safe = FxHashSet::default();
         safe.insert(0);
 

@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -186,7 +188,7 @@ logdir={logdir:?} checkpoint_dir={checkpoint_dir:?}"
             tetris_tui::run().expect("Failed to run TUI");
         }
         Commands::Test {} => {
-            let mut game = TetrisGame::new();
+            let mut game: TetrisGame = TetrisGame::new();
             println!("{}", game);
 
             let placements = game.current_placements();

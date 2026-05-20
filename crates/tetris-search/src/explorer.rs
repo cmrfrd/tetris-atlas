@@ -8,7 +8,9 @@ use rayon::iter::plumbing::{Folder, Reducer, UnindexedConsumer};
 use rayon::{current_num_threads, join_context};
 use std::iter::Iterator;
 use std::{collections::VecDeque, sync::Arc};
-use tetris_game::{TetrisBoard, TetrisGame, TetrisPiecePlacement};
+use tetris_game::{
+    StandardTetris, TetrisBoard, TetrisGame, TetrisGameConfig, TetrisPiecePlacement,
+};
 use tetris_utils::{HeaplessVec, VecPool, repeat_idx_unroll};
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -51,7 +53,7 @@ impl TetrisBloom1 {
 
         // Mix all limbs together
         let mut h = 0u64;
-        repeat_idx_unroll!(TetrisBoard::WIDTH, I, {
+        repeat_idx_unroll!(StandardTetris::COLS, I, {
             h ^= (limbs[I] as u64).rotate_left((I * 16) as u32);
         });
 

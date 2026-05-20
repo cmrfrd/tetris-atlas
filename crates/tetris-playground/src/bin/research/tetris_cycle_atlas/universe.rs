@@ -24,7 +24,7 @@ impl BoardUniverse {
         let mut board_to_id: FxHashMap<TetrisBoard, BoardId> = FxHashMap::default();
 
         // Intern the empty board
-        let empty_board = TetrisBoard::new();
+        let empty_board = TetrisBoard::EMPTY_BOARD;
         let empty_board_id = intern_board(&mut boards, &mut board_to_id, &empty_board);
 
         // BFS frontier
@@ -159,7 +159,7 @@ mod tests {
         let universe = BoardUniverse::discover(&config);
         assert!(universe.board_count() >= 1);
         assert_eq!(universe.empty_board_id, 0);
-        assert_eq!(universe.boards[0], TetrisBoard::new());
+        assert_eq!(universe.boards[0], TetrisBoard::EMPTY_BOARD);
     }
 
     #[test]

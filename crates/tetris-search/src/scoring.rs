@@ -1,5 +1,5 @@
 use proc_macros::inline_conditioned;
-use tetris_game::TetrisBoard;
+use tetris_game::{StandardTetris, TetrisBoard, TetrisGameConfig};
 use tetris_utils::repeat_idx_unroll;
 
 use crate::BeamTetrisState;
@@ -53,12 +53,12 @@ const WPOP_SCALE_HI: f32 = pow_f32(HEIGHT_MSE_ROW_PENALTY_BASE, 16);
 /// Uses a single byte-level LUT for branchless weighted popcount per column.
 #[inline_conditioned(always)]
 pub const fn height_mse_distance_from_empty(board: TetrisBoard) -> f32 {
-    const PLAYABLE_MASK: u32 = (1u32 << TetrisBoard::HEIGHT) - 1;
+    const PLAYABLE_MASK: u32 = (1u32 << StandardTetris::ROWS) - 1;
 
     let limbs = board.as_limbs();
     let mut total = 0.0f32;
 
-    repeat_idx_unroll!(TetrisBoard::WIDTH, COL, {
+    repeat_idx_unroll!(StandardTetris::COLS, COL, {
         let v = limbs[COL] & PLAYABLE_MASK;
         total += WPOP_LUT[(v & 0xFF) as usize]
             + WPOP_LUT[((v >> 8) & 0xFF) as usize] * WPOP_SCALE_MID
@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     fn test_height_mse_distance_from_empty_empty_board() {
-        let board = TetrisBoard::new();
+        let board: TetrisBoard = TetrisBoard::new();
         assert_eq!(height_mse_distance_from_empty(board), 0.0);
     }
 
@@ -101,9 +101,9 @@ mod tests {
     fn test_height_mse_distance_from_empty_random_boards() {
         fn reference_score(board: TetrisBoard) -> f32 {
             let limbs = board.as_limbs();
-            let mask = (1u32 << TetrisBoard::HEIGHT) - 1;
-            let mut row_diffs = [0u8; TetrisBoard::HEIGHT];
-            for col in 0..TetrisBoard::WIDTH {
+            let mask = (1u32 << StandardTetris::ROWS) - 1;
+            let mut row_diffs = [0u8; StandardTetris::ROWS];
+            for col in 0..StandardTetris::COLS {
                 let mut bits = limbs[col] & mask;
                 while bits != 0 {
                     let row = bits.trailing_zeros() as usize;
@@ -112,7 +112,7 @@ mod tests {
                 }
             }
             let mut total = 0.0f32;
-            for row in 0..TetrisBoard::HEIGHT {
+            for row in 0..StandardTetris::ROWS {
                 total += row_diffs[row] as f32 * pow_f32(HEIGHT_MSE_ROW_PENALTY_BASE, row);
             }
             total
@@ -120,7 +120,7 @@ mod tests {
 
         let mut rng = rand::rng();
         for _ in 0..1000 {
-            let mut board = TetrisBoard::new();
+            let mut board: TetrisBoard = TetrisBoard::new();
             board.set_random_bits(50, &mut rng);
             let expected = reference_score(board);
             let actual = height_mse_distance_from_empty(board);

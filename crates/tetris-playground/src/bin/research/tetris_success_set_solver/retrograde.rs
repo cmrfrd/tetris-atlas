@@ -382,7 +382,7 @@ mod tests {
 
     #[test]
     fn root_query_is_yes_for_immediate_line_clear() {
-        let mut board = TetrisBoard::new();
+        let mut board = TetrisBoard::EMPTY_BOARD;
         for col in 4..10 {
             board.set_bit(col, 0);
         }
@@ -573,7 +573,7 @@ mod tests {
 
     #[test]
     fn oracle_cross_check_matches_yes_root() {
-        let mut board = TetrisBoard::new();
+        let mut board = TetrisBoard::EMPTY_BOARD;
         for col in 4..10 {
             board.set_bit(col, 0);
         }

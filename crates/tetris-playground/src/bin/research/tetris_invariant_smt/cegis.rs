@@ -499,7 +499,7 @@ fn check_transition(
         SatResult::Unsat => None,
         SatResult::Sat => {
             let model = solver.get_model().unwrap();
-            let mut tb = TetrisBoard::new();
+            let mut tb = TetrisBoard::EMPTY_BOARD;
             for (i, col_bv) in board.iter().enumerate() {
                 if let Some(val) = model.eval(col_bv, true) {
                     if let Some(bits) = val.as_u64() {
@@ -635,7 +635,7 @@ pub fn run_bag_cegis(placements: &[PlacementInfo], max_rounds: u32) -> bool {
                     learned[t.source_bag as usize].push(constraint);
 
                     // Verify empty board still satisfies P_full
-                    let empty = TetrisBoard::new();
+                    let empty = TetrisBoard::EMPTY_BOARD;
                     if !board_satisfies_with_learned(
                         &empty,
                         &base_for_bag(full_bag),

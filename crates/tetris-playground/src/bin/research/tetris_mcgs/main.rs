@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 //! # Monte Carlo Graph Search (MCGS) Cycle Finder
 //!
 //! Explores the Tetris game graph using AND-OR MCGS to discover closed cycles
@@ -125,7 +127,7 @@ impl StateKey {
 
     fn empty() -> Self {
         Self {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             bag: TetrisPieceBagState::new(),
         }
     }
@@ -154,7 +156,10 @@ impl StateKey {
             ]);
         }
         Self {
-            board: TetrisBoard::from_bytes(unsafe { std::mem::transmute::<[u32; 10], [u8; 40]>(limbs) }, Major::Col),
+            board: TetrisBoard::from_bytes(
+                unsafe { std::mem::transmute::<[u32; 10], [u8; 40]>(limbs) },
+                Major::Col,
+            ),
             bag: TetrisPieceBagState::from(bag),
         }
     }
@@ -896,7 +901,7 @@ struct McgsSearch {
 
 impl McgsSearch {
     fn new() -> Self {
-        let empty = TetrisBoard::new();
+        let empty = TetrisBoard::EMPTY_BOARD;
         let mut pool_index = FxHashMap::default();
         pool_index.insert(empty, 0);
 
@@ -2131,7 +2136,7 @@ mod tests {
     #[test]
     fn state_key_dedup() {
         let k1 = StateKey::empty();
-        let k2 = StateKey::new(TetrisBoard::new(), TetrisPieceBagState::new());
+        let k2 = StateKey::new(TetrisBoard::EMPTY_BOARD, TetrisPieceBagState::new());
         assert_eq!(k1, k2);
         assert!(k1.is_full_bag());
     }
@@ -2141,7 +2146,7 @@ mod tests {
         let mut bag2 = TetrisPieceBagState::new();
         bag2.remove(TetrisPiece::all()[0]);
         let k1 = StateKey::empty();
-        let k2 = StateKey::new(TetrisBoard::new(), bag2);
+        let k2 = StateKey::new(TetrisBoard::EMPTY_BOARD, bag2);
         assert_ne!(k1, k2);
     }
 
@@ -2158,7 +2163,7 @@ mod tests {
     fn mem_store_cap() {
         let mut store = MemStore::new(5);
         for i in 0..10 {
-            let mut board = TetrisBoard::new();
+            let mut board = TetrisBoard::EMPTY_BOARD;
             if i > 0 {
                 let p = TetrisPiecePlacement::all_from_piece(TetrisPiece::all()[i % 7])[0];
                 let _ = board.apply_piece_placement(p);
@@ -2205,7 +2210,7 @@ mod tests {
         let mut search = McgsSearch::new();
         search.run_iteration(
             &mut store,
-            TetrisBoard::new(),
+            TetrisBoard::EMPTY_BOARD,
             1.4,
             0.25,
             0.10,
@@ -2226,7 +2231,7 @@ mod tests {
     #[test]
     fn dead_child_backprops_to_parent_edge() {
         let mut store = make_mem_store();
-        let mut child_board = TetrisBoard::new();
+        let mut child_board = TetrisBoard::EMPTY_BOARD;
         let _ = child_board
             .apply_piece_placement(TetrisPiecePlacement::all_from_piece(TetrisPiece::O_PIECE)[0]);
         let child_idx =
@@ -2278,7 +2283,7 @@ mod tests {
     #[test]
     fn progressive_widening_replaces_dead_active_edges() {
         let mut store = make_mem_store();
-        let mut pending_board = TetrisBoard::new();
+        let mut pending_board = TetrisBoard::EMPTY_BOARD;
         let _ = pending_board
             .apply_piece_placement(TetrisPiecePlacement::all_from_piece(TetrisPiece::I_PIECE)[0]);
 
@@ -2321,13 +2326,17 @@ mod tests {
         let mut store = make_mem_store();
         let mut search = McgsSearch::new();
 
-        let mut target_board = TetrisBoard::new();
+        let mut target_board = TetrisBoard::EMPTY_BOARD;
         let _ = target_board
             .apply_piece_placement(TetrisPiecePlacement::all_from_piece(TetrisPiece::O_PIECE)[0]);
         store.get_or_create(StateKey::new(target_board, TetrisPieceBagState::new()), 0);
         search.add_to_pool(target_board, 10);
 
-        search.record_reach(TetrisBoard::new(), target_board, Some(TetrisPiece::O_PIECE));
+        search.record_reach(
+            TetrisBoard::EMPTY_BOARD,
+            target_board,
+            Some(TetrisPiece::O_PIECE),
+        );
 
         let closure = search.closure_snapshot(&store);
         assert_eq!(closure.core_states, 2);
@@ -2344,7 +2353,7 @@ mod tests {
         for _ in 0..100 {
             search.run_iteration(
                 &mut store,
-                TetrisBoard::new(),
+                TetrisBoard::EMPTY_BOARD,
                 1.4,
                 0.25,
                 0.10,
@@ -2365,7 +2374,7 @@ mod tests {
         for _ in 0..200 {
             search.run_iteration(
                 &mut store,
-                TetrisBoard::new(),
+                TetrisBoard::EMPTY_BOARD,
                 1.4,
                 0.25,
                 0.10,
@@ -2388,7 +2397,7 @@ mod tests {
         for _ in 0..500 {
             search.run_iteration(
                 &mut store,
-                TetrisBoard::new(),
+                TetrisBoard::EMPTY_BOARD,
                 1.4,
                 0.25,
                 0.10,
@@ -2415,7 +2424,7 @@ mod tests {
         for _ in 0..1000 {
             search.run_iteration(
                 &mut store,
-                TetrisBoard::new(),
+                TetrisBoard::EMPTY_BOARD,
                 1.4,
                 0.25,
                 0.10,
@@ -2431,8 +2440,8 @@ mod tests {
 
     #[test]
     fn heuristic_bounds() {
-        assert_eq!(heuristic_value(&TetrisBoard::new()), 1.0);
-        let mut b = TetrisBoard::new();
+        assert_eq!(heuristic_value(&TetrisBoard::EMPTY_BOARD), 1.0);
+        let mut b = TetrisBoard::EMPTY_BOARD;
         let _ =
             b.apply_piece_placement(TetrisPiecePlacement::all_from_piece(TetrisPiece::all()[0])[0]);
         let v = heuristic_value(&b);
@@ -2486,7 +2495,7 @@ mod tests {
             for _ in 0..50 {
                 search.run_iteration(
                     &mut store,
-                    TetrisBoard::new(),
+                    TetrisBoard::EMPTY_BOARD,
                     1.4,
                     0.25,
                     0.10,

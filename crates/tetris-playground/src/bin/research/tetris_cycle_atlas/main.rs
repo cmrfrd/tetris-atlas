@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 //! # Cycle-Boundary Adversarial Atlas
 //!
 //! Reduces adversarial 7-bag Tetris state to **boards only** by working
@@ -423,7 +425,7 @@ fn run_play(
     let mut registry = PlayRegistry::new(&cycle_atlas.boards, max_registry_boards);
 
     let sleep_dur = std::time::Duration::from_secs_f64(delay);
-    let mut board = tetris_game::TetrisBoard::new();
+    let mut board = tetris_game::TetrisBoard::EMPTY_BOARD;
     let mut step: u64 = 0;
     let mut total_lines: u64 = 0;
     let mut transitions = transition::TransitionCache::new(inter_admissibility);

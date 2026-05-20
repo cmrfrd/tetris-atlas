@@ -30,7 +30,7 @@ pub struct RootStateConfig {
 impl Default for RootStateConfig {
     fn default() -> Self {
         Self {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::EMPTY_BOARD,
             bag: TetrisPieceBagState::new(),
         }
     }

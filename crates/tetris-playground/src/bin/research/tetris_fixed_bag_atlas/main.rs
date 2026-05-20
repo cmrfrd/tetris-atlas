@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 //! # Fixed-Bag-Order Atlas Solver
 //!
 //! Solves a simplified variant of the Tetris survival problem where the bag
@@ -337,7 +339,7 @@ fn run_play(atlas_path: &PathBuf, delay: f64, seed: u64) {
     };
 
     let sleep_dur = std::time::Duration::from_secs_f64(delay);
-    let mut board = tetris_game::TetrisBoard::new();
+    let mut board: tetris_game::TetrisBoard = tetris_game::TetrisBoard::EMPTY_BOARD;
     let mut cycle_pos: u8 = 0;
     let mut step: u64 = 0;
     let mut total_lines: u64 = 0;

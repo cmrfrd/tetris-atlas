@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -16,8 +18,8 @@ use tracing::{Level, info};
 use tracing_subscriber::prelude::*;
 
 use tetris_game::{
-    IsLost, Major, TetrisBoard, TetrisGame, TetrisPiece, TetrisPieceOrientation,
-    TetrisPiecePlacement,
+    IsLost, Major, StandardTetris, TetrisBoard, TetrisGame, TetrisGameConfig, TetrisPiece,
+    TetrisPieceOrientation, TetrisPiecePlacement, constants,
 };
 use tetris_ml::fdtype;
 use tetris_ml::ops::{create_orientation_mask, get_l2_norm};
@@ -277,7 +279,7 @@ impl TetrisBeamSupervisedPolicyMLP {
         let device = current_piece.device();
         let dtype = fdtype();
 
-        let mut features_vec = Vec::with_capacity(batch_size * TetrisBoard::SIZE);
+        let mut features_vec = Vec::with_capacity(batch_size * StandardTetris::BOARD_SIZE);
 
         for board in boards {
             let binary = board.to_cell_array(Major::Row);
@@ -286,9 +288,12 @@ impl TetrisBeamSupervisedPolicyMLP {
             }
         }
 
-        let board_features =
-            Tensor::from_vec(features_vec, (batch_size, TetrisBoard::SIZE), device)?
-                .to_dtype(dtype)?;
+        let board_features = Tensor::from_vec(
+            features_vec,
+            (batch_size, StandardTetris::BOARD_SIZE),
+            device,
+        )?
+        .to_dtype(dtype)?;
         let piece_oh = TetrisPieceOneHotTensor::from_piece_tensor(current_piece.clone())?;
         Ok(Tensor::cat(&[&board_features, piece_oh.inner()], 1)?)
     }
@@ -351,7 +356,7 @@ pub fn train_tetris_beam_supervised(
     let vb = VarBuilder::from_varmap(&model_varmap, dtype, &device);
 
     // Binary board (200) + piece one-hot (7)
-    let in_size = TetrisBoard::SIZE + TetrisPiece::NUM_PIECES;
+    let in_size = StandardTetris::BOARD_SIZE + TetrisPiece::NUM_PIECES;
     let h = model_dim;
     let policy_cfg = MlpConfig {
         input_size: in_size,

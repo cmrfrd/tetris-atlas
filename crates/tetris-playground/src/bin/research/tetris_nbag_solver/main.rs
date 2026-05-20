@@ -1,10 +1,12 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 mod search;
 
 use std::time::Instant;
 
 use anyhow::Result;
 use clap::Parser;
-use tetris_game::{TetrisBoard, TetrisGameRng, TetrisPiece, TetrisPieceBag};
+use tetris_game::{TetrisBoard, TetrisGameRng, TetrisPiece, TetrisPieceBag, TetrisPieceBagState};
 
 use search::{SearchOutcome, search};
 
@@ -35,7 +37,7 @@ fn generate_sequence(num_bags: u32, seed: u64) -> Vec<TetrisPiece> {
     let mut rng = TetrisGameRng::new(seed);
     let mut seq = Vec::with_capacity((num_bags * 7) as usize);
     for _ in 0..num_bags {
-        let mut bag = TetrisPieceBag::new_ordered();
+        let mut bag = TetrisPieceBag::new_ordered(TetrisPieceBagState::new());
         bag.shuffle(&mut rng);
         for _ in 0..7 {
             seq.push(bag.rand_next(&mut rng));
@@ -74,7 +76,7 @@ fn main() -> Result<()> {
     println!();
     println!();
 
-    let target = TetrisBoard::new();
+    let target = TetrisBoard::EMPTY_BOARD;
     let start = Instant::now();
     let outcome = search(&sequence, target, cli.width, cli.max_nodes, cli.verbose);
     let elapsed = start.elapsed();
@@ -97,7 +99,7 @@ fn main() -> Result<()> {
             if cli.replay {
                 println!();
                 println!("=== Replay ===");
-                let mut board = TetrisBoard::new();
+                let mut board: TetrisBoard = TetrisBoard::EMPTY_BOARD;
                 for (i, p) in result.placements.iter().enumerate() {
                     let outcome = board.apply_piece_placement(*p);
                     println!(

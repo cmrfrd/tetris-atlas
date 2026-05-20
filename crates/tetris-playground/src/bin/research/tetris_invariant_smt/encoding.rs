@@ -38,7 +38,7 @@ pub fn precompute_placements() -> Vec<PlacementInfo> {
     let mut result = Vec::new();
     for &placement in &TetrisPiecePlacement::ALL_PLACEMENTS {
         // Place on empty board to get placed column values
-        let mut board = TetrisBoard::new();
+        let mut board: TetrisBoard = TetrisBoard::EMPTY_BOARD;
         let pr = board.apply_piece_placement(placement);
         if bool::from(pr.is_lost) {
             continue;
@@ -461,7 +461,7 @@ pub fn board_col_bits(board: &TetrisBoard, col: usize) -> u64 {
 
 /// Helper: build a TetrisBoard from column heights (no holes, contiguous from row 0).
 pub fn board_from_heights(heights: &[u32]) -> TetrisBoard {
-    let mut board = TetrisBoard::new();
+    let mut board = TetrisBoard::EMPTY_BOARD;
     for (col, &h) in heights.iter().enumerate() {
         for r in 0..h {
             board.set_bit(col, r as usize);
@@ -569,7 +569,7 @@ mod tests {
 
     #[test]
     fn test_invariant_empty_board() {
-        let board = TetrisBoard::new();
+        let board = TetrisBoard::EMPTY_BOARD;
         assert!(board_satisfies_invariant(&board));
     }
 
@@ -592,7 +592,7 @@ mod tests {
     #[test]
     fn test_invariant_with_holes() {
         // Column 0: bit 1 set but not bit 0 → 1 hole, height 2
-        let mut board = TetrisBoard::new();
+        let mut board: TetrisBoard = TetrisBoard::EMPTY_BOARD;
         board.set_bit(0, 1);
         if MAX_TOTAL_HOLES >= 1 && MAX_HEIGHT >= 2 {
             assert!(board_satisfies_invariant(&board));
@@ -664,7 +664,7 @@ mod tests {
 
         for col_values in &test_boards {
             // Build a TetrisBoard from raw column values
-            let mut board = TetrisBoard::new();
+            let mut board: TetrisBoard = TetrisBoard::EMPTY_BOARD;
             for (col, &val) in col_values.iter().enumerate() {
                 for r in 0..BV_WIDTH {
                     if val & (1u64 << r) != 0 {
@@ -694,7 +694,7 @@ mod tests {
         let col_values = vec![0u64; BOARD_COLS as usize];
 
         for info in &placements {
-            let mut engine_board = TetrisBoard::new();
+            let mut engine_board = TetrisBoard::EMPTY_BOARD;
             let placement = TetrisPiecePlacement::from_index(info.index);
             let engine_result = engine_board.apply_piece_placement(placement);
 
@@ -804,7 +804,7 @@ mod tests {
     /// Helper: build a concrete board from raw column u32 values, apply game
     /// engine's clear_filled_rows, and return (cleared_limbs, lines_cleared).
     fn engine_clear_lines(col_vals: &[u32; 10]) -> ([u32; 10], u32) {
-        let mut board = TetrisBoard::new();
+        let mut board: TetrisBoard = TetrisBoard::EMPTY_BOARD;
         for (c, &val) in col_vals.iter().enumerate() {
             for r in 0..BV_WIDTH {
                 if val & (1 << r) != 0 {

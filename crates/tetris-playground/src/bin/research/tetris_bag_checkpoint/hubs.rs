@@ -138,8 +138,8 @@ pub fn run(args: HubsArgs) -> Result<()> {
     let mut visit_counts: FxHashMap<TetrisBoard, u32> = FxHashMap::default();
 
     // Start from the empty board
-    let mut frontier: Vec<TetrisBoard> = vec![TetrisBoard::new()];
-    *visit_counts.entry(TetrisBoard::new()).or_insert(0) += 1;
+    let mut frontier: Vec<TetrisBoard> = vec![TetrisBoard::EMPTY_BOARD];
+    *visit_counts.entry(TetrisBoard::EMPTY_BOARD).or_insert(0) += 1;
 
     for round in 0..args.rounds {
         let round_start = Instant::now();
@@ -432,7 +432,7 @@ pub fn run(args: HubsArgs) -> Result<()> {
         }
 
         if !stable_set.is_empty() {
-            let empty_hash = board_hash(&TetrisBoard::new());
+            let empty_hash = board_hash(&TetrisBoard::EMPTY_BOARD);
             println!();
             println!("=============================================");
             println!("  SAFE SET IS NON-EMPTY: {} boards!", stable_set.len());

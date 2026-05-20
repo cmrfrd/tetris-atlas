@@ -40,7 +40,7 @@ impl StateEdges {
 pub fn solve_with_retrograde(config: SolverConfig) -> SolveResult {
     solve_state_with_retrograde(
         config,
-        TetrisBoard::new(),
+        TetrisBoard::EMPTY_BOARD,
         TetrisPieceBagState::new(),
         config.total_pieces(),
     )
@@ -329,7 +329,7 @@ mod tests {
     use super::*;
 
     fn single_i_clear_board() -> TetrisBoard {
-        let mut board = TetrisBoard::new();
+        let mut board = TetrisBoard::EMPTY_BOARD;
         for col in 4..10 {
             board.set_bit(col, 0);
         }
@@ -379,6 +379,6 @@ mod tests {
         let result = board.apply_piece_placement(placement);
 
         assert_eq!(result.lines_cleared, 1);
-        assert_eq!(board, TetrisBoard::new());
+        assert_eq!(board, TetrisBoard::EMPTY_BOARD);
     }
 }

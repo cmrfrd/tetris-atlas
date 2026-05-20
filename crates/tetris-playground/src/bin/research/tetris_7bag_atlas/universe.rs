@@ -112,7 +112,7 @@ impl Universe {
         // ================================================================
         let board_start = Instant::now();
 
-        let empty_board = TetrisBoard::new();
+        let empty_board = TetrisBoard::EMPTY_BOARD;
         let empty_board_id = intern_board(&mut boards, &mut board_to_id, &empty_board);
         board_succ_ranges.push([EdgeRange::EMPTY; 7]);
 

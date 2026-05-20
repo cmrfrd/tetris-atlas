@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 //! # Tetris Demo - Multi Beam Search
 //!
 //! Demonstrates that a multi-beam search agent (voting across N parallel searches with different

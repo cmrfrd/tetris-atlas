@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 //! # Tetris Demo - Adaptive Multi Beam Search
 //!
 //! Similar to `tetris_demo_multi.rs`, but adapts search depth and beam width based on

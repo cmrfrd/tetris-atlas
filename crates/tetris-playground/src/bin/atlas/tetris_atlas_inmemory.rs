@@ -1,3 +1,5 @@
+#![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
 #![feature(const_convert)]
 #![feature(const_trait_impl)]
 //! # Tetris Atlas Builder - In-Memory Implementation
@@ -34,7 +36,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 use tetris_game::{
-    IsLost, Major, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPieceOrientation,
+    IsLost, Major, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
+    TetrisPieceOrientation, constants,
 };
 use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetris_score};
 use tetris_utils::repeat_idx_unroll;
@@ -136,9 +139,9 @@ const fn hash_board_bag(board: TetrisBoard, bag: TetrisPieceBagState) -> u64 {
     const FNV_OFFSET: u64 = 0xcbf29ce484222325;
     const FNV_PRIME: u64 = 0x100000001b3;
 
-    let board_bytes: [u32; TetrisBoard::WIDTH] = board.as_limbs();
+    let board_bytes: [u32; StandardTetris::COLS] = board.as_limbs();
     let mut hash = FNV_OFFSET;
-    repeat_idx_unroll!(TetrisBoard::WIDTH, I, {
+    repeat_idx_unroll!(StandardTetris::COLS, I, {
         hash ^= board_bytes[I] as u64;
         hash = hash.wrapping_mul(FNV_PRIME);
     });
@@ -222,7 +225,7 @@ impl SharedState {
     }
 
     fn seed_starting_state(&self) {
-        let empty_board = TetrisBoard::new();
+        let empty_board = TetrisBoard::EMPTY_BOARD;
         let bag = TetrisPieceBagState::new();
         self.frontier.push(empty_board, bag);
     }
@@ -914,7 +917,7 @@ pub fn run_tetris_atlas_explore(base_path: &str) {
 
         fn current_board(&self) -> TetrisBoard {
             if self.current_position == 0 {
-                TetrisBoard::new()
+                TetrisBoard::EMPTY_BOARD
             } else {
                 self.entries[self.current_position - 1].board
             }
@@ -998,9 +1001,9 @@ pub fn run_tetris_atlas_explore(base_path: &str) {
             let mut height = 0;
 
             // Calculate filled cells and height
-            for y in 0..TetrisBoard::HEIGHT {
+            for y in 0..StandardTetris::ROWS {
                 let mut row_has_filled = false;
-                for x in 0..TetrisBoard::WIDTH {
+                for x in 0..StandardTetris::COLS {
                     if board.get_bit(x, y) {
                         filled_cells += 1;
                         row_has_filled = true;

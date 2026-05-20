@@ -683,7 +683,7 @@ fn beam_search_to_empty_noisy(
     noise_seed: u64,
     temperature: f32,
 ) -> BeamResult {
-    let empty = TetrisBoard::new();
+    let empty = TetrisBoard::EMPTY_BOARD;
     let mut beam: Vec<(f32, TetrisBoard)> = vec![(0.0, empty)];
     let mut rng = StdRng::seed_from_u64(noise_seed.wrapping_add(12345));
 
@@ -936,7 +936,7 @@ fn beam_search_collect(
     max_height: u32,
     max_holes: u32,
 ) -> Vec<(f32, TetrisBoard)> {
-    let empty = TetrisBoard::new();
+    let empty = TetrisBoard::EMPTY_BOARD;
     let mut beam: Vec<(f32, TetrisBoard)> = vec![(0.0, empty)];
 
     for (step, &piece) in pieces.iter().enumerate() {
@@ -1054,7 +1054,7 @@ fn run_exact(
         bail!("exact mode expects exactly 5 bag permutation indices");
     }
 
-    let empty = TetrisBoard::new();
+    let empty = TetrisBoard::EMPTY_BOARD;
     let empty_hash = super::common::board_hash(&empty);
 
     println!("five_bag_cycle EXACT DFS");
@@ -1201,7 +1201,7 @@ fn run_puct_mcts(
 
     let constraints = BoardConstraints::new(args.max_height, args.max_holes);
     let base_config = PuctConfig {
-        start_board: TetrisBoard::new(),
+        start_board: TetrisBoard::EMPTY_BOARD,
         constraints,
         target,
         iterations: args.mcts_iterations,
@@ -1702,7 +1702,7 @@ fn single_rollout(
     max_holes: u32,
     rng: &mut StdRng,
 ) -> u32 {
-    let mut board = TetrisBoard::new();
+    let mut board = TetrisBoard::EMPTY_BOARD;
     let n_pieces = pieces.len();
     let mut total_lines_cleared: u32 = 0;
 
@@ -1784,7 +1784,7 @@ fn run_prove(args: &CycleRunConfig, perms: &[[TetrisPiece; 7]], bag_perms: &[usi
     let mut memo: FxHashSet<(super::common::BoardKey, u8)> = FxHashSet::default();
 
     let found = prove_dfs(
-        TetrisBoard::new(),
+        TetrisBoard::EMPTY_BOARD,
         &pieces,
         0,
         args.max_height,

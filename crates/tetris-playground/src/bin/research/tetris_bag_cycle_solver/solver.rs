@@ -162,7 +162,7 @@ pub struct Solver {
 impl Solver {
     pub fn new(config: SolverConfig, diagnostics_enabled: bool) -> Self {
         let mut boards = BoardCache::new();
-        let empty_board_id = boards.get_or_insert(TetrisBoard::new());
+        let empty_board_id = boards.get_or_insert(TetrisBoard::EMPTY_BOARD);
         let now = Instant::now();
         Self {
             config,

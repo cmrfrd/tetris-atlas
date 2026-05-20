@@ -760,7 +760,7 @@ mod tests {
 
     fn test_config(target: TargetSpec) -> PuctConfig {
         PuctConfig {
-            start_board: TetrisBoard::new(),
+            start_board: TetrisBoard::EMPTY_BOARD,
             constraints: BoardConstraints::new(20, u32::MAX),
             target,
             iterations: 64,
@@ -777,9 +777,9 @@ mod tests {
     #[test]
     fn empty_target_accepts_only_empty_board() {
         let target = TargetSpec::Empty;
-        assert!(target.is_success(&TetrisBoard::new()));
+        assert!(target.is_success(&TetrisBoard::EMPTY_BOARD));
 
-        let mut board = TetrisBoard::new();
+        let mut board = TetrisBoard::EMPTY_BOARD;
         let placement = TetrisPiecePlacement::all_from_piece(TetrisPiece::O_PIECE)[0];
         let result = board.apply_piece_placement(placement);
         assert_eq!(result.is_lost, IsLost::NOT_LOST);
@@ -789,7 +789,7 @@ mod tests {
     #[test]
     fn cell_count_target_dedupes_and_matches_counts() -> Result<()> {
         let target = TargetSpec::from_cli(MctsTargetKind::CellCount, vec![4, 4], None, None)?;
-        let mut board = TetrisBoard::new();
+        let mut board = TetrisBoard::EMPTY_BOARD;
         let placement = TetrisPiecePlacement::all_from_piece(TetrisPiece::O_PIECE)[0];
         let result = board.apply_piece_placement(placement);
         assert_eq!(result.is_lost, IsLost::NOT_LOST);
@@ -800,7 +800,7 @@ mod tests {
     #[test]
     fn low_board_target_uses_default_bounds() -> Result<()> {
         let target = TargetSpec::from_cli(MctsTargetKind::LowBoard, Vec::new(), None, None)?;
-        assert!(target.is_success(&TetrisBoard::new()));
+        assert!(target.is_success(&TetrisBoard::EMPTY_BOARD));
         Ok(())
     }
 
@@ -847,7 +847,7 @@ mod tests {
 
     #[test]
     fn empty_or_bust_penalizes_terminal_misses() {
-        let mut board = TetrisBoard::new();
+        let mut board = TetrisBoard::EMPTY_BOARD;
         let placement = TetrisPiecePlacement::all_from_piece(TetrisPiece::O_PIECE)[0];
         let result = board.apply_piece_placement(placement);
         assert_eq!(result.is_lost, IsLost::NOT_LOST);

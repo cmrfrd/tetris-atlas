@@ -110,7 +110,7 @@ pub fn run(args: AnalyzeTargetedArgs) -> Result<()> {
         let arr: [u8; 200] = blob.as_slice().try_into().unwrap_or([0u8; 200]);
         TetrisBoard::from_cell_array(arr, Major::Row)
     } else {
-        TetrisBoard::new()
+        TetrisBoard::EMPTY_BOARD
     };
 
     let start_cells = start_board.count();

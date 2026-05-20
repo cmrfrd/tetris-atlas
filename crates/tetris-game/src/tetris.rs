@@ -10,38 +10,8 @@ use tetris_utils::{
     BitMask, HeaplessVec, repeat_idx_unroll, rshift_slice_from_mask_u32, transpose_bits,
 };
 
-/// Core constants for Tetris game dimensions and pieces.
-pub mod constants {
-    /// Visible Tetris board dimensions
-    pub const ROWS: usize = 20;
-    pub const COLS: usize = 10;
-    pub const BOARD_SIZE: usize = ROWS * COLS;
-
-    /// Tetris piece rotations and pieces
-    pub const NUM_ROTATIONS: u8 = 4;
-    pub const NUM_TETRIS_PIECES: usize = 7;
-
-    /// Column representation for the board: each `u32` bit is a row (0 = bottom, 19 = top, 20-31 = overflow).
-    pub type BackingColType = u32;
-    pub const ACTUAL_ROWS: usize = BackingColType::BITS as usize;
-    /// Bytes per column limb — derived from the backing type rather than
-    /// hard-coding `4`. Update [`BackingColType`] and this follows.
-    pub const BYTES_PER_LIMB: usize = std::mem::size_of::<BackingColType>();
-    /// Total byte size of the packed-limbs board representation
-    /// (equivalent to `COLS * BYTES_PER_LIMB`).
-    pub const BOARD_BYTES: usize = COLS * BYTES_PER_LIMB;
-    const _: () = assert!(
-        super::constants::ACTUAL_ROWS > super::constants::ROWS,
-        "ACTUAL_ROWS must be greater than ROWS"
-    );
-    const _: () = assert!(
-        super::constants::BYTES_PER_LIMB * 8 == super::constants::ACTUAL_ROWS,
-        "BYTES_PER_LIMB must match BackingColType bit-width"
-    );
-
-    /// Number of possible cell states (0 = empty, 1 = filled).
-    pub const NUM_TETRIS_CELL_STATES: usize = 2;
-}
+pub use crate::config::constants;
+use crate::config::{StandardTetris, TetrisGameConfig};
 
 /// Piece shapes encoded as column bitmasks for fast collision detection.
 ///
@@ -211,7 +181,7 @@ impl Display for Column {
 }
 
 impl Column {
-    pub const MAX: u8 = constants::COLS as u8;
+    pub const MAX: u8 = StandardTetris::COLS as u8;
 
     pub const fn index(self) -> usize {
         self.0 as usize
@@ -731,7 +701,7 @@ impl TetrisPiecePlacement {
             let mut r = 0u8;
             let mut count = 0usize;
             while r < piece.num_rotations() {
-                count += (((constants::COLS as u8) - piece.width(Rotation(r))) + 1) as usize;
+                count += (((StandardTetris::COLS as u8) - piece.width(Rotation(r))) + 1) as usize;
                 r += 1;
             }
             counts[i] = count;
@@ -779,7 +749,7 @@ impl TetrisPiecePlacement {
             let mut r = 0;
             while r < piece.num_rotations() {
                 total_placements +=
-                    (((constants::COLS as u8) - piece.width(Rotation(r))) + 1) as usize;
+                    (((StandardTetris::COLS as u8) - piece.width(Rotation(r))) + 1) as usize;
                 r += 1;
             }
             i += 1;
@@ -801,7 +771,7 @@ impl TetrisPiecePlacement {
             let mut r = 0;
             while r < piece.num_rotations() {
                 let mut c = 0;
-                while c <= (constants::COLS as u8) - piece.width(Rotation(r)) {
+                while c <= (StandardTetris::COLS as u8) - piece.width(Rotation(r)) {
                     placements[placement_id] = Self {
                         piece,
                         orientation: TetrisPieceOrientation {
@@ -832,7 +802,7 @@ impl TetrisPiecePlacement {
         let mut offset = 0usize;
         let mut r: u8 = 0;
         while r < self.orientation.rotation.0 {
-            let k = ((constants::COLS as u8) - piece.width(Rotation(r)) + 1) as usize;
+            let k = ((StandardTetris::COLS as u8) - piece.width(Rotation(r)) + 1) as usize;
             offset += k;
             r += 1;
         }
@@ -952,11 +922,12 @@ pub const fn fisher_yates_7bag_stream_from_seed(rng: &mut TetrisGameRng) -> u64 
 pub struct TetrisPieceBag {
     stream: u64,
     pub remaining: u8,
+    piece_set: TetrisPieceBagState,
 }
 
 impl Default for TetrisPieceBag {
     fn default() -> Self {
-        Self::new_ordered()
+        Self::new_ordered(TetrisPieceBagState::new())
     }
 }
 
@@ -972,14 +943,16 @@ impl Display for TetrisPieceBag {
 }
 
 impl TetrisPieceBag {
-    /// Creates a new bag with pieces in deterministic order (O, I, S, Z, T, L, J).
+    /// Creates a new bag with pieces in deterministic order.
     ///
     /// Useful for testing when you need predictable piece sequences.
     #[must_use]
-    pub const fn new_ordered() -> Self {
+    pub const fn new_ordered(piece_set: TetrisPieceBagState) -> Self {
+        let bag = Self::from_bag_state(piece_set);
         Self {
-            stream: ORDERED_7,
-            remaining: 7,
+            stream: bag.stream,
+            remaining: bag.remaining,
+            piece_set,
         }
     }
 
@@ -987,20 +960,22 @@ impl TetrisPieceBag {
     ///
     /// This is the standard way to initialize a bag for gameplay.
     #[must_use]
-    pub const fn new_rand(rng: &mut TetrisGameRng) -> Self {
-        Self {
-            stream: fisher_yates_7bag_stream_from_seed(rng),
-            remaining: 7,
-        }
+    pub const fn new_rand(rng: &mut TetrisGameRng, piece_set: TetrisPieceBagState) -> Self {
+        let mut bag = Self::from_bag_state(piece_set);
+        bag.piece_set = piece_set;
+        bag.shuffle(rng);
+        bag
     }
 
-    /// Refills the bag with a new random permutation of all 7 pieces.
+    /// Refills the bag with a new random permutation of the configured piece set.
     ///
     /// Called automatically by [`rand_next`](Self::rand_next) when the bag is empty.
     #[inline_conditioned(always)]
     pub const fn rand_fill(&mut self, rng: &mut TetrisGameRng) {
-        self.stream = fisher_yates_7bag_stream_from_seed(rng);
-        self.remaining = 7;
+        let fresh = Self::from_bag_state(self.piece_set);
+        self.stream = fresh.stream;
+        self.remaining = fresh.remaining;
+        self.shuffle(rng);
     }
 
     /// Creates a bag from a [`TetrisPieceBagState`] bitmask.
@@ -1029,6 +1004,7 @@ impl TetrisPieceBag {
         Self {
             stream,
             remaining: out_k as u8,
+            piece_set: bag_state,
         }
     }
 
@@ -1436,29 +1412,38 @@ impl TetrisPieceBagState {
 /// 3. Row clearing can use SIMD-friendly operations across columns
 /// 4. Height calculation is a simple `leading_zeros()` operation per column
 #[derive(PartialEq, Eq, Debug, Hash, Clone, Copy, Ord, PartialOrd)]
-pub struct TetrisBoard([u32; constants::COLS]);
+pub struct TetrisBoard<C: TetrisGameConfig = StandardTetris>([u32; C::COLS])
+where
+    [(); C::COLS]:;
 
-impl Default for TetrisBoard {
+impl<C: TetrisGameConfig> Default for TetrisBoard<C>
+where
+    [(); C::COLS]:,
+{
     fn default() -> Self {
         Self::EMPTY_BOARD
     }
 }
 
-impl TetrisBoard {
-    pub const SIZE: usize = constants::BOARD_SIZE;
-    pub const WIDTH: usize = constants::COLS;
-    pub const HEIGHT: usize = constants::ROWS;
-    pub const NUM_TETRIS_CELL_STATES: usize = constants::NUM_TETRIS_CELL_STATES;
-
-    pub const EMPTY_BOARD: Self = Self([0_u32; constants::COLS]);
+impl<C: TetrisGameConfig> TetrisBoard<C>
+where
+    [(); C::COLS]:,
+{
+    pub const EMPTY_BOARD: Self = Self([0_u32; C::COLS]);
     pub const FULL_BOARD: Self = {
-        let mask = (1u32 << constants::ROWS) - 1; // Only fill playable rows (0..ROWS)
-        Self([mask; constants::COLS])
+        let mask = (1u32 << C::ROWS) - 1; // Only fill playable rows (0..ROWS)
+        Self([mask; C::COLS])
     };
 
     #[must_use]
-    pub const fn as_limbs(&self) -> [u32; constants::COLS] {
+    pub const fn as_limbs(&self) -> [u32; C::COLS] {
         self.0
+    }
+
+    /// Creates a board from raw column limbs.
+    #[must_use]
+    pub const fn from_limbs(limbs: [u32; C::COLS]) -> Self {
+        Self(limbs)
     }
 }
 
@@ -1466,27 +1451,38 @@ impl TetrisBoard {
 ///
 /// Zero-cost via `transmute`. Uses `BOARD_BYTES` so the layout follows
 /// `BackingColType` automatically.
-impl const From<TetrisBoard> for [u8; constants::BOARD_BYTES] {
+impl<C: TetrisGameConfig> const From<TetrisBoard<C>> for [u8; C::BOARD_BYTES]
+where
+    [(); C::COLS]:,
+    [(); C::BOARD_BYTES]:,
+{
     #[inline(always)]
-    fn from(board: TetrisBoard) -> Self {
-        unsafe { std::mem::transmute(board.0) }
+    fn from(board: TetrisBoard<C>) -> Self {
+        unsafe { std::mem::transmute_copy(&board.0) }
     }
 }
 
 /// Converts a column-major limb-as-bytes array to TetrisBoard.
-impl const From<[u8; constants::BOARD_BYTES]> for TetrisBoard {
+impl<C: TetrisGameConfig> const From<[u8; C::BOARD_BYTES]> for TetrisBoard<C>
+where
+    [(); C::COLS]:,
+    [(); C::BOARD_BYTES]:,
+{
     #[inline(always)]
-    fn from(bytes: [u8; constants::BOARD_BYTES]) -> Self {
+    fn from(bytes: [u8; C::BOARD_BYTES]) -> Self {
         unsafe {
-            Self(std::mem::transmute::<
-                [u8; constants::BOARD_BYTES],
-                [constants::BackingColType; constants::COLS],
-            >(bytes))
+            Self(std::mem::transmute_copy::<
+                [u8; C::BOARD_BYTES],
+                [constants::BackingColType; C::COLS],
+            >(&bytes))
         }
     }
 }
 
-impl TetrisBoard {
+impl<C: TetrisGameConfig> TetrisBoard<C>
+where
+    [(); C::COLS]:,
+{
     /// Gets the value of a single bit at the specified column and row position.
     ///
     /// # Arguments
@@ -1502,7 +1498,7 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::tetris::TetrisBoard;
-    /// let board = TetrisBoard::new();
+    /// let board: TetrisBoard = TetrisBoard::new();
     /// assert_eq!(board.get_bit(0, 0), false); // Empty cell at bottom-left
     /// ```
     #[inline_conditioned(always)]
@@ -1521,7 +1517,7 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::tetris::TetrisBoard;
-    /// let mut board = TetrisBoard::new();
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     /// board.set_bit(0, 0); // Set bottom-left cell
     /// assert_eq!(board.get_bit(0, 0), true);
     /// ```
@@ -1541,7 +1537,7 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::tetris::TetrisBoard;
-    /// let mut board = TetrisBoard::new();
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     /// board.set_bit(0, 0);
     /// board.clear_bit(0, 0);
     /// assert_eq!(board.get_bit(0, 0), false);
@@ -1563,27 +1559,30 @@ impl TetrisBoard {
     /// ```
     /// use tetris_game::tetris::TetrisBoard;
     /// use rand::thread_rng;
-    /// let mut board = TetrisBoard::new();
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     /// let mut rng = thread_rng();
     /// board.set_random_bits(10, &mut rng);
     /// ```
     pub fn set_random_bits<R: Rng + ?Sized>(&mut self, num_bits: usize, rng: &mut R) {
         for _ in 0..num_bits {
             let rand = rng.random::<u32>();
-            let col = ((rand >> 16) as u16 % constants::COLS as u16) as usize;
-            let row = ((rand & 0xFFFF) % constants::ROWS as u32) as usize;
+            let col = ((rand >> 16) as u16 % C::COLS as u16) as usize;
+            let row = ((rand & 0xFFFF) % C::ROWS as u32) as usize;
             self.set_bit(col, row);
         }
     }
 }
 
-impl Display for TetrisBoard {
+impl<C: TetrisGameConfig> Display for TetrisBoard<C>
+where
+    [(); C::COLS]:,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f)?;
         writeln!(f, " {:2}| board", "r")?;
         for row in (0..constants::ACTUAL_ROWS).rev() {
             let mut row_str = String::new();
-            for col in 0..constants::COLS {
+            for col in 0..C::COLS {
                 let bit = self.get_bit(col, row);
                 row_str.push(if bit { '#' } else { '.' });
             }
@@ -1604,7 +1603,13 @@ pub enum Major {
     Col,
 }
 
-impl TetrisBoard {
+impl<C: TetrisGameConfig> TetrisBoard<C>
+where
+    [(); C::COLS]:,
+    [(); C::BOARD_SIZE]:,
+    [(); C::BOARD_BYTES]:,
+    [(); C::ACTUAL_ROWS]:,
+{
     /// Converts the board to a flat cell array where each byte is 0 or 1.
     ///
     /// # Arguments
@@ -1618,24 +1623,24 @@ impl TetrisBoard {
     /// # Example
     ///
     /// ```
-    /// use tetris_game::tetris::{TetrisBoard, Major, constants};
-    /// let col = constants::COLS.min(4).saturating_sub(1);
-    /// let row = constants::ROWS.min(6).saturating_sub(1);
-    /// let mut board = TetrisBoard::new();
+    /// use tetris_game::{tetris::{TetrisBoard, Major}, StandardTetris, TetrisGameConfig};
+    /// let col = StandardTetris::COLS.min(4).saturating_sub(1);
+    /// let row = StandardTetris::ROWS.min(6).saturating_sub(1);
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     /// board.set_bit(col, row);
     /// let cells = board.to_cell_array(Major::Row);
-    /// assert_eq!(cells[row * constants::COLS + col], 1);
+    /// assert_eq!(cells[row * StandardTetris::COLS + col], 1);
     /// let cells = board.to_cell_array(Major::Col);
-    /// assert_eq!(cells[col * constants::ROWS + row], 1);
+    /// assert_eq!(cells[col * StandardTetris::ROWS + row], 1);
     /// ```
     #[inline_conditioned(always)]
-    pub const fn to_cell_array(&self, order: Major) -> [u8; Self::SIZE] {
-        let mut result = [0u8; Self::SIZE];
+    pub const fn to_cell_array(&self, order: Major) -> [u8; C::BOARD_SIZE] {
+        let mut result = [0u8; C::BOARD_SIZE];
         let mut i = 0;
-        while i < Self::SIZE {
+        while i < C::BOARD_SIZE {
             let (col, row) = match order {
-                Major::Row => (i % Self::WIDTH, i / Self::WIDTH),
-                Major::Col => (i / Self::HEIGHT, i % Self::HEIGHT),
+                Major::Row => (i % C::COLS, i / C::COLS),
+                Major::Col => (i / C::ROWS, i % C::ROWS),
             };
             result[i] = ((self.0[col] >> row) & 1) as u8;
             i += 1;
@@ -1654,20 +1659,20 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::tetris::{TetrisBoard, Major};
-    /// let mut board = TetrisBoard::new();
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     /// board.set_bit(0, 0);
     /// let cells = board.to_cell_array(Major::Row);
-    /// let board2 = TetrisBoard::from_cell_array(cells, Major::Row);
+    /// let board2: TetrisBoard = TetrisBoard::from_cell_array(cells, Major::Row);
     /// assert_eq!(board, board2);
     /// ```
     #[inline_conditioned(always)]
-    pub const fn from_cell_array(cells: [u8; Self::SIZE], order: Major) -> Self {
+    pub const fn from_cell_array(cells: [u8; C::BOARD_SIZE], order: Major) -> Self {
         let mut board = Self::EMPTY_BOARD;
         let mut i = 0;
-        while i < Self::SIZE {
+        while i < C::BOARD_SIZE {
             let (col, row) = match order {
-                Major::Row => (i % Self::WIDTH, i / Self::WIDTH),
-                Major::Col => (i / Self::HEIGHT, i % Self::HEIGHT),
+                Major::Row => (i % C::COLS, i / C::COLS),
+                Major::Col => (i / C::ROWS, i % C::ROWS),
             };
             board.0[col] |= (cells[i] as u32) << row;
             i += 1;
@@ -1686,35 +1691,22 @@ impl TetrisBoard {
     /// # Example
     ///
     /// ```
-    /// use tetris_game::tetris::{TetrisBoard, Major, constants};
-    /// let board = TetrisBoard::new();
+    /// use tetris_game::{tetris::{TetrisBoard, Major}, StandardTetris, TetrisGameConfig};
+    /// let board: TetrisBoard = TetrisBoard::new();
     /// let bytes = board.to_bytes(Major::Col);
-    /// assert_eq!(bytes.len(), constants::BOARD_BYTES);
-    /// assert_eq!(TetrisBoard::from_bytes(bytes, Major::Col), board);
+    /// assert_eq!(bytes.len(), StandardTetris::BOARD_BYTES);
+    /// assert_eq!(<TetrisBoard>::from_bytes(bytes, Major::Col), board);
     /// ```
     #[inline(always)]
-    pub const fn to_bytes(&self, order: Major) -> [u8; constants::BOARD_BYTES] {
+    pub const fn to_bytes(&self, order: Major) -> [u8; C::BOARD_BYTES] {
         // SAFETY: [BackingColType; COLS] and [u8; BOARD_BYTES] have the
         // same size (asserted via the `BYTES_PER_LIMB * 8 == ACTUAL_ROWS`
         // const-check in `constants`).
-        let mut bytes: [u8; constants::BOARD_BYTES] = unsafe { std::mem::transmute(self.0) };
+        let mut bytes: [u8; C::BOARD_BYTES] = unsafe { std::mem::transmute_copy(&self.0) };
         match order {
             Major::Col => bytes,
             Major::Row => {
-                // The transmuted bytes form a `COLS-row × ACTUAL_ROWS-col`
-                // row-major bit grid: bit `q` represents board cell
-                // `(col = q/ACTUAL_ROWS, row = q%ACTUAL_ROWS)` (each column
-                // limb occupies ACTUAL_ROWS consecutive bits). Transposing
-                // `COLS × ACTUAL_ROWS` → `ACTUAL_ROWS × COLS` produces the
-                // natural row-major byte layout where bit `p` = board cell
-                // `(row = p/COLS, col = p%COLS)`. Padding bits (board rows
-                // ROWS..ACTUAL_ROWS) are zero on the input and remain zero
-                // on the output's high rows.
-                transpose_bits::<
-                    { constants::COLS },
-                    { constants::ACTUAL_ROWS },
-                    { constants::BOARD_BYTES },
-                >(&mut bytes);
+                transpose_bits::<{ C::COLS }, { C::ACTUAL_ROWS }, { C::BOARD_BYTES }>(&mut bytes);
                 bytes
             }
         }
@@ -1729,47 +1721,40 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::tetris::{TetrisBoard, Major};
-    /// let mut board = TetrisBoard::new();
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     /// board.set_bit(3, 5);
     /// let bytes = board.to_bytes(Major::Col);
-    /// assert_eq!(TetrisBoard::from_bytes(bytes, Major::Col), board);
+    /// assert_eq!(<TetrisBoard>::from_bytes(bytes, Major::Col), board);
     /// ```
     #[inline(always)]
-    pub const fn from_bytes(bytes: [u8; constants::BOARD_BYTES], order: Major) -> Self {
+    pub const fn from_bytes(bytes: [u8; C::BOARD_BYTES], order: Major) -> Self {
         match order {
-            Major::Col => {
-                // SAFETY: same size, asserted in `constants`.
-                unsafe {
-                    Self(std::mem::transmute::<
-                        [u8; constants::BOARD_BYTES],
-                        [constants::BackingColType; constants::COLS],
-                    >(bytes))
-                }
-            }
+            Major::Col => unsafe {
+                Self(std::mem::transmute_copy::<
+                    [u8; C::BOARD_BYTES],
+                    [constants::BackingColType; C::COLS],
+                >(&bytes))
+            },
             Major::Row => {
-                // Inverse of `to_bytes(Row)`: input is `ACTUAL_ROWS × COLS`
-                // row-major. Transpose back to `COLS × ACTUAL_ROWS` so bit
-                // `q` = cell `(col=q/ACTUAL_ROWS, row=q%ACTUAL_ROWS)` —
-                // matching the transmuted limb layout.
                 let mut bytes = bytes;
-                transpose_bits::<
-                    { constants::ACTUAL_ROWS },
-                    { constants::COLS },
-                    { constants::BOARD_BYTES },
-                >(&mut bytes);
+                transpose_bits::<{ C::ACTUAL_ROWS }, { C::COLS }, { C::BOARD_BYTES }>(&mut bytes);
                 unsafe {
-                    Self(std::mem::transmute::<
-                        [u8; constants::BOARD_BYTES],
-                        [constants::BackingColType; constants::COLS],
-                    >(bytes))
+                    Self(std::mem::transmute_copy::<
+                        [u8; C::BOARD_BYTES],
+                        [constants::BackingColType; C::COLS],
+                    >(&bytes))
                 }
             }
         }
     }
 }
 
-impl TetrisBoard {
-    const NUM_BOARD_ID_CHUNKS: usize = constants::BOARD_SIZE / 5;
+impl<C: TetrisGameConfig> TetrisBoard<C>
+where
+    [(); C::COLS]:,
+    [(); C::BOARD_SIZE / 5]:,
+{
+    const NUM_BOARD_ID_CHUNKS: usize = C::BOARD_SIZE / 5;
 
     /// RFC 4648 base32 alphabet used for board ID encoding.
     const BASE32_ALPHABET: &[u8; 32] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -1788,20 +1773,21 @@ impl TetrisBoard {
     /// ```
     /// use tetris_game::tetris::TetrisBoard;
     /// // Round-trip: encode then decode any board.
-    /// let board = TetrisBoard::new();
+    /// let board: TetrisBoard = TetrisBoard::new();
     /// let id = board.to_board_id();
-    /// assert_eq!(TetrisBoard::from_board_id(&id), Some(board));
+    /// assert_eq!(<TetrisBoard>::from_board_id(&id), Some(board));
     /// ```
     #[must_use]
     pub fn to_board_id(&self) -> String {
-        let mut chars = [b'A'; Self::NUM_BOARD_ID_CHUNKS];
+        let mut chars = [b'A'; { C::BOARD_SIZE / 5 }];
 
-        for chunk_idx in 0..Self::NUM_BOARD_ID_CHUNKS {
+        let num_chunks = C::BOARD_SIZE / 5;
+        for chunk_idx in 0..num_chunks {
             let mut value: u8 = 0;
             for bit in 0..5 {
                 let bit_idx = chunk_idx * 5 + bit;
-                let row = bit_idx / constants::COLS;
-                let col = bit_idx % constants::COLS;
+                let row = bit_idx / C::COLS;
+                let col = bit_idx % C::COLS;
                 if self.get_bit(col, row) {
                     value |= 1 << (4 - bit);
                 }
@@ -1823,21 +1809,22 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::tetris::TetrisBoard;
-    /// let board = TetrisBoard::from_board_id("PXDHAE").unwrap();
+    /// let board: TetrisBoard = TetrisBoard::from_board_id("PXDHAE").unwrap();
     /// assert_eq!(board.get_bit(1, 0), true);
     /// assert_eq!(board.get_bit(0, 0), false);
     /// assert_eq!(board.to_board_id(), "PXDHAE");
     /// ```
     #[must_use]
     pub fn from_board_id(id: &str) -> Option<Self> {
-        if id.len() > Self::NUM_BOARD_ID_CHUNKS {
+        let num_chunks = C::BOARD_SIZE / 5;
+        if id.len() > num_chunks {
             return None;
         }
 
         let id_bytes = id.as_bytes();
         let mut board = Self::EMPTY_BOARD;
 
-        for chunk_idx in 0..Self::NUM_BOARD_ID_CHUNKS {
+        for chunk_idx in 0..num_chunks {
             let ch = if chunk_idx < id_bytes.len() {
                 id_bytes[chunk_idx]
             } else {
@@ -1853,8 +1840,8 @@ impl TetrisBoard {
             for bit in 0..5 {
                 if (value >> (4 - bit)) & 1 != 0 {
                     let bit_idx = chunk_idx * 5 + bit;
-                    let row = bit_idx / constants::COLS;
-                    let col = bit_idx % constants::COLS;
+                    let row = bit_idx / C::COLS;
+                    let col = bit_idx % C::COLS;
                     board.set_bit(col, row);
                 }
             }
@@ -1864,14 +1851,17 @@ impl TetrisBoard {
     }
 }
 
-impl TetrisBoard {
+impl<C: TetrisGameConfig> TetrisBoard<C>
+where
+    [(); C::COLS]:,
+{
     /// Creates a new empty Tetris board.
     ///
     /// # Example
     ///
     /// ```
     /// use tetris_game::tetris::TetrisBoard;
-    /// let board = TetrisBoard::new();
+    /// let board: TetrisBoard = TetrisBoard::new();
     /// assert_eq!(board.count(), 0);
     /// ```
     #[must_use]
@@ -1885,14 +1875,14 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::tetris::TetrisBoard;
-    /// let mut board = TetrisBoard::new();
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     /// board.set_bit(0, 0);
     /// assert_eq!(board.count(), 1);
     /// ```
     #[inline_conditioned(always)]
     pub const fn count(&self) -> u32 {
         let mut acc = 0;
-        repeat_idx_unroll!(constants::COLS, I, {
+        repeat_idx_unroll!(C::COLS, I, {
             acc += self.0[I].count_ones();
         });
         acc
@@ -1904,7 +1894,7 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::tetris::TetrisBoard;
-    /// let mut board = TetrisBoard::new();
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     /// board.set_bit(0, 0);
     /// board.clear();
     /// assert_eq!(board.count(), 0);
@@ -1920,7 +1910,7 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::tetris::TetrisBoard;
-    /// let mut board = TetrisBoard::new();
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     /// board.fill();
     /// assert!(board.get_bit(0, 0));
     /// ```
@@ -1937,14 +1927,14 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::tetris::TetrisBoard;
-    /// let mut board = TetrisBoard::new();
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     /// board.set_bit(0, 1); // Set bit at row 1
     /// assert_eq!(board.height(), 2); // Height should be 2
     /// ```
     #[inline_conditioned(always)]
     pub const fn height(&self) -> u32 {
         let mut acc = 0;
-        repeat_idx_unroll!(constants::COLS, I, {
+        repeat_idx_unroll!(C::COLS, I, {
             acc |= self.0[I];
         });
         u32::BITS - acc.leading_zeros()
@@ -1958,7 +1948,7 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::tetris::TetrisBoard;
-    /// let mut board = TetrisBoard::new();
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     /// board.set_bit(0, 0);
     /// board.set_bit(1, 5);
     /// let heights = board.heights();
@@ -1966,9 +1956,9 @@ impl TetrisBoard {
     /// assert_eq!(heights[1], 6);
     /// ```
     #[inline_conditioned(always)]
-    pub const fn heights(&self) -> [u32; constants::COLS] {
-        let mut out = [0u32; constants::COLS];
-        repeat_idx_unroll!(constants::COLS, I, {
+    pub const fn heights(&self) -> [u32; C::COLS] {
+        let mut out = [0u32; C::COLS];
+        repeat_idx_unroll!(C::COLS, I, {
             out[I] = u32::BITS - self.0[I].leading_zeros();
         });
         out
@@ -1982,7 +1972,7 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::TetrisBoard;
-    /// let mut board = TetrisBoard::new();
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     ///
     /// // Create a hole: fill row 0, skip row 1, fill row 2 in column 0
     /// board.set_bit(0, 0);
@@ -1993,9 +1983,9 @@ impl TetrisBoard {
     /// assert_eq!(holes[1], 0); // Column 1 has no holes
     /// ```
     #[inline_conditioned(always)]
-    pub const fn holes(&self) -> [u32; constants::COLS] {
-        let mut out = [0u32; constants::COLS];
-        repeat_idx_unroll!(constants::COLS, I, {
+    pub const fn holes(&self) -> [u32; C::COLS] {
+        let mut out = [0u32; C::COLS];
+        repeat_idx_unroll!(C::COLS, I, {
             let height = u32::BITS - self.0[I].leading_zeros();
             let filled_cells = self.0[I].count_ones();
             out[I] = height - filled_cells;
@@ -2012,7 +2002,7 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::TetrisBoard;
-    /// let mut board = TetrisBoard::new();
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     /// board.set_bit(0, 0); // col 0 height = 1
     /// board.set_bit(1, 2); // col 1 height = 3
     /// // |1 - 3| + |3 - 0| across columns 0..2, then zeros afterward.
@@ -2021,7 +2011,7 @@ impl TetrisBoard {
     #[inline_conditioned(always)]
     pub const fn roughness(&self) -> u32 {
         let mut sum = 0;
-        repeat_idx_unroll!(constants::COLS - 1, I, {
+        repeat_idx_unroll!(C::COLS - 1, I, {
             let left = u32::BITS - self.0[I].leading_zeros();
             let right = u32::BITS - self.0[I + 1].leading_zeros();
             sum += left.abs_diff(right);
@@ -2035,7 +2025,7 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::TetrisBoard;
-    /// let mut board = TetrisBoard::new();
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     ///
     /// // Create holes in two columns
     /// // Column 0: fill row 0, skip row 1, fill row 2 (1 hole)
@@ -2051,7 +2041,7 @@ impl TetrisBoard {
     #[inline_conditioned(always)]
     pub const fn total_holes(&self) -> u32 {
         let mut sum = 0;
-        repeat_idx_unroll!(constants::COLS, I, {
+        repeat_idx_unroll!(C::COLS, I, {
             let height = u32::BITS - self.0[I].leading_zeros();
             let filled_cells = self.0[I].count_ones();
             sum += height - filled_cells;
@@ -2068,7 +2058,7 @@ impl TetrisBoard {
     ///
     /// ```
     /// use tetris_game::tetris::TetrisBoard;
-    /// let mut board = TetrisBoard::new();
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     /// board.set_bit(0, 19); // Set bit at max valid height
     /// assert!(!board.is_lost());
     /// board.set_bit(0, 20); // Set bit above max height
@@ -2076,7 +2066,7 @@ impl TetrisBoard {
     /// ```
     #[inline_conditioned(always)]
     pub const fn is_lost(&self) -> bool {
-        self.height() > constants::ROWS as u32
+        self.height() > C::ROWS as u32
     }
 
     /// Clears all completely filled rows and shifts all cells above the cleared rows down.
@@ -2094,10 +2084,10 @@ impl TetrisBoard {
     /// # Examples
     ///
     /// ```
-    /// use tetris_game::tetris::{TetrisBoard, constants};
-    /// let mut board = TetrisBoard::new();
+    /// use tetris_game::{tetris::TetrisBoard, StandardTetris, TetrisGameConfig};
+    /// let mut board: TetrisBoard = TetrisBoard::new();
     /// // Fill an entire row at the current board width.
-    /// for col in 0..constants::COLS {
+    /// for col in 0..StandardTetris::COLS {
     ///     board.set_bit(col, 0);
     /// }
     /// assert_eq!(board.clear_filled_rows(), 1);
@@ -2106,10 +2096,10 @@ impl TetrisBoard {
     #[inline_conditioned(always)]
     pub const fn clear_filled_rows(&mut self) -> u32 {
         let mut filled_rows_mask = u32::MAX;
-        repeat_idx_unroll!(constants::COLS, I, {
+        repeat_idx_unroll!(C::COLS, I, {
             filled_rows_mask &= self.0[I];
         });
-        rshift_slice_from_mask_u32::<{ constants::COLS }, 4>(&mut self.0, filled_rows_mask);
+        rshift_slice_from_mask_u32::<{ C::COLS }, 4>(&mut self.0, filled_rows_mask);
         filled_rows_mask.count_ones()
     }
 
@@ -2121,6 +2111,7 @@ impl TetrisBoard {
     /// 3. Drop the piece as far as possible, then merge it into the board.
     /// 4. Clear filled rows and check for loss.
     #[inline_conditioned(always)]
+    #[allow(unconditional_panic)] // dead arms in repeat_idx_unroll! match const
     pub fn apply_piece_placement(&mut self, placement: TetrisPiecePlacement) -> PlacementResult {
         // Early exit: if the board is already in a lost state (all bits set),
         // don't process the placement to preserve the end state marker
@@ -2240,7 +2231,7 @@ impl TetrisBoard {
         let is_lost = self.is_lost();
         if is_lost {
             // Mark board as lost by filling beyond playable area
-            *self = Self([u32::MAX; constants::COLS]);
+            *self = Self([u32::MAX; C::COLS]);
         }
 
         PlacementResult {
@@ -2393,7 +2384,6 @@ impl TetrisGameRng {
     }
 }
 
-
 /// The result of applying a piece placement to a board.
 ///
 /// Contains information about the outcome of the placement:
@@ -2430,9 +2420,12 @@ pub struct PlacementResult {
 /// Games created with the same seed produce identical piece sequences,
 /// enabling replay and testing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TetrisGame {
+pub struct TetrisGame<C: TetrisGameConfig = StandardTetris>
+where
+    [(); C::COLS]:,
+{
     /// The current board state.
-    pub board: TetrisBoard,
+    pub board: TetrisBoard<C>,
     /// The piece that will be placed next.
     pub current_piece: TetrisPiece,
     /// The deterministic RNG (stores seed for reset).
@@ -2447,7 +2440,10 @@ pub struct TetrisGame {
     pub piece_count: u32,
 }
 
-impl Display for TetrisGame {
+impl<C: TetrisGameConfig> Display for TetrisGame<C>
+where
+    [(); C::COLS]:,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "TetrisGame:")?;
         writeln!(f, "  bag:")?;
@@ -2462,24 +2458,42 @@ impl Display for TetrisGame {
     }
 }
 
-impl Default for TetrisGame {
+impl<C: TetrisGameConfig> Default for TetrisGame<C>
+where
+    [(); C::COLS]:,
+{
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl TetrisGame {
+impl<C: TetrisGameConfig> TetrisGame<C>
+where
+    [(); C::COLS]:,
+{
     /// Create a new Tetris game.
     ///
     /// The game is initialized with a new board, a new bag, and a random piece
     /// popped from the bag.
     #[must_use]
     pub fn new() -> Self {
+        Self::new_with_piece_set(TetrisPieceBagState::new())
+    }
+
+    /// Creates a new game with a specific seed for reproducible piece sequences.
+    #[must_use]
+    pub fn new_with_seed(seed: u64) -> Self {
+        Self::new_with_seed_and_piece_set(seed, TetrisPieceBagState::new())
+    }
+
+    /// Creates a new game with a specific piece set.
+    #[must_use]
+    pub fn new_with_piece_set(piece_set: TetrisPieceBagState) -> Self {
         let mut rng = TetrisGameRng::default();
-        let mut bag = TetrisPieceBag::new_rand(&mut rng);
+        let mut bag = TetrisPieceBag::new_rand(&mut rng, piece_set);
         let current_piece = bag.rand_next(&mut rng);
         Self {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::<C>::new(),
             current_piece,
             rng,
             bag,
@@ -2489,14 +2503,14 @@ impl TetrisGame {
         }
     }
 
-    /// Creates a new game with a specific seed for reproducible piece sequences.
+    /// Creates a new game with a specific seed and piece set.
     #[must_use]
-    pub fn new_with_seed(seed: u64) -> Self {
+    pub fn new_with_seed_and_piece_set(seed: u64, piece_set: TetrisPieceBagState) -> Self {
         let mut rng = TetrisGameRng::new(seed);
-        let mut bag = TetrisPieceBag::new_rand(&mut rng);
+        let mut bag = TetrisPieceBag::new_rand(&mut rng, piece_set);
         let current_piece = bag.rand_next(&mut rng);
         Self {
-            board: TetrisBoard::new(),
+            board: TetrisBoard::<C>::new(),
             current_piece,
             rng,
             bag,
@@ -2511,7 +2525,7 @@ impl TetrisGame {
     /// Useful for resuming a game or testing specific scenarios.
     #[must_use]
     pub fn new_with_board_bag_piece_seeded(
-        board: TetrisBoard,
+        board: TetrisBoard<C>,
         bag_state: TetrisPieceBagState,
         current_piece: TetrisPiece,
         seed: u64,
@@ -2617,7 +2631,7 @@ impl TetrisGame {
     ///
     /// Each board represents the state after one valid placement (before the next piece).
     #[must_use]
-    pub fn next_boards(&self) -> Vec<TetrisBoard> {
+    pub fn next_boards(&self) -> Vec<TetrisBoard<C>> {
         let placements = TetrisPiecePlacement::all_from_piece(self.current_piece);
         placements
             .iter()
@@ -2667,10 +2681,16 @@ impl TetrisGame {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Workaround: default type params don't resolve in expression position
+    // with generic_const_exprs. These aliases pin to StandardTetris for tests.
+    #[allow(dead_code)]
+    type Board = TetrisBoard<StandardTetris>;
+    #[allow(dead_code)]
+    type Game = TetrisGame<StandardTetris>;
 
     #[test]
     fn test_piece_rotations() {
@@ -2783,25 +2803,25 @@ mod tests {
     /// Test board bit operations: set, get, clear, count, fill
     #[test]
     fn test_board_bit_ops() {
-        let mut board = TetrisBoard::new();
+        let mut board = Board::new();
         assert_eq!(board.count(), 0);
 
         // Empty board: every cell reads false
-        for row in 0..constants::ROWS {
-            for col in 0..constants::COLS {
+        for row in 0..StandardTetris::ROWS {
+            for col in 0..StandardTetris::COLS {
                 assert!(!board.get_bit(col, row));
             }
         }
 
         // Set each bit, verify it reads back and count increments
-        for row in 0..constants::ROWS {
-            for col in 0..constants::COLS {
+        for row in 0..StandardTetris::ROWS {
+            for col in 0..StandardTetris::COLS {
                 board.set_bit(col, row);
                 assert!(
                     board.get_bit(col, row),
                     "get_bit should be true after set at col={col}, row={row}"
                 );
-                let expected_count = (row * constants::COLS + col + 1) as u32;
+                let expected_count = (row * StandardTetris::COLS + col + 1) as u32;
                 assert_eq!(board.count(), expected_count);
             }
         }
@@ -2809,11 +2829,14 @@ mod tests {
         // Full board via fill
         board.clear();
         board.fill();
-        assert_eq!(board.count(), (constants::ROWS * constants::COLS) as u32);
+        assert_eq!(
+            board.count(),
+            (StandardTetris::ROWS * StandardTetris::COLS) as u32
+        );
 
         // Clear each bit, verify it reads back false
-        for row in 0..constants::ROWS {
-            for col in 0..constants::COLS {
+        for row in 0..StandardTetris::ROWS {
+            for col in 0..StandardTetris::COLS {
                 board.clear_bit(col, row);
                 assert!(
                     !board.get_bit(col, row),
@@ -2827,10 +2850,10 @@ mod tests {
     // For each cell in the board, set a single bit and assert the height
     #[test]
     fn test_board_height() {
-        let mut board = TetrisBoard::new();
+        let mut board = Board::new();
         assert_eq!(board.height(), 0);
-        for row in 0..constants::ROWS {
-            for col in 0..constants::COLS {
+        for row in 0..StandardTetris::ROWS {
+            for col in 0..StandardTetris::COLS {
                 board.clear();
                 board.set_bit(col, row);
                 let expected_height = (row + 1) as u32;
@@ -2849,7 +2872,7 @@ mod tests {
 
     #[test]
     fn test_drop_piece_simple() {
-        let mut board = TetrisBoard::new();
+        let mut board = Board::new();
         board.apply_piece_placement(TetrisPiecePlacement {
             piece: TetrisPiece::new(0),
             orientation: TetrisPieceOrientation {
@@ -2871,16 +2894,16 @@ mod tests {
             let rotation = Rotation(rand::random::<u8>() % Rotation::MAX);
             let piece_width = piece.width(rotation);
             // Skip orientations that don't fit on the current board width
-            if (piece_width as usize) > constants::COLS {
+            if (piece_width as usize) > StandardTetris::COLS {
                 continue;
             }
-            let slack = (constants::COLS as u8) - piece_width;
+            let slack = (StandardTetris::COLS as u8) - piece_width;
             let column = if slack == 0 {
                 Column(0)
             } else {
                 Column(rand::random::<u8>() % (slack + 1))
             };
-            TetrisBoard::new().apply_piece_placement(TetrisPiecePlacement {
+            Board::new().apply_piece_placement(TetrisPiecePlacement {
                 piece,
                 orientation: TetrisPieceOrientation { rotation, column },
             });
@@ -2896,7 +2919,7 @@ mod tests {
     ///   Total: 6195 test cases
     #[test]
     fn test_clear_filled_rows() {
-        let mut board = TetrisBoard::new();
+        let mut board = Board::new();
 
         // Helper to generate all combinations of size k from 0..ROWS
         fn combinations(n: usize, k: usize) -> Vec<Vec<usize>> {
@@ -2930,7 +2953,7 @@ mod tests {
         let fill_rows = |board: &mut TetrisBoard, rows: &[usize]| {
             board.clear();
             for &row in rows {
-                for col in 0..constants::COLS {
+                for col in 0..StandardTetris::COLS {
                     board.set_bit(col, row);
                 }
             }
@@ -2938,7 +2961,7 @@ mod tests {
 
         // Test all combinations for 1, 2, 3, and 4 filled rows
         for num_rows in 1..=4 {
-            let all_combinations = combinations(constants::ROWS, num_rows);
+            let all_combinations = combinations(StandardTetris::ROWS, num_rows);
 
             for (idx, rows) in all_combinations.iter().enumerate() {
                 fill_rows(&mut board, rows);
@@ -2970,11 +2993,11 @@ mod tests {
 
     #[test]
     fn test_loss_condition() {
-        let mut board = TetrisBoard::new();
+        let mut board = Board::new();
         assert!(!Into::<bool>::into(board.is_lost()));
 
         // Set a bit in the top 4 rows
-        board.set_bit(0, constants::ROWS + 1);
+        board.set_bit(0, StandardTetris::ROWS + 1);
         assert!(Into::<bool>::into(board.is_lost()));
         board.clear();
         assert!(!Into::<bool>::into(board.is_lost()));
@@ -3106,7 +3129,7 @@ mod tests {
     #[test]
     fn test_rand_next() {
         let mut tetris_rng = TetrisGameRng::new(42);
-        let mut bag = TetrisPieceBag::new_rand(&mut tetris_rng);
+        let mut bag = TetrisPieceBag::new_rand(&mut tetris_rng, TetrisPieceBagState::new());
         let mut pieces = std::collections::HashSet::new();
 
         for _ in 0..(constants::NUM_TETRIS_PIECES as usize) {
@@ -3166,7 +3189,7 @@ mod tests {
             Vec::new(),
         ];
         for _ in 0..1000 {
-            let mut bag = TetrisPieceBag::new_rand(&mut tetris_rng);
+            let mut bag = TetrisPieceBag::new_rand(&mut tetris_rng, TetrisPieceBagState::new());
             (0..7).for_each(|nth_sample| {
                 let ith_piece = bag.rand_next(&mut tetris_rng);
                 samples[nth_sample].push(ith_piece.index() as f32);
@@ -3187,31 +3210,31 @@ mod tests {
         let mut rng = rand::rng();
         for major in [Major::Row, Major::Col] {
             // Empty board
-            let board = TetrisBoard::new();
+            let board = Board::new();
             let cells = board.to_cell_array(major);
-            assert_eq!(cells.len(), constants::BOARD_SIZE);
-            assert_eq!(board, TetrisBoard::from_cell_array(cells, major));
+            assert_eq!(cells.len(), StandardTetris::BOARD_SIZE);
+            assert_eq!(board, Board::from_cell_array(cells, major));
 
             // Random boards
             for _ in 0..100 {
-                let mut board = TetrisBoard::new();
+                let mut board = Board::new();
                 board.set_random_bits(1024, &mut rng);
                 let cells = board.to_cell_array(major);
-                assert_eq!(board, TetrisBoard::from_cell_array(cells, major));
+                assert_eq!(board, Board::from_cell_array(cells, major));
             }
         }
     }
 
     #[test]
     fn test_cell_array_order_indexing() {
-        let mut board = TetrisBoard::new();
+        let mut board = Board::new();
         board.set_bit(3, 5);
 
         let row_major = board.to_cell_array(Major::Row);
-        assert_eq!(row_major[5 * constants::COLS + 3], 1);
+        assert_eq!(row_major[5 * StandardTetris::COLS + 3], 1);
 
         let col_major = board.to_cell_array(Major::Col);
-        assert_eq!(col_major[3 * constants::ROWS + 5], 1);
+        assert_eq!(col_major[3 * StandardTetris::ROWS + 5], 1);
     }
 
     /// Test placement index bijection: index <-> placement
@@ -3231,7 +3254,7 @@ mod tests {
     /// Test basic game flow: create, apply placement, piece changes
     #[test]
     fn test_tetris_game_basic() {
-        let mut game = TetrisGame::new_with_seed(42);
+        let mut game = Game::new_with_seed(42);
         let initial_piece = game.current_piece;
 
         let placements = game.current_placements();
@@ -3263,7 +3286,7 @@ mod tests {
     /// Test that placing pieces to exceed height triggers loss
     #[test]
     fn test_tetris_game_loss_from_placement() {
-        let mut game = TetrisGame::new_with_seed(42);
+        let mut game = Game::new_with_seed(42);
 
         // Stack pieces until loss (always place in same column)
         for _ in 0..100 {
@@ -3288,7 +3311,7 @@ mod tests {
 
     #[test]
     fn test_tetris_game_correct_reset() {
-        let mut game = TetrisGame::new_with_seed(42);
+        let mut game = Game::new_with_seed(42);
         let original_rng = game.rng;
         let original_bag = game.bag;
         let original_piece = game.current_piece;
@@ -3356,7 +3379,7 @@ mod tests {
         );
         assert_eq!(
             game.board,
-            TetrisBoard::new(),
+            Board::new(),
             "Board should be the same after reset"
         );
         assert_eq!(game.bag, original_bag, "Bag should be the same after reset");
@@ -3370,21 +3393,21 @@ mod tests {
     #[test]
     fn test_board_id_known_value() {
         // The expected ID "PXDHAE" is only valid at COLS == 10.
-        if constants::COLS != 10 {
+        if StandardTetris::COLS != 10 {
             return;
         }
-        let mut board = TetrisBoard::new();
+        let mut board = Board::new();
         for c in [1, 2, 3, 4, 5, 7, 8, 9] {
-            if c < constants::COLS {
+            if c < StandardTetris::COLS {
                 board.set_bit(c, 0);
             }
         }
         for c in [3, 4, 7, 8, 9] {
-            if c < constants::COLS {
+            if c < StandardTetris::COLS {
                 board.set_bit(c, 1);
             }
         }
-        if 7 < constants::COLS {
+        if 7 < StandardTetris::COLS {
             board.set_bit(7, 2);
         }
         assert_eq!(board.to_board_id(), "PXDHAE");
@@ -3395,30 +3418,29 @@ mod tests {
         const NUM_BOARDS: usize = 1000;
         let mut rng = rand::rng();
         for _ in 0..NUM_BOARDS {
-            let limbs: [u32; constants::COLS] =
-                std::array::from_fn(|_| rng.random::<u32>() & ((1 << constants::ROWS) - 1));
-            let board = TetrisBoard(limbs);
+            let limbs: [u32; StandardTetris::COLS] =
+                std::array::from_fn(|_| rng.random::<u32>() & ((1 << StandardTetris::ROWS) - 1));
+            let board = Board::from_limbs(limbs);
             let id = board.to_board_id();
-            let reconstructed =
-                TetrisBoard::from_board_id(&id).expect("valid board ID should decode");
+            let reconstructed = Board::from_board_id(&id).expect("valid board ID should decode");
             assert_eq!(board, reconstructed, "board ID roundtrip failed for {id}");
         }
     }
 
     #[test]
     fn test_board_id_empty() {
-        let board = TetrisBoard::new();
+        let board = Board::new();
         assert_eq!(board.to_board_id(), "");
-        let decoded = TetrisBoard::from_board_id("").expect("empty string is valid");
+        let decoded = Board::from_board_id("").expect("empty string is valid");
         assert_eq!(decoded, board);
     }
 
     #[test]
     fn test_board_id_invalid() {
-        assert!(TetrisBoard::from_board_id("!!!").is_none());
-        assert!(TetrisBoard::from_board_id("01").is_none());
-        let long = "A".repeat(constants::BOARD_SIZE / 5 + 1);
-        assert!(TetrisBoard::from_board_id(&long).is_none());
+        assert!(Board::from_board_id("!!!").is_none());
+        assert!(Board::from_board_id("01").is_none());
+        let long = "A".repeat(StandardTetris::BOARD_SIZE / 5 + 1);
+        assert!(Board::from_board_id(&long).is_none());
     }
 
     #[test]
@@ -3428,11 +3450,11 @@ mod tests {
 
         for _ in 0..NUM_BOARDS {
             // Create a random tetris board by setting random u32 values for each column
-            let limbs: [u32; constants::COLS] = std::array::from_fn(|_| rng.random());
-            let board = TetrisBoard(limbs);
+            let limbs: [u32; StandardTetris::COLS] = std::array::from_fn(|_| rng.random());
+            let board = Board::from_limbs(limbs);
 
             let bytes = board.to_bytes(Major::Col);
-            let reconstructed = TetrisBoard::from_bytes(bytes, Major::Col);
+            let reconstructed = Board::from_bytes(bytes, Major::Col);
 
             // Verify roundtrip
             assert_eq!(
@@ -3447,27 +3469,27 @@ mod tests {
         let mut rng = rand::rng();
         for _ in 0..1000 {
             // Only set bits in the valid row range (0..ROWS) to avoid padding issues
-            let limbs: [u32; constants::COLS] =
-                std::array::from_fn(|_| rng.random::<u32>() & ((1 << constants::ROWS) - 1));
-            let board = TetrisBoard(limbs);
+            let limbs: [u32; StandardTetris::COLS] =
+                std::array::from_fn(|_| rng.random::<u32>() & ((1 << StandardTetris::ROWS) - 1));
+            let board = Board::from_limbs(limbs);
 
             let bytes = board.to_bytes(Major::Row);
-            let reconstructed = TetrisBoard::from_bytes(bytes, Major::Row);
+            let reconstructed = Board::from_bytes(bytes, Major::Row);
             assert_eq!(board, reconstructed, "Row-major bytes roundtrip failed");
         }
     }
 
     #[test]
     fn test_tetris_board_bytes_row_col_different() {
-        let mut board = TetrisBoard::new();
+        let mut board = Board::new();
         board.set_bit(3, 5);
         let col_bytes = board.to_bytes(Major::Col);
         let row_bytes = board.to_bytes(Major::Row);
         // Col and row major should differ for non-trivial boards
         assert_ne!(col_bytes, row_bytes);
         // But both should roundtrip
-        assert_eq!(board, TetrisBoard::from_bytes(col_bytes, Major::Col));
-        assert_eq!(board, TetrisBoard::from_bytes(row_bytes, Major::Row));
+        assert_eq!(board, Board::from_bytes(col_bytes, Major::Col));
+        assert_eq!(board, Board::from_bytes(row_bytes, Major::Row));
     }
 
     /// Independent oracle: the bits in `to_bytes(Major::Row)` must, in
@@ -3478,9 +3500,9 @@ mod tests {
     fn test_to_bytes_row_matches_cell_array() {
         let mut rng = rand::rng();
         for _ in 0..1000 {
-            let limbs: [u32; constants::COLS] =
-                std::array::from_fn(|_| rng.random::<u32>() & ((1 << constants::ROWS) - 1));
-            let board = TetrisBoard(limbs);
+            let limbs: [u32; StandardTetris::COLS] =
+                std::array::from_fn(|_| rng.random::<u32>() & ((1 << StandardTetris::ROWS) - 1));
+            let board = Board::from_limbs(limbs);
 
             let row_bytes = board.to_bytes(Major::Row);
             let row_cells = board.to_cell_array(Major::Row);
@@ -3490,9 +3512,9 @@ mod tests {
             // data and rows 20..31 are padding zeros. Cell `(r, c)` lives at
             // bit position `r * COLS + c`. The cell array only covers the
             // first ROWS * COLS = 200 bits.
-            for r in 0..constants::ROWS {
-                for c in 0..constants::COLS {
-                    let bit_pos = r * constants::COLS + c;
+            for r in 0..StandardTetris::ROWS {
+                for c in 0..StandardTetris::COLS {
+                    let bit_pos = r * StandardTetris::COLS + c;
                     let from_bytes = (row_bytes[bit_pos / 8] >> (bit_pos % 8)) & 1;
                     let from_cells = row_cells[bit_pos];
                     assert_eq!(
@@ -3504,9 +3526,9 @@ mod tests {
 
             // Padding rows (20..32) of the row-major stream must be zero
             // — the column limbs only hold ROWS valid bits.
-            for r in constants::ROWS..32 {
-                for c in 0..constants::COLS {
-                    let bit_pos = r * constants::COLS + c;
+            for r in StandardTetris::ROWS..32 {
+                for c in 0..StandardTetris::COLS {
+                    let bit_pos = r * StandardTetris::COLS + c;
                     let from_bytes = (row_bytes[bit_pos / 8] >> (bit_pos % 8)) & 1;
                     assert_eq!(from_bytes, 0, "padding bit set at (r={r}, c={c})");
                 }
@@ -3521,22 +3543,22 @@ mod tests {
     fn test_from_bytes_row_matches_cell_array() {
         let mut rng = rand::rng();
         for _ in 0..1000 {
-            let limbs: [u32; constants::COLS] =
-                std::array::from_fn(|_| rng.random::<u32>() & ((1 << constants::ROWS) - 1));
-            let board = TetrisBoard(limbs);
+            let limbs: [u32; StandardTetris::COLS] =
+                std::array::from_fn(|_| rng.random::<u32>() & ((1 << StandardTetris::ROWS) - 1));
+            let board = Board::from_limbs(limbs);
 
             // Pack `to_cell_array(Row)` into a 40-byte bit-stream (rows
             // 20..32 are zero-padded).
             let row_cells = board.to_cell_array(Major::Row);
-            let mut row_bytes = [0u8; constants::BOARD_BYTES];
-            for r in 0..constants::ROWS {
-                for c in 0..constants::COLS {
-                    let bit_pos = r * constants::COLS + c;
+            let mut row_bytes = [0u8; StandardTetris::BOARD_BYTES];
+            for r in 0..StandardTetris::ROWS {
+                for c in 0..StandardTetris::COLS {
+                    let bit_pos = r * StandardTetris::COLS + c;
                     row_bytes[bit_pos / 8] |= row_cells[bit_pos] << (bit_pos % 8);
                 }
             }
 
-            let decoded = TetrisBoard::from_bytes(row_bytes, Major::Row);
+            let decoded = Board::from_bytes(row_bytes, Major::Row);
             assert_eq!(
                 decoded, board,
                 "from_bytes(Row) of manually packed cells must reconstruct the board"

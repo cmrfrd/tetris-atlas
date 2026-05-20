@@ -43,7 +43,7 @@ impl Universe {
         let mut edges: Vec<FlatEdge> = Vec::new();
 
         // Intern the empty board
-        let empty_board = TetrisBoard::new();
+        let empty_board = TetrisBoard::EMPTY_BOARD;
         let empty_board_id = intern_board(&mut boards, &mut board_to_id, &empty_board);
 
         // Intern the root state
