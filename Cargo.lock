@@ -3053,10 +3053,6 @@ dependencies = [
 [[package]]
 name = "proc-macros"
 version = "0.1.0"
-dependencies = [
- "quote",
- "syn 2.0.106",
-]
 
 [[package]]
 name = "profiling"

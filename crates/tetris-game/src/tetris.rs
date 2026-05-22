@@ -1,4 +1,4 @@
-use proc_macros::{inline_conditioned, piece_u32_cols};
+use proc_macros::inline_conditioned;
 use rand::Rng;
 use rand::distr::{Distribution, StandardUniform};
 
@@ -15,12 +15,14 @@ use crate::config::{StandardTetris, TetrisGameConfig};
 
 /// Piece shapes encoded as column bitmasks for fast collision detection.
 ///
-/// Each piece rotation is stored as an array of `u32` column bitmasks, where:
+/// Each piece rotation is stored as an array of `BackingColType` (usually as `u32`), column bitmasks, where:
 /// - Array length = piece width in that rotation
-/// - Each BackingColType should encode the filled cells in that column (bit 0 = bottom)
+/// - Each `BackingColType` encodes the filled cells in that column, with row r at bit
+///   position `31 - r` (so row 0 is the highest bit, row 3 is bit 28).
 ///
-/// The `piece_u32_cols!` macro generates these from visual representations,
-/// making the piece shapes easy to read and verify.
+/// The visual pattern is preserved as a comment block above each constant;
+/// the corresponding column literals are derived by setting bit `31 - r` of
+/// column `c` whenever `grid[r][c] == '1'`.
 ///
 /// # Naming Convention
 ///
@@ -29,123 +31,187 @@ use crate::config::{StandardTetris, TetrisGameConfig};
 /// - `N` = rotation index (0 = 0°, 1 = 90° CW, 2 = 180°, 3 = 270° CW)
 ///
 /// Note: O piece has only 1 rotation; I, S, Z have 2 distinct rotations.
+#[rustfmt::skip]
 mod tetris_piece_data {
-    use super::piece_u32_cols;
+    // 11
+    // 11
+    // 00
+    // 00
+    pub const O_PIECE_ROT_0: [u32; 2] = [
+        0b1100_0000_0000_0000_0000_0000_0000_0000,
+        0b1100_0000_0000_0000_0000_0000_0000_0000,
+    ];
 
-    pub const O_PIECE_ROT_0: [u32; 2] = piece_u32_cols! {
-        11
-        11
-        00
-        00
-    };
-    pub const I_PIECE_ROT_0: [u32; 4] = piece_u32_cols! {
-        1111
-        0000
-        0000
-        0000
-    };
-    pub const I_PIECE_ROT_1: [u32; 1] = piece_u32_cols! {
-        1
-        1
-        1
-        1
-    };
-    pub const S_PIECE_ROT_0: [u32; 3] = piece_u32_cols! {
-        011
-        110
-        000
-        000
-    };
-    pub const S_PIECE_ROT_1: [u32; 2] = piece_u32_cols! {
-        10
-        11
-        01
-        00
-    };
-    pub const Z_PIECE_ROT_0: [u32; 3] = piece_u32_cols! {
-        110
-        011
-        000
-        000
-    };
-    pub const Z_PIECE_ROT_1: [u32; 2] = piece_u32_cols! {
-        01
-        11
-        10
-        00
-    };
-    pub const T_PIECE_ROT_0: [u32; 3] = piece_u32_cols! {
-        111
-        010
-        000
-        000
-    };
-    pub const T_PIECE_ROT_1: [u32; 2] = piece_u32_cols! {
-        01
-        11
-        01
-        00
-    };
-    pub const T_PIECE_ROT_2: [u32; 3] = piece_u32_cols! {
-        010
-        111
-        000
-        000
-    };
-    pub const T_PIECE_ROT_3: [u32; 2] = piece_u32_cols! {
-        10
-        11
-        10
-        00
-    };
-    pub const L_PIECE_ROT_0: [u32; 3] = piece_u32_cols! {
-        001
-        111
-        000
-        000
-    };
-    pub const L_PIECE_ROT_1: [u32; 2] = piece_u32_cols! {
-        10
-        10
-        11
-        00
-    };
-    pub const L_PIECE_ROT_2: [u32; 3] = piece_u32_cols! {
-        111
-        100
-        000
-        000
-    };
-    pub const L_PIECE_ROT_3: [u32; 2] = piece_u32_cols! {
-        11
-        01
-        01
-        00
-    };
-    pub const J_PIECE_ROT_0: [u32; 3] = piece_u32_cols! {
-        100
-        111
-        000
-        000
-    };
-    pub const J_PIECE_ROT_1: [u32; 2] = piece_u32_cols! {
-        11
-        10
-        10
-        00
-    };
-    pub const J_PIECE_ROT_2: [u32; 3] = piece_u32_cols! {
-        111
-        001
-        000
-        000
-    };
-    pub const J_PIECE_ROT_3: [u32; 2] = piece_u32_cols! {
-        01
-        01
-        11
-        00
-    };
+    // 1111
+    // 0000
+    // 0000
+    // 0000
+    pub const I_PIECE_ROT_0: [u32; 4] = [
+        0b1000_0000_0000_0000_0000_0000_0000_0000,
+        0b1000_0000_0000_0000_0000_0000_0000_0000,
+        0b1000_0000_0000_0000_0000_0000_0000_0000,
+        0b1000_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 1
+    // 1
+    // 1
+    // 1
+    pub const I_PIECE_ROT_1: [u32; 1] = [
+        0b1111_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 011
+    // 110
+    // 000
+    // 000
+    pub const S_PIECE_ROT_0: [u32; 3] = [
+        0b0100_0000_0000_0000_0000_0000_0000_0000,
+        0b1100_0000_0000_0000_0000_0000_0000_0000,
+        0b1000_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 10
+    // 11
+    // 01
+    // 00
+    pub const S_PIECE_ROT_1: [u32; 2] = [
+        0b1100_0000_0000_0000_0000_0000_0000_0000,
+        0b0110_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 110
+    // 011
+    // 000
+    // 000
+    pub const Z_PIECE_ROT_0: [u32; 3] = [
+        0b1000_0000_0000_0000_0000_0000_0000_0000,
+        0b1100_0000_0000_0000_0000_0000_0000_0000,
+        0b0100_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 01
+    // 11
+    // 10
+    // 00
+    pub const Z_PIECE_ROT_1: [u32; 2] = [
+        0b0110_0000_0000_0000_0000_0000_0000_0000,
+        0b1100_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 111
+    // 010
+    // 000
+    // 000
+    pub const T_PIECE_ROT_0: [u32; 3] = [
+        0b1000_0000_0000_0000_0000_0000_0000_0000,
+        0b1100_0000_0000_0000_0000_0000_0000_0000,
+        0b1000_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 01
+    // 11
+    // 01
+    // 00
+    pub const T_PIECE_ROT_1: [u32; 2] = [
+        0b0100_0000_0000_0000_0000_0000_0000_0000,
+        0b1110_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 010
+    // 111
+    // 000
+    // 000
+    pub const T_PIECE_ROT_2: [u32; 3] = [
+        0b0100_0000_0000_0000_0000_0000_0000_0000,
+        0b1100_0000_0000_0000_0000_0000_0000_0000,
+        0b0100_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 10
+    // 11
+    // 10
+    // 00
+    pub const T_PIECE_ROT_3: [u32; 2] = [
+        0b1110_0000_0000_0000_0000_0000_0000_0000,
+        0b0100_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 001
+    // 111
+    // 000
+    // 000
+    pub const L_PIECE_ROT_0: [u32; 3] = [
+        0b0100_0000_0000_0000_0000_0000_0000_0000,
+        0b0100_0000_0000_0000_0000_0000_0000_0000,
+        0b1100_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 10
+    // 10
+    // 11
+    // 00
+    pub const L_PIECE_ROT_1: [u32; 2] = [
+        0b1110_0000_0000_0000_0000_0000_0000_0000,
+        0b0010_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 111
+    // 100
+    // 000
+    // 000
+    pub const L_PIECE_ROT_2: [u32; 3] = [
+        0b1100_0000_0000_0000_0000_0000_0000_0000,
+        0b1000_0000_0000_0000_0000_0000_0000_0000,
+        0b1000_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 11
+    // 01
+    // 01
+    // 00
+    pub const L_PIECE_ROT_3: [u32; 2] = [
+        0b1000_0000_0000_0000_0000_0000_0000_0000,
+        0b1110_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 100
+    // 111
+    // 000
+    // 000
+    pub const J_PIECE_ROT_0: [u32; 3] = [
+        0b1100_0000_0000_0000_0000_0000_0000_0000,
+        0b0100_0000_0000_0000_0000_0000_0000_0000,
+        0b0100_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 11
+    // 10
+    // 10
+    // 00
+    pub const J_PIECE_ROT_1: [u32; 2] = [
+        0b1110_0000_0000_0000_0000_0000_0000_0000,
+        0b1000_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 111
+    // 001
+    // 000
+    // 000
+    pub const J_PIECE_ROT_2: [u32; 3] = [
+        0b1000_0000_0000_0000_0000_0000_0000_0000,
+        0b1000_0000_0000_0000_0000_0000_0000_0000,
+        0b1100_0000_0000_0000_0000_0000_0000_0000,
+    ];
+
+    // 01
+    // 01
+    // 11
+    // 00
+    pub const J_PIECE_ROT_3: [u32; 2] = [
+        0b0010_0000_0000_0000_0000_0000_0000_0000,
+        0b1110_0000_0000_0000_0000_0000_0000_0000,
+    ];
 }
 
 /// A rotation state for a Tetris piece.
