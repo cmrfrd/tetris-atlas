@@ -1523,6 +1523,16 @@ theorem richQuadBoard_colHeight_le_base_add_seventeen
     (H := base + 13) (richTripleBoard_colHeight_le_base_add_thirteen first second third base) j
   omega
 
+/-- Scalar (single-number) field-height ceiling for the four-piece rich board,
+the form the drain and clear accounting consumes.  Immediate from the sharp
+per-column `base + 17` bound via `Finset.sup_le`. -/
+theorem richQuadBoard_maxColHeightInField_le (first second third fourth : Piece) (base : ℕ) :
+    maxColHeightInField GameConfig.standard (richQuadBoard first second third fourth base)
+      ≤ base + 17 := by
+  unfold maxColHeightInField
+  exact Finset.sup_le fun j _ =>
+    richQuadBoard_colHeight_le_base_add_seventeen first second third fourth base j
+
 theorem phaseCarrier_height {T : Bag} {b : Board}
     (h : PhaseCarrier T b) :
     ∀ j, Board.colHeight b j ≤ GameConfig.standard.rows := by
