@@ -1673,6 +1673,21 @@ theorem richQuadBoard_well_empty (first second third fourth : Piece)
             (by decide) hb0 havoid)
     _ = 0 := hb0
 
+/-- **Solid floor of the rich reset surface.**  Every non-well column of `richReadyBoard`
+stands at least `base` tall (`fullReady` pins cols 1..9 to `base`, with the two lips
+at `base + 1`).  Paired with `richReadyBoard_well_empty` (col 0 empty) this is the
+*clearability* structure the once-per-bag I-regulator needs: the bottom `base` rows are
+filled across columns 1..9 and gap only at the reserved well, so dropping the vertical I
+into column 0 completes those rows and clears them.  This is the line-clearing geometry
+the fixed-placement height ladder does not, by itself, expose. -/
+theorem richReadyBoard_band_floor (base : ℕ) (j : ℕ) (hj0 : j ≠ 0)
+    (hjc : j < GameConfig.standard.cols) :
+    base ≤ Board.colHeight (richReadyBoard base) j := by
+  dsimp [richReadyBoard]
+  rw [Board.colHeight_skyline hjc]
+  dsimp [ReservoirProfile]
+  split_ifs <;> omega
+
 theorem phaseCarrier_height {T : Bag} {b : Board}
     (h : PhaseCarrier T b) :
     ∀ j, Board.colHeight b j ≤ GameConfig.standard.rows := by
