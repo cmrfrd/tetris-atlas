@@ -1546,6 +1546,35 @@ theorem richReadyBoard_well_empty (base : ℕ) :
   rw [Board.colHeight_skyline (by decide : (0 : ℕ) < GameConfig.standard.cols)]
   simp
 
+/-- The reserved well (column 0) stays empty after one *non-I* filler lands on the
+rich reset surface.  Every non-I online placement sits at column `≥ 1`
+(`phasePlacement` puts O/T/L/J at col 1, S at 3, Z at 5; only the I-regulator
+targets col 0), so it dodges the well, clears nothing (an empty column blocks
+every row), and the exact-column frame lemma holds column 0 at its profile value
+`0`.  This is the inductive step of the well-emptiness invariant: only the
+once-per-bag I ever fills the well, which is precisely what lets it clear the
+bottom rows and drain the rich tail. -/
+theorem richStepBoard_well_empty (p : Piece) (hp : p ≠ Piece.I) (base : ℕ) :
+    Board.colHeight (richStepBoard p base) 0 = 0 := by
+  have hh0 : ReservoirProfile ReservoirPhase.fullReady base 0 = 0 := by
+    simp [ReservoirProfile]
+  have hcol : 1 ≤ (phasePlacement p).col := by
+    cases p with
+    | I => exact absurd rfl hp
+    | _ => decide
+  have havoid :
+      ∀ cell ∈ (phasePlacement p).shapeUp, (phasePlacement p).col + cell.1 ≠ 0 := by
+    intro cell _
+    omega
+  calc Board.colHeight (richStepBoard p base) 0
+      = ReservoirProfile ReservoirPhase.fullReady base 0 :=
+        Board.colHeight_applyStep_skyline_eq_of_avoid_well
+          (cfg := GameConfig.standard)
+          (h := ReservoirProfile ReservoirPhase.fullReady base)
+          (pl := phasePlacement p) (w := 0) (m := 0)
+          (by decide) (by decide) hh0 havoid havoid
+    _ = 0 := hh0
+
 theorem phaseCarrier_height {T : Bag} {b : Board}
     (h : PhaseCarrier T b) :
     ∀ j, Board.colHeight b j ≤ GameConfig.standard.rows := by
