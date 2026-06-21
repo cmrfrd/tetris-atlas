@@ -26274,4 +26274,37 @@ theorem reservoirDoubleSZSurface_O_lipShelf_then_drain {T : Bag} {base : ℕ}
     (reservoirDoubleSZSurface_O_lipShelf_spreadBandAt base
       (by have hr : GameConfig.standard.rows = 20 := rfl; omega)) hfloor hcap
 
+/-- **Survival face of the `O`-before-`I` interleaved half-cycle.** The `_safe` companion of
+`reservoirDoubleSZSurface_O_lipShelf_then_drain` (iter540): the very same valid `I`-drain after the
+lip-shelf `O` not only re-enters `reservoirSpreadCarrier ((T.draw O).draw I)` but lands on a board
+that has NOT topped out. The endpoint `¬ isLost` is read straight off carrier membership via
+`reservoirSpreadCarrier_not_isLost` (carrier height ≤ rows, hence below the ceiling), the established
+`_safe`-face pattern used throughout the burst certificates. This packages the interleaved
+filler-then-drain crossing as a survival certificate: whenever the adversary slips a flat `O` ahead
+of the once-per-bag regulator, there is a concrete valid drain that both stays in the carrier and
+keeps the game alive.
+
+Honest caveat (unchanged from iter540): this does NOT close crux #66 and #72. It certifies survival
+for ONE filler (`O`) interleaved before the drain; the `O` lip-shelf still breaks both staircase
+lips, so re-seating any `S` or `Z` still owed on a freshly re-established surface after this drain
+remains the open content, as does the all-orders bag closure. -/
+theorem reservoirDoubleSZSurface_O_lipShelf_then_drain_safe {T : Bag} {base : ℕ}
+    (hfloor : 4 ≤ base) (hcap : base + 3 ≤ 16) :
+    ∃ plI : Placement, plI.piece = Piece.I ∧ plI.Valid GameConfig.standard ∧
+      reservoirSpreadCarrier ((T.draw Piece.O).draw Piece.I)
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
+            { piece := Piece.O, rot := 0, col := 4 })
+          plI) ∧
+      ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
+            { piece := Piece.O, rot := 0, col := 4 })
+          plI) := by
+  obtain ⟨plI, hpiece, hvalid, hcarrier⟩ :=
+    reservoirDoubleSZSurface_O_lipShelf_then_drain (T := T) (base := base) hfloor hcap
+  exact ⟨plI, hpiece, hvalid, hcarrier, reservoirSpreadCarrier_not_isLost _ _ hcarrier⟩
+
 end Tetris
