@@ -1533,6 +1533,19 @@ theorem richQuadBoard_maxColHeightInField_le (first second third fourth : Piece)
   exact Finset.sup_le fun j _ =>
     richQuadBoard_colHeight_le_base_add_seventeen first second third fourth base j
 
+/-- The reserved well (column 0) of the rich *reset* surface is empty.  The
+`fullReady` profile pins column 0 to height 0 while every other column sits at
+`base` (or `base + 1` at the two lips), so a vertical I dropped into column 0
+lands on the floor.  This is the base case of the well-emptiness invariant that
+lets the once-per-bag I-regulator clear the bottom rows and drain the rich tail
+back down — the line-clearing move the fixed-placement ladder (which tops out at
+`base + 17`) cannot supply on its own. -/
+theorem richReadyBoard_well_empty (base : ℕ) :
+    Board.colHeight (richReadyBoard base) 0 = 0 := by
+  dsimp [richReadyBoard, ReservoirProfile]
+  rw [Board.colHeight_skyline (by decide : (0 : ℕ) < GameConfig.standard.cols)]
+  simp
+
 theorem phaseCarrier_height {T : Bag} {b : Board}
     (h : PhaseCarrier T b) :
     ∀ j, Board.colHeight b j ≤ GameConfig.standard.rows := by
