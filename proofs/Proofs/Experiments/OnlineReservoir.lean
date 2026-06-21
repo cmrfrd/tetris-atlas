@@ -1575,6 +1575,39 @@ theorem richStepBoard_well_empty (p : Piece) (hp : p ≠ Piece.I) (base : ℕ) :
           (by decide) (by decide) hh0 havoid havoid
     _ = 0 := hh0
 
+/-- The reserved well (column 0) stays empty after a *second* non-I filler lands on
+the rich surface.  `richStepBoard` is no longer a skyline, so the skyline frame lemma
+no longer applies; instead the inductive step rides on the *general* empty-well bricks
+(`fullRows_place_eq_empty_of_well` + `colHeight_applyStep_eq_of_not_col_of_no_fullRows`),
+which hold on the arbitrary boards a bag passes through between resets.  Both fillers are
+non-I, so each sits at column `≥ 1`, dodges the well, clears nothing (an empty column
+blocks every row), and column 0 is held at its prior value `0`.  This carries the
+well-emptiness invariant one rung up the rich ladder toward the once-per-bag I-drain. -/
+theorem richPairBoard_well_empty (first second : Piece)
+    (h1 : first ≠ Piece.I) (h2 : second ≠ Piece.I) (base : ℕ) :
+    Board.colHeight (richPairBoard first second base) 0 = 0 := by
+  have hb0 : Board.colHeight (richStepBoard first base) 0 = 0 :=
+    richStepBoard_well_empty first h1 base
+  have hcol : 1 ≤ (phasePlacement second).col := by
+    cases second with
+    | I => exact absurd rfl h2
+    | _ => decide
+  have havoid :
+      ∀ cell ∈ (phasePlacement second).shapeUp, (phasePlacement second).col + cell.1 ≠ 0 := by
+    intro cell _
+    omega
+  calc Board.colHeight (richPairBoard first second base) 0
+      = Board.colHeight (richStepBoard first base) 0 :=
+        Board.colHeight_applyStep_eq_of_not_col_of_no_fullRows
+          (cfg := GameConfig.standard) (b := richStepBoard first base)
+          (pl := phasePlacement second) (j := 0)
+          havoid
+          (Board.fullRows_place_eq_empty_of_well
+            (cfg := GameConfig.standard) (b := richStepBoard first base)
+            (pl := phasePlacement second) (w := 0)
+            (by decide) hb0 havoid)
+    _ = 0 := hb0
+
 theorem phaseCarrier_height {T : Bag} {b : Board}
     (h : PhaseCarrier T b) :
     ∀ j, Board.colHeight b j ≤ GameConfig.standard.rows := by
