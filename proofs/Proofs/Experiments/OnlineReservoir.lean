@@ -1608,6 +1608,37 @@ theorem richPairBoard_well_empty (first second : Piece)
             (by decide) hb0 havoid)
     _ = 0 := hb0
 
+/-- The reserved well (column 0) stays empty after a *third* non-I filler lands on the
+rich surface.  Same general empty-well discharge as the pair case, one rung higher:
+all three fillers are non-I (hence at column `≥ 1`), so each dodges the well, clears
+nothing, and column 0 is held at `0` across the placement.  This carries the
+well-emptiness invariant up to `richTripleBoard`, two rungs below the `richQuad`
+saturation point where the once-per-bag I-drain must fire. -/
+theorem richTripleBoard_well_empty (first second third : Piece)
+    (h1 : first ≠ Piece.I) (h2 : second ≠ Piece.I) (h3 : third ≠ Piece.I) (base : ℕ) :
+    Board.colHeight (richTripleBoard first second third base) 0 = 0 := by
+  have hb0 : Board.colHeight (richPairBoard first second base) 0 = 0 :=
+    richPairBoard_well_empty first second h1 h2 base
+  have hcol : 1 ≤ (phasePlacement third).col := by
+    cases third with
+    | I => exact absurd rfl h3
+    | _ => decide
+  have havoid :
+      ∀ cell ∈ (phasePlacement third).shapeUp, (phasePlacement third).col + cell.1 ≠ 0 := by
+    intro cell _
+    omega
+  calc Board.colHeight (richTripleBoard first second third base) 0
+      = Board.colHeight (richPairBoard first second base) 0 :=
+        Board.colHeight_applyStep_eq_of_not_col_of_no_fullRows
+          (cfg := GameConfig.standard) (b := richPairBoard first second base)
+          (pl := phasePlacement third) (j := 0)
+          havoid
+          (Board.fullRows_place_eq_empty_of_well
+            (cfg := GameConfig.standard) (b := richPairBoard first second base)
+            (pl := phasePlacement third) (w := 0)
+            (by decide) hb0 havoid)
+    _ = 0 := hb0
+
 theorem phaseCarrier_height {T : Bag} {b : Board}
     (h : PhaseCarrier T b) :
     ∀ j, Board.colHeight b j ≤ GameConfig.standard.rows := by
