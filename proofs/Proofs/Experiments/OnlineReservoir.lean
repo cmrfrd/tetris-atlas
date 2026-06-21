@@ -1505,6 +1505,24 @@ theorem richQuadBoard_height (first second third fourth : Piece) (base : ℕ)
     ((Board.not_isLost_iff_forall_row_lt GameConfig.standard
       (richQuadBoard first second third fourth base)).mp hnotLost) j
 
+/-- Sharp per-column ceiling for the exact four-piece rich board: each of the
+four fixed online placements adds at most four to any column, so on top of the
+`base + 1` ready surface the quad board never exceeds `base + 17`.  This is the
+top rung of the `+1/+5/+9/+13` rich ladder and the exact height the `rich4`
+frontier step must account for.  Note `base + 17 ≤ rows = 20` already forces
+`base ≤ 3`, so a fifth fixed placement (another `+4`) can reach `base + 21 > 20`:
+the rich tail cannot stay under the ceiling without a line-clearing drain. -/
+theorem richQuadBoard_colHeight_le_base_add_seventeen
+    (first second third fourth : Piece) (base : ℕ) :
+    ∀ j, Board.colHeight (richQuadBoard first second third fourth base) j ≤ base + 17 := by
+  intro j
+  dsimp [richQuadBoard]
+  have hstep := Board.colHeight_applyStep_le_of_colHeight_le
+    (cfg := GameConfig.standard) (b := richTripleBoard first second third base)
+    (pl := phasePlacement fourth)
+    (H := base + 13) (richTripleBoard_colHeight_le_base_add_thirteen first second third base) j
+  omega
+
 theorem phaseCarrier_height {T : Bag} {b : Board}
     (h : PhaseCarrier T b) :
     ∀ j, Board.colHeight b j ≤ GameConfig.standard.rows := by
