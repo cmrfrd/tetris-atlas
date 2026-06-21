@@ -1639,6 +1639,40 @@ theorem richTripleBoard_well_empty (first second third : Piece)
             (by decide) hb0 havoid)
     _ = 0 := hb0
 
+/-- The reserved well (column 0) stays empty at the rich *saturation* rung: after a
+*fourth* non-I filler lands, `richQuadBoard` still has an empty well.  This closes the
+well-emptiness ladder — `richReady`/`richStep`/`richPair`/`richTriple`/`richQuad` all
+keep column 0 at height `0` as long as every filler is non-I.  It is exactly the
+precondition the once-per-bag I-regulator needs: with the well empty all the way up to
+`base + 17`, a vertical I dropped into column 0 lands on the floor and clears the bottom
+rows, draining the rich tail back down — the line-clearing move the fixed-placement
+ladder cannot supply on its own. -/
+theorem richQuadBoard_well_empty (first second third fourth : Piece)
+    (h1 : first ≠ Piece.I) (h2 : second ≠ Piece.I) (h3 : third ≠ Piece.I)
+    (h4 : fourth ≠ Piece.I) (base : ℕ) :
+    Board.colHeight (richQuadBoard first second third fourth base) 0 = 0 := by
+  have hb0 : Board.colHeight (richTripleBoard first second third base) 0 = 0 :=
+    richTripleBoard_well_empty first second third h1 h2 h3 base
+  have hcol : 1 ≤ (phasePlacement fourth).col := by
+    cases fourth with
+    | I => exact absurd rfl h4
+    | _ => decide
+  have havoid :
+      ∀ cell ∈ (phasePlacement fourth).shapeUp, (phasePlacement fourth).col + cell.1 ≠ 0 := by
+    intro cell _
+    omega
+  calc Board.colHeight (richQuadBoard first second third fourth base) 0
+      = Board.colHeight (richTripleBoard first second third base) 0 :=
+        Board.colHeight_applyStep_eq_of_not_col_of_no_fullRows
+          (cfg := GameConfig.standard) (b := richTripleBoard first second third base)
+          (pl := phasePlacement fourth) (j := 0)
+          havoid
+          (Board.fullRows_place_eq_empty_of_well
+            (cfg := GameConfig.standard) (b := richTripleBoard first second third base)
+            (pl := phasePlacement fourth) (w := 0)
+            (by decide) hb0 havoid)
+    _ = 0 := hb0
+
 theorem phaseCarrier_height {T : Bag} {b : Board}
     (h : PhaseCarrier T b) :
     ∀ j, Board.colHeight b j ≤ GameConfig.standard.rows := by
