@@ -9224,6 +9224,51 @@ theorem isSpreadBoundedRWSkylineAt_applyStep_L_band_preserves_notch {cfg : GameC
   · rw [colHeight_skyline hnc2, Function.update_of_ne (by omega), Function.update_of_ne (by omega),
         Function.update_of_ne (by omega)]
 
+/-- **An intervening `L` keeps the band AND both standing notches — the two-notch band frame for the
+`L` filler in its spacer role.** The both-notches upgrade of
+`isSpreadBoundedRWSkylineAt_applyStep_L_band_preserves_notch`, mirroring
+`isSpreadBoundedRWSkylineAt_applyStep_T_band_preserves_both_notches` for the three-column `L` (rotation
+0, profile `+1, +1, +2`): while two reserved notches sit on disjoint triples (an S-notch on `sc, sc+1,
+sc+2` and a Z-notch on `zc, zc+1, zc+2`), an `L` landing on an in-band flat triple `c, c+1, c+2` (tall
+column fitting under the band top via `h c + 2 ≤ base + s`) that is column-disjoint from BOTH notch
+windows (`hsepS`, `hsepZ` use the triple bound `_ + 2 < _`) re-enters `IsSpreadBoundedRWSkylineAt cfg s
+base` AND leaves all six notch heights exactly where they were. `L` is dual-use — it can dig a fresh
+S-notch, or, as here, act as a flat spacer while both reserved notches already stand. It does NOT close
+the every-order obligation — crux #66/#72 remains open and `TetrisSolvableValid` is NOT proven. Proof:
+apply the single-notch `L` band frame twice (once per notch triple), sharing the one band re-entry. -/
+theorem isSpreadBoundedRWSkylineAt_applyStep_L_band_preserves_both_notches {cfg : GameConfig}
+    {h : ℕ → ℕ} {base s c w sc zc : ℕ}
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
+    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c)
+    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
+    (hw0 : h w = 0)
+    (hband : ∀ j < cfg.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + s)
+    (hfit : h c + 2 ≤ base + s) (hslack : base + s ≤ cfg.rows)
+    (hsc : sc < cfg.cols) (hsc1 : sc + 1 < cfg.cols) (hsc2 : sc + 2 < cfg.cols)
+    (hzc : zc < cfg.cols) (hzc1 : zc + 1 < cfg.cols) (hzc2 : zc + 2 < cfg.cols)
+    (hsepS : sc + 2 < c ∨ c + 2 < sc) (hsepZ : zc + 2 < c ∨ c + 2 < zc) :
+    IsSpreadBoundedRWSkylineAt cfg s base
+        (Placement.applyStep cfg (skyline cfg h) { piece := Piece.L, rot := 0, col := c }) ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.L, rot := 0, col := c }) sc = h sc ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.L, rot := 0, col := c }) (sc + 1) = h (sc + 1) ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.L, rot := 0, col := c }) (sc + 2) = h (sc + 2) ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.L, rot := 0, col := c }) zc = h zc ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.L, rot := 0, col := c }) (zc + 1) = h (zc + 1) ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.L, rot := 0, col := c }) (zc + 2) = h (zc + 2) := by
+  obtain ⟨hband', hs0, hs1, hs2⟩ :=
+    isSpreadBoundedRWSkylineAt_applyStep_L_band_preserves_notch hc hc1 hc2 heq1 heq2
+      hw hwc hwc1 hwc2 hw0 hband hfit hslack hsc hsc1 hsc2 hsepS
+  obtain ⟨_, hz0, hz1, hz2⟩ :=
+    isSpreadBoundedRWSkylineAt_applyStep_L_band_preserves_notch hc hc1 hc2 heq1 heq2
+      hw hwc hwc1 hwc2 hw0 hband hfit hslack hzc hzc1 hzc2 hsepZ
+  exact ⟨hband', hs0, hs1, hs2, hz0, hz1, hz2⟩
+
 /-- **A flat J threads the reservoir band while preserving a disjoint reserved notch — the
 mirror band-level frame brick.** This bundles the two facts the bag-phase ledger needs about an
 intervening flat J drawn off-phase: (1) the post-drop board is still a member of the same
