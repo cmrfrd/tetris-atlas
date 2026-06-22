@@ -25731,6 +25731,41 @@ theorem isFlatFrontBandAt_notchPairs_drain_height {c s base : ℕ} {b : Board}
   Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt
     (isFlatFrontBandAt_notchPairs_drain hb hs hc0 hc5 hbase4)
 
+/-- **The both-notch-pairs-then-drain half-cycle nets a four-row descent of the cap** (iter569). The
+notch-side analogue of the flat-filler net-descent ledger
+`isFlatFrontBandAt_flatFiller_fill_list_drain_netDescent` (iter517), and a direct corollary of the
+notch drain height cap (iter568). The starting surface `IsFlatFrontBandAt c s base b` lives under the
+band ceiling `base + s`; after routing the two owed notch pieces through their `L`/`J`-manufactured
+valleys (`L@c, S@c, J@(c+3), Z@(c+3)`) and dropping the once-per-bag regulator `I` into the reserved
+well, the drain endpoint is capped at `base - 4 + s` (iter568). Rearranged with `base ≥ 4`, that says
+the endpoint max column height plus four is still at most the *starting* band ceiling `base + s` — the
+notch half-cycle does not merely hold the cap steady, it pulls it strictly downward by the four rows
+the vertical `I` clears, exactly matching the four-row descent the flat-filler half-cycle banks
+(iter517). This is the monotone-descent face of the regulator on the notch route: the raise-versus-
+drain balance over the two notch pairs plus the drain is net negative by four, the descent budget a
+bounded carrier needs so that chaining the notch half-cycle (against the flat-filler half-cycle) cannot
+let the cap drift upward across a bag. It still says nothing about adversarial interleaving of the two
+halves against one shared drain, nor a notch drawn before its paired filler, and re-establishing a flat
+front at the lowered floor (the post-drain band is spread, not flat) is the remaining packing content;
+the every-order per-bag raise-versus-drain balance is the bag-phase closure #66 and #72 still demand.
+`TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_notchPairs_drain_netDescent {c s base : ℕ} {b : Board}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
+    (hc0 : 0 < c) (hc5 : c + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
+    Board.maxColHeight GameConfig.standard
+      (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard b
+                { piece := Piece.L, rot := 0, col := c })
+              { piece := Piece.S, rot := 0, col := c })
+            { piece := Piece.J, rot := 0, col := c + 3 })
+          { piece := Piece.Z, rot := 0, col := c + 3 })
+        { piece := Piece.I, rot := 1, col := 0 }) + 4 ≤ base + s := by
+  have hcap := isFlatFrontBandAt_notchPairs_drain_height hb hs hc0 hc5 hbase4
+  omega
+
 /-- **A full layer of flat fillers fits and marches the front, in any order** (iter511). Tightens
 the room budget of `isFlatFrontBandAt_nonSZ_fill_list` (iter482) by excluding the width-four
 horizontal `I`: a run `ps` of strictly-flat fillers (each `O`, `T`, `L`, or `J`, advancing the front
