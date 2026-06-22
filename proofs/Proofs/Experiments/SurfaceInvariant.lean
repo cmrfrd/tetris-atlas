@@ -23562,6 +23562,57 @@ theorem reservoirRichSurface_O_pocket_carrier_both_notches {T : Bag} {base : ℕ
     (by decide) (by decide)
   exact ⟨⟨base, 2, hband, hledger⟩, reservoirRichSurface_O_pocket_preserves_both_notches⟩
 
+/-- **A horizontal `I` filler across the pocket keeps BOTH spread-carrier membership AND both standing
+notches.** The horizontal-`I` counterpart of `reservoirRichSurface_O_pocket_carrier_both_notches`: a
+flat `I` (rotation `0`) dropped across the four-wide flat pocket `cols 1,2,3,4` of the rich surface
+lifts that quad by exactly one, re-entering `reservoirSpreadCarrier (T.draw Piece.I)` at the same
+floor `base` while leaving both reserved landing sites untouched — the Z-notch triple `5,6,7` and the
+S-notch triple `6,7,8` read back at their original `base+1, base, base, base+1` profile. The carrier
+conjunct comes from the band conjunct of
+`Board.isSpreadBoundedRWSkylineAt_applyStep_horizI_band_preserves_both_notches` instantiated at the
+rich surface (well `w = 0`, spread `s = 2`, quad `c = 1`, S-notch `sc = 6`, Z-notch `zc = 5`),
+packaged as `⟨base, 2, ·, hledger⟩`; the four height read-backs come from that same brick's six raw
+`colHeight` equalities. This is the brick that lets a mid-bag horizontal `I` filler thread the whole
+pocket in one move WITHOUT spending either reserved notch. It does NOT close the pocket-fills-up
+spread growth across many fillers, nor the all-orders per-bag drain accounting (crux `#66`, `#72`);
+`TetrisSolvableValid` is NOT proven. -/
+theorem reservoirRichSurface_horizI_pocket_carrier_both_notches {T : Bag} {base : ℕ}
+    (hslack : base + 2 ≤ GameConfig.standard.rows)
+    (hledger : base + 2 + (T.draw Piece.I).card + 1 ≤ GameConfig.standard.rows) :
+    reservoirSpreadCarrier (T.draw Piece.I)
+        (Placement.applyStep GameConfig.standard
+          (Board.skyline GameConfig.standard (reservoirRichSurface base))
+          { piece := Piece.I, rot := 0, col := 1 }) ∧
+      (Board.colHeight (Placement.applyStep GameConfig.standard
+          (Board.skyline GameConfig.standard (reservoirRichSurface base))
+          { piece := Piece.I, rot := 0, col := 1 }) 5 = base + 1 ∧
+      Board.colHeight (Placement.applyStep GameConfig.standard
+          (Board.skyline GameConfig.standard (reservoirRichSurface base))
+          { piece := Piece.I, rot := 0, col := 1 }) 6 = base ∧
+      Board.colHeight (Placement.applyStep GameConfig.standard
+          (Board.skyline GameConfig.standard (reservoirRichSurface base))
+          { piece := Piece.I, rot := 0, col := 1 }) 7 = base ∧
+      Board.colHeight (Placement.applyStep GameConfig.standard
+          (Board.skyline GameConfig.standard (reservoirRichSurface base))
+          { piece := Piece.I, rot := 0, col := 1 }) 8 = base + 1) := by
+  obtain ⟨hband, hs0, hs1, hs2, hz0, hz1, hz2⟩ :=
+    Board.isSpreadBoundedRWSkylineAt_applyStep_horizI_band_preserves_both_notches
+      (cfg := GameConfig.standard) (h := reservoirRichSurface base)
+      (base := base) (s := 2) (c := 1) (w := 0) (sc := 6) (zc := 5)
+      (by decide) (by decide) (by decide) (by decide)
+      (by simp [reservoirRichSurface]) (by simp [reservoirRichSurface]) (by simp [reservoirRichSurface])
+      (by decide) (by decide) (by decide) (by decide) (by decide)
+      (by simp [reservoirRichSurface])
+      (by intro j hj hj0; simp only [reservoirRichSurface]; split_ifs <;> omega)
+      (by simp [reservoirRichSurface]) hslack
+      (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+      (by decide) (by decide)
+  refine ⟨⟨base, 2, hband, hledger⟩, ?_, ?_, ?_, ?_⟩
+  · rw [hz0]; simp [reservoirRichSurface]
+  · rw [hs0]; simp [reservoirRichSurface]
+  · rw [hs1]; simp [reservoirRichSurface]
+  · rw [hs2]; simp [reservoirRichSurface]
+
 /-- **The phase-matched per-piece fill dispatcher into the spread carrier.** Unifies the two
 phase bridges (`reservoirSpreadCarrier_flatPhase_flat_fill_step` and
 `reservoirSpreadCarrier_SZPhase_SZ_fill_step`) behind one disjunctive `hsite` premise that pairs the
