@@ -8954,6 +8954,51 @@ theorem isSpreadBoundedRWSkylineAt_applyStep_O_band_preserves_notch {cfg : GameC
   · rw [colHeight_skyline hnc1, Function.update_of_ne (by omega), Function.update_of_ne (by omega)]
   · rw [colHeight_skyline hnc2, Function.update_of_ne (by omega), Function.update_of_ne (by omega)]
 
+/-- **An intervening `O` keeps the band AND both standing notches — the two-notch band frame.** The
+both-notches upgrade of `isSpreadBoundedRWSkylineAt_applyStep_O_band_preserves_notch`: while two
+reserved notches sit on disjoint triples (an S-notch on `sc, sc+1, sc+2` and a Z-notch on
+`zc, zc+1, zc+2`), an `O` landing on an in-band flat pair `c, c+1` (fitting under the band top via
+`h c + 2 ≤ base + s`) that is column-disjoint from BOTH notch windows (`hsepS`, `hsepZ`) re-enters
+`IsSpreadBoundedRWSkylineAt cfg s base` AND leaves all six notch heights exactly where they were. This
+is the band-level brick that threads a flat filler past TWO owed landing sites at once while keeping the
+height bound — the missing two-notch counterpart of the single-notch band frames, and the band-vocab
+upgrade of `applyStep_O_skyline_preserves_both_notches` (which carried only the notch shapes, not band
+re-entry). Because the carrier closure must keep both an S-site and a Z-site reserved across an
+adversarial mid-bag `O`, this is exactly the brick a per-bag site-regeneration argument chains. It does
+NOT close the every-order obligation — crux #66/#72 remains open and `TetrisSolvableValid` is NOT
+proven. Proof: apply the single-notch `O` band frame twice (once per notch triple), sharing the one
+band re-entry, and bundle the two height trios. -/
+theorem isSpreadBoundedRWSkylineAt_applyStep_O_band_preserves_both_notches {cfg : GameConfig}
+    {h : ℕ → ℕ} {base s c w sc zc : ℕ}
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (heq : h c = h (c + 1))
+    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hw0 : h w = 0)
+    (hband : ∀ j < cfg.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + s)
+    (hfit : h c + 2 ≤ base + s) (hslack : base + s ≤ cfg.rows)
+    (hsc : sc < cfg.cols) (hsc1 : sc + 1 < cfg.cols) (hsc2 : sc + 2 < cfg.cols)
+    (hzc : zc < cfg.cols) (hzc1 : zc + 1 < cfg.cols) (hzc2 : zc + 2 < cfg.cols)
+    (hsepS : sc + 2 < c ∨ c + 1 < sc) (hsepZ : zc + 2 < c ∨ c + 1 < zc) :
+    IsSpreadBoundedRWSkylineAt cfg s base
+        (Placement.applyStep cfg (skyline cfg h) { piece := Piece.O, rot := 0, col := c }) ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.O, rot := 0, col := c }) sc = h sc ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.O, rot := 0, col := c }) (sc + 1) = h (sc + 1) ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.O, rot := 0, col := c }) (sc + 2) = h (sc + 2) ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.O, rot := 0, col := c }) zc = h zc ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.O, rot := 0, col := c }) (zc + 1) = h (zc + 1) ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.O, rot := 0, col := c }) (zc + 2) = h (zc + 2) := by
+  obtain ⟨hband', hs0, hs1, hs2⟩ :=
+    isSpreadBoundedRWSkylineAt_applyStep_O_band_preserves_notch hc hc1 heq hw hwc hwc1 hw0
+      hband hfit hslack hsc hsc1 hsc2 hsepS
+  obtain ⟨_, hz0, hz1, hz2⟩ :=
+    isSpreadBoundedRWSkylineAt_applyStep_O_band_preserves_notch hc hc1 heq hw hwc hwc1 hw0
+      hband hfit hslack hzc hzc1 hzc2 hsepZ
+  exact ⟨hband', hs0, hs1, hs2, hz0, hz1, hz2⟩
+
 /-- **An intervening horizontal-`I` keeps both the band and a standing notch.** The four-column
 counterpart of `isSpreadBoundedRWSkylineAt_applyStep_O_band_preserves_notch`: a horizontal `I` landing
 on an in-band flat quad `c, c+1, c+2, c+3` (`heq1`..`heq3`, fitting under the band top via
