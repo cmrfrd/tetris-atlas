@@ -21394,6 +21394,20 @@ theorem isLevelPocketBandAt_of_isFlatRunReservoirAt {w s base : ℕ} {b : Board}
     (by omega) (by omega) (by omega) (by omega)
     (hrun 0 (by omega)) (hrun 1 (by omega)) (hrun 2 (by omega)) (hrun 3 (by omega))
 
+/-- **A flat run may be read at any narrower width `≥ 4`.** The width field `w` only records how many
+consecutive columns starting at the pocket `pc` are pinned to the floor `base`; nothing else in
+`IsFlatRunReservoirAt` mentions `w`. So if a board carries a width-`w` run and `4 ≤ w' ≤ w`, the same
+board carries the width-`w'` run on the same pocket: the `pc + w' ≤ cols` bound weakens from `pc + w ≤
+cols`, and the run equation `h (pc + i) = base` for `i < w'` is a restriction of the one for `i < w`.
+This monotonicity is the bookkeeping that lets a width-tracking flat carrier shrink its run as non-I
+pieces consume columns and re-expand it on the once-per-bag I-drain; it is enabling infrastructure,
+not the bag-phase closure — crux #66/#72 remain open and `TetrisSolvableValid` is NOT yet proven. -/
+theorem isFlatRunReservoirAt_width_mono {w w' s base : ℕ} {b : Board}
+    (hb : IsFlatRunReservoirAt w s base b) (hw'4 : 4 ≤ w') (hww' : w' ≤ w) :
+    IsFlatRunReservoirAt w' s base b := by
+  obtain ⟨h, pc, rfl, hw0, hband, hslack, hpc1, hpcw, hw4, hrun⟩ := hb
+  exact ⟨h, pc, rfl, hw0, hband, hslack, hpc1, by omega, hw'4, fun i hi => hrun i (by omega)⟩
+
 /-- **A single O reduces a flat run by exactly two columns at the same floor.** Dropping the O flush
 across the leftmost two columns of the width-`w` run (`w ≥ 6`, so the surviving run stays `≥ 4`
 wide) raises those two columns to `base + 2`. With spread `s ≥ 2` the lifted pair stays inside the
