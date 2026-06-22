@@ -26978,6 +26978,42 @@ theorem bagOrder_filler_nonSZ_perm {ps : List Piece}
       = [Piece.O, Piece.T, Piece.L, Piece.J] := by decide
   rwa [heq] at hf
 
+/-- **The two staircase pieces of a bag order permute `[S, Z]`** (iter642). The notch-core complement
+of `bagOrder_filler_nonSZ_perm` (iter506): where iter506 keeps the four flat fillers and drops `S, Z`,
+this KEEPS only `S` and `Z` and drops `O, T, L, J`. After splitting an adversarial bag order at its
+unique regulator `I` as `pre ++ I :: post`, the two filler runs together permute the six non-`I`
+pieces (iter494); filtering that combined run to retain only the staircase chiralities leaves exactly
+a permutation of `[S, Z]` — precisely one `S` and one `Z`, in whatever order the adversary interleaved
+them. The proof mirrors iter506: transport the combined-run permutation across `List.Perm.filter` with
+the Bool guard that keeps only `S, Z`, then evaluate the canonical filtered list to `[S, Z]` by
+`decide`. Together with iter506 this fully partitions the six fillers of every bag into the flat core
+`[O, T, L, J]` and the staircase core `[S, Z]`, pinning the exact notch-routing obligation: per bag,
+the surface must host exactly one `S`-notch and one `Z`-notch landing, in adversary order, split
+arbitrarily across the mid-bag drain.
+
+Honest caveat: this is multiset accounting, not scheduling. It pins WHICH staircase pieces are owed
+(one each), not WHEN they arrive relative to the drain or to each other, and it does not bridge the
+column-budget overlap obstruction (#90/#151: a single surface cannot host pocket + well + both notches
+on ten columns; the rich surface's two notches overlap at columns `6, 7`, so seating one staircase
+destroys the other's notch — iter608). The per-bag raise-versus-drain balance and the both-staircase
+all-orders routing remain open. `TetrisSolvableValid` is NOT proven; crux #66/#72 remains the genuine
+open gap; no sorry. -/
+theorem bagOrder_filler_SZ_perm {ps : List Piece}
+    (h : ps.Perm [Piece.O, Piece.I, Piece.S, Piece.Z, Piece.T, Piece.L, Piece.J]) :
+    ∃ (pre post : List Piece),
+      ps = pre ++ Piece.I :: post ∧ Piece.I ∉ pre ∧ Piece.I ∉ post ∧
+      ((pre ++ post).filter
+        (fun p => match p with | Piece.S => true | Piece.Z => true | _ => false)).Perm
+        [Piece.S, Piece.Z] := by
+  obtain ⟨pre, post, hsplit, hpre, hpost, hperm⟩ := bagOrder_filler_perm h
+  refine ⟨pre, post, hsplit, hpre, hpost, ?_⟩
+  have hf := hperm.filter
+    (fun p => match p with | Piece.S => true | Piece.Z => true | _ => false)
+  have heq : ([Piece.O, Piece.S, Piece.Z, Piece.T, Piece.L, Piece.J].filter
+      (fun p => match p with | Piece.S => true | Piece.Z => true | _ => false))
+      = [Piece.S, Piece.Z] := by decide
+  rwa [heq] at hf
+
 /-- **Pocket-preserving maximal drain: `n` vertical-`I` drops keep the level pocket band** (iter507).
 The pocket-PRESERVING analogue of the pocket-less iterated drain `isSpreadBoundedRWSkylineAt_iter_drain`
 (iter496). Each single step `isLevelPocketBandAt_vertI_descends` drops the regulator `I` into the
