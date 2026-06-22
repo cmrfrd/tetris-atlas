@@ -8607,6 +8607,44 @@ theorem applyStep_vertI_well_both_notches_descend {cfg : GameConfig} {h : ℕ �
   refine ⟨_, applyStep_vertI_well hw hw0 hothers, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
     split_ifs with hh <;> omega
 
+/-- **The two-valley layout is a drain fixpoint — structural re-entry, floor-agnostic.** This is the
+invariant-preservation statement the bag-phase scheduler actually consumes: it forgets the exact
+descended heights of `applyStep_vertI_well_both_notches_descend` and keeps only the *shape* — that the
+post-drain board again carries an S-notch on `c, c+1, c+2` and a Z-notch on `d, d+1, d+2`, with the
+well still empty. Where the underlying descent lemma reports concrete values
+(`h' c = h c - 4`, …), this corollary reports the relations `h' c = h' (c+1)`, `h' (c+2) = h' c + 1`
+(S-notch) and `h' (d+1) = h' (d+2)`, `h' d = h' (d+1) + 1` (Z-notch), exactly the predicate form a
+both-notch carrier invariant is phrased in. So the once-per-bag vertical-`I` drain maps a both-notch
+surface to a both-notch surface: the layout that hosts an early `S` and an early `Z` is reproduced at
+the next reset, four rows lower, without referring to which floor it sits at. This makes it directly
+re-feedable into the same both-notch predicate across a bag boundary. It does NOT close the
+adversarial-order obligation — crux #66/#72 remains open and `TetrisSolvableValid` is NOT proven; the
+scheduler that re-digs the consumed valleys (via the once-per-bag `L`/`J`) *before* the drain, for
+every order the adversary picks, is the open content. Proof: discharge through
+`applyStep_vertI_well_both_notches_descend` and read the four shape relations off its concrete
+descended values by `omega`. -/
+theorem applyStep_vertI_well_both_notches_descend_reentry {cfg : GameConfig} {h : ℕ → ℕ}
+    {c d w : ℕ}
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
+    (hd : d < cfg.cols) (hd1 : d + 1 < cfg.cols) (hd2 : d + 2 < cfg.cols)
+    (heqS : h c = h (c + 1)) (hstepS : h (c + 2) = h c + 1)
+    (heqZ : h (d + 1) = h (d + 2)) (hstepZ : h d = h (d + 1) + 1)
+    (hw : w < cfg.cols)
+    (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
+    (hwd : w ≠ d) (hwd1 : w ≠ d + 1) (hwd2 : w ≠ d + 2)
+    (hw0 : h w = 0)
+    (hothers : ∀ j, j < cfg.cols → j ≠ w → 4 ≤ h j) :
+    ∃ h' : ℕ → ℕ,
+      Placement.applyStep cfg (skyline cfg h) { piece := Piece.I, rot := 1, col := w }
+        = skyline cfg h' ∧
+      h' c = h' (c + 1) ∧ h' (c + 2) = h' c + 1 ∧
+      h' (d + 1) = h' (d + 2) ∧ h' d = h' (d + 1) + 1 ∧
+      h' w = 0 := by
+  obtain ⟨h', hstep, hHc, hHc1, hHc2, hHd, hHd1, hHd2, hHw⟩ :=
+    applyStep_vertI_well_both_notches_descend hc hc1 hc2 hd hd1 hd2
+      heqS hstepS heqZ hstepZ hw hwc hwc1 hwc2 hwd hwd1 hwd2 hw0 hothers
+  exact ⟨h', hstep, by omega, by omega, by omega, by omega, hHw⟩
+
 /-- **An intervening `O` keeps both the band and a standing notch — the band-level threading frame.**
 The colHeight frame `colHeight_applyStep_O_skyline_preserves_notch` shows an intervening `O` leaves a
 reserved notch's three heights fixed; this lemma upgrades that to the band vocabulary the carrier
