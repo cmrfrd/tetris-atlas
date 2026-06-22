@@ -25116,6 +25116,28 @@ theorem isBoundedPocketBandCarrier_maximal_drain_to_reservoir_safe {b : Board}
     reservoirCarrier_maximal_drain_reset_safe hband
   exact ⟨pls, hmem, hcarrier, hsafe⟩
 
+/-- **A reset-floor level pocket band IS a full-bag spread carrier** (iter554). Bridges the
+certified inter-bag reset endpoint into the spread-carrier vocabulary where the per-piece fill
+edges live. The maximal drain lands the board in a level pocket band at floor `floor % 4 < 4`
+(`reservoirCarrier_maximal_drain_reset`); this lemma takes that sharp `floor < 4` band and forgets
+it to `reservoirSpreadCarrier Bag.full` via the pocket-to-spread forgetful edge
+(`isSpreadBoundedRWSkylineAt_of_isLevelPocketBandAt`, spread preserved at `2`). The bridge is NOT
+free in general — the spread-carrier ledger `floor + 2 + 7 + 1 ≤ 20` is `+2` stronger than the
+level-band ledger `floor + 7 + 1 ≤ 20`, so it would fail for `floor ∈ {11, 12}` — but at the reset
+`floor < 4` it holds with room to spare (`floor + 10 ≤ 13 ≤ 20`). This is the missing adapter that
+lets the certified reset side (iter552/553) feed the spread-carrier front door
+`tetrisSolvableValid_of_reservoirSpreadCarrier_closed`, where the open fill crux #66 must discharge
+the per-bag closure. This does NOT prove `TetrisSolvableValid`: crux #66 (bag-level fill closure)
+and #72 (richer carrier closed under all seven) remain open; no `sorry`. -/
+theorem reservoirSpreadCarrier_full_of_isLevelPocketBandAt_reset {floor : ℕ} {b : Board}
+    (hlt : floor < 4)
+    (hband : Board.IsLevelPocketBandAt GameConfig.standard 2 floor b) :
+    reservoirSpreadCarrier Bag.full b := by
+  refine ⟨floor, 2, Board.isSpreadBoundedRWSkylineAt_of_isLevelPocketBandAt hband, ?_⟩
+  rw [Bag.full_card]
+  have hr : GameConfig.standard.rows = 20 := rfl
+  omega
+
 /-- **A full layer of flat fillers fits and marches the front, in any order** (iter511). Tightens
 the room budget of `isFlatFrontBandAt_nonSZ_fill_list` (iter482) by excluding the width-four
 horizontal `I`: a run `ps` of strictly-flat fillers (each `O`, `T`, `L`, or `J`, advancing the front
