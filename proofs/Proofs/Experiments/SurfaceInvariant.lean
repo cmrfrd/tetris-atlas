@@ -26134,6 +26134,42 @@ theorem isFlatFrontBandAt_flatFiller_then_notchPairs_drain_height {s base : ℕ}
   exact ⟨pls, c', hforall, hlo, hhi,
     Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt hdrain⟩
 
+/-- **Net `-4` descent ledger for the full favorable-order single-layer bag cycle** (iter573). The
+ledger entry that completes the iter571 whole-bag-cycle quartet (cycle, iter571; height cap,
+iter572; net descent, here), mirroring `isFlatFrontBandAt_notchPairs_drain_netDescent` (iter569) and
+the exact-capacity `isFlatFrontBandAt_flatFiller_fill_list` net-descent (iter517). It restates the
+iter572 height cap in balance form: the endpoint peak of the whole bag — strictly-flat fillers `ps`,
+both owed notch pairs, then the once-per-bag vertical `I` drain — satisfies `peak + 4 ≤ base + s`,
+i.e. the bag closes at least four rows below where its incoming `base + s` ceiling sat. This is the
+quantitative statement that one favorable-order bag makes net downward progress, the `-4`-per-bag
+budget the reservoir thesis rests on. It stays a favorable-order accounting: the `+4` drain credit
+is banked against a fillers-before-notches, drain-last schedule, not an adversarial interleaving, so
+the every-order availability of a drain before the ceiling (crux #66, #72) is still open and
+`TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_flatFiller_then_notchPairs_drain_netDescent {s base : ℕ} {c : ℕ}
+    {b : Board} {ps : List Piece}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
+    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
+    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
+    ∃ (pls : List Placement) (c' : ℕ),
+      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
+      c ≤ c' ∧ c' ≤ c + 3 * ps.length ∧
+      Board.maxColHeight GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard
+                (Placement.applyStep GameConfig.standard
+                  (pls.foldl (Placement.applyStep GameConfig.standard) b)
+                  { piece := Piece.L, rot := 0, col := c' })
+                { piece := Piece.S, rot := 0, col := c' })
+              { piece := Piece.J, rot := 0, col := c' + 3 })
+            { piece := Piece.Z, rot := 0, col := c' + 3 })
+          { piece := Piece.I, rot := 1, col := 0 }) + 4 ≤ base + s := by
+  obtain ⟨pls, c', hforall, hlo, hhi, hcap⟩ :=
+    isFlatFrontBandAt_flatFiller_then_notchPairs_drain_height hb hs hc0 hmem hroom hbase4
+  exact ⟨pls, c', hforall, hlo, hhi, by omega⟩
+
 /-- **Pairing an owed `S` with a preceding `L` keeps the master carrier on a flat band** (iter518).
 The first carrier-level two-piece transition that absorbs an `S` hole-free without any pre-existing
 notch: on a band flat at `base` with the reserved well parked at column `0` and spread `s ≥ 3`, drop
