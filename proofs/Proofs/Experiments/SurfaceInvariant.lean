@@ -25624,6 +25624,51 @@ theorem isFlatFrontBandAt_LS_then_JZ_safe {c s base : ℕ} {b : Board}
   obtain ⟨hJ, hJZ⟩ := isFlatFrontBandAt_JZ_step_safe hb2 hs (by omega) (by omega)
   exact ⟨hL, hLS, hJ, hJZ⟩
 
+/-- **The reversed four-piece notch block survives at every intermediate placement** (iter578). The
+per-prefix transient-survival certificate for the reversed-order notch block
+`isFlatFrontBandAt_JZ_then_LS` (iter576), the reversed mirror of `isFlatFrontBandAt_LS_then_JZ_safe`
+(iter564): all FOUR boards the adversary's clock passes through as the bag feeds its `J`, `Z`, `L`, `S`
+into the working front — after the `J` digs the `Z`-notch, after the owed `Z` drops in, after the `L`
+digs the `S`-notch at the advanced front `c + 3`, and after the owed `S` drops in — keep every cell
+strictly under the `rows` ceiling, so the game is not lost at any of the four steps. It is the same
+composition as iter564 with the pair order swapped: `isFlatFrontBandAt_JZ_step_safe` (iter559) certifies
+the first two boards directly from the band cap, then `isFlatFrontBandAt_JZ_step` (iter556) carries the
+band forward to front `c + 3`, on which `isFlatFrontBandAt_LS_step_safe` (iter558) certifies the last
+two. As in the favorable order, the not-lost bounds are order-INDEPENDENT pure height facts (each
+board's top stays under `base + s ≤ rows`); the pair order is the placement SCHEDULE the band shape
+uses, not a constraint on the adversary's height safety. With iter564 this delivers the per-prefix
+survival schedule for BOTH notch-pair orders, so the transient half of the closure no longer assumes
+which notch pair the adversary draws first. What stays open is the within-pair reversal, the every-order
+availability of a drain before the limit, and the bag-level raise/drain balance — crux #66 and #72
+remain open and `TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_JZ_then_LS_safe {c s base : ℕ} {b : Board}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
+    (hc0 : 0 < c) (hc5 : c + 5 < GameConfig.standard.cols) :
+    ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard b { piece := Piece.J, rot := 0, col := c }) ∧
+      ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard b { piece := Piece.J, rot := 0, col := c })
+          { piece := Piece.Z, rot := 0, col := c }) ∧
+      ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard b { piece := Piece.J, rot := 0, col := c })
+            { piece := Piece.Z, rot := 0, col := c })
+          { piece := Piece.L, rot := 0, col := c + 3 }) ∧
+      ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard b { piece := Piece.J, rot := 0, col := c })
+              { piece := Piece.Z, rot := 0, col := c })
+            { piece := Piece.L, rot := 0, col := c + 3 })
+          { piece := Piece.S, rot := 0, col := c + 3 }) := by
+  obtain ⟨hJ, hJZ⟩ := isFlatFrontBandAt_JZ_step_safe hb hs hc0 (by omega)
+  have hb2 := isFlatFrontBandAt_JZ_step hb hs hc0 (by omega)
+  obtain ⟨hL, hLS⟩ := isFlatFrontBandAt_LS_step_safe hb2 hs (by omega) (by omega)
+  exact ⟨hJ, hJZ, hL, hLS⟩
+
 /-- **The fully-certified four-piece notch block** (iter565). The single edge a per-bag survival
 schedule consumes at the favorable-order notch block: it fuses the carrier re-entry of
 `reservoirSpreadCarrier_flatFront_notchPairs_step` (iter563) with the per-prefix transient safety of
