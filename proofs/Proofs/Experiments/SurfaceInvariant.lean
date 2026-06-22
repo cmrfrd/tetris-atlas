@@ -23822,6 +23822,43 @@ theorem reservoirRichSurface_flatFiller_pocket_carrier_both_notches {T : Bag} {b
       reservoirRichSurface_J_pocket_carrier_both_notches hslack hledger
     exact ⟨{ piece := Piece.J, rot := 0, col := 1 }, rfl, hc, by omega, by omega, by omega⟩
 
+/-- **The once-per-bag regulator drain regenerates the universal rich surface, lowered by four**
+(iter631). The rich-surface analogue of `reservoirDoubleSZSurface_vertI_well_drain` (iter362), and the
+regeneration linchpin the universal-phase thread (iter608–625) was missing. The rich reset surface
+`reservoirRichSurface base` reserves an empty well at column `0` and seats every working column inside
+`[base, base + 1]` (the two notch lips at columns `5` and `8` sit at `base + 1`, every other working
+column at `base`). Once `4 ≤ base` every neighbour of the well is at least four high, so dropping the
+vertical `I` into the well (`Board.applyStep_vertI_well`) clears the bottom four now-full rows and
+gravity drops every other column by exactly four. Crucially the profile is *preserved*: the pocket,
+the S-notch and the Z-notch all ride at the top of the stack and descend unchanged, so the post-drain
+board is the very same `reservoirRichSurface` shape at floor `base - 4`. This is what lets the once-per-bag
+`I` reset the universal phase to a strictly lower floor without spending either reserved staircase site —
+the line clearing removes full rows from *beneath* the surface, never the notches themselves. Unlike the
+double-valley reset (iter362), the rich surface hosts ALL seven pieces (iter608), so this single drain
+regenerates the landing menu for the *entire* next bag, not just the owed staircases.
+
+Honest caveat (unchanged): this does NOT close crux `#66`/`#72`. It is the shape-preserving drain on the
+GIVEN rich surface at `base ≥ 4`; it does not schedule the drain against the fillers that raise the floor
+across a bag (the post-fill board is a bare spread band, not this rich surface), nor prove the all-orders
+raise-versus-drain balance that keeps the floor bounded. It is the universal-phase regenerator brick, not
+the all-orders bag closure. `TetrisSolvableValid` is NOT proven; no sorry. -/
+theorem reservoirRichSurface_vertI_well_drain {base : ℕ} (hbase : 4 ≤ base) :
+    Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirRichSurface base))
+        { piece := Piece.I, rot := 1, col := 0 }
+      = Board.skyline GameConfig.standard (reservoirRichSurface (base - 4)) := by
+  rw [Board.applyStep_vertI_well (cfg := GameConfig.standard)
+    (h := reservoirRichSurface base) (w := 0)
+    (by decide) (by simp [reservoirRichSurface])
+    (fun j _ hj0 => by simp only [reservoirRichSurface]; split_ifs <;> omega)]
+  congr 1
+  funext j
+  simp only [reservoirRichSurface]
+  by_cases hj0 : j = 0
+  · simp [hj0]
+  · simp only [if_neg hj0]
+    split_ifs <;> omega
+
 /-- **The phase-matched per-piece fill dispatcher into the spread carrier.** Unifies the two
 phase bridges (`reservoirSpreadCarrier_flatPhase_flat_fill_step` and
 `reservoirSpreadCarrier_SZPhase_SZ_fill_step`) behind one disjunctive `hsite` premise that pairs the
