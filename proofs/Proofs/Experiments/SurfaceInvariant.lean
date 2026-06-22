@@ -23859,6 +23859,33 @@ theorem reservoirRichSurface_vertI_well_drain {base : ℕ} (hbase : 4 ≤ base) 
   · simp only [if_neg hj0]
     split_ifs <;> omega
 
+/-- **The universal rich surface drains into the spread-band carrier** (iter632). The rich-surface
+analogue of `reservoirDoubleSZSurface_vertI_drain_carrier`: the regenerator edge stated in the
+carrier vocabulary the final reduction consumes, but on the strictly-better all-7-hosting reset
+surface. Dropping the once-per-bag vertical `I` into the reserved well of `reservoirRichSurface base`
+clears four rows and lands the literal profile `reservoirRichSurface (base - 4)` (iter631's drain),
+which iter609's reset-state membership `reservoirSpreadCarrier_richSurface_mem` repackages directly
+as a spread-1 carrier member at floor `base - 4`. With the destination ledger
+`(base - 4) + 1 + (T.draw I).card + 1 ≤ rows` this re-enters `reservoirSpreadCarrier (T.draw Piece.I)`.
+The payoff over the double-valley drain edge: the surface handed to the next bag is the universal
+rich shape, whose pocket and BOTH notches survive the drain (iter631), so the regenerated carrier
+already hosts every piece the next bag can draw — no owed-staircase bookkeeping rides underneath.
+Honest caveat (unchanged): this is the GIVEN-surface drain edge at `base ≥ 4`; it does not schedule
+the drain against the across-bag fillers that raise the floor (the post-fill board is a bare spread
+band, not this rich surface), nor prove the all-orders raise-versus-drain balance. Crux `#66`/`#72`
+remain open; `TetrisSolvableValid` is NOT proven; no sorry. -/
+theorem reservoirSpreadCarrier_richSurface_vertI_drain_carrier {T : Bag} {base : ℕ}
+    (hbase : 4 ≤ base)
+    (hledger : (base - 4) + 1 + (T.draw Piece.I).card + 1 ≤ GameConfig.standard.rows) :
+    ∃ plI : Placement, plI.piece = Piece.I ∧ plI.Valid GameConfig.standard ∧
+      reservoirSpreadCarrier (T.draw Piece.I)
+        (Placement.applyStep GameConfig.standard
+          (Board.skyline GameConfig.standard (reservoirRichSurface base))
+          plI) := by
+  refine ⟨{ piece := Piece.I, rot := 1, col := 0 }, rfl, Board.valid_vertI (by decide), ?_⟩
+  rw [reservoirRichSurface_vertI_well_drain hbase]
+  exact reservoirSpreadCarrier_richSurface_mem hledger
+
 /-- **The phase-matched per-piece fill dispatcher into the spread carrier.** Unifies the two
 phase bridges (`reservoirSpreadCarrier_flatPhase_flat_fill_step` and
 `reservoirSpreadCarrier_SZPhase_SZ_fill_step`) behind one disjunctive `hsite` premise that pairs the
