@@ -200,32 +200,6 @@ theorem exists_col_lt_of_sum_lt {cols k : ℕ} {h : ℕ → ℕ}
   rw [Finset.sum_const, Finset.card_range, smul_eq_mul] at hle
   omega
 
-/-- **A skyline light enough has a short column.** Specialising the averaging
-pigeonhole through `card_skyline`: if the board holds fewer than `cfg.cols * k`
-filled cells, some real column has height `< k`. This is the packing brick that
-lets a placement argument *select* a low landing column from a cell-count budget,
-the bridge between the conserved cell total and the existence of safe headroom. -/
-theorem exists_low_col_of_card_lt {cfg : GameConfig} {h : ℕ → ℕ} {k : ℕ}
-    (hcard : (skyline cfg h).card < cfg.cols * k) :
-    ∃ j < cfg.cols, h j < k := by
-  rw [card_skyline] at hcard
-  exact exists_col_lt_of_sum_lt hcard
-
-/-- **The cell budget of an in-field skyline.** If every real column stays within
-`cfg.rows`, the board holds at most `cfg.cols * cfg.rows` filled cells — the full
-grid is the worst case. The conserved-quantity ceiling that bounds the potential:
-combined with the `+4`-per-placement law, it pins how often line clears must fire
-to keep the board in-field. -/
-theorem card_skyline_le {cfg : GameConfig} {h : ℕ → ℕ}
-    (hb : ∀ j < cfg.cols, h j ≤ cfg.rows) :
-    (skyline cfg h).card ≤ cfg.cols * cfg.rows := by
-  rw [card_skyline]
-  calc ∑ j ∈ Finset.range cfg.cols, h j
-      ≤ ∑ _j ∈ Finset.range cfg.cols, cfg.rows :=
-        Finset.sum_le_sum (fun j hj => hb j (Finset.mem_range.mp hj))
-    _ = cfg.cols * cfg.rows := by
-        rw [Finset.sum_const, Finset.card_range, smul_eq_mul]
-
 /-- A profile bounded by `cfg.rows` on real columns gives a skyline whose every
 column height is `≤ cfg.rows` (out-of-range columns are empty). -/
 theorem colHeight_skyline_le {cfg : GameConfig} {h : ℕ → ℕ}
@@ -243,17 +217,6 @@ theorem not_isLost_skyline {cfg : GameConfig} {h : ℕ → ℕ}
     (hb : ∀ j < cfg.cols, h j ≤ cfg.rows) :
     ¬ Board.isLost cfg (skyline cfg h) :=
   Board.not_isLost_of_colHeight_le (colHeight_skyline_le hb)
-
-/-- **A constant-height block is never lost.** The flattest special case of
-`not_isLost_skyline`: the uniform skyline at height `k ≤ cfg.rows` (every in-field
-column filled to row `k`) sits inside the field. This is the topout-freedom of the
-full bottom-`k` slab — exactly the pre-clear surface a well-clear momentarily passes
-through (all columns level at the fill height) — so it certifies that the terminal
-placement of a fill-then-clear cycle does not spill above the field whenever the
-fill height stays within `cfg.rows`. -/
-theorem not_isLost_skyline_const {cfg : GameConfig} {k : ℕ} (hk : k ≤ cfg.rows) :
-    ¬ Board.isLost cfg (skyline cfg (fun _ => k)) :=
-  not_isLost_skyline (fun _ _ => hk)
 
 /-! ## Gravity on a skyline: line clears subtract the minimum profile
 
@@ -459,20 +422,6 @@ theorem colHeight_le_applyStep_of_no_fullRows {cfg : GameConfig} {b : Board}
   rw [Placement.applyStep_eq_clearLines_place, clearLines_eq_self_of_no_fullRows cfg h]
   exact colHeight_le_place b pl j
 
-/-- **The unconditional structural step identity — parent of the no-clear bricks.**
-Every `applyStep`, whether it clears rows or not, is `clearLines` applied to the
-bare union `b ∪ pl.dropped b`: place drops the piece (union), then the clear phase
-runs on the result. This is just the two definitional unfoldings
-(`applyStep_eq_clearLines_place` ∘ `place_eq_union_dropped`) packaged as one named
-brick, with the `clearLines` wrapper left *explicit* so the clear-active re-entry
-(the I-in-well drop that clears `k` rows, #65) can compute its reset surface
-directly. Specialising the wrapper to the identity when `fullRows = ∅` recovers
-`applyStep_eq_union_dropped_of_no_fullRows`; here it stays general. -/
-theorem applyStep_eq_clearLines_union_dropped {cfg : GameConfig} (b : Board)
-    (pl : Placement) :
-    pl.applyStep cfg b = clearLines cfg (b ∪ pl.dropped b) := by
-  rw [Placement.applyStep_eq_clearLines_place, Placement.place_eq_union_dropped]
-
 /-- **The exact post-board *set* of a no-clear placement — the structural
 re-entry brick.** When the placed board completes no rows
 (`fullRows cfg (pl.place b) = ∅`), the line-clear phase is the identity, so the
@@ -518,20 +467,6 @@ theorem dropped_subset_applyStep_of_no_fullRows {cfg : GameConfig} {b : Board}
     pl.dropped b ⊆ pl.applyStep cfg b := by
   rw [applyStep_eq_union_dropped_of_no_fullRows h]
   exact Finset.subset_union_right
-
-/-- **Cell-membership characterisation of a no-clear step.** The `↔` refinement of
-the two subset bricks (`subset_applyStep_of_no_fullRows`,
-`dropped_subset_applyStep_of_no_fullRows`): since a no-clear step is exactly
-`b ∪ pl.dropped b` (`applyStep_eq_union_dropped_of_no_fullRows`), a cell `c` is
-filled *after* the step iff it was filled before *or* it belongs to the dropped
-piece — nothing else appears and nothing disappears. This is the decision
-procedure a re-entry argument calls to settle whether a *named* cell is occupied
-post-step (e.g. confirming a row is/ isn't completed), one step finer than the
-height- and subset-level bricks. -/
-theorem mem_applyStep_of_no_fullRows {cfg : GameConfig} {b : Board} {pl : Placement}
-    (h : fullRows cfg (pl.place b) = ∅) {c : Coord} :
-    c ∈ pl.applyStep cfg b ↔ c ∈ b ∨ c ∈ pl.dropped b := by
-  rw [applyStep_eq_union_dropped_of_no_fullRows h, Finset.mem_union]
 
 /-- **The exact post-step profile of a no-clear placement — the profile-tracking
 engine.** When the placed board completes no rows (`fullRows cfg (pl.place b) = ∅`),
@@ -862,53 +797,6 @@ theorem colHeight_applyStep_skyline_allwindows_of_avoid {cfg : GameConfig} {h : 
   · exact colHeight_applyStep_skyline_Znotch_of_avoid hw hz2 hh0 hzstep hzflat
       (hav w hwW) (hav z hzW) (hav (z + 1) hz1W) (hav (z + 2) hz2W)
 
-/-- **Budget-feasible window coexistence: well, flat-4 pocket and shared S, Z valley all
-survive one dodging move.** The 9-column-feasible redesign of
-`colHeight_applyStep_skyline_allwindows_of_avoid`. That lemma protected four disjoint blocks —
-the well (1 col), a flat-4 (4 cols), a separate S-notch (3 cols) and a separate Z-notch
-(3 cols) — totalling `1 + 4 + 3 + 3 = 11` columns, which `four_disjoint_blocks_card_le` shows
-cannot fit on the standard 10-wide board. Here the two 3-column staircase notches are replaced
-by ONE shared width-4 valley `(base+1, base, base, base+1)` that hosts both S (right lip) and Z
-(left lip), so the protected blocks are the well (1), the flat-4 (4) and the valley (4),
-totalling `1 + 4 + 4 = 9 ≤ 10` — exactly the column budget the phase-conditional carrier
-(`well_plus_notch_leaves_flat`) fits. The protected columns are collected into one Finset `W`;
-from the single dodge `∀ cell ∈ pl.shapeUp, pl.col + cell.1 ∉ W` the post-move surface holds the
-well empty, the flat-4 flat at `h f`, and the valley in its exact `(base+1, base, base, base+1)`
-shape. So a single piece routed clear of every protected column re-presents, within 10 columns,
-every landing site the next adversary draw of O, T, L, J, I, S or Z needs. This discharges the
-shape half of the re-entry obligation (#72) in a column-feasible way; the existence half — that
-such a dodging landing site always exists for each piece without unbounded height growth —
-remains the open content of #66. -/
-theorem colHeight_applyStep_skyline_wellPocketValley_of_avoid {cfg : GameConfig} {h : ℕ → ℕ}
-    {pl : Placement} {w f v base : ℕ} {W : Finset ℕ}
-    (hw : w < cfg.cols) (hf3 : f + 3 < cfg.cols) (hv3 : v + 3 < cfg.cols) (hh0 : h w = 0)
-    (hfflat1 : h (f + 1) = h f) (hfflat2 : h (f + 2) = h f) (hfflat3 : h (f + 3) = h f)
-    (hv0 : h v = base + 1) (hv1 : h (v + 1) = base) (hv2 : h (v + 2) = base)
-    (hv3p : h (v + 3) = base + 1)
-    (hwW : w ∈ W)
-    (hfW : f ∈ W) (hf1W : f + 1 ∈ W) (hf2W : f + 2 ∈ W) (hf3W : f + 3 ∈ W)
-    (hvW : v ∈ W) (hv1W : v + 1 ∈ W) (hv2W : v + 2 ∈ W) (hv3W : v + 3 ∈ W)
-    (havoid : ∀ cell ∈ pl.shapeUp, pl.col + cell.1 ∉ W) :
-    colHeight (pl.applyStep cfg (skyline cfg h)) w = 0 ∧
-    (colHeight (pl.applyStep cfg (skyline cfg h)) f = h f ∧
-     colHeight (pl.applyStep cfg (skyline cfg h)) (f + 1) = h f ∧
-     colHeight (pl.applyStep cfg (skyline cfg h)) (f + 2) = h f ∧
-     colHeight (pl.applyStep cfg (skyline cfg h)) (f + 3) = h f) ∧
-    (colHeight (pl.applyStep cfg (skyline cfg h)) v = base + 1 ∧
-     colHeight (pl.applyStep cfg (skyline cfg h)) (v + 1) = base ∧
-     colHeight (pl.applyStep cfg (skyline cfg h)) (v + 2) = base ∧
-     colHeight (pl.applyStep cfg (skyline cfg h)) (v + 3) = base + 1) := by
-  have hav : ∀ a ∈ W, ∀ cell ∈ pl.shapeUp, pl.col + cell.1 ≠ a := by
-    intro a ha cell hc heq
-    exact havoid cell hc (by rw [heq]; exact ha)
-  refine ⟨?_, ?_, ?_⟩
-  · rw [colHeight_applyStep_skyline_eq_of_avoid_well hw hw hh0 (hav w hwW) (hav w hwW)]
-    exact hh0
-  · exact colHeight_applyStep_skyline_flat4_of_avoid hw hf3 hh0 hfflat1 hfflat2 hfflat3
-      (hav w hwW) (hav f hfW) (hav (f + 1) hf1W) (hav (f + 2) hf2W) (hav (f + 3) hf3W)
-  · exact colHeight_applyStep_skyline_valley4_of_avoid hw hv3 hh0 hv0 hv1 hv2 hv3p
-      (hav w hwW) (hav v hvW) (hav (v + 1) hv1W) (hav (v + 2) hv2W) (hav (v + 3) hv3W)
-
 /-- **Flat-ceiling preservation on the empty-well skyline carrier — the ceiling
 payoff.** The `≤ H` analogue of `colHeight_applyStep_skyline_eq_of_avoid_well`:
 composing the no-clear discharge (`fullRows_place_skyline_eq_empty_of_well`) with the
@@ -983,30 +871,6 @@ theorem avoid_finset_of_offset_lt {pl : Placement} {W : Finset ℕ} {bound : ℕ
   have hb := hoff cell hcell
   rcases hW _ hmem with h | h <;> omega
 
-/-- **A piece anchored inside a window-free band dodges the whole protected set — the
-one-shot packing bridge.** Composes the band geometry with the Finset lift
-`avoid_finset_of_offset_lt`. The ingredients a carrier step actually has on hand: the
-per-piece footprint width `hoff` (`∀ cell ∈ pl.shapeUp, cell.1 < bound`), a scratch band
-`[lo, hi]` that the entire protected set `W` lies outside (`hWout : ∀ a ∈ W, a < lo ∨
-hi < a` — the well and all three windows sit clear of the band), and the anchor landing
-inside the band so the footprint window `[pl.col, pl.col + bound)` fits within `[lo, hi]`
-(`lo ≤ pl.col` and `pl.col + bound ≤ hi + 1`). The conclusion is the single dodge
-`∀ cell ∈ pl.shapeUp, pl.col + cell.1 ∉ W` that
-`colHeight_applyStep_skyline_allwindows_of_avoid` consumes. So once a piece is placed with
-its footprint inside a window-free band, all three windows survive in their exact landing
-shapes for free — this is the geometric heart of the existence half of the re-entry
-obligation (#72), leaving only the packing fact that such a band always exists. -/
-theorem avoid_finset_of_anchor_in_clear_band {pl : Placement} {W : Finset ℕ}
-    {lo hi bound : ℕ}
-    (hoff : ∀ cell ∈ pl.shapeUp, cell.1 < bound)
-    (hWout : ∀ a ∈ W, a < lo ∨ hi < a)
-    (hanchor_lo : lo ≤ pl.col)
-    (hanchor_hi : pl.col + bound ≤ hi + 1) :
-    ∀ cell ∈ pl.shapeUp, pl.col + cell.1 ∉ W := by
-  refine avoid_finset_of_offset_lt hoff ?_
-  intro a ha
-  rcases hWout a ha with h | h <;> omega
-
 /-- **Four disjoint column blocks of widths 1, 4, 3, 3 need at least 11 columns — the
 window-budget bound.** A purely combinatorial counting fact: any four pairwise-disjoint
 Finsets `A, B, C, D` of cardinalities 1, 4, 3, 3 whose union lies inside `range cols`
@@ -1074,22 +938,6 @@ theorem colHeight_applyStep_skyline_well_eq_zero {cfg : GameConfig} {h : ℕ →
     (pl := pl) (j := w) havoid
   rw [colHeight_skyline hw, hw0] at hle
   exact Nat.le_zero.mp hle
-
-/-- **A leftmost well survives any placement to its right.** On a skyline whose
-well column `w` is empty, hard-dropping any piece whose anchor column `pl.col`
-sits strictly right of the well (`w < pl.col`) keeps the well empty after clears.
-Every occupied column is `pl.col + cell.1 ≥ pl.col > w`, so the placement
-trivially avoids `w` (discharged by `omega`), and `colHeight_applyStep_skyline_well_eq_zero`
-finishes. This is the piece-agnostic well-preservation step for the standard
-reserved-well strategy where the well is the leftmost column and all packing
-happens to its right. -/
-theorem colHeight_applyStep_skyline_well_eq_zero_of_lt_col {cfg : GameConfig}
-    {h : ℕ → ℕ} {pl : Placement} {w : ℕ} (hw : w < cfg.cols) (hw0 : h w = 0)
-    (hlt : w < pl.col) :
-    colHeight (pl.applyStep cfg (skyline cfg h)) w = 0 := by
-  apply colHeight_applyStep_skyline_well_eq_zero hw hw0
-  intro cell _
-  omega
 
 /-- **A reserved column survives an entire sequence of avoiding placements.** If
 every placement in `pls` avoids column `j`, then folding the whole sequence of
@@ -1408,20 +1256,6 @@ theorem colHeight_clearLines_eq_zero_of_forall_isFull {cfg : GameConfig} {b : Bo
   rw [clearLines_eq_empty_of_forall_isFull h]
   exact Tetris.Board.colHeight_empty j
 
-/-- **The cell count resets to zero.** The cardinality face of the reset trio,
-joining `colHeight_clearLines_eq_zero_of_forall_isFull` (here) and
-`maxColHeight_clearLines_eq_zero_of_forall_isFull` (with the other potential
-lemmas): clearing a board whose every cell lies in a full row wipes it to `∅`
-(`clearLines_eq_empty_of_forall_isFull`), which holds no cells. This is the
-area-ledger endpoint of a full-slab clear — the `card` the packing route tracks
-(`card_foldl_applyStep_le`) collapses to `0`, so the area budget is fully refunded
-the instant a packed slab clears. -/
-theorem card_clearLines_eq_zero_of_forall_isFull {cfg : GameConfig} {b : Board}
-    (h : ∀ p ∈ b, isFull cfg b p.2) :
-    (clearLines cfg b).card = 0 := by
-  rw [clearLines_eq_empty_of_forall_isFull h]
-  exact Finset.card_empty
-
 /-- **The wiping step.** If a placement fills `b` so that every cell of the placed
 board `pl.place b` lies in a complete row, then the full piece step (drop + clear)
 returns every column to height `0`. This is the I-into-the-well drop that
@@ -1463,17 +1297,6 @@ theorem skyline_const_eq_full_grid {cfg : GameConfig} (h : ℕ) :
   ext ⟨j, r⟩
   rw [mem_skyline]
   simp only [Finset.mem_product, Finset.mem_range]
-
-/-- **Column height of the full grid.** Every real column `j < cfg.cols` of the
-complete grid `range cfg.cols ×ˢ range h` has height exactly `h`. A free corollary
-of `skyline_const_eq_full_grid` (the grid is the constant skyline) composed with
-`colHeight_skyline` (a skyline's height recovers its profile). This is the
-height-accounting endpoint of the reset chain: after a full-slab clear the board
-is empty (height `0`), and the full slab itself sits at uniform height `h`. -/
-theorem colHeight_full_grid {cfg : GameConfig} {h : ℕ} {j : ℕ} (hj : j < cfg.cols) :
-    Board.colHeight (Finset.range cfg.cols ×ˢ Finset.range h) j = h := by
-  rw [← skyline_const_eq_full_grid]
-  exact colHeight_skyline hj
 
 /-! ## Per-piece closure: the vertical I piece
 
@@ -2876,24 +2699,6 @@ theorem not_isLost_skyline_foldl_fill {cfg : GameConfig} {cs : List ℕ}
     simpa using foldl_update_nodup_le hnodup (h := fun _ => 0) j
   omega
 
-/-- **Fill-phase survival from any bounded surface.** The arbitrary-start generalisation of
-`not_isLost_skyline_foldl_fill` (which fixes the empty profile): a `Nodup` vertical-I fill — each
-listed column rising exactly `+4` — applied to *any* surface `h` whose in-field columns are all
-capped by `B` lands every column at most `B + 4`, so the result is never lost once `B + 4 ≤ rows`.
-This is the build-phase survival face of the closed fill-then-clear cycle at a non-zero floor: the
-clear's `-4` is undone by the fill's `+4` (`foldl_clear_profile_eq_in_field`), and this certifies
-the intermediate fill never tops out as long as the starting surface leaves four rows of headroom. -/
-theorem not_isLost_skyline_foldl_fill_of_bounded {cfg : GameConfig} {cs : List ℕ} {h : ℕ → ℕ}
-    {B : ℕ} (hnodup : cs.Nodup) (hh : ∀ j, j < cfg.cols → h j ≤ B) (hcap : B + 4 ≤ cfg.rows) :
-    ¬ Board.isLost cfg
-        (skyline cfg (cs.foldl (fun g c => Function.update g c (g c + 4)) h)) := by
-  apply not_isLost_skyline
-  intro j hj
-  have hle : (cs.foldl (fun g c => Function.update g c (g c + 4)) h) j ≤ h j + 4 :=
-    foldl_update_nodup_le hnodup j
-  have hhj : h j ≤ B := hh j hj
-  omega
-
 /-- **The fill-and-clear cycle restores the in-field profile.** After a
 duplicate-free fill of every non-well column (`cs` covers `{0,…,cfg.cols-1}\{w}`)
 and the terminal well-clear, the post-clear profile
@@ -2982,22 +2787,6 @@ theorem foldl_fill_then_clear_init {cfg : GameConfig} {w : ℕ} (hw : w < cfg.co
       = GameState.init.board := by
   rw [init_board_eq_skyline cfg]
   exact foldl_fill_then_clear_fixed_all_cols hw rfl
-
-/-- **colHeight bridge for no-clear moves.** If the full move `applyStep` on a
-skyline reduces to another skyline `skyline cfg h'` (the no-clear case), then any
-per-column ceiling `h' j ≤ h j + d` on the resulting profile transfers verbatim
-to the column heights of the post-move board. The colHeight companion to
-`applyStep_skyline_of_place_eq`: it lifts each per-piece `place`-level height
-debit (`colHeight_place_*_skyline_le`) to a bound on the *full* move, the form
-the height-accounting half of a bag-phase potential consumes. -/
-theorem colHeight_applyStep_le_of_skyline_eq {cfg : GameConfig} {h h' : ℕ → ℕ}
-    {pl : Placement} {d : ℕ}
-    (hstep : Placement.applyStep cfg (skyline cfg h) pl = skyline cfg h')
-    (hbound : ∀ j, j < cfg.cols → h' j ≤ h j + d)
-    {j : ℕ} (hj : j < cfg.cols) :
-    colHeight (Placement.applyStep cfg (skyline cfg h) pl) j ≤ h j + d := by
-  rw [hstep, colHeight_skyline hj]
-  exact hbound j hj
 
 /-! ### The scalar surface potential
 
@@ -3141,23 +2930,6 @@ theorem card_foldl_take_applyStep_le {cfg : GameConfig} (pls : List Placement) (
   have hlen : (pls.take n).length ≤ pls.length := List.length_take_le' n pls
   omega
 
-/-- **Prefix card stays within the full grid.** The card analogue of the not-lost
-transient `not_isLost_foldl_take_applyStep_of_colHeight_le`: given a single area budget
-`b.card + 4 * pls.length ≤ cfg.cols * cfg.rows`, *every* prefix of the placement schedule
-holds at most `cfg.cols * cfg.rows` cells — the board never overflows the playing field's
-total area at any intermediate drop. This is the non-vacuous per-bag survival-accounting
-face of the packing ledger: where the height transient `+4 * 7 = 28` overruns `rows = 20`
-and goes vacuous over a full bag, the area budget has the whole grid (`200`) of headroom,
-so a 7-bag's `28`-cell growth sits comfortably under the cap and this prefix invariant
-genuinely holds across an entire bag. Proof: the prefix growth bound
-(`card_foldl_take_applyStep_le`) chains with the budget by transitivity. -/
-theorem card_foldl_take_applyStep_le_grid {cfg : GameConfig} (pls : List Placement)
-    {b : Board} (hbudget : b.card + 4 * pls.length ≤ cfg.cols * cfg.rows) (n : ℕ) :
-    ((pls.take n).foldl (fun acc pl => pl.applyStep cfg acc) b).card
-      ≤ cfg.cols * cfg.rows := by
-  have hbound := card_foldl_take_applyStep_le (cfg := cfg) pls n (b := b)
-  omega
-
 /-- **Net per-bag card ledger: growth then well-clear.** Composes the two halves of
 the area accounting into a single inequality. Folding any list of placements `pls`
 onto `b` grows the cell count by at most `4 · pls.length` (`card_foldl_applyStep_le`);
@@ -3205,29 +2977,6 @@ theorem card_wellclear_after_foldl_le_card {cfg : GameConfig} (pls : List Placem
   have h := card_wellclear_after_foldl_le pls hfold hw hwell hothers
   omega
 
-/-- **The full-grid area ceiling is a fixed point of a capped bag-plus-well-clear cycle.**
-The directly-atlas-facing face of `card_wellclear_after_foldl_le_card`: a board that *enters*
-a bag already within the field's total area (`b.card ≤ cfg.cols * cfg.rows`) and runs a
-clear-capped bag (`pls.length ≤ cfg.cols − 1`, so the single vertical-I well clear repays the
-growth) *leaves* still within that same area ceiling. So the packing invariant
-`card ≤ cfg.cols * cfg.rows` is self-maintaining across a whole bag cycle — the precise
-fixed-point shape an area-bounded atlas carrier closes on, and (unlike the height ceiling,
-whose `+4 * 7 = 28` overruns `rows = 20` mid-bag) genuinely non-vacuous because the `200`-cell
-grid budget absorbs a 7-bag's growth before the clear refunds it. Proof: the post-clear count
-is at most the pre-fold count (`card_wellclear_after_foldl_le_card`), which is at most the
-ceiling by hypothesis — transitivity via `omega`. -/
-theorem card_wellclear_after_foldl_le_grid {cfg : GameConfig} (pls : List Placement)
-    {b : Board} {h' : ℕ → ℕ} {w : ℕ}
-    (hbudget : b.card ≤ cfg.cols * cfg.rows)
-    (hlen : pls.length ≤ cfg.cols - 1)
-    (hfold : pls.foldl (fun acc pl => pl.applyStep cfg acc) b = skyline cfg h')
-    (hw : w < cfg.cols) (hwell : h' w = 0)
-    (hothers : ∀ j, j < cfg.cols → j ≠ w → 4 ≤ h' j) :
-    (Placement.applyStep cfg (skyline cfg h')
-        { piece := Piece.I, rot := 1, col := w }).card ≤ cfg.cols * cfg.rows := by
-  have h := card_wellclear_after_foldl_le_card pls hlen hfold hw hwell hothers
-  omega
-
 /-- **Scalar per-step potential ceiling.** Hard-dropping any *valid* piece raises
 the surface potential `maxColHeight` by at most `4`: the drop offset never exceeds
 the current potential (a valid placement only occupies real columns, each capped by
@@ -3253,30 +3002,6 @@ theorem maxColHeight_applyStep_le {cfg : GameConfig} {b : Board} {pl : Placement
   refine le_trans (colHeight_applyStep_le_max b pl j) (max_le ?_ ?_)
   · exact le_trans (colHeight_le_maxColHeight hj) (Nat.le_add_right (maxColHeight cfg b) 4)
   · exact le_trans (colHeight_dropped_le b pl j) (Nat.add_le_add_right hdrop 4)
-
-/-- **One valid drop onto a low-enough board never loses — independent of shape.**
-The general (non-skyline) one-step survival primitive: on a well-formed board whose
-surface potential has four cells of headroom (`maxColHeight cfg b + 4 ≤ cfg.rows`),
-hard-dropping *any* valid placement `pl` yields a board that is not lost. Two facts
-chain: the drop raises the potential by at most four
-(`maxColHeight_applyStep_le`, the `+4` Lipschitz bound), so the post-move potential
-stays `≤ cfg.rows`; and a valid placement preserves well-formedness
-(`Placement.applyStep_wf`), so the scalar-potential non-loss bridge
-(`not_isLost_of_maxColHeight_le`) converts that potential cap into the actual
-`¬ isLost` verdict. Crucially this needs **no** clean landing — the piece may gouge
-holes on a rough surface, since a hole sits below the field and never trips the loss
-predicate (which fires only when a cell reaches row `cfg.rows`). This is exactly the
-survival obligation the flat∨notched carrier cannot meet by cleanliness after an
-`S`/`Z` roughens the top: as long as a scheduled well-clear keeps the potential four
-below the ceiling, the next adversary draw — whatever its shape — is survived for
-free. The decoupling of *non-loss* (a pure height budget) from *surface repair* (the
-skyline bookkeeping) the closure programme needs. -/
-theorem not_isLost_applyStep_of_maxColHeight_add_four_le {cfg : GameConfig} {b : Board}
-    {pl : Placement} (hwf : WF cfg b) (hv : pl.Valid cfg)
-    (hbudget : maxColHeight cfg b + 4 ≤ cfg.rows) :
-    ¬ isLost cfg (pl.applyStep cfg b) := by
-  refine not_isLost_of_maxColHeight_le (Placement.applyStep_wf hwf hv) ?_
-  exact le_trans (maxColHeight_applyStep_le hv) hbudget
 
 /-- **Per-bag scalar potential bound.** Folding a list of valid placements onto a
 board raises the scalar potential `maxColHeight` by at most `4` per placement.
@@ -3357,20 +3082,6 @@ theorem maxColHeight_skyline {cfg : GameConfig} {h : ℕ → ℕ} :
   rw [Finset.mem_range] at hj
   exact colHeight_skyline hj
 
-/-- **A skyline's surface potential is at most its cell count.** A skyline has no
-holes, so `maxColHeight` is the supremum of the column profile (`maxColHeight_skyline`)
-while the cell count is its sum (`card_skyline`); over `ℕ` a supremum never exceeds the
-sum (`Finset.single_le_sum`). So `maxColHeight cfg (skyline cfg h) ≤ (skyline cfg h).card`
-— the forward (area-bounds-height) companion to `card_skyline_le_of_maxColHeight_le`: any
-cell-count ceiling the packing ledger maintains immediately caps the surface height,
-closing the loop between the area potential and the loss predicate `colHeight ≤ rows`. -/
-theorem maxColHeight_le_card_skyline {cfg : GameConfig} (h : ℕ → ℕ) :
-    maxColHeight cfg (skyline cfg h) ≤ (skyline cfg h).card := by
-  rw [maxColHeight_skyline, card_skyline]
-  apply Finset.sup_le
-  intro j hj
-  exact Finset.single_le_sum (f := h) (fun i _ => Nat.zero_le _) hj
-
 /-- **A pointwise-bounded skyline has bounded surface potential.** If every real
 column's profile height is at most `B`, the scalar surface potential `maxColHeight`
 is at most `B`. The general profile-to-potential bound (`maxColHeight_skyline`
@@ -3400,25 +3111,6 @@ theorem forall_le_of_maxColHeight_skyline_le {cfg : GameConfig} {h : ℕ → ℕ
   calc h j = Board.colHeight (skyline cfg h) j := (colHeight_skyline hj).symm
     _ ≤ maxColHeight cfg (skyline cfg h) := colHeight_le_maxColHeight hj
     _ ≤ B := hmax
-
-/-- **Skyline transient potential bound.** The scalar (carrier-return) twin of
-`not_isLost_foldl_take_applyStep_skyline`: from any skyline with profile bounded by
-`B`, every prefix of a valid placement schedule keeps the surface potential within
-`B + 4 * pls.length`. Pairs with that survival lemma — one bounds loss, this bounds
-height — so a per-bag closure reads BOTH off the same headroom `B + 4 * pls.length`:
-the bag endpoint is un-lost *and* its potential is capped, the height precondition a
-bounded-skyline carrier needs to re-admit the endpoint. Compose of
-`maxColHeight_skyline_le_of_forall` (start ≤ B) with the transient bound
-`maxColHeight_foldl_take_applyStep_le`. -/
-theorem maxColHeight_foldl_take_applyStep_skyline_le {cfg : GameConfig} {h : ℕ → ℕ} {B : ℕ}
-    (hB : ∀ j, j < cfg.cols → h j ≤ B) (pls : List Placement)
-    (hvalid : ∀ pl ∈ pls, pl.Valid cfg) (n : ℕ) :
-    maxColHeight cfg
-        ((pls.take n).foldl (fun acc pl => pl.applyStep cfg acc) (skyline cfg h))
-      ≤ B + 4 * pls.length := by
-  have hstart := maxColHeight_skyline_le_of_forall hB
-  have hbound := maxColHeight_foldl_take_applyStep_le pls hvalid n (b := skyline cfg h)
-  omega
 
 /-- **Prefix peak is bounded by the endpoint peak when the reserved well stays empty.**
 The tight per-prefix surface bound the reserved-well packing schedule needs. The full fold
@@ -3710,27 +3402,6 @@ theorem isFull_iff_nonwell_and_well {cfg : GameConfig} {b : Board} {w : ℕ}
     · exact hwell
     · exact hnw c (Finset.mem_erase.mpr ⟨hne, hc⟩)
 
-/-- **A line clear strictly reduces occupancy.** If a well-formed board (with at
-least one column) has any full row, then clearing lines strictly drops the cell
-count: that full row alone contributes `cfg.cols ≥ 1` cells removed by gravity.
-The strict companion to `card_clearLines_le`, obtained from the exact ledger
-`clearLines_count_add` (`b.count = (clearLines b).count + cols * |fullRows|`).
-This is the capstone of the saturation gives a clear chain
-(`exists_isFull_of_card_gt`, `isFull_iff_nonwell_and_well`): it converts the mere
-existence of a full row into measurable progress, the strict decrease any
-bounded-occupancy or termination argument needs to rule out an unbounded stack. -/
-theorem card_clearLines_lt_of_isFull {cfg : GameConfig} {b : Board}
-    (hwf : WF cfg b) (hcols : 0 < cfg.cols) {r : ℕ} (hr : isFull cfg b r) :
-    (clearLines cfg b).card < b.card := by
-  have hmem : r ∈ fullRows cfg b := by
-    rw [mem_fullRows_iff]
-    exact ⟨Finset.mem_image.mpr ⟨(0, r), hr 0 (Finset.mem_range.mpr hcols), rfl⟩, hr⟩
-  have hpos : 0 < (fullRows cfg b).card := Finset.card_pos.mpr ⟨r, hmem⟩
-  have hacc := clearLines_count_add hwf
-  unfold Board.count at hacc
-  have hmpos : 0 < cfg.cols * (fullRows cfg b).card := Nat.mul_pos hcols hpos
-  omega
-
 /-- **The empty board has zero surface potential.** The scalar potential of the
 empty board is `0`: the zero skyline caps every column at `0`, so the `sup` is
 `0`. This is the `hinit` fact for any `maxColHeight`-indexed carrier — a
@@ -3887,25 +3558,6 @@ theorem exists_colHeight_eq_zero_of_card_lt {cfg : GameConfig} {h : ℕ → ℕ}
           rw [colHeight_skyline (Finset.mem_range.mp hj)] at hne
           exact Nat.one_le_iff_ne_zero.mpr hne
   omega
-
-/-- **Surface-potential reset for the well clear.** The `maxColHeight`-level
-companion to `colHeight_applyStep_vertI_well_le`: dropping the vertical I into the
-reserved well (every other column at least four high, all under the ceiling) clears
-four rows and pins the entire scalar surface potential to `cfg.rows - 4`. This is the
-`-4` regulator that complements the `+2` ordinary-move debits: however much a bag of
-ordinary placements roughens and raises the surface, the closing well clear resets the
-potential to four full rows of slack below the ceiling. -/
-theorem maxColHeight_applyStep_vertI_well_le {cfg : GameConfig} {h : ℕ → ℕ} {w : ℕ}
-    (hw : w < cfg.cols) (hwell : h w = 0)
-    (hothers : ∀ j, j < cfg.cols → j ≠ w → 4 ≤ h j)
-    (hbound : ∀ j, j < cfg.cols → h j ≤ cfg.rows) :
-    maxColHeight cfg (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.I, rot := 1, col := w }) ≤ cfg.rows - 4 := by
-  unfold maxColHeight
-  apply Finset.sup_le
-  intro j hj
-  rw [Finset.mem_range] at hj
-  exact colHeight_applyStep_vertI_well_le hw hwell hothers hbound hj
 
 /-! ### Reserved-well move witness (O, the template)
 
@@ -4086,51 +3738,6 @@ theorem card_applyStep_O_replicate_skyline_noclear {cfg : GameConfig} {h : ℕ �
     Finset.erase_eq, Finset.erase_eq]
   omega
 
-/-- **The `m`-fold O-stack keeps the ceiling when its target stays low.** The height face of the
-O-tile brick trio (shape `applyStep_O_replicate_skyline_noclear`, cells
-`card_applyStep_O_replicate_skyline_noclear`, height here): given a prior pointwise ceiling
-`(∀ j, h j ≤ cfg.rows)` and that the stacked pair's final height stays under the ceiling
-`(h c + 2 * m ≤ cfg.rows)`, dropping `m` O's keeps `maxColHeight ≤ cfg.rows`. Proof: rewrite the
-fold to its closed `skyline` profile, then `maxColHeight_skyline_le_of_forall` reduces to a
-per-column bound — the two bumped columns `(c, c+1)` hit `h c + 2 * m ≤ cfg.rows`, every other
-column keeps its prior `≤ cfg.rows`. The structural clone of `maxColHeight_applyStep_O_skyline_le_rows`
-off the replicate closed form, the height invariant the packing-carrier hstep quotes for the O-tile. -/
-theorem maxColHeight_applyStep_O_replicate_skyline_noclear_le_rows
-    {cfg : GameConfig} {h : ℕ → ℕ} {c w m : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (heq : h c = h (c + 1))
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hw0 : h w = 0)
-    (hbound : ∀ j, j < cfg.cols → h j ≤ cfg.rows) (hlow : h c + 2 * m ≤ cfg.rows) :
-    maxColHeight cfg
-        (List.foldl (Placement.applyStep cfg) (skyline cfg h)
-          (List.replicate m { piece := Piece.O, rot := 0, col := c }))
-      ≤ cfg.rows := by
-  rw [applyStep_O_replicate_skyline_noclear hc hc1 heq hw hwc hwc1 hw0 m]
-  apply maxColHeight_skyline_le_of_forall
-  intro j hj
-  by_cases hjc : j = c
-  · rw [hjc, Function.update_of_ne (by omega : c ≠ c + 1), Function.update_self]; exact hlow
-  · by_cases hjc1 : j = c + 1
-    · rw [hjc1, Function.update_self]; exact hlow
-    · rw [Function.update_of_ne hjc1, Function.update_of_ne hjc]; exact hbound j hj
-
-/-- **The `m`-fold O-stack never tops out at any prefix.** The transient/safety face of the O-tile
-family: for any starting surface bounded by `B` (`∀ j, h j ≤ B`) and any prefix length `n`, folding
-the first `n` of `m` O-placements never reaches a lost board, provided the worst-case growth fits
-under the ceiling (`B + 4 * m ≤ cfg.rows`). A thin wrapper over the generic prefix-survival engine
-`not_isLost_foldl_take_applyStep_skyline` (every placement adds at most four rows, so the height never
-exceeds `B + 4 * pls.length`), instantiated at `pls = replicate m {O}` via `List.length_replicate`.
-Shape-agnostic — it needs only the height budget, not flatness or the reserved well — so this is the
-per-step `isLost` obligation the packing carrier discharges while raising a pair across a piece
-sequence (the safety complement of the height bound `maxColHeight_applyStep_O_replicate_..._le_rows`). -/
-theorem not_isLost_take_applyStep_O_replicate_skyline {cfg : GameConfig} {h : ℕ → ℕ} {B : ℕ}
-    (hh : ∀ j, j < cfg.cols → h j ≤ B) (c m n : ℕ) (hcap : B + 4 * m ≤ cfg.rows) :
-    ¬ Board.isLost cfg
-        (((List.replicate m { piece := Piece.O, rot := 0, col := c }).take n).foldl
-          (Placement.applyStep cfg) (skyline cfg h)) := by
-  apply not_isLost_foldl_take_applyStep_skyline hh
-  rw [List.length_replicate]
-  exact hcap
-
 /-- **Two disjoint O-stacks raise a flat 4-wide block by `2 * m`.** The first disjoint-support
 composition: stacking `m` O's on pair `(c, c+1)` then `m` O's on pair `(c+2, c+3)` of an
 originally-flat four-column block (each pair level, with a reserved well `w` outside the block) raises
@@ -4203,66 +3810,6 @@ theorem applyStep_O_replicate_three_disjoint_skyline_noclear
   exact congrArg (skyline cfg)
     (by funext x; simp only [Function.update_apply]; split_ifs <;> omega)
 
-/-- **Ceiling face of the disjoint 4-wide O-tile.** The height companion of
-`applyStep_O_replicate_two_disjoint_skyline_noclear`: given a prior pointwise ceiling
-`(∀ j, h j ≤ cfg.rows)` and that each lifted pair stays under the ceiling
-`(h c + 2 * m ≤ cfg.rows)` and `(h (c+2) + 2 * m ≤ cfg.rows)`, the 4-wide lift keeps
-`maxColHeight ≤ cfg.rows`. Rewrite the fold to its closed `skyline` profile via the shape
-lemma, then `maxColHeight_skyline_le_of_forall` reduces to a per-column bound: the four
-bumped columns hit their pair budget, every other column keeps its prior `≤ cfg.rows`. -/
-theorem maxColHeight_applyStep_O_replicate_two_disjoint_skyline_noclear_le_rows
-    {cfg : GameConfig} {h : ℕ → ℕ} {c w m : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols) (hc3 : c + 3 < cfg.cols)
-    (heq01 : h c = h (c + 1)) (heq23 : h (c + 2) = h (c + 3))
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2) (hwc3 : w ≠ c + 3)
-    (hw0 : h w = 0)
-    (hbound : ∀ j, j < cfg.cols → h j ≤ cfg.rows)
-    (hlow01 : h c + 2 * m ≤ cfg.rows) (hlow23 : h (c + 2) + 2 * m ≤ cfg.rows) :
-    maxColHeight cfg
-        (List.foldl (Placement.applyStep cfg) (skyline cfg h)
-          (List.replicate m { piece := Piece.O, rot := 0, col := c } ++
-           List.replicate m { piece := Piece.O, rot := 0, col := c + 2 }))
-      ≤ cfg.rows := by
-  rw [applyStep_O_replicate_two_disjoint_skyline_noclear hc hc1 hc2 hc3 heq01 heq23
-        hw hwc hwc1 hwc2 hwc3 hw0]
-  apply maxColHeight_skyline_le_of_forall
-  intro j hj
-  by_cases hjc : j = c
-  · rw [hjc, Function.update_of_ne (by omega : c ≠ c + 3),
-        Function.update_of_ne (by omega : c ≠ c + 2),
-        Function.update_of_ne (by omega : c ≠ c + 1), Function.update_self]
-    exact hlow01
-  · by_cases hjc1 : j = c + 1
-    · rw [hjc1, Function.update_of_ne (by omega : c + 1 ≠ c + 3),
-          Function.update_of_ne (by omega : c + 1 ≠ c + 2), Function.update_self]
-      exact hlow01
-    · by_cases hjc2 : j = c + 2
-      · rw [hjc2, Function.update_of_ne (by omega : c + 2 ≠ c + 3), Function.update_self]
-        exact hlow23
-      · by_cases hjc3 : j = c + 3
-        · rw [hjc3, Function.update_self]; exact hlow23
-        · rw [Function.update_of_ne hjc3, Function.update_of_ne hjc2,
-              Function.update_of_ne hjc1, Function.update_of_ne hjc]
-          exact hbound j hj
-
-/-- **Prefix survival of the disjoint 4-wide O-tile.** The transient (every-prefix)
-not-lost face of the 4-wide composition: for any starting surface bounded by `B` and any
-prefix length `n`, folding the first `n` of the `2 * m` O-placements (the concatenated
-`(c,c+1)` then `(c+2,c+3)` stacks) never reaches a lost board, provided the worst-case
-growth fits under the ceiling `(B + 8 * m ≤ cfg.rows)`. Shape-agnostic wrapper over
-`not_isLost_foldl_take_applyStep_skyline`: the append has length `2 * m` by
-`List.length_append`, so the cap reduces to `B + 4 * (m + m) ≤ cfg.rows`. -/
-theorem not_isLost_take_applyStep_O_replicate_two_disjoint_skyline
-    {cfg : GameConfig} {h : ℕ → ℕ} {B : ℕ}
-    (hh : ∀ j, j < cfg.cols → h j ≤ B) (c m n : ℕ) (hcap : B + 8 * m ≤ cfg.rows) :
-    ¬ Board.isLost cfg
-        (((List.replicate m ({ piece := Piece.O, rot := 0, col := c } : Placement) ++
-           List.replicate m ({ piece := Piece.O, rot := 0, col := c + 2 } : Placement)).take n).foldl
-          (Placement.applyStep cfg) (skyline cfg h)) := by
-  apply not_isLost_foldl_take_applyStep_skyline hh
-  rw [List.length_append, List.length_replicate, List.length_replicate]
-  omega
-
 /-- **Cell ledger of the disjoint 4-wide O-tile.** The cells face completing the four-face set for
 the 4-wide composition (shape `applyStep_O_replicate_two_disjoint_skyline_noclear`, height
 `maxColHeight_..._le_rows`, safety `not_isLost_take_...`, cells here): the two disjoint O-stacks add
@@ -4294,25 +3841,6 @@ theorem card_applyStep_O_replicate_two_disjoint_skyline_noclear
       applyStep_O_replicate_skyline_noclear hc hc1 heq01 hw hwc hwc1 hw0 m,
       card_applyStep_O_replicate_skyline_noclear hc2 hc3 heq23' hw hwc2 hwc3 hw0' m,
       hcard2a]
-  omega
-
-/-- **Prefix survival of the disjoint 6-wide O-tile.** The transient (every-prefix) not-lost face of
-the 6-wide composition `applyStep_O_replicate_three_disjoint_skyline_noclear`: folding any prefix of
-the `3 * m` O-placements (stacks on `(c,c+1)`, `(c+2,c+3)`, `(c+4,c+5)`) never tops out, provided
-`B + 12 * m ≤ cfg.rows`. Shape-agnostic wrapper over `not_isLost_foldl_take_applyStep_skyline`; the
-two-fold append has length `3 * m` by `List.length_append`, so the cap reduces to
-`B + 4 * ((m + m) + m) ≤ cfg.rows`. -/
-theorem not_isLost_take_applyStep_O_replicate_three_disjoint_skyline
-    {cfg : GameConfig} {h : ℕ → ℕ} {B : ℕ}
-    (hh : ∀ j, j < cfg.cols → h j ≤ B) (c m n : ℕ) (hcap : B + 12 * m ≤ cfg.rows) :
-    ¬ Board.isLost cfg
-        (((List.replicate m ({ piece := Piece.O, rot := 0, col := c } : Placement) ++
-           List.replicate m ({ piece := Piece.O, rot := 0, col := c + 2 } : Placement) ++
-           List.replicate m ({ piece := Piece.O, rot := 0, col := c + 4 } : Placement)).take n).foldl
-          (Placement.applyStep cfg) (skyline cfg h)) := by
-  apply not_isLost_foldl_take_applyStep_skyline hh
-  rw [List.length_append, List.length_append, List.length_replicate, List.length_replicate,
-      List.length_replicate]
   omega
 
 /-- **Cell ledger of the disjoint 6-wide O-tile.** The cells face of the 6-wide composition
@@ -4494,57 +4022,6 @@ theorem foldl_append_skyline_compose
     List.foldl (Placement.applyStep cfg) (skyline cfg h) (L1 ++ L2) = skyline cfg g2 := by
   rw [List.foldl_append, h1, h2]
 
-/-- **Cell ledger of the full `cols 1..9` repack layer.** Stacking `p` O-pieces on each reserved
-flat pair `(c,c+1)`, `(c+2,c+3)`, `(c+4,c+5)` and then `q` vertical-I pieces on each tail column
-`c+6`, `c+7`, `c+8`, over an empty well `w`, adds exactly `12 * p + 12 * q` filled cells: the three
-O-pairs contribute `12 * p` (each pair raises two columns by `2p`) and the three vertical-I stacks
-contribute `12 * q` (each column raised by `4q`). Nothing clears (the well stays empty), so the cell
-count is purely additive. Proof: `List.foldl_append` splits at the O and vertical-I boundary, the
-O-shape lemma lands the leading fold on the six-fold profile `G1`, the vertical-I card lemma adds
-`12 * q` over `G1`, and `card G1 = card h + 12 * p` closes by `omega`. This is the cell face of the
-one-layer packing brick, paired with the shape composition `foldl_append_skyline_compose`. -/
-theorem card_applyStep_O_vertI_repack_skyline_noclear
-    {cfg : GameConfig} {h : ℕ → ℕ} {c w p q : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (hc3 : c + 3 < cfg.cols) (hc4 : c + 4 < cfg.cols) (hc5 : c + 5 < cfg.cols)
-    (hc6 : c + 6 < cfg.cols) (hc7 : c + 7 < cfg.cols) (hc8 : c + 8 < cfg.cols)
-    (heq01 : h c = h (c + 1)) (heq23 : h (c + 2) = h (c + 3)) (heq45 : h (c + 4) = h (c + 5))
-    (hw : w < cfg.cols)
-    (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2) (hwc3 : w ≠ c + 3)
-    (hwc4 : w ≠ c + 4) (hwc5 : w ≠ c + 5) (hwc6 : w ≠ c + 6) (hwc7 : w ≠ c + 7)
-    (hwc8 : w ≠ c + 8) (hw0 : h w = 0) :
-    (List.foldl (Placement.applyStep cfg) (skyline cfg h)
-        ((List.replicate p { piece := Piece.O, rot := 0, col := c } ++
-          List.replicate p { piece := Piece.O, rot := 0, col := c + 2 } ++
-          List.replicate p { piece := Piece.O, rot := 0, col := c + 4 }) ++
-         (List.replicate q { piece := Piece.I, rot := 1, col := c + 6 } ++
-          List.replicate q { piece := Piece.I, rot := 1, col := c + 7 } ++
-          List.replicate q { piece := Piece.I, rot := 1, col := c + 8 }))).card
-      = (skyline cfg h).card + 12 * p + 12 * q := by
-  have hw0' :
-      (Function.update (Function.update (Function.update (Function.update
-        (Function.update (Function.update h
-        c (h c + 2 * p)) (c + 1) (h c + 2 * p)) (c + 2) (h (c + 2) + 2 * p))
-        (c + 3) (h (c + 2) + 2 * p)) (c + 4) (h (c + 4) + 2 * p))
-        (c + 5) (h (c + 4) + 2 * p)) w = 0 := by
-    simp only [Function.update_apply]; split_ifs <;> omega
-  have hcardO :
-      (skyline cfg (Function.update (Function.update (Function.update (Function.update
-        (Function.update (Function.update h
-        c (h c + 2 * p)) (c + 1) (h c + 2 * p)) (c + 2) (h (c + 2) + 2 * p))
-        (c + 3) (h (c + 2) + 2 * p)) (c + 4) (h (c + 4) + 2 * p))
-        (c + 5) (h (c + 4) + 2 * p))).card = (skyline cfg h).card + 12 * p := by
-    rw [← applyStep_O_replicate_three_disjoint_skyline_noclear hc hc1 hc2 hc3 hc4 hc5
-          heq01 heq23 heq45 hw hwc hwc1 hwc2 hwc3 hwc4 hwc5 hw0]
-    exact card_applyStep_O_replicate_three_disjoint_skyline_noclear hc hc1 hc2 hc3 hc4 hc5
-          heq01 heq23 heq45 hw hwc hwc1 hwc2 hwc3 hwc4 hwc5 hw0
-  rw [List.foldl_append,
-      applyStep_O_replicate_three_disjoint_skyline_noclear hc hc1 hc2 hc3 hc4 hc5
-        heq01 heq23 heq45 hw hwc hwc1 hwc2 hwc3 hwc4 hwc5 hw0,
-      card_applyStep_vertI_replicate_three_disjoint_skyline_noclear hc6 hc7 hc8 hw
-        hwc6 hwc7 hwc8 hw0']
-  omega
-
 /-- **Ceiling face, full repack layer (reserved well).** The combined O-triple
 (cols `c..c+5`) then vertI-triple (cols `c+6..c+8`) keeps every column height
 `≤ cfg.rows`, given each tile's own ceiling budget. Composes the O-layer ceiling
@@ -4640,114 +4117,6 @@ theorem not_isLost_take_applyStep_O_vertI_repack_skyline
   simp only [List.length_append, List.length_replicate]
   omega
 
-/-- **Endpoint survival of the full repack layer (reserved well).** The endpoint companion to
-the prefix face `not_isLost_take_applyStep_O_vertI_repack_skyline`: where that certifies every
-*prefix* of the O-triple then vertI-triple schedule stays un-lost, this certifies the *final*
-folded board — the surface the next phase (a well-clear or the next bag) inherits sits below
-`cfg.rows`. Same headroom `B + 12 * p + 12 * q ≤ cfg.rows`; the generic endpoint lemma
-`not_isLost_foldl_applyStep_skyline` bounds the length `3p + 3q` schedule's total rise by
-`12p + 12q`. -/
-theorem not_isLost_applyStep_O_vertI_repack_skyline
-    {cfg : GameConfig} {h : ℕ → ℕ} {B : ℕ}
-    (hh : ∀ j, j < cfg.cols → h j ≤ B) (c p q : ℕ)
-    (hcap : B + 12 * p + 12 * q ≤ cfg.rows) :
-    ¬ Board.isLost cfg
-        (((List.replicate p ({ piece := Piece.O, rot := 0, col := c } : Placement) ++
-           List.replicate p ({ piece := Piece.O, rot := 0, col := c + 2 } : Placement) ++
-           List.replicate p ({ piece := Piece.O, rot := 0, col := c + 4 } : Placement)) ++
-          (List.replicate q ({ piece := Piece.I, rot := 1, col := c + 6 } : Placement) ++
-           List.replicate q ({ piece := Piece.I, rot := 1, col := c + 7 } : Placement) ++
-           List.replicate q ({ piece := Piece.I, rot := 1, col := c + 8 } : Placement))).foldl
-          (Placement.applyStep cfg) (skyline cfg h)) := by
-  apply not_isLost_foldl_applyStep_skyline hh
-  simp only [List.length_append, List.length_replicate]
-  omega
-
-/-- **Flat-input ceiling of the full repack layer.** Specialises the per-tile-budget
-ceiling `maxColHeight_applyStep_O_vertI_repack_skyline_noclear_le_rows` to a surface
-that is flat at height `k` across all nine packed columns `c..c+8`, with the O-count
-locked to `p = 2 * q`. Then every O-pair rises `2p = 4q` and every vertI column rises
-`4q`, so all nine columns land at the common height `k + 4q`; the single fit condition
-`k + 4 * q ≤ cfg.rows` discharges all six per-tile budgets. This is the height-maintenance
-fact a leveled reserved-well carrier quotes after absorbing one block of O and I draws
-before the well-clear. -/
-theorem maxColHeight_applyStep_O_vertI_repack_skyline_flat_le_rows
-    {cfg : GameConfig} {h : ℕ → ℕ} {c w k q : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (hc3 : c + 3 < cfg.cols) (hc4 : c + 4 < cfg.cols) (hc5 : c + 5 < cfg.cols)
-    (hc6 : c + 6 < cfg.cols) (hc7 : c + 7 < cfg.cols) (hc8 : c + 8 < cfg.cols)
-    (hw : w < cfg.cols)
-    (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2) (hwc3 : w ≠ c + 3)
-    (hwc4 : w ≠ c + 4) (hwc5 : w ≠ c + 5) (hwc6 : w ≠ c + 6) (hwc7 : w ≠ c + 7)
-    (hwc8 : w ≠ c + 8) (hw0 : h w = 0)
-    (hflat : ∀ j, c ≤ j → j ≤ c + 8 → h j = k)
-    (hbound : ∀ j, j < cfg.cols → h j ≤ cfg.rows)
-    (hfit : k + 4 * q ≤ cfg.rows) :
-    maxColHeight cfg
-        (List.foldl (Placement.applyStep cfg) (skyline cfg h)
-          ((List.replicate (2 * q) { piece := Piece.O, rot := 0, col := c } ++
-            List.replicate (2 * q) { piece := Piece.O, rot := 0, col := c + 2 } ++
-            List.replicate (2 * q) { piece := Piece.O, rot := 0, col := c + 4 }) ++
-           (List.replicate q { piece := Piece.I, rot := 1, col := c + 6 } ++
-            List.replicate q { piece := Piece.I, rot := 1, col := c + 7 } ++
-            List.replicate q { piece := Piece.I, rot := 1, col := c + 8 })))
-      ≤ cfg.rows := by
-  apply maxColHeight_applyStep_O_vertI_repack_skyline_noclear_le_rows
-    hc hc1 hc2 hc3 hc4 hc5 hc6 hc7 hc8 ?_ ?_ ?_ hw hwc hwc1 hwc2 hwc3 hwc4 hwc5
-    hwc6 hwc7 hwc8 hw0 hbound ?_ ?_ ?_ ?_ ?_ ?_
-  · rw [hflat c (by omega) (by omega), hflat (c + 1) (by omega) (by omega)]
-  · rw [hflat (c + 2) (by omega) (by omega), hflat (c + 3) (by omega) (by omega)]
-  · rw [hflat (c + 4) (by omega) (by omega), hflat (c + 5) (by omega) (by omega)]
-  · rw [hflat c (by omega) (by omega)]; omega
-  · rw [hflat (c + 2) (by omega) (by omega)]; omega
-  · rw [hflat (c + 4) (by omega) (by omega)]; omega
-  · rw [hflat (c + 6) (by omega) (by omega)]; omega
-  · rw [hflat (c + 7) (by omega) (by omega)]; omega
-  · rw [hflat (c + 8) (by omega) (by omega)]; omega
-
-/-- **Reserved well stays empty through the full repack layer.** After stacking the three flat
-O-pairs (cols `c..c+5`) and the three vertical-I tail columns (cols `c+6..c+8`) over an empty
-reserved well `w`, the well column is still height `0`. Every placed cell sits in one of the real
-columns `c..c+8` (O cells at column offsets `0,1`; vertical-I cells at offset `0`), all distinct
-from `w`, so the `havoid` premise of `colHeight_foldl_applyStep_skyline_well_eq_zero` holds and no
-draw ever pokes the well. This is the re-entry hinge: the well stays clear for the subsequent
-well-clear (`foldl_fill_then_clear_fixed_all_cols`) that returns the surface to itself. -/
-theorem colHeight_applyStep_O_vertI_repack_skyline_noclear_well_eq_zero
-    {cfg : GameConfig} {h : ℕ → ℕ} {c w p q : ℕ}
-    (hw : w < cfg.cols)
-    (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2) (hwc3 : w ≠ c + 3)
-    (hwc4 : w ≠ c + 4) (hwc5 : w ≠ c + 5) (hwc6 : w ≠ c + 6) (hwc7 : w ≠ c + 7)
-    (hwc8 : w ≠ c + 8) (hw0 : h w = 0) :
-    colHeight (List.foldl (Placement.applyStep cfg) (skyline cfg h)
-        ((List.replicate p { piece := Piece.O, rot := 0, col := c } ++
-          List.replicate p { piece := Piece.O, rot := 0, col := c + 2 } ++
-          List.replicate p { piece := Piece.O, rot := 0, col := c + 4 }) ++
-         (List.replicate q { piece := Piece.I, rot := 1, col := c + 6 } ++
-          List.replicate q { piece := Piece.I, rot := 1, col := c + 7 } ++
-          List.replicate q { piece := Piece.I, rot := 1, col := c + 8 }))) w = 0 := by
-  apply colHeight_foldl_applyStep_skyline_well_eq_zero hw hw0
-  intro pl hpl cell hcell
-  simp only [List.mem_append, List.mem_replicate] at hpl
-  rcases hpl with (((⟨-, rfl⟩ | ⟨-, rfl⟩) | ⟨-, rfl⟩) | ((⟨-, rfl⟩ | ⟨-, rfl⟩) | ⟨-, rfl⟩))
-  · rw [shapeUp_O] at hcell
-    simp only [Finset.mem_insert, Finset.mem_singleton] at hcell
-    rcases hcell with rfl | rfl | rfl | rfl <;> dsimp only <;> omega
-  · rw [shapeUp_O] at hcell
-    simp only [Finset.mem_insert, Finset.mem_singleton] at hcell
-    rcases hcell with rfl | rfl | rfl | rfl <;> dsimp only <;> omega
-  · rw [shapeUp_O] at hcell
-    simp only [Finset.mem_insert, Finset.mem_singleton] at hcell
-    rcases hcell with rfl | rfl | rfl | rfl <;> dsimp only <;> omega
-  · rw [shapeUp_vertI] at hcell
-    simp only [Finset.mem_insert, Finset.mem_singleton] at hcell
-    rcases hcell with rfl | rfl | rfl | rfl <;> dsimp only <;> omega
-  · rw [shapeUp_vertI] at hcell
-    simp only [Finset.mem_insert, Finset.mem_singleton] at hcell
-    rcases hcell with rfl | rfl | rfl | rfl <;> dsimp only <;> omega
-  · rw [shapeUp_vertI] at hcell
-    simp only [Finset.mem_insert, Finset.mem_singleton] at hcell
-    rcases hcell with rfl | rfl | rfl | rfl <;> dsimp only <;> omega
-
 /-- **S move witness, reserved well.** On the staircase notch `(h c = h(c+1)`,
 `h(c+2) = h c + 1)` with a reserved empty real column `w`, the full S move lands
 flush — profile `(k, k, k+1) ↦ (k+1, k+2, k+2)` — and clears nothing. The notch
@@ -4785,72 +4154,6 @@ theorem maxColHeight_applyStep_S_skyline_le {cfg : GameConfig} {h : ℕ → ℕ}
       ← place_S_skyline hc hc1 hc2 heq hstep]
   exact colHeight_place_S_skyline_le hc hc1 hc2 heq hstep hj
 
-/-- **Ceiling-preserving S placement.** The first notch ceiling brick: an S on its
-notch (`heq : h c = h(c+1)`, `hstep : h(c+2) = h c + 1`) with a reserved empty well
-(`hw0`). The S writes `h c + 1` into column `c` and `h c + 2` into `c+1, c+2`; with a
-pointwise ceiling (`hbound`) and a low landing (`hlow : h c + 2 ≤ rows`) the
-post-placement surface potential stays `≤ cfg.rows` outright — no `+2` drift. Same
-3-column peel template as the flat-triple ceiling lemmas, but on the notch shape
-rather than a flat shelf. Adds S to the O/T/L/J/horizI ceiling family; only the
-mirror Z notch and the well-clearing vertical I remain. -/
-theorem maxColHeight_applyStep_S_skyline_le_rows {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heq : h c = h (c + 1)) (hstep : h (c + 2) = h c + 1)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0)
-    (hbound : ∀ j, j < cfg.cols → h j ≤ cfg.rows) (hlow : h c + 2 ≤ cfg.rows) :
-    maxColHeight cfg
-        (Placement.applyStep cfg (skyline cfg h) { piece := Piece.S, rot := 0, col := c })
-      ≤ cfg.rows := by
-  rw [applyStep_S_skyline_noclear hc hc1 hc2 heq hstep hw hwc hwc1 hwc2 hw0]
-  apply maxColHeight_skyline_le_of_forall
-  intro j hj
-  by_cases hjc : j = c
-  · rw [hjc, Function.update_of_ne (by omega : c ≠ c + 2),
-        Function.update_of_ne (by omega : c ≠ c + 1), Function.update_self]
-    omega
-  · by_cases hjc1 : j = c + 1
-    · rw [hjc1, Function.update_of_ne (by omega : c + 1 ≠ c + 2), Function.update_self]
-      omega
-    · by_cases hjc2 : j = c + 2
-      · rw [hjc2, Function.update_self]
-        omega
-      · rw [Function.update_of_ne hjc2, Function.update_of_ne hjc1, Function.update_of_ne hjc]
-        exact hbound j hj
-
-/-- **A no-clear S placement adds exactly four cells.** The first notch
-cell-conservation brick: on the staircase notch (`heq : h c = h(c+1)`,
-`hstep : h(c+2) = h c + 1`) with a reserved well, the no-clear S writes
-`+1, +2, +2` into columns `c, c+1, c+2` over heights `(k, k, k+1)`
-(`applyStep_S_skyline_noclear`), a net `+4`. Same three-fold
-`sum_update_of_mem` / `add_sum_erase` / `erase_eq` peel as the flat-triple pieces;
-`omega` closes using the notch constraints `heq, hstep` (touched columns sum to
-`3·(h c) + 5`, the base notch to `3·(h c) + 1`). -/
-theorem card_applyStep_S_skyline_noclear {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heq : h c = h (c + 1)) (hstep : h (c + 2) = h c + 1)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0) :
-    (Placement.applyStep cfg (skyline cfg h) { piece := Piece.S, rot := 0, col := c }).card
-      = (skyline cfg h).card + 4 := by
-  have hc2' : c + 2 ∈ Finset.range cfg.cols := Finset.mem_range.mpr hc2
-  have hc1_sdiff : c + 1 ∈ (Finset.range cfg.cols) \ {c + 2} := by
-    simp only [Finset.mem_sdiff, Finset.mem_range, Finset.mem_singleton]; omega
-  have hc_sdiff2 : c ∈ ((Finset.range cfg.cols) \ {c + 2}) \ {c + 1} := by
-    simp only [Finset.mem_sdiff, Finset.mem_range, Finset.mem_singleton]; omega
-  have hc1_erase : c + 1 ∈ (Finset.range cfg.cols).erase (c + 2) := by
-    simp only [Finset.mem_erase, Finset.mem_range]; omega
-  have hc_erase2 : c ∈ ((Finset.range cfg.cols).erase (c + 2)).erase (c + 1) := by
-    simp only [Finset.mem_erase, Finset.mem_range]; omega
-  rw [applyStep_S_skyline_noclear hc hc1 hc2 heq hstep hw hwc hwc1 hwc2 hw0,
-    card_skyline, card_skyline,
-    Finset.sum_update_of_mem hc2', Finset.sum_update_of_mem hc1_sdiff,
-    Finset.sum_update_of_mem hc_sdiff2,
-    ← Finset.add_sum_erase _ h hc2', ← Finset.add_sum_erase _ h hc1_erase,
-    ← Finset.add_sum_erase _ h hc_erase2,
-    Finset.erase_eq, Finset.erase_eq, Finset.erase_eq]
-  omega
-
 /-- **Z move witness, reserved well.** The mirror of `applyStep_S_skyline_noclear`:
 on the mirror notch `(h(c+1) = h(c+2)`, `h c = h(c+1) + 1)` with a reserved empty
 real column `w`, the full Z move lands flush — profile `(k+1, k, k) ↦ (k+2, k+2,
@@ -4867,94 +4170,6 @@ theorem applyStep_Z_skyline_noclear {cfg : GameConfig} {h : ℕ → ℕ} {c w : 
   applyStep_skyline_of_place_eq (place_Z_skyline hc hc1 hc2 heq hstep)
     ⟨w, hw, by rw [Function.update_of_ne hwc2, Function.update_of_ne hwc1,
                    Function.update_of_ne hwc]; exact hw0⟩
-
-/-- **Surface-potential debit for the Z move.** The mirror of
-`maxColHeight_applyStep_S_skyline_le`: placing a Z on its mirror notch
-(`h(c+1) = h(c+2)`, `h c = h(c+1) + 1`) into a skyline with a reserved empty
-column raises the scalar surface potential `maxColHeight` by at most `2`. With
-this the per-piece applyStep potential-debit table is complete for all seven
-tetrominoes (O/T/L/J/S/Z `+2`, horizontal-I `+1`). -/
-theorem maxColHeight_applyStep_Z_skyline_le {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heq : h (c + 1) = h (c + 2)) (hstep : h c = h (c + 1) + 1)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0) :
-    maxColHeight cfg
-        (Placement.applyStep cfg (skyline cfg h) { piece := Piece.Z, rot := 0, col := c })
-      ≤ maxColHeight cfg (skyline cfg h) + 2 := by
-  apply maxColHeight_le_of_forall_colHeight_le
-  intro j hj
-  rw [colHeight_skyline hj,
-      applyStep_Z_skyline_noclear hc hc1 hc2 heq hstep hw hwc hwc1 hwc2 hw0,
-      ← place_Z_skyline hc hc1 hc2 heq hstep]
-  exact colHeight_place_Z_skyline_le hc hc1 hc2 heq hstep hj
-
-/-- **Ceiling-preserving Z placement.** The mirror notch ceiling brick completing the
-seven-piece surface family: a Z on its mirror notch (`heq : h(c+1) = h(c+2)`,
-`hstep : h c = h(c+1) + 1`) with a reserved empty well (`hw0`). The Z writes
-`h(c+1) + 2` into columns `c, c+1` and `h(c+1) + 1` into `c+2`; with a pointwise
-ceiling (`hbound`) and a low landing (`hlow : h(c+1) + 2 ≤ rows`) the post-placement
-surface potential stays `≤ cfg.rows` outright — no `+2` drift. Same 3-column notch
-peel template as the S brick. With this every ordinary piece (O/T/L/J/horizI/S/Z) has
-its ceiling-preserving placement; only the well-clearing vertical I remains. -/
-theorem maxColHeight_applyStep_Z_skyline_le_rows {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heq : h (c + 1) = h (c + 2)) (hstep : h c = h (c + 1) + 1)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0)
-    (hbound : ∀ j, j < cfg.cols → h j ≤ cfg.rows) (hlow : h (c + 1) + 2 ≤ cfg.rows) :
-    maxColHeight cfg
-        (Placement.applyStep cfg (skyline cfg h) { piece := Piece.Z, rot := 0, col := c })
-      ≤ cfg.rows := by
-  rw [applyStep_Z_skyline_noclear hc hc1 hc2 heq hstep hw hwc hwc1 hwc2 hw0]
-  apply maxColHeight_skyline_le_of_forall
-  intro j hj
-  by_cases hjc : j = c
-  · rw [hjc, Function.update_of_ne (by omega : c ≠ c + 2),
-        Function.update_of_ne (by omega : c ≠ c + 1), Function.update_self]
-    omega
-  · by_cases hjc1 : j = c + 1
-    · rw [hjc1, Function.update_of_ne (by omega : c + 1 ≠ c + 2), Function.update_self]
-      omega
-    · by_cases hjc2 : j = c + 2
-      · rw [hjc2, Function.update_self]
-        omega
-      · rw [Function.update_of_ne hjc2, Function.update_of_ne hjc1, Function.update_of_ne hjc]
-        exact hbound j hj
-
-/-- **A no-clear Z placement adds exactly four cells.** The mirror-notch
-cell-conservation brick completing the seven-piece card table: on the mirror notch
-(`heq : h(c+1) = h(c+2)`, `hstep : h c = h(c+1) + 1`) with a reserved well, the
-no-clear Z writes `+2, +2, +1` into columns `c, c+1, c+2` over heights `(k+1, k, k)`
-(`applyStep_Z_skyline_noclear`), a net `+4`. Same three-fold
-`sum_update_of_mem` / `add_sum_erase` / `erase_eq` peel as the S brick; `omega` closes
-using the mirror-notch constraints `heq, hstep` (touched columns sum to
-`3·(h (c+1)) + 5`, the base notch to `3·(h (c+1)) + 1`). With this every ordinary
-piece (O/T/L/J/horizI/S/Z) has its `+4` no-clear cell-conservation brick. -/
-theorem card_applyStep_Z_skyline_noclear {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heq : h (c + 1) = h (c + 2)) (hstep : h c = h (c + 1) + 1)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0) :
-    (Placement.applyStep cfg (skyline cfg h) { piece := Piece.Z, rot := 0, col := c }).card
-      = (skyline cfg h).card + 4 := by
-  have hc2' : c + 2 ∈ Finset.range cfg.cols := Finset.mem_range.mpr hc2
-  have hc1_sdiff : c + 1 ∈ (Finset.range cfg.cols) \ {c + 2} := by
-    simp only [Finset.mem_sdiff, Finset.mem_range, Finset.mem_singleton]; omega
-  have hc_sdiff2 : c ∈ ((Finset.range cfg.cols) \ {c + 2}) \ {c + 1} := by
-    simp only [Finset.mem_sdiff, Finset.mem_range, Finset.mem_singleton]; omega
-  have hc1_erase : c + 1 ∈ (Finset.range cfg.cols).erase (c + 2) := by
-    simp only [Finset.mem_erase, Finset.mem_range]; omega
-  have hc_erase2 : c ∈ ((Finset.range cfg.cols).erase (c + 2)).erase (c + 1) := by
-    simp only [Finset.mem_erase, Finset.mem_range]; omega
-  rw [applyStep_Z_skyline_noclear hc hc1 hc2 heq hstep hw hwc hwc1 hwc2 hw0,
-    card_skyline, card_skyline,
-    Finset.sum_update_of_mem hc2', Finset.sum_update_of_mem hc1_sdiff,
-    Finset.sum_update_of_mem hc_sdiff2,
-    ← Finset.add_sum_erase _ h hc2', ← Finset.add_sum_erase _ h hc1_erase,
-    ← Finset.add_sum_erase _ h hc_erase2,
-    Finset.erase_eq, Finset.erase_eq, Finset.erase_eq]
-  omega
 
 /-- **Horizontal-I move witness, reserved well.** On a flat four-column stretch
 `(h(c+1) = h(c+2) = h(c+3) = h c)` with a reserved empty real column `w`, the full
@@ -4973,106 +4188,6 @@ theorem applyStep_horizI_skyline_noclear {cfg : GameConfig} {h : ℕ → ℕ} {c
   applyStep_skyline_of_place_eq (place_horizI_skyline hc hc1 hc2 hc3 heq1 heq2 heq3)
     ⟨w, hw, by rw [Function.update_of_ne hwc3, Function.update_of_ne hwc2,
                    Function.update_of_ne hwc1, Function.update_of_ne hwc]; exact hw0⟩
-
-/-- **The horizontal-I move lifts the surface potential by at most one.** The
-cheapest line-builder: on a flat quad it raises all four columns by exactly one,
-so the scalar potential rises by at most one (the only `+1` entry in the debit
-table, versus `+2` for the rest). Same template as the flat-triple pieces, with
-`colHeight_place_horizI_skyline_le` supplying the per-column `+1` cap. -/
-theorem maxColHeight_applyStep_horizI_skyline_le {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (hc3 : c + 3 < cfg.cols)
-    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c) (heq3 : h (c + 3) = h c)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hwc3 : w ≠ c + 3) (hw0 : h w = 0) :
-    maxColHeight cfg
-        (Placement.applyStep cfg (skyline cfg h) { piece := Piece.I, rot := 0, col := c })
-      ≤ maxColHeight cfg (skyline cfg h) + 1 := by
-  apply maxColHeight_le_of_forall_colHeight_le
-  intro j hj
-  rw [colHeight_skyline hj,
-      applyStep_horizI_skyline_noclear hc hc1 hc2 hc3 heq1 heq2 heq3 hw hwc hwc1 hwc2 hwc3 hw0,
-      ← place_horizI_skyline hc hc1 hc2 hc3 heq1 heq2 heq3]
-  exact colHeight_place_horizI_skyline_le hc hc1 hc2 hc3 heq1 heq2 heq3 hj
-
-/-- **Ceiling-preserving horizontal-I placement.** The cheapest ceiling brick:
-the flat-I (`+1` to all four columns) on a flat quad (`heq1`–`heq3`) with a
-reserved empty well (`hw0`). Because every touched column rises only to `h c + 1`,
-the low-landing premise needed is the weaker `hlow : h c + 1 ≤ rows` (one less
-than the `+2` pieces). With a pointwise ceiling (`hbound`) the post-placement
-surface potential stays `≤ cfg.rows` outright. Same 4-column peel template as the
-flat-triple ceiling lemmas; touched columns close by `omega` from `hlow`, the
-rest inherit `hbound`. Adds the horizontal I to the O/T/L/J ceiling family,
-leaving only the notch pieces S, Z and the well-clearing vertical I. -/
-theorem maxColHeight_applyStep_horizI_skyline_le_rows {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (hc3 : c + 3 < cfg.cols)
-    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c) (heq3 : h (c + 3) = h c)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hwc3 : w ≠ c + 3) (hw0 : h w = 0)
-    (hbound : ∀ j, j < cfg.cols → h j ≤ cfg.rows) (hlow : h c + 1 ≤ cfg.rows) :
-    maxColHeight cfg
-        (Placement.applyStep cfg (skyline cfg h) { piece := Piece.I, rot := 0, col := c })
-      ≤ cfg.rows := by
-  rw [applyStep_horizI_skyline_noclear hc hc1 hc2 hc3 heq1 heq2 heq3 hw hwc hwc1 hwc2 hwc3 hw0]
-  apply maxColHeight_skyline_le_of_forall
-  intro j hj
-  by_cases hjc : j = c
-  · rw [hjc, Function.update_of_ne (by omega : c ≠ c + 3),
-        Function.update_of_ne (by omega : c ≠ c + 2),
-        Function.update_of_ne (by omega : c ≠ c + 1), Function.update_self]
-    omega
-  · by_cases hjc1 : j = c + 1
-    · rw [hjc1, Function.update_of_ne (by omega : c + 1 ≠ c + 3),
-          Function.update_of_ne (by omega : c + 1 ≠ c + 2), Function.update_self]
-      omega
-    · by_cases hjc2 : j = c + 2
-      · rw [hjc2, Function.update_of_ne (by omega : c + 2 ≠ c + 3), Function.update_self]
-        omega
-      · by_cases hjc3 : j = c + 3
-        · rw [hjc3, Function.update_self]
-          omega
-        · rw [Function.update_of_ne hjc3, Function.update_of_ne hjc2,
-              Function.update_of_ne hjc1, Function.update_of_ne hjc]
-          exact hbound j hj
-
-/-- **A no-clear horizontal-I placement adds exactly four cells.** The 4-column
-cell-conservation brick: on a flat quad (`heq1`–`heq3`) with a reserved well, the
-no-clear flat-I writes `+1` into each of columns `c, c+1, c+2, c+3`
-(`applyStep_horizI_skyline_noclear`), summing to `+4`. The 4-fold extension of the
-flat-triple peel: four `sum_update_of_mem` (outermost update `c+3` first) + four
-`add_sum_erase` (same order) + four `erase_eq` (bridge erase↔sdiff), each touched
-column cancelling from both sides, leaving `omega` the arithmetic
-`1 + 1 + 1 + 1 = 4` modulo `heq1, heq2, heq3`. -/
-theorem card_applyStep_horizI_skyline_noclear {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (hc3 : c + 3 < cfg.cols)
-    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c) (heq3 : h (c + 3) = h c)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hwc3 : w ≠ c + 3) (hw0 : h w = 0) :
-    (Placement.applyStep cfg (skyline cfg h) { piece := Piece.I, rot := 0, col := c }).card
-      = (skyline cfg h).card + 4 := by
-  have hc3' : c + 3 ∈ Finset.range cfg.cols := Finset.mem_range.mpr hc3
-  have hc2_sdiff : c + 2 ∈ (Finset.range cfg.cols) \ {c + 3} := by
-    simp only [Finset.mem_sdiff, Finset.mem_range, Finset.mem_singleton]; omega
-  have hc1_sdiff2 : c + 1 ∈ ((Finset.range cfg.cols) \ {c + 3}) \ {c + 2} := by
-    simp only [Finset.mem_sdiff, Finset.mem_range, Finset.mem_singleton]; omega
-  have hc_sdiff3 : c ∈ (((Finset.range cfg.cols) \ {c + 3}) \ {c + 2}) \ {c + 1} := by
-    simp only [Finset.mem_sdiff, Finset.mem_range, Finset.mem_singleton]; omega
-  have hc2_erase : c + 2 ∈ (Finset.range cfg.cols).erase (c + 3) := by
-    simp only [Finset.mem_erase, Finset.mem_range]; omega
-  have hc1_erase2 : c + 1 ∈ ((Finset.range cfg.cols).erase (c + 3)).erase (c + 2) := by
-    simp only [Finset.mem_erase, Finset.mem_range]; omega
-  have hc_erase3 : c ∈ (((Finset.range cfg.cols).erase (c + 3)).erase (c + 2)).erase (c + 1) := by
-    simp only [Finset.mem_erase, Finset.mem_range]; omega
-  rw [applyStep_horizI_skyline_noclear hc hc1 hc2 hc3 heq1 heq2 heq3 hw hwc hwc1 hwc2 hwc3 hw0,
-    card_skyline, card_skyline,
-    Finset.sum_update_of_mem hc3', Finset.sum_update_of_mem hc2_sdiff,
-    Finset.sum_update_of_mem hc1_sdiff2, Finset.sum_update_of_mem hc_sdiff3,
-    ← Finset.add_sum_erase _ h hc3', ← Finset.add_sum_erase _ h hc2_erase,
-    ← Finset.add_sum_erase _ h hc1_erase2, ← Finset.add_sum_erase _ h hc_erase3,
-    Finset.erase_eq, Finset.erase_eq, Finset.erase_eq, Finset.erase_eq]
-  omega
 
 /-- **T move witness, reserved well.** On a flat three-column shelf
 `(h(c+1) = h(c+2) = h c)` with a reserved empty real column `w`, the full T move
@@ -5121,25 +4236,6 @@ theorem card_applyStep_T_skyline_noclear {cfg : GameConfig} {h : ℕ → ℕ} {c
     ← Finset.add_sum_erase _ h hc_erase2,
     Finset.erase_eq, Finset.erase_eq, Finset.erase_eq]
   omega
-
-/-- **The T move lifts the surface potential by at most two.** The flat-triple
-analogue of `maxColHeight_applyStep_O_skyline_le`, via the same template: the T
-no-clear witness reduces the move to its profile, `colHeight_place_T_skyline_le`
-caps each real column at `+2`, and `maxColHeight_le_of_forall_colHeight_le` lifts
-the per-column cap to the scalar potential. -/
-theorem maxColHeight_applyStep_T_skyline_le {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0) :
-    maxColHeight cfg
-        (Placement.applyStep cfg (skyline cfg h) { piece := Piece.T, rot := 2, col := c })
-      ≤ maxColHeight cfg (skyline cfg h) + 2 := by
-  apply maxColHeight_le_of_forall_colHeight_le
-  intro j hj
-  rw [colHeight_skyline hj, applyStep_T_skyline_noclear hc hc1 hc2 heq1 heq2 hw hwc hwc1 hwc2 hw0,
-      ← place_T_skyline hc hc1 hc2 heq1 heq2]
-  exact colHeight_place_T_skyline_le hc hc1 hc2 heq1 heq2 hj
 
 /-- **T move keeps the ceiling when it lands low.** The 3-column analogue of
 `maxColHeight_applyStep_O_skyline_le_rows`: on a flat triple shelf with a reserved
@@ -5514,24 +4610,6 @@ theorem colHeight_applyStep_LS_skyline_band_at {cfg : GameConfig} {h : ℕ → �
         have hb := hband j hj hjw
         omega
 
-/-- **The L move lifts the surface potential by at most two.** Same flat-triple
-template as O and T: the L no-clear witness reduces the move to its profile,
-`colHeight_place_L_skyline_le` caps each real column at `+2`, and the aggregator
-lifts that to the scalar potential. -/
-theorem maxColHeight_applyStep_L_skyline_le {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0) :
-    maxColHeight cfg
-        (Placement.applyStep cfg (skyline cfg h) { piece := Piece.L, rot := 0, col := c })
-      ≤ maxColHeight cfg (skyline cfg h) + 2 := by
-  apply maxColHeight_le_of_forall_colHeight_le
-  intro j hj
-  rw [colHeight_skyline hj, applyStep_L_skyline_noclear hc hc1 hc2 heq1 heq2 hw hwc hwc1 hwc2 hw0,
-      ← place_L_skyline hc hc1 hc2 heq1 heq2]
-  exact colHeight_place_L_skyline_le hc hc1 hc2 heq1 heq2 hj
-
 /-- **L move keeps the ceiling when it lands low.** The L analogue of
 `maxColHeight_applyStep_T_skyline_le_rows`: on a flat triple shelf with a reserved
 well, dropping an L whose tallest cell stays under the ceiling (`h c + 2 ≤ cfg.rows`)
@@ -5563,38 +4641,6 @@ theorem maxColHeight_applyStep_L_skyline_le_rows {cfg : GameConfig} {h : ℕ →
         omega
       · rw [Function.update_of_ne hjc2, Function.update_of_ne hjc1, Function.update_of_ne hjc]
         exact hbound j hj
-
-/-- **A no-clear L placement adds exactly four cells.** The 3-column cell-conservation
-brick (mirror of `card_applyStep_T_skyline_noclear`): on a level shelf
-(`heq1, heq2`) with a reserved well, the no-clear L writes `+1, +1, +2` into columns
-`c, c+1, c+2` (`applyStep_L_skyline_noclear`), summing to `+4`. Proof by the reusable
-three-fold `sum_update_of_mem` / `add_sum_erase` / `erase_eq` peel: each touched column
-is removed from both sides and the residual sums coincide, leaving `omega` the
-arithmetic `1 + 1 + 2 = 4` modulo `heq1, heq2`. -/
-theorem card_applyStep_L_skyline_noclear {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0) :
-    (Placement.applyStep cfg (skyline cfg h) { piece := Piece.L, rot := 0, col := c }).card
-      = (skyline cfg h).card + 4 := by
-  have hc2' : c + 2 ∈ Finset.range cfg.cols := Finset.mem_range.mpr hc2
-  have hc1_sdiff : c + 1 ∈ (Finset.range cfg.cols) \ {c + 2} := by
-    simp only [Finset.mem_sdiff, Finset.mem_range, Finset.mem_singleton]; omega
-  have hc_sdiff2 : c ∈ ((Finset.range cfg.cols) \ {c + 2}) \ {c + 1} := by
-    simp only [Finset.mem_sdiff, Finset.mem_range, Finset.mem_singleton]; omega
-  have hc1_erase : c + 1 ∈ (Finset.range cfg.cols).erase (c + 2) := by
-    simp only [Finset.mem_erase, Finset.mem_range]; omega
-  have hc_erase2 : c ∈ ((Finset.range cfg.cols).erase (c + 2)).erase (c + 1) := by
-    simp only [Finset.mem_erase, Finset.mem_range]; omega
-  rw [applyStep_L_skyline_noclear hc hc1 hc2 heq1 heq2 hw hwc hwc1 hwc2 hw0,
-    card_skyline, card_skyline,
-    Finset.sum_update_of_mem hc2', Finset.sum_update_of_mem hc1_sdiff,
-    Finset.sum_update_of_mem hc_sdiff2,
-    ← Finset.add_sum_erase _ h hc2', ← Finset.add_sum_erase _ h hc1_erase,
-    ← Finset.add_sum_erase _ h hc_erase2,
-    Finset.erase_eq, Finset.erase_eq, Finset.erase_eq]
-  omega
 
 /-- **J move witness, reserved well.** The mirror of `applyStep_L_skyline_noclear`:
 on a flat three-column shelf `(h(c+1) = h(c+2) = h c)` with a reserved empty real
@@ -5645,33 +4691,6 @@ theorem colHeight_applyStep_J_skyline_makes_Znotch {cfg : GameConfig} {h : ℕ �
   · rw [colHeight_skyline hc1, Function.update_of_ne (by omega : c + 1 ≠ c + 2),
         Function.update_self]
   · rw [colHeight_skyline hc2, Function.update_self]
-
-/-- **A flat J touches only its own triple — the frame companion to
-`colHeight_applyStep_J_skyline_makes_Znotch`.** Mirror of `colHeight_applyStep_L_skyline_frame`:
-a no-clear J at column `c` writes only columns `c, c+1, c+2`; the reserved well `w` stays
-empty (`colHeight w = 0`) and every other in-field column keeps its prior height
-(`colHeight j = h j`). With the makes-Znotch heights this fully characterises the post-J
-surface: a Z-notch mirror staircase at the placed triple, the band untouched everywhere
-else — the input the downstream "J re-digs a Z-notch in an otherwise level band" step needs.
-Proof: the same `Function.update_of_ne` well peel and off-triple peel as the L frame, against
-`applyStep_J_skyline_noclear`'s explicit triple update. -/
-theorem colHeight_applyStep_J_skyline_frame {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0) :
-    colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.J, rot := 0, col := c }) w = 0 ∧
-    ∀ j, j < cfg.cols → j ≠ c → j ≠ c + 1 → j ≠ c + 2 →
-      colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.J, rot := 0, col := c }) j = h j := by
-  rw [applyStep_J_skyline_noclear hc hc1 hc2 heq1 heq2 hw hwc hwc1 hwc2 hw0]
-  refine ⟨?_, ?_⟩
-  · rw [colHeight_skyline hw, Function.update_of_ne hwc2, Function.update_of_ne hwc1,
-        Function.update_of_ne hwc]; exact hw0
-  · intro j hj hjc hjc1 hjc2
-    rw [colHeight_skyline hj, Function.update_of_ne hjc2, Function.update_of_ne hjc1,
-        Function.update_of_ne hjc]
 
 /-- **Post-J board is a Z-notch skyline — the mirror rebuild-to-consume interface.** Mirror
 of `applyStep_L_skyline_flat_isSnotchSkyline`: after a no-clear J on a level triple (with
@@ -5923,91 +4942,6 @@ theorem colHeight_applyStep_JZ_skyline_band_at {cfg : GameConfig} {h : ℕ → �
         have hb := hband j hj hjw
         omega
 
-/-- **The J move lifts the surface potential by at most two.** The mirror of the L
-debit and the last of the flat-triple pieces, via the same template: J's no-clear
-witness reduces the move to its profile, `colHeight_place_J_skyline_le` caps each
-real column at `+2`, and the aggregator lifts that to the scalar potential. With
-this, four of the seven pieces (O, T, L, J) have their `+2` potential debit; the
-horizontal I (`+1`) and the two notch pieces S, Z (`+2`) remain. -/
-theorem maxColHeight_applyStep_J_skyline_le {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0) :
-    maxColHeight cfg
-        (Placement.applyStep cfg (skyline cfg h) { piece := Piece.J, rot := 0, col := c })
-      ≤ maxColHeight cfg (skyline cfg h) + 2 := by
-  apply maxColHeight_le_of_forall_colHeight_le
-  intro j hj
-  rw [colHeight_skyline hj, applyStep_J_skyline_noclear hc hc1 hc2 heq1 heq2 hw hwc hwc1 hwc2 hw0,
-      ← place_J_skyline hc hc1 hc2 heq1 heq2]
-  exact colHeight_place_J_skyline_le hc hc1 hc2 heq1 heq2 hj
-
-/-- **Ceiling-preserving J placement.** The mirror-J companion to the O/T/L
-templates: on a flat shelf (`heq1`, `heq2`) with a reserved well held empty
-(`hw0`), a pointwise ceiling (`hbound`) plus a low landing (`hlow : h c + 2 ≤
-rows`) forces the post-placement surface potential to stay `≤ cfg.rows`
-**outright** — no `+2` drift. J writes `h c + 2` into column `c` and `h c + 1`
-into `c+1, c+2`; each touched column is `≤ h c + 2 ≤ rows`, and the untouched
-columns inherit `hbound`. Completes the flat-triple ceiling family (O, T, L, J);
-horizontal I (`+1`) and the notch pieces S, Z remain. -/
-theorem maxColHeight_applyStep_J_skyline_le_rows {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0)
-    (hbound : ∀ j, j < cfg.cols → h j ≤ cfg.rows) (hlow : h c + 2 ≤ cfg.rows) :
-    maxColHeight cfg
-        (Placement.applyStep cfg (skyline cfg h) { piece := Piece.J, rot := 0, col := c })
-      ≤ cfg.rows := by
-  rw [applyStep_J_skyline_noclear hc hc1 hc2 heq1 heq2 hw hwc hwc1 hwc2 hw0]
-  apply maxColHeight_skyline_le_of_forall
-  intro j hj
-  by_cases hjc : j = c
-  · rw [hjc, Function.update_of_ne (by omega : c ≠ c + 2),
-        Function.update_of_ne (by omega : c ≠ c + 1), Function.update_self]
-    omega
-  · by_cases hjc1 : j = c + 1
-    · rw [hjc1, Function.update_of_ne (by omega : c + 1 ≠ c + 2), Function.update_self]
-      omega
-    · by_cases hjc2 : j = c + 2
-      · rw [hjc2, Function.update_self]
-        omega
-      · rw [Function.update_of_ne hjc2, Function.update_of_ne hjc1, Function.update_of_ne hjc]
-        exact hbound j hj
-
-/-- **A no-clear J placement adds exactly four cells.** The 3-column cell-conservation
-brick completing the flat-triple trio (O, T, L, J): on a level shelf (`heq1, heq2`)
-with a reserved well, the no-clear J writes `+2, +1, +1` into columns `c, c+1, c+2`
-(`applyStep_J_skyline_noclear`), summing to `+4`. Same reusable three-fold
-`sum_update_of_mem` / `add_sum_erase` / `erase_eq` peel as T and L: each touched column
-is removed from both sides and the residual sums coincide, leaving `omega` the
-arithmetic `2 + 1 + 1 = 4` modulo `heq1, heq2`. -/
-theorem card_applyStep_J_skyline_noclear {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0) :
-    (Placement.applyStep cfg (skyline cfg h) { piece := Piece.J, rot := 0, col := c }).card
-      = (skyline cfg h).card + 4 := by
-  have hc2' : c + 2 ∈ Finset.range cfg.cols := Finset.mem_range.mpr hc2
-  have hc1_sdiff : c + 1 ∈ (Finset.range cfg.cols) \ {c + 2} := by
-    simp only [Finset.mem_sdiff, Finset.mem_range, Finset.mem_singleton]; omega
-  have hc_sdiff2 : c ∈ ((Finset.range cfg.cols) \ {c + 2}) \ {c + 1} := by
-    simp only [Finset.mem_sdiff, Finset.mem_range, Finset.mem_singleton]; omega
-  have hc1_erase : c + 1 ∈ (Finset.range cfg.cols).erase (c + 2) := by
-    simp only [Finset.mem_erase, Finset.mem_range]; omega
-  have hc_erase2 : c ∈ ((Finset.range cfg.cols).erase (c + 2)).erase (c + 1) := by
-    simp only [Finset.mem_erase, Finset.mem_range]; omega
-  rw [applyStep_J_skyline_noclear hc hc1 hc2 heq1 heq2 hw hwc hwc1 hwc2 hw0,
-    card_skyline, card_skyline,
-    Finset.sum_update_of_mem hc2', Finset.sum_update_of_mem hc1_sdiff,
-    Finset.sum_update_of_mem hc_sdiff2,
-    ← Finset.add_sum_erase _ h hc2', ← Finset.add_sum_erase _ h hc1_erase,
-    ← Finset.add_sum_erase _ h hc_erase2,
-    Finset.erase_eq, Finset.erase_eq, Finset.erase_eq]
-  omega
-
 /-! ### Bounded-skyline carrier: the reusable height discharge
 
 A board is a *bounded skyline* when it equals `skyline cfg h` for some profile `h`
@@ -6029,40 +4963,6 @@ theorem colHeight_le_of_isBoundedSkyline {cfg : GameConfig} {b : Board}
     (hb : IsBoundedSkyline cfg b) (j : ℕ) : colHeight b j ≤ cfg.rows := by
   obtain ⟨h, rfl, hbound⟩ := hb
   exact colHeight_skyline_le hbound j
-
-/-- **Bounded skylines are never lost (`hheight ⇒ ¬ lost`).** The root non-loss
-certificate for the entire skyline carrier hierarchy: any height-bounded skyline
-keeps every column profile within the field, so no filled cell reaches row
-`cfg.rows`. Strictly more general than `not_isLost_of_isReservedWellSkyline` —
-every reserved-well, flat-top, and notched face forgets down to an
-`IsBoundedSkyline`, so each inherits its `¬ lost` obligation through this single
-lemma rather than re-deriving the skyline height bound. -/
-theorem not_isLost_of_isBoundedSkyline {cfg : GameConfig} {b : Board}
-    (hb : IsBoundedSkyline cfg b) : ¬ Board.isLost cfg b := by
-  obtain ⟨h, rfl, hbound⟩ := hb
-  exact not_isLost_skyline hbound
-
-/-- **Gravity preserves the bounded-skyline carrier.** Clearing lines on a
-height-bounded skyline yields another height-bounded skyline: the minimum real-
-column profile `m` is subtracted uniformly (`clearLines_skyline`), and
-`h j - m ≤ h j ≤ cfg.rows` keeps every column within the field. This is the
-clear-step half of any per-bag closure argument — placement may raise the
-surface, but the subsequent line clear lands back inside `IsBoundedSkyline`
-rather than escaping the carrier. Needs `0 < cfg.cols` so the profile minimum
-over the real columns exists. -/
-theorem isBoundedSkyline_clearLines {cfg : GameConfig} {b : Board}
-    (hcols : 0 < cfg.cols) (hb : IsBoundedSkyline cfg b) :
-    IsBoundedSkyline cfg (Board.clearLines cfg b) := by
-  obtain ⟨h, rfl, hbound⟩ := hb
-  have hne : (Finset.range cfg.cols).Nonempty := Finset.nonempty_range_iff.mpr hcols.ne'
-  have hm : ∀ j < cfg.cols, (Finset.range cfg.cols).inf' hne h ≤ h j :=
-    fun j hj => Finset.inf'_le h (Finset.mem_range.mpr hj)
-  have hm0 : ∃ j < cfg.cols, h j = (Finset.range cfg.cols).inf' hne h := by
-    obtain ⟨a, ha, hae⟩ := Finset.exists_mem_eq_inf' hne h
-    exact ⟨a, Finset.mem_range.mp ha, hae.symm⟩
-  rw [clearLines_skyline hm hm0]
-  exact ⟨fun j => h j - (Finset.range cfg.cols).inf' hne h, rfl,
-    fun j hj => le_trans (Nat.sub_le _ _) (hbound j hj)⟩
 
 /-- **The empty board is a bounded skyline (`hinit`).** The zero profile is the
 empty board and is trivially capped by `cfg.rows`, discharging the initial
@@ -6091,22 +4991,6 @@ theorem isBoundedSkyline_of_maxColHeight_le {cfg : GameConfig} {h : ℕ → ℕ}
   have h1 : colHeight (skyline cfg h) j ≤ cfg.rows :=
     le_trans (colHeight_le_maxColHeight hj) hM
   rwa [colHeight_skyline hj] at h1
-
-/-- **Skyline shape plus a potential ceiling certifies a bounded skyline.** The
-applyStep-facing generalisation of `isBoundedSkyline_of_maxColHeight_le`: it drops
-the *syntactic* `skyline cfg h` requirement and accepts any board merely *equal*
-to a skyline (`heq`) together with a potential ceiling (`hM`). This is the keystone
-for the bounded-skyline `hstep`: each move's `applyStep_*_skyline_noclear` witness
-supplies `heq` (the post-drop board is a skyline) and the matching
-`maxColHeight_applyStep_*_skyline_le_rows` supplies `hM`, so all seven placements
-land their *carrier-membership* obligation through this one bridge — no per-piece
-membership wrapper, no `Function.update` bookkeeping at the call site. -/
-theorem isBoundedSkyline_of_eq_skyline_of_maxColHeight_le {cfg : GameConfig}
-    {b : Board} {h : ℕ → ℕ} (heq : b = skyline cfg h)
-    (hM : maxColHeight cfg b ≤ cfg.rows) :
-    IsBoundedSkyline cfg b := by
-  rw [heq] at hM ⊢
-  exact isBoundedSkyline_of_maxColHeight_le hM
 
 /-- **A bounded skyline has potential at most `cfg.rows`.** The scalar *forward*
 companion to `isBoundedSkyline_of_maxColHeight_le`: where that lemma turns a
@@ -6276,30 +5160,6 @@ theorem isReservedWellSkyline_vertI_reenters {cfg : GameConfig} {h : ℕ → ℕ
   · show (if w = w then 0 else h w - 4) = 0
     rw [if_pos rfl]
 
-/-- **Assembled `hstep` fragment: vertical I on the generic reserved-well carrier.**
-The generic-surface analogue of `isFlatTopRWSkyline_vertI_hstep`: packages
-`isReservedWellSkyline_vertI_reenters` into the `∃ pl, piece ∧ Valid ∧ carrier`
-shape a closure obligation consumes. Validity is just `w < cfg.cols` (the vertical
-`I` is one column wide — every shape cell has column offset `0`), and re-entry maps
-any reserved-well surface whose non-well columns stand at `≥ 4` back into the
-reserved-well family, lowered by four. So on *any* reserved-well surface (not only
-the flat face) the height-regulating `I` branch of `hstep` is closed outright — the
-sole cell-removing move that offsets the other pieces' upward raises, now available
-to a wider all-seven carrier (task #72). -/
-theorem isReservedWellSkyline_vertI_hstep {cfg : GameConfig} {h : ℕ → ℕ} {w : ℕ}
-    (hw : w < cfg.cols) (hbound : ∀ j < cfg.cols, h j ≤ cfg.rows)
-    (hwell : h w = 0) (hothers : ∀ j, j < cfg.cols → j ≠ w → 4 ≤ h j) :
-    ∃ pl : Placement, pl.piece = Piece.I ∧ pl.Valid cfg ∧
-      IsReservedWellSkyline cfg
-        (Placement.applyStep cfg (skyline cfg h) pl) := by
-  refine ⟨{ piece := Piece.I, rot := 1, col := w }, rfl, ?_,
-    isReservedWellSkyline_vertI_reenters hw hbound hwell hothers⟩
-  intro cell hcell
-  have h0 : ∀ c ∈ Piece.I.shapeUp 1, c.1 = 0 := by decide
-  have hcz := h0 cell hcell
-  show w + cell.1 < cfg.cols
-  omega
-
 /-- **Vertical-I *filler* preserves the reserved-well carrier.** The complement of the
 well-clear fragment (`isReservedWellSkyline_applyStep_vertI_well`): dropping the vertical I
 on a *non-well* column `c ≠ w` that has four cells of headroom (`h c + 4 ≤ cfg.rows`) lands
@@ -6325,32 +5185,6 @@ theorem isReservedWellSkyline_applyStep_vertI {cfg : GameConfig} {h : ℕ → �
     · rw [Function.update_of_ne hjc]; exact hbound j hj
   · rw [Function.update_of_ne hwc]; exact hw0
 
-/-- **The vertical-I fill fold stays inside the reserved-well carrier.** The membership
-companion to `foldl_vertI_skyline`: filling a duplicate-free list `cs` of non-well columns
-with vertical-I drops — each column real and distinct from the reserved well `w` (`hcs`,
-`hnodup`, `hwnotmem`) and starting with four cells of headroom
-(`hbound : h j + 4 ≤ cfg.rows`) — lands on a board that is still an `IsReservedWellSkyline`.
-The fold rewrites to `skyline cfg (cs.foldl … h)` (`foldl_vertI_skyline`); every column
-rises by at most four (`foldl_update_nodup_le`) so stays under the ceiling, and the well is
-never touched (`foldl_update_skip`) so it stays empty. This lifts the single-column filler
-(`isReservedWellSkyline_applyStep_vertI`) to a whole fill *phase*: a bag schedule may pile
-the well's neighbours up column-by-column and remain in the carrier the entire time, with
-the once-per-bag well-clear still pending. -/
-theorem isReservedWellSkyline_foldl_vertI_fill {cfg : GameConfig} {cs : List ℕ}
-    {h : ℕ → ℕ} {w : ℕ} (hw : w < cfg.cols) (hcs : ∀ c ∈ cs, c < cfg.cols ∧ c ≠ w)
-    (hnodup : cs.Nodup) (hwnotmem : w ∉ cs) (hw0 : h w = 0)
-    (hbound : ∀ j < cfg.cols, h j + 4 ≤ cfg.rows) :
-    IsReservedWellSkyline cfg
-      ((cs.map (fun c => ({ piece := Piece.I, rot := 1, col := c } : Placement))).foldl
-          (fun acc pl => pl.applyStep cfg acc) (skyline cfg h)) := by
-  rw [foldl_vertI_skyline hw cs hcs hw0]
-  refine ⟨cs.foldl (fun g c => Function.update g c (g c + 4)) h, rfl, ?_, w, hw, ?_⟩
-  · intro j hj
-    have hle := foldl_update_nodup_le hnodup (h := h) j
-    have hb := hbound j hj
-    omega
-  · rw [foldl_update_skip cs hwnotmem]; exact hw0
-
 /-- **The empty board is a reserved-well skyline (`hinit`).** The zero profile is
 the empty board, trivially capped, and column `0` (real since `cfg.cols_pos`)
 serves as the initial empty well. -/
@@ -6358,64 +5192,6 @@ theorem isReservedWellSkyline_empty (cfg : GameConfig) :
     IsReservedWellSkyline cfg Board.empty :=
   ⟨fun _ => 0, (skyline_zero_eq_empty cfg).symm, fun _ _ => Nat.zero_le _,
     ⟨0, cfg.cols_pos, rfl⟩⟩
-
-/-- **The reserved-well carrier follows from a height bound plus a sub-row packing
-budget.** A bounded skyline holding strictly fewer than `cfg.cols` cells is a
-reserved-well skyline: the height cap supplies the bound field and
-`exists_colHeight_eq_zero_of_card_lt` supplies the empty well. This packages the
-packing→reserved-well bridge as a carrier membership, so a card-budget invariant can
-hand the seven no-clear move witnesses their required well with no extra work. -/
-theorem isReservedWellSkyline_of_bounded_card_lt {cfg : GameConfig} {h : ℕ → ℕ}
-    (hbound : ∀ j < cfg.cols, h j ≤ cfg.rows)
-    (hcard : (skyline cfg h).card < cfg.cols) :
-    IsReservedWellSkyline cfg (skyline cfg h) := by
-  obtain ⟨w, hw, hzero⟩ := exists_colHeight_eq_zero_of_card_lt hcard
-  rw [Finset.mem_range] at hw
-  rw [colHeight_skyline hw] at hzero
-  exact ⟨h, rfl, hbound, w, hw, hzero⟩
-
-/-- **A reserved-well skyline within the non-well card budget has a safe landing
-site.** The predicate-level lift of `exists_ne_well_colHeight_le_of_card_le`:
-unpacking the carrier exposes its empty well `w` (`colHeight b w = 0`) and, when the
-cell count fits the non-well budget `(cfg.cols - 1) * M`, exhibits a *real* column
-`j ≠ w` at height `≤ M`. Because an ordinary (non-clearing) placement must avoid the
-reserved well, the landing column has to come from the non-well columns; this lemma
-delivers it straight from carrier membership plus a card bound, with no explicit
-profile in sight. With `M := cfg.rows - 2` this is exactly the guaranteed flat-shelf
-landing the seven per-piece `hstep` fragments consume — the existence half of a
-reserved-well closure, reduced to a single area inequality on the board. -/
-theorem exists_ne_well_landing_of_isReservedWellSkyline {cfg : GameConfig} {b : Board}
-    {M : ℕ} (hb : IsReservedWellSkyline cfg b) (h2 : 2 ≤ cfg.cols)
-    (hcard : b.card ≤ (cfg.cols - 1) * M) :
-    ∃ w, w < cfg.cols ∧ colHeight b w = 0 ∧
-      ∃ j ∈ Finset.range cfg.cols, j ≠ w ∧ colHeight b j ≤ M := by
-  obtain ⟨h, rfl, hbound, w, hw, hw0⟩ := hb
-  refine ⟨w, hw, ?_, ?_⟩
-  · rw [colHeight_skyline hw]; exact hw0
-  · exact exists_ne_well_colHeight_le_of_card_le hw h2 hcard
-
-/-- **The notched surface is a reserved-well skyline.** The exact profile the
-all-seven dispatch (`isNotchedFlatTopRWSkyline_all7_hstep`) feeds on —
-`0` at the well `w`, a single bump `base + 1` at column `m`, flat `base`
-everywhere else — is a member of the `IsReservedWellSkyline` carrier whenever the
-well is real and the bump fits (`base + 1 ≤ cfg.rows`). The well column reads `0`
-unconditionally (the `j = w` guard fires first, even at `w = m`), so this exhibits
-the *input* of the all-seven step as a genuine carrier state, the entry side of
-any closure that routes a bag through a notched surface. -/
-theorem isReservedWellSkyline_notched {cfg : GameConfig} {base w m : ℕ}
-    (hw : w < cfg.cols) (hbase : base + 1 ≤ cfg.rows) :
-    IsReservedWellSkyline cfg
-      (skyline cfg (fun j => if j = w then 0 else if j = m then base + 1 else base)) := by
-  refine ⟨fun j => if j = w then 0 else if j = m then base + 1 else base, rfl, ?_, w, hw, ?_⟩
-  · intro j _
-    show (if j = w then 0 else if j = m then base + 1 else base) ≤ cfg.rows
-    split
-    · exact Nat.zero_le _
-    · split
-      · exact hbase
-      · omega
-  · show (if w = w then 0 else if w = m then base + 1 else base) = 0
-    rw [if_pos rfl]
 
 /-- **The well-clear step preserves the reserved-well carrier.** Dropping the
 vertical I into an empty well whose neighbours are all `≥ 4` lands back inside
@@ -6443,23 +5219,6 @@ theorem isReservedWellSkyline_applyStep_vertI_well
   · show (if w = w then 0 else h w - 4) = 0
     rw [if_pos rfl]
 
-/-- **The well-clear step as an `hstep` witness for `I`.** Packages
-`isReservedWellSkyline_applyStep_vertI_well` into the exact existential shape the
-bag-indexed reduction's `hstep` consumes: the vertical-I placement `{I, 1, w}` is
-valid (`valid_vertI`) and lands in a reserved-well skyline. So when the adversary
-draws `I` on a reserved-well surface whose non-well columns are all `≥ 4`, the
-well clear *is* a discharging witness — the I-piece branch of any per-piece
-closure, mirroring `isReservedWellSkyline_O_hstep` and its flat-shelf siblings. -/
-theorem isReservedWellSkyline_vertI_well_hstep
-    {cfg : GameConfig} {h : ℕ → ℕ} {w : ℕ}
-    (hw : w < cfg.cols) (hwell : h w = 0)
-    (hothers : ∀ j, j < cfg.cols → j ≠ w → 4 ≤ h j)
-    (hbound : ∀ j < cfg.cols, h j ≤ cfg.rows) :
-    ∃ pl : Placement, pl.piece = Piece.I ∧ pl.Valid cfg ∧
-      IsReservedWellSkyline cfg (Placement.applyStep cfg (skyline cfg h) pl) :=
-  ⟨{ piece := Piece.I, rot := 1, col := w }, rfl, valid_vertI hw,
-    isReservedWellSkyline_applyStep_vertI_well hw hwell hothers hbound⟩
-
 /-- **Well-avoiding adjacent pair always exists (when `cfg.cols ≥ 4`).** Every
 flat-shelf reserved-well fragment (`isReservedWellSkyline_applyStep_O` and its
 T/L/J/horizontal-I siblings) needs a real adjacent column pair `(c, c+1)` that
@@ -6475,24 +5234,6 @@ theorem exists_nonwell_adjacent_pair {cfg : GameConfig} {w : ℕ}
   rcases lt_or_ge w 2 with hlt | hge
   · exact ⟨2, by omega, by omega, by omega⟩
   · exact ⟨0, by omega, by omega, by omega⟩
-
-/-- **Well-avoiding adjacent quad always exists (when `cfg.cols ≥ 8`).** The
-flat-shelf dispatch `isReservedWellSkyline_flatShelf_hstep` consumes a *four*-wide
-flat window `(d, d+1, d+2, d+3)` clear of the reserved well `w` — subsuming the
-O (2-wide), T/L/J (3-wide), and horizontal-I (4-wide) footprints in one shelf.
-Carrier membership alone names no such window; this lemma supplies it. With at
-least eight columns a single well position can never block both the low quad
-`[0,3]` and the shifted quad `[4,7]`: pick `d = 4` when `w` sits in `{0,1,2,3}`
-and `d = 0` otherwise. (Eight columns are necessary: with `cfg.cols = 7` and
-`w = 3` every 4-wide window touches the well.) The wider companion to
-`exists_nonwell_adjacent_pair`, completing the window-selection bricks the
-flat-shelf `hstep` needs to fire on a reserved-well surface. -/
-theorem exists_nonwell_adjacent_quad {cfg : GameConfig} {w : ℕ}
-    (hw : w < cfg.cols) (h8 : 8 ≤ cfg.cols) :
-    ∃ d, d + 3 < cfg.cols ∧ w ≠ d ∧ w ≠ d + 1 ∧ w ≠ d + 2 ∧ w ≠ d + 3 := by
-  rcases lt_or_ge w 4 with hlt | hge
-  · exact ⟨4, by omega, by omega, by omega, by omega, by omega⟩
-  · exact ⟨0, by omega, by omega, by omega, by omega, by omega⟩
 
 /-! ### Per-piece `hstep` fragments against the reserved-well carrier
 
@@ -7033,32 +5774,6 @@ theorem isReservedWellSkyline_all7_hstep_standard {base : ℕ} {p : Piece}
     (hbound := by intro j _; split_ifs <;> omega)
     (hp := hp)
 
-/-- **One-step immortality of the rich standard surface against any adversary draw.** The
-rich-carrier analogue of `isNotchedFlatTopRWSkyline_all7_not_isLost_standard` (the notched
-surface) and the flat-top survival certificate: from the concrete *rich* standard surface —
-well at column `0`, two bumps at columns `5` and `8`, flat `base` elsewhere, with two cells of
-headroom (`base + 2 ≤ 20`) — *whatever* piece `p` the adversary draws, the player has a **valid**
-placement whose post-move board is **not lost**. It packages the rich all-7 landing
-(`isReservedWellSkyline_all7_hstep_standard`, which lands in a reserved-well skyline) into the
-actual safety predicate via the reserved-well non-loss certificate
-(`not_isLost_of_isReservedWellSkyline`). This completes the trio of move-level immortality
-certificates (flat, notched, rich), and pins the survival guarantee to the very surface the
-height-regulator (`applyStep_richStandard_vertI_clear`) walks down its four-rows-per-step
-descent ladder — so the carrier the closure actually iterates carries its own per-state
-non-loss witness, one the bag-phase closure accumulates into infinite play. -/
-theorem isReservedWellSkyline_all7_not_isLost_standard {base : ℕ} {p : Piece}
-    (hbase : base + 2 ≤ GameConfig.standard.rows)
-    (hp : p = Piece.O ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J ∨ p = Piece.I
-          ∨ p = Piece.S ∨ p = Piece.Z) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (skyline GameConfig.standard
-            (fun j => if j = 0 then 0 else if j = 5 then base + 1 else if j = 8 then base + 1 else base))
-          pl) := by
-  obtain ⟨pl, hpiece, hvalid, hrw⟩ := isReservedWellSkyline_all7_hstep_standard hbase hp
-  exact ⟨pl, hpiece, hvalid, not_isLost_of_isReservedWellSkyline hrw⟩
-
 /-- **The well-clear re-enters the rich standard surface, four rows lower.** The first genuine
 *self*-re-entry for the rich reserved-well surface: dropping a vertical `I` into the empty well
 (column `0`) of
@@ -7161,38 +5876,6 @@ theorem card_richStandard_surface {base : ℕ} :
   norm_num
   omega
 
-/-- **The well-clear debits exactly 36 cells from the rich surface.** Composing the
-height-regulator (`applyStep_richStandard_vertI_clear`: the vertical-I well-clear returns the
-rich surface at `base - 4`) with the area certificate (`card_richStandard_surface` read at
-`base - 4`): the cleared board carries `9 · (base − 4) + 2` cells. Since the pre-clear surface
-holds `9 · base + 2` (`card_richStandard_surface`), the I-regulator removes a flat
-`9·base + 2 − (9·(base−4) + 2) = 36` cells per application — the four full rows of the
-`10`-wide field minus the `4` well cells the vertical I never had to fill. This pins the
-descent's cell budget to an exact arithmetic ledger, the conserved quantity any
-potential/pigeonhole bound on the surviving cycle must respect. -/
-theorem card_applyStep_richStandard_vertI_clear {base : ℕ} (hbase4 : 4 ≤ base) :
-    (Placement.applyStep GameConfig.standard
-        (skyline GameConfig.standard
-          (fun j => if j = 0 then 0 else if j = 5 then base + 1 else if j = 8 then base + 1 else base))
-        { piece := Piece.I, rot := 1, col := 0 }).card
-      = 9 * (base - 4) + 2 := by
-  rw [applyStep_richStandard_vertI_clear hbase4, card_richStandard_surface (base := base - 4)]
-
-/-- **The iterated descent's cell budget.** After `n` successive vertical-`I` well-clears
-(`applyStep_richStandard_vertI_clear_replicate`: the fold lands on the rich surface at
-`base - 4·n`) the board carries exactly `9·(base − 4·n) + 2` cells — the area certificate
-(`card_richStandard_surface`) read at the lowered height. Since each clear debits a fixed
-`36` cells (`9·base + 2 ↦ 9·(base−4) + 2`), `n` of them debit `36·n`, pinning the descent's
-running cell count to one closed integer. The area face of the iterated regulator, completing
-the closed-form/survival/budget trio for the `n`-fold well-clear. -/
-theorem card_applyStep_richStandard_vertI_clear_replicate {n base : ℕ} (h : 4 * n ≤ base) :
-    (List.foldl (Placement.applyStep GameConfig.standard)
-        (skyline GameConfig.standard
-          (fun j => if j = 0 then 0 else if j = 5 then base + 1 else if j = 8 then base + 1 else base))
-        (List.replicate n { piece := Piece.I, rot := 1, col := 0 })).card
-      = 9 * (base - 4 * n) + 2 := by
-  rw [applyStep_richStandard_vertI_clear_replicate n base h, card_richStandard_surface]
-
 /-- **The rich standard surface is never lost.** Its tallest columns are the two notch
 shelves `j = 5, 8` at height `base + 1`; every other real column sits at `base` or `0`. So
 once `base + 1 ≤ rows` the whole profile fits inside the visible field and
@@ -7249,52 +5932,6 @@ theorem not_isLost_take_applyStep_richStandard_vertI_clear_replicate {n base : �
           ((List.replicate n { piece := Piece.I, rot := 1, col := 0 }).take m)) := by
   rw [List.take_replicate]
   exact not_isLost_applyStep_richStandard_vertI_clear_replicate (by omega) hbase
-
-/-- **Bag-burst transient survival of the rich surface.** Where
-`not_isLost_take_applyStep_richStandard_vertI_clear_replicate` certifies survival under the
-*specific* vertical-`I` descent schedule, this certifies survival under an **arbitrary** list of
-placements `pls`: starting from the rich standard surface (max height `base + 1`), no prefix of
-`pls` ever tops out, provided the whole burst fits the headroom budget `(base + 1) + 4·k ≤ rows`
-(`k = pls.length`). Each placement lifts the surface by at most four, so the running peak stays
-`≤ (base + 1) + 4·k`; the prefix lemma `not_isLost_foldl_take_applyStep_skyline` discharges every
-intermediate board at once. This is the height-bound half a per-bag carrier quotes for the
-mid-bag phase, where the adversary's pieces land in shape-forgetting positions and only the loose
-`+4` budget — not any concrete surface invariant — keeps the board alive until the next
-well-clear regenerates slack. -/
-theorem not_isLost_take_foldl_richStandard {base : ℕ} (pls : List Placement) (n : ℕ)
-    (hcap : (base + 1) + 4 * pls.length ≤ GameConfig.standard.rows) :
-    ¬ Board.isLost GameConfig.standard
-        ((pls.take n).foldl (Placement.applyStep GameConfig.standard)
-          (skyline GameConfig.standard
-            (fun j => if j = 0 then 0 else if j = 5 then base + 1 else if j = 8 then base + 1 else base))) := by
-  apply not_isLost_foldl_take_applyStep_skyline (B := base + 1)
-  · intro j _
-    dsimp only
-    split_ifs <;> omega
-  · exact hcap
-
-/-- **The whole descent ladder still hosts every piece.** Generalising
-`applyStep_richStandard_vertI_clear_all7` (its `n = 1` case) to arbitrary depth: after `n`
-successive vertical-`I` well-clears (`applyStep_richStandard_vertI_clear_replicate` lands the fold
-on the rich surface at `base - 4·n`), *any* piece the adversary next draws still has a valid
-placement keeping the board a reserved-well skyline — provided the ladder has room to run
-(`4·n ≤ base`) and the lowered surface keeps its two-row headroom (`base + 2 ≤ rows`, which the
-descent only relaxes). So no number of regulator clears ever strands the surface in a stuck
-configuration; the descent hands back a fully functional carrier at every rung. -/
-theorem applyStep_richStandard_vertI_clear_replicate_all7 {n base : ℕ} {p : Piece}
-    (hn : 4 * n ≤ base) (hbase : base + 2 ≤ GameConfig.standard.rows)
-    (hp : p = Piece.O ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J ∨ p = Piece.I
-          ∨ p = Piece.S ∨ p = Piece.Z) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      IsReservedWellSkyline GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (List.foldl (Placement.applyStep GameConfig.standard)
-            (skyline GameConfig.standard
-              (fun j => if j = 0 then 0 else if j = 5 then base + 1 else if j = 8 then base + 1 else base))
-            (List.replicate n { piece := Piece.I, rot := 1, col := 0 }))
-          pl) := by
-  rw [applyStep_richStandard_vertI_clear_replicate n base hn]
-  exact isReservedWellSkyline_all7_hstep_standard (base := base - 4 * n) (by omega) hp
 
 /-- **The descent regulator can target any height band.** Given any rich standard surface at
 height `base` and any target floor `lo ≤ base`, there is a clear-count `n` (namely `(base - lo) / 4`)
@@ -7489,30 +6126,6 @@ theorem isSpreadBoundedRWSkyline_of_isFlatTopRWSkyline {cfg : GameConfig} {b : B
     simp only [if_neg hjw]
     omega
   · omega
-
-/-- **A zero-spread band carrier is a flat top.** The converse of
-`isSpreadBoundedRWSkyline_of_isFlatTopRWSkyline`, completing the equivalence the band
-carrier's definition asserts ("the flat-top carrier is exactly the `spread = 0` slice"):
-at `spread = 0` the degenerate band `[floor, floor]` pins every non-well column to
-`floor`, so the profile agrees with the canonical flat-top profile
-`fun j => if j = w then 0 else floor` on every real column, hence the two skylines are
-equal. The well, the height cap (`floor ≤ cfg.rows`), and the flat base read straight off
-the band data. Paired with the forward map this makes `IsSpreadBoundedRWSkyline cfg 0` and
-`IsFlatTopRWSkyline` interchangeable, so a closure argument may re-enter the flat-top
-machinery the instant a well clear collapses the spread back to zero. -/
-theorem isFlatTopRWSkyline_of_isSpreadBoundedRWSkyline_zero {cfg : GameConfig} {b : Board}
-    (hb : IsSpreadBoundedRWSkyline cfg 0 b) : IsFlatTopRWSkyline cfg b := by
-  obtain ⟨h, floor, w, rfl, hw, hw0, hband, hcap⟩ := hb
-  refine ⟨floor, w, hw, by omega, ?_⟩
-  ext ⟨j, r⟩
-  simp only [mem_skyline]
-  by_cases hj : j < cfg.cols
-  · rcases eq_or_ne j w with rfl | hjw
-    · simp [hw0]
-    · obtain ⟨hlo, hhi⟩ := hband j hj hjw
-      have hjf : h j = floor := by omega
-      simp [hj, hjw, hjf]
-  · simp [hj]
 
 /-- **A spread-bounded reserved well is a reserved-well skyline (forget the band).**
 The forgetful map down to the bare reserved-well carrier: drop the `floor`/`spread`
@@ -7761,37 +6374,6 @@ theorem isLevelPocketBand_vertI_well_descend {cfg : GameConfig} {spread : ℕ}
     rw [if_neg (Ne.symm hwc2), hpc2]
   · show (if c + 3 = w then 0 else h (c + 3) - 4) = floor - 4
     rw [if_neg (Ne.symm hwc3), hpc3]
-
-/-- **Validity-carrying ∃-form of the pocket-preserving well-clear (the σ-dispatch I-branch).**
-Packages `isLevelPocketBand_vertI_well_descend` into the `∃ pl, pl.piece = I ∧ pl.Valid cfg ∧
-carrier` shape a strategy's per-piece response consumes — the height-regulator analogue of the
-fills' existing existential forms (`isSpreadBoundedRWSkyline_lands_of_isLevelPocketBand`,
-`isSpreadBoundedRWSkyline_SZ_valley_of_notch`). Validity is immediate: the vertical `I` is one
-column wide (every shape cell sits at column offset `0`), so it is in-bounds wherever the well
-column `w < cfg.cols` is. With the descent already proven to re-enter `IsLevelPocketBand` one
-band lower (keeping the floor shelf), this is the ready-to-use `I` clause of σ's per-piece
-dispatch on the `tetrisSolvableValid_of_levelPocketBand_closed` carrier: when the bag hands the
-player an `I`, σ plays it into the well and stays admissible. -/
-theorem isLevelPocketBand_vertI_well_descend_exists {cfg : GameConfig} {spread : ℕ}
-    {h : ℕ → ℕ} {floor w c : ℕ}
-    (hw : w < cfg.cols) (hw0 : h w = 0) (hfloor4 : 4 ≤ floor)
-    (hband : ∀ j < cfg.cols, j ≠ w → floor ≤ h j ∧ h j ≤ floor + spread)
-    (hcap : floor + spread ≤ cfg.rows)
-    (hc3 : c + 3 < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1)
-    (hwc2 : w ≠ c + 2) (hwc3 : w ≠ c + 3)
-    (hpc : h c = floor) (hpc1 : h (c + 1) = floor)
-    (hpc2 : h (c + 2) = floor) (hpc3 : h (c + 3) = floor) :
-    ∃ pl : Placement, pl.piece = Piece.I ∧ pl.Valid cfg ∧
-      IsLevelPocketBand cfg spread
-        (Placement.applyStep cfg (skyline cfg h) pl) := by
-  refine ⟨{ piece := Piece.I, rot := 1, col := w }, rfl, ?_,
-    isLevelPocketBand_vertI_well_descend hw hw0 hfloor4 hband hcap hc3 hwc hwc1 hwc2 hwc3
-      hpc hpc1 hpc2 hpc3⟩
-  intro cell hcell
-  have h0 : ∀ c ∈ Piece.I.shapeUp 1, c.1 = 0 := by decide
-  have hcz := h0 cell hcell
-  show w + cell.1 < cfg.cols
-  omega
 
 /-- **Floor-exposing level pocket band.** Identical to `IsLevelPocketBand` except the
 common `floor` of the off-well columns is lifted OUT of the existential and exposed as an
@@ -8465,40 +7047,6 @@ theorem colHeight_applyStep_S_skyline_preserves_notch {cfg : GameConfig} {h : �
   · rw [colHeight_skyline hnc2, Function.update_of_ne (by omega), Function.update_of_ne (by omega),
         Function.update_of_ne (by omega)]
 
-/-- **An intervening `Z` preserves a disjoint standing notch — the mirror cross-notch survival.**
-The Z-piece counterpart of `colHeight_applyStep_S_skyline_preserves_notch`: a `Z` landing in its own
-mirror notch (`heq : h (c+1) = h (c+2)`, `hstep : h c = h (c+1) + 1`) on the triple `c, c+1, c+2`,
-when that triple is entirely separated from a *second* notch triple `nc, nc+1, nc+2`
-(`hsep : nc + 2 < c ∨ c + 2 < nc`), leaves all three heights of the second notch exactly where they
-were. Together with the S case this completes the staircase cross-preservation pair: whichever owed
-staircase piece the adversary plays to consume its own notch, a disjoint reserved notch held for the
-*other* staircase piece survives untouched. Proof mirrors the S case: rewrite through
-`applyStep_Z_skyline_noclear` to the three-column update on `c, c+1, c+2`, then each second-notch
-column reads back through three `Function.update_of_ne` (the separation makes every index distinct
-from each of `c, c+1, c+2`) across `colHeight_skyline`. -/
-theorem colHeight_applyStep_Z_skyline_preserves_notch {cfg : GameConfig} {h : ℕ → ℕ}
-    {c w nc : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heq : h (c + 1) = h (c + 2)) (hstep : h c = h (c + 1) + 1)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0)
-    (hnc : nc < cfg.cols) (hnc1 : nc + 1 < cfg.cols) (hnc2 : nc + 2 < cfg.cols)
-    (hsep : nc + 2 < c ∨ c + 2 < nc) :
-    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.Z, rot := 0, col := c }) nc = h nc ∧
-      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.Z, rot := 0, col := c }) (nc + 1) = h (nc + 1) ∧
-      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.Z, rot := 0, col := c }) (nc + 2) = h (nc + 2) := by
-  rw [applyStep_Z_skyline_noclear hc hc1 hc2 heq hstep hw hwc hwc1 hwc2 hw0]
-  refine ⟨?_, ?_, ?_⟩
-  · rw [colHeight_skyline hnc, Function.update_of_ne (by omega), Function.update_of_ne (by omega),
-        Function.update_of_ne (by omega)]
-  · rw [colHeight_skyline hnc1, Function.update_of_ne (by omega), Function.update_of_ne (by omega),
-        Function.update_of_ne (by omega)]
-  · rw [colHeight_skyline hnc2, Function.update_of_ne (by omega), Function.update_of_ne (by omega),
-        Function.update_of_ne (by omega)]
-
 /-- **The once-per-bag well-clear drain carries an S-notch down by four — notch survival across the
 reset.** The drain atom complementing the no-clear intervening-piece frames
 (`colHeight_applyStep_S_skyline_preserves_notch` and siblings, which keep a disjoint notch fixed under
@@ -8607,44 +7155,6 @@ theorem applyStep_vertI_well_both_notches_descend {cfg : GameConfig} {h : ℕ �
   refine ⟨_, applyStep_vertI_well hw hw0 hothers, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
     split_ifs with hh <;> omega
 
-/-- **The two-valley layout is a drain fixpoint — structural re-entry, floor-agnostic.** This is the
-invariant-preservation statement the bag-phase scheduler actually consumes: it forgets the exact
-descended heights of `applyStep_vertI_well_both_notches_descend` and keeps only the *shape* — that the
-post-drain board again carries an S-notch on `c, c+1, c+2` and a Z-notch on `d, d+1, d+2`, with the
-well still empty. Where the underlying descent lemma reports concrete values
-(`h' c = h c - 4`, …), this corollary reports the relations `h' c = h' (c+1)`, `h' (c+2) = h' c + 1`
-(S-notch) and `h' (d+1) = h' (d+2)`, `h' d = h' (d+1) + 1` (Z-notch), exactly the predicate form a
-both-notch carrier invariant is phrased in. So the once-per-bag vertical-`I` drain maps a both-notch
-surface to a both-notch surface: the layout that hosts an early `S` and an early `Z` is reproduced at
-the next reset, four rows lower, without referring to which floor it sits at. This makes it directly
-re-feedable into the same both-notch predicate across a bag boundary. It does NOT close the
-adversarial-order obligation — crux #66/#72 remains open and `TetrisSolvableValid` is NOT proven; the
-scheduler that re-digs the consumed valleys (via the once-per-bag `L`/`J`) *before* the drain, for
-every order the adversary picks, is the open content. Proof: discharge through
-`applyStep_vertI_well_both_notches_descend` and read the four shape relations off its concrete
-descended values by `omega`. -/
-theorem applyStep_vertI_well_both_notches_descend_reentry {cfg : GameConfig} {h : ℕ → ℕ}
-    {c d w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (hd : d < cfg.cols) (hd1 : d + 1 < cfg.cols) (hd2 : d + 2 < cfg.cols)
-    (heqS : h c = h (c + 1)) (hstepS : h (c + 2) = h c + 1)
-    (heqZ : h (d + 1) = h (d + 2)) (hstepZ : h d = h (d + 1) + 1)
-    (hw : w < cfg.cols)
-    (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hwd : w ≠ d) (hwd1 : w ≠ d + 1) (hwd2 : w ≠ d + 2)
-    (hw0 : h w = 0)
-    (hothers : ∀ j, j < cfg.cols → j ≠ w → 4 ≤ h j) :
-    ∃ h' : ℕ → ℕ,
-      Placement.applyStep cfg (skyline cfg h) { piece := Piece.I, rot := 1, col := w }
-        = skyline cfg h' ∧
-      h' c = h' (c + 1) ∧ h' (c + 2) = h' c + 1 ∧
-      h' (d + 1) = h' (d + 2) ∧ h' d = h' (d + 1) + 1 ∧
-      h' w = 0 := by
-  obtain ⟨h', hstep, hHc, hHc1, hHc2, hHd, hHd1, hHd2, hHw⟩ :=
-    applyStep_vertI_well_both_notches_descend hc hc1 hc2 hd hd1 hd2
-      heqS hstepS heqZ hstepZ hw hwc hwc1 hwc2 hwd hwd1 hwd2 hw0 hothers
-  exact ⟨h', hstep, by omega, by omega, by omega, by omega, hHw⟩
-
 /-- **An intervening `O` keeps BOTH standing notches — the two-valley fill-phase frame.** Where the
 single-notch `colHeight_applyStep_O_skyline_preserves_notch` shows one reserved notch survives a flat
 `O` laid elsewhere, this is the two-valley version the bag-phase scheduler needs *during* a bag: while
@@ -8742,169 +7252,6 @@ theorem applyStep_horizI_skyline_preserves_both_notches {cfg : GameConfig} {h : 
   obtain ⟨f0, f1, f2⟩ :=
     colHeight_applyStep_horizI_skyline_preserves_notch hc hc1 hc2 hc3 heq1 heq2 heq3
       hw hwc hwc1 hwc2 hwc3 hw0 hzc hzc1 hzc2 hsepZ
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · rw [e0, e1, heqS]
-  · rw [e2, e0, hstepS]
-  · rw [f1, f2, heqZ]
-  · rw [f0, f1, hstepZ]
-
-/-- **An intervening `T` keeps BOTH standing notches — the two-valley fill-phase frame for the `T`
-filler.** The `T` analogue of `applyStep_O_skyline_preserves_both_notches` and
-`applyStep_horizI_skyline_preserves_both_notches`: while both an S-notch (on `sc, sc+1, sc+2`) and a
-Z-notch (on `zc, zc+1, zc+2`) sit reserved, a flat `T` (rot 2) played on a separate flat triple
-`c, c+1, c+2` (over a reserved empty well `w`) leaves both notch profiles intact. Both staircases are
-separated from the three-column `T` window (`hsepS`, `hsepZ` use the triple bound `_ + 2 < _`), so the
-`T` touches neither, and the conclusion is stated in post-`T` notch shape: on the landed board `b`,
-`colHeight b sc = colHeight b (sc+1)`, `colHeight b (sc+2) = colHeight b sc + 1` (S-notch) and
-`colHeight b (zc+1) = colHeight b (zc+2)`, `colHeight b zc = colHeight b (zc+1) + 1` (Z-notch). `T` is
-the bag's pure spacer — neither a digger nor a consumer — so this is exactly the brick the scheduler
-needs when the adversary slots the `T` between a notch's producer and its consumer. It does NOT close
-the every-order obligation — crux #66/#72 remains open and `TetrisSolvableValid` is NOT proven. Proof:
-apply the single-notch `T` frame twice (once per triple) to read each notch column's height back to
-its pre-`T` value, then close the four shape relations by the pre-`T` notch hypotheses. -/
-theorem applyStep_T_skyline_preserves_both_notches {cfg : GameConfig} {h : ℕ → ℕ}
-    {c sc zc w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heqT1 : h (c + 1) = h c) (heqT2 : h (c + 2) = h c)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0)
-    (hsc : sc < cfg.cols) (hsc1 : sc + 1 < cfg.cols) (hsc2 : sc + 2 < cfg.cols)
-    (heqS : h sc = h (sc + 1)) (hstepS : h (sc + 2) = h sc + 1)
-    (hzc : zc < cfg.cols) (hzc1 : zc + 1 < cfg.cols) (hzc2 : zc + 2 < cfg.cols)
-    (heqZ : h (zc + 1) = h (zc + 2)) (hstepZ : h zc = h (zc + 1) + 1)
-    (hsepS : sc + 2 < c ∨ c + 2 < sc) (hsepZ : zc + 2 < c ∨ c + 2 < zc) :
-    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.T, rot := 2, col := c }) sc
-      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.T, rot := 2, col := c }) (sc + 1) ∧
-    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.T, rot := 2, col := c }) (sc + 2)
-      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.T, rot := 2, col := c }) sc + 1 ∧
-    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.T, rot := 2, col := c }) (zc + 1)
-      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.T, rot := 2, col := c }) (zc + 2) ∧
-    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.T, rot := 2, col := c }) zc
-      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.T, rot := 2, col := c }) (zc + 1) + 1 := by
-  obtain ⟨e0, e1, e2⟩ :=
-    colHeight_applyStep_T_skyline_preserves_notch hc hc1 hc2 heqT1 heqT2
-      hw hwc hwc1 hwc2 hw0 hsc hsc1 hsc2 hsepS
-  obtain ⟨f0, f1, f2⟩ :=
-    colHeight_applyStep_T_skyline_preserves_notch hc hc1 hc2 heqT1 heqT2
-      hw hwc hwc1 hwc2 hw0 hzc hzc1 hzc2 hsepZ
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · rw [e0, e1, heqS]
-  · rw [e2, e0, hstepS]
-  · rw [f1, f2, heqZ]
-  · rw [f0, f1, hstepZ]
-
-/-- **An intervening `L` (in its flat-filler role) keeps BOTH standing notches — the two-valley
-fill-phase frame for the `L` filler.** The `L` analogue of `applyStep_O_skyline_preserves_both_notches`
-and friends: while both an S-notch (on `sc, sc+1, sc+2`) and a Z-notch (on `zc, zc+1, zc+2`) sit
-reserved, a flat `L` (rot 0) played on a separate flat triple `c, c+1, c+2` (over a reserved empty well
-`w`) leaves both notch profiles intact. Both staircases are separated from the three-column `L` window
-(`hsepS`, `hsepZ` use the triple bound `_ + 2 < _`), so the `L` touches neither, and the conclusion is
-stated in post-`L` notch shape: on the landed board `b`, `colHeight b sc = colHeight b (sc+1)`,
-`colHeight b (sc+2) = colHeight b sc + 1` (S-notch) and `colHeight b (zc+1) = colHeight b (zc+2)`,
-`colHeight b zc = colHeight b (zc+1) + 1` (Z-notch). `L` is *dual-use* — it can either dig a fresh
-S-notch (the digger role, `applyStep_L_skyline_flat_isSnotchSkyline`) or, as here, act as a flat filler
-elsewhere on the band; this lemma covers the scheduler's choice to spend the bag's `L` as a spacer
-while both reserved notches already stand, leaving them untouched. It does NOT close the every-order
-obligation — crux #66/#72 remains open and `TetrisSolvableValid` is NOT proven. Proof: apply the
-single-notch `L` frame twice (once per triple) to read each notch column's height back to its pre-`L`
-value, then close the four shape relations by the pre-`L` notch hypotheses. -/
-theorem applyStep_L_skyline_preserves_both_notches {cfg : GameConfig} {h : ℕ → ℕ}
-    {c sc zc w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heqL1 : h (c + 1) = h c) (heqL2 : h (c + 2) = h c)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0)
-    (hsc : sc < cfg.cols) (hsc1 : sc + 1 < cfg.cols) (hsc2 : sc + 2 < cfg.cols)
-    (heqS : h sc = h (sc + 1)) (hstepS : h (sc + 2) = h sc + 1)
-    (hzc : zc < cfg.cols) (hzc1 : zc + 1 < cfg.cols) (hzc2 : zc + 2 < cfg.cols)
-    (heqZ : h (zc + 1) = h (zc + 2)) (hstepZ : h zc = h (zc + 1) + 1)
-    (hsepS : sc + 2 < c ∨ c + 2 < sc) (hsepZ : zc + 2 < c ∨ c + 2 < zc) :
-    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.L, rot := 0, col := c }) sc
-      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.L, rot := 0, col := c }) (sc + 1) ∧
-    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.L, rot := 0, col := c }) (sc + 2)
-      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.L, rot := 0, col := c }) sc + 1 ∧
-    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.L, rot := 0, col := c }) (zc + 1)
-      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.L, rot := 0, col := c }) (zc + 2) ∧
-    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.L, rot := 0, col := c }) zc
-      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.L, rot := 0, col := c }) (zc + 1) + 1 := by
-  obtain ⟨e0, e1, e2⟩ :=
-    colHeight_applyStep_L_skyline_preserves_notch hc hc1 hc2 heqL1 heqL2
-      hw hwc hwc1 hwc2 hw0 hsc hsc1 hsc2 hsepS
-  obtain ⟨f0, f1, f2⟩ :=
-    colHeight_applyStep_L_skyline_preserves_notch hc hc1 hc2 heqL1 heqL2
-      hw hwc hwc1 hwc2 hw0 hzc hzc1 hzc2 hsepZ
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · rw [e0, e1, heqS]
-  · rw [e2, e0, hstepS]
-  · rw [f1, f2, heqZ]
-  · rw [f0, f1, hstepZ]
-
-/-- **An intervening `J` (in its flat-filler role) keeps BOTH standing notches — the two-valley
-fill-phase frame that completes the five-flat-filler row.** Last of the five flat fillers (after `O`,
-horizontal-`I`, `T`, `L`): while both an S-notch (on `sc, sc+1, sc+2`) and a Z-notch (on
-`zc, zc+1, zc+2`) sit reserved, a flat `J` (rot 0) played on a separate flat triple `c, c+1, c+2`
-(over a reserved empty well `w`) leaves both notch profiles intact. Both staircases are separated from
-the three-column `J` window (`hsepS`, `hsepZ` use the triple bound `_ + 2 < _`), so the `J` touches
-neither, and the conclusion is stated in post-`J` notch shape: on the landed board `b`,
-`colHeight b sc = colHeight b (sc+1)`, `colHeight b (sc+2) = colHeight b sc + 1` (S-notch) and
-`colHeight b (zc+1) = colHeight b (zc+2)`, `colHeight b zc = colHeight b (zc+1) + 1` (Z-notch). Like
-`L`, `J` is *dual-use* — it can either dig a fresh Z-notch (the digger role,
-`applyStep_J_skyline_flat_isZnotchSkyline`) or, as here, act as a flat filler elsewhere; this lemma
-covers the scheduler spending the bag's `J` as a spacer while both reserved notches already stand. With
-this, every non-staircase filler the adversary can interpose between a notch's producer and its
-consumer keeps both reserved landing spots. It does NOT close the every-order obligation — crux
-#66/#72 remains open and `TetrisSolvableValid` is NOT proven. Proof: apply the single-notch `J` frame
-twice (once per triple) to read each notch column's height back to its pre-`J` value, then close the
-four shape relations by the pre-`J` notch hypotheses. -/
-theorem applyStep_J_skyline_preserves_both_notches {cfg : GameConfig} {h : ℕ → ℕ}
-    {c sc zc w : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heqJ1 : h (c + 1) = h c) (heqJ2 : h (c + 2) = h c)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0)
-    (hsc : sc < cfg.cols) (hsc1 : sc + 1 < cfg.cols) (hsc2 : sc + 2 < cfg.cols)
-    (heqS : h sc = h (sc + 1)) (hstepS : h (sc + 2) = h sc + 1)
-    (hzc : zc < cfg.cols) (hzc1 : zc + 1 < cfg.cols) (hzc2 : zc + 2 < cfg.cols)
-    (heqZ : h (zc + 1) = h (zc + 2)) (hstepZ : h zc = h (zc + 1) + 1)
-    (hsepS : sc + 2 < c ∨ c + 2 < sc) (hsepZ : zc + 2 < c ∨ c + 2 < zc) :
-    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.J, rot := 0, col := c }) sc
-      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.J, rot := 0, col := c }) (sc + 1) ∧
-    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.J, rot := 0, col := c }) (sc + 2)
-      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.J, rot := 0, col := c }) sc + 1 ∧
-    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.J, rot := 0, col := c }) (zc + 1)
-      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.J, rot := 0, col := c }) (zc + 2) ∧
-    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.J, rot := 0, col := c }) zc
-      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-        { piece := Piece.J, rot := 0, col := c }) (zc + 1) + 1 := by
-  obtain ⟨e0, e1, e2⟩ :=
-    colHeight_applyStep_J_skyline_preserves_notch hc hc1 hc2 heqJ1 heqJ2
-      hw hwc hwc1 hwc2 hw0 hsc hsc1 hsc2 hsepS
-  obtain ⟨f0, f1, f2⟩ :=
-    colHeight_applyStep_J_skyline_preserves_notch hc hc1 hc2 heqJ1 heqJ2
-      hw hwc hwc1 hwc2 hw0 hzc hzc1 hzc2 hsepZ
   refine ⟨?_, ?_, ?_, ?_⟩
   · rw [e0, e1, heqS]
   · rw [e2, e0, hstepS]
@@ -9602,50 +7949,6 @@ theorem isSpreadBoundedRWSkylineAt_applyStep_TLJ_band_preserves_notch {cfg : Gam
   · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_J_band_preserves_notch hc hc1 hc2 heq1 heq2
       hw hwc hwc1 hwc2 hw0 hband hfit hslack hnc hnc1 hnc2 hsep⟩
 
-/-- **Any flat-triple-fitting filler — `O`, `T`, `L`, or `J` — admits a band-and-notch-preserving
-drop, widening the piece-variable dispatcher.** This extends
-`isSpreadBoundedRWSkylineAt_applyStep_TLJ_band_preserves_notch` by folding the `O` piece into the
-same flat-triple hypothesis: an `O` lands on the leftmost two columns `c, c+1` of the flat triple
-and simply ignores the third, so it is covered by the very same `heq1, heq2`, fit, and separation
-data the `T`, `L`, `J` frames consume. Whichever of the four the adversary draws mid-bag, if the
-board offers an in-band flat triple `c, c+1, c+2` (tall column fitting under the band top via
-`h c + 2 ≤ base + s`) that is column-disjoint from a reserved notch window `nc, nc+1, nc+2`
-(`hsep`), then THERE EXISTS a rotation whose no-clear drop both re-enters
-`IsSpreadBoundedRWSkylineAt cfg s base` AND leaves all three notch heights untouched. Four of the
-five flat fillers are now uniform; only the width-4 horizontal `I` needs a wider run. Proof: case on
-`hp`; the `O` branch reuses the flat triple via `heq1.symm` for its pair shape and weakens the
-triple separation to the pair separation by omega, and the `T`, `L`, `J` branches are exactly the
-earlier dispatcher. -/
-theorem isSpreadBoundedRWSkylineAt_applyStep_OTLJ_band_preserves_notch {cfg : GameConfig}
-    {h : ℕ → ℕ} {base s c w nc : ℕ} {p : Piece}
-    (hp : p = Piece.O ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J)
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0)
-    (hband : ∀ j < cfg.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + s)
-    (hfit : h c + 2 ≤ base + s) (hslack : base + s ≤ cfg.rows)
-    (hnc : nc < cfg.cols) (hnc1 : nc + 1 < cfg.cols) (hnc2 : nc + 2 < cfg.cols)
-    (hsep : nc + 2 < c ∨ c + 2 < nc) :
-    ∃ rot : Rotation,
-      IsSpreadBoundedRWSkylineAt cfg s base
-          (Placement.applyStep cfg (skyline cfg h) { piece := p, rot := rot, col := c }) ∧
-        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-            { piece := p, rot := rot, col := c }) nc = h nc ∧
-        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-            { piece := p, rot := rot, col := c }) (nc + 1) = h (nc + 1) ∧
-        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-            { piece := p, rot := rot, col := c }) (nc + 2) = h (nc + 2) := by
-  rcases hp with rfl | rfl | rfl | rfl
-  · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_O_band_preserves_notch hc hc1 heq1.symm
-      hw hwc hwc1 hw0 hband hfit hslack hnc hnc1 hnc2 (by omega)⟩
-  · exact ⟨2, isSpreadBoundedRWSkylineAt_applyStep_T_band_preserves_notch hc hc1 hc2 heq1 heq2
-      hw hwc hwc1 hwc2 hw0 hband hfit hslack hnc hnc1 hnc2 hsep⟩
-  · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_L_band_preserves_notch hc hc1 hc2 heq1 heq2
-      hw hwc hwc1 hwc2 hw0 hband hfit hslack hnc hnc1 hnc2 hsep⟩
-  · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_J_band_preserves_notch hc hc1 hc2 heq1 heq2
-      hw hwc hwc1 hwc2 hw0 hband hfit hslack hnc hnc1 hnc2 hsep⟩
-
 /-- **Every flat-filler — `O`, horizontal `I`, `T`, `L`, `J` — admits a band-and-notch-preserving
 drop on a flat quad: the complete flat-filler piece dispatcher.** This closes the flat-filler half
 of the piece-variable composition by folding the width-4 horizontal `I` in alongside the four
@@ -9691,111 +7994,6 @@ theorem isSpreadBoundedRWSkylineAt_applyStep_flatFiller_band_preserves_notch {cf
       hw hwc hwc1 hwc2 hw0 hband hfit hslack hnc hnc1 hnc2 (by omega)⟩
   · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_J_band_preserves_notch hc hc1 hc2 heq1 heq2
       hw hwc hwc1 hwc2 hw0 hband hfit hslack hnc hnc1 hnc2 (by omega)⟩
-
-/-- **Every flat-filler — `O`, horizontal `I`, `T`, `L`, `J` — admits a band-and-BOTH-notches-preserving
-drop on a flat quad: the complete two-notch flat-filler dispatcher.** The two-notch upgrade of
-`isSpreadBoundedRWSkylineAt_applyStep_flatFiller_band_preserves_notch`, unifying the five per-piece
-two-notch band frames (`O`, horizontal-`I`, `T`, `L`, `J`) behind one `Piece` variable. On an in-band
-flat run of width four `c .. c+3` (`heq1, heq2, heq3`, with the tall print fitting under the band top
-via `h c + 2 ≤ base + s`) that is column-disjoint from TWO reserved notch windows — an S-notch on
-`sc, sc+1, sc+2` and a Z-notch on `zc, zc+1, zc+2` (`hsepS`, `hsepZ : _ + 2 < c ∨ c + 3 < _`) — whichever
-flat filler the adversary draws admits a rotation whose no-clear drop both re-enters
-`IsSpreadBoundedRWSkylineAt cfg s base` AND leaves ALL SIX notch heights untouched. This is exactly the
-mid-bag invariant a per-bag site-regeneration argument threads: between a notch's producer and its
-deferred consumer, ANY interposed flat filler keeps both owed landing sites open while staying
-height-bounded. The flat quad is the strongest shape hypothesis and the quad separation the strongest
-disjointness, so each narrower piece reuses them through omega: the pair (`O`) and triple (`T`, `L`, `J`)
-fits and separations all follow, and the horizontal-`I` keeps the quad. It does NOT close the every-order
-obligation — crux #66/#72 remains open and `TetrisSolvableValid` is NOT proven. Proof: case on `hp` and
-discharge each branch with its two-notch band frame, weakening the fit and both separations by omega
-where the piece is narrower. -/
-theorem isSpreadBoundedRWSkylineAt_applyStep_flatFiller_band_preserves_both_notches {cfg : GameConfig}
-    {h : ℕ → ℕ} {base s c w sc zc : ℕ} {p : Piece}
-    (hp : p = Piece.O ∨ p = Piece.I ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J)
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols) (hc3 : c + 3 < cfg.cols)
-    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c) (heq3 : h (c + 3) = h c)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2) (hwc3 : w ≠ c + 3)
-    (hw0 : h w = 0)
-    (hband : ∀ j < cfg.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + s)
-    (hfit : h c + 2 ≤ base + s) (hslack : base + s ≤ cfg.rows)
-    (hsc : sc < cfg.cols) (hsc1 : sc + 1 < cfg.cols) (hsc2 : sc + 2 < cfg.cols)
-    (hzc : zc < cfg.cols) (hzc1 : zc + 1 < cfg.cols) (hzc2 : zc + 2 < cfg.cols)
-    (hsepS : sc + 2 < c ∨ c + 3 < sc) (hsepZ : zc + 2 < c ∨ c + 3 < zc) :
-    ∃ rot : Rotation,
-      IsSpreadBoundedRWSkylineAt cfg s base
-          (Placement.applyStep cfg (skyline cfg h) { piece := p, rot := rot, col := c }) ∧
-        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-            { piece := p, rot := rot, col := c }) sc = h sc ∧
-        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-            { piece := p, rot := rot, col := c }) (sc + 1) = h (sc + 1) ∧
-        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-            { piece := p, rot := rot, col := c }) (sc + 2) = h (sc + 2) ∧
-        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-            { piece := p, rot := rot, col := c }) zc = h zc ∧
-        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-            { piece := p, rot := rot, col := c }) (zc + 1) = h (zc + 1) ∧
-        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-            { piece := p, rot := rot, col := c }) (zc + 2) = h (zc + 2) := by
-  rcases hp with rfl | rfl | rfl | rfl | rfl
-  · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_O_band_preserves_both_notches hc hc1 heq1.symm
-      hw hwc hwc1 hw0 hband hfit hslack hsc hsc1 hsc2 hzc hzc1 hzc2 (by omega) (by omega)⟩
-  · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_horizI_band_preserves_both_notches hc hc1 hc2 hc3
-      heq1 heq2 heq3 hw hwc hwc1 hwc2 hwc3 hw0 hband (by omega) hslack hsc hsc1 hsc2 hzc hzc1 hzc2
-      hsepS hsepZ⟩
-  · exact ⟨2, isSpreadBoundedRWSkylineAt_applyStep_T_band_preserves_both_notches hc hc1 hc2 heq1 heq2
-      hw hwc hwc1 hwc2 hw0 hband hfit hslack hsc hsc1 hsc2 hzc hzc1 hzc2 (by omega) (by omega)⟩
-  · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_L_band_preserves_both_notches hc hc1 hc2 heq1 heq2
-      hw hwc hwc1 hwc2 hw0 hband hfit hslack hsc hsc1 hsc2 hzc hzc1 hzc2 (by omega) (by omega)⟩
-  · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_J_band_preserves_both_notches hc hc1 hc2 heq1 heq2
-      hw hwc hwc1 hwc2 hw0 hband hfit hslack hsc hsc1 hsc2 hzc hzc1 hzc2 (by omega) (by omega)⟩
-
-/-- **An owed staircase consumer — `S` or `Z` — admits a band-and-BOTH-notches-preserving drop on its
-own notch: the consumer-side two-notch dispatcher.** This is the two-notch upgrade of
-`isSpreadBoundedRWSkylineAt_applyStep_SZ_band_preserves_notch` (iter471) and the consumer mirror of the
-flat-filler two-notch dispatcher (iter616): whichever staircase consumer the adversary draws, spending
-it on its own notch at `c, c+1, c+2` (the mirror-image shapes carried inside `hshape` — `S` wants
-`h c = h (c+1)`, `h (c+2) = h c + 1`; `Z` wants `h (c+1) = h (c+2)`, `h c = h (c+1) + 1`, each with its
-own fit) admits a rotation whose no-clear drop both re-enters `IsSpreadBoundedRWSkylineAt cfg s base`
-AND leaves TWO column-disjoint reserved notch windows `sc, sc+1, sc+2` and `zc, zc+1, zc+2` (`hsepS`,
-`hsepZ`) with all six heights untouched. So when the adversary spends one owed staircase piece while two
-further staircase sites are still reserved for later owed pieces, neither of those sites is disturbed —
-exactly the ledger fact the all-orders per-bag accounting needs at a consumer step. Proof: case on
-`hshape`, peeling each branch's piece equation, shape pair, and fit, then discharge with the matching
-`S` or `Z` both-notches band frame at rotation `0`. Honest crux: this is one consumer-step brick; the
-all-orders per-bag drain accounting (crux #66/#72) stays open, and `TetrisSolvableValid` is NOT
-proven. -/
-theorem isSpreadBoundedRWSkylineAt_applyStep_SZ_band_preserves_both_notches {cfg : GameConfig}
-    {h : ℕ → ℕ} {base s c w sc zc : ℕ} {p : Piece}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (hshape : (p = Piece.S ∧ h c = h (c + 1) ∧ h (c + 2) = h c + 1 ∧ h c + 2 ≤ base + s)
-            ∨ (p = Piece.Z ∧ h (c + 1) = h (c + 2) ∧ h c = h (c + 1) + 1 ∧ h (c + 1) + 2 ≤ base + s))
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0)
-    (hband : ∀ j < cfg.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + s)
-    (hslack : base + s ≤ cfg.rows)
-    (hsc : sc < cfg.cols) (hsc1 : sc + 1 < cfg.cols) (hsc2 : sc + 2 < cfg.cols)
-    (hzc : zc < cfg.cols) (hzc1 : zc + 1 < cfg.cols) (hzc2 : zc + 2 < cfg.cols)
-    (hsepS : sc + 2 < c ∨ c + 2 < sc) (hsepZ : zc + 2 < c ∨ c + 2 < zc) :
-    ∃ rot : Rotation,
-      IsSpreadBoundedRWSkylineAt cfg s base
-          (Placement.applyStep cfg (skyline cfg h) { piece := p, rot := rot, col := c }) ∧
-        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-            { piece := p, rot := rot, col := c }) sc = h sc ∧
-        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-            { piece := p, rot := rot, col := c }) (sc + 1) = h (sc + 1) ∧
-        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-            { piece := p, rot := rot, col := c }) (sc + 2) = h (sc + 2) ∧
-        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-            { piece := p, rot := rot, col := c }) zc = h zc ∧
-        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-            { piece := p, rot := rot, col := c }) (zc + 1) = h (zc + 1) ∧
-        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
-            { piece := p, rot := rot, col := c }) (zc + 2) = h (zc + 2) := by
-  rcases hshape with ⟨rfl, heq, hstep, hfit⟩ | ⟨rfl, heq, hstep, hfit⟩
-  · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_S_band_preserves_both_notches hc hc1 hc2 heq hstep
-      hw hwc hwc1 hwc2 hw0 hband hfit hslack hsc hsc1 hsc2 hzc hzc1 hzc2 hsepS hsepZ⟩
-  · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_Z_band_preserves_both_notches hc hc1 hc2 heq hstep
-      hw hwc hwc1 hwc2 hw0 hband hfit hslack hsc hsc1 hsc2 hzc hzc1 hzc2 hsepS hsepZ⟩
 
 /-- **An owed staircase consumer — `S` or `Z` — admits a band-and-notch-preserving drop on its own
 notch: the consumer-side piece dispatcher.** This is the staircase counterpart of the flat-filler
@@ -9949,39 +8147,6 @@ theorem exists_flatBand_flatFillerInputs {cfg : GameConfig} {h : ℕ → ℕ} {b
     flatBand_window_flatFillerInputs hflat hc hc1 hc2 hc3 hwc hwc1 hwc2 hwc3 hs
   exact ⟨c, hc3, hwc, hwc1, hwc2, hwc3, hband, he1, he2, he3, hfit⟩
 
-/-- **Every flat filler has a band-preserving landing on a flat reset band — the flat-phase landing
-existence, self-contained.** Splices the existence-half adapter `exists_flatBand_flatFillerInputs`
-(which produces a concrete well-dodging window plus the dispatcher input bundle) into the notch-free
-dispatcher `isSpreadBoundedRWSkylineAt_applyStep_flatFiller_band`. The payoff: on a flat band at least
-eight columns wide at floor `base` with reserved empty well `w` and at least two rows of spread slack
-(`2 ≤ s`, `base + s ≤ cfg.rows`), ANY flat filler `O`, `I`, `T`, `L`, `J` admits a landing column `c`
-and rotation whose no-clear drop keeps the board in `IsSpreadBoundedRWSkylineAt cfg s base` at the same
-floor — with NO column chosen by hand and NO reserved notch demanded. This is exactly the flat-phase
-half of the bag closure's fill obligation: whatever non-staircase piece the adversary draws while the
-surface is flat, a safe in-band landing provably exists. The staircase pieces `S`, `Z` and the harder
-notched phase (a window that must also dodge a 3-wide notch inside ten columns) stay separate. Proof:
-obtain the window and its well-dodge disequalities, read each window column's height back to `base` off
-the flat hypothesis, then feed the dispatcher with floor `base` and the two-row fit from `2 ≤ s`. -/
-theorem exists_flatBand_flatFiller_lands {cfg : GameConfig} {h : ℕ → ℕ} {base s w : ℕ} {p : Piece}
-    (hp : p = Piece.O ∨ p = Piece.I ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J)
-    (hcols : 8 ≤ cfg.cols) (hw : w < cfg.cols) (hw0 : h w = 0)
-    (hflat : ∀ j < cfg.cols, j ≠ w → h j = base) (hs : 2 ≤ s)
-    (hslack : base + s ≤ cfg.rows) :
-    ∃ c, c + 3 < cfg.cols ∧ ∃ rot : Rotation,
-      IsSpreadBoundedRWSkylineAt cfg s base
-        (Placement.applyStep cfg (skyline cfg h) { piece := p, rot := rot, col := c }) := by
-  obtain ⟨c, hc3, hwc, hwc1, hwc2, hwc3, hband, _, _, _, _⟩ :=
-    exists_flatBand_flatFillerInputs hcols hw hflat hs
-  have hc : c < cfg.cols := by omega
-  have hc1 : c + 1 < cfg.cols := by omega
-  have hc2 : c + 2 < cfg.cols := by omega
-  have hcf : h c = base := hflat c hc (by omega)
-  have hc1f : h (c + 1) = base := hflat (c + 1) hc1 (by omega)
-  have hc2f : h (c + 2) = base := hflat (c + 2) hc2 (by omega)
-  have hc3f : h (c + 3) = base := hflat (c + 3) hc3 (by omega)
-  exact ⟨c, hc3, isSpreadBoundedRWSkylineAt_applyStep_flatFiller_band hp hc hc1 hc2 hc3
-    hw hwc hwc1 hwc2 hwc3 hw0 hcf hc1f hc2f hc3f hband (by omega) (by omega) hslack⟩
-
 /-- **The J-then-Z round trip re-enters the reservoir band at the same floor — the mirror
 band-re-entry payoff.** Mirror of `isSpreadBoundedRWSkylineAt_applyStep_LS_flat`, the Z-piece
 counterpart of the S re-entry atom: on a flat triple `c, c+1, c+2` sitting at the band floor `base`
@@ -10089,34 +8254,6 @@ theorem isLevelPocketBandAt_skyline {cfg : GameConfig} {spread : ℕ}
     (hpc2 : h (c + 2) = floor) (hpc3 : h (c + 3) = floor) :
     IsLevelPocketBandAt cfg spread floor (skyline cfg h) :=
   ⟨h, w, c, rfl, hw, hw0, hband, hslack, hc3, hwc, hwc1, hwc2, hwc3, hpc, hpc1, hpc2, hpc3⟩
-
-/-- **From a spread band plus a `colHeight` pocket window up to a level pocket band.** The missing
-adapter between the arbitrary-member fill arcs — which land in `IsSpreadBoundedRWSkylineAt` (the
-floor-pinned spread band, pocket consumed) — and the reservoir fill ledger, which needs an
-`IsLevelPocketBandAt` (a band carrying a width-four pocket). Given a floor-pinned spread band whose
-floor is *positive*, any four consecutive in-bounds columns all at `colHeight = floor` reconstitute
-the pocket: the reserved empty well sits at height `0`, so with `floor > 0` it cannot coincide with
-any pocket column (height `floor`), and the well-dodge side conditions discharge automatically. The
-positivity of `floor` is exactly what makes the dodge free; the `floor = 0` bands are the flat
-shelves, which already carry pocket witnesses directly (`isLevelPocketBandAt_flat`). This is the
-re-pocketing primitive a closure step applies whenever a fill happens to leave four floor columns
-exposed. -/
-theorem isLevelPocketBandAt_of_isSpreadBoundedRWSkylineAt {cfg : GameConfig} {spread floor : ℕ}
-    {b : Board} (hb : IsSpreadBoundedRWSkylineAt cfg spread floor b)
-    (hfloor : 0 < floor) {c : ℕ} (hc3 : c + 3 < cfg.cols)
-    (hpc : Board.colHeight b c = floor) (hpc1 : Board.colHeight b (c + 1) = floor)
-    (hpc2 : Board.colHeight b (c + 2) = floor) (hpc3 : Board.colHeight b (c + 3) = floor) :
-    IsLevelPocketBandAt cfg spread floor b := by
-  obtain ⟨h, w, rfl, hw, hw0, hband, hcap⟩ := hb
-  rw [colHeight_skyline (by omega : c < cfg.cols)] at hpc
-  rw [colHeight_skyline (by omega : c + 1 < cfg.cols)] at hpc1
-  rw [colHeight_skyline (by omega : c + 2 < cfg.cols)] at hpc2
-  rw [colHeight_skyline (by omega : c + 3 < cfg.cols)] at hpc3
-  refine isLevelPocketBandAt_skyline hw hw0 hband hcap hc3 ?_ ?_ ?_ ?_ hpc hpc1 hpc2 hpc3
-  · intro he; rw [he, hpc] at hw0; omega
-  · intro he; rw [he, hpc1] at hw0; omega
-  · intro he; rw [he, hpc2] at hw0; omega
-  · intro he; rw [he, hpc3] at hw0; omega
 
 /-- **Arbitrary-band O-pocket fill arc.** Dropping the O piece flush into the guaranteed
 width-four floor pocket of an *arbitrary* `IsLevelPocketBandAt standard 2 floor` member is a
@@ -11036,32 +9173,6 @@ theorem maxColHeight_le_S_floorNotch_of_skyline {floor w c : ℕ} {h : ℕ → �
       hpc hpc1 hpc2
   exact ⟨pl, hpiece, hvalid, hnotlost, maxColHeight_le_of_isSpreadBoundedRWSkylineAt hband'⟩
 
-/-- **Top-preservation face of the Z floor-notch fill.** The mirror of
-`maxColHeight_le_S_floorNotch_of_skyline`: given the mirror Z unit-step floor notch on a spread-2
-reserved-well skyline (column `c` sits one above the band floor, `c+1, c+2` rest at the floor), the
-Z placement is valid, survives, and keeps the band TOP at `floor + 2`:
-`maxColHeight standard b' ≤ floor + 2`. It packages the floor-tracked Z arc
-`isSpreadBoundedRWSkylineAt_Z_floorNotch_of_skyline` through the band-top cap
-`maxColHeight_le_of_isSpreadBoundedRWSkylineAt`. With the S companion this completes the
-all-seven top-preserving fill menu: every tetromino, given the landing room its phase supplies,
-absorbs into the spread-2 band without raising the ceiling above `floor + 2`. -/
-theorem maxColHeight_le_Z_floorNotch_of_skyline {floor w c : ℕ} {h : ℕ → ℕ}
-    (hw : w < GameConfig.standard.cols) (hw0 : h w = 0)
-    (hband : ∀ j < GameConfig.standard.cols, j ≠ w → floor ≤ h j ∧ h j ≤ floor + 2)
-    (hcap : floor + 2 ≤ GameConfig.standard.rows)
-    (hc2 : c + 2 < GameConfig.standard.cols)
-    (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hpc : h c = floor + 1) (hpc1 : h (c + 1) = floor) (hpc2 : h (c + 2) = floor) :
-    ∃ pl : Placement, pl.piece = Piece.Z ∧ pl.Valid GameConfig.standard ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard (skyline GameConfig.standard h) pl) ∧
-      maxColHeight GameConfig.standard
-        (Placement.applyStep GameConfig.standard (skyline GameConfig.standard h) pl) ≤ floor + 2 := by
-  obtain ⟨pl, hpiece, hvalid, hband', hnotlost⟩ :=
-    isSpreadBoundedRWSkylineAt_Z_floorNotch_of_skyline hw hw0 hband hcap hc2 hwc hwc1 hwc2
-      hpc hpc1 hpc2
-  exact ⟨pl, hpiece, hvalid, hnotlost, maxColHeight_le_of_isSpreadBoundedRWSkylineAt hband'⟩
-
 /-- **The pocket-band carrier.** A standard-config board is admissible exactly when it is a
 floor-exposing level pocket band for *some* spread and floor. This is the disjunction-of-shapes
 carrier the atlas crux needs: rather than pinning one fixed surface (which the column-budget
@@ -11190,54 +9301,6 @@ theorem isBoundedPocketBandCarrier_not_isLost {spread : ℕ} {b : Board}
     ¬ Board.isLost GameConfig.standard b :=
   isPocketBandCarrier_not_isLost (isPocketBandCarrier_of_isBoundedPocketBandCarrier hb)
 
-/-- **The spread-bounded carrier is well-formed** (the structural obligation, last of the cheap
-faces). Every budgeted-carrier board satisfies `Board.WF` for the standard config: forget the pinned
-spread (`isPocketBandCarrier_of_isBoundedPocketBandCarrier`) and invoke the bare carrier's
-well-formedness face (`isPocketBandCarrier_wf`). With this the budgeted carrier now discharges all
-four cheap obligations a bag-indexed reduction needs — init, height, not_isLost, wf — so the only
-remaining content is the genuine bag-boundary re-flatten step, not any membership bookkeeping. -/
-theorem isBoundedPocketBandCarrier_wf {spread : ℕ} {b : Board}
-    (hb : IsBoundedPocketBandCarrier spread b) :
-    Board.WF GameConfig.standard b :=
-  isPocketBandCarrier_wf (isPocketBandCarrier_of_isBoundedPocketBandCarrier hb)
-
-/-- **The carrier's flat-piece fill edge** (carrier-input form of the iter239 dispatcher). From any
-spread-2 bounded pocket-band carrier board, dropping any one of the five flat pieces (O, horizontal-I,
-T, L, J) on its guaranteed width-four floor pocket is a valid placement landing in
-`IsSpreadBoundedRWSkyline standard 2` (hence not lost). It is the iter239 flat dispatcher with the
-input restated in carrier vocabulary: `IsBoundedPocketBandCarrier 2` unfolds to *some* floor-exposing
-level pocket band, which the dispatcher consumes directly. Note the landing is the bare spread band,
-strictly wider than the carrier (the carrier additionally guarantees a pocket); regenerating the
-pocket from this spread band is the open re-entry step the closed transition graph still owes. -/
-theorem isSpreadBoundedRWSkyline_flat_fill_of_isBoundedPocketBandCarrier {b : Board} {p : Piece}
-    (hp : p = Piece.O ∨ p = Piece.I ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J)
-    (hb : IsBoundedPocketBandCarrier 2 b) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      IsSpreadBoundedRWSkyline GameConfig.standard 2
-        (Placement.applyStep GameConfig.standard b pl) ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard b pl) := by
-  obtain ⟨floor, hband⟩ := hb
-  exact isSpreadBoundedRWSkyline_flat_pocket_of_isLevelPocketBandAt hp hband
-
-/-- **The bounded carrier is itself a spread band (subsumption inclusion).** Every
-`IsBoundedPocketBandCarrier spread` board forgets — by dropping its pocket witness — to an
-`IsSpreadBoundedRWSkyline standard spread` board, via the standing chain
-`isSpreadBoundedRWSkyline_of_isLevelPocketBand` after `isLevelPocketBand_of_isLevelPocketBandAt`. This
-makes the redundancy explicit: a level pocket band is a *special case* of the bare spread band (it adds
-a guaranteed four-wide level basin), so a disjunctive carrier "pocket band or spread band" collapses to
-the spread band alone. The strategic consequence is that the pocket guarantee is load-bearing only on
-the *input* side of the fill edge (to land a flat piece predictably); the carrier cannot simply be
-widened to the spread band, because the spread band is not closed under the flat pieces without a
-pocket to aim at. Reusable wherever a carrier board must be handed to bare-spread-band machinery
-(height cap, non-loss, card ledger). -/
-theorem isSpreadBoundedRWSkyline_of_isBoundedPocketBandCarrier {spread : ℕ} {b : Board}
-    (hb : IsBoundedPocketBandCarrier spread b) :
-    IsSpreadBoundedRWSkyline GameConfig.standard spread b := by
-  obtain ⟨floor, hband⟩ := hb
-  exact isSpreadBoundedRWSkyline_of_isLevelPocketBand
-    (isLevelPocketBand_of_isLevelPocketBandAt hband)
-
 /-- **The spread-bounded carrier's card/area ceiling.** Every budgeted-carrier board holds at most
 `(cols - 1) * rows` filled cells. The board is a level pocket band at the pinned spread for some
 floor, which forgets along the standing chain to a reserved-well skyline
@@ -11256,30 +9319,6 @@ theorem isBoundedPocketBandCarrier_card_le {spread : ℕ} {b : Board}
     (isReservedWellSkyline_of_isSpreadBoundedRWSkyline
       (isSpreadBoundedRWSkyline_of_isLevelPocketBand
         (isLevelPocketBand_of_isLevelPocketBandAt hband)))
-
-/-- **The spread-bounded carrier's live area ceiling.** The M-parameterized refinement of
-`isBoundedPocketBandCarrier_card_le`: given any ceiling `M` with `maxColHeight ≤ M`, the budgeted
-carrier holds at most `(cols - 1) * M` filled cells. Same forgetful bridge chain to a reserved-well
-skyline (`isReservedWellSkyline_of_isSpreadBoundedRWSkyline` after `isSpreadBoundedRWSkyline_of_
-isLevelPocketBand` after `isLevelPocketBand_of_isLevelPocketBandAt`), but the count is then read off
-by the live-potential ledger `isReservedWellSkyline_card_le_of_maxColHeight_le` instead of the static
-`isReservedWellSkyline_card_le` — the reserved well still contributes `0`, and each of the other
-`cols - 1` columns is capped at the live `M` rather than the full board height `rows`. On a post-drain
-endpoint where the scalar reset family pins `maxColHeight ≤ 5` (the `..._maxColHeight` drain faces),
-this collapses to `card ≤ (10 - 1) * 5 = 45`: the conserved area potential that a drain-forcing
-pigeonhole (a saturated bag must clear a row) consumes. Banks the well AND tracks the live ceiling, so
-strictly sharper than both `isBoundedPocketBandCarrier_card_le` (`(cols-1)*rows`) and the generic
-`card_le_mul_maxColHeight` (`cols*M`). -/
-theorem isBoundedPocketBandCarrier_card_le_of_maxColHeight_le {spread M : ℕ} {b : Board}
-    (hb : IsBoundedPocketBandCarrier spread b)
-    (hM : maxColHeight GameConfig.standard b ≤ M) :
-    b.card ≤ (GameConfig.standard.cols - 1) * M := by
-  obtain ⟨floor, hband⟩ := hb
-  exact isReservedWellSkyline_card_le_of_maxColHeight_le
-    (isReservedWellSkyline_of_isSpreadBoundedRWSkyline
-      (isSpreadBoundedRWSkyline_of_isLevelPocketBand
-        (isLevelPocketBand_of_isLevelPocketBandAt hband)))
-    hM
 
 /-- **Budget-preserving I-drain edge into the spread-bounded carrier.** The spread-pinned
 refinement of `isPocketBandCarrier_of_vertI_descends`: draining a floor-exposing level pocket band of
@@ -11513,29 +9552,6 @@ theorem isBoundedPocketBandCarrier_of_vertI_drain_maxColHeight {b : Board}
   intro j _
   exact hcap j
 
-/-- **Guaranteed flat landing basin on any budgeted-carrier surface.** The carrier-vocabulary lift of
-`isLevelPocketBandAt_pocket_window` (the band pocket-window primitive), bundled with the per-column
-spread cap `colHeight_le_of_isLevelPocketBandAt`. Every `IsBoundedPocketBandCarrier spread` board — no
-matter how its off-pocket columns vary within the band — exposes four consecutive in-bounds columns
-`c, c + 1, c + 2, c + 3` whose `colHeight` is *exactly* a common floor value, AND every column of the
-board sits at most `spread` above that floor. The basin sits at the band's lowest level (the exposed
-floor), so a piece dropped to span it rests predictably at `floor` regardless of the neighbouring
-bumps, while the `colHeight ≤ floor + spread` bound caps how far the rest of the surface towers over
-the basin. This is the geometric precondition the arbitrary-member fill edge consumes: it turns the
-existentially-hidden band profile into a concrete usable landing window plus a uniform height envelope,
-the two facts a player needs to place a drawn piece on an otherwise uncontrolled carrier member and
-predict the resulting band. -/
-theorem isBoundedPocketBandCarrier_pocket_window {spread : ℕ} {b : Board}
-    (hb : IsBoundedPocketBandCarrier spread b) :
-    ∃ (c floor : ℕ), c + 3 < GameConfig.standard.cols ∧
-      Board.colHeight b c = floor ∧ Board.colHeight b (c + 1) = floor ∧
-      Board.colHeight b (c + 2) = floor ∧ Board.colHeight b (c + 3) = floor ∧
-      (∀ j, Board.colHeight b j ≤ floor + spread) := by
-  obtain ⟨floor, hband⟩ := hb
-  obtain ⟨c, hc3, hc, hc1, hc2, hc3'⟩ := isLevelPocketBandAt_pocket_window hband
-  exact ⟨c, floor, hc3, hc, hc1, hc2, hc3',
-    fun j => colHeight_le_of_isLevelPocketBandAt hband j⟩
-
 /-- **Floor-exposing flat band: a flat profile carries a level pocket at its known floor.**
 The floor-exposing analogue of `isLevelPocketBand_flat`. On a flat surface whose every
 non-well column sits at the common height `base` and whose well `w` is empty, the board is
@@ -11692,25 +9708,6 @@ theorem isLevelPocketBandAt_flatShelf_vertI_fill {base c : ℕ}
   · rw [Function.update_of_ne (show (2:ℕ) ≠ c by omega)]; simp
   · rw [Function.update_of_ne (show (3:ℕ) ≠ c by omega)]; simp
   · rw [Function.update_of_ne (show (4:ℕ) ≠ c by omega)]; simp
-
-/-- **The vert-I fill survives (every fill step is non-lost).** The survival certificate paired
-with `isLevelPocketBandAt_flatShelf_vertI_fill`: the board after the fill is a level pocket band, so
-it is a spread-bounded reserved-well skyline, so it is not a top-out. This is the fill analogue of
-`isLevelPocketBandAt_vertI_descends_safe` (the drain's survival cert), and it is load-bearing rather
-than decorative — the bag-indexed step obligation `hP_step` of `tetrisSolvableValid_of_strategy_bagInvariant`
-demands `¬ isLost` at *every* placement the strategy makes, so a fill phase that iterates this atom needs
-each intermediate fill certified safe. -/
-theorem isLevelPocketBandAt_flatShelf_vertI_fill_safe {base c : ℕ}
-    (hc5 : 5 ≤ c) (hc : c < GameConfig.standard.cols)
-    (hcap : base + 4 ≤ GameConfig.standard.rows) :
-    ¬ Board.isLost GameConfig.standard
-      (Placement.applyStep GameConfig.standard
-        (skyline GameConfig.standard (fun j => if j = 0 then 0 else base))
-        { piece := Piece.I, rot := 1, col := c }) :=
-  not_isLost_of_isSpreadBoundedRWSkyline
-    (isSpreadBoundedRWSkyline_of_isLevelPocketBand
-      (isLevelPocketBand_of_isLevelPocketBandAt
-        (isLevelPocketBandAt_flatShelf_vertI_fill hc5 hc hcap)))
 
 /-- **Board-shape core of the repack raise: the seven-piece repack fold lands the flat shelf at
 floor `base` exactly on the flat shelf at floor `base + 4`.** This is the raw computational identity
@@ -12053,27 +10050,6 @@ theorem foldl_flatten_replicate_eq_of_fix {cfg : GameConfig} {b0 : Board}
   | succ k ih =>
     rw [List.replicate_succ, List.flatten_cons, List.foldl_append, hfix]
     exact ih
-
-/-- **The raise and drain CYCLE is a closed loop on the flat shelf.** Specialising
-`foldl_flatten_replicate_eq_of_fix` to the canonical net-zero CYCLE — the nine-piece repack-raise
-followed by the well-clearing vertical `I`, whose one-pass fixed point is `foldl_cycle_eq_flatShelf`:
-folding `k` whole copies of the cycle over `flat@base` returns *literally* `flat@base`, for every `k`.
-Paired with `not_isLost_foldl_take_cycle_iterate` (every prefix of the infinite repeat is un-lost)
-this exhibits an honest period-ten closed cycle in board space anchored at `flat@base` — the surface
-regulator a flat-shelf bag phase rides indefinitely, the closed-loop face of the infinite-horizon
-survival the carrier route is assembling. -/
-theorem foldl_flatten_replicate_cycle_eq_flatShelf {base : ℕ} (k : ℕ) :
-    List.foldl (Placement.applyStep GameConfig.standard)
-        (skyline GameConfig.standard (fun j => if j = 0 then 0 else base))
-        ((List.replicate k (((List.replicate 2 { piece := Piece.O, rot := 0, col := 1 } ++
-            List.replicate 2 { piece := Piece.O, rot := 0, col := 3 } ++
-            List.replicate 2 { piece := Piece.O, rot := 0, col := 5 }) ++
-           (List.replicate 1 { piece := Piece.I, rot := 1, col := 7 } ++
-            List.replicate 1 { piece := Piece.I, rot := 1, col := 8 } ++
-            List.replicate 1 { piece := Piece.I, rot := 1, col := 9 })) ++
-          [{ piece := Piece.I, rot := 1, col := 0 }] : List Placement)).flatten)
-      = skyline GameConfig.standard (fun j => if j = 0 then 0 else base) :=
-  foldl_flatten_replicate_eq_of_fix foldl_cycle_eq_flatShelf k
 
 /-- **First true closure brick for the band carrier: an O placement on a flat-top
 takes it into a spread-2 band.** Dropping the O square onto two adjacent non-well
@@ -13042,40 +11018,6 @@ theorem isLevelPocketBandAt_flatShelf_lands_standard {base : ℕ} {p : Piece}
   · exact ⟨{ piece := Piece.I, rot := 0, col := 1 }, rfl, by decide,
       isLevelPocketBandAt_horizI_flatTop_standard hslack⟩
 
-/-- **Column-flexible floor-exposing flat-shelf dispatcher (standard flat top, all five
-non-staircase pieces).** The column-flexible refinement of
-`isLevelPocketBandAt_flatShelf_lands_standard`: from the standard flat top — reserved well at
-column `0`, every other column at `base`, two cells of headroom (`base + 2 ≤ 20`) — for any draw
-`p ∈ {O, T, L, J, I}` and any target column `oc` in the right block (`5 ≤ oc`, `oc + 3 < cols`)
-there is a VALID placement of `p` at column `oc` whose post-move board is a floor-exposing level
-pocket band of spread `2` at the STATICALLY KNOWN floor `base`, with the regenerated width-4
-pocket fixed at columns `1, 2, 3, 4`. Each disjunct pairs the parametric validity witness
-(`valid_{O,T,L,J,horizI}`, discharged by `omega` from `oc + 3 < cols`) with the matching
-column-flexible fill (`isLevelPocketBandAt_{O,T,L,J,horizI}_flatTop_standard_at`). Where the
-fixed-column dispatcher always seats the piece at column `1` and relocates the pocket rightward,
-this seats the piece anywhere in the right block and reads the fresh pocket off the fixed left
-block — the placement freedom a strategy needs to choose WHERE to absorb each flat piece while
-keeping a known pocket. Staircase `S`, `Z` are excluded (they need a notched top). -/
-theorem isLevelPocketBandAt_flatShelf_lands_standard_at {base oc : ℕ} {p : Piece}
-    (hslack : base + 2 ≤ GameConfig.standard.rows) (hoc : 5 ≤ oc)
-    (hoc3 : oc + 3 < GameConfig.standard.cols)
-    (hp : p = Piece.O ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J ∨ p = Piece.I) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      IsLevelPocketBandAt GameConfig.standard 2 base
-        (Placement.applyStep GameConfig.standard
-          (skyline GameConfig.standard (fun j => if j = 0 then 0 else base)) pl) := by
-  rcases hp with rfl | rfl | rfl | rfl | rfl
-  · exact ⟨{ piece := Piece.O, rot := 0, col := oc }, rfl, valid_O (by omega),
-      isLevelPocketBandAt_O_flatTop_standard_at hslack hoc (by omega)⟩
-  · exact ⟨{ piece := Piece.T, rot := 2, col := oc }, rfl, valid_T (by omega),
-      isLevelPocketBandAt_T_flatTop_standard_at hslack hoc (by omega)⟩
-  · exact ⟨{ piece := Piece.L, rot := 0, col := oc }, rfl, valid_L (by omega),
-      isLevelPocketBandAt_L_flatTop_standard_at hslack hoc (by omega)⟩
-  · exact ⟨{ piece := Piece.J, rot := 0, col := oc }, rfl, valid_J (by omega),
-      isLevelPocketBandAt_J_flatTop_standard_at hslack hoc (by omega)⟩
-  · exact ⟨{ piece := Piece.I, rot := 0, col := oc }, rfl, valid_horizI hoc3,
-      isLevelPocketBandAt_horizI_flatTop_standard_at hslack hoc hoc3⟩
-
 /-- **Two-O multi-piece absorption on a standard flat shelf.** The first genuine *multi-piece*
 absorption brick: the flat shelf at floor `base` absorbs *two* disjoint `O` pieces (columns
 `oc1, oc1+1` then `oc2, oc2+1`, with `oc1 + 1 < oc2` so the two two-wide blocks never overlap)
@@ -13314,62 +11256,6 @@ theorem isLevelPocketBandAt_T_lands_of_band_site {base oc : ℕ} {h : ℕ → �
       heq1 heq2 (by decide) (by omega) (by omega) (by omega) hw0, hsite]
   refine ⟨Function.update (Function.update (Function.update h oc (base + 1))
       (oc + 1) (base + 2)) (oc + 2) (base + 1), 0, 1, rfl, by decide, ?_, ?_, ?_,
-    by decide, by decide, by decide, by decide, by decide, ?_, ?_, ?_, ?_⟩
-  · rw [Function.update_of_ne (show (0:ℕ) ≠ oc + 2 by omega),
-        Function.update_of_ne (show (0:ℕ) ≠ oc + 1 by omega),
-        Function.update_of_ne (show (0:ℕ) ≠ oc by omega)]; exact hw0
-  · intro j hj hjw
-    rcases eq_or_ne j (oc + 2) with rfl | hjne2
-    · rw [Function.update_self]; omega
-    · rw [Function.update_of_ne hjne2]
-      rcases eq_or_ne j (oc + 1) with rfl | hjne1
-      · rw [Function.update_self]; omega
-      · rw [Function.update_of_ne hjne1]
-        rcases eq_or_ne j oc with rfl | hjne0
-        · rw [Function.update_self]; omega
-        · rw [Function.update_of_ne hjne0]; exact hband j hj hjw
-  · exact hslack
-  · rw [Function.update_of_ne (show (1:ℕ) ≠ oc + 2 by omega),
-        Function.update_of_ne (show (1:ℕ) ≠ oc + 1 by omega),
-        Function.update_of_ne (show (1:ℕ) ≠ oc by omega)]; exact hp1
-  · rw [Function.update_of_ne (show (2:ℕ) ≠ oc + 2 by omega),
-        Function.update_of_ne (show (2:ℕ) ≠ oc + 1 by omega),
-        Function.update_of_ne (show (2:ℕ) ≠ oc by omega)]; exact hp2
-  · rw [Function.update_of_ne (show (3:ℕ) ≠ oc + 2 by omega),
-        Function.update_of_ne (show (3:ℕ) ≠ oc + 1 by omega),
-        Function.update_of_ne (show (3:ℕ) ≠ oc by omega)]; exact hp3
-  · rw [Function.update_of_ne (show (4:ℕ) ≠ oc + 2 by omega),
-        Function.update_of_ne (show (4:ℕ) ≠ oc + 1 by omega),
-        Function.update_of_ne (show (4:ℕ) ≠ oc by omega)]; exact hp4
-
-/-- **Bumpy-input single-L fill arc.** The flat-bottomed L (rotation 0) companion to
-`isLevelPocketBandAt_T_lands_of_band_site`: on an *arbitrary* spread-2 band-shaped height
-profile `h` carrying a reserved empty well at column 0, a regeneration pocket flat at `base`
-across columns 1, 2, 3, 4, and a flat 3-wide landing site `h oc = h (oc+1) = h (oc+2) = base`
-at some `oc ≥ 5`, dropping the L onto the site lands back in `IsLevelPocketBandAt standard 2 base`
-at the SAME floor. The L raises the site to `(base+1, base+1, base+2)` — the riser sits on the
-right column at `base+2`, the two left columns at `base+1`, all inside the spread-2 band — while
-columns 1, 2, 3, 4 and the well are untouched, so the landing surface re-exhibits the width-four
-floor pocket at columns 1, 2, 3, 4. Floor is fixed (`floor' = base`), so the reservoir ledger
-spends zero floor units and the non-`I` fill closes through `reservoirCarrier_fill_step` with
-`hrise` trivial. Like its O, horizontal-I and T siblings it defers only the site-existence
-obligation (`#89`); the geometric landing is discharged. -/
-theorem isLevelPocketBandAt_L_lands_of_band_site {base oc : ℕ} {h : ℕ → ℕ}
-    (hslack : base + 2 ≤ GameConfig.standard.rows)
-    (hw0 : h 0 = 0)
-    (hband : ∀ j < GameConfig.standard.cols, j ≠ 0 → base ≤ h j ∧ h j ≤ base + 2)
-    (hp1 : h 1 = base) (hp2 : h 2 = base) (hp3 : h 3 = base) (hp4 : h 4 = base)
-    (hoc : 5 ≤ oc) (hoc2 : oc + 2 < GameConfig.standard.cols)
-    (hsite : h oc = base) (hsite1 : h (oc + 1) = base) (hsite2 : h (oc + 2) = base) :
-    IsLevelPocketBandAt GameConfig.standard 2 base
-      (Placement.applyStep GameConfig.standard (skyline GameConfig.standard h)
-        { piece := Piece.L, rot := 0, col := oc }) := by
-  have heq1 : h (oc + 1) = h oc := by rw [hsite1, hsite]
-  have heq2 : h (oc + 2) = h oc := by rw [hsite2, hsite]
-  rw [applyStep_L_skyline_noclear (c := oc) (w := 0) (by omega) (by omega) hoc2
-      heq1 heq2 (by decide) (by omega) (by omega) (by omega) hw0, hsite]
-  refine ⟨Function.update (Function.update (Function.update h oc (base + 1))
-      (oc + 1) (base + 1)) (oc + 2) (base + 2), 0, 1, rfl, by decide, ?_, ?_, ?_,
     by decide, by decide, by decide, by decide, by decide, ?_, ?_, ?_, ?_⟩
   · rw [Function.update_of_ne (show (0:ℕ) ≠ oc + 2 by omega),
         Function.update_of_ne (show (0:ℕ) ≠ oc + 1 by omega),
@@ -13804,65 +11690,6 @@ theorem isLevelPocketBandAt_S_lands_notch {base pc : ℕ} {h : ℕ → ℕ}
       heq hstep (by decide) (by omega) (by omega) (by omega) hw0, hsite0]
   refine ⟨Function.update (Function.update (Function.update h pc (base + 1))
       (pc + 1) (base + 2)) (pc + 2) (base + 2), 0, pc + 3, rfl, by decide, ?_, ?_, ?_,
-    by omega, by omega, by omega, by omega, by omega, ?_, ?_, ?_, ?_⟩
-  · rw [Function.update_of_ne (show (0:ℕ) ≠ pc + 2 by omega),
-        Function.update_of_ne (show (0:ℕ) ≠ pc + 1 by omega),
-        Function.update_of_ne (show (0:ℕ) ≠ pc by omega)]; exact hw0
-  · intro j hj hjw
-    rcases eq_or_ne j (pc + 2) with rfl | hjne2
-    · rw [Function.update_self]; omega
-    · rw [Function.update_of_ne hjne2]
-      rcases eq_or_ne j (pc + 1) with rfl | hjne1
-      · rw [Function.update_self]; omega
-      · rw [Function.update_of_ne hjne1]
-        rcases eq_or_ne j pc with rfl | hjne0
-        · rw [Function.update_self]; omega
-        · rw [Function.update_of_ne hjne0]; exact hband j hj hjw
-  · exact hslack
-  · rw [Function.update_of_ne (show (pc + 3:ℕ) ≠ pc + 2 by omega),
-        Function.update_of_ne (show (pc + 3:ℕ) ≠ pc + 1 by omega),
-        Function.update_of_ne (show (pc + 3:ℕ) ≠ pc by omega)]; exact hsite3
-  · rw [Function.update_of_ne (show (pc + 4:ℕ) ≠ pc + 2 by omega),
-        Function.update_of_ne (show (pc + 4:ℕ) ≠ pc + 1 by omega),
-        Function.update_of_ne (show (pc + 4:ℕ) ≠ pc by omega)]; exact hsite4
-  · rw [Function.update_of_ne (show (pc + 5:ℕ) ≠ pc + 2 by omega),
-        Function.update_of_ne (show (pc + 5:ℕ) ≠ pc + 1 by omega),
-        Function.update_of_ne (show (pc + 5:ℕ) ≠ pc by omega)]; exact hsite5
-  · rw [Function.update_of_ne (show (pc + 6:ℕ) ≠ pc + 2 by omega),
-        Function.update_of_ne (show (pc + 6:ℕ) ≠ pc + 1 by omega),
-        Function.update_of_ne (show (pc + 6:ℕ) ≠ pc by omega)]; exact hsite6
-
-/-- **Self-regenerating notch Z fill (mirror staircase region).** The `Z` (rotation 0) mirror of
-`isLevelPocketBandAt_S_lands_notch`, completing the per-piece geometric menu over all seven pieces:
-on a band whose only assumed structured region is a width-seven run at columns `pc .. pc + 6` with a
-single LEFT bump — column `pc` at `base + 1`, columns `pc + 1, pc + 2` at `base`, and columns
-`pc + 3 .. pc + 6` flat at `base` — dropping the down-and-flat `Z` at the left fills the mirror
-staircase `(pc, pc + 1, pc + 2) = (base + 1, base, base)` into the tower
-`(base + 2, base + 2, base + 1)`, keeping every raised column inside the spread-two band, while the
-remaining four columns `pc + 3 .. pc + 6` stay flat at `base`. The post-move board is again
-`IsLevelPocketBandAt standard 2 base` with the width-four pocket regenerated at columns
-`pc + 3 .. pc + 6`. The `At`-indexed, arbitrary-`base`, arbitrary-`pc` generalization of
-`isLevelPocketBand_Z_notched_standard`; floor is fixed (`floor' = base`), so it slots into
-`reservoirCarrier_fill_step` at zero ledger cost and discharges the `#89` site-existence obligation
-for the mirror-staircase input shape. With both `S` and `Z` notch arcs the full seven-piece
-geometric fill menu is complete: every piece has a self-regenerating landing. -/
-theorem isLevelPocketBandAt_Z_lands_notch {base pc : ℕ} {h : ℕ → ℕ}
-    (hslack : base + 2 ≤ GameConfig.standard.rows)
-    (hw0 : h 0 = 0)
-    (hband : ∀ j < GameConfig.standard.cols, j ≠ 0 → base ≤ h j ∧ h j ≤ base + 2)
-    (hpc : 1 ≤ pc) (hpc6 : pc + 6 < GameConfig.standard.cols)
-    (hsite0 : h pc = base + 1) (hsite1 : h (pc + 1) = base) (hsite2 : h (pc + 2) = base)
-    (hsite3 : h (pc + 3) = base) (hsite4 : h (pc + 4) = base) (hsite5 : h (pc + 5) = base)
-    (hsite6 : h (pc + 6) = base) :
-    IsLevelPocketBandAt GameConfig.standard 2 base
-      (Placement.applyStep GameConfig.standard (skyline GameConfig.standard h)
-        { piece := Piece.Z, rot := 0, col := pc }) := by
-  have heq : h (pc + 1) = h (pc + 2) := by rw [hsite1, hsite2]
-  have hstep : h pc = h (pc + 1) + 1 := by rw [hsite0, hsite1]
-  rw [applyStep_Z_skyline_noclear (c := pc) (w := 0) (by omega) (by omega) (by omega)
-      heq hstep (by decide) (by omega) (by omega) (by omega) hw0, hsite1]
-  refine ⟨Function.update (Function.update (Function.update h pc (base + 2))
-      (pc + 1) (base + 2)) (pc + 2) (base + 1), 0, pc + 3, rfl, by decide, ?_, ?_, ?_,
     by omega, by omega, by omega, by omega, by omega, ?_, ?_, ?_, ?_⟩
   · rw [Function.update_of_ne (show (0:ℕ) ≠ pc + 2 by omega),
         Function.update_of_ne (show (0:ℕ) ≠ pc + 1 by omega),
@@ -14514,48 +12341,6 @@ theorem isBoundedPocketBandCarrier_canonical_step_drain {base : ℕ}
     isBoundedPocketBandCarrier_of_vertI_descends hout hfloor
   exact ⟨s, pl, plI, hpiece, hvalid, hpieceI, hvalidI, ⟨base, hin⟩, hdrain⟩
 
-/-- **Fully-certified spread-pinned place-then-drain half-cycle (budgeted membership AND survival,
-one brick).** The budgeted-vocabulary fusion mirroring `isLevelPocketBandAt_canonical_step_drain_floor_safe`:
-where that brick exposes the floor ledger on the band vocabulary, this one states everything in the
-fixed budget-`2` carrier and adds the post-fill board's membership that the bare
-`isBoundedPocketBandCarrier_canonical_step_drain` omits. For EVERY drawn piece `p` (with `4 ≤ base`)
-there is a canonical input surface `skyline s` and a valid placement `pl` of `p` followed by a valid
-well-`I` placement `plI` such that ALL THREE boards the half-cycle passes through — the input surface,
-the post-fill landing, and the post-drain board — are spread-`2` bounded carrier members
-(`IsBoundedPocketBandCarrier 2`), AND each of the three is certified `¬ Board.isLost`. The two
-canonical endpoints are spread-2 bands at floor `base` (so each repackages as `⟨base, ·⟩`); the drain
-`isBoundedPocketBandCarrier_of_vertI_descends` holds the budget fixed while lowering the floor and
-hands back the post-drain board's survival directly. This is the maximal single-piece-plus-regulator
-certificate in budgeted vocabulary — the carrier-membership a σ-invariant threads forward AND the
-top-out-free obligation it discharges, in the SAME witness, for the whole answer-and-regulate pair.
-The remaining open content (#66) is unchanged: the edge from an ARBITRARY budgeted member rather than a
-canonical input, plus the bag-order interleaving of the single per-bag `I` among the seven draws. -/
-theorem isBoundedPocketBandCarrier_canonical_step_drain_safe {base : ℕ}
-    (hslack : base + 2 ≤ GameConfig.standard.rows) (hfloor : 4 ≤ base) (p : Piece) :
-    ∃ (s : ℕ → ℕ) (pl plI : Placement),
-      pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      plI.piece = Piece.I ∧ plI.Valid GameConfig.standard ∧
-      IsBoundedPocketBandCarrier 2 (skyline GameConfig.standard s) ∧
-      IsBoundedPocketBandCarrier 2
-        (Placement.applyStep GameConfig.standard (skyline GameConfig.standard s) pl) ∧
-      IsBoundedPocketBandCarrier 2
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard (skyline GameConfig.standard s) pl) plI) ∧
-      ¬ Board.isLost GameConfig.standard (skyline GameConfig.standard s) ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard (skyline GameConfig.standard s) pl) ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard (skyline GameConfig.standard s) pl) plI) := by
-  obtain ⟨s, pl, hpiece, hvalid, hin, hout⟩ := isLevelPocketBandAt_canonical_input_isBand hslack p
-  obtain ⟨plI, hpieceI, hvalidI, hdrain, hdrainsafe⟩ :=
-    isBoundedPocketBandCarrier_of_vertI_descends hout hfloor
-  exact ⟨s, pl, plI, hpiece, hvalid, hpieceI, hvalidI,
-    ⟨base, hin⟩, ⟨base, hout⟩, hdrain,
-    isBoundedPocketBandCarrier_not_isLost ⟨base, hin⟩,
-    isBoundedPocketBandCarrier_not_isLost ⟨base, hout⟩,
-    hdrainsafe⟩
-
 /-- **Survival face of the carrier place-then-drain transition.** The `not_isLost` strengthening
 of `isPocketBandCarrier_canonical_step_drain`: the same two-placement answer-and-regulate edge, but
 now certifying that EVERY board the transition passes through is alive — the input surface
@@ -14965,43 +12750,6 @@ theorem isBoundedPocketBandCarrier_fill_then_drain_bounded {base : ℕ}
   have hj := hcap j
   omega
 
-/-- **Scalar-potential constant-ceiling endpoint of the canonical half-cycle.** The single-scalar
-companion to `isBoundedPocketBandCarrier_fill_then_drain_bounded`, and the canonical-input twin of
-`isBoundedPocketBandCarrier_of_vertI_drain_maxColHeight` (which resets an arbitrary member). For every
-piece `p`, the canonical absorb-then-drain half-cycle — answer `p` on a tailored canonical surface, then
-run the `I`-regulator — lands in `IsBoundedPocketBandCarrier 2` with the *scalar potential*
-`maxColHeight ≤ 5`, every drain placement a valid `I`, the post-fill board and every drain prefix
-un-lost. Where the `_bounded` face states the post-cycle ceiling per column (`∀ j, colHeight ≤ 5`), this
-collapses that family into the one supremum the potential route reads (`Finset.sup_le` over the
-per-column `≤ 5`), feedable straight into `not_isLost_of_maxColHeight_le` with a constant gap of `15`
-beneath the 20-row top-out — independent of how tall the input `base` was. This is the scalar fixed-ceiling
-certificate a phase-indexed σ re-establishes at each bag boundary in single-scalar vocabulary: whatever
-piece the bag draws, after the canonical answer-and-regulate the surface potential sits below `5`. -/
-theorem isBoundedPocketBandCarrier_fill_then_drain_maxColHeight {base : ℕ}
-    (hslack : base + 2 ≤ GameConfig.standard.rows) (p : Piece) :
-    ∃ (s : ℕ → ℕ) (pl : Placement) (ps : List Placement),
-      pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      (∀ q ∈ ps, q.piece = Piece.I ∧ q.Valid GameConfig.standard) ∧
-      IsBoundedPocketBandCarrier 2
-        (List.foldl (Placement.applyStep GameConfig.standard)
-          (Placement.applyStep GameConfig.standard (skyline GameConfig.standard s) pl) ps) ∧
-      maxColHeight GameConfig.standard
-        (List.foldl (Placement.applyStep GameConfig.standard)
-          (Placement.applyStep GameConfig.standard (skyline GameConfig.standard s) pl) ps) ≤ 5 ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard (skyline GameConfig.standard s) pl) ∧
-      (∀ k, ¬ Board.isLost GameConfig.standard
-        (List.foldl (Placement.applyStep GameConfig.standard)
-          (Placement.applyStep GameConfig.standard (skyline GameConfig.standard s) pl)
-          (ps.take k))) := by
-  obtain ⟨s, pl, ps, hpiece, hvalid, hall, hband, hcap, hfillsafe, hsafe⟩ :=
-    isBoundedPocketBandCarrier_fill_then_drain_bounded hslack p
-  refine ⟨s, pl, ps, hpiece, hvalid, hall, hband, ?_, hfillsafe, hsafe⟩
-  unfold maxColHeight
-  apply Finset.sup_le
-  intro j _
-  exact hcap j
-
 /-- **All-7 canonical pocket regeneration (uniform per-piece existence).** The consolidation
 that closes the per-piece pocket-regeneration menu (ABLK through ABLR) into one uniform
 statement: for EVERY piece `p` there exists a canonical input surface `s` and a VALID placement
@@ -15049,27 +12797,6 @@ theorem isLevelPocketBand_canonical_lands_all7 {base : ℕ}
         isLevelPocketBand_flatShelf_lands_standard hslack
           (Or.inr (Or.inr (Or.inr (Or.inl rfl))))
       exact ⟨_, pl, hpiece, hvalid, hband⟩
-
-/-- **Survival face of the all-7 canonical pocket regeneration.** The `not_isLost`
-strengthening of `isLevelPocketBand_canonical_lands_all7`: for EVERY piece `p` the canonical
-surface `s` and VALID placement `pl` not only land back in a spread-2 level pocket band, that
-landing board is certified *not lost*. The survival conjunct is read straight off the band:
-forgetting the pocket gives a spread-2 reserved-well skyline
-(`isSpreadBoundedRWSkyline_of_isLevelPocketBand`), whose ceiling cap rules out a top-out
-(`not_isLost_of_isSpreadBoundedRWSkyline`). This is the uniform *answer-and-survive* certificate
-a strategy's per-move non-loss bookkeeping consumes: whatever piece the adversary draws, the
-player has a canonical surface from which that piece both rebuilds the pocket AND keeps the game
-alive — the survival face of the bag-phase σ's per-piece dispatch. -/
-theorem isLevelPocketBand_canonical_lands_all7_not_isLost {base : ℕ}
-    (hslack : base + 2 ≤ GameConfig.standard.rows) (p : Piece) :
-    ∃ (s : ℕ → ℕ) (pl : Placement), pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      IsLevelPocketBand GameConfig.standard 2
-        (Placement.applyStep GameConfig.standard (skyline GameConfig.standard s) pl) ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard (skyline GameConfig.standard s) pl) := by
-  obtain ⟨s, pl, hpiece, hvalid, hband⟩ := isLevelPocketBand_canonical_lands_all7 hslack p
-  exact ⟨s, pl, hpiece, hvalid, hband,
-    not_isLost_of_isSpreadBoundedRWSkyline (isSpreadBoundedRWSkyline_of_isLevelPocketBand hband)⟩
 
 /-- **Band-carrier landing-site existence: a flat top admits an O placement into a
 spread-2 band.** The band-carrier analogue of `isFlatTopRWSkyline_O_lands`: instead of
@@ -15446,38 +13173,6 @@ theorem isSpreadBoundedRWSkyline_L_of_isSpreadBounded {cfg : GameConfig} {spread
           omega
   · omega
 
-/-- **Band-carrier landing-site existence: a flat top admits an L placement into a
-spread-2 band.** Identical disjoint-triple pigeonhole to the T case
-(`isSpreadBoundedRWSkyline_T_lands_of_isFlatTop`); only the dropped piece differs (`{L, 0, _}`
-for `{T, 2, _}`), since both consume the same level three-shelf away from the well. Recognising
-the flat top as a spread-0 band, the general L closure (`isSpreadBoundedRWSkyline_L_of_isSpreadBounded`)
-seats it into `[base, base+2]`. Third band-existence brick. -/
-theorem isSpreadBoundedRWSkyline_L_lands_of_isFlatTop {cfg : GameConfig} {base w : ℕ}
-    (hw : w < cfg.cols) (h6 : 6 ≤ cfg.cols) (hslack : base + 2 ≤ cfg.rows) :
-    ∃ c, IsSpreadBoundedRWSkyline cfg 2
-      (Placement.applyStep cfg (skyline cfg (fun j => if j = w then 0 else base))
-        { piece := Piece.L, rot := 0, col := c }) := by
-  obtain ⟨c, hc2, hwc, hwc1, hwc2⟩ :
-      ∃ c, c + 2 < cfg.cols ∧ w ≠ c ∧ w ≠ c + 1 ∧ w ≠ c + 2 := by
-    rcases Nat.lt_or_ge w 3 with hlt | hge
-    · exact ⟨3, by omega, by omega, by omega, by omega⟩
-    · exact ⟨0, by omega, by omega, by omega, by omega⟩
-  have hc : c < cfg.cols := by omega
-  have hc1 : c + 1 < cfg.cols := by omega
-  set h : ℕ → ℕ := fun j => if j = w then 0 else base with hh
-  have hw0 : h w = 0 := by rw [hh]; simp
-  have hbase : h c = base := by rw [hh]; simp only [if_neg (Ne.symm hwc)]
-  have hbase1 : h (c + 1) = base := by rw [hh]; simp only [if_neg (Ne.symm hwc1)]
-  have hbase2 : h (c + 2) = base := by rw [hh]; simp only [if_neg (Ne.symm hwc2)]
-  have heq1 : h (c + 1) = h c := by rw [hbase1, hbase]
-  have heq2 : h (c + 2) = h c := by rw [hbase2, hbase]
-  have hband : ∀ j < cfg.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + 0 := by
-    intro j hj hjw
-    have hjb : h j = base := by rw [hh]; simp only [if_neg hjw]
-    omega
-  exact ⟨c, isSpreadBoundedRWSkyline_L_of_isSpreadBounded hc hc1 hc2 hw hwc hwc1 hwc2 hw0
-    heq1 heq2 hband (by omega)⟩
-
 /-- **Spread-preserving valley fill, L-shelf: a flat L dropped onto a floor-level
 triple keeps the band width fixed.** The L member of the spread-non-increasing family.
 When the level triple `(c, c+1, c+2)` sits at the band **floor** (`hcfloor : h c = floor`)
@@ -15555,39 +13250,6 @@ theorem isSpreadBoundedRWSkyline_J_of_isSpreadBounded {cfg : GameConfig} {spread
           obtain ⟨hjlo, hjhi⟩ := hband j hj hjw
           omega
   · omega
-
-/-- **Band-carrier landing-site existence: a flat top admits a J placement into a
-spread-2 band.** Identical disjoint-triple pigeonhole to the T and L cases; only the
-dropped piece differs (`{J, 0, _}`), since all three consume the same level three-shelf
-away from the well. Recognising the flat top as a spread-0 band, the general J closure
-(`isSpreadBoundedRWSkyline_J_of_isSpreadBounded`) seats it into `[base, base+2]`. Fourth
-band-existence brick — with O, T, L, J done, only horizontal-I remains on the flat-shelf
-track (S and Z need the notched entry). -/
-theorem isSpreadBoundedRWSkyline_J_lands_of_isFlatTop {cfg : GameConfig} {base w : ℕ}
-    (hw : w < cfg.cols) (h6 : 6 ≤ cfg.cols) (hslack : base + 2 ≤ cfg.rows) :
-    ∃ c, IsSpreadBoundedRWSkyline cfg 2
-      (Placement.applyStep cfg (skyline cfg (fun j => if j = w then 0 else base))
-        { piece := Piece.J, rot := 0, col := c }) := by
-  obtain ⟨c, hc2, hwc, hwc1, hwc2⟩ :
-      ∃ c, c + 2 < cfg.cols ∧ w ≠ c ∧ w ≠ c + 1 ∧ w ≠ c + 2 := by
-    rcases Nat.lt_or_ge w 3 with hlt | hge
-    · exact ⟨3, by omega, by omega, by omega, by omega⟩
-    · exact ⟨0, by omega, by omega, by omega, by omega⟩
-  have hc : c < cfg.cols := by omega
-  have hc1 : c + 1 < cfg.cols := by omega
-  set h : ℕ → ℕ := fun j => if j = w then 0 else base with hh
-  have hw0 : h w = 0 := by rw [hh]; simp
-  have hbase : h c = base := by rw [hh]; simp only [if_neg (Ne.symm hwc)]
-  have hbase1 : h (c + 1) = base := by rw [hh]; simp only [if_neg (Ne.symm hwc1)]
-  have hbase2 : h (c + 2) = base := by rw [hh]; simp only [if_neg (Ne.symm hwc2)]
-  have heq1 : h (c + 1) = h c := by rw [hbase1, hbase]
-  have heq2 : h (c + 2) = h c := by rw [hbase2, hbase]
-  have hband : ∀ j < cfg.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + 0 := by
-    intro j hj hjw
-    have hjb : h j = base := by rw [hh]; simp only [if_neg hjw]
-    omega
-  exact ⟨c, isSpreadBoundedRWSkyline_J_of_isSpreadBounded hc hc1 hc2 hw hwc hwc1 hwc2 hw0
-    heq1 heq2 hband (by omega)⟩
 
 /-- **Spread-preserving valley fill, J-shelf: a flat J dropped onto a floor-level
 triple keeps the band width fixed.** The J member of the spread-non-increasing family,
@@ -15722,50 +13384,6 @@ theorem not_isLost_lands_of_isLevelPocketBand
     isSpreadBoundedRWSkyline_lands_of_isLevelPocketBand hb hspread p hp
   exact ⟨pl, hpiece, hvalid, not_isLost_of_isSpreadBoundedRWSkyline hband⟩
 
-/-- **A flat top discharges the full hstep triple for EVERY flat-shelf piece.** The flat-top
-specialisation of `isSpreadBoundedRWSkyline_flat5_valley_of_levelPocket`: on a reserved-well
-flat top (every non-well column at the common height `base`, the well at `0`), the width-four
-LEVEL pocket the consolidation needs always EXISTS by disjoint-quad pigeonhole (`8 ≤ cfg.cols`),
-so the explicit-pocket hypotheses discharge and ANY piece from the flat-shelf set
-`{O, I, T, L, J}` admits a placement meeting the FULL `hstep` triple — correct piece,
-`pl.Valid cfg`, post-board a spread-`2` band. Viewing the flat top as a spread-`2` band
-(`base ≤ h j ≤ base + 2` holds trivially, the four pocket columns level at `floor = base`), the
-five-piece consolidation lands each piece without exceeding band width `2`. This is the flat-top
-analogue of the per-piece `isSpreadBoundedRWSkyline_horizI_lands_of_isFlatTop`, now covering all
-five flat pieces at once WITH validity — exactly the `{O, I, T, L, J}` branches of the flat-top
-carrier closure, exiting (honestly) to the wider band the surface roughening produces, not back
-to a flat top. -/
-theorem isSpreadBoundedRWSkyline_flat5_valid_lands_of_isFlatTop {cfg : GameConfig} {base w : ℕ}
-    (hw : w < cfg.cols) (h8 : 8 ≤ cfg.cols) (hslack : base + 2 ≤ cfg.rows)
-    (p : Piece)
-    (hp : p = Piece.O ∨ p = Piece.I ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧
-      IsSpreadBoundedRWSkyline cfg 2
-        (Placement.applyStep cfg (skyline cfg (fun j => if j = w then 0 else base)) pl) := by
-  obtain ⟨c, hc3, hwc, hwc1, hwc2, hwc3⟩ :
-      ∃ c, c + 3 < cfg.cols ∧ w ≠ c ∧ w ≠ c + 1 ∧ w ≠ c + 2 ∧ w ≠ c + 3 := by
-    rcases Nat.lt_or_ge w 4 with hlt | hge
-    · exact ⟨4, by omega, by omega, by omega, by omega, by omega⟩
-    · exact ⟨0, by omega, by omega, by omega, by omega, by omega⟩
-  have hc : c < cfg.cols := by omega
-  have hc1 : c + 1 < cfg.cols := by omega
-  have hc2 : c + 2 < cfg.cols := by omega
-  set h : ℕ → ℕ := fun j => if j = w then 0 else base with hh
-  have hw0 : h w = 0 := by rw [hh]; simp
-  have hbase : h c = base := by rw [hh]; simp only [if_neg (Ne.symm hwc)]
-  have hbase1 : h (c + 1) = base := by rw [hh]; simp only [if_neg (Ne.symm hwc1)]
-  have hbase2 : h (c + 2) = base := by rw [hh]; simp only [if_neg (Ne.symm hwc2)]
-  have hbase3 : h (c + 3) = base := by rw [hh]; simp only [if_neg (Ne.symm hwc3)]
-  have heq1 : h (c + 1) = h c := by rw [hbase1, hbase]
-  have heq2 : h (c + 2) = h c := by rw [hbase2, hbase]
-  have heq3 : h (c + 3) = h c := by rw [hbase3, hbase]
-  have hband : ∀ j < cfg.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + 2 := by
-    intro j hj hjw
-    have hjb : h j = base := by rw [hh]; simp only [if_neg hjw]
-    omega
-  exact isSpreadBoundedRWSkyline_flat5_valley_of_levelPocket hc hc1 hc2 hc3 hw hwc hwc1 hwc2
-    hwc3 hw0 heq1 heq2 heq3 hbase (by omega) hband hslack p hp
-
 /-- **Spread-preserving valley fill, S-notch: a notch-seated S dropped onto a
 floor-level staircase keeps the band width fixed.** The first notch-seated member of the
 spread-non-increasing family (companion to the flat-shelf O, horizontal-I, T, L, J valley
@@ -15883,32 +13501,6 @@ theorem isSpreadBoundedRWSkyline_SZ_valley_of_notch {cfg : GameConfig} {spread :
       isSpreadBoundedRWSkyline_Z_valley_of_isSpreadBounded hc hc1 hc2 hw hwc hwc1 hwc2 hw0
         heq hstep hcfloor hspread hband hslack⟩
 
-/-- **Staircase survival face of the `{S, Z}` valley fit.** The `not_isLost` companion to
-`isSpreadBoundedRWSkyline_SZ_valley_of_notch`, mirroring the flat-shelf
-`not_isLost_lands_of_isLevelPocketBand`: on a depth-at-least-two spread band carrying the
-`p`-appropriate floor staircase (S the right-riser, Z the mirror left-riser), the forced
-staircase piece admits a VALID placement whose landing board is not lost. Composes the
-spread-preserving valley fit (which keeps the band width at `spread`) with the band survival
-certificate `not_isLost_of_isSpreadBoundedRWSkyline`. Together with the flat-shelf face this
-closes the per-piece non-loss certificate for ALL seven pieces on a player-built band — the
-survival bookkeeping the reachability route threads through each σ-move. -/
-theorem not_isLost_SZ_valley_of_notch {cfg : GameConfig} {spread : ℕ}
-    {h : ℕ → ℕ} {floor w c : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
-    (hw0 : h w = 0) (hspread : 2 ≤ spread)
-    (hband : ∀ j < cfg.cols, j ≠ w → floor ≤ h j ∧ h j ≤ floor + spread)
-    (hslack : floor + spread ≤ cfg.rows)
-    (p : Piece) (hp : p = Piece.S ∨ p = Piece.Z)
-    (hSnotch : p = Piece.S → h c = h (c + 1) ∧ h (c + 2) = h c + 1 ∧ h c = floor)
-    (hZnotch : p = Piece.Z → h (c + 1) = h (c + 2) ∧ h c = h (c + 1) + 1 ∧ h (c + 1) = floor) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧
-      ¬ Board.isLost cfg (Placement.applyStep cfg (skyline cfg h) pl) := by
-  obtain ⟨pl, hpiece, hvalid, hband'⟩ :=
-    isSpreadBoundedRWSkyline_SZ_valley_of_notch hc hc1 hc2 hw hwc hwc1 hwc2 hw0 hspread
-      hband hslack p hp hSnotch hZnotch
-  exact ⟨pl, hpiece, hvalid, not_isLost_of_isSpreadBoundedRWSkyline hband'⟩
-
 /-- **The complete valley menu: a fully equipped band absorbs all seven pieces at the
 band width.** The capstone of the spread-non-increasing family, consolidating
 `isSpreadBoundedRWSkyline_flat5_valley_of_levelPocket` (the five flat-shelf pieces seated
@@ -16022,42 +13614,6 @@ theorem isSpreadBoundedRWSkyline_all7_valley_of_pocket_Snotch_Znotch {cfg : Game
     exact isSpreadBoundedRWSkyline_SZ_valley_of_notch he he1 he2 hw hwe hwe1 hwe2 hw0 hspread
       hband hslack Piece.Z (Or.inr rfl) (fun hpS => absurd hpS (by decide)) (fun _ => hZnotch)
 
-/-- **The two-notch valley menu survives every adversarial next piece, at ANY floor.** The non-loss
-face of `isSpreadBoundedRWSkyline_all7_valley_of_pocket_Snotch_Znotch`, composed with
-`not_isLost_of_isSpreadBoundedRWSkyline` (every spread-bounded reserved-well board sits under the
-ceiling). From any band that offers a width-four level pocket, an ascending `S`-notch, a descending
-`Z`-notch, and a reserved well, WHATEVER piece the adversary draws admits a valid placement whose
-landing board is not lost. Unlike `isSpreadBoundedRWSkyline_all7_valley_standard_not_isLost`, this is
-floor-agnostic: it survives at the lowered floors produced after an I-clear reset, so it is the
-reusable survival face the eventual two-phase strategy quotes whenever the band carrier re-enters an
-all-seven-ready surface at whatever height the clear left behind. -/
-theorem isSpreadBoundedRWSkyline_all7_valley_of_pocket_Snotch_Znotch_not_isLost
-    {cfg : GameConfig} {spread : ℕ}
-    {h : ℕ → ℕ} {floor w c d e : ℕ}
-    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
-    (hc3 : c + 3 < cfg.cols)
-    (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2) (hwc3 : w ≠ c + 3)
-    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c) (heq3 : h (c + 3) = h c)
-    (hcfloor : h c = floor)
-    (hd : d < cfg.cols) (hd1 : d + 1 < cfg.cols) (hd2 : d + 2 < cfg.cols)
-    (hwd : w ≠ d) (hwd1 : w ≠ d + 1) (hwd2 : w ≠ d + 2)
-    (hSnotch : h d = h (d + 1) ∧ h (d + 2) = h d + 1 ∧ h d = floor)
-    (he : e < cfg.cols) (he1 : e + 1 < cfg.cols) (he2 : e + 2 < cfg.cols)
-    (hwe : w ≠ e) (hwe1 : w ≠ e + 1) (hwe2 : w ≠ e + 2)
-    (hZnotch : h (e + 1) = h (e + 2) ∧ h e = h (e + 1) + 1 ∧ h (e + 1) = floor)
-    (hw : w < cfg.cols) (hw0 : h w = 0) (hspread : 2 ≤ spread)
-    (hband : ∀ j < cfg.cols, j ≠ w → floor ≤ h j ∧ h j ≤ floor + spread)
-    (hslack : floor + spread ≤ cfg.rows)
-    (p : Piece) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧
-      ¬ Board.isLost cfg (Placement.applyStep cfg (skyline cfg h) pl) := by
-  obtain ⟨pl, hpiece, hvalid, hband'⟩ :=
-    isSpreadBoundedRWSkyline_all7_valley_of_pocket_Snotch_Znotch
-      hc hc1 hc2 hc3 hwc hwc1 hwc2 hwc3 heq1 heq2 heq3 hcfloor
-      hd hd1 hd2 hwd hwd1 hwd2 hSnotch he he1 he2 hwe hwe1 hwe2 hZnotch
-      hw hw0 hspread hband hslack p
-  exact ⟨pl, hpiece, hvalid, not_isLost_of_isSpreadBoundedRWSkyline hband'⟩
-
 /-- **The two-notch valley menu lands every piece at a PINNED floor.** The floor-magnitude-tracking
 upgrade of `isSpreadBoundedRWSkyline_all7_valley_of_pocket_Snotch_Znotch`: same single-board geometry
 (reserved well `w`, width-four level pocket at `c..c+3`, ascending `S`-notch at `d..d+2`, descending
@@ -16166,44 +13722,6 @@ theorem isSpreadBoundedRWSkyline_Sphase_valley_standard (p : Piece) (hp : p ≠ 
     hband (by decide)
     p (fun _ => by decide) (fun hpZ => absurd hpZ hp)
 
-/-- **The Z-phase mirror landing surface, realizable in ten standard columns.** The reflection
-partner of `isSpreadBoundedRWSkyline_Sphase_valley_standard`: the same single-notch carrier geometry
-but with a `Z`-staircase notch in place of the `S`-notch. The surface is
-`h = (0, 5, 4, 4, 4, 4, 4, 4, 4, 4)`: well at column `0`, a `Z`-notch at columns `1..3`
-(heights `5, 4, 4`, the unit step descending), and a level pocket at columns `4..7` (all `4`), with
-columns `8, 9` flat filler. It is a spread-`2` reserved-well band (off-well heights lie in `[4, 6]`),
-so for EVERY drawn piece other than `S` the all-seven valley menu lands a valid placement keeping the
-spread-`2` band: the five flat-shelf pieces seat in the pocket and `Z` seats in the notch, while `S`
-is excluded by hypothesis because its mirror notch is absent.
-
-Together with the `S`-phase witness this exhibits both bag-phase from-surfaces a phase-conditional
-`hstep` alternates between — `S`-pending boards carry the ascending notch, `Z`-pending boards the
-descending one — each fitting the ten-column budget (`well + notch + pocket = 8 ≤ 10`). The remaining
-content is the phase transition: stepping a piece must hand the next phase its matching notch. -/
-theorem isSpreadBoundedRWSkyline_Zphase_valley_standard (p : Piece) (hp : p ≠ Piece.S) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      IsSpreadBoundedRWSkyline GameConfig.standard 2
-        (Placement.applyStep GameConfig.standard
-          (skyline GameConfig.standard
-            (fun j => if j = 0 then 0 else if j = 1 then 5 else 4)) pl) := by
-  have hband : ∀ j < GameConfig.standard.cols, j ≠ 0 →
-      (4 : ℕ) ≤ (fun j => if j = 0 then 0 else if j = 1 then 5 else 4) j ∧
-      (fun j => if j = 0 then 0 else if j = 1 then 5 else 4) j ≤ 4 + 2 := by
-    intro j hj hjw
-    have hj10 : j < 10 := hj
-    interval_cases j <;> revert hjw <;> decide
-  exact isSpreadBoundedRWSkyline_all7_valley_of_pocket_notch
-    (c := 4) (d := 1) (w := 0) (floor := 4) (spread := 2)
-    (by decide) (by decide) (by decide) (by decide)
-    (by decide) (by decide) (by decide) (by decide)
-    (by decide) (by decide) (by decide)
-    (by decide)
-    (by decide) (by decide) (by decide)
-    (by decide) (by decide) (by decide)
-    (by decide) (by decide) (by decide)
-    hband (by decide)
-    p (fun hpS => absurd hpS hp) (fun _ => by decide)
-
 /-- **Column-budget obstruction: a pocket, both staircase notches, and a reserved well cannot
 coexist in ten columns.** The rigorous form of the informal `1 + 4 + 3 + 3 = 11 > 10` reading
 (task `#90`). If a width-four level pocket `[c, c+4)`, an `S`-notch `[d, d+3)`, a `Z`-notch
@@ -16227,48 +13745,6 @@ theorem no_pocket_SZnotch_well_in_ten_cols
     (h_cw : c + 4 ≤ w ∨ w + 1 ≤ c) (h_de : d + 3 ≤ e ∨ e + 3 ≤ d)
     (h_dw : d + 3 ≤ w ∨ w + 1 ≤ d) (h_ew : e + 3 ≤ w ∨ w + 1 ≤ e) :
     False := by omega
-
-/-- **A single standard board absorbs BOTH staircase pieces.** The concrete board
-`(0,4,4,5,5,4,4,4,4,4)` over `GameConfig.standard` carries a reserved well at column 0,
-an ascending `S`-notch at columns `1..3` (profile `4,4,5`), and a descending `Z`-notch at
-columns `4..6` (profile `5,4,4`), all inside the spread-`2` band `[4,6]`. Whichever of the
-two staircase pieces the adversary names, it seats flush at its own notch and the landing
-board stays in the same spread-`2` band. This is the witness the single-notch
-`isSpreadBoundedRWSkyline_Sphase_valley_standard` and `..._Zphase_valley_standard` boards
-could not give: each of those handled only ONE staircase piece (excluding the other by a
-`p ≠ Z` or `p ≠ S` precondition). Here `well + Snotch + Znotch = 1 + 3 + 3 = 7 ≤ 10`, so
-both notches plus the well fit comfortably with columns `7..9` to spare. It is the
-constructive complement to `no_pocket_SZnotch_well_in_ten_cols`, which only forbids fitting
-a width-four pocket ALONGSIDE both notches and the well when all four sites are pairwise
-disjoint; the staircase pair alone needs no pocket and so escapes that budget entirely. -/
-theorem isSpreadBoundedRWSkyline_SZ_both_valley_standard (p : Piece)
-    (hp : p = Piece.S ∨ p = Piece.Z) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      IsSpreadBoundedRWSkyline GameConfig.standard 2
-        (Placement.applyStep GameConfig.standard
-          (skyline GameConfig.standard
-            (fun j => if j = 0 then 0 else if j = 3 then 5 else if j = 4 then 5 else 4)) pl) := by
-  have hband : ∀ j < GameConfig.standard.cols, j ≠ 0 →
-      (4 : ℕ) ≤ (fun j => if j = 0 then 0 else if j = 3 then 5 else if j = 4 then 5 else 4) j ∧
-      (fun j => if j = 0 then 0 else if j = 3 then 5 else if j = 4 then 5 else 4) j ≤ 4 + 2 := by
-    intro j hj hjw
-    have hj10 : j < 10 := hj
-    interval_cases j <;> revert hjw <;> decide
-  rcases hp with rfl | rfl
-  · exact isSpreadBoundedRWSkyline_SZ_valley_of_notch
-      (c := 1) (w := 0) (floor := 4) (spread := 2)
-      (by decide) (by decide) (by decide)
-      (by decide) (by decide) (by decide) (by decide)
-      (by decide) (by decide)
-      hband (by decide)
-      Piece.S (Or.inl rfl) (fun _ => by decide) (fun hpZ => absurd hpZ (by decide))
-  · exact isSpreadBoundedRWSkyline_SZ_valley_of_notch
-      (c := 4) (w := 0) (floor := 4) (spread := 2)
-      (by decide) (by decide) (by decide)
-      (by decide) (by decide) (by decide) (by decide)
-      (by decide) (by decide)
-      hband (by decide)
-      Piece.Z (Or.inr rfl) (fun hpS => absurd hpS (by decide)) (fun _ => by decide)
 
 /-- **A single standard board closed under EVERY adversarial next piece.** The concrete surface
 `h = (0, 4, 4, 5, 5, 4, 4, 4, 4, 4)` over `GameConfig.standard` simultaneously carries all four
@@ -16400,35 +13876,6 @@ theorem isSpreadBoundedRWSkyline_all7_valley_richStandard_not_isLost {base : ℕ
     isSpreadBoundedRWSkyline_all7_valley_richStandard hbase p
   exact ⟨pl, hpiece, hvalid, not_isLost_of_isSpreadBoundedRWSkyline hband⟩
 
-/-- **The rich standard surface is a level-pocket band.** The descent-track landing surface
-`(0, base, base, base, base, base+1, base, base, base+1, base)` is a member of the refined
-reachability-route carrier `IsLevelPocketBand` at spread `1`: reserved well at column `0`, every
-off-well column inside `[base, base+1]`, and a guaranteed width-four LEVEL shelf at columns `1..4`
-(all resting at the band floor `base`). Where `isSpreadBoundedRWSkyline_all7_valley_richStandard`
-reads the rich surface as a bare spread band to feed the valley menu, this reads it as a *pocket*
-band — the strictly stronger predicate that already exhibits the flat shelf the five flat-shelf
-pieces land on, so the rich surface is admissible for the level-pocket reachability invariant the
-candidate `tetrisSolvableValid_of_strategy_invariant` route carries. -/
-theorem isLevelPocketBand_richStandard {base : ℕ}
-    (hbase : base + 1 ≤ GameConfig.standard.rows) :
-    IsLevelPocketBand GameConfig.standard 1
-      (skyline GameConfig.standard
-        (fun j => if j = 0 then 0 else if j = 5 then base + 1 else if j = 8 then base + 1 else base)) := by
-  refine ⟨_, base, 0, 1, rfl, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · decide
-  · simp
-  · intro j hj hjw; split_ifs <;> omega
-  · exact hbase
-  · decide
-  · decide
-  · decide
-  · decide
-  · decide
-  · simp
-  · simp
-  · simp
-  · simp
-
 /-- **S closure for the band carrier: a no-clear notch-seated S on a spread-`s` band
 lands in a spread-`s+2` band.** Unlike the flat-shelf pieces, S demands a staircase
 notch `(h c = h (c+1), h (c+2) = h c + 1)`; seated there off the reserved well it
@@ -16467,47 +13914,6 @@ theorem isSpreadBoundedRWSkyline_S_of_isSpreadBounded {cfg : GameConfig} {spread
           obtain ⟨hjlo, hjhi⟩ := hband j hj hjw
           omega
   · omega
-
-/-- **Band-carrier landing-site existence, S on a unit step: a surface flat at `base`
-except for a single `+1` riser admits an S placement into a spread-3 band.** Unlike the
-flat-shelf pieces (which need a level run and enter from a flat top), the no-clear S
-demands a staircase `(h c = h (c+1), h (c+2) = h c + 1)`, so its entry surface must
-already carry a unit step. Here the step sits at column `m + 2`; placing the S at
-`c = m` seats it flush on the staircase. The entry is a spread-1 band (every column in
-`[base, base+1]`), and the general S closure raises the notch by two, landing in
-`IsSpreadBoundedRWSkyline cfg 3`. First of the two notch-entry existence bricks (Z is
-the mirror). -/
-theorem isSpreadBoundedRWSkyline_S_lands_of_isStep {cfg : GameConfig} {base w m : ℕ}
-    (hw : w < cfg.cols) (hm2 : m + 2 < cfg.cols)
-    (hwm : w ≠ m) (hwm1 : w ≠ m + 1) (hwm2 : w ≠ m + 2)
-    (hslack : base + 3 ≤ cfg.rows) :
-    ∃ c, IsSpreadBoundedRWSkyline cfg 3
-      (Placement.applyStep cfg
-        (skyline cfg (fun j => if j = w then 0 else if j = m + 2 then base + 1 else base))
-        { piece := Piece.S, rot := 0, col := c }) := by
-  refine ⟨m, ?_⟩
-  have hc : m < cfg.cols := by omega
-  have hc1 : m + 1 < cfg.cols := by omega
-  set h : ℕ → ℕ := fun j => if j = w then 0 else if j = m + 2 then base + 1 else base with hh
-  have hw0 : h w = 0 := by rw [hh]; simp
-  have hbase : h m = base := by
-    rw [hh]; simp only [if_neg (Ne.symm hwm), if_neg (show m ≠ m + 2 by omega)]
-  have hbase1 : h (m + 1) = base := by
-    rw [hh]; simp only [if_neg (Ne.symm hwm1), if_neg (show m + 1 ≠ m + 2 by omega)]
-  have hstepval : h (m + 2) = base + 1 := by
-    rw [hh]; simp only [if_neg (Ne.symm hwm2)]; simp
-  have heq : h m = h (m + 1) := by rw [hbase, hbase1]
-  have hstep : h (m + 2) = h m + 1 := by rw [hstepval, hbase]
-  have hband : ∀ j < cfg.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + 1 := by
-    intro j hj hjw
-    have hjval : h j = (if j = m + 2 then base + 1 else base) := by
-      rw [hh]; simp only [if_neg hjw]
-    rw [hjval]
-    by_cases hj2 : j = m + 2
-    · rw [if_pos hj2]; omega
-    · rw [if_neg hj2]; omega
-  exact isSpreadBoundedRWSkyline_S_of_isSpreadBounded hc hc1 hm2 heq hstep hw hwm hwm1 hwm2 hw0
-    hband (by omega)
 
 /-- **Z closure for the band carrier: a no-clear notch-seated Z on a spread-`s` band
 lands in a spread-`s+2` band.** The mirror of the S brick: Z demands the opposite
@@ -16549,46 +13955,6 @@ theorem isSpreadBoundedRWSkyline_Z_of_isSpreadBounded {cfg : GameConfig} {spread
           obtain ⟨hjlo, hjhi⟩ := hband j hj hjw
           omega
   · omega
-
-/-- **Band-carrier landing-site existence, Z on a unit step: the mirror of the S brick.**
-The no-clear Z demands the opposite staircase `(h (c+1) = h (c+2), h c = h (c+1) + 1)`
-— the riser on the LEFT — so its entry surface carries a `+1` step at column `m` (not
-`m + 2`). Placing the Z at `c = m` seats it flush. The entry is a spread-1 band, and the
-general Z closure raises the notch by two, landing in `IsSpreadBoundedRWSkyline cfg 3`.
-Second of the two notch-entry existence bricks; with it the per-piece band landing-site
-existence layer is complete on canonical entry surfaces (flat top for O, T, L, J,
-horizontal-I; unit step for S and Z). -/
-theorem isSpreadBoundedRWSkyline_Z_lands_of_isStep {cfg : GameConfig} {base w m : ℕ}
-    (hw : w < cfg.cols) (hm2 : m + 2 < cfg.cols)
-    (hwm : w ≠ m) (hwm1 : w ≠ m + 1) (hwm2 : w ≠ m + 2)
-    (hslack : base + 3 ≤ cfg.rows) :
-    ∃ c, IsSpreadBoundedRWSkyline cfg 3
-      (Placement.applyStep cfg
-        (skyline cfg (fun j => if j = w then 0 else if j = m then base + 1 else base))
-        { piece := Piece.Z, rot := 0, col := c }) := by
-  refine ⟨m, ?_⟩
-  have hc : m < cfg.cols := by omega
-  have hc1 : m + 1 < cfg.cols := by omega
-  set h : ℕ → ℕ := fun j => if j = w then 0 else if j = m then base + 1 else base with hh
-  have hw0 : h w = 0 := by rw [hh]; simp
-  have hriser : h m = base + 1 := by
-    rw [hh]; simp only [if_neg (Ne.symm hwm)]; simp
-  have hbase1 : h (m + 1) = base := by
-    rw [hh]; simp only [if_neg (Ne.symm hwm1), if_neg (show m + 1 ≠ m by omega)]
-  have hbase2 : h (m + 2) = base := by
-    rw [hh]; simp only [if_neg (Ne.symm hwm2), if_neg (show m + 2 ≠ m by omega)]
-  have heq : h (m + 1) = h (m + 2) := by rw [hbase1, hbase2]
-  have hstep : h m = h (m + 1) + 1 := by rw [hriser, hbase1]
-  have hband : ∀ j < cfg.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + 1 := by
-    intro j hj hjw
-    have hjval : h j = (if j = m then base + 1 else base) := by
-      rw [hh]; simp only [if_neg hjw]
-    rw [hjval]
-    by_cases hj2 : j = m
-    · rw [if_pos hj2]; omega
-    · rw [if_neg hj2]; omega
-  exact isSpreadBoundedRWSkyline_Z_of_isSpreadBounded hc hc1 hm2 heq hstep hw hwm hwm1 hwm2 hw0
-    hband (by omega)
 
 /-- **The spread-carrier descent engine: a well-clearing vertical I lowers the band
 floor by four while preserving the spread.** This is the reset that closes the loop.
@@ -17040,39 +14406,6 @@ theorem isLevelPocketBandAt_horizI_descent_lands_safe {cfg : GameConfig} {spread
   exact ⟨{ piece := Piece.I, rot := 0, col := c }, { piece := Piece.I, rot := 1, col := w },
     rfl, rfl, hskyline, not_isLost_of_isSpreadBoundedRWSkyline hskyline⟩
 
-/-- **The arbitrary-band horizI descent, now fully discharged: both placements VALID.**
-Strengthens `isLevelPocketBandAt_horizI_descent_lands_safe` by additionally returning the two
-placements' `Placement.Valid` certificates — the horizontal-I valley drop is in-field because the
-band's pocket satisfies `c + 3 < cfg.cols` (`valid_horizI`), and the vertical-I well clear is
-in-field because the band's well satisfies `w < cfg.cols` (`valid_vertI`). Both certificates come
-straight out of the destructured band data, no side computation. This is the completely-certified
-two-move descent atom on an *arbitrary* `IsLevelPocketBandAt` member: piece tags pinned to I, both
-moves valid, the result a spread-bounded reserved-well skyline, and certified non-lost. It is the
-exact shape a strategy-invariant reduction consumes per move (the `hvalid` obligation of
-`tetrisSolvableValid_of_strategy_invariant` wants `(σ T b p).Valid`), so the arbitrary-member
-landing edge of #66 part (a) is now strategy-ready. The one missing piece for an unbounded
-schedule remains band RE-ENTRY: the spread-bounded survival output must be upgraded to a fresh
-`IsLevelPocketBandAt` so the atom composes with itself. -/
-theorem isLevelPocketBandAt_horizI_descent_lands_safe_valid {cfg : GameConfig} {spread floor : ℕ}
-    {b : Board} (hb : IsLevelPocketBandAt cfg spread floor b)
-    (hfloor : 4 ≤ floor) (hspread : 1 ≤ spread) :
-    ∃ pl1 pl2 : Placement, pl1.piece = Piece.I ∧ pl2.piece = Piece.I ∧
-      pl1.Valid cfg ∧ pl2.Valid cfg ∧
-      IsSpreadBoundedRWSkyline cfg spread
-        (Placement.applyStep cfg (Placement.applyStep cfg b pl1) pl2) ∧
-      ¬ Board.isLost cfg (Placement.applyStep cfg (Placement.applyStep cfg b pl1) pl2) := by
-  obtain ⟨h, w, c, rfl, hw, hw0, hband, hcap, hc3, hwc, hwc1, hwc2, hwc3,
-    hpc, hpc1, hpc2, hpc3⟩ := hb
-  have hc : c < cfg.cols := by omega
-  have hc1 : c + 1 < cfg.cols := by omega
-  have hc2 : c + 2 < cfg.cols := by omega
-  have hskyline := isSpreadBoundedRWSkyline_horizI_valley_then_vertI_well_of_isSpreadBounded
-    hc hc1 hc2 hc3 hw hwc hwc1 hwc2 hwc3 hw0
-    (hpc1.trans hpc.symm) (hpc2.trans hpc.symm) (hpc3.trans hpc.symm) hpc hfloor hspread hband hcap
-  exact ⟨{ piece := Piece.I, rot := 0, col := c }, { piece := Piece.I, rot := 1, col := w },
-    rfl, rfl, valid_horizI hc3, valid_vertI hw, hskyline,
-    not_isLost_of_isSpreadBoundedRWSkyline hskyline⟩
-
 /-- **Unique-floor horizontal-I fill is a clean band ascent (`floor` to `floor+1`,
 `spread` to `spread-1`).** Under the extra hypothesis that every non-pocket, off-well column
 sits strictly above the floor (`huniq`: such columns have height at least `floor + 1`), the
@@ -17169,37 +14502,6 @@ theorem isLevelPocketBandAt_horizI_ascends_of_uniqueFloor_safe
       (isSpreadBoundedRWSkyline_of_isLevelPocketBand
         (isLevelPocketBand_of_isLevelPocketBandAt hband'))⟩
 
-/-- **Budget-shrinking horizontal-I ascent edge into the spread-bounded carrier.** The ascent
-companion to `isBoundedPocketBandCarrier_of_vertI_descends`: where the drain edge holds the spread
-budget fixed while lowering the floor by four, this fill edge spends one unit of spread budget to
-raise the floor by one. From a unique-floor band profile (the pocket is the strict minimum, `huniq`)
-one valid horizontal `I` dropped in the pocket lands in `IsBoundedPocketBandCarrier (spread - 1)` —
-the same band one row higher and one unit tighter — by forgetting the floor `floor + 1` of
-`isLevelPocketBandAt_horizI_ascends_of_uniqueFloor_safe` into the budgeted carrier's existential;
-its survival face passes straight through. Together with the drain edge this gives the budgeted
-carrier its two floor-moving transitions in the strategy-consumable vocabulary: drain pays nothing
-and falls four, fill pays one unit of spread and rises one — the spread ledger a bag-indexed
-scheduler debits on every fill and never on a drain. -/
-theorem isBoundedPocketBandCarrier_of_horizI_ascends {spread floor w c : ℕ} {h : ℕ → ℕ}
-    (hc3 : c + 3 < GameConfig.standard.cols) (hw : w < GameConfig.standard.cols)
-    (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2) (hwc3 : w ≠ c + 3)
-    (hw0 : h w = 0)
-    (hpc : h c = floor) (hpc1 : h (c + 1) = floor) (hpc2 : h (c + 2) = floor)
-    (hpc3 : h (c + 3) = floor)
-    (hband : ∀ j < GameConfig.standard.cols, j ≠ w → floor ≤ h j ∧ h j ≤ floor + spread)
-    (hcap : floor + spread ≤ GameConfig.standard.rows) (hspread : 1 ≤ spread)
-    (huniq : ∀ j < GameConfig.standard.cols, j ≠ w → j ≠ c → j ≠ c + 1 → j ≠ c + 2 → j ≠ c + 3 →
-      floor + 1 ≤ h j) :
-    ∃ pl : Placement, pl.piece = Piece.I ∧ pl.Valid GameConfig.standard ∧
-      IsBoundedPocketBandCarrier (spread - 1)
-        (Placement.applyStep GameConfig.standard (skyline GameConfig.standard h) pl) ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard (skyline GameConfig.standard h) pl) := by
-  obtain ⟨pl, hpiece, hvalid, hband', hsafe⟩ :=
-    isLevelPocketBandAt_horizI_ascends_of_uniqueFloor_safe
-      hc3 hw hwc hwc1 hwc2 hwc3 hw0 hpc hpc1 hpc2 hpc3 hband hcap hspread huniq
-  exact ⟨pl, hpiece, hvalid, ⟨floor + 1, hband'⟩, hsafe⟩
-
 /-- **Pocket location always exists for the horizontal-I descent.** The horizI companion to
 `isSpreadBoundedRWSkyline_O_descent_exists_pocketBand`, and the spread-1 workhorse: on a field
 at least eight wide (`h8`), a four-wide flat pocket `(c, c+1, c+2, c+3)` avoiding the single
@@ -17233,44 +14535,6 @@ theorem isSpreadBoundedRWSkyline_horizI_descent_exists_pocketBand
   have hc2 : c + 2 < cfg.cols := by omega
   exact ⟨c, isSpreadBoundedRWSkyline_horizI_descent_lands_of_pocketBand
     hc hc1 hc2 hc3 hw hwc hwc1 hwc2 hwc3 hfloor hspread hslack⟩
-
-/-- **Validated horizI descent: both placements in-bounds, no abstract surface.** Strengthens
-`isSpreadBoundedRWSkyline_horizI_descent_exists_pocketBand` by also returning the two
-placements' `Placement.Valid` certificates — the horizontal-I valley drop (`valid_horizI`,
-needs `c + 3 < cols`, supplied by the pocket choice) and the vertical-I well clear
-(`valid_vertI`, needs `w < cols`). This is the fully discharged two-move descent unit: a
-concrete spread-bounded carrier, an explicit pocket column, and a proof that BOTH moves are
-in-bounds — exactly the `pl.Valid` obligation every bag-indexed hstep carries
-(`tetrisSolvableValid_of_bag_indexed_invariant`). The composable fragment a per-bag scheduler
-consumes: a validated valley-then-well pair landing a band four rows lower at zero spread cost.
-Closes the validity-threading gap for the spread-1 atom matching the real carrier's
-tightness. -/
-theorem isSpreadBoundedRWSkyline_horizI_descent_exists_pocketBand_valid
-    {cfg : GameConfig} {spread floor w : ℕ}
-    (hw : w < cfg.cols) (h8 : 8 ≤ cfg.cols)
-    (hfloor : 4 ≤ floor) (hspread : 1 ≤ spread)
-    (hslack : floor + spread ≤ cfg.rows) :
-    ∃ c, ({ piece := Piece.I, rot := 0, col := c } : Placement).Valid cfg ∧
-      ({ piece := Piece.I, rot := 1, col := w } : Placement).Valid cfg ∧
-      IsSpreadBoundedRWSkyline cfg spread
-        (Placement.applyStep cfg
-          (Placement.applyStep cfg
-            (skyline cfg
-              (fun j => if j = w then 0 else
-                if j = c ∨ j = c + 1 ∨ j = c + 2 ∨ j = c + 3 then floor else floor + spread))
-            { piece := Piece.I, rot := 0, col := c })
-          { piece := Piece.I, rot := 1, col := w }) := by
-  obtain ⟨c, hc3, hwc, hwc1, hwc2, hwc3⟩ :
-      ∃ c, c + 3 < cfg.cols ∧ w ≠ c ∧ w ≠ c + 1 ∧ w ≠ c + 2 ∧ w ≠ c + 3 := by
-    rcases Nat.lt_or_ge w 4 with hlt | hge
-    · exact ⟨cfg.cols - 4, by omega, by omega, by omega, by omega, by omega⟩
-    · exact ⟨0, by omega, by omega, by omega, by omega, by omega⟩
-  have hc : c < cfg.cols := by omega
-  have hc1 : c + 1 < cfg.cols := by omega
-  have hc2 : c + 2 < cfg.cols := by omega
-  exact ⟨c, valid_horizI hc3, valid_vertI hw,
-    isSpreadBoundedRWSkyline_horizI_descent_lands_of_pocketBand
-      hc hc1 hc2 hc3 hw hwc hwc1 hwc2 hwc3 hfloor hspread hslack⟩
 
 /-- **Favorable descent atom, T-shelf: a valley-seated T plus a well-clearing vertical I
 descends the floor four rows at ZERO spread cost.** The T member of the valley-then-well
@@ -17694,43 +14958,6 @@ theorem isSpreadBoundedRWSkyline_J_valley_then_vertI_well_of_isSpreadBounded
           obtain ⟨hjlo, hjhi⟩ := hband j hj hjw
           omega
   · omega
-
-/-- **Arbitrary-member answer-and-regulate edge (J fill, then well clear).**
-The J-piece companion to `isSpreadBoundedRWSkyline_L_fill_then_drain_of_isLevelPocketBandAt`, and
-the last of the five flat answers: from the same arbitrary spread-2 level pocket-band member `b`,
-the floor pocket is answered by a `J` (rotation 0) laid flat across the level triple
-`(c, c+1, c+2)` of the width-four pocket — its foot `c` to `floor + 2` and `(c+1, c+2)` to
-`floor + 1`, all inside the spread-2 band — and the well vertical `I` then clears four rows,
-landing back in `IsSpreadBoundedRWSkyline standard 2` (and certified not lost). With this the whole
-flat menu O, horizI, T, L, J each has an arbitrary-member answer-and-regulate edge feeding the
-per-piece breadth toward bag-phase closure (#66), landing site read from the band's own pocket.
-Like the others it exits to the bare spread band (the fill consumes the pocket); only S, Z (notch
-fills) and the width-four pocket regeneration remain. -/
-theorem isSpreadBoundedRWSkyline_J_fill_then_drain_of_isLevelPocketBandAt
-    {floor : ℕ} {b : Board}
-    (hb : IsLevelPocketBandAt GameConfig.standard 2 floor b) (hfloor : 4 ≤ floor) :
-    ∃ plJ plI : Placement,
-      plJ.piece = Piece.J ∧ plJ.Valid GameConfig.standard ∧
-      plI.piece = Piece.I ∧ plI.Valid GameConfig.standard ∧
-      IsSpreadBoundedRWSkyline GameConfig.standard 2
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard b plJ) plI) ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard b plJ) plI) := by
-  obtain ⟨h, w, c, rfl, hw, hw0, hband, hcap, hc3, hwc, hwc1, hwc2, hwc3,
-    hpc, hpc1, hpc2, hpc3⟩ := hb
-  have hsb : IsSpreadBoundedRWSkyline GameConfig.standard 2
-      (Placement.applyStep GameConfig.standard
-        (Placement.applyStep GameConfig.standard (skyline GameConfig.standard h)
-          { piece := Piece.J, rot := 0, col := c })
-        { piece := Piece.I, rot := 1, col := w }) :=
-    isSpreadBoundedRWSkyline_J_valley_then_vertI_well_of_isSpreadBounded
-      (by omega) (by omega) (by omega) hw hwc hwc1 hwc2 hw0
-      (by rw [hpc1, hpc]) (by rw [hpc2, hpc]) hpc hfloor (by omega) hband hcap
-  exact ⟨{ piece := Piece.J, rot := 0, col := c }, { piece := Piece.I, rot := 1, col := w },
-    rfl, valid_J (by omega), rfl, valid_vertI hw, hsb,
-    not_isLost_of_isSpreadBoundedRWSkyline hsb⟩
 
 /-- **A concrete floor-pocket band realizes the J descent.** The J-shelf companion to
 `isSpreadBoundedRWSkyline_O_descent_lands_of_pocketBand` and the T, L witnesses: take the band
@@ -18156,32 +15383,6 @@ theorem isSpreadBoundedRWSkyline_descent_exists_of_piece
       isSpreadBoundedRWSkyline_J_descent_exists_pocketBand hw (by omega) hfloor hspread hslack
     exact ⟨_, { piece := Piece.J, rot := 0, col := c }, rfl, h⟩
 
-/-- **Survival face of the piece-uniform descent: every drawn piece has a non-losing response.**
-The not-lost certificate riding on `isSpreadBoundedRWSkyline_descent_exists_of_piece`: for an
-arbitrary drawn piece `p`, the favorable band surface and placement that the dispatcher returns
-land a board that is provably **not** a game-over (`¬ Board.isLost cfg`). It composes the uniform
-descent existence with the spread-bounded non-loss bridge
-(`not_isLost_of_isSpreadBoundedRWSkyline`): the descent output is a band-bounded reserved-well
-skyline, every column of which is capped below `rows`, so the board has not topped out.
-
-This is the survival statement the affirmative atlas claim is ultimately assembled from, read at
-the per-piece grain: whatever tetromino the adversary names, the player owns a response after
-which the game is still alive. A per-bag scheduler chains these single-step survival certificates
-(one per drawn piece) into the infinite-horizon non-loss the Atlas asserts. -/
-theorem not_isLost_descent_exists_of_piece
-    {cfg : GameConfig} {spread floor w : ℕ}
-    (hw : w < cfg.cols) (h8 : 8 ≤ cfg.cols)
-    (hfloor : 4 ≤ floor) (hspread : 2 ≤ spread)
-    (hslack : floor + spread ≤ cfg.rows) (p : Piece) :
-    ∃ (band : ℕ → ℕ) (pl : Placement), pl.piece = p ∧
-      ¬ Board.isLost cfg
-        (Placement.applyStep cfg
-          (Placement.applyStep cfg (skyline cfg band) pl)
-          { piece := Piece.I, rot := 1, col := w }) := by
-  obtain ⟨band, pl, hpiece, hsb⟩ :=
-    isSpreadBoundedRWSkyline_descent_exists_of_piece hw h8 hfloor hspread hslack p
-  exact ⟨band, pl, hpiece, not_isLost_of_isSpreadBoundedRWSkyline hsb⟩
-
 /-- **Validity-carrying piece-uniform descent: the response is a pair of legal moves.**
 The legal-move strengthening of `isSpreadBoundedRWSkyline_descent_exists_of_piece`: for an
 arbitrary drawn piece `p`, the favorable band surface comes with a placement `pl` of that piece
@@ -18246,50 +15447,6 @@ theorem isSpreadBoundedRWSkyline_descent_exists_of_piece_valid
     exact ⟨_, { piece := Piece.J, rot := 0, col := c }, rfl, valid_J hc2, valid_vertI hw,
       isSpreadBoundedRWSkyline_J_descent_lands_of_pocketBand
         hc hc1 hc2 hw hwc hwc1 hwc2 hfloor hspread hslack⟩
-
-/-- **Inductive-step bundle: the validity-carrying descent leaves a board ready for
-the next well drop.** Strengthens `isSpreadBoundedRWSkyline_descent_exists_of_piece_valid`
-with the post-board well certificate (`exists_well_colHeight_eq_zero_of_isSpreadBoundedRWSkyline`):
-the resulting carrier board not only sits in the spread band with both moves legal, it
-also exposes a fully clear column `w'`. This is precisely the shape a per-bag scheduler
-iterates — place piece `p`, clear the well with the regulator vertical `I`, then read off
-the next empty column to repeat — so a single conjunction carries everything the next
-step's `hP_step` and `hP_valid` consume without re-deriving the well from scratch. -/
-theorem isSpreadBoundedRWSkyline_descent_exists_of_piece_valid_well
-    {cfg : GameConfig} {spread floor w : ℕ}
-    (hw : w < cfg.cols) (h8 : 8 ≤ cfg.cols)
-    (hfloor : 4 ≤ floor) (hspread : 2 ≤ spread)
-    (hslack : floor + spread ≤ cfg.rows) (p : Piece) :
-    ∃ (band : ℕ → ℕ) (pl : Placement), pl.piece = p ∧
-      pl.Valid cfg ∧
-      ({ piece := Piece.I, rot := 1, col := w } : Placement).Valid cfg ∧
-      IsSpreadBoundedRWSkyline cfg spread
-        (Placement.applyStep cfg
-          (Placement.applyStep cfg (skyline cfg band) pl)
-          { piece := Piece.I, rot := 1, col := w }) ∧
-      ∃ w', w' < cfg.cols ∧
-        colHeight
-          (Placement.applyStep cfg
-            (Placement.applyStep cfg (skyline cfg band) pl)
-            { piece := Piece.I, rot := 1, col := w }) w' = 0 := by
-  obtain ⟨band, pl, hpiece, hplvalid, hivalid, hsb⟩ :=
-    isSpreadBoundedRWSkyline_descent_exists_of_piece_valid hw h8 hfloor hspread hslack p
-  exact ⟨band, pl, hpiece, hplvalid, hivalid, hsb,
-    exists_well_colHeight_eq_zero_of_isSpreadBoundedRWSkyline hsb⟩
-
-/-- **The spread-bounded reserved-well carrier is well-formed.** The companion
-structural bridge to `not_isLost_of_isSpreadBoundedRWSkyline`, inherited through the
-forgetful map (`isReservedWellSkyline_of_isSpreadBoundedRWSkyline`) and the
-reserved-well well-formedness brick (`wf_of_isReservedWellSkyline`): a band-bounded
-board is a reserved-well skyline, whose every filled cell sits in a real column, so
-the whole board satisfies `Board.WF`. Together with the non-loss bridge this discharges
-the two standing well-formedness/safety side-conditions any bag-indexed carrier built
-on `IsSpreadBoundedRWSkyline` must supply, leaving only the per-bag closure (`hstep`)
-as the open content. The spread-carrier `Board.WF` analogue of
-`not_isLost_of_isSpreadBoundedRWSkyline`. -/
-theorem isSpreadBoundedRWSkyline_wf {cfg : GameConfig} {spread : ℕ} {b : Board}
-    (hb : IsSpreadBoundedRWSkyline cfg spread b) : Board.WF cfg b :=
-  wf_of_isReservedWellSkyline (isReservedWellSkyline_of_isSpreadBoundedRWSkyline hb)
 
 /-- **The empty board is a flat-top reserved-well skyline (`hinit`).** Taking
 `base = 0` and well `w = 0`, the flat-top profile `fun j => if j = 0 then 0 else 0`
@@ -18374,33 +15531,6 @@ theorem maxColHeight_flatTop_skyline {cfg : GameConfig} {base w : ℕ}
       (Finset.mem_range.mpr hj0)
     simpa only [if_neg hj0w] using hle
 
-/-- **The well clear keeps the flat top flat (re-flattening).** Dropping the
-vertical I into the well of a flat-top board whose shelf stands at `base ≥ 4`
-clears four full rows and lowers every non-well column by exactly `4`, landing on
-the flat-top board of the same well at height `base - 4`. So the I-in-well move
-maps the flat-top carrier into itself, descending the base by `4`. This is the
-descent half of flat-top closure: the ordinary pieces raise/roughen the surface,
-the once-per-bag well clear pulls it straight back down to a lower flat top — the
-re-flattening that pure per-piece landing lemmas (which exit to the looser
-reserved well) could not supply. -/
-theorem applyStep_vertI_well_flatTop {cfg : GameConfig} {base w : ℕ}
-    (hw : w < cfg.cols) (hbase : 4 ≤ base) :
-    Placement.applyStep cfg (skyline cfg (fun j => if j = w then 0 else base))
-        { piece := Piece.I, rot := 1, col := w }
-      = skyline cfg (fun j => if j = w then 0 else base - 4) := by
-  have hwell : (fun j => if j = w then (0 : ℕ) else base) w = 0 := by simp
-  have hothers : ∀ j, j < cfg.cols → j ≠ w →
-      4 ≤ (fun j => if j = w then (0 : ℕ) else base) j := by
-    intro j _ hjw
-    simp only [if_neg hjw]
-    exact hbase
-  rw [applyStep_vertI_well hw hwell hothers]
-  congr 1
-  funext j
-  by_cases hjw : j = w
-  · rw [if_pos hjw, if_pos hjw]
-  · rw [if_neg hjw, if_neg hjw, if_neg hjw]
-
 /-- **Flat-top carrier admits a safe O placement (landing-site existence).** On a
 flat-top reserved-well board with at least four columns and two cells of headroom
 (`base + 2 ≤ cfg.rows`), the two disjoint column pairs `{0,1}` and `{2,3}` cannot
@@ -18430,137 +15560,6 @@ theorem isFlatTopRWSkyline_O_lands {cfg : GameConfig} {base w : ℕ}
     · exact Nat.zero_le _
     · omega
   · show (if c = w then 0 else base) + 2 ≤ cfg.rows
-    rw [if_neg (by omega : ¬ c = w)]; exact hslack
-
-/-- **Flat-top carrier admits a safe T placement (landing-site existence).** With
-at least six columns the two disjoint column triples `{0,1,2}` and `{3,4,5}`
-cannot both contain the well `w`, so one of them is a flat three-shelf away from
-`w`; dropping a `{T, 2, _}` there lands flush and yields another reserved-well
-skyline. Same disjoint-blocks pigeonhole as the O case, scaled from pairs to
-triples. -/
-theorem isFlatTopRWSkyline_T_lands {cfg : GameConfig} {base w : ℕ}
-    (hw : w < cfg.cols) (h6 : 6 ≤ cfg.cols) (hslack : base + 2 ≤ cfg.rows) :
-    ∃ c, IsReservedWellSkyline cfg
-      (Placement.applyStep cfg (skyline cfg (fun j => if j = w then 0 else base))
-        { piece := Piece.T, rot := 2, col := c }) := by
-  obtain ⟨c, hc2, hwc, hwc1, hwc2⟩ :
-      ∃ c, c + 2 < cfg.cols ∧ w ≠ c ∧ w ≠ c + 1 ∧ w ≠ c + 2 := by
-    rcases Nat.lt_or_ge w 3 with hlt | hge
-    · exact ⟨3, by omega, by omega, by omega, by omega⟩
-    · exact ⟨0, by omega, by omega, by omega, by omega⟩
-  have hc : c < cfg.cols := by omega
-  have hc1 : c + 1 < cfg.cols := by omega
-  refine ⟨c, isReservedWellSkyline_applyStep_T hc hc1 hc2 ?_ ?_ hw hwc hwc1 hwc2 ?_ ?_ ?_⟩
-  · show (if c + 1 = w then 0 else base) = (if c = w then 0 else base)
-    rw [if_neg (by omega : ¬ c + 1 = w), if_neg (by omega : ¬ c = w)]
-  · show (if c + 2 = w then 0 else base) = (if c = w then 0 else base)
-    rw [if_neg (by omega : ¬ c + 2 = w), if_neg (by omega : ¬ c = w)]
-  · show (if w = w then 0 else base) = 0
-    rw [if_pos rfl]
-  · intro j hj
-    show (if j = w then 0 else base) ≤ cfg.rows
-    split
-    · exact Nat.zero_le _
-    · omega
-  · show (if c = w then 0 else base) + 2 ≤ cfg.rows
-    rw [if_neg (by omega : ¬ c = w)]; exact hslack
-
-/-- **Flat-top carrier admits a safe L placement (landing-site existence).** Same
-flat-three-shelf existence as the T case (disjoint triples `{0,1,2}` / `{3,4,5}`,
-`6 ≤ cfg.cols`); only the piece dropped differs (`{L, 0, _}` instead of
-`{T, 2, _}`), since both consume the identical flat-3 precondition. -/
-theorem isFlatTopRWSkyline_L_lands {cfg : GameConfig} {base w : ℕ}
-    (hw : w < cfg.cols) (h6 : 6 ≤ cfg.cols) (hslack : base + 2 ≤ cfg.rows) :
-    ∃ c, IsReservedWellSkyline cfg
-      (Placement.applyStep cfg (skyline cfg (fun j => if j = w then 0 else base))
-        { piece := Piece.L, rot := 0, col := c }) := by
-  obtain ⟨c, hc2, hwc, hwc1, hwc2⟩ :
-      ∃ c, c + 2 < cfg.cols ∧ w ≠ c ∧ w ≠ c + 1 ∧ w ≠ c + 2 := by
-    rcases Nat.lt_or_ge w 3 with hlt | hge
-    · exact ⟨3, by omega, by omega, by omega, by omega⟩
-    · exact ⟨0, by omega, by omega, by omega, by omega⟩
-  have hc : c < cfg.cols := by omega
-  have hc1 : c + 1 < cfg.cols := by omega
-  refine ⟨c, isReservedWellSkyline_applyStep_L hc hc1 hc2 ?_ ?_ hw hwc hwc1 hwc2 ?_ ?_ ?_⟩
-  · show (if c + 1 = w then 0 else base) = (if c = w then 0 else base)
-    rw [if_neg (by omega : ¬ c + 1 = w), if_neg (by omega : ¬ c = w)]
-  · show (if c + 2 = w then 0 else base) = (if c = w then 0 else base)
-    rw [if_neg (by omega : ¬ c + 2 = w), if_neg (by omega : ¬ c = w)]
-  · show (if w = w then 0 else base) = 0
-    rw [if_pos rfl]
-  · intro j hj
-    show (if j = w then 0 else base) ≤ cfg.rows
-    split
-    · exact Nat.zero_le _
-    · omega
-  · show (if c = w then 0 else base) + 2 ≤ cfg.rows
-    rw [if_neg (by omega : ¬ c = w)]; exact hslack
-
-/-- **Flat-top carrier admits a safe J placement (landing-site existence).** Same
-flat-three-shelf existence as the T and L cases (disjoint triples `{0,1,2}` /
-`{3,4,5}`, `6 ≤ cfg.cols`); only the piece dropped differs (`{J, 0, _}`). -/
-theorem isFlatTopRWSkyline_J_lands {cfg : GameConfig} {base w : ℕ}
-    (hw : w < cfg.cols) (h6 : 6 ≤ cfg.cols) (hslack : base + 2 ≤ cfg.rows) :
-    ∃ c, IsReservedWellSkyline cfg
-      (Placement.applyStep cfg (skyline cfg (fun j => if j = w then 0 else base))
-        { piece := Piece.J, rot := 0, col := c }) := by
-  obtain ⟨c, hc2, hwc, hwc1, hwc2⟩ :
-      ∃ c, c + 2 < cfg.cols ∧ w ≠ c ∧ w ≠ c + 1 ∧ w ≠ c + 2 := by
-    rcases Nat.lt_or_ge w 3 with hlt | hge
-    · exact ⟨3, by omega, by omega, by omega, by omega⟩
-    · exact ⟨0, by omega, by omega, by omega, by omega⟩
-  have hc : c < cfg.cols := by omega
-  have hc1 : c + 1 < cfg.cols := by omega
-  refine ⟨c, isReservedWellSkyline_applyStep_J hc hc1 hc2 ?_ ?_ hw hwc hwc1 hwc2 ?_ ?_ ?_⟩
-  · show (if c + 1 = w then 0 else base) = (if c = w then 0 else base)
-    rw [if_neg (by omega : ¬ c + 1 = w), if_neg (by omega : ¬ c = w)]
-  · show (if c + 2 = w then 0 else base) = (if c = w then 0 else base)
-    rw [if_neg (by omega : ¬ c + 2 = w), if_neg (by omega : ¬ c = w)]
-  · show (if w = w then 0 else base) = 0
-    rw [if_pos rfl]
-  · intro j hj
-    show (if j = w then 0 else base) ≤ cfg.rows
-    split
-    · exact Nat.zero_le _
-    · omega
-  · show (if c = w then 0 else base) + 2 ≤ cfg.rows
-    rw [if_neg (by omega : ¬ c = w)]; exact hslack
-
-/-- **Flat-top carrier admits a safe horizontal-I placement (landing-site
-existence).** Scaling the disjoint-blocks pigeonhole from triples to quadruples:
-with at least eight columns the disjoint quads `{0,1,2,3}` / `{4,5,6,7}` cannot
-both contain the well `w`, so one is a flat four-shelf away from `w`. Dropping a
-`{I, 0, _}` there lands flush. Note the lighter headroom `base + 1 ≤ cfg.rows`
-(the flat I only adds one row). This completes all five flat pieces. -/
-theorem isFlatTopRWSkyline_horizI_lands {cfg : GameConfig} {base w : ℕ}
-    (hw : w < cfg.cols) (h8 : 8 ≤ cfg.cols) (hslack : base + 1 ≤ cfg.rows) :
-    ∃ c, IsReservedWellSkyline cfg
-      (Placement.applyStep cfg (skyline cfg (fun j => if j = w then 0 else base))
-        { piece := Piece.I, rot := 0, col := c }) := by
-  obtain ⟨c, hc3, hwc, hwc1, hwc2, hwc3⟩ :
-      ∃ c, c + 3 < cfg.cols ∧ w ≠ c ∧ w ≠ c + 1 ∧ w ≠ c + 2 ∧ w ≠ c + 3 := by
-    rcases Nat.lt_or_ge w 4 with hlt | hge
-    · exact ⟨4, by omega, by omega, by omega, by omega, by omega⟩
-    · exact ⟨0, by omega, by omega, by omega, by omega, by omega⟩
-  have hc : c < cfg.cols := by omega
-  have hc1 : c + 1 < cfg.cols := by omega
-  have hc2 : c + 2 < cfg.cols := by omega
-  refine ⟨c, isReservedWellSkyline_applyStep_horizI hc hc1 hc2 hc3 ?_ ?_ ?_ hw hwc hwc1
-    hwc2 hwc3 ?_ ?_ ?_⟩
-  · show (if c + 1 = w then 0 else base) = (if c = w then 0 else base)
-    rw [if_neg (by omega : ¬ c + 1 = w), if_neg (by omega : ¬ c = w)]
-  · show (if c + 2 = w then 0 else base) = (if c = w then 0 else base)
-    rw [if_neg (by omega : ¬ c + 2 = w), if_neg (by omega : ¬ c = w)]
-  · show (if c + 3 = w then 0 else base) = (if c = w then 0 else base)
-    rw [if_neg (by omega : ¬ c + 3 = w), if_neg (by omega : ¬ c = w)]
-  · show (if w = w then 0 else base) = 0
-    rw [if_pos rfl]
-  · intro j hj
-    show (if j = w then 0 else base) ≤ cfg.rows
-    split
-    · exact Nat.zero_le _
-    · omega
-  · show (if c = w then 0 else base) + 1 ≤ cfg.rows
     rw [if_neg (by omega : ¬ c = w)]; exact hslack
 
 /-- **Flat-top carrier discharges the whole flat-shelf hstep (existence + validity).**
@@ -18746,82 +15745,6 @@ flat-top `not_isLost_of_isFlatTopRWSkyline`. -/
 theorem not_isLost_of_isNotchedFlatTopRWSkyline {cfg : GameConfig} {b : Board}
     (hb : IsNotchedFlatTopRWSkyline cfg b) : ¬ Board.isLost cfg b :=
   not_isLost_of_isReservedWellSkyline (isReservedWellSkyline_of_isNotchedFlatTopRWSkyline hb)
-
-/-- **The notch-ready disjunction is never lost.** Board-level non-loss for the
-exact predicate the bag-phase carrier carries in its first conjunct
-(`IsFlatTopRWSkyline cfg b ∨ IsNotchedFlatTopRWSkyline cfg b`): split on the
-disjunction and quote the matching face's non-loss corollary
-(`not_isLost_of_isFlatTopRWSkyline` / `not_isLost_of_isNotchedFlatTopRWSkyline`).
-The non-loss twin of `colHeight_le_of_isFlatTop_or_isNotched`, giving a closure
-argument on the disjunctive carrier a one-step `¬ isLost` route straight off the
-descriptor — no detour through `colHeight_le_of_isFlatTop_or_isNotched` then
-`not_isLost_of_colHeight_le`. -/
-theorem not_isLost_of_isFlatTop_or_isNotched {cfg : GameConfig} {b : Board}
-    (h : IsFlatTopRWSkyline cfg b ∨ IsNotchedFlatTopRWSkyline cfg b) :
-    ¬ Board.isLost cfg b := by
-  rcases h with hf | hn
-  · exact not_isLost_of_isFlatTopRWSkyline hf
-  · exact not_isLost_of_isNotchedFlatTopRWSkyline hn
-
-/-- **Exact cell count of a notched flat-top board.** With an empty well at `w`, a
-single bump column at `m` raised to `base + 1`, and the remaining `cfg.cols - 2`
-real columns at `base`, the board holds exactly `(cfg.cols - 1) * base + 1` cells —
-precisely one more than the un-notched flat top of the same `base`
-(`card_flatTop_skyline`), the lone extra cell being the notch bump. Proved by
-peeling both distinguished columns (`w`, then `m`) off the column-height sum and
-collapsing the constant remainder. Pins the +1 cell-count debt the notch carries,
-which any re-flattening (notch-filling) step must repay. -/
-theorem card_notchedFlatTop_skyline {cfg : GameConfig} {base w m : ℕ}
-    (hw : w < cfg.cols) (hm : m < cfg.cols) (hwm : w ≠ m) :
-    (skyline cfg (fun j => if j = w then 0 else if j = m then base + 1 else base)).card
-      = (cfg.cols - 1) * base + 1 := by
-  have hwr : w ∈ Finset.range cfg.cols := Finset.mem_range.mpr hw
-  have hm_erase : m ∈ (Finset.range cfg.cols).erase w :=
-    Finset.mem_erase.mpr ⟨Ne.symm hwm, Finset.mem_range.mpr hm⟩
-  have hcongr : ∀ j ∈ ((Finset.range cfg.cols).erase w).erase m,
-      (if j = w then (0 : ℕ) else if j = m then base + 1 else base) = base := by
-    intro j hj
-    rw [if_neg (Finset.ne_of_mem_erase (Finset.mem_of_mem_erase hj)),
-      if_neg (Finset.ne_of_mem_erase hj)]
-  rw [card_skyline, ← Finset.add_sum_erase _ _ hwr, if_pos rfl, zero_add,
-    ← Finset.add_sum_erase _ _ hm_erase, if_neg (Ne.symm hwm), if_pos rfl,
-    Finset.sum_congr rfl hcongr, Finset.sum_const,
-    Finset.card_erase_of_mem hm_erase, Finset.card_erase_of_mem hwr,
-    Finset.card_range, smul_eq_mul]
-  obtain ⟨n, hn⟩ : ∃ n, cfg.cols = n + 2 := ⟨cfg.cols - 2, by omega⟩
-  rw [hn]
-  have e1 : n + 2 - 1 - 1 = n := by omega
-  have e2 : n + 2 - 1 = n + 1 := by omega
-  rw [e1, e2]
-  ring
-
-/-- **Surface potential of a notched flat-top board is `base + 1`.** The lone bump
-column `m` stands at `base + 1`, dominating the well (`0`) and the flat columns
-(`base`), so the column-height supremum is exactly `base + 1` — precisely one above
-the un-notched flat top (`maxColHeight_flatTop_skyline`). This reads the scalar
-potential straight off the notched descriptor; together with the flat-top value it
-fixes the `+1` potential the carrier carries while an S/Z notch is owed. -/
-theorem maxColHeight_notchedFlatTop_skyline {cfg : GameConfig} {base w m : ℕ}
-    (hm : m < cfg.cols) (hwm : w ≠ m) :
-    maxColHeight cfg
-        (skyline cfg (fun j => if j = w then 0 else if j = m then base + 1 else base))
-      = base + 1 := by
-  rw [maxColHeight_skyline]
-  apply le_antisymm
-  · apply Finset.sup_le
-    intro j _
-    split
-    · exact Nat.zero_le _
-    · split
-      · exact le_refl _
-      · exact Nat.le_succ _
-  · have key : (if m = w then (0 : ℕ) else if m = m then base + 1 else base) ≤
-        (Finset.range cfg.cols).sup
-          (fun j => if j = w then 0 else if j = m then base + 1 else base) :=
-      Finset.le_sup (f := fun j => if j = w then 0 else if j = m then base + 1 else base)
-        (Finset.mem_range.mpr hm)
-    rw [if_neg (Ne.symm hwm), if_pos rfl] at key
-    exact key
 
 /-- **Notched carrier hosts an S placement.** Parametrising the single bump at
 column `c + 2` (so the up-step S-notch sits at `(c, c+1, c+2) = (base, base,
@@ -19124,224 +16047,6 @@ theorem isNotchedFlatTopRWSkyline_standard_surface {base : ℕ}
         (fun j => if j = 0 then 0 else if j = 3 then base + 1 else base)) :=
   ⟨base, 0, 3, by decide, by decide, by decide, hbase, rfl⟩
 
-/-- **Notched carrier hosts an O placement.** The single bump at `m` and the well
-at `w` are two columns to dodge; with `cfg.cols ≥ 6` the three disjoint adjacent
-pairs `{0,1}, {2,3}, {4,5}` cannot all be blocked (two holes hit at most two
-pairs), so some pair `(c, c+1)` sits at the flat height `base`, clear of both. The
-no-clear `{O, 0, c}` placement raises that pair to `base + 2` and yields a
-reserved-well skyline. This is the first flat piece ported onto the notched
-carrier — the start of unifying all seven pieces onto a single carrier that hosts
-every adversary draw. -/
-theorem isNotchedFlatTopRWSkyline_O_lands {cfg : GameConfig} {base w m : ℕ}
-    (hw : w < cfg.cols) (hm : m < cfg.cols) (h6 : 6 ≤ cfg.cols)
-    (hslack : base + 2 ≤ cfg.rows) :
-    ∃ c, IsReservedWellSkyline cfg
-      (Placement.applyStep cfg
-        (skyline cfg (fun j => if j = w then 0 else if j = m then base + 1 else base))
-        { piece := Piece.O, rot := 0, col := c }) := by
-  obtain ⟨c, hc1, hwc, hwc1, hmc, hmc1⟩ :
-      ∃ c, c + 1 < cfg.cols ∧ w ≠ c ∧ w ≠ c + 1 ∧ m ≠ c ∧ m ≠ c + 1 := by
-    rcases Nat.lt_or_ge w 2 with hwA | hwA
-    · rcases Nat.lt_or_ge m 4 with hmlt | hmge
-      · exact ⟨4, by omega, by omega, by omega, by omega, by omega⟩
-      · exact ⟨2, by omega, by omega, by omega, by omega, by omega⟩
-    · rcases Nat.lt_or_ge w 4 with hwB | hwB
-      · rcases Nat.lt_or_ge m 2 with hmlt | hmge
-        · exact ⟨4, by omega, by omega, by omega, by omega, by omega⟩
-        · exact ⟨0, by omega, by omega, by omega, by omega, by omega⟩
-      · rcases Nat.lt_or_ge w 6 with hwC | hwC
-        · rcases Nat.lt_or_ge m 2 with hmlt | hmge
-          · exact ⟨2, by omega, by omega, by omega, by omega, by omega⟩
-          · exact ⟨0, by omega, by omega, by omega, by omega, by omega⟩
-        · rcases Nat.lt_or_ge m 2 with hmlt | hmge
-          · exact ⟨2, by omega, by omega, by omega, by omega, by omega⟩
-          · exact ⟨0, by omega, by omega, by omega, by omega, by omega⟩
-  have hc : c < cfg.cols := by omega
-  refine ⟨c, isReservedWellSkyline_applyStep_O hc hc1 ?_ hw hwc hwc1 ?_ ?_ ?_⟩
-  · show (if c = w then 0 else if c = m then base + 1 else base)
-       = (if c + 1 = w then 0 else if c + 1 = m then base + 1 else base)
-    rw [if_neg (by omega : ¬ c = w), if_neg (by omega : ¬ c = m),
-        if_neg (by omega : ¬ c + 1 = w), if_neg (by omega : ¬ c + 1 = m)]
-  · show (if w = w then 0 else if w = m then base + 1 else base) = 0
-    rw [if_pos rfl]
-  · intro j hj
-    show (if j = w then 0 else if j = m then base + 1 else base) ≤ cfg.rows
-    split
-    · exact Nat.zero_le _
-    · split
-      · omega
-      · omega
-  · show (if c = w then 0 else if c = m then base + 1 else base) + 2 ≤ cfg.rows
-    rw [if_neg (by omega : ¬ c = w), if_neg (by omega : ¬ c = m)]
-    exact hslack
-
-/-- **Notched carrier hosts a T placement.** Same two-column dodge as the O port,
-but the T flush-fit needs a flat *triple* `(c, c+1, c+2)`. With `cfg.cols ≥ 9` the
-three disjoint triples `{0,1,2}, {3,4,5}, {6,7,8}` cannot all be blocked by the
-well `w` and the bump `m` (two holes hit at most two triples), so some triple sits
-at the flat height `base`, clear of both. The no-clear `{T, 2, c}` placement peaks
-the centre at `base + 2` and yields a reserved-well skyline. Second flat piece
-ported onto the notched carrier. -/
-theorem isNotchedFlatTopRWSkyline_T_lands {cfg : GameConfig} {base w m : ℕ}
-    (hw : w < cfg.cols) (hm : m < cfg.cols) (h9 : 9 ≤ cfg.cols)
-    (hslack : base + 2 ≤ cfg.rows) :
-    ∃ c, IsReservedWellSkyline cfg
-      (Placement.applyStep cfg
-        (skyline cfg (fun j => if j = w then 0 else if j = m then base + 1 else base))
-        { piece := Piece.T, rot := 2, col := c }) := by
-  obtain ⟨c, hc2, hwc, hwc1, hwc2, hmc, hmc1, hmc2⟩ :
-      ∃ c, c + 2 < cfg.cols ∧ w ≠ c ∧ w ≠ c + 1 ∧ w ≠ c + 2 ∧
-        m ≠ c ∧ m ≠ c + 1 ∧ m ≠ c + 2 := by
-    rcases Nat.lt_or_ge w 3 with hwA | hwA
-    · rcases Nat.lt_or_ge m 6 with hmlt | hmge
-      · exact ⟨6, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-      · exact ⟨3, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-    · rcases Nat.lt_or_ge w 6 with hwB | hwB
-      · rcases Nat.lt_or_ge m 3 with hmlt | hmge
-        · exact ⟨6, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-        · exact ⟨0, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-      · rcases Nat.lt_or_ge w 9 with hwC | hwC
-        · rcases Nat.lt_or_ge m 3 with hmlt | hmge
-          · exact ⟨3, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-          · exact ⟨0, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-        · rcases Nat.lt_or_ge m 3 with hmlt | hmge
-          · exact ⟨3, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-          · exact ⟨0, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-  have hc : c < cfg.cols := by omega
-  have hc1 : c + 1 < cfg.cols := by omega
-  refine ⟨c, isReservedWellSkyline_applyStep_T hc hc1 hc2 ?_ ?_ hw hwc hwc1 hwc2 ?_ ?_ ?_⟩
-  · show (if c + 1 = w then 0 else if c + 1 = m then base + 1 else base)
-       = (if c = w then 0 else if c = m then base + 1 else base)
-    rw [if_neg (by omega : ¬ c + 1 = w), if_neg (by omega : ¬ c + 1 = m),
-        if_neg (by omega : ¬ c = w), if_neg (by omega : ¬ c = m)]
-  · show (if c + 2 = w then 0 else if c + 2 = m then base + 1 else base)
-       = (if c = w then 0 else if c = m then base + 1 else base)
-    rw [if_neg (by omega : ¬ c + 2 = w), if_neg (by omega : ¬ c + 2 = m),
-        if_neg (by omega : ¬ c = w), if_neg (by omega : ¬ c = m)]
-  · show (if w = w then 0 else if w = m then base + 1 else base) = 0
-    rw [if_pos rfl]
-  · intro j hj
-    show (if j = w then 0 else if j = m then base + 1 else base) ≤ cfg.rows
-    split
-    · exact Nat.zero_le _
-    · split
-      · omega
-      · omega
-  · show (if c = w then 0 else if c = m then base + 1 else base) + 2 ≤ cfg.rows
-    rw [if_neg (by omega : ¬ c = w), if_neg (by omega : ¬ c = m)]
-    exact hslack
-
-/-- **Notched carrier hosts an L placement.** Identical flat-triple port to the T
-case (the `{L, 0, c}` fragment has the same three-column flush-fit signature): with
-`cfg.cols ≥ 9` a flat triple `(c, c+1, c+2)` clear of both the well `w` and the
-bump `m` exists by the 2-hole/3-disjoint-triple pigeonhole, and the no-clear L
-placement raises it to `(base+1, base+1, base+2)`, capped by `base + 2 ≤ cfg.rows`.
-Third flat piece ported onto the notched carrier. -/
-theorem isNotchedFlatTopRWSkyline_L_lands {cfg : GameConfig} {base w m : ℕ}
-    (hw : w < cfg.cols) (hm : m < cfg.cols) (h9 : 9 ≤ cfg.cols)
-    (hslack : base + 2 ≤ cfg.rows) :
-    ∃ c, IsReservedWellSkyline cfg
-      (Placement.applyStep cfg
-        (skyline cfg (fun j => if j = w then 0 else if j = m then base + 1 else base))
-        { piece := Piece.L, rot := 0, col := c }) := by
-  obtain ⟨c, hc2, hwc, hwc1, hwc2, hmc, hmc1, hmc2⟩ :
-      ∃ c, c + 2 < cfg.cols ∧ w ≠ c ∧ w ≠ c + 1 ∧ w ≠ c + 2 ∧
-        m ≠ c ∧ m ≠ c + 1 ∧ m ≠ c + 2 := by
-    rcases Nat.lt_or_ge w 3 with hwA | hwA
-    · rcases Nat.lt_or_ge m 6 with hmlt | hmge
-      · exact ⟨6, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-      · exact ⟨3, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-    · rcases Nat.lt_or_ge w 6 with hwB | hwB
-      · rcases Nat.lt_or_ge m 3 with hmlt | hmge
-        · exact ⟨6, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-        · exact ⟨0, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-      · rcases Nat.lt_or_ge w 9 with hwC | hwC
-        · rcases Nat.lt_or_ge m 3 with hmlt | hmge
-          · exact ⟨3, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-          · exact ⟨0, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-        · rcases Nat.lt_or_ge m 3 with hmlt | hmge
-          · exact ⟨3, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-          · exact ⟨0, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-  have hc : c < cfg.cols := by omega
-  have hc1 : c + 1 < cfg.cols := by omega
-  refine ⟨c, isReservedWellSkyline_applyStep_L hc hc1 hc2 ?_ ?_ hw hwc hwc1 hwc2 ?_ ?_ ?_⟩
-  · show (if c + 1 = w then 0 else if c + 1 = m then base + 1 else base)
-       = (if c = w then 0 else if c = m then base + 1 else base)
-    rw [if_neg (by omega : ¬ c + 1 = w), if_neg (by omega : ¬ c + 1 = m),
-        if_neg (by omega : ¬ c = w), if_neg (by omega : ¬ c = m)]
-  · show (if c + 2 = w then 0 else if c + 2 = m then base + 1 else base)
-       = (if c = w then 0 else if c = m then base + 1 else base)
-    rw [if_neg (by omega : ¬ c + 2 = w), if_neg (by omega : ¬ c + 2 = m),
-        if_neg (by omega : ¬ c = w), if_neg (by omega : ¬ c = m)]
-  · show (if w = w then 0 else if w = m then base + 1 else base) = 0
-    rw [if_pos rfl]
-  · intro j hj
-    show (if j = w then 0 else if j = m then base + 1 else base) ≤ cfg.rows
-    split
-    · exact Nat.zero_le _
-    · split
-      · omega
-      · omega
-  · show (if c = w then 0 else if c = m then base + 1 else base) + 2 ≤ cfg.rows
-    rw [if_neg (by omega : ¬ c = w), if_neg (by omega : ¬ c = m)]
-    exact hslack
-
-/-- **Notched carrier hosts a J placement.** The last flat-triple port (the
-`{J, 0, c}` fragment shares the T/L three-column flush-fit signature): with
-`cfg.cols ≥ 9` a flat triple `(c, c+1, c+2)` clear of both the well `w` and the
-bump `m` exists by the 2-hole/3-disjoint-triple pigeonhole, and the no-clear J
-placement raises it to `(base+2, base+1, base+1)`, capped by `base + 2 ≤ cfg.rows`.
-With this, six of the seven pieces land on the notched carrier — only the
-horizontal I (a flat quad) remains. -/
-theorem isNotchedFlatTopRWSkyline_J_lands {cfg : GameConfig} {base w m : ℕ}
-    (hw : w < cfg.cols) (hm : m < cfg.cols) (h9 : 9 ≤ cfg.cols)
-    (hslack : base + 2 ≤ cfg.rows) :
-    ∃ c, IsReservedWellSkyline cfg
-      (Placement.applyStep cfg
-        (skyline cfg (fun j => if j = w then 0 else if j = m then base + 1 else base))
-        { piece := Piece.J, rot := 0, col := c }) := by
-  obtain ⟨c, hc2, hwc, hwc1, hwc2, hmc, hmc1, hmc2⟩ :
-      ∃ c, c + 2 < cfg.cols ∧ w ≠ c ∧ w ≠ c + 1 ∧ w ≠ c + 2 ∧
-        m ≠ c ∧ m ≠ c + 1 ∧ m ≠ c + 2 := by
-    rcases Nat.lt_or_ge w 3 with hwA | hwA
-    · rcases Nat.lt_or_ge m 6 with hmlt | hmge
-      · exact ⟨6, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-      · exact ⟨3, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-    · rcases Nat.lt_or_ge w 6 with hwB | hwB
-      · rcases Nat.lt_or_ge m 3 with hmlt | hmge
-        · exact ⟨6, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-        · exact ⟨0, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-      · rcases Nat.lt_or_ge w 9 with hwC | hwC
-        · rcases Nat.lt_or_ge m 3 with hmlt | hmge
-          · exact ⟨3, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-          · exact ⟨0, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-        · rcases Nat.lt_or_ge m 3 with hmlt | hmge
-          · exact ⟨3, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-          · exact ⟨0, by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩
-  have hc : c < cfg.cols := by omega
-  have hc1 : c + 1 < cfg.cols := by omega
-  refine ⟨c, isReservedWellSkyline_applyStep_J hc hc1 hc2 ?_ ?_ hw hwc hwc1 hwc2 ?_ ?_ ?_⟩
-  · show (if c + 1 = w then 0 else if c + 1 = m then base + 1 else base)
-       = (if c = w then 0 else if c = m then base + 1 else base)
-    rw [if_neg (by omega : ¬ c + 1 = w), if_neg (by omega : ¬ c + 1 = m),
-        if_neg (by omega : ¬ c = w), if_neg (by omega : ¬ c = m)]
-  · show (if c + 2 = w then 0 else if c + 2 = m then base + 1 else base)
-       = (if c = w then 0 else if c = m then base + 1 else base)
-    rw [if_neg (by omega : ¬ c + 2 = w), if_neg (by omega : ¬ c + 2 = m),
-        if_neg (by omega : ¬ c = w), if_neg (by omega : ¬ c = m)]
-  · show (if w = w then 0 else if w = m then base + 1 else base) = 0
-    rw [if_pos rfl]
-  · intro j hj
-    show (if j = w then 0 else if j = m then base + 1 else base) ≤ cfg.rows
-    split
-    · exact Nat.zero_le _
-    · split
-      · omega
-      · omega
-  · show (if c = w then 0 else if c = m then base + 1 else base) + 2 ≤ cfg.rows
-    rw [if_neg (by omega : ¬ c = w), if_neg (by omega : ¬ c = m)]
-    exact hslack
-
 /-- **Notched carrier hosts the I placement — via the well, not a flat quad.** The
 horizontal I cannot sit flush on the notched carrier in general (the well and bump
 can split the flat top into runs shorter than four), so the I-piece takes its
@@ -19594,30 +16299,6 @@ theorem isNotchedFlatTopRWSkyline_all7_hstep_standard_reduction
   exists_validPlacement_eta
     (Board.isNotchedFlatTopRWSkyline_all7_hstep_standard hbase hp)
 
-/-- **Rich standard reserved-well surface, reduction-shaped.** The bare-carrier twin of
-`isNotchedFlatTopRWSkyline_all7_hstep_standard_reduction`: composing the rich-surface all-7
-dispatch (`Board.isReservedWellSkyline_all7_hstep_standard`) with the record-eta transport
-(`exists_validPlacement_eta`) rewrites each move into the bag-indexed reduction's
-`{ pl with piece := p }` form. So on the concrete 10-column reserved-well surface
-`fun j => if j = 0 then 0 else if j = 5 then base + 1 else if j = 8 then base + 1 else base`
-(`base + 2 ≤ rows`), every one of the seven pieces admits a valid placement whose post-move
-board — now in reduction position — is again a reserved-well skyline. This is the exact shape a
-discharge of `tetrisSolvableValid_of_reservedWell_closed`'s `hstep` produces for this surface,
-certifying the dispatch→transport pipeline end-to-end on the bare reserved-well carrier. -/
-theorem isReservedWellSkyline_all7_hstep_standard_reduction
-    {base : ℕ} {p : Piece}
-    (hbase : base + 2 ≤ GameConfig.standard.rows)
-    (hp : p = Piece.O ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J ∨ p = Piece.I
-          ∨ p = Piece.S ∨ p = Piece.Z) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      Board.IsReservedWellSkyline GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Board.skyline GameConfig.standard
-            (fun j => if j = 0 then 0 else if j = 5 then base + 1 else if j = 8 then base + 1 else base))
-          { pl with piece := p }) :=
-  exists_validPlacement_eta
-    (Board.isReservedWellSkyline_all7_hstep_standard hbase hp)
-
 /-- **Flat-top well-clear, reduction-shaped.** The flat-top analogue of
 `isNotchedFlatTopRWSkyline_all7_hstep_standard_reduction` for the vertical-`I`
 well clear: composing the dispatch-shaped `Board.isFlatTopRWSkyline_vertI_hstep`
@@ -19654,32 +16335,6 @@ theorem mem_flatShelf_pieces_of_no_SZ {T : Bag} {p : Piece}
   · exact Or.inr (Or.inl rfl)
   · exact Or.inr (Or.inr (Or.inl rfl))
   · exact Or.inr (Or.inr (Or.inr (Or.inl rfl)))
-
-/-- **Flat-phase top-preserving fill.** The phase-aware assembly of the flat
-top-preservation face: once the bag `T` owes neither `S` nor `Z`, every owed piece is one of the
-five flats (`mem_flatShelf_pieces_of_no_SZ`), so an arbitrary spread-2 level pocket band member
-absorbs the drawn piece `p ∈ T` into its guaranteed floor pocket as a valid, surviving placement
-that keeps the band top at `floor + 2` (`maxColHeight standard b' ≤ floor + 2`, via
-`Board.maxColHeight_le_flatFill_of_isLevelPocketBandAt`). This is the flat phase of the
-bag-phase-aware closure: no notch is required, the pocket alone services every remaining draw. The
-post-fill board lands in the pocket-less spread-2 band at the same floor, so chaining a second flat
-fill needs the floor pocket regenerated (the drain's job), not this atom. -/
-theorem maxColHeight_le_flatPhaseFill_of_isLevelPocketBandAt {floor : ℕ} {b : Board} {T : Bag}
-    {p : Piece} (hb : Board.IsLevelPocketBandAt GameConfig.standard 2 floor b)
-    (hp : p ∈ T) (hS : Piece.S ∉ T) (hZ : Piece.Z ∉ T) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard b pl) ∧
-      Board.maxColHeight GameConfig.standard
-        (Placement.applyStep GameConfig.standard b pl) ≤ floor + 2 := by
-  have hp5 : p = Piece.O ∨ p = Piece.I ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J := by
-    rcases mem_flatShelf_pieces_of_no_SZ hp hS hZ with h | h | h | h | h
-    · exact Or.inl h
-    · exact Or.inr (Or.inr (Or.inl h))
-    · exact Or.inr (Or.inr (Or.inr (Or.inl h)))
-    · exact Or.inr (Or.inr (Or.inr (Or.inr h)))
-    · exact Or.inr (Or.inl h)
-  exact Board.maxColHeight_le_flatFill_of_isLevelPocketBandAt hp5 hb
 
 /-- **Drawing keeps every other owed piece available.** If `q` is in the bag and
 `q ≠ p`, then `q` survives the draw of `p`: `q ∈ bag.draw p`. Either the draw
@@ -19810,29 +16465,6 @@ theorem tetrisSolvableValid_of_bag_indexed_invariant
     exact hheight g.bag g.board hg j
   · intro g hg p hp
     exact hstep g.bag g.board hg p hp
-
-/-- **Atlas existence reduces to bounded-skyline closure.** Specialising the
-bag-indexed reduction to the bounded-skyline carrier (ignoring the bag phase)
-discharges the initial and height obligations outright — via
-`Board.isBoundedSkyline_empty` and `Board.colHeight_le_of_isBoundedSkyline` — so
-the entire `TetrisSolvableValid` verdict rests on a *single* closure hypothesis:
-from any bounded skyline, every piece the adversary can draw admits a valid
-placement whose post-move board is again a bounded skyline. This isolates the
-genuine crux (surface closure under the 7-bag) as one explicit, self-contained
-obligation; the seven `Board.applyStep_*_skyline_noclear` witnesses plus the
-well-clear engine are precisely the material a discharge of `hstep` would compose. -/
-theorem tetrisSolvableValid_of_boundedSkyline_closed
-    (hstep : ∀ (T : Bag) (b : Board), Board.IsBoundedSkyline GameConfig.standard b →
-      ∀ p, p ∈ T →
-      ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-        Board.IsBoundedSkyline GameConfig.standard
-          (Placement.applyStep GameConfig.standard b { pl with piece := p })) :
-    TetrisSolvableValid :=
-  tetrisSolvableValid_of_bag_indexed_invariant
-    (fun _ b => Board.IsBoundedSkyline GameConfig.standard b)
-    (Board.isBoundedSkyline_empty GameConfig.standard)
-    (fun _ _ hb => Board.colHeight_le_of_isBoundedSkyline hb)
-    hstep
 
 /-- **Atlas existence reduces to reserved-well closure.** The reserved-well
 refinement of the bounded-skyline reduction: `hinit` and `hheight` discharge
@@ -19967,32 +16599,6 @@ inductive ReachableUnder (σ : Bag → Board → Piece → Placement) : Bag → 
       ReachableUnder σ (T.draw p)
         (Placement.applyStep GameConfig.standard b { (σ T b p) with piece := p })
 
-/-- **Reachable boards are well-formed.** A structural invariant of the
-reachability carrier, prior to any height accounting: for *any* strategy `σ` that
-names the demanded piece (`hpiece`) and only ever plays placements valid on the
-boards it actually reaches (`hvalid`), every state `ReachableUnder σ T b` carries a
-well-formed board. The induction is immediate — `init` is `Board.empty_wf`, and each
-`step` folds one valid placement onto a well-formed board, preserved by
-`Placement.applyStep_wf` after collapsing the played record `{ σ T b p with piece := p }`
-back to `σ T b p` (`Placement.applyStep_with_piece_self`, valid because `hpiece`
-already fixes the piece field). `Board.WF` is the standing side-condition every
-column-height and line-clear lemma demands, so this is the gate a route-A `hheight`
-proof passes through before it can read `colHeight` off a reachable board: where the
-abstract reduction `tetrisSolvableValid_of_strategy` leaves `hheight` as the open
-content, this supplies the well-formedness half of its inductive hypothesis for free,
-uniformly over every strategy. -/
-theorem wf_of_reachableUnder {σ : Bag → Board → Piece → Placement}
-    (hpiece : ∀ T b p, (σ T b p).piece = p)
-    (hvalid : ∀ T b, ReachableUnder σ T b → ∀ p, p ∈ T →
-        (σ T b p).Valid GameConfig.standard)
-    {T : Bag} {b : Board} (h : ReachableUnder σ T b) :
-    Board.WF GameConfig.standard b := by
-  induction h with
-  | init => exact Board.empty_wf GameConfig.standard
-  | @step T b p hr hp ih =>
-      rw [Placement.applyStep_with_piece_self b (σ T b p) (hpiece T b p)]
-      exact Placement.applyStep_wf ih (hvalid T b hr p hp)
-
 /-- **Atlas existence reduces to a height-bounded valid strategy.** The decisive
 re-keying of the bag-indexed reduction onto a *reachability* carrier. Where the
 surface reductions above each rest on a closure hypothesis that is in fact
@@ -20083,35 +16689,6 @@ theorem tetrisSolvableValid_of_pocketBandCarrier_strategy
     hstep
     hvalid
     (fun b hb => Board.isPocketBandCarrier_height hb)
-
-/-- **Atlas existence from a spread-2 budgeted pocket-band-carrier strategy.** The spread-pinned
-specialisation of `tetrisSolvableValid_of_pocketBandCarrier_strategy`: taking the player-built
-invariant to be `Board.IsBoundedPocketBandCarrier 2` (the carrier whose every visited surface is a
-level pocket band of spread at most `2` for some floor), the two cheap obligations discharge
-outright — `hI_init` by `Board.isBoundedPocketBandCarrier_empty` (the empty board is a spread-2
-carrier, as `2 ≤ rows`) and `hI_height` by `Board.isBoundedPocketBandCarrier_height` (every
-budgeted-carrier column sits at most `rows` high). The whole `TetrisSolvableValid` verdict therefore
-rests on the strategy-local content over the BUDGETED carrier: a `σ` that names the demanded piece
-(`hpiece`), keeps the spread-2 pocket-band carrier across its response to every drawable piece
-(`hstep`), and only plays in-bounds placements (`hvalid`). This is the budgeted-vocabulary front
-door — strictly tighter than the bare-carrier `tetrisSolvableValid_of_pocketBandCarrier_strategy`,
-since the `σ` must now hold the spread headroom fixed at `2`, exactly the discipline the
-fill-then-drain regulator enforces by returning every surface to a spread-2 band
-(`Board.isBoundedPocketBandCarrier_fill_then_drain_bounded`). -/
-theorem tetrisSolvableValid_of_boundedPocketBandCarrier_strategy
-    (σ : Bag → Board → Piece → Placement)
-    (hpiece : ∀ T b p, (σ T b p).piece = p)
-    (hstep : ∀ T b p, Board.IsBoundedPocketBandCarrier 2 b → p ∈ T →
-        Board.IsBoundedPocketBandCarrier 2
-          (Placement.applyStep GameConfig.standard b { (σ T b p) with piece := p }))
-    (hvalid : ∀ T b p, Board.IsBoundedPocketBandCarrier 2 b → p ∈ T →
-        (σ T b p).Valid GameConfig.standard) :
-    TetrisSolvableValid :=
-  tetrisSolvableValid_of_strategy_invariant σ (Board.IsBoundedPocketBandCarrier 2) hpiece
-    (Board.isBoundedPocketBandCarrier_empty (by decide))
-    hstep
-    hvalid
-    (fun b hb => Board.isBoundedPocketBandCarrier_height hb)
 
 /-- **Bag-indexed strategy reduction (phase-aware).** The same route-A reduction as
 `tetrisSolvableValid_of_strategy_invariant`, but the carried invariant `P : Bag → Board → Prop`
@@ -20328,21 +16905,6 @@ theorem bagPhaseCarrier_notched_standard_surface {T : Bag} {base : ℕ}
   bagPhaseCarrier_of_isNotchedFlatTopRWSkyline
     (Board.isNotchedFlatTopRWSkyline_standard_surface hbase) hSZ
 
-/-- **The standard flat surface is a carrier member in *every* phase.** The flat-top companion
-to `bagPhaseCarrier_notched_standard_surface`: the concrete standard flat board — well at column
-`0`, flat `base` everywhere else — sits in the headline `bagPhaseCarrier T` for an *arbitrary*
-bag `T`, with no phase side-condition. It composes the concrete flat-surface membership
-(`isFlatTopRWSkyline_standard_surface`, needing only `base ≤ 20`) with the unconditional flat
-constructor (`bagPhaseCarrier_of_isFlatTopRWSkyline`). Where the notched companion must still owe
-a staircase piece, the flat surface is admissible the moment it is flat — so this is the carrier
-*entry* certificate for the flat phase the well-clear re-flattens into, the board a closure
-returns to after each height-regulating `I` drop. -/
-theorem bagPhaseCarrier_flatTop_standard_surface {T : Bag} {base : ℕ}
-    (hbase : base ≤ GameConfig.standard.rows) :
-    bagPhaseCarrier T
-      (Board.skyline GameConfig.standard (fun j => if j = 0 then 0 else base)) :=
-  bagPhaseCarrier_of_isFlatTopRWSkyline (Board.isFlatTopRWSkyline_standard_surface hbase)
-
 /-- **Bag-boundary re-entry: every surface state is admissible at a refill.** The carrier's
 first conjunct is exactly `IsFlatTopRWSkyline ∨ IsNotchedFlatTopRWSkyline`, so *whatever*
 surface (flat or notched) a player ends a bag with becomes admissible the instant the bag
@@ -20377,23 +16939,6 @@ theorem bagPhaseCarrier_full_iff {b : Board} :
         Board.IsNotchedFlatTopRWSkyline GameConfig.standard b) :=
   ⟨fun hP => hP.1, bagPhaseCarrier_full_of_flatTop_or_notched⟩
 
-/-- **In the spent-staircase (flat) phase the carrier *is* the flat top.** The flat-phase
-companion to `bagPhaseCarrier_full_iff`: once the bag owes neither `S` nor `Z`
-(`¬(S ∈ T ∨ Z ∈ T)`), `bagPhaseCarrier T b` holds *exactly* when `b` is a plain flat-top
-reserved-well skyline — the notched disjunct is excluded. The forward direction reads the
-flat-phase clause off the carrier (`hP.2 hno`); the backward direction is the unconditional
-`bagPhaseCarrier_of_isFlatTopRWSkyline`. Where `bagPhaseCarrier_full_iff` pins the carrier at the
-bag boundary (notch *permitted*), this pins it in the flat phase (notch *forbidden*): together
-the two iffs characterise the carrier exactly in both phases where it is a pure surface predicate
-— a refill admits either face, a spent-staircase bag admits only the flat face. This is the
-invariant a flat-phase `hstep` must re-establish: a flat top stepped by a flat-shelf piece (the
-only kind the bag can still hold, by `mem_flatShelf_pieces_of_no_SZ`) has to re-flatten to stay in
-the carrier while no staircase piece is owed. -/
-theorem bagPhaseCarrier_no_SZ_iff {T : Bag} {b : Board}
-    (hno : ¬(Piece.S ∈ T ∨ Piece.Z ∈ T)) :
-    bagPhaseCarrier T b ↔ Board.IsFlatTopRWSkyline GameConfig.standard b :=
-  ⟨fun hP => hP.2 hno, fun h => bagPhaseCarrier_of_isFlatTopRWSkyline h⟩
-
 /-- **First `hstep` fragment landing in the headline carrier (flat-top well clear).**
 The carrier-level lift of `isFlatTopRWSkyline_vertI_hstep_reduction`: from a flat-top
 reserved-well board at common height `base ≥ 4`, the vertical `I` well-clear lands a
@@ -20416,62 +16961,6 @@ theorem bagPhaseCarrier_flatTop_vertI_hstep {T : Bag} {base w : ℕ}
   obtain ⟨pl, hpiece, hvalid, hflat⟩ :=
     isFlatTopRWSkyline_vertI_hstep_reduction (cfg := GameConfig.standard) hw hbase hbase4
   exact ⟨pl, hpiece, hvalid, bagPhaseCarrier_of_isFlatTopRWSkyline hflat⟩
-
-/-- **Notched-carrier `hstep` fragment (well clear, staircase still owed).** The
-notched-phase companion to `bagPhaseCarrier_flatTop_vertI_hstep`. On a *notched*
-flat-top reserved-well board (well `w`, bump `m`, common height `base ≥ 4`) with the
-bag still owing a staircase piece (`S ∈ T ∨ Z ∈ T`), the vertical-`I` well-clear lands
-a valid placement whose post-move board is admissible in the headline
-`bagPhaseCarrier (T.draw I)`. Two facts combine: the clear re-enters the *notched*
-family lowered by four (`Board.isNotchedFlatTopRWSkyline_vertI_hstep`, transported into
-reduction shape by `exists_validPlacement_eta`), supplying the carrier's first disjunct
-(`Or.inr`); and drawing `I`—which is neither `S` nor `Z`—keeps the owed staircase piece
-in the bag (`Bag.owes_staircase_of_draw_of_ne_SZ`), so the no-staircase clause stays
-vacuous. Thus the `I` branch of the carrier's `hstep` closes outright in the notch phase
-too, the height-regulator that offsets the staircase pieces' raises while the notch is
-still required. -/
-theorem bagPhaseCarrier_notched_vertI_hstep {T : Bag} {base w m : ℕ}
-    (hw : w < GameConfig.standard.cols) (hm : m < GameConfig.standard.cols) (hwm : w ≠ m)
-    (hbase : base + 1 ≤ GameConfig.standard.rows) (hbase4 : 4 ≤ base)
-    (hSZ : Piece.S ∈ T ∨ Piece.Z ∈ T) :
-    ∃ pl : Placement, pl.piece = Piece.I ∧ pl.Valid GameConfig.standard ∧
-      bagPhaseCarrier (T.draw Piece.I)
-        (Placement.applyStep GameConfig.standard
-          (Board.skyline GameConfig.standard
-            (fun j => if j = w then 0 else if j = m then base + 1 else base))
-          { pl with piece := Piece.I }) := by
-  obtain ⟨pl, hpiece, hvalid, hnotch⟩ :=
-    exists_validPlacement_eta
-      (Board.isNotchedFlatTopRWSkyline_vertI_hstep hw hm hwm hbase hbase4)
-  refine ⟨pl, hpiece, hvalid, bagPhaseCarrier_of_isNotchedFlatTopRWSkyline hnotch ?_⟩
-  have hstill : Piece.S ∈ T.draw Piece.I ∨ Piece.Z ∈ T.draw Piece.I :=
-    Bag.owes_staircase_of_draw_of_ne_SZ (by decide) (by decide) hSZ
-  exact hstill
-
-/-- **Atlas existence reduces to two-phase-carrier closure (the tightest reduction).**
-Instantiating `tetrisSolvableValid_of_bag_indexed_invariant` at the phase-indexed surface
-carrier `bagPhaseCarrier` and discharging its two free obligations outright —
-`bagPhaseCarrier_init` (empty board, full bag) and `bagPhaseCarrier_height` (every admissible
-board is height-bounded, so never lost) — collapses the entire `TetrisSolvableValid` verdict
-onto a *single* explicit hypothesis: from any admissible `(T, b)` and any piece `p` still owed
-by the bag, the player has a valid placement of `p` whose post-move board is again admissible
-under `T.draw p`. This is the exact crux the surface programme has been circling (`#66`): the
-bag-transition table (`Bag.draw_full_or_no_SZ_of_no_SZ`, `Bag.draw_owes_staircase_or_spent_SZ`)
-routes the phase, the `bagPhaseCarrier_of_*` constructors re-tighten each face, and the I-well
-fragments (`bagPhaseCarrier_{flatTop,notched}_vertI_hstep`) already close the `I` branch in both
-phases — so a full discharge of this `hstep` is *precisely* the remaining mathematical content
-of the atlas-existence claim, with `hinit`/`hheight` permanently retired. -/
-theorem tetrisSolvableValid_of_bagPhaseCarrier_closed
-    (hstep : ∀ (T : Bag) (b : Board), bagPhaseCarrier T b → ∀ p, p ∈ T →
-      ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-        bagPhaseCarrier (T.draw p)
-          (Placement.applyStep GameConfig.standard b { pl with piece := p })) :
-    TetrisSolvableValid :=
-  tetrisSolvableValid_of_bag_indexed_invariant
-    bagPhaseCarrier
-    bagPhaseCarrier_init
-    bagPhaseCarrier_height
-    hstep
 
 /-- **The bag-indexed reservoir carrier.** A `(bag, board)` pair is *reservoir-admissible*
 when the board is a level pocket band of spread `2` for some exposed `floor`, AND that floor,
@@ -20517,28 +17006,6 @@ spread-`2` bounded pocket-band carrier and reading off its height cap bounds eve
 theorem reservoirCarrier_height (T : Bag) (b : Board) (h : reservoirCarrier T b) (j : ℕ) :
     Board.colHeight b j ≤ GameConfig.standard.rows :=
   Board.isBoundedPocketBandCarrier_height (reservoirCarrier_isBoundedPocketBandCarrier h) j
-
-/-- **Atlas existence reduces to reservoir-carrier closure.** Instantiating
-`tetrisSolvableValid_of_bag_indexed_invariant` at the bag-indexed reservoir carrier and
-discharging its initial and height obligations outright — `reservoirCarrier_init` (empty board,
-full bag, ledger `8 ≤ 20`) and `reservoirCarrier_height` (every reservoir board is a spread-`2`
-band, hence height-bounded, hence never lost) — collapses the whole `TetrisSolvableValid`
-verdict onto a single explicit hypothesis: from any reservoir-admissible `(T, b)` and any piece
-`p` the bag still owes, the player has a valid placement of `p` whose post-move board is again
-reservoir-admissible under `T.draw p`. This is the reservoir-vocabulary form of the `#66` crux,
-with the ledger now available to the discharger as the headroom budget that the once-per-bag
-I-drain replenishes. -/
-theorem tetrisSolvableValid_of_reservoirCarrier_closed
-    (hstep : ∀ (T : Bag) (b : Board), reservoirCarrier T b → ∀ p, p ∈ T →
-      ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-        reservoirCarrier (T.draw p)
-          (Placement.applyStep GameConfig.standard b { pl with piece := p })) :
-    TetrisSolvableValid :=
-  tetrisSolvableValid_of_bag_indexed_invariant
-    reservoirCarrier
-    reservoirCarrier_init
-    reservoirCarrier_height
-    hstep
 
 /-- **The reservoir's I-regulator drain edge** (the "a drain is always available" half of the
 bag closure). On any reservoir board whose witnessed band floor is at least `4`, the reserved
@@ -20632,31 +17099,6 @@ theorem reservoirCarrier_fill_step {T : Bag} {b : Board} {p : Piece} {floor floo
   obtain ⟨pl, hpiece, hvalid, hband'⟩ := hfill
   exact ⟨pl, hpiece, hvalid, floor', hband', by omega⟩
 
-/-- **The non-`I` absorption edge under a single floor cap** (the bag-boundary face of the fill
-edge, mirroring `reservoirCarrier_vertI_drain_cap`). When the drawn non-`I` piece is the bag's
-last owed piece its draw refills the clock `1 ↦ 7`, so the non-refill ledger of
-`reservoirCarrier_fill_step` no longer applies; instead, as with the drain, the closure collapses
-to a single floor cap. Given the geometric fill witness landing the post-move board in a spread-`2`
-level pocket band at floor `floor'`, the post-move board re-enters `reservoirCarrier (T.draw p)`
-whenever `floor' ≤ rows - 8 = 12`, since the refilled clock is at most a full bag
-(`(T.draw p).card ≤ 7`, `Bag.card_le_seven`) and `floor' + (T.draw p).card + 1 ≤ 12 + 7 + 1 = 20`.
-Together with `reservoirCarrier_fill_step` this closes the non-`I` half of the `hstep` for every
-bag phase: a unit floor rise suffices mid-bag, and the deeper cap `≤ 12` covers the refill
-boundary — both reducing to the same geometric obligation of a controlled-rise landing band. -/
-theorem reservoirCarrier_fill_step_cap {T : Bag} {b : Board} {p : Piece} {floor' : ℕ}
-    (hfill : ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      Board.IsLevelPocketBandAt GameConfig.standard 2 floor'
-        (Placement.applyStep GameConfig.standard b { pl with piece := p }))
-    (hcap : floor' ≤ 12) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      reservoirCarrier (T.draw p)
-        (Placement.applyStep GameConfig.standard b { pl with piece := p }) := by
-  obtain ⟨pl, hpiece, hvalid, hband'⟩ := hfill
-  refine ⟨pl, hpiece, hvalid, floor', hband', ?_⟩
-  have h7 : (T.draw p).card ≤ 7 := Bag.card_le_seven _
-  have hr : GameConfig.standard.rows = 20 := rfl
-  omega
-
 /-- **Reservoir membership from a band witness plus the ledger inequality.** The explicit-floor
 constructor for `reservoirCarrier`: a spread-`2` level pocket band at floor `floor` together with
 the scalar ledger bound `floor + T.card + 1 ≤ rows` is exactly reservoir-admissibility. This is
@@ -20667,18 +17109,6 @@ theorem reservoirCarrier_of_band_ledger {T : Bag} {b : Board} {floor : ℕ}
     (hledger : floor + T.card + 1 ≤ GameConfig.standard.rows) :
     reservoirCarrier T b :=
   ⟨floor, hband, hledger⟩
-
-/-- **The empty board is reservoir-admissible against every bag.** Generalisation of
-`reservoirCarrier_init` past the full bag: the empty board is a floor-`0` spread-`2` level pocket
-band (`isLevelPocketBandAt_empty`), and the ledger `0 + T.card + 1 ≤ 20` holds for any bag, since
-`T.card ≤ 7` (`Bag.card_le_seven`). This is the reset anchor — whenever the surface route drains
-all the way back to the empty board, it re-enters the carrier no matter where in the bag cycle it
-is. Mirrors `bagPhaseCarrier_empty`. -/
-theorem reservoirCarrier_empty (T : Bag) : reservoirCarrier T Board.empty := by
-  refine ⟨0, Board.isLevelPocketBandAt_empty GameConfig.standard (by decide) (by decide), ?_⟩
-  have hr : GameConfig.standard.rows = 20 := rfl
-  have h7 : T.card ≤ 7 := Bag.card_le_seven T
-  omega
 
 /-- **Canonical reset-surface fill closes the reservoir in place.** The bag-boundary fill
 companion to `reservoirCarrier_vertI_drain_cap`: from the canonical reset surface the
@@ -20967,22 +17397,6 @@ theorem maxColHeight_reservoirFlatSurface (base : ℕ) :
   simp only [reservoirFlatSurface]
   split_ifs <;> omega
 
-/-- **Height cap of the SZ reset surface.** The shared-valley reset surface
-`reservoirSZSurface base` (well at column `0`, the two valley lips at columns `1` and `4` raised to
-`base + 1`, every other
-working column at `base`) never rises above `base + 1`: its skyline's `maxColHeight` is at most
-`base + 1`. The extra `+ 1` over `maxColHeight_reservoirFlatSurface` is exactly the valley-lip
-overhead the staircase phase pays. This is the height face of the SZ reset surface — the floor the
-once-per-bag drain targets when the bag still owes a staircase — and feeds the height-bound
-obligation of any per-bag carrier anchored on it. -/
-theorem maxColHeight_reservoirSZSurface (base : ℕ) :
-    Board.maxColHeight GameConfig.standard
-      (Board.skyline GameConfig.standard (reservoirSZSurface base)) ≤ base + 1 := by
-  apply Board.maxColHeight_skyline_le_of_forall
-  intro j _
-  simp only [reservoirSZSurface]
-  split_ifs <;> omega
-
 /-- **`hheight` face of the flat reset surface.** The flat reset surface in the exact per-column
 shape `tetrisSolvableValid_of_bag_indexed_invariant` demands of `hheight`: every column profile of
 `Board.skyline (reservoirFlatSurface base)` is at most `rows`, for *every* `j` (including the
@@ -21013,23 +17427,6 @@ theorem colHeight_reservoirSZSurface_le {base : ℕ}
   simp only [reservoirSZSurface]
   split_ifs <;> omega
 
-/-- **`hheight` face of the phase-routed reset surface.** The single-ledger consolidation of the two
-reset-surface height faces behind the same `if Piece.S ∈ T ∨ Piece.Z ∈ T` selector that
-`reservoirCarrier_resetSurface_mem` dispatches on: whichever reset surface the drained bag presents
-(shared valley if a staircase is owed, flat shelf otherwise), every column profile stays within the
-field under the uniform slack `base + 1 ≤ rows`. This is the literal `hheight` obligation evaluated
-at the bag boundary, ready to plug into any per-bag carrier whose reset board is this selector. -/
-theorem colHeight_resetSurface_le {T : Bag} {base : ℕ}
-    (hbase : base + 1 ≤ GameConfig.standard.rows) (j : ℕ) :
-    Board.colHeight (Board.skyline GameConfig.standard
-        (if Piece.S ∈ T ∨ Piece.Z ∈ T then reservoirSZSurface base
-          else reservoirFlatSurface base)) j ≤ GameConfig.standard.rows := by
-  by_cases h : Piece.S ∈ T ∨ Piece.Z ∈ T
-  · rw [if_pos h]
-    exact colHeight_reservoirSZSurface_le hbase j
-  · rw [if_neg h]
-    exact colHeight_reservoirFlatSurface_le (by omega) j
-
 /-- **The double-valley reset surface.** The two-staircase companion of `reservoirSZSurface`: the
 reserved empty well sits at column `0`, then TWO disjoint width-four valleys are carved into the
 flat band, the first at columns `1, 2, 3, 4` and the second at columns `5, 6, 7, 8`, each with the
@@ -21042,32 +17439,6 @@ def reservoirDoubleSZSurface (base : ℕ) : ℕ → ℕ := fun j =>
   if j = 0 then 0
   else if j = 1 ∨ j = 4 ∨ j = 5 ∨ j = 8 then base + 1
   else base
-
-/-- **Height cap of the double-valley reset surface.** Every column of the two-valley surface lives
-in `[base, base + 1]` (the valley lips are the only `base + 1` columns and the well is `0`), so the
-`maxColHeight` over the skyline is at most `base + 1`, exactly as for the single-valley
-`reservoirSZSurface`. Adding a second valley costs no extra height. -/
-theorem maxColHeight_reservoirDoubleSZSurface (base : ℕ) :
-    Board.maxColHeight GameConfig.standard
-      (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base)) ≤ base + 1 := by
-  apply Board.maxColHeight_skyline_le_of_forall
-  intro j _
-  simp only [reservoirDoubleSZSurface]
-  split_ifs <;> omega
-
-/-- **`hheight` face of the double-valley reset surface.** Every column profile of
-`Board.skyline (reservoirDoubleSZSurface base)` is at most `rows` under the same uniform slack
-`base + 1 ≤ rows` as the single-valley surface. This is the bag-boundary height obligation when the
-drained bag resets to the two-valley surface (the carrier shape for the two-staircase sub-problem,
-where the adversary may owe both `S` and `Z` before the drain). -/
-theorem colHeight_reservoirDoubleSZSurface_le {base : ℕ}
-    (hbase : base + 1 ≤ GameConfig.standard.rows) (j : ℕ) :
-    Board.colHeight (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base)) j
-      ≤ GameConfig.standard.rows := by
-  apply Board.colHeight_skyline_le
-  intro k _
-  simp only [reservoirDoubleSZSurface]
-  split_ifs <;> omega
 
 /-- **Reserved well of the double-valley surface is empty.** The profile value at column `0` is
 `0`, the literal `hw0 : h 0 = 0` frame hypothesis every fill-step and band smart constructor
@@ -21106,35 +17477,6 @@ theorem reservoirDoubleSZSurface_spreadBandAt (base : ℕ)
       (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base)) :=
   Board.isSpreadBoundedRWSkylineAt_skyline (w := 0) (by decide)
     (reservoirDoubleSZSurface_well base) (reservoirDoubleSZSurface_band base) hbase
-
-/-- **A flat O seats on the lip-shelf without touching either valley.** The double-valley
-surface keeps its columns `4` and `5` both at `base + 1`, an adjacent level width-two shelf — a
-landing pad for a flat `O`. Placing `{O, rot 0, col 4}` writes `+2` into columns `4, 5` (lifting
-them to `base + 3`) and leaves every other column untouched, so both valley floors survive: the
-valley1 cells `2, 3` and the valley2 cells `6, 7` all stay at exactly `base`. This is the
-geometric escape for the hardest interleave, a flat piece arriving before both owed staircases
-are placed: rather than consuming a valley the flat parks on the lip-shelf, and the two pristine
-notches stay available for the still owed `S` and `Z`. The well at column `0` keeps the move
-clear-free, so the heights add without any row filling. -/
-theorem reservoirDoubleSZSurface_O_lipShelf_preserves_valleys (base : ℕ) :
-    Board.colHeight (Placement.applyStep GameConfig.standard
-        (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-        { piece := Piece.O, rot := 0, col := 4 }) 2 = base ∧
-    Board.colHeight (Placement.applyStep GameConfig.standard
-        (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-        { piece := Piece.O, rot := 0, col := 4 }) 3 = base ∧
-    Board.colHeight (Placement.applyStep GameConfig.standard
-        (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-        { piece := Piece.O, rot := 0, col := 4 }) 6 = base ∧
-    Board.colHeight (Placement.applyStep GameConfig.standard
-        (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-        { piece := Piece.O, rot := 0, col := 4 }) 7 = base := by
-  rw [Board.applyStep_O_skyline_noclear (c := 4) (w := 0) (by decide) (by decide)
-      (by simp [reservoirDoubleSZSurface]) (by decide) (by decide) (by decide)
-      (reservoirDoubleSZSurface_well base)]
-  refine ⟨?_, ?_, ?_, ?_⟩ <;>
-    rw [Board.colHeight_skyline (by decide)] <;>
-    simp [Function.update_apply, reservoirDoubleSZSurface]
 
 /-- **The lip-shelf O leaves a spread-three reserved-well band — re-entry into the carrier.**
 After the flat `O` parks on the double-valley surface's adjacent lip-shelf (columns `4, 5`, lifting
@@ -21241,21 +17583,6 @@ theorem reservoirDoubleSZSurface_Z_valley2_preserves_valley1 (base : ℕ) :
     (by simp [reservoirDoubleSZSurface]) (by simp [reservoirDoubleSZSurface])
     (by simp [reservoirDoubleSZSurface]) (by simp [reservoirDoubleSZSurface])
     (by decide) (by decide) (by decide) (by decide) (by decide)
-
-/-- **Reserved well survives the first staircase `Z` landing — the order-mirror frame companion.**
-The `Z`-first analogue of `reservoirDoubleSZSurface_S_valley1_preserves_well`: the valley2 `Z` move
-`{Z, rot 0, col 5}` dodges column `0`, so the reserved well stays empty (`colHeight … 0 = 0`) on the
-post-move board. Paired with `reservoirDoubleSZSurface_Z_valley2_preserves_valley1` this certifies
-that opening the bag with `Z` leaves BOTH structural features a follow-on `S` needs — an empty well
-and a pristine valley1 — so the second staircase can seat into valley1 with the same frame the
-landing lemmas demand, and the once-per-bag `I` still has its drain column. -/
-theorem reservoirDoubleSZSurface_Z_valley2_preserves_well (base : ℕ) :
-    Board.colHeight (Placement.applyStep GameConfig.standard
-        (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-        { piece := Piece.Z, rot := 0, col := 5 }) 0 = 0 := by
-  rw [Board.colHeight_applyStep_skyline_eq_of_avoid_well (w := 0) (m := 0)
-      (by decide) (by decide) (reservoirDoubleSZSurface_well base) (by decide) (by decide),
-    reservoirDoubleSZSurface_well]
 
 /-- **The post-S board stays a spread-2 band off the well.** After the valley1 `S` move
 `{S, rot 0, col 2}` (a valid S-notch placement on the right lip of valley1 — `h 2 = h 3 = base`,
@@ -21390,48 +17717,6 @@ theorem reservoirDoubleSZSurface_afterS_eq_skyline (base : ℕ) :
   simp only [Function.update_apply, reservoirDoubleSZSurface]
   split_ifs <;> omega
 
-/-- **Skyline normal form for the post-`SZ` double-valley board.** Chains the post-`S` normal form
-(`reservoirDoubleSZSurface_afterS_eq_skyline`) into the valley2 `Z` move (`{Z, rot 0, col 5}`,
-seating on the mirror notch `g 5 = g 6 + 1`, `g 6 = g 7`), collapsing the whole `S`-then-`Z` burst
-into ONE explicit closed-form skyline. The `Z` writes `base + 2` into columns `5, 6` and `base + 1`
-into column `7`, leaving the post-`S` heights elsewhere untouched, so the board after BOTH staircases
-(the adversary's `S, Z` order, both before the regulator `I`) equals `Board.skyline` of the named
-profile `(0, base+1, base+1, base+2, base+2, base+2, base+2, base+1, base+1, base)` — peak exactly
-`base + 2`, well drained. This single explicit skyline is the direct input to the once-per-bag
-vertical-`I` well-drain (`reservoirDoubleSZSurface_vertI_well_drain` operates on the analogous
-profile), so the "both staircases owed before the `I`" branch hands the drain a pattern-matchable
-board rather than a six-deep nested `Function.update`. -/
-theorem reservoirDoubleSZSurface_afterSZ_eq_skyline (base : ℕ) :
-    Placement.applyStep GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-          { piece := Piece.S, rot := 0, col := 2 })
-        { piece := Piece.Z, rot := 0, col := 5 }
-      = Board.skyline GameConfig.standard
-          (fun j => if j = 0 then 0
-                    else if j = 1 then base + 1
-                    else if j = 2 then base + 1
-                    else if j = 3 then base + 2
-                    else if j = 4 then base + 2
-                    else if j = 5 then base + 2
-                    else if j = 6 then base + 2
-                    else if j = 7 then base + 1
-                    else if j = 8 then base + 1
-                    else base) := by
-  rw [reservoirDoubleSZSurface_afterS_eq_skyline,
-    Board.applyStep_Z_skyline_noclear (c := 5) (w := 0) (by decide) (by decide) (by decide)
-      (by simp) (by simp) (by decide) (by decide) (by decide) (by decide) (by simp)]
-  congr 1
-  funext j
-  rcases eq_or_ne j 5 with rfl | h5
-  · simp
-  rcases eq_or_ne j 6 with rfl | h6
-  · simp
-  rcases eq_or_ne j 7 with rfl | h7
-  · simp
-  simp only [Function.update_apply]
-  split_ifs <;> omega
-
 /-- **Reserved well survives BOTH staircases.** The two-staircase analogue of
 `reservoirDoubleSZSurface_S_valley1_preserves_well`: seating `S` in valley1 (`{S, rot 0, col 2}`)
 and then `Z` in valley2 (`{Z, rot 0, col 5}`, the mirror notch on the left lip of valley2 where
@@ -21496,45 +17781,6 @@ theorem reservoirDoubleSZSurface_afterSZ_band (base : ℕ) :
   · simp [reservoirDoubleSZSurface]
   simp only [Function.update_apply, reservoirDoubleSZSurface]
   split_ifs <;> omega
-
-/-- **The two staircases regenerate a width-4 flat shelf at `base + 2`.** The phase-transition
-payoff: after `S` seats in valley1 (`{S, rot 0, col 2}`, lifting columns `2, 3, 4` to
-`base + 1, base + 2, base + 2`) and `Z` seats in valley2 (`{Z, rot 0, col 5}`, lifting columns
-`5, 6, 7` to `base + 2, base + 2, base + 1`), columns `3, 4, 5, 6` all sit at exactly `base + 2`,
-a level width-4 pocket. This is the structural bridge from the staircase phase to the flat phase
-WITHIN one bag: once both owed staircases are absorbed, the surface itself exposes the flat landing
-strip the remaining flats (`O, T, L, J`) drop onto, so the double-valley surface need not also carry
-a separate flat pocket (which the ten-column budget forbids alongside two valleys). -/
-theorem reservoirDoubleSZSurface_afterSZ_flatShelf (base : ℕ) :
-    Board.colHeight (Placement.applyStep GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-          { piece := Piece.S, rot := 0, col := 2 })
-        { piece := Piece.Z, rot := 0, col := 5 }) 3 = base + 2 ∧
-    Board.colHeight (Placement.applyStep GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-          { piece := Piece.S, rot := 0, col := 2 })
-        { piece := Piece.Z, rot := 0, col := 5 }) 4 = base + 2 ∧
-    Board.colHeight (Placement.applyStep GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-          { piece := Piece.S, rot := 0, col := 2 })
-        { piece := Piece.Z, rot := 0, col := 5 }) 5 = base + 2 ∧
-    Board.colHeight (Placement.applyStep GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-          { piece := Piece.S, rot := 0, col := 2 })
-        { piece := Piece.Z, rot := 0, col := 5 }) 6 = base + 2 := by
-  refine ⟨?_, ?_, ?_, ?_⟩ <;>
-  · rw [Board.applyStep_S_skyline_noclear (c := 2) (w := 0) (by decide) (by decide) (by decide)
-        (by simp [reservoirDoubleSZSurface]) (by simp [reservoirDoubleSZSurface])
-        (by decide) (by decide) (by decide) (by decide) (reservoirDoubleSZSurface_well base),
-      Board.applyStep_Z_skyline_noclear (c := 5) (w := 0) (by decide) (by decide) (by decide)
-        (by simp [reservoirDoubleSZSurface]) (by simp [reservoirDoubleSZSurface])
-        (by decide) (by decide) (by decide) (by decide) (by simp [reservoirDoubleSZSurface]),
-      Board.colHeight_skyline (by decide)]
-    simp [reservoirDoubleSZSurface]
 
 /-- **Post-SZ board is a reserved-well spread-2 band.** Packages the height payoff of the two
 disjoint valleys into the reusable carrier vocabulary: after `S` seats in valley1 and `Z` seats in
@@ -21742,40 +17988,6 @@ theorem reservoirDoubleSZSurface_SZ_comm (base : ℕ) :
       Function.update_of_ne h4, Function.update_of_ne h3, Function.update_of_ne h2,
       Function.update_of_ne h7, Function.update_of_ne h6, Function.update_of_ne h5]
 
-/-- **The Z-then-S two-step is equally legal and survivable.** The mirror of
-`reservoirDoubleSZSurface_SZ_transition` for the opposite adversarial order: from the reset surface
-`reservoirDoubleSZSurface base`, playing `{Z, rot 0, col 5}` then `{S, rot 0, col 2}` is valid and
-lands in the SAME reserved-well spread-2 band, has not topped out, and peaks at height at most
-`base + 2`. Proven for free by transporting every face of the S-then-Z certificate across the
-commutation equality `reservoirDoubleSZSurface_SZ_comm`. Together the two transitions certify BOTH
-orders the adversary can pick when it draws the bag's two staircases back to back, so a carrier need
-only host one to survive either. -/
-theorem reservoirDoubleSZSurface_ZS_transition (base : ℕ)
-    (hbase : base + 2 ≤ GameConfig.standard.rows) :
-    ({ piece := Piece.Z, rot := 0, col := 5 } : Placement).Valid GameConfig.standard ∧
-    ({ piece := Piece.S, rot := 0, col := 2 } : Placement).Valid GameConfig.standard ∧
-    Board.IsSpreadBoundedRWSkyline GameConfig.standard 2
-      (Placement.applyStep GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-          { piece := Piece.Z, rot := 0, col := 5 })
-        { piece := Piece.S, rot := 0, col := 2 }) ∧
-    ¬ Board.isLost GameConfig.standard
-      (Placement.applyStep GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-          { piece := Piece.Z, rot := 0, col := 5 })
-        { piece := Piece.S, rot := 0, col := 2 }) ∧
-    Board.maxColHeight GameConfig.standard
-      (Placement.applyStep GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-          { piece := Piece.Z, rot := 0, col := 5 })
-        { piece := Piece.S, rot := 0, col := 2 }) ≤ base + 2 := by
-  rw [← reservoirDoubleSZSurface_SZ_comm base]
-  obtain ⟨hS, hZ, hspread, hlost, hheight⟩ := reservoirDoubleSZSurface_SZ_transition base hbase
-  exact ⟨hZ, hS, hspread, hlost, hheight⟩
-
 /-- **The drain regenerates the double-valley reset surface, lowered by four.** The linchpin of the
 period cycle. The two-valley surface has its reserved well at column `0` and every working column in
 `[base, base + 1]`; once `4 ≤ base` every neighbour of the well is at least four high, so dropping
@@ -21924,14 +18136,6 @@ theorem isLevelPocketBandAt_of_isFlatPhaseReservoirAtS {s base : ℕ} {b : Board
     (by decide) hw0 hband hslack (by omega)
     (by omega) (by omega) (by omega) (by omega)
     hs0 hs1 hs2 hs3
-
-/-- **The spread-`2` flat phase shape is the `s = 2` instance of the parametric shape.** Both
-predicates are the same existential with the buffer specialised to `2`, so they are definitionally
-interchangeable. This lets every spread-`2` flat-phase fact (init, hosting, refinement) be read as
-the `s = 2` slice of the parametric family, and lets a future phase-indexed-spread carrier reuse
-the existing concrete flat witnesses unchanged. -/
-theorem isFlatPhaseReservoirAtS_two_iff {base : ℕ} {b : Board} :
-    IsFlatPhaseReservoirAtS 2 base b ↔ IsFlatPhaseReservoirAt base b := Iff.rfl
 
 /-- **The width-parametric flat run reservoir shape.** Generalises `IsFlatPhaseReservoirAtS` from a
 hardcoded width-eight flat run to an arbitrary run width `w` (with `w ≥ 4` so a width-four pocket is
@@ -22265,26 +18469,6 @@ theorem isFlatRunReservoirAt_of_isFlatPhaseReservoirAtS {s base : ℕ} {b : Boar
   · exact hs6
   · exact hs7
 
-/-- **A flat phase shape hosts any non-staircase piece, landing in a shrinking flat run.** The first
-fill consequence of the run bridge: re-reading the width-eight flat phase shape as an
-`IsFlatRunReservoirAt 8 s base` run (`isFlatRunReservoirAt_of_isFlatPhaseReservoirAtS`) and applying
-the five-piece run reducer (`isFlatRunReservoirAt_nonStaircase_step`), every non-staircase piece
-`p ∈ {O, I, T, L, J}` has a valid placement seating flush on the run, landing in an
-`IsFlatRunReservoirAt w' s base` board with surviving width `w' ≥ 4`. This is the steady-state flat
-fill the `flat_no_sz_edge` needs — the shrinking run is the post-fill shape a flat phase actually
-re-enters, with the once-per-bag I-drain replenishing the run back to full width. Needs buffer
-`s ≥ 2` (the O, T, L, J podiums reach `base + 2`). -/
-theorem isFlatPhaseReservoirAtS_hosts_nonStaircase {s base : ℕ} {b : Board} {p : Piece}
-    (hb : IsFlatPhaseReservoirAtS s base b) (hs2 : 2 ≤ s)
-    (hp : p = Piece.O ∨ p = Piece.I ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      ∃ w', 4 ≤ w' ∧ IsFlatRunReservoirAt w' s base
-        (Placement.applyStep GameConfig.standard b pl) := by
-  have hrun : IsFlatRunReservoirAt 8 s base b := isFlatRunReservoirAt_of_isFlatPhaseReservoirAtS hb
-  obtain ⟨pl, hpc, hv, w', hw', hout⟩ :=
-    isFlatRunReservoirAt_nonStaircase_step hrun (by omega) hs2 hp
-  exact ⟨pl, hpc, hv, w', by omega, hout⟩
-
 /-- **A flat run reservoir forgets to a floor-pinned spread band.** The run shape's own forgetful
 edge into the drain vocabulary: `isLevelPocketBandAt_of_isFlatRunReservoirAt` repackages an
 `IsFlatRunReservoirAt w s base` board as a spread-`s` level pocket band, then
@@ -22475,13 +18659,6 @@ theorem isSZPhaseReservoirAtS_full_drain {s base : ℕ} {b : Board}
   · simp only [if_neg (show pc + 2 ≠ 0 by omega)]; omega
   · simp only [if_neg (show pc + 3 ≠ 0 by omega)]; omega
 
-/-- **The spread-`2` S and Z phase shape is the `s = 2` instance of the parametric shape.** Both
-predicates are the same existential with the buffer specialised to `2`, so they are definitionally
-interchangeable, letting every spread-`2` staircase-phase fact be read as the `s = 2` slice of the
-parametric family. -/
-theorem isSZPhaseReservoirAtS_two_iff {base : ℕ} {b : Board} :
-    IsSZPhaseReservoirAtS 2 base b ↔ IsSZPhaseReservoirAt base b := Iff.rfl
-
 /-- **Flat phase buffer monotonicity.** Widening the buffer from `s` to any `s' ≥ s` (as long as
 the wider band still fits, `base + s' ≤ rows`) preserves the flat phase shape: the same skyline,
 well, and width-eight floor run witness it, and every working column stays inside `[base, base + s]
@@ -22496,21 +18673,6 @@ theorem isFlatPhaseReservoirAtS_mono_spread {s s' base : ℕ} {b : Board}
   exact ⟨h, pc, rfl, hw0,
     fun j hj hj0 => ⟨(hband j hj hj0).1, le_trans (hband j hj hj0).2 (by omega)⟩,
     hcap, hpc1, hpc7, hs0, hs1, hs2, hs3, hs4, hs5, hs6, hs7⟩
-
-/-- **S and Z phase buffer monotonicity.** The staircase-phase analogue of
-`isFlatPhaseReservoirAtS_mono_spread`: widening the buffer from `s` to `s' ≥ s` (with
-`base + s' ≤ rows`) preserves the S/Z phase shape, since the valley lips at `base + 1` and the flat
-pocket all stay inside the widened band `[base, base + s']`. Lets a fill raise the surface while a
-staircase is still owed, re-presenting the valley shape at the enlarged buffer. -/
-theorem isSZPhaseReservoirAtS_mono_spread {s s' base : ℕ} {b : Board}
-    (hb : IsSZPhaseReservoirAtS s base b) (hss : s ≤ s')
-    (hcap : base + s' ≤ GameConfig.standard.rows) :
-    IsSZPhaseReservoirAtS s' base b := by
-  obtain ⟨h, vc, pc, rfl, hw0, hband, _, hvc1, hord, hpc3, hv0, hv1, hv2, hv3,
-    hp0, hp1, hp2, hp3⟩ := hb
-  exact ⟨h, vc, pc, rfl, hw0,
-    fun j hj hj0 => ⟨(hband j hj hj0).1, le_trans (hband j hj hj0).2 (by omega)⟩,
-    hcap, hvc1, hord, hpc3, hv0, hv1, hv2, hv3, hp0, hp1, hp2, hp3⟩
 
 /-- **The canonical flat reset surface is a flat phase shape** (the re-entry the I-drain targets).
 The concrete `reservoirFlatSurface base` (reserved well at column `0`, flat shelf at floor `base`
@@ -22699,54 +18861,6 @@ theorem bandPhaseReservoirS_flat_vertI_drain_step {T : Bag} {b : Board} {base s 
   refine bandPhaseReservoirS_of_flat (isFlatPhaseReservoirAtS_full_drain hflat hbase4) ?_
   rw [Bag.card_draw_of_ge_two hI hcard]; omega
 
-/-- **Carrier-level I-drain from the S/Z phase, non-emptying case** (the SZ-edge `p = I` branch).
-Mirror of `bandPhaseReservoirS_flat_vertI_drain_step` for the staircase phase: the guaranteed
-well-`I` regulator drops the floor by four (`isSZPhaseReservoirAtS_full_drain`, valid because
-`base ≥ 4`), re-entering the carrier via `bandPhaseReservoirS_of_SZ`. Drawing the `I` is
-non-emptying (`2 ≤ T.card`), so it merely erases `I` (`draw_eq_erase_of_card_ge_two`); the still-owed
-staircase debt `S`/`Z` survives the erase (`S ≠ I`, `Z ≠ I`), keeping the S/Z disjunct legitimate.
-The ledger closes cleanly: `(base - 4) + s + (T.card - 1) + 1 = base + s + T.card - 4 ≤ rows`. This
-discharges the `p = I` branch of `sz_edge` in the non-emptying regime. -/
-theorem bandPhaseReservoirS_SZ_vertI_drain_step {T : Bag} {b : Board} {base s : ℕ}
-    (hsz : IsSZPhaseReservoirAtS s base b)
-    (hI : Piece.I ∈ T) (howes : Piece.S ∈ T ∨ Piece.Z ∈ T)
-    (hcard : 2 ≤ T.card) (hbase4 : 4 ≤ base)
-    (hledger : base + s + T.card + 1 ≤ GameConfig.standard.rows) :
-    ∃ pl : Placement, pl.piece = Piece.I ∧ pl.Valid GameConfig.standard ∧
-      bandPhaseReservoirS (T.draw Piece.I)
-        (Placement.applyStep GameConfig.standard b { pl with piece := Piece.I }) := by
-  refine ⟨{ piece := Piece.I, rot := 1, col := 0 }, rfl, Board.valid_vertI (by decide), ?_⟩
-  have howes' : Piece.S ∈ T.draw Piece.I ∨ Piece.Z ∈ T.draw Piece.I := by
-    rw [Bag.draw_eq_erase_of_card_ge_two hI hcard]
-    rcases howes with hS | hZ
-    · exact Or.inl (Finset.mem_erase.mpr ⟨by decide, hS⟩)
-    · exact Or.inr (Finset.mem_erase.mpr ⟨by decide, hZ⟩)
-  refine bandPhaseReservoirS_of_SZ (isSZPhaseReservoirAtS_full_drain hsz hbase4) howes' ?_
-  rw [Bag.card_draw_of_ge_two hI hcard]; omega
-
-/-- **Carrier-level I-drain from the flat phase, the *emptying* case** (the bag-boundary companion to
-`bandPhaseReservoirS_flat_vertI_drain_step`). When the drawn `I` is the bag's LAST piece, the draw
-refills to seven (`T.draw Piece.I = Bag.full`). The well-`I` regulator still drops the floor by four
-(`isFlatPhaseReservoirAtS_full_drain`, valid because `base ≥ 4`) and re-enters the carrier through
-`bandPhaseReservoirS_of_flat` — but now against the refilled seven-piece bag, so the destination
-ledger is `(base - 4) + s + 7 + 1 ≤ rows`, i.e. `base + s + 4 ≤ rows`. That is strictly TWO units
-tighter than the singleton source ledger `base + s + 1 + 1 ≤ rows` (`T.card = 1`): the floor drops
-by four while the bag clock jumps by six, the genuine `+2` bag-boundary gap the buffer `s` must be
-sized to absorb. So the emptying drain closes precisely when the band carries that extra slack —
-the concrete arithmetic face of the once-per-bag reset, completing the flat edge's `p = I` taxonomy
-alongside the non-emptying step. -/
-theorem bandPhaseReservoirS_flat_vertI_drain_emptying_step {T : Bag} {b : Board} {base s : ℕ}
-    (hflat : IsFlatPhaseReservoirAtS s base b)
-    (hempty : T.draw Piece.I = Bag.full)
-    (hbase4 : 4 ≤ base)
-    (hslack : base + s + 4 ≤ GameConfig.standard.rows) :
-    ∃ pl : Placement, pl.piece = Piece.I ∧ pl.Valid GameConfig.standard ∧
-      bandPhaseReservoirS (T.draw Piece.I)
-        (Placement.applyStep GameConfig.standard b { pl with piece := Piece.I }) := by
-  refine ⟨{ piece := Piece.I, rot := 1, col := 0 }, rfl, Board.valid_vertI (by decide), ?_⟩
-  refine bandPhaseReservoirS_of_flat (isFlatPhaseReservoirAtS_full_drain hflat hbase4) ?_
-  rw [hempty, Bag.full_card]; omega
-
 /-- **The once-per-bag cycle re-enters the carrier at the flat reset surface** (the drain to flat
 phase re-entry). Folding the full raise then drain cycle over the canonical flat reset surface
 `reservoirFlatSurface base` returns, by the board fixed-point identity `foldl_cycle_eq_flatShelf`,
@@ -22842,13 +18956,6 @@ theorem bandPhaseReservoirS_of_strict {T : Bag} {b : Board}
   · exact Or.inr (hsz howes)
   · exact Or.inl (hflat howes)
 
-/-- **The strict carrier is height-bounded** (its `hheight` face), inherited through the refinement
-`bandPhaseReservoirS_of_strict` and the inclusive carrier's height face. -/
-theorem bandPhaseReservoirSStrict_height (T : Bag) (b : Board)
-    (hb : bandPhaseReservoirSStrict T b) (j : ℕ) :
-    Board.colHeight b j ≤ GameConfig.standard.rows :=
-  bandPhaseReservoirS_height T b (bandPhaseReservoirS_of_strict hb) j
-
 /-- **The bag-phase carrier refines the weak reservoir carrier** (strong to weak). Either phase
 shape forgets to a spread-`2` level pocket band at the same floor `base`, and the bag-phase ledger
 `base + T.card + 1 ≤ rows` is the weak carrier's ledger, so `reservoirCarrier_of_band_ledger`
@@ -22935,55 +19042,6 @@ theorem tetrisSolvableValid_of_bandPhaseReservoirS_edges
     · exact sz_edge T b base s hsz howes hledger p hp
     · exact flat_edge T b base s (hflat_imp howes) hledger p hp
 
-/-- **Flat-edge split: separate the hole-free flat fill from the bootstrap hole risk.** The
-`flat_edge` of `tetrisSolvableValid_of_bandPhaseReservoirS_edges` must service a flat phase shape
-under *any* bag — including a bag that still owes a staircase. Those two regimes have very different
-geometry, so this router splits the single flat edge into the two edges it really is:
-
-* `flat_no_sz_edge` — the **steady-state** flat fill: the bag owes no staircase
-  (`¬(S ∈ T ∨ Z ∈ T)`), so every owed piece is one of the five flats
-  (`mem_flatShelf_pieces_of_no_SZ`) and lands cleanly into the wide pocket. No `S` or `Z` is ever
-  dropped onto a flat run (the one move that would punch a hole), so this edge is hole-free. This is
-  the workhorse the once-per-bag drain keeps regenerating room for.
-* `flat_owes_edge` — the **bootstrap** flat fill: a flat surface while the bag still owes `S`/`Z`
-  (the empty board with a full bag is exactly this state). Here the adversary may draw the staircase
-  piece onto a flat run, leaving a transient hole that a first-bag line clear must remove.
-  Discharging this edge is the genuine open bootstrap obligation, isolated here away from the
-  steady-state edges.
-
-Routing the parent `flat_edge` to whichever sub-edge the owed-staircase status selects discharges
-it, so `TetrisSolvableValid` now reduces to three edges: two hole-free (steady state) plus the
-quarantined bootstrap. -/
-theorem tetrisSolvableValid_of_bandPhaseReservoirS_edges_split
-    (flat_no_sz_edge : ∀ (T : Bag) (b : Board) (base s : ℕ),
-        IsFlatPhaseReservoirAtS s base b →
-        ¬(Piece.S ∈ T ∨ Piece.Z ∈ T) →
-        base + s + T.card + 1 ≤ GameConfig.standard.rows →
-        ∀ p, p ∈ T → ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-          bandPhaseReservoirS (T.draw p)
-            (Placement.applyStep GameConfig.standard b { pl with piece := p }))
-    (flat_owes_edge : ∀ (T : Bag) (b : Board) (base s : ℕ),
-        IsFlatPhaseReservoirAtS s base b →
-        (Piece.S ∈ T ∨ Piece.Z ∈ T) →
-        base + s + T.card + 1 ≤ GameConfig.standard.rows →
-        ∀ p, p ∈ T → ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-          bandPhaseReservoirS (T.draw p)
-            (Placement.applyStep GameConfig.standard b { pl with piece := p }))
-    (sz_edge : ∀ (T : Bag) (b : Board) (base s : ℕ),
-        IsSZPhaseReservoirAtS s base b →
-        (Piece.S ∈ T ∨ Piece.Z ∈ T) →
-        base + s + T.card + 1 ≤ GameConfig.standard.rows →
-        ∀ p, p ∈ T → ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-          bandPhaseReservoirS (T.draw p)
-            (Placement.applyStep GameConfig.standard b { pl with piece := p })) :
-    TetrisSolvableValid := by
-  apply tetrisSolvableValid_of_bandPhaseReservoirS_edges
-  · intro T b base s hflat hledger p hp
-    by_cases howes : Piece.S ∈ T ∨ Piece.Z ∈ T
-    · exact flat_owes_edge T b base s hflat howes hledger p hp
-    · exact flat_no_sz_edge T b base s hflat howes hledger p hp
-  · exact sz_edge
-
 /-- **The spread-band reservoir carrier.** The bag-phase-indexed carrier built on the floor-pinned
 spread band `IsSpreadBoundedRWSkylineAt` rather than the pocket band `IsLevelPocketBandAt`. The two
 ledger conjuncts mirror `reservoirCarrier`'s exactly — a band floor `base`, a spread `s`, and the
@@ -23018,29 +19076,6 @@ theorem reservoirSpreadCarrier_height (T : Bag) (b : Board) (h : reservoirSpread
   obtain ⟨base, s, hband, hledger⟩ := h
   have hcol := Board.colHeight_le_of_isSpreadBoundedRWSkylineAt hband j
   omega
-
-/-- **The phase carrier forgets to the spread-band carrier** (the spread-vocabulary mirror of
-`reservoirCarrier_of_bandPhaseReservoir`). Every `bandPhaseReservoirS T b` board carries a concrete
-bag-phase shape — a flat phase shape (well plus width-eight run) or an S/Z phase shape (well plus
-shared valley plus pocket) — at some floor `base` and buffer `s`. Either shape forgets to a
-spread-`s` level pocket band at the same floor (`isLevelPocketBandAt_of_isFlatPhaseReservoirAtS` /
-`isLevelPocketBandAt_of_isSZPhaseReservoirAtS`), which in turn forgets its width-four pocket to a
-floor-pinned spread band (`Board.isSpreadBoundedRWSkylineAt_of_isLevelPocketBandAt`). The two
-carriers share the *identical* ledger `base + s + T.card + 1 ≤ rows`, so the headroom budget
-transports verbatim. This is the structural bridge from the *site-guaranteeing* phase carrier (whose
-shapes discharge the spread carrier's open `hsite`, but which no single fill preserves) to the
-*closed-under-fill* spread carrier (which survives any fill landing in a band, but whose `hsite` a
-bare band leaves open): a strategy can read its surface as either, taking the phase shape to land the
-next owed piece and the bare spread band to certify height — so the phase carrier inherits every
-spread-carrier height, drain, and survival face for free. -/
-theorem reservoirSpreadCarrier_of_bandPhaseReservoirS {T : Bag} {b : Board}
-    (hb : bandPhaseReservoirS T b) : reservoirSpreadCarrier T b := by
-  obtain ⟨base, s, hledger, hphase, _⟩ := hb
-  have hband : Board.IsLevelPocketBandAt GameConfig.standard s base b := by
-    rcases hphase with hf | hsz
-    · exact isLevelPocketBandAt_of_isFlatPhaseReservoirAtS hf
-    · exact isLevelPocketBandAt_of_isSZPhaseReservoirAtS hsz
-  exact ⟨base, s, Board.isSpreadBoundedRWSkylineAt_of_isLevelPocketBandAt hband, hledger⟩
 
 /-- **Atlas existence reduces to spread-band-carrier closure.** Instantiating
 `tetrisSolvableValid_of_bag_indexed_invariant` at the spread-band carrier and discharging its initial
@@ -23242,37 +19277,6 @@ theorem reservoirSpreadCarrier_fill_step {T : Bag} {b : Board} {p : Piece} {base
         (Placement.applyStep GameConfig.standard b { pl with piece := p }) := by
   obtain ⟨pl, hpiece, hvalid, hband'⟩ := hfill
   exact ⟨pl, hpiece, hvalid, base', s, hband', by omega⟩
-
-/-- **The spread-band carrier's unified band-top fill edge.** The band-top generalization of
-`reservoirSpreadCarrier_fill_step`, which only books a floor rise at a *fixed* buffer `s`. The
-spread-carrier ledger `base + s + T.card + 1 ≤ rows` constrains only the *band top* `base + s` (the
-highest a working column may sit), so the accounting that keeps the carrier closed cares about how
-far the band top moves, not whether it moved by raising the floor or by widening the buffer. This
-edge makes that explicit: given a geometric fill witness landing the post-move board in a
-floor-pinned spread band `IsSpreadBoundedRWSkylineAt standard s' base'` at ANY floor `base'` and ANY
-buffer `s'`, the single hypothesis `base' + s' ≤ base + s + 1` (the band top rose by at most one)
-together with the ledger and a non-refill draw (`(T.draw p).card < T.card`) re-enters
-`reservoirSpreadCarrier (T.draw p)`. The arithmetic is the dual reading of the bag clock: each draw
-ticks `T.card` down by one, buying exactly one unit of band-top headroom, so a unit band-top rise is
-paid for by the unit clock tick —
-`base' + s' + (T.draw p).card + 1 ≤ (base + s + 1) + (T.card - 1) + 1 = base + s + T.card + 1 ≤ rows`.
-Setting `s' = s` recovers the floor-rise edge (`base' ≤ base + 1`); setting `base' = base, s' = s + 1`
-gives its missing dual — the buffer *widens* by one at a pinned floor — which is exactly the slack a
-stack of absorbing fills consumes as the non-`I` pieces of a bag arrive before the regulator `I`
-drains them back down. -/
-theorem reservoirSpreadCarrier_fill_step_bandtop {T : Bag} {b : Board} {p : Piece}
-    {base base' s s' : ℕ}
-    (hfill : ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      Board.IsSpreadBoundedRWSkylineAt GameConfig.standard s' base'
-        (Placement.applyStep GameConfig.standard b { pl with piece := p }))
-    (hbandtop : base' + s' ≤ base + s + 1)
-    (hledger : base + s + T.card + 1 ≤ GameConfig.standard.rows)
-    (hcard : (T.draw p).card < T.card) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      reservoirSpreadCarrier (T.draw p)
-        (Placement.applyStep GameConfig.standard b { pl with piece := p }) := by
-  obtain ⟨pl, hpiece, hvalid, hband'⟩ := hfill
-  exact ⟨pl, hpiece, hvalid, base', s', hband', by omega⟩
 
 /-- **The spread-band carrier's wide-pocket flat fill closes in place.** The concrete flat branch of
 the `reservoirSpreadCarrier` non-`I` half, and the spread analogue of
@@ -23942,72 +19946,6 @@ theorem reservoirRichSurface_S_notch_carrier {T : Bag} {base : ℕ}
     split_ifs <;> omega
   · omega
 
-/-- **The owed-`Z` mirror: seating the owed `Z` into the rich surface's Z-notch re-enters the spread
-carrier** (iter640). The `Z`-staircase companion of `reservoirRichSurface_S_notch_carrier` (iter639)
-and the mirror of `reservoirDoubleSZSurface_Z_carrier` (iter390). On `reservoirRichSurface base` the
-columns `5, 6, 7` read `base + 1, base, base` — exactly the descending notch a `Z` (rotation `0`,
-column `5`) seats into without a hole (`Board.applyStep_Z_skyline_noclear`, whose mirror premises
-`h 6 = h 7` and `h 5 = h 6 + 1` the surface meets): the post-`Z` board is the explicit skyline
-`(0, base, base, base, base, base+2, base+2, base+1, base+1, base)`, a reserved-well spread-`2` band
-at floor `base`, which re-enters `reservoirSpreadCarrier (T.draw Z)` via the floor-pinned smart
-constructor `Board.isSpreadBoundedRWSkylineAt_skyline`. This is the move the universal phase plays
-when the adversary opens the bag with the owed `Z`.
-
-Honest caveat: the rich surface's two notches OVERLAP at columns `6, 7` (the Z-notch is `5,6,7`, the
-S-notch is `6,7,8`), so seating the `Z` here RAISES columns `6, 7` and destroys the S-notch — this
-brick hosts ONE owed staircase, not both, exactly the overlap obstruction flagged in iter608. With
-iter639 it completes the owed-staircase opening pair on the rich surface, but it does NOT close crux
-`#66`/`#72` (both-staircase all-orders bag accounting); `TetrisSolvableValid` is NOT proven; no sorry. -/
-theorem reservoirRichSurface_Z_notch_carrier {T : Bag} {base : ℕ}
-    (hledger : base + 2 + (T.draw Piece.Z).card + 1 ≤ GameConfig.standard.rows) :
-    reservoirSpreadCarrier (T.draw Piece.Z)
-      (Placement.applyStep GameConfig.standard
-        (Board.skyline GameConfig.standard (reservoirRichSurface base))
-        { piece := Piece.Z, rot := 0, col := 5 }) := by
-  rw [Board.applyStep_Z_skyline_noclear (c := 5) (w := 0) (by decide) (by decide) (by decide)
-      (by simp [reservoirRichSurface]) (by simp [reservoirRichSurface])
-      (by decide) (by decide) (by decide) (by decide) (by simp [reservoirRichSurface])]
-  refine ⟨base, 2, ?_, hledger⟩
-  apply Board.isSpreadBoundedRWSkylineAt_skyline (w := 0)
-  · decide
-  · simp [Function.update_apply, reservoirRichSurface]
-  · intro j hj hjw
-    rcases eq_or_ne j 5 with rfl | h5
-    · simp [reservoirRichSurface]
-    rcases eq_or_ne j 6 with rfl | h6
-    · simp [reservoirRichSurface]
-    rcases eq_or_ne j 7 with rfl | h7
-    · simp [reservoirRichSurface]
-    simp only [Function.update_apply, reservoirRichSurface]
-    split_ifs <;> omega
-  · omega
-
-/-- **The owed-`S` notch landing exits safely into the carrier** (iter641). The survival face of
-`reservoirRichSurface_S_notch_carrier` (iter639), and the rich-surface analogue of
-`reservoirDoubleSZSurface_S_carrier_safe` (iter391): when the universal phase opens the bag with the
-owed `S`, seating it in the rich surface's S-notch (`{S, rot 0, col 6}`) not only re-enters
-`reservoirSpreadCarrier (T.draw S)` at the unchanged floor `base`, the post-`S` board is certified to
-have not topped out (`reservoirSpreadCarrier_not_isLost`). The final per-piece reduction consumes the
-paired carrier-plus-safety face, so a universal-phase survival schedule can quote this brick to
-discharge the `S`-opening without re-deriving either the notch landing or its safety.
-
-Honest caveat (unchanged from iter639): the rich surface's two notches OVERLAP at columns `6, 7`, so
-this brick hosts ONE owed staircase, not both — it EXHIBITS, not overcomes, the iter608 notch-overlap
-obstruction. It does NOT close crux `#66`/`#72` (both-staircase all-orders bag accounting);
-`TetrisSolvableValid` is NOT proven; no sorry. -/
-theorem reservoirRichSurface_S_notch_carrier_safe {T : Bag} {base : ℕ}
-    (hledger : base + 2 + (T.draw Piece.S).card + 1 ≤ GameConfig.standard.rows) :
-    reservoirSpreadCarrier (T.draw Piece.S)
-      (Placement.applyStep GameConfig.standard
-        (Board.skyline GameConfig.standard (reservoirRichSurface base))
-        { piece := Piece.S, rot := 0, col := 6 }) ∧
-    ¬ Board.isLost GameConfig.standard
-      (Placement.applyStep GameConfig.standard
-        (Board.skyline GameConfig.standard (reservoirRichSurface base))
-        { piece := Piece.S, rot := 0, col := 6 }) := by
-  have hcarrier := reservoirRichSurface_S_notch_carrier (T := T) (base := base) hledger
-  exact ⟨hcarrier, reservoirSpreadCarrier_not_isLost _ _ hcarrier⟩
-
 /-- **The once-per-bag regulator drain regenerates the universal rich surface, lowered by four**
 (iter631). The rich-surface analogue of `reservoirDoubleSZSurface_vertI_well_drain` (iter362), and the
 regeneration linchpin the universal-phase thread (iter608–625) was missing. The rich reset surface
@@ -24044,88 +19982,6 @@ theorem reservoirRichSurface_vertI_well_drain {base : ℕ} (hbase : 4 ≤ base) 
   · simp [hj0]
   · simp only [if_neg hj0]
     split_ifs <;> omega
-
-/-- **The universal rich surface drains into the spread-band carrier** (iter632). The rich-surface
-analogue of `reservoirDoubleSZSurface_vertI_drain_carrier`: the regenerator edge stated in the
-carrier vocabulary the final reduction consumes, but on the strictly-better all-7-hosting reset
-surface. Dropping the once-per-bag vertical `I` into the reserved well of `reservoirRichSurface base`
-clears four rows and lands the literal profile `reservoirRichSurface (base - 4)` (iter631's drain),
-which iter609's reset-state membership `reservoirSpreadCarrier_richSurface_mem` repackages directly
-as a spread-1 carrier member at floor `base - 4`. With the destination ledger
-`(base - 4) + 1 + (T.draw I).card + 1 ≤ rows` this re-enters `reservoirSpreadCarrier (T.draw Piece.I)`.
-The payoff over the double-valley drain edge: the surface handed to the next bag is the universal
-rich shape, whose pocket and BOTH notches survive the drain (iter631), so the regenerated carrier
-already hosts every piece the next bag can draw — no owed-staircase bookkeeping rides underneath.
-Honest caveat (unchanged): this is the GIVEN-surface drain edge at `base ≥ 4`; it does not schedule
-the drain against the across-bag fillers that raise the floor (the post-fill board is a bare spread
-band, not this rich surface), nor prove the all-orders raise-versus-drain balance. Crux `#66`/`#72`
-remain open; `TetrisSolvableValid` is NOT proven; no sorry. -/
-theorem reservoirSpreadCarrier_richSurface_vertI_drain_carrier {T : Bag} {base : ℕ}
-    (hbase : 4 ≤ base)
-    (hledger : (base - 4) + 1 + (T.draw Piece.I).card + 1 ≤ GameConfig.standard.rows) :
-    ∃ plI : Placement, plI.piece = Piece.I ∧ plI.Valid GameConfig.standard ∧
-      reservoirSpreadCarrier (T.draw Piece.I)
-        (Placement.applyStep GameConfig.standard
-          (Board.skyline GameConfig.standard (reservoirRichSurface base))
-          plI) := by
-  refine ⟨{ piece := Piece.I, rot := 1, col := 0 }, rfl, Board.valid_vertI (by decide), ?_⟩
-  rw [reservoirRichSurface_vertI_well_drain hbase]
-  exact reservoirSpreadCarrier_richSurface_mem hledger
-
-/-- **Survival face of the universal rich-surface well drain** (iter633). The rich-surface analogue of
-`reservoirDoubleSZSurface_vertI_well_drain_safe` (iter363): bundles the three facts a cycle step needs
-about the once-per-bag vertical-`I` drain on the all-7-hosting reset surface — the placement is valid,
-it rewrites `reservoirRichSurface base` to the same rich profile lowered by `4`
-(`reservoirRichSurface_vertI_well_drain`, iter631), and the lowered surface has not topped out. The
-height bound `base + 1 ≤ rows` on the pre-drain surface carries to the post-drain surface for free
-(natural subtraction only shrinks the floor, and the two notch lips ride at `(base - 4) + 1 ≤ base + 1`),
-so `not_isLost_skyline` discharges survival from the profile cap by `split_ifs <;> omega` over the four
-height cases (well `0`, the two `base - 4 + 1` notch lips, the `base - 4` floor). This is the
-survival-carrying regenerator face the final reduction's edges must each provide: the drain returns a
-fresh rich shape at floor `base - 4`, pocket and both notches intact, ready to host the next bag.
-Honest caveat (unchanged): this is the GIVEN-surface drain at `base ≥ 4`; it neither schedules the drain
-against the across-bag fillers that raise the floor nor proves the all-orders raise-versus-drain balance.
-Crux `#66`/`#72` remain open; `TetrisSolvableValid` is NOT proven; no sorry. -/
-theorem reservoirRichSurface_vertI_well_drain_safe {base : ℕ} (hbase : 4 ≤ base)
-    (hrows : base + 1 ≤ GameConfig.standard.rows) :
-    ({ piece := Piece.I, rot := 1, col := 0 } : Placement).Valid GameConfig.standard ∧
-    Placement.applyStep GameConfig.standard
-        (Board.skyline GameConfig.standard (reservoirRichSurface base))
-        { piece := Piece.I, rot := 1, col := 0 }
-      = Board.skyline GameConfig.standard (reservoirRichSurface (base - 4)) ∧
-    ¬ Board.isLost GameConfig.standard
-      (Board.skyline GameConfig.standard (reservoirRichSurface (base - 4))) :=
-  ⟨Board.valid_vertI (by decide),
-   reservoirRichSurface_vertI_well_drain hbase,
-   Board.not_isLost_skyline (fun j _ => by
-     simp only [reservoirRichSurface]; split_ifs <;> omega)⟩
-
-/-- **The phase-matched per-piece fill dispatcher into the spread carrier.** Unifies the two
-phase bridges (`reservoirSpreadCarrier_flatPhase_flat_fill_step` and
-`reservoirSpreadCarrier_SZPhase_SZ_fill_step`) behind one disjunctive `hsite` premise that pairs the
-drawn piece with the phase shape matching its type: EITHER a flat piece `p ∈ {O, I, T, L, J}` together
-with a flat phase shape `IsFlatPhaseReservoirAtS 2 base b`, OR a staircase `p ∈ {S, Z}` together with
-a staircase phase shape `IsSZPhaseReservoirAtS 2 base b`. In either case the matched phase shape
-carries the landing site that piece needs by construction, so it has a valid placement re-entering
-`reservoirSpreadCarrier (T.draw p)` at the same floor `base`. This is the per-piece closure of the
-spread carrier *when the surface is in the bag-phase-correct shape*: it reduces the entire non-`I`
-half of the per-bag closure to maintaining the phase shape matching whatever the bag still owes — a
-flat run when no staircase is owed, a valley when one is. The genuine residue is the OFF-phase case
-(a flat drawn while a staircase is owed must land in the S/Z phase's width-four pocket, which the
-ten-column budget forces rather than a second width-eight run) plus re-presenting the phase shape via
-the once-per-bag drain. -/
-theorem reservoirSpreadCarrier_phase_fill_step {T : Bag} {base : ℕ} {b : Board} {p : Piece}
-    (hsite :
-      ((p = Piece.O ∨ p = Piece.I ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J) ∧
-        IsFlatPhaseReservoirAtS 2 base b) ∨
-      ((p = Piece.S ∨ p = Piece.Z) ∧ IsSZPhaseReservoirAtS 2 base b))
-    (hledger : base + 2 + (T.draw p).card + 1 ≤ GameConfig.standard.rows) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      reservoirSpreadCarrier (T.draw p)
-        (Placement.applyStep GameConfig.standard b { pl with piece := p }) := by
-  rcases hsite with ⟨hp, hflat⟩ | ⟨hp, hsz⟩
-  · exact reservoirSpreadCarrier_flatPhase_flat_fill_step hflat hp hledger
-  · exact reservoirSpreadCarrier_SZPhase_SZ_fill_step hsz hp hledger
 
 /-- **Off-phase flat fill in the SZ phase.** A flat piece `p ∈ {O,I,T,L,J}` can arrive while the
 board is in the SZ (staircase-owed) phase. The budget geometry (#90 and #151: well + valley +
@@ -24328,30 +20184,6 @@ theorem reservoirSpreadCarrier_phase_regulated_step_safe {T : Bag} {base : ℕ} 
     reservoirSpreadCarrier_phase_regulated_step hphase hflat hfloor hcap hledger
   exact ⟨pl, hpiece, hvalid, hcarrier, reservoirSpreadCarrier_not_isLost _ _ hcarrier⟩
 
-/-- **The once-per-bag drain from the bare spread band, with its survival certificate.** The
-drain-side companion of `reservoirSpreadCarrier_phase_regulated_step_safe`: where that brick certifies
-the absorbing fills (and the off-the-phase regulated step) are safe, this one certifies the regulator
-drain itself. On any floor-pinned spread band whose floor is at least four and whose top sits at
-`base + s ≤ 16`, dropping the vertical `I` into the reserved empty well clears four full rows and
-re-enters `reservoirSpreadCarrier (T.draw Piece.I)` (`reservoirSpreadCarrier_vertI_drain_cap`); the
-destination carrier membership then certifies the drained board has not topped out
-(`reservoirSpreadCarrier_not_isLost`). Together with the fill-safe step this gives the two moves a
-per-bag survival schedule alternates between — absorb on the six non-regulator pieces, drain on the
-guaranteed `I` — each delivering both the carrier re-entry under `T.draw p` and the `¬ isLost`
-certificate the schedule threads through every adversarial order. Unlike the fill, the drain reads its
-band directly off the bare carrier vocabulary, so it needs no phase shape to fire: the reserved well is
-always present, so the regulator is always available once the floor has risen far enough to clear. -/
-theorem reservoirSpreadCarrier_vertI_drain_cap_safe {T : Bag} {b : Board} {base s : ℕ}
-    (hband : Board.IsSpreadBoundedRWSkylineAt GameConfig.standard s base b)
-    (hfloor : 4 ≤ base) (hcap : base + s ≤ 16) :
-    ∃ plI : Placement, plI.piece = Piece.I ∧ plI.Valid GameConfig.standard ∧
-      reservoirSpreadCarrier (T.draw Piece.I)
-        (Placement.applyStep GameConfig.standard b plI) ∧
-      ¬ Board.isLost GameConfig.standard (Placement.applyStep GameConfig.standard b plI) := by
-  obtain ⟨plI, hpiece, hvalid, hcarrier⟩ :=
-    reservoirSpreadCarrier_vertI_drain_cap (T := T) hband hfloor hcap
-  exact ⟨plI, hpiece, hvalid, hcarrier, reservoirSpreadCarrier_not_isLost _ _ hcarrier⟩
-
 /-- **The two-staircase burst exits into the carrier, with its survival certificate.** The survival
 face of `reservoirDoubleSZSurface_SZ_burst_carrier`: on the killer adversary order — `S` immediately
 followed by `Z`, the order the two reserved valleys exist to survive — the post-burst board not only
@@ -24379,31 +20211,6 @@ theorem reservoirDoubleSZSurface_SZ_burst_carrier_safe {T : Bag} {base : ℕ}
   have hcarrier := reservoirDoubleSZSurface_SZ_burst_carrier (T := T) (base := base) hledger
   exact ⟨hcarrier, reservoirSpreadCarrier_not_isLost _ _ hcarrier⟩
 
-/-- **The mid-bag flat-`O` interruption exits safely into the carrier.** The survival face of
-`reservoirDoubleSZSurface_O_lipShelf_carrier`, and the flat-interruption companion of
-`reservoirDoubleSZSurface_SZ_burst_carrier_safe`: when the adversary slips a flat `O` in before the
-owed staircases land, the lip-shelf landing parks it on the shared lips (columns `4, 5`) without
-touching either valley, and the post-`O` board both re-enters `reservoirSpreadCarrier (T.draw O)` (at
-the one extra unit of spread the shelf spent) AND is certified to have not topped out
-(`reservoirSpreadCarrier_not_isLost`). Together with the burst-safe brick this survival-certifies the
-double-valley phase's two response classes — absorb a flat on its lips, or discharge both owed
-staircases into their valleys — so whichever of these the adversary forces while the drain is still
-owed, the surface it lands on is a safe carrier member, and the schedule quotes the pair without
-re-deriving safety. The valleys stay pristine under the `O`, so the staircase burst remains available
-afterward. -/
-theorem reservoirDoubleSZSurface_O_lipShelf_carrier_safe {T : Bag} {base : ℕ}
-    (hledger : base + 3 + (T.draw Piece.O).card + 1 ≤ GameConfig.standard.rows) :
-    reservoirSpreadCarrier (T.draw Piece.O)
-      (Placement.applyStep GameConfig.standard
-        (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-        { piece := Piece.O, rot := 0, col := 4 }) ∧
-    ¬ Board.isLost GameConfig.standard
-      (Placement.applyStep GameConfig.standard
-        (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-        { piece := Piece.O, rot := 0, col := 4 }) := by
-  have hcarrier := reservoirDoubleSZSurface_O_lipShelf_carrier (T := T) (base := base) hledger
-  exact ⟨hcarrier, reservoirSpreadCarrier_not_isLost _ _ hcarrier⟩
-
 /-- **The lone first staircase exits safely into the carrier.** The survival face of
 `reservoirDoubleSZSurface_S_carrier`, the single-`S` companion of
 `reservoirDoubleSZSurface_SZ_burst_carrier_safe`: when the adversary opens the bag with `S`, seating
@@ -24424,27 +20231,6 @@ theorem reservoirDoubleSZSurface_S_carrier_safe {T : Bag} {base : ℕ}
         (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
         { piece := Piece.S, rot := 0, col := 2 }) := by
   have hcarrier := reservoirDoubleSZSurface_S_carrier (T := T) (base := base) hledger
-  exact ⟨hcarrier, reservoirSpreadCarrier_not_isLost _ _ hcarrier⟩
-
-/-- **The lone second staircase exits safely into the carrier.** The single-`Z` mirror of
-`reservoirDoubleSZSurface_S_carrier_safe`: opening the bag with `Z` and seating it in valley2
-(`{Z, rot 0, col 5}`) re-enters `reservoirSpreadCarrier (T.draw Z)` at the unchanged floor `base`
-and the post-`Z` board is certified to have not topped out (`reservoirSpreadCarrier_not_isLost`),
-with valley1 left pristine for the owed `S`. With the `S`-carrier-safe, burst-safe, and
-`O`-interruption-safe bricks, every opening move on the double-valley surface now carries both the
-carrier re-entry and the `¬ isLost` certificate the per-bag survival schedule threads through any
-adversarial order. -/
-theorem reservoirDoubleSZSurface_Z_carrier_safe {T : Bag} {base : ℕ}
-    (hledger : base + 2 + (T.draw Piece.Z).card + 1 ≤ GameConfig.standard.rows) :
-    reservoirSpreadCarrier (T.draw Piece.Z)
-      (Placement.applyStep GameConfig.standard
-        (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-        { piece := Piece.Z, rot := 0, col := 5 }) ∧
-    ¬ Board.isLost GameConfig.standard
-      (Placement.applyStep GameConfig.standard
-        (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-        { piece := Piece.Z, rot := 0, col := 5 }) := by
-  have hcarrier := reservoirDoubleSZSurface_Z_carrier (T := T) (base := base) hledger
   exact ⟨hcarrier, reservoirSpreadCarrier_not_isLost _ _ hcarrier⟩
 
 /-- **The double-valley surface's first-move dispatcher over `{S, Z, O, I}`.** A single statement
@@ -24517,40 +20303,6 @@ theorem reservoirSZSurface_firstMove_dispatch {T : Bag} {base : ℕ} {p : Piece}
       hfloor hcap hledger
   exact ⟨pl, hpiece, hvalid, hc, reservoirSpreadCarrier_not_isLost _ _ hc⟩
 
-/-- **The five-flat first move on the concrete flat phase surface.** The flat-phase companion of
-`reservoirSZSurface_firstMove_dispatch` (iter394): on the concrete flat reset surface
-`reservoirFlatSurface` (reserved well at column `0`, a wide flat run at columns `1` through `9`, all at
-floor `base`), each of the five flats `p ∈ {O, I, T, L, J}` has a valid opening that lands in the
-spread carrier without topping out. It is the concrete instance of
-`reservoirSpreadCarrier_flatPhase_regulated_step` at the realised surface: the surface is an
-`IsFlatPhaseReservoirAtS 2 base` member (`isFlatPhaseReservoirAtS_reservoirFlatSurface`, whose cap
-obligation `base + 2 ≤ rows` is read off the carrier ledger), so for the drawn flat `p` the regulator
-either drops the once-per-bag `I` into the reserved well — clearing four rows and draining the floor to
-`base` minus four — or seats any of the other four flats flush on the wide run at the unchanged floor
-`base`, and either way re-enters the spread carrier under `T.draw p`. The survival certificate is read
-straight off the destination membership by `reservoirSpreadCarrier_not_isLost`. Together with the S/Z
-first move this gives the opening move at both concrete reset surfaces: the flat surface fields the
-five flats the steady-state bag draws, the S/Z surface fields all seven while a staircase is still
-owed. What stays open is the phase REGENERATION the next piece needs — re-presenting the flat run shape
-rather than the bare spread band the fill lands on — which the ten-column budget forces to be
-bag-phase-aware. -/
-theorem reservoirFlatSurface_firstMove_dispatch {T : Bag} {base : ℕ} {p : Piece}
-    (hp : p = Piece.O ∨ p = Piece.I ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J)
-    (hfloor : 4 ≤ base) (hcap : base + 2 ≤ 16)
-    (hledger : base + 2 + (T.draw p).card + 1 ≤ GameConfig.standard.rows) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      reservoirSpreadCarrier (T.draw p)
-        (Placement.applyStep GameConfig.standard
-          (Board.skyline GameConfig.standard (reservoirFlatSurface base)) { pl with piece := p }) ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Board.skyline GameConfig.standard (reservoirFlatSurface base)) { pl with piece := p }) := by
-  obtain ⟨pl, hpiece, hvalid, hc⟩ :=
-    reservoirSpreadCarrier_flatPhase_regulated_step
-      (isFlatPhaseReservoirAtS_reservoirFlatSurface (s := 2) (base := base) (by omega))
-      hp hfloor hcap hledger
-  exact ⟨pl, hpiece, hvalid, hc, reservoirSpreadCarrier_not_isLost _ _ hc⟩
-
 /-- **The width-parametric flat run absorbs a flat into the spread carrier, at any run width.** The
 flat half of the carrier closure, stated on the SHRINKING run rather than the fixed width-eight phase
 shape: it is the generalisation of `reservoirSpreadCarrier_flatPhase_flat_fill_step` from
@@ -24605,38 +20357,6 @@ theorem reservoirSpreadCarrier_flatRun_drain_step {T : Bag} {w s base : ℕ} {b 
     isSpreadBoundedRWSkylineAt_of_isFlatRunReservoirAt
       (isFlatRunReservoirAt_full_drain hb hbase4),
     hledger⟩
-
-/-- **The per-piece fill-then-drain net half-cycle lands in the spread carrier.** The carrier-boundary
-lift of the run-level `isFlatRunReservoirAt_nonStaircase_fillDrain` (iter351), composing the two edges
-of the previous two iterations into one net transition: from a width-`w ≥ 8`, spread-`s ≥ 2`,
-floor-`≥ 4` flat run, seating any flat `p ∈ {O, I, T, L, J}` flush on the run and then dropping the
-guaranteed well-`I` lands — after BOTH placements — in a narrower run at the lowered floor `base - 4`
-(`isFlatRunReservoirAt_nonStaircase_fillDrain`), which forgets to its floor-pinned spread band
-(`isSpreadBoundedRWSkylineAt_of_isFlatRunReservoirAt`) and re-enters
-`reservoirSpreadCarrier ((T.draw p).draw Piece.I)` under the post-pair bag clock. This is the exact
-per-piece bag accounting expressed at the front door: each non-`I` flat spends at most four columns of
-run, and the once-per-bag `I` buys back four rows of floor, so the pair nets a strictly lower band that
-still satisfies the carrier ledger (the drained floor `base - 4` is four below the source). It bundles
-the fill half (`reservoirSpreadCarrier_flatRun_fill_step`, iter377) and the drain half
-(`reservoirSpreadCarrier_flatRun_drain_step`, iter378) into the single rise-and-reset unit a bag-phase
-closure iterates — the smallest two-move step that both absorbs a piece and resets the floor without
-leaving the spread carrier. What stays open is the run-width REGENERATION the next bag needs, which the
-ten-column budget forces to be bag-phase-aware. -/
-theorem reservoirSpreadCarrier_flatRun_fillDrain_step {T : Bag} {w s base : ℕ} {b : Board} {p : Piece}
-    (hb : IsFlatRunReservoirAt w s base b) (hw8 : 8 ≤ w) (hs2 : 2 ≤ s) (hbase4 : 4 ≤ base)
-    (hp : p = Piece.O ∨ p = Piece.I ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J)
-    (hledger : (base - 4) + s + ((T.draw p).draw Piece.I).card + 1 ≤ GameConfig.standard.rows) :
-    ∃ pl plI : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      plI.piece = Piece.I ∧ plI.Valid GameConfig.standard ∧
-      reservoirSpreadCarrier ((T.draw p).draw Piece.I)
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard b pl) plI) := by
-  obtain ⟨pl, w', hpiece, hvalid, _, hdrain⟩ :=
-    isFlatRunReservoirAt_nonStaircase_fillDrain hb hw8 hs2 hbase4 hp
-  exact ⟨pl, { piece := Piece.I, rot := 1, col := 0 }, hpiece, hvalid, rfl,
-    Board.valid_vertI (show (0 : ℕ) < GameConfig.standard.cols by decide),
-    base - 4, s,
-    isSpreadBoundedRWSkylineAt_of_isFlatRunReservoirAt hdrain, hledger⟩
 
 /-- **A wide flat run absorbs two consecutive flats, spending at most eight columns.** The two-piece
 chaining of the per-piece reducer `isFlatRunReservoirAt_nonStaircase_step`, making the linear width
@@ -24890,29 +20610,6 @@ theorem reservoirSpreadCarrier_flat_O_vstack_step {T : Bag} {s base : ℕ} {h : 
   intro j hj hjw
   rw [hflat j (Nat.pos_of_ne_zero hjw) hj]; omega
 
-/-- **Column-parametric flat-band `O` fill** (iter399). The same one-move availability as
-`reservoirSpreadCarrier_flat_O_vstack_step` but with the landing column `c` a free parameter rather
-than pinned to `1`: on a band flat at `base` with the reserved well at column `0`, any interior pair
-`(c, c+1)` with `0 < c` and `c+1 < cols` hosts the vertical `O` and keeps the carrier. This is the
-move the bag-phase strategy needs to fill a flat layer left to right — it picks the current fill-front
-column instead of always stacking on columns `1` and `2`. Regeneration (that a flat pair survives in
-the un-raised suffix after each fill) is still owed to the closure. -/
-theorem reservoirSpreadCarrier_flat_O_vstack_step_at {T : Bag} {s base c : ℕ} {h : ℕ → ℕ}
-    (hs : 2 ≤ s) (hw0 : h 0 = 0)
-    (hflat : ∀ j, 0 < j → j < GameConfig.standard.cols → h j = base)
-    (hc0 : 0 < c) (hc1 : c + 1 < GameConfig.standard.cols)
-    (hledger : base + s + (T.draw Piece.O).card + 1 ≤ GameConfig.standard.rows) :
-    ∃ pl : Placement, pl.piece = Piece.O ∧ pl.Valid GameConfig.standard ∧
-      reservoirSpreadCarrier (T.draw Piece.O)
-        (Placement.applyStep GameConfig.standard (Board.skyline GameConfig.standard h) pl) := by
-  have hcols : c < GameConfig.standard.cols := by omega
-  refine reservoirSpreadCarrier_O_vstack_step (w := 0) (c := c) (f := base)
-    (by decide) hw0 ?_ hcols hc1 (by omega) (by omega)
-    (hflat c hc0 hcols) (hflat (c + 1) (by omega) hc1)
-    (le_refl base) (by omega) hledger
-  intro j hj hjw
-  rw [hflat j (Nat.pos_of_ne_zero hjw) hj]; omega
-
 /-- **Flat-pair regeneration: a second `O` survives the first fill** (iter400). The first concrete
 proof that a landing pair PERSISTS after a partial fill — the existence core of the adversarial-order
 crux for the all-`O` sub-case. Starting from a band flat at `base` with the reserved well at column
@@ -24962,98 +20659,6 @@ theorem reservoirSpreadCarrier_flat_OO_regen {T : Bag} {s base : ℕ} {h : ℕ �
       · rw [hval j hj1 hj2, hflat j (Nat.pos_of_ne_zero hj0) hj]; omega
   · rw [hval 3 (by decide) (by decide), hflat 3 (by decide) (by decide)]
   · rw [hval (3 + 1) (by decide) (by decide), hflat (3 + 1) (by decide) (by decide)]
-
-/-- **`n`-fold disjoint-`O` regeneration: a flat band absorbs `k` vertical `O`s left to right** (iter626).
-The inductive generalization of `reservoirSpreadCarrier_flat_OO_regen` (iter400) from two `O`s to an
-arbitrary count `k`. Starting from a band flat at the floor `base` with the reserved empty well at column
-`0`, drop one `O` flush across each disjoint column pair `(2i+1, 2i+2)` for `i < k`. Because every fill
-seats on a FRESH floor pair (cols `2i+1, 2i+2` are still at `base`, never previously raised), each is a
-valid no-clear placement (`applyStep_O_skyline_noclear`) that lifts only its own two columns to `base + 2`,
-leaving the un-raised suffix flat — so the whole post-fill profile stays inside the spread-`2` band
-`[base, base + 2]` and the left-fold of the `k` placements lands back in `IsSpreadBoundedRWSkylineAt 2 base`.
-The pair budget `2 * k < cols` caps `k ≤ 4` on the ten-wide board (cols `1..8`, leaving col `9`), which is
-the concrete content of the vertical-stacking dodge: where the run-width track spends one floor column per
-piece and hits the `4 * 6 + 4 = 28 > 9` wall (`isFlatRunReservoirAt_iter_nonStaircase_drain`), this spends
-only vertical headroom and seats four `O`s in eight columns at a fixed floor. This is regeneration made
-quantitative — each fill regenerates the next landing pair in the flat suffix — but it is NOT the bag-phase
-closure: it is single-piece-typed (`O` only, the heights differ for `T`/`S`/`Z`), and a full bag's six
-non-`I` pieces plus the all-orders adversarial scheduling and the once-per-bag `I` drain back to a reset
-surface (crux `#66`/`#72`) remain open. `TetrisSolvableValid` is NOT proven. No sorry. -/
-theorem isSpreadBoundedRWSkylineAt_flat_O_fill_pairs {base : ℕ} {h : ℕ → ℕ} (k : ℕ)
-    (hw0 : h 0 = 0)
-    (hflat : ∀ j, 0 < j → j < GameConfig.standard.cols → h j = base)
-    (h2k : 2 * k < GameConfig.standard.cols)
-    (hslack : base + 2 ≤ GameConfig.standard.rows) :
-    (∀ i < k, ({ piece := Piece.O, rot := 0, col := 2 * i + 1 } : Placement).Valid GameConfig.standard) ∧
-      Board.IsSpreadBoundedRWSkylineAt GameConfig.standard 2 base
-        (((List.range k).map
-              (fun i => ({ piece := Piece.O, rot := 0, col := 2 * i + 1 } : Placement))).foldl
-          (fun b' pl => Placement.applyStep GameConfig.standard b' pl)
-          (Board.skyline GameConfig.standard h)) := by
-  refine ⟨fun i hi => Board.valid_O (by omega), ?_⟩
-  have hfold : ∀ m, 2 * m < GameConfig.standard.cols →
-      (((List.range m).map
-            (fun i => ({ piece := Piece.O, rot := 0, col := 2 * i + 1 } : Placement))).foldl
-          (fun b' pl => Placement.applyStep GameConfig.standard b' pl)
-          (Board.skyline GameConfig.standard h))
-        = Board.skyline GameConfig.standard
-            (fun j => if 0 < j ∧ j ≤ 2 * m then base + 2 else h j) := by
-    intro m
-    induction m with
-    | zero =>
-      intro _
-      simp only [List.range_zero, List.map_nil, List.foldl_nil]
-      refine congrArg (Board.skyline GameConfig.standard) ?_
-      funext j
-      rw [if_neg (by omega)]
-    | succ n ih =>
-      intro hsucc
-      have hc1lt : 2 * n + 1 < GameConfig.standard.cols := by omega
-      have hc2lt : 2 * n + 1 + 1 < GameConfig.standard.cols := by omega
-      have hgc : (fun j => if 0 < j ∧ j ≤ 2 * n then base + 2 else h j) (2 * n + 1) = base := by
-        show (if 0 < 2 * n + 1 ∧ 2 * n + 1 ≤ 2 * n then base + 2 else h (2 * n + 1)) = base
-        rw [if_neg (by omega)]; exact hflat (2 * n + 1) (by omega) hc1lt
-      have hgc1 : (fun j => if 0 < j ∧ j ≤ 2 * n then base + 2 else h j) (2 * n + 1 + 1) = base := by
-        show (if 0 < 2 * n + 1 + 1 ∧ 2 * n + 1 + 1 ≤ 2 * n then base + 2 else h (2 * n + 1 + 1)) = base
-        rw [if_neg (by omega)]; exact hflat (2 * n + 1 + 1) (by omega) hc2lt
-      have hg0 : (fun j => if 0 < j ∧ j ≤ 2 * n then base + 2 else h j) 0 = 0 := by
-        show (if 0 < 0 ∧ 0 ≤ 2 * n then base + 2 else h 0) = 0
-        rw [if_neg (by omega)]; exact hw0
-      have hgcb : (if 0 < 2 * n + 1 ∧ 2 * n + 1 ≤ 2 * n then base + 2 else h (2 * n + 1)) = base := by
-        rw [if_neg (by omega)]; exact hflat (2 * n + 1) (by omega) hc1lt
-      have heq_h : (fun j => if 0 < j ∧ j ≤ 2 * n then base + 2 else h j) (2 * n + 1)
-          = (fun j => if 0 < j ∧ j ≤ 2 * n then base + 2 else h j) (2 * n + 1 + 1) := by
-        rw [hgc, hgc1]
-      rw [List.range_succ, List.map_append, List.foldl_append, ih (by omega)]
-      simp only [List.map_cons, List.map_nil, List.foldl_cons, List.foldl_nil]
-      rw [Board.applyStep_O_skyline_noclear
-          (h := fun j => if 0 < j ∧ j ≤ 2 * n then base + 2 else h j) (w := 0)
-          hc1lt hc2lt heq_h (by decide) (by omega) (by omega) hg0, hgcb]
-      refine congrArg (Board.skyline GameConfig.standard) ?_
-      funext j
-      show Function.update (Function.update
-              (fun j => if 0 < j ∧ j ≤ 2 * n then base + 2 else h j) (2 * n + 1) (base + 2))
-            (2 * n + 1 + 1) (base + 2) j
-          = (if 0 < j ∧ j ≤ 2 * (n + 1) then base + 2 else h j)
-      rcases eq_or_ne j (2 * n + 1 + 1) with rfl | hj2
-      · rw [Function.update_self, if_pos (by omega)]
-      · rw [Function.update_of_ne hj2]
-        rcases eq_or_ne j (2 * n + 1) with rfl | hj1
-        · rw [Function.update_self, if_pos (by omega)]
-        · rw [Function.update_of_ne hj1]
-          show (if 0 < j ∧ j ≤ 2 * n then base + 2 else h j)
-            = (if 0 < j ∧ j ≤ 2 * (n + 1) then base + 2 else h j)
-          split_ifs <;> omega
-  rw [hfold k h2k]
-  refine Board.isSpreadBoundedRWSkylineAt_skyline (w := 0) (by decide) ?_ ?_ hslack
-  · show (if 0 < 0 ∧ 0 ≤ 2 * k then base + 2 else h 0) = 0
-    rw [if_neg (by omega)]; exact hw0
-  · intro j hj hj0
-    show base ≤ (if 0 < j ∧ j ≤ 2 * k then base + 2 else h j)
-      ∧ (if 0 < j ∧ j ≤ 2 * k then base + 2 else h j) ≤ base + 2
-    split_ifs with hc
-    · omega
-    · rw [hflat j (Nat.pos_of_ne_zero hj0) hj]; omega
 
 /-- **The vertical-stacking `T` atom** (iter401). The `T` analogue of
 `isSpreadBoundedRWSkylineAt_O_vstack` (iter396): the flat-bottom `T` (`rot := 2`) dropped onto a level
@@ -25394,139 +20999,6 @@ theorem reservoirSpreadCarrier_flat_J_step {T : Bag} {s base : ℕ} {h : ℕ →
   intro j hj hjw
   rw [hflat j (Nat.pos_of_ne_zero hjw) hj]; omega
 
-/-- **Notch creation: a `T` sets up the staircase a following `Z` consumes** (iter635). A genuinely
-bag-phase-aware fill, and the `T`-built mirror of the `L`-then-`S` / `J`-then-`Z` pairings (iter518/519).
-A *flat* band carries no `+1` step, so a hole-maker `Z` can never land on it directly — its notch must be
-manufactured by an earlier piece. Starting from a band flat at the floor `base` with the reserved empty
-well at column `0` and spread at least `2`, the flat-bottom `T` at columns `(1, 2, 3)` writes
-`(base+1, base+2, base+1)` (`applyStep_T_skyline_noclear`), so its RIGHT shoulder leaves the descending
-step `(h 3, h 4, h 5) = (base+1, base, base)` — exactly the mirror notch the no-clear `Z` requires. The
-`Z` then drops flush at column `3` (`reservoirSpreadCarrier_Z_vstack_step`), writing
-`(base+2, base+2, base+1)`, and the whole profile stays inside `[base, base+2] ⊆ [base, base+s]`,
-re-entering `reservoirSpreadCarrier ((T.draw Piece.T).draw Piece.Z)`. Unlike `L`/`J` (which each carve a
-single staircase on one shoulder), the symmetric `T` shoulders host EITHER a left `S`-notch or a right
-`Z`-notch, so a `T` already in hand can pay for whichever staircase the bag still owes — widening the
-scheduler's options. It bakes in the order `T` before `Z`; the adversary's `Z`-before-`T` order needs a
-different notch source (crux `#66`/`#72`), and the once-per-bag `I` drain back to a reset surface is still
-open. `TetrisSolvableValid` is NOT proven. No sorry. -/
-theorem reservoirSpreadCarrier_flat_T_then_Z_notch_step {T : Bag} {s base : ℕ} {h : ℕ → ℕ}
-    (hs : 2 ≤ s) (hw0 : h 0 = 0)
-    (hflat : ∀ j, 0 < j → j < GameConfig.standard.cols → h j = base)
-    (hledger : base + s + ((T.draw Piece.T).draw Piece.Z).card + 1 ≤ GameConfig.standard.rows) :
-    ∃ pl1 : Placement, pl1.piece = Piece.T ∧ pl1.Valid GameConfig.standard ∧
-      ∃ pl2 : Placement, pl2.piece = Piece.Z ∧ pl2.Valid GameConfig.standard ∧
-        reservoirSpreadCarrier ((T.draw Piece.T).draw Piece.Z)
-          (Placement.applyStep GameConfig.standard
-            (Placement.applyStep GameConfig.standard (Board.skyline GameConfig.standard h) pl1) pl2) := by
-  refine ⟨{ piece := Piece.T, rot := 2, col := 1 }, rfl, Board.valid_T (by decide), ?_⟩
-  have hT : Placement.applyStep GameConfig.standard (Board.skyline GameConfig.standard h)
-        { piece := Piece.T, rot := 2, col := 1 }
-      = Board.skyline GameConfig.standard
-          (Function.update (Function.update (Function.update h 1 (h 1 + 1)) 2 (h 1 + 2))
-            3 (h 1 + 1)) :=
-    Board.applyStep_T_skyline_noclear (w := 0) (by decide) (by decide) (by decide)
-      (by rw [hflat 2 (by decide) (by decide), hflat 1 (by decide) (by decide)])
-      (by rw [hflat 3 (by decide) (by decide), hflat 1 (by decide) (by decide)])
-      (by decide) (by decide) (by decide) (by decide) hw0
-  rw [hT]
-  set h' := Function.update (Function.update (Function.update h 1 (h 1 + 1)) 2 (h 1 + 2))
-    3 (h 1 + 1) with hh'
-  have hval : ∀ j : ℕ, j ≠ 1 → j ≠ 2 → j ≠ 3 → h' j = h j := by
-    intro j hj1 hj2 hj3
-    rw [hh', Function.update_of_ne hj3, Function.update_of_ne hj2, Function.update_of_ne hj1]
-  have h1v : h' 1 = base + 1 := by
-    rw [hh', Function.update_of_ne (by decide : (1 : ℕ) ≠ 3),
-      Function.update_of_ne (by decide : (1 : ℕ) ≠ 2), Function.update_self,
-      hflat 1 (by decide) (by decide)]
-  have h2v : h' 2 = base + 2 := by
-    rw [hh', Function.update_of_ne (by decide : (2 : ℕ) ≠ 3), Function.update_self,
-      hflat 1 (by decide) (by decide)]
-  have h3v : h' 3 = base + 1 := by
-    rw [hh', Function.update_self, hflat 1 (by decide) (by decide)]
-  have h0v : h' 0 = 0 := by
-    rw [hval 0 (by decide) (by decide) (by decide)]; exact hw0
-  have h4v : h' 4 = base := by
-    rw [hval 4 (by decide) (by decide) (by decide)]; exact hflat 4 (by decide) (by decide)
-  have h5v : h' 5 = base := by
-    rw [hval 5 (by decide) (by decide) (by decide)]; exact hflat 5 (by decide) (by decide)
-  refine reservoirSpreadCarrier_Z_vstack_step (T := T.draw Piece.T) (w := 0) (c := 3) (f := base)
-    (by decide) h0v ?_ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-    h3v h4v h5v (le_refl base) (by omega) hledger
-  intro j hj hj0
-  rcases eq_or_ne j 1 with rfl | hj1
-  · rw [h1v]; omega
-  · rcases eq_or_ne j 2 with rfl | hj2
-    · rw [h2v]; omega
-    · rcases eq_or_ne j 3 with rfl | hj3
-      · rw [h3v]; omega
-      · rw [hval j hj1 hj2 hj3, hflat j (Nat.pos_of_ne_zero hj0) hj]; omega
-
-/-- **Notch creation: a `T` sets up the staircase a following `S` consumes** (iter636). The LEFT-shoulder
-mirror of iter635's `T`-then-`Z`. A *flat* band carries no `+1` step, so a hole-maker `S` can never land
-on it directly — its ascending notch must be manufactured by an earlier piece. Starting from a band flat
-at the floor `base` with the reserved empty well at column `0` and spread at least `2`, the flat-bottom
-`T` at columns `(3, 4, 5)` writes `(base+1, base+2, base+1)` (`applyStep_T_skyline_noclear`), so its LEFT
-shoulder leaves the ascending step `(h 1, h 2, h 3) = (base, base, base+1)` — exactly the notch the
-no-clear `S` requires. The `S` then drops flush at column `1` (`reservoirSpreadCarrier_S_vstack_step`),
-writing `(base+1, base+1, base+2)`, and the whole profile stays inside `[base, base+2] ⊆ [base, base+s]`,
-re-entering `reservoirSpreadCarrier ((T.draw Piece.T).draw Piece.S)`. Together with iter635 this shows the
-symmetric `T` can pay for EITHER staircase — a left `S`-notch or a right `Z`-notch — so a `T` already in
-hand serves whichever the bag still owes, widening the scheduler's options. It bakes in the order `T`
-before `S`; the adversary's `S`-before-`T` order needs a different notch source (crux `#66`/`#72`), and the
-once-per-bag `I` drain back to a reset surface is still open. `TetrisSolvableValid` is NOT proven.
-No sorry. -/
-theorem reservoirSpreadCarrier_flat_T_then_S_notch_step {T : Bag} {s base : ℕ} {h : ℕ → ℕ}
-    (hs : 2 ≤ s) (hw0 : h 0 = 0)
-    (hflat : ∀ j, 0 < j → j < GameConfig.standard.cols → h j = base)
-    (hledger : base + s + ((T.draw Piece.T).draw Piece.S).card + 1 ≤ GameConfig.standard.rows) :
-    ∃ pl1 : Placement, pl1.piece = Piece.T ∧ pl1.Valid GameConfig.standard ∧
-      ∃ pl2 : Placement, pl2.piece = Piece.S ∧ pl2.Valid GameConfig.standard ∧
-        reservoirSpreadCarrier ((T.draw Piece.T).draw Piece.S)
-          (Placement.applyStep GameConfig.standard
-            (Placement.applyStep GameConfig.standard (Board.skyline GameConfig.standard h) pl1) pl2) := by
-  refine ⟨{ piece := Piece.T, rot := 2, col := 3 }, rfl, Board.valid_T (by decide), ?_⟩
-  have hT : Placement.applyStep GameConfig.standard (Board.skyline GameConfig.standard h)
-        { piece := Piece.T, rot := 2, col := 3 }
-      = Board.skyline GameConfig.standard
-          (Function.update (Function.update (Function.update h 3 (h 3 + 1)) 4 (h 3 + 2))
-            5 (h 3 + 1)) :=
-    Board.applyStep_T_skyline_noclear (w := 0) (by decide) (by decide) (by decide)
-      (by rw [hflat 4 (by decide) (by decide), hflat 3 (by decide) (by decide)])
-      (by rw [hflat 5 (by decide) (by decide), hflat 3 (by decide) (by decide)])
-      (by decide) (by decide) (by decide) (by decide) hw0
-  rw [hT]
-  set h' := Function.update (Function.update (Function.update h 3 (h 3 + 1)) 4 (h 3 + 2))
-    5 (h 3 + 1) with hh'
-  have hval : ∀ j : ℕ, j ≠ 3 → j ≠ 4 → j ≠ 5 → h' j = h j := by
-    intro j hj3 hj4 hj5
-    rw [hh', Function.update_of_ne hj5, Function.update_of_ne hj4, Function.update_of_ne hj3]
-  have h3v : h' 3 = base + 1 := by
-    rw [hh', Function.update_of_ne (by decide : (3 : ℕ) ≠ 5),
-      Function.update_of_ne (by decide : (3 : ℕ) ≠ 4), Function.update_self,
-      hflat 3 (by decide) (by decide)]
-  have h4v : h' 4 = base + 2 := by
-    rw [hh', Function.update_of_ne (by decide : (4 : ℕ) ≠ 5), Function.update_self,
-      hflat 3 (by decide) (by decide)]
-  have h5v : h' 5 = base + 1 := by
-    rw [hh', Function.update_self, hflat 3 (by decide) (by decide)]
-  have h0v : h' 0 = 0 := by
-    rw [hval 0 (by decide) (by decide) (by decide)]; exact hw0
-  have h1v : h' 1 = base := by
-    rw [hval 1 (by decide) (by decide) (by decide)]; exact hflat 1 (by decide) (by decide)
-  have h2v : h' 2 = base := by
-    rw [hval 2 (by decide) (by decide) (by decide)]; exact hflat 2 (by decide) (by decide)
-  refine reservoirSpreadCarrier_S_vstack_step (T := T.draw Piece.T) (w := 0) (c := 1) (f := base)
-    (by decide) h0v ?_ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
-    h1v h2v h3v (le_refl base) (by omega) hledger
-  intro j hj hj0
-  rcases eq_or_ne j 3 with rfl | hj3
-  · rw [h3v]; omega
-  · rcases eq_or_ne j 4 with rfl | hj4
-    · rw [h4v]; omega
-    · rcases eq_or_ne j 5 with rfl | hj5
-      · rw [h5v]; omega
-      · rw [hval j hj3 hj4 hj5, hflat j (Nat.pos_of_ne_zero hj0) hj]; omega
-
 /-- **The vertical-stacking horizontal-`I` atom for the spread-band carrier** (iter406). The cheapest
 absorber: the no-clear horizontal `I` lands on a level quad (columns `c, c+1, c+2, c+3` all read `f`)
 and writes `f+1` into each, a peak of only `f+1` (`applyStep_horizI_skyline_noclear`). As long as the
@@ -25629,50 +21101,6 @@ theorem reservoirSpreadCarrier_flat_nonStaircase_step {T : Bag} {s base : ℕ} {
   | T => exact reservoirSpreadCarrier_flat_T_step hs hw0 hflat hledger
   | L => exact reservoirSpreadCarrier_flat_L_step hs hw0 hflat hledger
   | J => exact reservoirSpreadCarrier_flat_J_step hs hw0 hflat hledger
-
-/-- **The non-staircase vstack dispatcher behind one flat-quad site** (iter630). The vstack-track
-analogue of `reservoirSpreadCarrier_nonRegulator_fill_step` (iter346) and the vertical companion of
-`reservoirSpreadCarrier_flat_nonStaircase_step` (iter407): it unifies the five per-piece vertical-stack
-carrier steps (`O`, horizontal-`I`, `T`, `L`, `J`) behind a SINGLE landing premise — a flat quad of
-four adjacent off-well columns `c, c+1, c+2, c+3` all at a common height `f` ANYWHERE inside the band
-(`base ≤ f`, `f + 2 ≤ base + s`), with the reserved empty well parked at `w`. The quad is the widest
-footprint any non-staircase piece needs (`O` uses the pair `c, c+1`; `T`/`L`/`J` the triple
-`c, c+1, c+2`; the horizontal `I` the whole quad), so the one site discharges every routing: each piece
-drops flush on its prefix of the quad and re-enters `reservoirSpreadCarrier (T.draw p)` at the SAME
-floor `base` and spread `s`, spending vertical headroom rather than run width. This is the move that
-dodges the `4 * 6 + 4 = 28 > 9` column wall of `isFlatRunReservoirAt_iter_nonStaircase_drain` — a band
-at spread `≥ 3` stacks a fresh layer on a plateau without ever widening the run. The two staircases
-`S`, `Z` are excluded by `hp` because they alone need a `+1` notch underneath (their vstack atoms take a
-staircase site, not a flat quad), so they stay supplied separately by the bag-phase invariant. What
-stays open is exactly the adversarial-order availability of such a flat quad after the band is partly
-raised (regeneration), plus the once-per-bag `I` drain — crux `#66`. `TetrisSolvableValid` is NOT
-proven; no sorry. -/
-theorem reservoirSpreadCarrier_nonStaircase_vstack_step {T : Bag} {s base f : ℕ} {h : ℕ → ℕ}
-    {w c : ℕ} {p : Piece}
-    (hw : w < GameConfig.standard.cols) (hw0 : h w = 0)
-    (hband : ∀ j < GameConfig.standard.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + s)
-    (hc3 : c + 3 < GameConfig.standard.cols)
-    (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2) (hwc3 : w ≠ c + 3)
-    (hcf : h c = f) (hc1f : h (c + 1) = f) (hc2f : h (c + 2) = f) (hc3f : h (c + 3) = f)
-    (hflo : base ≤ f) (hfhi : f + 2 ≤ base + s)
-    (hp : p = Piece.O ∨ p = Piece.I ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J)
-    (hledger : base + s + (T.draw p).card + 1 ≤ GameConfig.standard.rows) :
-    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      reservoirSpreadCarrier (T.draw p)
-        (Placement.applyStep GameConfig.standard (Board.skyline GameConfig.standard h) pl) := by
-  have hc : c < GameConfig.standard.cols := by omega
-  have hc1 : c + 1 < GameConfig.standard.cols := by omega
-  have hc2 : c + 2 < GameConfig.standard.cols := by omega
-  rcases hp with rfl | rfl | rfl | rfl | rfl
-  · exact reservoirSpreadCarrier_O_vstack_step hw hw0 hband hc hc1 hwc hwc1 hcf hc1f hflo hfhi hledger
-  · exact reservoirSpreadCarrier_horizI_vstack_step hw hw0 hband hc hc1 hc2 hc3
-      hwc hwc1 hwc2 hwc3 hcf hc1f hc2f hc3f hflo hfhi hledger
-  · exact reservoirSpreadCarrier_T_vstack_step hw hw0 hband hc hc1 hc2
-      hwc hwc1 hwc2 hcf hc1f hc2f hflo hfhi hledger
-  · exact reservoirSpreadCarrier_L_vstack_step hw hw0 hband hc hc1 hc2
-      hwc hwc1 hwc2 hcf hc1f hc2f hflo hfhi hledger
-  · exact reservoirSpreadCarrier_J_vstack_step hw hw0 hband hc hc1 hc2
-      hwc hwc1 hwc2 hcf hc1f hc2f hflo hfhi hledger
 
 /-- **The flat-front spread band: a flat layer caught mid fill** (iter408). The inductable shape
 the adversarial-order closure actually needs, abstracting the ad-hoc regeneration of
@@ -26000,28 +21428,6 @@ theorem isFlatPhaseReservoirAtS_of_isFlatFrontBandAt_one {s base : ℕ} {b : Boa
     ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   all_goals exact hflat _ (by omega) (by decide)
 
-/-- **The flat-front band is a width-parametric flat run** (iter415). The front-position view
-`IsFlatFrontBandAt c` and the run-width view `IsFlatRunReservoirAt w` are dual descriptions of the
-SAME mid-fill surface: the flat shelf `[c, cols)` the front band carries IS a flat run at column
-`pc = c` of width `w = cols - c`. So a front-band at front `c` with at least four shelf columns left
-(`c + 4 ≤ cols`) is an `IsFlatRunReservoirAt (cols - c) s base` board at the same floor and buffer.
-The well at column `0`, the band `[base, base + s]`, and the slack `base + s ≤ rows` transport
-verbatim; only the flat-run conjunct needs the index shift `h (c + i) = base` for `i < cols - c`,
-which is exactly the shelf condition `∀ j, c ≤ j → j < cols → h j = base` read at `j = c + i`. This
-unifies the front-advance fill menu (`isFlatFrontBandAt_{O,horizI,T,L,J}_step`, which march `c`
-rightward) with the width-reduction reducers (`isFlatRunReservoirAt_*_step`, which shrink `w`): the
-two parallel developments are the same process, `c` increasing exactly as `w = cols - c` decreases.
-Feeding a partially advanced front band into the run/carrier machinery at intermediate widths now
-needs no fresh fill lemmas. -/
-theorem isFlatRunReservoirAt_of_isFlatFrontBandAt {c s base : ℕ} {b : Board}
-    (hb : IsFlatFrontBandAt c s base b) (hc1 : 1 ≤ c)
-    (hwidth : c + 4 ≤ GameConfig.standard.cols) :
-    IsFlatRunReservoirAt (GameConfig.standard.cols - c) s base b := by
-  obtain ⟨h, rfl, hw0, hband, hcap, hflat⟩ := hb
-  refine ⟨h, c, rfl, hw0, hband, hcap, hc1, by omega, by omega, ?_⟩
-  intro i hi
-  exact hflat (c + i) (by omega) (by omega)
-
 /-- **A flat reset surface, in front-band vocabulary, enters the carrier** (iter416). The carrier
 re-entry door expressed in the `IsFlatFrontBandAt` language the iter408–415 fill development speaks.
 A front band at front `c = 1` is the fully-flat reset surface (whole shelf `[1, cols)` pinned to
@@ -26101,28 +21507,6 @@ theorem isFlatFrontBandAt_one_vertI_drain {s base : ℕ} {b : Board}
     rw [if_neg (by omega), hflat j hj1 hjcols]
   · omega
 
-/-- **The regulator drain re-enters the bag-phase carrier** (iter419). The once-per-bag `I` drain,
-read all the way back into the phase-indexed carrier `bandPhaseReservoirS`. Compose the
-shape-preserving drain (`isFlatFrontBandAt_one_vertI_drain`: a flat reset surface at front `1`, floor
-`base`, with `4 ≤ base`, drops under the vertical-well `I` to a flat reset surface at front `1`, floor
-`base - 4`) with the carrier re-entry door (`bandPhaseReservoirS_of_isFlatFrontBandAt_one`: any flat
-front band at `1` is a phase-shape member once the ledger fits). The result is that the drain does not
-merely land in a bare spread band but in the very phase carrier the bag closure schedules over: for
-whatever bag `T'` is current after the `I` is spent, the drained surface is `bandPhaseReservoirS T'`
-at the lowered floor `base - 4`, under the destination ledger `(base - 4) + s + T'.card + 1 ≤ rows`.
-This is the regulator half of the reset cycle expressed as a carrier edge — complementing the flat
-filler door (iter416, which re-enters the carrier after a fill) — so a strategy that holds a flat
-reset surface can drain once per bag and stay inside the phase carrier rather than falling out to an
-un-regenerable bare band. The genuine open residue is unchanged: that the four-deep layer is actually
-present at the well when the drain fires, the bag-phase packing obligation (#66 and #72). -/
-theorem bandPhaseReservoirS_of_isFlatFrontBandAt_one_vertI_drain {T' : Bag} {b : Board} {s base : ℕ}
-    (hb : IsFlatFrontBandAt 1 s base b) (hbase4 : 4 ≤ base)
-    (hledger : (base - 4) + s + T'.card + 1 ≤ GameConfig.standard.rows) :
-    bandPhaseReservoirS T'
-      (Placement.applyStep GameConfig.standard b { piece := Piece.I, rot := 1, col := 0 }) :=
-  bandPhaseReservoirS_of_isFlatFrontBandAt_one
-    (isFlatFrontBandAt_one_vertI_drain hb hbase4) hledger
-
 /-- **A flat-front band at any front position is a master-carrier member** (iter420). The
 front-position-agnostic re-entry door into the master carrier `reservoirSpreadCarrier` — the very
 predicate `tetrisSolvableValid_of_reservoirSpreadCarrier_closed` reduces the whole atlas verdict to.
@@ -26195,41 +21579,6 @@ theorem reservoirSpreadCarrier_flatFront_nonSZ_fill_step {T : Bag} {b : Board} {
   · exact reservoirSpreadCarrier_flatFront_horizI_fill_step hb (by omega) hc0 hroom hledger
   · exact reservoirSpreadCarrier_flatFront_fill_step hb hs hc0 hpS hpZ hpI (by omega) hledger
 
-/-- **Spread monotonicity for the flat-front band** (iter423). Widening the band tolerance leaves a
-flat-front band a flat-front band: from `IsFlatFrontBandAt c s base b` and `s ≤ s'` with the wider
-ceiling `base + s' ≤ rows`, the SAME profile `h` is an `IsFlatFrontBandAt c s' base` member — the well
-stays empty, the flat shelf `[c, cols)` is untouched, and each working column already in `[base, base
-+ s]` lies a fortiori in `[base, base + s']`. The structural counterpart of the level-pocket band's
-spread monotonicity, needed to reconcile the fill menu's differing buffer demands: the flat-triple
-fillers (`O`, `T`, `L`, `J`) need `s ≥ 2` for their `base + 2` peak while the horizontal `I` needs only
-`s ≥ 1`, so a closure dispatching over the whole non-notch alphabet at one spread first normalises the
-band to the common `s ≥ 2` via this widening. It spends ledger headroom (the wider `s'` raises the band
-top), so the caller supplies the slack; nothing about the surface shape changes. -/
-theorem isFlatFrontBandAt_mono {c s s' base : ℕ} {b : Board}
-    (hb : IsFlatFrontBandAt c s base b) (hss : s ≤ s')
-    (hcap : base + s' ≤ GameConfig.standard.rows) :
-    IsFlatFrontBandAt c s' base b := by
-  obtain ⟨h, rfl, hw0, hband, _, hflat⟩ := hb
-  refine ⟨h, rfl, hw0, ?_, hcap, hflat⟩
-  intro j hj hj0
-  obtain ⟨hlo, hhi⟩ := hband j hj hj0
-  exact ⟨hlo, by omega⟩
-
-/-- **Front-position monotonicity for the flat-front band.** The front index `c` only records HOW FAR
-the flat shelf reaches back: `IsFlatFrontBandAt c s base` asserts `h j = base` for every `c ≤ j <
-cols`. So retracting the claim to a LATER front `c' ≥ c` is a pure weakening — the shelf `[c', cols)`
-is a sub-interval of `[c, cols)`, every column of which is already pinned to `base`, while the well and
-band conjuncts (which never mention `c`) carry over unchanged. This is the fill-front dual of
-`isFlatRunReservoirAt_width_mono` (iter604): both discard a structural-extent claim to align two
-partially-filled surfaces at a common front before composing their fills, the bookkeeping a bag-phase
-schedule needs when independent fill segments end at different fronts. Enabling infrastructure, not the
-closure — crux #66/#72 remain open and `TetrisSolvableValid` is NOT yet proven. -/
-theorem isFlatFrontBandAt_front_mono {c c' s base : ℕ} {b : Board}
-    (hb : IsFlatFrontBandAt c s base b) (hcc' : c ≤ c') :
-    IsFlatFrontBandAt c' s base b := by
-  obtain ⟨h, rfl, hw0, hband, hcap, hflat⟩ := hb
-  exact ⟨h, rfl, hw0, hband, hcap, fun j hj hjcols => hflat j (le_trans hcc' hj) hjcols⟩
-
 /-- **Every non-`S` non-`Z` piece advances the fill front and stays a flat-front band** (iter480).
 The chainable companion of `reservoirSpreadCarrier_flatFront_nonSZ_fill_step` (iter422): where that
 dispatcher forgets each landing to the spread carrier, this one keeps the richer
@@ -26257,35 +21606,6 @@ theorem isFlatFrontBandAt_nonSZ_filler_step {c s base : ℕ} {b : Board} {p : Pi
   · obtain ⟨pl, c', hpc, hval, hlo, hhi, hband⟩ :=
       isFlatFrontBandAt_filler_step hb hs hc0 hpS hpZ hpI (by omega)
     exact ⟨pl, c', hpc, hval, hlo, by omega, hband⟩
-
-/-- **Two consecutive non-`S` non-`Z` fillers compose on the flat-front band** (iter481). The base
-case of layer-filling by chaining `isFlatFrontBandAt_nonSZ_filler_step` (iter480): from a flat-front
-band at front `c` with spread `s ≥ 2`, a reserved well (`0 < c`), and room for two front-seated quads
-(`c + 7 < cols`), any two non-notch pieces `p` then `q` have valid front-seated placements whose
-composite landing is again a flat-front band, with the front advanced to some `c'` in `(c, c + 8]`.
-The second fill reuses the first landing's front band directly — the well stays at column `0`, the
-new flat shelf opens at `c'`, and the spread `s` is held fixed — so no re-derivation is needed beyond
-two applications of the single-step dispatcher. This is the inductive kernel the full layer-fill
-rests on: the front marches monotonically right under each non-notch piece until the shelf is spent,
-at which point the once-per-bag drain resets it. The bag-order scheduling against the `S`/`Z` notch
-route and the drain is the open residue (#66, #72). -/
-theorem isFlatFrontBandAt_nonSZ_filler_two_step {c s base : ℕ} {b : Board} {p q : Piece}
-    (hb : IsFlatFrontBandAt c s base b) (hs : 2 ≤ s) (hc0 : 0 < c)
-    (hpS : p ≠ Piece.S) (hpZ : p ≠ Piece.Z)
-    (hqS : q ≠ Piece.S) (hqZ : q ≠ Piece.Z)
-    (hroom : c + 7 < GameConfig.standard.cols) :
-    ∃ (pl₁ pl₂ : Placement) (c' : ℕ),
-      pl₁.piece = p ∧ pl₁.Valid GameConfig.standard ∧
-      pl₂.piece = q ∧ pl₂.Valid GameConfig.standard ∧
-      c < c' ∧ c' ≤ c + 8 ∧
-      IsFlatFrontBandAt c' s base
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard b pl₁) pl₂) := by
-  obtain ⟨pl₁, c₁, hp1, hv1, hlo1, hhi1, hb1⟩ :=
-    isFlatFrontBandAt_nonSZ_filler_step hb hs hc0 hpS hpZ (by omega)
-  obtain ⟨pl₂, c₂, hp2, hv2, hlo2, hhi2, hb2⟩ :=
-    isFlatFrontBandAt_nonSZ_filler_step hb1 hs (by omega) hqS hqZ (by omega)
-  exact ⟨pl₁, pl₂, c₂, hp1, hv1, hp2, hv2, by omega, by omega, hb2⟩
 
 /-- **A whole run of non-`S` non-`Z` pieces fills into the flat-front band** (iter482). The full
 layer-fill obtained by inducting `isFlatFrontBandAt_nonSZ_filler_step` (iter480) over an arbitrary
@@ -26835,69 +22155,6 @@ theorem isSpreadBoundedRWSkylineAt_maximal_drain_height {cfg : GameConfig} {spre
   obtain ⟨ws, hlen, hwmem, hband, hsafe⟩ := isSpreadBoundedRWSkylineAt_maximal_drain hb
   exact ⟨ws, hlen, hwmem, Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt hband, hsafe⟩
 
-/-- **Bag-order filler runs sum to six pieces** (iter500). Refines the split at the unique I:
-any bag order `ps` splits as `pre ++ I :: post` with `pre.length + post.length = 6`. Since the bag
-has seven pieces and exactly one is the regulator I, at most six non-I fillers ever arrive before
-the I (split arbitrarily by the adversary between the two runs). This is the quantitative core of
-"a drain is always available before the limit is reached": the stack can rise by at most six piece
-placements between consecutive regulator drains, so a constant slack above the reset band suffices to
-stay under the height limit no matter where the adversary puts the I. It pairs with the per-run notch
-bound `bagOrder_split_run_notch_le` (each run owes at most one S and one Z). The actual all-order
-height balance and the S/Z notch routing under the column-budget obstruction (#66, #72) are still
-open. -/
-theorem bagOrder_split_run_total_len {ps : List Piece}
-    (h : ps.Perm [Piece.O, Piece.I, Piece.S, Piece.Z, Piece.T, Piece.L, Piece.J]) :
-    ∃ (pre post : List Piece),
-      ps = pre ++ Piece.I :: post ∧ Piece.I ∉ pre ∧ Piece.I ∉ post ∧
-      pre.length + post.length = 6 := by
-  obtain ⟨pre, post, hsplit, hpre, hpost, _, _, _, _⟩ := bagOrder_split_run_notch_le h
-  refine ⟨pre, post, hsplit, hpre, hpost, ?_⟩
-  have hlen : ps.length = 7 := by simpa using h.length_eq
-  rw [hsplit, List.length_append, List.length_cons] at hlen
-  omega
-
-/-- **Absolute constant height of the maximal-drain reset surface** (iter501). Collapses the
-floor-relative cap `isSpreadBoundedRWSkylineAt_maximal_drain_height` to a constant: since `floor % 4`
-is always `< 4`, the drained skyline sits at `maxColHeight ≤ 3 + spread` with NO dependence on `floor`
-whatsoever. However tall the stack had grown, the maximal regulator drain returns it to a fixed-height
-reset band capped by `3 + spread`, and every intermediate prefix survives. This is the sharpest form of
-the goal's "drain back down to a reset surface": a universal ceiling for the post-drain surface,
-exactly what a height-bounded bag invariant needs as its lower anchor. It still leaves the fill side and
-the adversarial order open (#66, #72). -/
-theorem isSpreadBoundedRWSkylineAt_maximal_drain_height_const {cfg : GameConfig} {spread floor : ℕ}
-    {b : Board} (hb : Board.IsSpreadBoundedRWSkylineAt cfg spread floor b) :
-    ∃ ws : List ℕ,
-      ws.length = floor / 4 ∧ (∀ w ∈ ws, w < cfg.cols) ∧
-      Board.maxColHeight cfg
-        (ws.foldl (fun b' w =>
-          Placement.applyStep cfg b' { piece := Piece.I, rot := 1, col := w }) b) ≤ 3 + spread ∧
-      (∀ k, ¬ Board.isLost cfg
-        ((ws.take k).foldl (fun b' w =>
-          Placement.applyStep cfg b' { piece := Piece.I, rot := 1, col := w }) b)) := by
-  obtain ⟨ws, hlen, hwmem, hheight, hsafe⟩ := isSpreadBoundedRWSkylineAt_maximal_drain_height hb
-  exact ⟨ws, hlen, hwmem, by omega, hsafe⟩
-
-/-- **Drain to a reset surface** (iter502). The reusable interface form of the maximal drain: from
-any spread band at height `floor`, a safe regulator drain sequence lands in a spread band at SOME
-`floor' < 4` — a bounded reset surface — hiding the modular `floor % 4` arithmetic behind a clean
-existential. This is the canonical "drain back down to a reset surface" edge the bag cycle consumes:
-no matter how tall the stack grew, the once-per-bag I regulator returns it to a reset band whose floor
-is one of four bounded residues, and every intermediate prefix survives. It packages the endpoint as a
-genuine carrier state ready to re-enter the fill phase; the fill side and adversarial-order closure
-(#66, #72) remain the open work. -/
-theorem isSpreadBoundedRWSkylineAt_drain_to_reset {cfg : GameConfig} {spread floor : ℕ}
-    {b : Board} (hb : Board.IsSpreadBoundedRWSkylineAt cfg spread floor b) :
-    ∃ (ws : List ℕ) (floor' : ℕ),
-      floor' < 4 ∧ ws.length = floor / 4 ∧ (∀ w ∈ ws, w < cfg.cols) ∧
-      Board.IsSpreadBoundedRWSkylineAt cfg spread floor'
-        (ws.foldl (fun b' w =>
-          Placement.applyStep cfg b' { piece := Piece.I, rot := 1, col := w }) b) ∧
-      (∀ k, ¬ Board.isLost cfg
-        ((ws.take k).foldl (fun b' w =>
-          Placement.applyStep cfg b' { piece := Piece.I, rot := 1, col := w }) b)) := by
-  obtain ⟨ws, hlen, hwmem, hband, hsafe⟩ := isSpreadBoundedRWSkylineAt_maximal_drain hb
-  exact ⟨ws, floor % 4, by omega, hlen, hwmem, hband, hsafe⟩
-
 /-- **Full bag multiset characterization** (iter503). Any bag order `ps` contains each of the seven
 tetrominoes exactly once: `ps.count p = 1` for every `p`. This is the decidable foundation for the
 bag-phase bookkeeping the goal calls for ("which pieces are still owed"): at any point mid-bag, the
@@ -26912,40 +22169,6 @@ theorem bagOrder_count_each {ps : List Piece}
     ps.count Piece.Z = 1 ∧ ps.count Piece.T = 1 ∧ ps.count Piece.L = 1 ∧
     ps.count Piece.J = 1 := by
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> · rw [h.count_eq]; decide
-
-/-- **Every bag order contains all seven pieces** (iter504). For any bag order `ps` and any piece
-`p`, `p ∈ ps`. This is the existence guarantee the whole reservoir construction leans on: in every
-bag the regulator I is present (so a drain is always available within the bag) and both notch pieces
-S and Z are present (so the staircase notches that host them must be offered). Together with
-`bagOrder_count_each` (each piece exactly once) this fully pins the bag as the canonical 7-piece
-multiset, the structural content of the 7-bag randomizer. Proved by transporting membership across the
-permutation (`Perm.mem_iff`) and deciding membership in the canonical list. The adversary still chooses
-the ORDER; closing the height invariant for every order remains open (#66, #72). -/
-theorem bagOrder_mem_each {ps : List Piece}
-    (h : ps.Perm [Piece.O, Piece.I, Piece.S, Piece.Z, Piece.T, Piece.L, Piece.J]) :
-    ∀ p : Piece, p ∈ ps := by
-  intro p
-  rw [h.mem_iff]
-  cases p <;> decide
-
-/-- **Spread weakening of the floor-pinned band** (iter505). A band that fits within spread `spread`
-also fits within any wider spread `spread' ≥ spread`, provided the wider band still respects the height
-limit (`floor + spread' ≤ rows`). Widening only relaxes the per-column upper bound `h j ≤ floor +
-spread`, so every column already inside the tight band stays inside the loose one; the only new
-obligation is the height-limit cap, which is supplied as a hypothesis. This is the structural glue for
-unifying sub-results proved at different spreads onto one common band width — useful when the flat fill
-contributes one spread and the S/Z notch staircase contributes another, and the bag invariant must hold
-them in a single carrier. It does not touch the per-bag height balance or the adversarial order
-(#66, #72). -/
-theorem isSpreadBoundedRWSkylineAt_spread_mono {cfg : GameConfig} {spread spread' floor : ℕ}
-    {b : Board} (hb : Board.IsSpreadBoundedRWSkylineAt cfg spread floor b)
-    (hle : spread ≤ spread') (hcap : floor + spread' ≤ cfg.rows) :
-    Board.IsSpreadBoundedRWSkylineAt cfg spread' floor b := by
-  obtain ⟨h, w, hbsky, hw, hw0, hband, _⟩ := hb
-  refine ⟨h, w, hbsky, hw, hw0, ?_, hcap⟩
-  intro j hj hjw
-  obtain ⟨hlo, hhi⟩ := hband j hj hjw
-  exact ⟨hlo, by omega⟩
 
 /-- **The pure flat fillers of a bag order permute `[O, T, L, J]`** (iter506). The flat-core
 refinement of `bagOrder_filler_perm` (iter494) and `bagOrder_split_run_notch_le` (iter495): after
@@ -26976,42 +22199,6 @@ theorem bagOrder_filler_nonSZ_perm {ps : List Piece}
   have heq : ([Piece.O, Piece.S, Piece.Z, Piece.T, Piece.L, Piece.J].filter
       (fun p => match p with | Piece.S => false | Piece.Z => false | _ => true))
       = [Piece.O, Piece.T, Piece.L, Piece.J] := by decide
-  rwa [heq] at hf
-
-/-- **The two staircase pieces of a bag order permute `[S, Z]`** (iter642). The notch-core complement
-of `bagOrder_filler_nonSZ_perm` (iter506): where iter506 keeps the four flat fillers and drops `S, Z`,
-this KEEPS only `S` and `Z` and drops `O, T, L, J`. After splitting an adversarial bag order at its
-unique regulator `I` as `pre ++ I :: post`, the two filler runs together permute the six non-`I`
-pieces (iter494); filtering that combined run to retain only the staircase chiralities leaves exactly
-a permutation of `[S, Z]` — precisely one `S` and one `Z`, in whatever order the adversary interleaved
-them. The proof mirrors iter506: transport the combined-run permutation across `List.Perm.filter` with
-the Bool guard that keeps only `S, Z`, then evaluate the canonical filtered list to `[S, Z]` by
-`decide`. Together with iter506 this fully partitions the six fillers of every bag into the flat core
-`[O, T, L, J]` and the staircase core `[S, Z]`, pinning the exact notch-routing obligation: per bag,
-the surface must host exactly one `S`-notch and one `Z`-notch landing, in adversary order, split
-arbitrarily across the mid-bag drain.
-
-Honest caveat: this is multiset accounting, not scheduling. It pins WHICH staircase pieces are owed
-(one each), not WHEN they arrive relative to the drain or to each other, and it does not bridge the
-column-budget overlap obstruction (#90/#151: a single surface cannot host pocket + well + both notches
-on ten columns; the rich surface's two notches overlap at columns `6, 7`, so seating one staircase
-destroys the other's notch — iter608). The per-bag raise-versus-drain balance and the both-staircase
-all-orders routing remain open. `TetrisSolvableValid` is NOT proven; crux #66/#72 remains the genuine
-open gap; no sorry. -/
-theorem bagOrder_filler_SZ_perm {ps : List Piece}
-    (h : ps.Perm [Piece.O, Piece.I, Piece.S, Piece.Z, Piece.T, Piece.L, Piece.J]) :
-    ∃ (pre post : List Piece),
-      ps = pre ++ Piece.I :: post ∧ Piece.I ∉ pre ∧ Piece.I ∉ post ∧
-      ((pre ++ post).filter
-        (fun p => match p with | Piece.S => true | Piece.Z => true | _ => false)).Perm
-        [Piece.S, Piece.Z] := by
-  obtain ⟨pre, post, hsplit, hpre, hpost, hperm⟩ := bagOrder_filler_perm h
-  refine ⟨pre, post, hsplit, hpre, hpost, ?_⟩
-  have hf := hperm.filter
-    (fun p => match p with | Piece.S => true | Piece.Z => true | _ => false)
-  have heq : ([Piece.O, Piece.S, Piece.Z, Piece.T, Piece.L, Piece.J].filter
-      (fun p => match p with | Piece.S => true | Piece.Z => true | _ => false))
-      = [Piece.S, Piece.Z] := by decide
   rwa [heq] at hf
 
 /-- **The inter-regulator segment across a bag boundary is non-`I` and at most 12 pieces long**
@@ -27054,46 +22241,6 @@ theorem bagOrder_interI_segment {ps1 ps2 : List Piece}
     rw [List.length_append]
     omega
 
-/-- **Each piece type appears at most twice in the inter-regulator segment** (iter647). The
-per-type refinement of `bagOrder_interI_segment` (iter646): where iter646 bounds the TOTAL length of
-the run `post1 ++ pre2` between two consecutive regulator `I`s by twelve, this bounds the count of
-EACH individual piece type by two. The reason is that every piece — `I` included — occurs exactly once
-per bag (`bagOrder_count_eq_one`, iter493), so a given shape can contribute at most one copy from the
-first bag's post-drain suffix and at most one from the second bag's pre-drain prefix, hence at most two
-across the boundary. This is the per-column substrate the height balance needs: between two drains the
-reservoir receives at most two `O`s, at most two `T`s, at most two `S`s, and so on, so no single column
-family is asked to absorb more than two same-shape pieces before the next guaranteed drain. The two
-hardest pieces obey it too — at most two `S` and at most two `Z` notches arrive between drains — which
-caps the notch-routing obligation across the bag boundary.
-
-Honest caveat: this is all-orders accounting, not scheduling. It pins HOW MANY of each shape the
-reservoir owes between drains, not WHEN they arrive or WHERE to place them, and it does not bridge the
-column-budget obstruction or close the per-bag raise versus drain ledger. `TetrisSolvableValid` is NOT
-proven; crux #66/#72 (all-orders per-bag I-drain accounting against the single shared regulator)
-remains the genuine open gap; no sorry. -/
-theorem bagOrder_interI_segment_count_le {ps1 ps2 : List Piece}
-    (h1 : ps1.Perm [Piece.O, Piece.I, Piece.S, Piece.Z, Piece.T, Piece.L, Piece.J])
-    (h2 : ps2.Perm [Piece.O, Piece.I, Piece.S, Piece.Z, Piece.T, Piece.L, Piece.J]) :
-    ∃ (pre1 post1 pre2 post2 : List Piece),
-      ps1 = pre1 ++ Piece.I :: post1 ∧ ps2 = pre2 ++ Piece.I :: post2 ∧
-      Piece.I ∉ pre1 ∧ Piece.I ∉ post1 ∧ Piece.I ∉ pre2 ∧ Piece.I ∉ post2 ∧
-      ∀ p, (post1 ++ pre2).count p ≤ 2 := by
-  obtain ⟨pre1, post1, hsplit1, hpre1, hpost1⟩ := bagOrder_split_at_unique_I h1
-  obtain ⟨pre2, post2, hsplit2, hpre2, hpost2⟩ := bagOrder_split_at_unique_I h2
-  refine ⟨pre1, post1, pre2, post2, hsplit1, hsplit2, hpre1, hpost1, hpre2, hpost2, ?_⟩
-  intro p
-  have hc1 : post1.count p ≤ 1 := by
-    have hh := bagOrder_count_eq_one h1 p
-    rw [hsplit1, List.count_append,
-      show (Piece.I :: post1) = [Piece.I] ++ post1 from rfl, List.count_append] at hh
-    omega
-  have hc2 : pre2.count p ≤ 1 := by
-    have hh := bagOrder_count_eq_one h2 p
-    rw [hsplit2, List.count_append] at hh
-    omega
-  rw [List.count_append]
-  omega
-
 /-- **Inter-regulator cell budget across a bag boundary** (iter648). The area consequence of the
 inter-regulator segment length bound `bagOrder_interI_segment` (iter646). Between two consecutive
 `I`-drains — one guaranteed per bag, so the worst-case gap spans a bag boundary with the first bag's
@@ -27129,32 +22276,6 @@ theorem bagOrder_interI_segment_card_budget {ps1 ps2 : List Piece}
       rw [← hmap, List.length_map]
     omega
   have hcard := Board.card_foldl_applyStep_le (cfg := GameConfig.standard) pls (b := b)
-  omega
-
-/-- **The worst-case inter-drain window still leaves a low landing site** (iter649). The
-site-existence payoff of the inter-regulator cell budget `bagOrder_interI_segment_card_budget`
-(iter648): that lemma caps the cells the at-most-twelve non-`I` fillers add between two consecutive
-drains at `48`. A reset surface near floor `base` holds about `9 * base` cells over its nine non-well
-columns, so a post-fill skyline holds at most `9 * base + 48` cells. Dividing through the nine non-well
-columns by the reserved-well pigeonhole `exists_ne_well_colHeight_le_of_card_le`, SOME non-well column
-then sits at height at most `base + 6` — because `9 * (base + 6) = 9 * base + 54 ≥ 9 * base + 48`, and
-`48` over nine columns rounds up to a `+6` rise on the lowest column. That column is a guaranteed
-landing site within spread six of the floor: whatever order the adversary feeds the twelve fillers, a
-piece can be dropped there without breaching a spread-six band cap. This is the quantitative form of
-the goal's "the surface stays under the height limit no matter the order" — the area the worst-case
-window can pile up translates to a bounded rise on the lowest column, so a drain stays reachable before
-the band fills. It is gated on the post-fill board being a hole-free skyline of the stated card (the
-fillers must pack without holes) and does NOT by itself schedule WHICH filler lands WHERE; the
-per-order placement that realises the band, and the S and Z notch column budget (#90), stay open.
-`TetrisSolvableValid` is NOT proven; crux #66 and #72 remain open; no sorry. -/
-theorem exists_ne_well_lowsite_inter_drain {h : ℕ → ℕ} {base : ℕ}
-    (hcard : (Board.skyline GameConfig.standard h).card ≤ 9 * base + 48) :
-    ∃ j ∈ Finset.range GameConfig.standard.cols, j ≠ 0 ∧
-      Board.colHeight (Board.skyline GameConfig.standard h) j ≤ base + 6 := by
-  refine Board.exists_ne_well_colHeight_le_of_card_le (cfg := GameConfig.standard)
-    (w := 0) (M := base + 6) (by decide) (by decide) ?_
-  have hcols : GameConfig.standard.cols - 1 = 9 := by decide
-  rw [hcols]
   omega
 
 /-- **Pocket-preserving maximal drain: `n` vertical-`I` drops keep the level pocket band** (iter507).
@@ -27288,53 +22409,6 @@ theorem reservoirCarrier_maximal_drain_reset_safe {floor : ℕ} {b : Board}
   have hmod : floor - 4 * (floor / 4) = floor % 4 := by omega
   rw [hmod] at hband'
   refine ⟨pls, hlen, hmem, ⟨floor % 4, hband', ?_⟩, hsafe⟩
-  rw [Bag.full_card]
-  have hr : GameConfig.standard.rows = 20 := rfl
-  omega
-
-/-- **Floor-hiding carrier form of the certified inter-bag reset drain** (iter553). The
-arbitrary-member lift of `reservoirCarrier_maximal_drain_reset_safe` (iter552) into the
-`IsBoundedPocketBandCarrier 2` vocabulary — the surface a bag-indexed strategy actually holds, since
-it hides the exact floor behind an existential. From ANY spread-`2` bounded pocket-band carrier board,
-whatever hidden floor it carries, the reserved-well vertical-`I` drain empties the stack all the way
-down to a fresh-bag reset: the result re-enters `reservoirCarrier Bag.full` (the carrier state for a
-full seven-piece bag) and every prefix of the drain is un-lost. The proof forgets the carrier to its
-hidden floor (`obtain ⟨floor, hband⟩`) and hands that level band to the explicit-floor reset-safe,
-dropping only the now-unstatable length face. This is the inter-bag transition a per-bag survival
-schedule quotes at the bag boundary: it holds a bounded carrier (not an explicit floor), and this
-brick certifies the regulator collapses it to a fresh-bag-ready reservoir without ever topping out.
-The complementary fill side and the adversarial S and Z notch routing remain the open closure
-(#66, #72). -/
-theorem isBoundedPocketBandCarrier_maximal_drain_to_reservoir_safe {b : Board}
-    (hb : Board.IsBoundedPocketBandCarrier 2 b) :
-    ∃ pls : List Placement,
-      (∀ pl ∈ pls, pl.piece = Piece.I ∧ pl.Valid GameConfig.standard) ∧
-      reservoirCarrier Bag.full (pls.foldl (Placement.applyStep GameConfig.standard) b) ∧
-      (∀ k, ¬ Board.isLost GameConfig.standard
-        ((pls.take k).foldl (Placement.applyStep GameConfig.standard) b)) := by
-  obtain ⟨floor, hband⟩ := hb
-  obtain ⟨pls, _, hmem, hcarrier, hsafe⟩ :=
-    reservoirCarrier_maximal_drain_reset_safe hband
-  exact ⟨pls, hmem, hcarrier, hsafe⟩
-
-/-- **A reset-floor level pocket band IS a full-bag spread carrier** (iter554). Bridges the
-certified inter-bag reset endpoint into the spread-carrier vocabulary where the per-piece fill
-edges live. The maximal drain lands the board in a level pocket band at floor `floor % 4 < 4`
-(`reservoirCarrier_maximal_drain_reset`); this lemma takes that sharp `floor < 4` band and forgets
-it to `reservoirSpreadCarrier Bag.full` via the pocket-to-spread forgetful edge
-(`isSpreadBoundedRWSkylineAt_of_isLevelPocketBandAt`, spread preserved at `2`). The bridge is NOT
-free in general — the spread-carrier ledger `floor + 2 + 7 + 1 ≤ 20` is `+2` stronger than the
-level-band ledger `floor + 7 + 1 ≤ 20`, so it would fail for `floor ∈ {11, 12}` — but at the reset
-`floor < 4` it holds with room to spare (`floor + 10 ≤ 13 ≤ 20`). This is the missing adapter that
-lets the certified reset side (iter552/553) feed the spread-carrier front door
-`tetrisSolvableValid_of_reservoirSpreadCarrier_closed`, where the open fill crux #66 must discharge
-the per-bag closure. This does NOT prove `TetrisSolvableValid`: crux #66 (bag-level fill closure)
-and #72 (richer carrier closed under all seven) remain open; no `sorry`. -/
-theorem reservoirSpreadCarrier_full_of_isLevelPocketBandAt_reset {floor : ℕ} {b : Board}
-    (hlt : floor < 4)
-    (hband : Board.IsLevelPocketBandAt GameConfig.standard 2 floor b) :
-    reservoirSpreadCarrier Bag.full b := by
-  refine ⟨floor, 2, Board.isSpreadBoundedRWSkylineAt_of_isLevelPocketBandAt hband, ?_⟩
   rw [Bag.full_card]
   have hr : GameConfig.standard.rows = 20 := rfl
   omega
@@ -27581,38 +22655,6 @@ theorem isFlatFrontBandAt_JZ_then_LS_drain_height {c s base : ℕ} {b : Board}
         { piece := Piece.I, rot := 1, col := 0 }) ≤ base - 4 + s :=
   Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt
     (isFlatFrontBandAt_JZ_then_LS_drain hb hs hc0 hc5 hbase4)
-
-/-- **The reversed notch-pair half-cycle also nets a four-row descent of the cap** (iter580). The
-reversed-order mirror of `isFlatFrontBandAt_notchPairs_drain_netDescent` (iter569), a direct corollary
-of the reversed-order drain height cap (iter579). The starting surface `IsFlatFrontBandAt c s base b`
-lives under the band ceiling `base + s`; after the adversary delivers its notch pairs in the reversed
-order (`J@c, Z@c, L@(c+3), S@(c+3)`) and the strategy drops the once-per-bag regulator `I` into the
-reserved well, the drain endpoint is capped at `base - 4 + s` (iter579). Rearranged with `base ≥ 4`,
-that says the endpoint max column height plus four is still at most the *starting* band ceiling
-`base + s` — the reversed notch half-cycle, exactly like the favorable order (iter569), pulls the cap
-strictly downward by the four rows the vertical `I` clears. Together with iter569 BOTH notch-pair
-orders now bank the same four-row descent budget, so the bag-phase ledger sees a net-(-4) half-cycle
-regardless of which notch pair the adversary draws first — the descent budget a bounded carrier needs
-so chaining notch and filler half-cycles cannot let the cap drift upward across a bag. It still says
-nothing about adversarial interleaving of the two halves against one shared drain, nor a notch drawn
-before its paired filler; the every-order per-bag raise-versus-drain balance is the bag-phase closure
-cruxes #66 and #72 still demand. `TetrisSolvableValid` is NOT proven. -/
-theorem isFlatFrontBandAt_JZ_then_LS_drain_netDescent {c s base : ℕ} {b : Board}
-    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
-    (hc0 : 0 < c) (hc5 : c + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
-    Board.maxColHeight GameConfig.standard
-      (Placement.applyStep GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard
-            (Placement.applyStep GameConfig.standard
-              (Placement.applyStep GameConfig.standard b
-                { piece := Piece.J, rot := 0, col := c })
-              { piece := Piece.Z, rot := 0, col := c })
-            { piece := Piece.L, rot := 0, col := c + 3 })
-          { piece := Piece.S, rot := 0, col := c + 3 })
-        { piece := Piece.I, rot := 1, col := 0 }) + 4 ≤ base + s := by
-  have hcap := isFlatFrontBandAt_JZ_then_LS_drain_height hb hs hc0 hc5 hbase4
-  omega
 
 /-- **The owed `S`, paired behind its `L`, closes the master carrier at an arbitrary fill front**
 (iter561). The flat-front-band, arbitrary-`c` lift of `reservoirSpreadCarrier_flat_LS_step` (iter518),
@@ -27901,56 +22943,6 @@ theorem isFlatFrontBandAt_JZ_then_LS_safe {c s base : ℕ} {b : Board}
   obtain ⟨hL, hLS⟩ := isFlatFrontBandAt_LS_step_safe hb2 hs (by omega) (by omega)
   exact ⟨hJ, hJZ, hL, hLS⟩
 
-/-- **The fully-certified four-piece notch block** (iter565). The single edge a per-bag survival
-schedule consumes at the favorable-order notch block: it fuses the carrier re-entry of
-`reservoirSpreadCarrier_flatFront_notchPairs_step` (iter563) with the per-prefix transient safety of
-`isFlatFrontBandAt_LS_then_JZ_safe` (iter564) into one statement. From a flat-front band at front `c`,
-scheduling the bag's `L`, `S`, `J`, `Z` into the working front — `L@c` digs the `S`-notch, the owed
-`S` drops in, `J@(c+3)` digs the `Z`-notch, the owed `Z` drops in — yields four valid placements, each
-of whose intermediate boards is certified NOT lost, and whose final board re-enters
-`reservoirSpreadCarrier` under the four-times-drawn bag. So the caller gets, in one move, the
-destination carrier AND the safety of every drop in between, with no per-piece re-derivation. The
-carrier face is delivered by `reservoirSpreadCarrier_of_isFlatFrontBandAt` (iter420) on the endpoint
-band `isFlatFrontBandAt_LS_then_JZ` (iter557); the four safety faces are exactly iter564's tuple. As in
-its two halves, this bakes in the LS-before-JZ, partner-before-notch placement SCHEDULE the flat-front
-band uses; it is the favorable-order notch block, not the adversarial every-order closure. What stays
-open is the every-order availability of a drain before the limit and the per-bag raise/drain balance —
-crux #66 and #72 remain open and `TetrisSolvableValid` is NOT proven. -/
-theorem reservoirSpreadCarrier_flatFront_notchPairs_step_safe {T : Bag} {b : Board} {c s base : ℕ}
-    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
-    (hc0 : 0 < c) (hc5 : c + 5 < GameConfig.standard.cols)
-    (hledger : base + s + ((((T.draw Piece.L).draw Piece.S).draw Piece.J).draw Piece.Z).card + 1
-      ≤ GameConfig.standard.rows) :
-    ∃ pl1 : Placement, pl1.piece = Piece.L ∧ pl1.Valid GameConfig.standard ∧
-      ¬ Board.isLost GameConfig.standard (Placement.applyStep GameConfig.standard b pl1) ∧
-      ∃ pl2 : Placement, pl2.piece = Piece.S ∧ pl2.Valid GameConfig.standard ∧
-        ¬ Board.isLost GameConfig.standard
-          (Placement.applyStep GameConfig.standard
-            (Placement.applyStep GameConfig.standard b pl1) pl2) ∧
-        ∃ pl3 : Placement, pl3.piece = Piece.J ∧ pl3.Valid GameConfig.standard ∧
-          ¬ Board.isLost GameConfig.standard
-            (Placement.applyStep GameConfig.standard
-              (Placement.applyStep GameConfig.standard
-                (Placement.applyStep GameConfig.standard b pl1) pl2) pl3) ∧
-          ∃ pl4 : Placement, pl4.piece = Piece.Z ∧ pl4.Valid GameConfig.standard ∧
-            ¬ Board.isLost GameConfig.standard
-              (Placement.applyStep GameConfig.standard
-                (Placement.applyStep GameConfig.standard
-                  (Placement.applyStep GameConfig.standard
-                    (Placement.applyStep GameConfig.standard b pl1) pl2) pl3) pl4) ∧
-            reservoirSpreadCarrier ((((T.draw Piece.L).draw Piece.S).draw Piece.J).draw Piece.Z)
-              (Placement.applyStep GameConfig.standard
-                (Placement.applyStep GameConfig.standard
-                  (Placement.applyStep GameConfig.standard
-                    (Placement.applyStep GameConfig.standard b pl1) pl2) pl3) pl4) := by
-  obtain ⟨hL, hLS, hJ, hJZ⟩ := isFlatFrontBandAt_LS_then_JZ_safe hb hs hc0 hc5
-  refine ⟨{ piece := Piece.L, rot := 0, col := c }, rfl, Board.valid_L (by omega), hL,
-    { piece := Piece.S, rot := 0, col := c }, rfl, Board.valid_S (by omega), hLS,
-    { piece := Piece.J, rot := 0, col := c + 3 }, rfl, Board.valid_J (by omega), hJ,
-    { piece := Piece.Z, rot := 0, col := c + 3 }, rfl, Board.valid_Z (by omega), hJZ, ?_⟩
-  exact reservoirSpreadCarrier_of_isFlatFrontBandAt
-    (isFlatFrontBandAt_LS_then_JZ hb hs hc0 hc5) hledger
-
 /-- **Both notch pairs, then the regulator drain, net a four-row descent** (iter566). The notch-side
 companion of the flat-filler fill-then-drain half-cycle `isFlatFrontBandAt_flatFiller_fill_list_drain`
 (iter514). Where that lemma marched a run of strictly-flat fillers (`O`, `T`, `L`, `J`) across one
@@ -27987,63 +22979,6 @@ theorem isFlatFrontBandAt_notchPairs_drain {c s base : ℕ} {b : Board}
         { piece := Piece.I, rot := 1, col := 0 }) :=
   isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain
     (isFlatFrontBandAt_LS_then_JZ hb hs hc0 hc5) hbase4
-
-/-- **The both-notch-pairs-then-drain half-cycle survives at every step** (iter567). The transient
-survival certificate for `isFlatFrontBandAt_notchPairs_drain` (iter566), exactly as
-`isFlatFrontBandAt_flatFiller_fill_list_drain_safe` (iter515) certifies the flat-filler half-cycle:
-every one of the five intermediate boards along the schedule `L@c, S@c, J@(c+3), Z@(c+3), I-well`
-has not topped out. The four notch-placement boards are discharged verbatim by the four-step
-transient-survival certificate `isFlatFrontBandAt_LS_then_JZ_safe` (iter564); the fifth — the board
-after the once-per-bag regulator `I` drains four rows from the reserved well — is not lost because it
-is a spread band (`isFlatFrontBandAt_notchPairs_drain`, iter566), forgotten to a raw spread skyline
-(`Board.isSpreadBoundedRWSkyline_of_isSpreadBoundedRWSkylineAt`) whose reserved well keeps it under
-the ceiling (`Board.not_isLost_of_isSpreadBoundedRWSkyline`). Together with iter515 this gives the
-fully-certified survival face for both halves of the favorable-order per-bag cycle: the adversary's
-chosen order of the flat fillers tiles one layer and drains (iter515), and the two owed notch pieces
-route through their `L`/`J`-manufactured valleys and drain (this lemma), neither half ever topping
-out at any intermediate placement. The honest caveats are unchanged: this still bakes in the
-partner-before-notch order and the fillers-versus-notches split, and certifies the two halves against
-*separate* drains rather than interleaving them against one shared once-per-bag `I`; the every-order
-per-bag raise-versus-drain balance is the bag-phase closure #66 and #72 still demand.
-`TetrisSolvableValid` is NOT proven. -/
-theorem isFlatFrontBandAt_notchPairs_drain_safe {c s base : ℕ} {b : Board}
-    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
-    (hc0 : 0 < c) (hc5 : c + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
-    ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c }) ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c })
-          { piece := Piece.S, rot := 0, col := c }) ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard
-            (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c })
-            { piece := Piece.S, rot := 0, col := c })
-          { piece := Piece.J, rot := 0, col := c + 3 }) ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard
-            (Placement.applyStep GameConfig.standard
-              (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c })
-              { piece := Piece.S, rot := 0, col := c })
-            { piece := Piece.J, rot := 0, col := c + 3 })
-          { piece := Piece.Z, rot := 0, col := c + 3 }) ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard
-            (Placement.applyStep GameConfig.standard
-              (Placement.applyStep GameConfig.standard
-                (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c })
-                { piece := Piece.S, rot := 0, col := c })
-              { piece := Piece.J, rot := 0, col := c + 3 })
-            { piece := Piece.Z, rot := 0, col := c + 3 })
-          { piece := Piece.I, rot := 1, col := 0 }) := by
-  obtain ⟨hL, hLS, hJ, hJZ⟩ := isFlatFrontBandAt_LS_then_JZ_safe hb hs hc0 hc5
-  refine ⟨hL, hLS, hJ, hJZ, ?_⟩
-  exact Board.not_isLost_of_isSpreadBoundedRWSkyline
-    (Board.isSpreadBoundedRWSkyline_of_isSpreadBoundedRWSkylineAt
-      (isFlatFrontBandAt_notchPairs_drain hb hs hc0 hc5 hbase4))
 
 /-- **Tight height cap on the both-notch-pairs-then-drain endpoint** (iter568). The notch-side
 analogue of the flat-filler drain height cap `isFlatFrontBandAt_flatFiller_fill_list_drain_height`
@@ -28146,35 +23081,6 @@ theorem isFlatFrontBandAt_flatFiller_fill_list {s base : ℕ} :
     refine ⟨pl :: pls, c', List.Forall₂.cons ⟨hp1, hv1⟩ hforall, by omega, ?_, ?_⟩
     · rw [List.length_cons]; omega
     · rw [List.foldl_cons]; exact hbn
-
-/-- **A full layer of flat fillers stays under the height limit, in any order** (iter512). The
-fill-side height cap: read the band-top ceiling off the endpoint of the layer-tiling fill list
-(iter511) via the forgetful edge to the floor-pinned spread band
-(`isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt`, iter408) and its scalar cap
-(`maxColHeight_le_of_isSpreadBoundedRWSkylineAt`). Whatever adversarial order the strictly-flat
-fillers (`O`, `T`, `L`, `J`) arrive in, after seating them along the working front the entire
-skyline still sits at height at most `base + s`: the fillers march the front sideways across the
-band, never stacking above the spread ceiling. This is the fill-side mirror of the drain-side
-height caps (`isSpreadBoundedRWSkylineAt_maximal_drain_height`, iter499;
-`isLevelPocketBandAt_maximal_drain_height`, iter509) — the goal's "the surface stays under the
-height limit no matter the order", now stated for the rise phase rather than the drain phase. It
-caps only the flat-filler portion of a bag; it does NOT schedule the `S` and `Z` notch pieces,
-interleave them with the flats, or close the per-bag raise versus drain balance for every order
-(#66, #72 remain open). -/
-theorem isFlatFrontBandAt_flatFiller_fill_list_height {s base : ℕ}
-    {ps : List Piece} {c : ℕ} {b : Board}
-    (hb : IsFlatFrontBandAt c s base b) (hs : 2 ≤ s) (hc0 : 0 < c)
-    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
-    (hroom : c + 3 * ps.length ≤ GameConfig.standard.cols) :
-    ∃ pls : List Placement,
-      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
-      Board.maxColHeight GameConfig.standard
-        (pls.foldl (Placement.applyStep GameConfig.standard) b) ≤ base + s := by
-  obtain ⟨pls, c', hforall, _, _, hbn⟩ :=
-    isFlatFrontBandAt_flatFiller_fill_list ps hb hs hc0 hmem hroom
-  exact ⟨pls, hforall,
-    Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt
-      (isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt hbn)⟩
 
 /-- **The layer-tiling flat fill survives at every prefix, in any order** (iter513). The tight-budget
 (`c + 3 * ps.length`) analogue of the per-prefix survival certificate
@@ -28523,43 +23429,6 @@ theorem isFlatFrontBandAt_flatFiller_then_notchPairs_JZLS_drain_height {s base :
   exact ⟨pls, c', hforall, hlo, hhi,
     Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt hdrain⟩
 
-/-- **Net `-4` descent ledger for the full reversed-notch-order single-layer bag cycle** (iter584).
-The reversed-notch-order mirror of `isFlatFrontBandAt_flatFiller_then_notchPairs_drain_netDescent`
-(iter573), completing the iter582 whole-bag-cycle quartet (cycle, iter582; height cap, iter583; net
-descent, here). It restates the iter583 height cap in balance form: the endpoint peak of the whole bag
-— strictly-flat fillers `ps`, both owed notch pairs in the reversed order (`J@c', Z@c', L@(c'+3),
-S@(c'+3)`), then the once-per-bag vertical `I` drain — satisfies `peak + 4 ≤ base + s`, i.e. the bag
-closes at least four rows below where its incoming `base + s` ceiling sat. With iter573 BOTH notch-pair
-orders now bank the SAME `-4`-per-bag budget: one single-layer bag makes net downward progress whichever
-notch pair the adversary delivers first. This is the quantitative reservoir-descent statement the
-bounded carrier rests on. It stays a fixed-schedule accounting: the `+4` drain credit is banked against
-a fillers-before-notches, partner-before-notch, drain-last schedule, not an adversarial interleaving, so
-the every-order availability of a drain before the ceiling (cruxes #66 and #72) is still open and
-`TetrisSolvableValid` is NOT proven. -/
-theorem isFlatFrontBandAt_flatFiller_then_notchPairs_JZLS_drain_netDescent {s base : ℕ} {c : ℕ}
-    {b : Board} {ps : List Piece}
-    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
-    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
-    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
-    ∃ (pls : List Placement) (c' : ℕ),
-      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
-      c ≤ c' ∧ c' ≤ c + 3 * ps.length ∧
-      Board.maxColHeight GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard
-            (Placement.applyStep GameConfig.standard
-              (Placement.applyStep GameConfig.standard
-                (Placement.applyStep GameConfig.standard
-                  (pls.foldl (Placement.applyStep GameConfig.standard) b)
-                  { piece := Piece.J, rot := 0, col := c' })
-                { piece := Piece.Z, rot := 0, col := c' })
-              { piece := Piece.L, rot := 0, col := c' + 3 })
-            { piece := Piece.S, rot := 0, col := c' + 3 })
-          { piece := Piece.I, rot := 1, col := 0 }) + 4 ≤ base + s := by
-  obtain ⟨pls, c', hforall, hlo, hhi, hcap⟩ :=
-    isFlatFrontBandAt_flatFiller_then_notchPairs_JZLS_drain_height hb hs hc0 hmem hroom hbase4
-  exact ⟨pls, c', hforall, hlo, hhi, by omega⟩
-
 /-- **Full favorable-order single-layer bag cycle: fillers, both notch pairs, then one drain**
 (iter571). Cap iter570 with the once-per-bag vertical-`I` drain: from a flat-front band at floor
 `base`, lay any adversarial order of strictly-flat fillers (`O`/`T`/`L`/`J`) advancing the front to
@@ -28729,70 +23598,6 @@ theorem isFlatFrontBandAt_flatFiller_then_notchPairs_safe {s base : ℕ} {c : �
           simp only [List.length_cons, List.length_nil]; omega)]
       exact hJZ
 
-/-- **The reversed-notch-order single-layer non-`I` bag content survives at every intermediate
-placement** (iter585). The reversed-notch-order mirror of `isFlatFrontBandAt_flatFiller_then_notchPairs_safe`
-(iter574): as the bag feeds its strictly-flat fillers `ps` and then both owed notch pairs in the reversed
-order (`J`@`c'`, `Z`@`c'`, `L`@`(c'+3)`, `S`@`(c'+3)`) onto one flat layer, *every* prefix of the combined
-schedule `pls ++ [J, Z, L, S]` folds to a board that has not topped out — so the game is alive at each of
-the bag's non-`I` drops. It is the same clean composition of two prefix-safety certificates as iter574:
-inside the filler run the survival is iter513's per-prefix face
-(`isFlatFrontBandAt_flatFiller_fill_list_safe`), and past the run the four notch boards are exactly the
-four conjuncts of iter578 (`isFlatFrontBandAt_JZ_then_LS_safe`) on the post-filler band, glued by the
-standard `List.take_append` / `List.foldl_append` decomposition with the four-element notch tail
-enumerated by its length. With iter574 the per-prefix transient-survival face now holds for BOTH
-notch-pair orders. Like every brick in the family it certifies a fillers-before-notches,
-partner-before-notch schedule, not an adversarial interleaving against the single shared `I`; the
-every-order availability of a drain before the ceiling is the bag-phase closure cruxes #66 and #72 still
-demand. `TetrisSolvableValid` is NOT proven. -/
-theorem isFlatFrontBandAt_flatFiller_then_notchPairs_JZLS_safe {s base : ℕ} {c : ℕ} {b : Board}
-    {ps : List Piece}
-    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
-    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
-    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) :
-    ∃ (pls : List Placement) (c' : ℕ),
-      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
-      c ≤ c' ∧ c' ≤ c + 3 * ps.length ∧
-      IsFlatFrontBandAt (c' + 6) s base
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard
-            (Placement.applyStep GameConfig.standard
-              (Placement.applyStep GameConfig.standard
-                (pls.foldl (Placement.applyStep GameConfig.standard) b)
-                { piece := Piece.J, rot := 0, col := c' })
-              { piece := Piece.Z, rot := 0, col := c' })
-            { piece := Piece.L, rot := 0, col := c' + 3 })
-          { piece := Piece.S, rot := 0, col := c' + 3 }) ∧
-      (∀ k, ¬ Board.isLost GameConfig.standard
-        (((pls ++ [({ piece := Piece.J, rot := 0, col := c' } : Placement),
-                   { piece := Piece.Z, rot := 0, col := c' },
-                   { piece := Piece.L, rot := 0, col := c' + 3 },
-                   { piece := Piece.S, rot := 0, col := c' + 3 }]).take k).foldl
-          (Placement.applyStep GameConfig.standard) b)) := by
-  obtain ⟨pls, c', hforall, hlo, hhi, hbn, hsafe⟩ :=
-    isFlatFrontBandAt_flatFiller_fill_list_safe ps hb (by omega) hc0 hmem (by omega)
-  obtain ⟨hJ, hJZ, hL, hLS⟩ := isFlatFrontBandAt_JZ_then_LS_safe hbn hs (by omega) (by omega)
-  refine ⟨pls, c', hforall, hlo, hhi,
-    isFlatFrontBandAt_JZ_then_LS hbn hs (by omega) (by omega), ?_⟩
-  intro k
-  rcases Nat.lt_or_ge k (pls.length + 1) with hk | hk
-  · rw [List.take_append, Nat.sub_eq_zero_of_le (Nat.le_of_lt_succ hk), List.take_zero,
-      List.append_nil]
-    exact hsafe k
-  · rw [List.take_append, List.take_of_length_le (show pls.length ≤ k by omega),
-      List.foldl_append]
-    rcases Nat.lt_or_ge (k - pls.length) 4 with hj4 | hj4
-    · have hcase : k - pls.length = 1 ∨ k - pls.length = 2 ∨ k - pls.length = 3 := by omega
-      rcases hcase with h | h | h
-      · rw [h]; exact hJ
-      · rw [h]; exact hJZ
-      · rw [h]; exact hL
-    · rw [List.take_of_length_le (show ([({ piece := Piece.J, rot := 0, col := c' } : Placement),
-            { piece := Piece.Z, rot := 0, col := c' },
-            { piece := Piece.L, rot := 0, col := c' + 3 },
-            { piece := Piece.S, rot := 0, col := c' + 3 }]).length ≤ k - pls.length by
-          simp only [List.length_cons, List.length_nil]; omega)]
-      exact hLS
-
 /-- **The fully-certified favorable-order whole-bag segment: every drop, including the drain,
 survives** (iter575). The drain-inclusive per-prefix transient-survival face — iter574 extended by
 the once-per-bag vertical `I` — and the most end-to-end certified bag segment in the family. From a
@@ -28862,80 +23667,6 @@ theorem isFlatFrontBandAt_flatFiller_then_notchPairs_drain_safe {s base : ℕ} {
             { piece := Piece.S, rot := 0, col := c' },
             { piece := Piece.J, rot := 0, col := c' + 3 },
             { piece := Piece.Z, rot := 0, col := c' + 3 },
-            { piece := Piece.I, rot := 1, col := 0 }]).length ≤ k - pls.length by
-          simp only [List.length_cons, List.length_nil]; omega)]
-      exact hIsafe
-
-/-- **The fully-certified reversed-notch-order whole-bag segment: every drop, including the drain,
-survives** (iter586). The reversed-notch-order mirror of
-`isFlatFrontBandAt_flatFiller_then_notchPairs_drain_safe` (iter575): the drain-inclusive per-prefix
-transient-survival face — iter585 extended by the once-per-bag vertical `I`. From a flat-front band at
-floor `base`, the schedule `pls ++ [J, Z, L, S, I]` lays the strictly-flat fillers `ps`, routes both
-owed notch pairs in the reversed order, and drops the regulator `I` into the reserved well; the endpoint
-settles into a spread band at floor `base - 4`, and *every* prefix of the whole schedule folds to a
-board that has not topped out. The proof mirrors iter575's `List.take_append`/`List.foldl_append` split
-over a five-element tail: the first four boards are iter578's reversed notch-block conjuncts on the
-post-filler band, and the fifth — after the drain — is not-lost because the post-drain spread band keeps
-its reserved well under the ceiling. With iter575 the complete certified `-4`-per-bag segment (endpoint
-band, iter581; height cap, iter583; net descent, iter584; non-`I` prefix safety, iter585; drain prefix
-safety, here) now holds for BOTH notch-pair orders. What it still does not do — the entire remaining
-content — is schedule the single shared `I` against an adversarial interleaving or guarantee a drain is
-reachable before the ceiling for *every* order; cruxes #66 and #72 remain open and `TetrisSolvableValid`
-is NOT proven. -/
-theorem isFlatFrontBandAt_flatFiller_then_notchPairs_JZLS_drain_safe {s base : ℕ} {c : ℕ} {b : Board}
-    {ps : List Piece}
-    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
-    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
-    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
-    ∃ (pls : List Placement) (c' : ℕ),
-      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
-      c ≤ c' ∧ c' ≤ c + 3 * ps.length ∧
-      Board.IsSpreadBoundedRWSkylineAt GameConfig.standard s (base - 4)
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard
-            (Placement.applyStep GameConfig.standard
-              (Placement.applyStep GameConfig.standard
-                (Placement.applyStep GameConfig.standard
-                  (pls.foldl (Placement.applyStep GameConfig.standard) b)
-                  { piece := Piece.J, rot := 0, col := c' })
-                { piece := Piece.Z, rot := 0, col := c' })
-              { piece := Piece.L, rot := 0, col := c' + 3 })
-            { piece := Piece.S, rot := 0, col := c' + 3 })
-          { piece := Piece.I, rot := 1, col := 0 }) ∧
-      (∀ k, ¬ Board.isLost GameConfig.standard
-        (((pls ++ [({ piece := Piece.J, rot := 0, col := c' } : Placement),
-                   { piece := Piece.Z, rot := 0, col := c' },
-                   { piece := Piece.L, rot := 0, col := c' + 3 },
-                   { piece := Piece.S, rot := 0, col := c' + 3 },
-                   { piece := Piece.I, rot := 1, col := 0 }]).take k).foldl
-          (Placement.applyStep GameConfig.standard) b)) := by
-  obtain ⟨pls, c', hforall, hlo, hhi, hbn, hsafe⟩ :=
-    isFlatFrontBandAt_flatFiller_fill_list_safe ps hb (by omega) hc0 hmem (by omega)
-  obtain ⟨hJ, hJZ, hL, hLS⟩ := isFlatFrontBandAt_JZ_then_LS_safe hbn hs (by omega) (by omega)
-  have hdrain := isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain
-    (isFlatFrontBandAt_JZ_then_LS hbn hs (by omega) (by omega)) hbase4
-  have hIsafe := Board.not_isLost_of_isSpreadBoundedRWSkyline
-    (Board.isSpreadBoundedRWSkyline_of_isSpreadBoundedRWSkylineAt hdrain)
-  refine ⟨pls, c', hforall, hlo, hhi, hdrain, ?_⟩
-  intro k
-  rcases Nat.lt_or_ge k (pls.length + 1) with hk | hk
-  · rw [List.take_append, Nat.sub_eq_zero_of_le (Nat.le_of_lt_succ hk), List.take_zero,
-      List.append_nil]
-    exact hsafe k
-  · rw [List.take_append, List.take_of_length_le (show pls.length ≤ k by omega),
-      List.foldl_append]
-    rcases Nat.lt_or_ge (k - pls.length) 5 with hj5 | hj5
-    · have hcase : k - pls.length = 1 ∨ k - pls.length = 2 ∨ k - pls.length = 3 ∨
-          k - pls.length = 4 := by omega
-      rcases hcase with h | h | h | h
-      · rw [h]; exact hJ
-      · rw [h]; exact hJZ
-      · rw [h]; exact hL
-      · rw [h]; exact hLS
-    · rw [List.take_of_length_le (show ([({ piece := Piece.J, rot := 0, col := c' } : Placement),
-            { piece := Piece.Z, rot := 0, col := c' },
-            { piece := Piece.L, rot := 0, col := c' + 3 },
-            { piece := Piece.S, rot := 0, col := c' + 3 },
             { piece := Piece.I, rot := 1, col := 0 }]).length ≤ k - pls.length by
           simp only [List.length_cons, List.length_nil]; omega)]
       exact hIsafe
@@ -29149,46 +23880,6 @@ theorem isFlatFrontBandAt_JZ_then_fillers_then_LS_drain_height {s base c : ℕ} 
   exact ⟨pls, c', hforall, hlo, hhi,
     Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt hdrain⟩
 
-/-- **Scalar height cap for the favorable-pair "fillers between the two notch pairs" drain** (iter643).
-The `maxColHeight` face of iter588 (`isFlatFrontBandAt_LS_then_fillers_then_JZ_drain`), the `LS`-first
-mirror of the reversed-pair height cap iter602
-(`isFlatFrontBandAt_JZ_then_fillers_then_LS_drain_height`). From a flat-front band at front `c`, run the
-bag's `L`-then-`S` pair first, deal the strictly-flat fillers `ps` in the gap, land the `J`-then-`Z`
-pair at the fresh front `c'`, and spend the once-per-bag vertical `I` down the reserved well: the
-resulting peak column height is at most `(base - 4) + s`, i.e. four rows below the incoming `base + s`
-ceiling. It just reads the spread-bounded skyline endpoint of iter588 through
-`Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt`, turning the carrier-shaped drain certificate into
-the scalar `maxColHeight ≤ rows`-style bound the strategy reduction consumes. With iter602 this completes
-the height companion for BOTH inter-pair (fillers-between) orders (`LS`-first here, `JZ`-first in
-iter602). Honest caveats are unchanged: this bounds the endpoint of a single half-cycle that bakes in the
-`L`-before-`S`, `J`-before-`Z`, and `LS`-before-`JZ` orders against a drain-last schedule; it does not
-discharge the every-order availability of a drain before the ceiling. Crux #66 and #72 stay open and
-`TetrisSolvableValid` is NOT proven; no `sorry`. -/
-theorem isFlatFrontBandAt_LS_then_fillers_then_JZ_drain_height {s base c : ℕ} {b : Board}
-    {ps : List Piece}
-    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
-    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
-    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
-    ∃ (pls : List Placement) (c' : ℕ),
-      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
-      c + 3 ≤ c' ∧ c' ≤ c + 3 + 3 * ps.length ∧
-      Board.maxColHeight GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard
-            (Placement.applyStep GameConfig.standard
-              (pls.foldl (Placement.applyStep GameConfig.standard)
-                (Placement.applyStep GameConfig.standard
-                  (Placement.applyStep GameConfig.standard b
-                    { piece := Piece.L, rot := 0, col := c })
-                  { piece := Piece.S, rot := 0, col := c }))
-              { piece := Piece.J, rot := 0, col := c' })
-            { piece := Piece.Z, rot := 0, col := c' })
-          { piece := Piece.I, rot := 1, col := 0 }) ≤ (base - 4) + s := by
-  obtain ⟨pls, c', hforall, hlo, hhi, hdrain⟩ :=
-    isFlatFrontBandAt_LS_then_fillers_then_JZ_drain hb hs hc0 hmem hroom hbase4
-  exact ⟨pls, c', hforall, hlo, hhi,
-    Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt hdrain⟩
-
 /-- **The favorable-pair "fillers between the two notch pairs" half-cycle survives at every drop,
 including the drain** (iter644). The per-prefix transient-survival face of iter588
 (`isFlatFrontBandAt_LS_then_fillers_then_JZ_drain`), the inter-pair (fillers-between) analogue of the
@@ -29286,104 +23977,6 @@ theorem isFlatFrontBandAt_LS_then_fillers_then_JZ_drain_safe {s base c : ℕ} {b
             { piece := Piece.I, rot := 1, col := 0 }]).length ≤
             k - ([({ piece := Piece.L, rot := 0, col := c } : Placement),
             { piece := Piece.S, rot := 0, col := c }]).length - pls.length by
-            simp only [List.length_cons, List.length_nil] at hj3 ⊢; omega)]
-        exact hIsafe
-
-/-- **The reversed-pair "fillers between the two notch pairs" half-cycle survives at every drop,
-including the drain** (iter645). The `JZ`-first mirror of iter644
-(`isFlatFrontBandAt_LS_then_fillers_then_JZ_drain_safe`): the per-prefix transient-survival face of
-iter601 (`isFlatFrontBandAt_JZ_then_fillers_then_LS_drain`). Along the half-cycle
-`[J@c, Z@c] ++ ps' ++ [L@c', S@c', I@0]` — run the bag's `J`-then-`Z` pair first, deal the
-strictly-flat fillers `ps` in the gap, land the `L`-then-`S` pair, then spend the once-per-bag
-vertical `I` down the reserved well — every intermediate board (and the drained endpoint) has not
-topped out. Proved by a three-segment `List.take_append` / `List.foldl_append` prefix split, reading
-the head boards off `isFlatFrontBandAt_JZ_step_safe` (iter559), the middle filler run off
-`isFlatFrontBandAt_flatFiller_fill_list_safe` (iter513), the tail off
-`isFlatFrontBandAt_LS_step_safe` (iter558), and the drained tail off
-`Board.not_isLost_of_isSpreadBoundedRWSkyline` of iter412's regulator drain. With iter644 this
-completes the prefix-survival certificate for BOTH inter-pair orders. Honest caveats unchanged: this
-EXHIBITS the obstruction rather than overcoming it — it bakes in the favorable within-bag order
-(`J`-before-`Z`, `L`-before-`S`, fillers between the two notch pairs, drain last); it is a
-multi-piece block-level half-cycle, NOT a per-piece `hstep`. The genuine all-orders per-bag I-drain
-accounting against the single shared regulator — crux #66 and #72 — remains open;
-`TetrisSolvableValid` is NOT proven; no `sorry`. -/
-theorem isFlatFrontBandAt_JZ_then_fillers_then_LS_drain_safe {s base c : ℕ} {b : Board}
-    {ps : List Piece}
-    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
-    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
-    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
-    ∃ (pls : List Placement) (c' : ℕ),
-      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
-      c + 3 ≤ c' ∧ c' ≤ c + 3 + 3 * ps.length ∧
-      Board.IsSpreadBoundedRWSkylineAt GameConfig.standard s (base - 4)
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard
-            (Placement.applyStep GameConfig.standard
-              (pls.foldl (Placement.applyStep GameConfig.standard)
-                (Placement.applyStep GameConfig.standard
-                  (Placement.applyStep GameConfig.standard b
-                    { piece := Piece.J, rot := 0, col := c })
-                  { piece := Piece.Z, rot := 0, col := c }))
-              { piece := Piece.L, rot := 0, col := c' })
-            { piece := Piece.S, rot := 0, col := c' })
-          { piece := Piece.I, rot := 1, col := 0 }) ∧
-      (∀ k, ¬ Board.isLost GameConfig.standard
-        ((([({ piece := Piece.J, rot := 0, col := c } : Placement),
-            { piece := Piece.Z, rot := 0, col := c }] ++
-           (pls ++
-            [({ piece := Piece.L, rot := 0, col := c' } : Placement),
-             { piece := Piece.S, rot := 0, col := c' },
-             { piece := Piece.I, rot := 1, col := 0 }])).take k).foldl
-          (Placement.applyStep GameConfig.standard) b)) := by
-  obtain ⟨hJ, hJZ⟩ := isFlatFrontBandAt_JZ_step_safe hb hs hc0 (by omega)
-  have hbJZ := isFlatFrontBandAt_JZ_step hb hs hc0 (by omega)
-  obtain ⟨pls, c', hforall, hlo, hhi, hbn, hsafe⟩ :=
-    isFlatFrontBandAt_flatFiller_fill_list_safe ps hbJZ (by omega) (by omega) hmem (by omega)
-  obtain ⟨hL, hLS⟩ := isFlatFrontBandAt_LS_step_safe hbn hs (by omega) (by omega)
-  have hdrain := isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain
-    (isFlatFrontBandAt_LS_step hbn hs (by omega) (by omega)) hbase4
-  have hIsafe := Board.not_isLost_of_isSpreadBoundedRWSkyline
-    (Board.isSpreadBoundedRWSkyline_of_isSpreadBoundedRWSkylineAt hdrain)
-  refine ⟨pls, c', hforall, by omega, by omega, hdrain, ?_⟩
-  intro k
-  rcases Nat.lt_or_ge k (([({ piece := Piece.J, rot := 0, col := c } : Placement),
-      { piece := Piece.Z, rot := 0, col := c }]).length + 1) with hk | hk
-  · rw [List.take_append, Nat.sub_eq_zero_of_le (Nat.le_of_lt_succ hk), List.take_zero,
-      List.append_nil]
-    have hcase : k = 0 ∨ k = 1 ∨ k = 2 := by
-      simp only [List.length_cons, List.length_nil] at hk; omega
-    rcases hcase with h | h | h <;> subst h
-    · exact isFlatFrontBandAt_not_isLost hb
-    · exact hJ
-    · exact hJZ
-  · rw [List.take_append,
-      List.take_of_length_le (show ([({ piece := Piece.J, rot := 0, col := c } : Placement),
-        { piece := Piece.Z, rot := 0, col := c }]).length ≤ k by
-        simp only [List.length_cons, List.length_nil] at hk ⊢; omega), List.foldl_append]
-    rcases Nat.lt_or_ge (k - ([({ piece := Piece.J, rot := 0, col := c } : Placement),
-        { piece := Piece.Z, rot := 0, col := c }]).length) (pls.length + 1) with hk2 | hk2
-    · rw [List.take_append, Nat.sub_eq_zero_of_le (Nat.le_of_lt_succ hk2), List.take_zero,
-        List.append_nil]
-      exact hsafe _
-    · rw [List.take_append, List.take_of_length_le (show pls.length ≤ k -
-          ([({ piece := Piece.J, rot := 0, col := c } : Placement),
-           { piece := Piece.Z, rot := 0, col := c }]).length by
-          simp only [List.length_cons, List.length_nil] at hk2 ⊢; omega), List.foldl_append]
-      rcases Nat.lt_or_ge (k - ([({ piece := Piece.J, rot := 0, col := c } : Placement),
-          { piece := Piece.Z, rot := 0, col := c }]).length - pls.length) 3 with hj3 | hj3
-      · have hcase : k - ([({ piece := Piece.J, rot := 0, col := c } : Placement),
-            { piece := Piece.Z, rot := 0, col := c }]).length - pls.length = 1 ∨
-            k - ([({ piece := Piece.J, rot := 0, col := c } : Placement),
-            { piece := Piece.Z, rot := 0, col := c }]).length - pls.length = 2 := by
-          simp only [List.length_cons, List.length_nil] at hk2 hj3 ⊢; omega
-        rcases hcase with h | h
-        · rw [h]; exact hL
-        · rw [h]; exact hLS
-      · rw [List.take_of_length_le (show ([({ piece := Piece.L, rot := 0, col := c' } : Placement),
-            { piece := Piece.S, rot := 0, col := c' },
-            { piece := Piece.I, rot := 1, col := 0 }]).length ≤
-            k - ([({ piece := Piece.J, rot := 0, col := c } : Placement),
-            { piece := Piece.Z, rot := 0, col := c }]).length - pls.length by
             simp only [List.length_cons, List.length_nil] at hj3 ⊢; omega)]
         exact hIsafe
 
@@ -29514,50 +24107,6 @@ theorem isFlatFrontBandAt_JZ_then_LS_then_fillers_drain {s base : ℕ} {c : ℕ}
     isFlatFrontBandAt_JZ_then_LS_then_fillers hb hs hc0 hmem hroom
   exact ⟨pls, hforall, isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain hbn hbase4⟩
 
-/-- **The `LS`-`JZ`-fillers bag block, then the regulator drain, nets a four-row descent** (iter634).
-The drain face of `isFlatFrontBandAt_LS_then_JZ_then_fillers` (iter627), the LS-first mirror of the
-sixth-ordering drain `isFlatFrontBandAt_JZ_then_LS_then_fillers_drain` (iter629), and the LAST of the
-six block-ordering drains to be filled in. From `IsFlatFrontBandAt c s base b` the adversary spends
-`L`-then-`S` at column `c` (the `L` re-digs the single-step `S`-notch, the `S` seats into it), then
-`J`-then-`Z` at `c + 3` (the `J` manufactures the `Z`-notch), then the remaining strictly-flat fillers
-`ps` left-to-right, landing a flat front at the same floor `base` (iter627); the once-per-bag vertical
-`I` dropped into the reserved well at column `0` then clears four rows and the surface settles into a
-spread band at the lowered floor `base - 4`
-(`isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain`, iter412). With iter571/588/601/629 and
-this lemma, all six block-orderings of `{fillers, LS-pair, JZ-pair}` now have a net-negative
-raise-versus-drain cycle, the four-row descent budget a bounded carrier needs so chaining cannot let
-the cap drift upward. Honest caveats — exactly the open content: this is a block-level composition, not
-the per-piece `hstep`; it bakes in the `L`-before-`S` / `J`-before-`Z` order within each notch pair
-(the adversarial `S`-before-its-paired-`L` case has no hole-free skyline placement on a bare flat
-front — the column-budget obstruction, #90/#151), and the post-drain band is spread, not flat, so
-re-establishing a flat front at floor `base - 4` is the remaining packing content. It still does not
-feed a bag-indexed carrier whose per-piece `hstep` is true. The all-orders per-bag drain accounting
-feeding the final reduction — crux #66/#72 — remains open; `TetrisSolvableValid` is NOT proven by this
-lemma; no `sorry`. -/
-theorem isFlatFrontBandAt_LS_then_JZ_then_fillers_drain {s base : ℕ} {c : ℕ} {b : Board}
-    {ps : List Piece}
-    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
-    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
-    (hroom : c + 6 + 3 * ps.length ≤ GameConfig.standard.cols)
-    (hbase4 : 4 ≤ base) :
-    ∃ (pls : List Placement),
-      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
-      Board.IsSpreadBoundedRWSkylineAt GameConfig.standard s (base - 4)
-        (Placement.applyStep GameConfig.standard
-          (pls.foldl (Placement.applyStep GameConfig.standard)
-            (Placement.applyStep GameConfig.standard
-              (Placement.applyStep GameConfig.standard
-                (Placement.applyStep GameConfig.standard
-                  (Placement.applyStep GameConfig.standard b
-                    { piece := Piece.L, rot := 0, col := c })
-                  { piece := Piece.S, rot := 0, col := c })
-                { piece := Piece.J, rot := 0, col := c + 3 })
-              { piece := Piece.Z, rot := 0, col := c + 3 }))
-          { piece := Piece.I, rot := 1, col := 0 }) := by
-  obtain ⟨pls, c', hforall, _, _, hbn⟩ :=
-    isFlatFrontBandAt_LS_then_JZ_then_fillers hb hs hc0 hmem hroom
-  exact ⟨pls, hforall, isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain hbn hbase4⟩
-
 /-- **Pairing an owed `S` with a preceding `L` keeps the master carrier on a flat band** (iter518).
 The first carrier-level two-piece transition that absorbs an `S` hole-free without any pre-existing
 notch: on a band flat at `base` with the reserved well parked at column `0` and spread `s ≥ 3`, drop
@@ -29663,42 +24212,6 @@ theorem reservoirSpreadCarrier_all7Standard {T : Bag}
   have hj10 : j < 10 := hj
   interval_cases j <;> revert hjw <;> decide
 
-/-- **One-step adversarial survival of the all-seven fixed standard surface, in carrier vocabulary**
-(iter603). Packages the iter520 single-board all-seven finding for the eventual `hstep`: for ANY bag
-`T` whose remaining card fits the headroom ledger `card + 7 ≤ rows`, the ONE concrete fixed surface
-`σ = (0, 4, 4, 5, 5, 4, 4, 4, 4, 4)` is simultaneously (a) a master `reservoirSpreadCarrier T` member
-(`reservoirSpreadCarrier_all7Standard`, iter520) AND (b) a from-surface with a guaranteed valid,
-non-losing reply to WHATEVER piece `p` the adversary draws
-(`isSpreadBoundedRWSkyline_all7_valley_standard_not_isLost`, the survival face of the two-notch valley
-menu). Unlike the order-baking notch-pair ladder (iter587 onward), this is anchored on the SINGLE
-fixed all-seven board — the well at column `0`, the ascending `S`-notch at `1..3`, the descending
-`Z`-notch at `4..6` sharing column `6` with the width-four pocket at `6..9` — so it is genuinely
-order-free for the first move: the adversary may draw any of the seven and the strategy answers
-without topping out. This is precisely the from-surface the iter520 docstring flags that a true
-`bagPhaseCarrier` `hstep` (task #66) quotes.
-
-Honest caveat — this is the FIRST-MOVE survival, not the closure. It certifies that `σ` survives one
-arbitrary draw, but it does NOT yet certify the post-board is again a carrier member ready for the
-NEXT owed piece: the all-seven menu emits its landing in the existential-floor
-`IsSpreadBoundedRWSkyline 2` vocabulary, and the iter523 bridge recovers only the EXISTENCE of a
-pinned floor, not its magnitude, so the carrier ledger `floor + 2 + (T.draw p).card + 1 ≤ rows` for
-the post-board is not yet available — it needs a floor-pinned all-seven menu (a separate, larger
-obligation). The cross-step site-regeneration that keeps `σ` all-seven-ready as the bag drains, under
-every order, is exactly the open content. Crux #66 and #72 stay open and `TetrisSolvableValid` is NOT
-proven. -/
-theorem reservoirSpreadCarrier_all7Standard_step_not_isLost {T : Bag}
-    (hcard : T.card + 7 ≤ GameConfig.standard.rows) (p : Piece) :
-    reservoirSpreadCarrier T
-        (Board.skyline GameConfig.standard
-          (fun j => if j = 0 then 0 else if j = 3 then 5 else if j = 4 then 5 else 4)) ∧
-      ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-        ¬ Board.isLost GameConfig.standard
-          (Placement.applyStep GameConfig.standard
-            (Board.skyline GameConfig.standard
-              (fun j => if j = 0 then 0 else if j = 3 then 5 else if j = 4 then 5 else 4)) pl) :=
-  ⟨reservoirSpreadCarrier_all7Standard hcard,
-   Board.isSpreadBoundedRWSkyline_all7_valley_standard_not_isLost p⟩
-
 /-- **Floor-pinned per-piece regeneration, lifted into the master carrier** (iter521). For any single
 piece `p` the adversary draws from a mid-bag `T` (card at least two, so the draw genuinely decrements
 rather than refilling), there is a reset surface `s` and a valid placement `pl` of `p` whose
@@ -29724,35 +24237,6 @@ theorem reservoirSpreadCarrier_canonical_lands_all7 {T : Bag} {base : ℕ}
   obtain ⟨s, pl, hpiece, hvalid, hband⟩ :=
     Board.isLevelPocketBandAt_canonical_lands_all7 (base := base) (by omega) p
   refine ⟨s, pl, hpiece, hvalid, ?_⟩
-  refine ⟨base, 2, Board.isSpreadBoundedRWSkylineAt_of_isLevelPocketBandAt hband, ?_⟩
-  have hdraw : (T.draw p).card = T.card - 1 := Bag.card_draw_of_ge_two hp hcard
-  omega
-
-/-- **Survival face of the floor-pinned per-piece carrier regeneration** (iter522). The same
-mid-bag per-piece landing as `reservoirSpreadCarrier_canonical_lands_all7`, now also certifying that
-the post-board has NOT topped out (`¬ isLost`). Drawn from
-`isLevelPocketBandAt_canonical_lands_all7_not_isLost`, whose un-lost certificate rides directly off
-the height bound of the resulting spread-2 level-pocket band; the carrier membership and the headroom
-ledger thread exactly as in the unsafe version. This matters because the eventual bag-level closure
-must answer the adversary from a board it is also safe to STAND on, so every transition we hand the
-strategy needs the alive certificate bundled in, not just the shape invariant.
-
-The caveats are unchanged and still leave crux #66 and #72 open: the reset surface `s` is chosen
-DEPENDING on the drawn `p` (order-dependent, not one fixed all-seven board), and the lemma covers
-only the mid-bag regime `2 ≤ T.card`; the singleton bag boundary that refills the card to seven still
-needs the once-per-bag I-drain. `TetrisSolvableValid` remains unproven. -/
-theorem reservoirSpreadCarrier_canonical_lands_all7_safe {T : Bag} {base : ℕ}
-    (hcard : 2 ≤ T.card)
-    (hledger : base + 2 + T.card + 1 ≤ GameConfig.standard.rows)
-    {p : Piece} (hp : p ∈ T) :
-    ∃ (s : ℕ → ℕ) (pl : Placement), pl.piece = p ∧ pl.Valid GameConfig.standard ∧
-      reservoirSpreadCarrier (T.draw p)
-        (Placement.applyStep GameConfig.standard (Board.skyline GameConfig.standard s) pl) ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard (Board.skyline GameConfig.standard s) pl) := by
-  obtain ⟨s, pl, hpiece, hvalid, hband, hsafe⟩ :=
-    Board.isLevelPocketBandAt_canonical_lands_all7_not_isLost (base := base) (by omega) p
-  refine ⟨s, pl, hpiece, hvalid, ?_, hsafe⟩
   refine ⟨base, 2, Board.isSpreadBoundedRWSkylineAt_of_isLevelPocketBandAt hband, ?_⟩
   have hdraw : (T.draw p).card = T.card - 1 := Bag.card_draw_of_ge_two hp hcard
   omega
@@ -29976,58 +24460,6 @@ theorem reservoirSpreadCarrier_flat_notchPair_step_safe {T : Bag} {s base : ℕ}
   · exact reservoirSpreadCarrier_flat_LS_step_safe hs hw0 hflat hledger
   · exact reservoirSpreadCarrier_flat_JZ_step_safe hs hw0 hflat hledger
 
-/-- **The concrete flat reset surface hosts the opener-paired staircase routing** (iter528). The
-abstract opener-paired dispatcher `reservoirSpreadCarrier_flat_notchPair_step_safe` (iter527) realised
-on the named reset surface `reservoirFlatSurface base` — the concrete profile `fun j => if j = 0 then 0
-else base` (reserved empty well at column `0`, every working column level at `base`) that the
-once-per-bag drain settles onto and that the phase-carrier membership lemmas
-(`isFlatPhaseReservoirAtS_reservoirFlatSurface`) already recognise as a bag-carrier member. Because that
-profile satisfies the two flat-band side conditions verbatim (`reservoirFlatSurface base 0 = 0` and
-`reservoirFlatSurface base j = base` for every working `j`), the iter527 routing transports unchanged:
-for an owed staircase `p` and its matching opener `q` (`L` for `S`, `J` for `Z`), dropping the opener
-across columns `(1, 2, 3)` to carve the matching notch then seating the staircase lands back in
-`reservoirSpreadCarrier ((T.draw q).draw p)`, with both the post-opener and post-pair boards certified
-to have not topped out.
-
-Pinning the routing to the named surface is what lets the bag-level closure quote a single concrete
-carrier member rather than re-supplying the abstract flatness hypotheses at every staircase event: the
-drain produces exactly `reservoirFlatSurface`, so the surface the strategy returns to between layers is
-the very one this edge fires on.
-
-Honest caveat (unchanged): this still does NOT close crux #66 and #72. It is the same two-piece
-opener-before-staircase edge as iter527, only instantiated; it neither fields the adversarial
-staircase-before-opener order (that routes through the pre-notched double-valley surface), nor
-regenerates the flat surface after the pair, nor schedules the routing against the once-per-bag drain
-and the remaining fillers. It is concrete plumbing for the staircase routing, not the all-orders
-closure itself. -/
-theorem reservoirSpreadCarrier_flatSurface_notchPair_step_safe {T : Bag} {s base : ℕ} {q p : Piece}
-    (hpair : (q = Piece.L ∧ p = Piece.S) ∨ (q = Piece.J ∧ p = Piece.Z))
-    (hs : 3 ≤ s)
-    (hledger : base + s + ((T.draw q).draw p).card + 1 ≤ GameConfig.standard.rows) :
-    ∃ pl1 : Placement, pl1.piece = q ∧ pl1.Valid GameConfig.standard ∧
-      ∃ pl2 : Placement, pl2.piece = p ∧ pl2.Valid GameConfig.standard ∧
-        reservoirSpreadCarrier ((T.draw q).draw p)
-          (Placement.applyStep GameConfig.standard
-            (Placement.applyStep GameConfig.standard
-              (Board.skyline GameConfig.standard (reservoirFlatSurface base))
-              { piece := q, rot := 0, col := 1 })
-            { piece := p, rot := 0, col := 1 }) ∧
-        ¬ Board.isLost GameConfig.standard
-            (Placement.applyStep GameConfig.standard
-              (Board.skyline GameConfig.standard (reservoirFlatSurface base))
-              { piece := q, rot := 0, col := 1 }) ∧
-        ¬ Board.isLost GameConfig.standard
-            (Placement.applyStep GameConfig.standard
-              (Placement.applyStep GameConfig.standard
-                (Board.skyline GameConfig.standard (reservoirFlatSurface base))
-                { piece := q, rot := 0, col := 1 })
-              { piece := p, rot := 0, col := 1 }) := by
-  refine reservoirSpreadCarrier_flat_notchPair_step_safe hpair hs ?_ ?_ hledger
-  · simp [reservoirFlatSurface]
-  · intro j hj hjc
-    simp only [reservoirFlatSurface]
-    rw [if_neg (by omega)]
-
 /-- **The post-pair board exposes its explicit band floor `base`** (iter529). The opener-paired notch
 routings `reservoirSpreadCarrier_flat_notchPair_step_safe` (iter527) and its named-surface
 instantiation (iter528) return the post-pair board wrapped in `reservoirSpreadCarrier`, which hides the
@@ -30248,43 +24680,6 @@ theorem reservoirDoubleSZSurface_SZ_burst_band_drain_carrier {T' : Bag} {base : 
     reservoirDoubleSZSurface_SZ_burst_band_drain hbase hfloor4
   exact ⟨w, hw, ⟨base - 4, 2, hband, hledger⟩, hnotlost⟩
 
-/-- Mirror order of the burst-drain-carrier round trip: when the adversary plays `Z` before `S` on the
-double-valley surface, the same carrier round trip closes. The two staircases write to disjoint column
-sets (`reservoirDoubleSZSurface_SZ_comm`: `Z`-then-`S` lands the IDENTICAL board as `S`-then-`Z`), so the
-regulator drain, the floor lowering `base → base - 4`, and the re-entry into `reservoirSpreadCarrier T'`
-all transport verbatim from `reservoirDoubleSZSurface_SZ_burst_band_drain_carrier` (iter533) by rewriting
-the board through the commutation equality. Together with iter533 this neutralizes the adversary's
-`S`-versus-`Z` ordering choice for the absorb then drain then re-enter cycle on the two-staircase surface:
-whichever staircase is drawn first, the post-burst board hands the same drained spread band back to the
-next bag under the post-drain ledger `(base - 4) + 2 + T'.card + 1 ≤ rows`.
-
-Honest caveat (unchanged): this does NOT close crux #66 and #72. It still fires only on the GIVEN
-double-valley surface at `base ≥ 4`, handles only the two staircase pieces (the `Z`/`S` burst, not the
-five fillers nor their interleaving with the drain), and does not regenerate the valleys after the drain.
-It closes the ordering symmetry of the burst-drain brick, not the all-orders bag invariant. -/
-theorem reservoirDoubleSZSurface_ZS_burst_band_drain_carrier {T' : Bag} {base : ℕ}
-    (hbase : base + 2 ≤ GameConfig.standard.rows) (hfloor4 : 4 ≤ base)
-    (hledger : (base - 4) + 2 + T'.card + 1 ≤ GameConfig.standard.rows) :
-    ∃ w : ℕ, w < GameConfig.standard.cols ∧
-      reservoirSpreadCarrier T'
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard
-            (Placement.applyStep GameConfig.standard
-              (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-              { piece := Piece.Z, rot := 0, col := 5 })
-            { piece := Piece.S, rot := 0, col := 2 })
-          { piece := Piece.I, rot := 1, col := w }) ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard
-            (Placement.applyStep GameConfig.standard
-              (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-              { piece := Piece.Z, rot := 0, col := 5 })
-            { piece := Piece.S, rot := 0, col := 2 })
-          { piece := Piece.I, rot := 1, col := w }) := by
-  rw [← reservoirDoubleSZSurface_SZ_comm base]
-  exact reservoirDoubleSZSurface_SZ_burst_band_drain_carrier hbase hfloor4 hledger
-
 /-- A three-move adversarial order on the double-valley surface: the regulator `I` drawn FIRST, then the
 `S`-then-`Z` burst. This is the case the goal explicitly flags — "the `I` might come first" — and it is
 survived by composing two facts already proven: the early `I` into the reserved well clears four rows and
@@ -30430,98 +24825,6 @@ theorem reservoirDoubleSZSurface_vertI_then_ZS_burst_carrier_safe {T : Bag} {bas
   have hcarrier := reservoirDoubleSZSurface_vertI_then_ZS_burst_carrier (T := T) (base := base) hbase hledger
   exact ⟨hcarrier, reservoirSpreadCarrier_not_isLost _ _ hcarrier⟩
 
-/-- **The whole early-drain staircase square dispatches safely into the carrier** (iter539). One
-black-box consolidating all four corners of the I-and-staircase phase on the double-valley surface, so
-the per-bag schedule can quote a single fact instead of four separate burst faces. Given the floor has
-banked at least four rows (`4 ≤ base`) and each corner's ledger fits under the row ceiling, every one of
-the four openings the adversary can force with the regulator `I` and the two owed staircase pieces lands
-back in `reservoirSpreadCarrier` AND is certified to have not topped out:
-
-* `S` then `Z` with no leading drain (iter375), re-entering `reservoirSpreadCarrier ((T.draw S).draw Z)`;
-* `Z` then `S` with no leading drain (iter526), re-entering `reservoirSpreadCarrier ((T.draw Z).draw S)`;
-* the regulator `I` first, then `S` then `Z` (iter537), draining four rows before the burst;
-* the regulator `I` first, then `Z` then `S` (iter538), the swapped drain-first burst.
-
-It is a pure four-way conjunction of the established `_safe` faces, so the surfaces, columns, and
-re-entry transport verbatim. This is the survival-certified menu of staircase responses indexed by both
-the staircase order and the regulator position: whichever of the four the adversary plays while the two
-owed staircases (and possibly the drain) are still in hand, the board it lands on is a safe carrier
-member and the schedule never re-derives safety.
-
-Honest caveat (unchanged): this does NOT close crux #66 and #72. It consolidates four specific
-three-move (or two-move) prefixes on the given double-valley surface at `base ≥ 4`; it does not cover the
-orders that interleave the five non-staircase fillers between the staircase draws, the notch
-regeneration after a non-staircase fill, nor the all-orders bag closure the front door demands. It is the
-packaged staircase-square menu, not the all-orders bag invariant. -/
-theorem reservoirDoubleSZSurface_staircase_square_dispatch {T : Bag} {base : ℕ}
-    (hbase : 4 ≤ base)
-    (hSZ : base + 2 + ((T.draw Piece.S).draw Piece.Z).card + 1 ≤ GameConfig.standard.rows)
-    (hZS : base + 2 + ((T.draw Piece.Z).draw Piece.S).card + 1 ≤ GameConfig.standard.rows)
-    (hISZ : (base - 4) + 2 + (((T.draw Piece.I).draw Piece.S).draw Piece.Z).card + 1
-      ≤ GameConfig.standard.rows)
-    (hIZS : (base - 4) + 2 + (((T.draw Piece.I).draw Piece.Z).draw Piece.S).card + 1
-      ≤ GameConfig.standard.rows) :
-    (reservoirSpreadCarrier ((T.draw Piece.S).draw Piece.Z)
-       (Placement.applyStep GameConfig.standard
-         (Placement.applyStep GameConfig.standard
-           (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-           { piece := Piece.S, rot := 0, col := 2 })
-         { piece := Piece.Z, rot := 0, col := 5 }) ∧
-     ¬ Board.isLost GameConfig.standard
-       (Placement.applyStep GameConfig.standard
-         (Placement.applyStep GameConfig.standard
-           (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-           { piece := Piece.S, rot := 0, col := 2 })
-         { piece := Piece.Z, rot := 0, col := 5 })) ∧
-    (reservoirSpreadCarrier ((T.draw Piece.Z).draw Piece.S)
-       (Placement.applyStep GameConfig.standard
-         (Placement.applyStep GameConfig.standard
-           (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-           { piece := Piece.Z, rot := 0, col := 5 })
-         { piece := Piece.S, rot := 0, col := 2 }) ∧
-     ¬ Board.isLost GameConfig.standard
-       (Placement.applyStep GameConfig.standard
-         (Placement.applyStep GameConfig.standard
-           (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-           { piece := Piece.Z, rot := 0, col := 5 })
-         { piece := Piece.S, rot := 0, col := 2 })) ∧
-    (reservoirSpreadCarrier (((T.draw Piece.I).draw Piece.S).draw Piece.Z)
-       (Placement.applyStep GameConfig.standard
-         (Placement.applyStep GameConfig.standard
-           (Placement.applyStep GameConfig.standard
-             (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-             { piece := Piece.I, rot := 1, col := 0 })
-           { piece := Piece.S, rot := 0, col := 2 })
-         { piece := Piece.Z, rot := 0, col := 5 }) ∧
-     ¬ Board.isLost GameConfig.standard
-       (Placement.applyStep GameConfig.standard
-         (Placement.applyStep GameConfig.standard
-           (Placement.applyStep GameConfig.standard
-             (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-             { piece := Piece.I, rot := 1, col := 0 })
-           { piece := Piece.S, rot := 0, col := 2 })
-         { piece := Piece.Z, rot := 0, col := 5 })) ∧
-    (reservoirSpreadCarrier (((T.draw Piece.I).draw Piece.Z).draw Piece.S)
-       (Placement.applyStep GameConfig.standard
-         (Placement.applyStep GameConfig.standard
-           (Placement.applyStep GameConfig.standard
-             (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-             { piece := Piece.I, rot := 1, col := 0 })
-           { piece := Piece.Z, rot := 0, col := 5 })
-         { piece := Piece.S, rot := 0, col := 2 }) ∧
-     ¬ Board.isLost GameConfig.standard
-       (Placement.applyStep GameConfig.standard
-         (Placement.applyStep GameConfig.standard
-           (Placement.applyStep GameConfig.standard
-             (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-             { piece := Piece.I, rot := 1, col := 0 })
-           { piece := Piece.Z, rot := 0, col := 5 })
-         { piece := Piece.S, rot := 0, col := 2 })) := by
-  exact ⟨reservoirDoubleSZSurface_SZ_burst_carrier_safe (T := T) (base := base) hSZ,
-         reservoirDoubleSZSurface_ZS_burst_carrier_safe (T := T) (base := base) hZS,
-         reservoirDoubleSZSurface_vertI_then_SZ_burst_carrier_safe (T := T) (base := base) hbase hISZ,
-         reservoirDoubleSZSurface_vertI_then_ZS_burst_carrier_safe (T := T) (base := base) hbase hIZS⟩
-
 /-- **A flat `O` slipped in before the regulator drain still exits into the carrier** (iter540). The
 first genuine interleaved-filler half-cycle on the double-valley surface: the adversary parks a flat
 `O` on the lip-shelf (columns `4, 5`) BEFORE delivering the once-per-bag regulator `I`, and the
@@ -30553,38 +24856,5 @@ theorem reservoirDoubleSZSurface_O_lipShelf_then_drain {T : Bag} {base : ℕ}
   reservoirSpreadCarrier_vertI_drain_cap (T := T.draw Piece.O)
     (reservoirDoubleSZSurface_O_lipShelf_spreadBandAt base
       (by have hr : GameConfig.standard.rows = 20 := rfl; omega)) hfloor hcap
-
-/-- **Survival face of the `O`-before-`I` interleaved half-cycle.** The `_safe` companion of
-`reservoirDoubleSZSurface_O_lipShelf_then_drain` (iter540): the very same valid `I`-drain after the
-lip-shelf `O` not only re-enters `reservoirSpreadCarrier ((T.draw O).draw I)` but lands on a board
-that has NOT topped out. The endpoint `¬ isLost` is read straight off carrier membership via
-`reservoirSpreadCarrier_not_isLost` (carrier height ≤ rows, hence below the ceiling), the established
-`_safe`-face pattern used throughout the burst certificates. This packages the interleaved
-filler-then-drain crossing as a survival certificate: whenever the adversary slips a flat `O` ahead
-of the once-per-bag regulator, there is a concrete valid drain that both stays in the carrier and
-keeps the game alive.
-
-Honest caveat (unchanged from iter540): this does NOT close crux #66 and #72. It certifies survival
-for ONE filler (`O`) interleaved before the drain; the `O` lip-shelf still breaks both staircase
-lips, so re-seating any `S` or `Z` still owed on a freshly re-established surface after this drain
-remains the open content, as does the all-orders bag closure. -/
-theorem reservoirDoubleSZSurface_O_lipShelf_then_drain_safe {T : Bag} {base : ℕ}
-    (hfloor : 4 ≤ base) (hcap : base + 3 ≤ 16) :
-    ∃ plI : Placement, plI.piece = Piece.I ∧ plI.Valid GameConfig.standard ∧
-      reservoirSpreadCarrier ((T.draw Piece.O).draw Piece.I)
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard
-            (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-            { piece := Piece.O, rot := 0, col := 4 })
-          plI) ∧
-      ¬ Board.isLost GameConfig.standard
-        (Placement.applyStep GameConfig.standard
-          (Placement.applyStep GameConfig.standard
-            (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
-            { piece := Piece.O, rot := 0, col := 4 })
-          plI) := by
-  obtain ⟨plI, hpiece, hvalid, hcarrier⟩ :=
-    reservoirDoubleSZSurface_O_lipShelf_then_drain (T := T) (base := base) hfloor hcap
-  exact ⟨plI, hpiece, hvalid, hcarrier, reservoirSpreadCarrier_not_isLost _ _ hcarrier⟩
 
 end Tetris
