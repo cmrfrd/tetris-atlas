@@ -26279,6 +26279,44 @@ theorem isFlatFrontBandAt_flatFiller_then_notchPairs_JZLS {s base : ℕ} {c : �
   exact ⟨pls, c', hforall, hlo, hhi,
     isFlatFrontBandAt_JZ_then_LS hbn hs (by omega) (by omega)⟩
 
+/-- **Full reversed-notch-order single-layer bag cycle: fillers, both notch pairs, then one drain**
+(iter582). The reversed-notch-order mirror of `isFlatFrontBandAt_flatFiller_then_notchPairs_drain`
+(iter571): cap iter581 with the once-per-bag vertical-`I` drain. From a flat-front band at floor
+`base`, lay any adversarial order of strictly-flat fillers (`O`/`T`/`L`/`J`) advancing the front to
+`c'`, route both owed notch pieces in the reversed pair order (`J`@`c'`, `Z`@`c'`, `L`@`(c'+3)`,
+`S`@`(c'+3)`), then drop the vertical `I` into the reserved well at column `0` — clearing four rows and
+landing in a spread band at floor `base - 4`. With iter571 the whole non-`I` bag content now drains to
+the same `base - 4` floor regardless of which notch pair the adversary delivers first, the net `-4`
+descent banked either way. The honest caveats are exactly the open content: it bakes in the
+fillers-before-notches, partner-before-notch (`L`-before-`S`, `J`-before-`Z`), drain-last schedule, so
+it does not settle the adversarial case where the `I` is drawn first or mid-bag, nor the column-width
+limit that forces a phase-aware mid-bag drain. Those are the obstructions cruxes #66 and #72 still
+demand. `TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_flatFiller_then_notchPairs_JZLS_drain {s base : ℕ} {c : ℕ} {b : Board}
+    {ps : List Piece}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
+    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
+    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
+    ∃ (pls : List Placement) (c' : ℕ),
+      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
+      c ≤ c' ∧ c' ≤ c + 3 * ps.length ∧
+      Board.IsSpreadBoundedRWSkylineAt GameConfig.standard s (base - 4)
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard
+                (Placement.applyStep GameConfig.standard
+                  (pls.foldl (Placement.applyStep GameConfig.standard) b)
+                  { piece := Piece.J, rot := 0, col := c' })
+                { piece := Piece.Z, rot := 0, col := c' })
+              { piece := Piece.L, rot := 0, col := c' + 3 })
+            { piece := Piece.S, rot := 0, col := c' + 3 })
+          { piece := Piece.I, rot := 1, col := 0 }) := by
+  obtain ⟨pls, c', hforall, hlo, hhi, hbn⟩ :=
+    isFlatFrontBandAt_flatFiller_then_notchPairs_JZLS hb hs hc0 hmem hroom
+  exact ⟨pls, c', hforall, hlo, hhi,
+    isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain hbn hbase4⟩
+
 /-- **Full favorable-order single-layer bag cycle: fillers, both notch pairs, then one drain**
 (iter571). Cap iter570 with the once-per-bag vertical-`I` drain: from a flat-front band at floor
 `base`, lay any adversarial order of strictly-flat fillers (`O`/`T`/`L`/`J`) advancing the front to
