@@ -20337,6 +20337,21 @@ theorem reservoirDoubleSZSurface_Z_valley2_preserves_valley1 (base : ℕ) :
     (by simp [reservoirDoubleSZSurface]) (by simp [reservoirDoubleSZSurface])
     (by decide) (by decide) (by decide) (by decide) (by decide)
 
+/-- **Reserved well survives the first staircase `Z` landing — the order-mirror frame companion.**
+The `Z`-first analogue of `reservoirDoubleSZSurface_S_valley1_preserves_well`: the valley2 `Z` move
+`{Z, rot 0, col 5}` dodges column `0`, so the reserved well stays empty (`colHeight … 0 = 0`) on the
+post-move board. Paired with `reservoirDoubleSZSurface_Z_valley2_preserves_valley1` this certifies
+that opening the bag with `Z` leaves BOTH structural features a follow-on `S` needs — an empty well
+and a pristine valley1 — so the second staircase can seat into valley1 with the same frame the
+landing lemmas demand, and the once-per-bag `I` still has its drain column. -/
+theorem reservoirDoubleSZSurface_Z_valley2_preserves_well (base : ℕ) :
+    Board.colHeight (Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
+        { piece := Piece.Z, rot := 0, col := 5 }) 0 = 0 := by
+  rw [Board.colHeight_applyStep_skyline_eq_of_avoid_well (w := 0) (m := 0)
+      (by decide) (by decide) (reservoirDoubleSZSurface_well base) (by decide) (by decide),
+    reservoirDoubleSZSurface_well]
+
 /-- **The post-S board stays a spread-2 band off the well.** After the valley1 `S` move
 `{S, rot 0, col 2}` (a valid S-notch placement on the right lip of valley1 — `h 2 = h 3 = base`,
 `h 4 = base + 1` — rewritten to a skyline by `applyStep_S_skyline_noclear`), every working column
