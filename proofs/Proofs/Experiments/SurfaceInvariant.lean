@@ -25700,6 +25700,37 @@ theorem isFlatFrontBandAt_notchPairs_drain_safe {c s base : ℕ} {b : Board}
     (Board.isSpreadBoundedRWSkyline_of_isSpreadBoundedRWSkylineAt
       (isFlatFrontBandAt_notchPairs_drain hb hs hc0 hc5 hbase4))
 
+/-- **Tight height cap on the both-notch-pairs-then-drain endpoint** (iter568). The notch-side
+analogue of the flat-filler drain height cap `isFlatFrontBandAt_flatFiller_fill_list_drain_height`
+(iter516), and the height-ledger entry completing the notch-pairs-then-drain trio (drain, iter566;
+prefix safety, iter567; this height cap). After routing the two adversarially-owed notch pieces
+through their `L`/`J`-manufactured valleys (`L@c, S@c, J@(c+3), Z@(c+3)`) and dropping the once-per-bag
+regulator `I` into the reserved well at column `0`, the resulting surface has every column capped at
+`base - 4 + s` — the post-drain floor `base - 4` plus the band spread `s`. The bound reads straight
+off the post-drain spread band of `isFlatFrontBandAt_notchPairs_drain` (iter566) via
+`maxColHeight_le_of_isSpreadBoundedRWSkylineAt`. Carrying an explicit `maxColHeight` bound (not merely
+the `¬ isLost` ceiling) is what a bounded-carrier height accounting needs to chain the notch half-cycle
+against the flat-filler half-cycle (iter516) without the cap drifting upward across a bag. It still
+says nothing about adversarial interleaving of the two halves against one shared drain, nor about a
+notch drawn before its paired filler; the every-order per-bag raise-versus-drain balance is the
+bag-phase closure #66 and #72 still demand. `TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_notchPairs_drain_height {c s base : ℕ} {b : Board}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
+    (hc0 : 0 < c) (hc5 : c + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
+    Board.maxColHeight GameConfig.standard
+      (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard b
+                { piece := Piece.L, rot := 0, col := c })
+              { piece := Piece.S, rot := 0, col := c })
+            { piece := Piece.J, rot := 0, col := c + 3 })
+          { piece := Piece.Z, rot := 0, col := c + 3 })
+        { piece := Piece.I, rot := 1, col := 0 }) ≤ base - 4 + s :=
+  Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt
+    (isFlatFrontBandAt_notchPairs_drain hb hs hc0 hc5 hbase4)
+
 /-- **A full layer of flat fillers fits and marches the front, in any order** (iter511). Tightens
 the room budget of `isFlatFrontBandAt_nonSZ_fill_list` (iter482) by excluding the width-four
 horizontal `I`: a run `ps` of strictly-flat fillers (each `O`, `T`, `L`, or `J`, advancing the front
