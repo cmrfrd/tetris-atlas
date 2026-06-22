@@ -25348,6 +25348,40 @@ theorem isFlatFrontBandAt_JZ_then_LS {c s base : ℕ} {b : Board}
   have h2 := isFlatFrontBandAt_LS_step h1 hs (by omega) (by omega)
   exact h2
 
+/-- **The reversed notch-pair order, then the regulator drain, also nets a four-row descent**
+(iter577). The reversed-order analogue of `isFlatFrontBandAt_notchPairs_drain` (iter566), built on
+the reversed pair-order block `isFlatFrontBandAt_JZ_then_LS` (iter576) instead of the favorable
+`isFlatFrontBandAt_LS_then_JZ` (iter557). When the adversary delivers its `Z`-notch pair before its
+`S`-notch pair, the strategy spends the bag's `J` to re-dig the single-step `Z`-notch and seats the
+owed `Z` (front `c → c+3`), then spends the `L` for the `S`-notch and seats the owed `S`
+(front `c+3 → c+6`), the surface staying a flat-front band at floor `base` throughout (iter576) — and
+then, since the floor has built to at least four (`4 ≤ base`), drops the once-per-bag vertical `I` into
+the reserved well at column `0`, clearing the bottom four rows and settling into a spread band at floor
+`base - 4` (`isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain`, iter412). Together with
+iter566 the regulator drain now caps BOTH notch-pair orders at the same `base - 4` floor, so the
+bag-phase ledger keeps its net-(-4) descent regardless of which notch pair the adversary draws first.
+Honest caveats: it still bakes in the `L`-before-`S` and `J`-before-`Z` partner-before-notch order
+WITHIN each pair, and drains the four notch pieces against their own once-per-bag `I` rather than
+interleaving them with the flat fillers against one shared drain; the within-pair reversal and the
+every-order raise-versus-drain balance are the bag-phase closure #66 and #72 still demand.
+`TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_JZ_then_LS_drain {c s base : ℕ} {b : Board}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
+    (hc0 : 0 < c) (hc5 : c + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
+    Board.IsSpreadBoundedRWSkylineAt GameConfig.standard s (base - 4)
+      (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard b
+                { piece := Piece.J, rot := 0, col := c })
+              { piece := Piece.Z, rot := 0, col := c })
+            { piece := Piece.L, rot := 0, col := c + 3 })
+          { piece := Piece.S, rot := 0, col := c + 3 })
+        { piece := Piece.I, rot := 1, col := 0 }) :=
+  isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain
+    (isFlatFrontBandAt_JZ_then_LS hb hs hc0 hc5) hbase4
+
 /-- **The owed `S`, paired behind its `L`, closes the master carrier at an arbitrary fill front**
 (iter561). The flat-front-band, arbitrary-`c` lift of `reservoirSpreadCarrier_flat_LS_step` (iter518),
 which routed the `L`-then-`S` notch pair only on the special level reset surface (front pinned at
