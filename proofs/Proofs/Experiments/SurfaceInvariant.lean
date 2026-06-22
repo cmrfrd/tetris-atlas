@@ -25606,6 +25606,43 @@ theorem reservoirSpreadCarrier_flatFront_notchPairs_step_safe {T : Bag} {b : Boa
   exact reservoirSpreadCarrier_of_isFlatFrontBandAt
     (isFlatFrontBandAt_LS_then_JZ hb hs hc0 hc5) hledger
 
+/-- **Both notch pairs, then the regulator drain, net a four-row descent** (iter566). The notch-side
+companion of the flat-filler fill-then-drain half-cycle `isFlatFrontBandAt_flatFiller_fill_list_drain`
+(iter514). Where that lemma marched a run of strictly-flat fillers (`O`, `T`, `L`, `J`) across one
+layer and then drained, this one absorbs the two adversarially-owed notch pieces `S` and `Z` via
+their manufactured-valley pairings — spend the bag's `L` to re-dig the single-step `S`-notch and seat
+the owed `S` (front `c → c+3`), then spend the bag's `J` for the `Z`-notch and seat the owed `Z`
+(front `c+3 → c+6`), the surface staying a flat-front band at floor `base` throughout
+(`isFlatFrontBandAt_LS_then_JZ`, iter557) — and then, since the floor has built to at least four
+(`4 ≤ base`), drops the once-per-bag vertical `I` into the reserved well at column `0`, clearing the
+bottom four rows and settling the surface into a spread band at floor `base - 4`
+(`isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain`, iter412). This is the four-notch-then-
+drain half of the per-bag cycle, complementary to iter514's flat-filler half: between the two, a whole
+seven-bag (two notch pieces routed through their pairings, the flat fillers `O`/`T` and the remaining
+`L`/`J` tiling the layer, and the single `I` regulator) is covered piece-for-piece in the favorable
+arrangement. The honest caveats are unchanged and exactly the open content: this bakes in the
+`L`-before-`S` and `J`-before-`Z` partner-before-notch order and the fillers-versus-notches split, so
+it does not by itself settle the adversarial case where an `S` or `Z` is drawn before its paired
+`L`/`J`, nor does it interleave the two halves against a single shared drain; the every-order per-bag
+raise-versus-drain balance is the bag-phase closure #66 and #72 still demand. `TetrisSolvableValid` is
+NOT proven. -/
+theorem isFlatFrontBandAt_notchPairs_drain {c s base : ℕ} {b : Board}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
+    (hc0 : 0 < c) (hc5 : c + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
+    Board.IsSpreadBoundedRWSkylineAt GameConfig.standard s (base - 4)
+      (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard b
+                { piece := Piece.L, rot := 0, col := c })
+              { piece := Piece.S, rot := 0, col := c })
+            { piece := Piece.J, rot := 0, col := c + 3 })
+          { piece := Piece.Z, rot := 0, col := c + 3 })
+        { piece := Piece.I, rot := 1, col := 0 }) :=
+  isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain
+    (isFlatFrontBandAt_LS_then_JZ hb hs hc0 hc5) hbase4
+
 /-- **A full layer of flat fillers fits and marches the front, in any order** (iter511). Tightens
 the room budget of `isFlatFrontBandAt_nonSZ_fill_list` (iter482) by excluding the width-four
 horizontal `I`: a run `ps` of strictly-flat fillers (each `O`, `T`, `L`, or `J`, advancing the front
