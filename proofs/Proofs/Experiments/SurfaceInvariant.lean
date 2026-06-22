@@ -25511,6 +25511,51 @@ theorem isFlatFrontBandAt_JZ_step_safe {c s base : ℕ} {b : Board}
   · exact isFlatFrontBandAt_not_isLost
       (isFlatFrontBandAt_JZ_step ⟨h, rfl, hw0, hband, hcap, hflat⟩ hs hc0 hc2)
 
+/-- **The four-piece notch block survives at every intermediate placement** (iter564). The per-prefix
+transient-survival certificate for the both-notch-pairs front step
+`isFlatFrontBandAt_LS_then_JZ` (iter557) / `reservoirSpreadCarrier_flatFront_notchPairs_step`
+(iter563): all FOUR boards the adversary's clock passes through as the bag feeds its `L`, `S`, `J`, `Z`
+into the working front — after the `L` digs the `S`-notch, after the owed `S` drops in, after the `J`
+digs the `Z`-notch at the advanced front `c + 3`, and after the owed `Z` drops in — keep every cell
+strictly under the `rows` ceiling, so the game is not lost at any of the four steps. It is the clean
+composition of the two pair-survival certificates: `isFlatFrontBandAt_LS_step_safe` (iter558) certifies
+the first two boards directly from the band cap, then `isFlatFrontBandAt_LS_step` (iter555) carries the
+band forward to front `c + 3`, on which `isFlatFrontBandAt_JZ_step_safe` (iter559) certifies the last
+two. Like its two halves, the not-lost bounds are order-INDEPENDENT pure height facts (each board's
+top stays under `base + s ≤ rows`); the LS-before-JZ, partner-before-notch arrangement is the
+placement SCHEDULE the band shape uses, not a constraint on the adversary's height safety. Paired with
+iter563's carrier re-entry this delivers both faces a per-bag survival schedule consumes at the
+four-piece notch block: the destination carrier AND the transient safety of every drop in between.
+What stays open is the every-order availability of a drain before the limit and the bag-level
+raise/drain balance — crux #66 and #72 remain open and `TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_LS_then_JZ_safe {c s base : ℕ} {b : Board}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
+    (hc0 : 0 < c) (hc5 : c + 5 < GameConfig.standard.cols) :
+    ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c }) ∧
+      ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c })
+          { piece := Piece.S, rot := 0, col := c }) ∧
+      ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c })
+            { piece := Piece.S, rot := 0, col := c })
+          { piece := Piece.J, rot := 0, col := c + 3 }) ∧
+      ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c })
+              { piece := Piece.S, rot := 0, col := c })
+            { piece := Piece.J, rot := 0, col := c + 3 })
+          { piece := Piece.Z, rot := 0, col := c + 3 }) := by
+  obtain ⟨hL, hLS⟩ := isFlatFrontBandAt_LS_step_safe hb hs hc0 (by omega)
+  have hb2 := isFlatFrontBandAt_LS_step hb hs hc0 (by omega)
+  obtain ⟨hJ, hJZ⟩ := isFlatFrontBandAt_JZ_step_safe hb2 hs (by omega) (by omega)
+  exact ⟨hL, hLS, hJ, hJZ⟩
+
 /-- **A full layer of flat fillers fits and marches the front, in any order** (iter511). Tightens
 the room budget of `isFlatFrontBandAt_nonSZ_fill_list` (iter482) by excluding the width-four
 horizontal `I`: a run `ps` of strictly-flat fillers (each `O`, `T`, `L`, or `J`, advancing the front
