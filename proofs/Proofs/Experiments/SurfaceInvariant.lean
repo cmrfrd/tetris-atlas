@@ -8801,6 +8801,60 @@ theorem applyStep_T_skyline_preserves_both_notches {cfg : GameConfig} {h : ℕ �
   · rw [f1, f2, heqZ]
   · rw [f0, f1, hstepZ]
 
+/-- **An intervening `L` (in its flat-filler role) keeps BOTH standing notches — the two-valley
+fill-phase frame for the `L` filler.** The `L` analogue of `applyStep_O_skyline_preserves_both_notches`
+and friends: while both an S-notch (on `sc, sc+1, sc+2`) and a Z-notch (on `zc, zc+1, zc+2`) sit
+reserved, a flat `L` (rot 0) played on a separate flat triple `c, c+1, c+2` (over a reserved empty well
+`w`) leaves both notch profiles intact. Both staircases are separated from the three-column `L` window
+(`hsepS`, `hsepZ` use the triple bound `_ + 2 < _`), so the `L` touches neither, and the conclusion is
+stated in post-`L` notch shape: on the landed board `b`, `colHeight b sc = colHeight b (sc+1)`,
+`colHeight b (sc+2) = colHeight b sc + 1` (S-notch) and `colHeight b (zc+1) = colHeight b (zc+2)`,
+`colHeight b zc = colHeight b (zc+1) + 1` (Z-notch). `L` is *dual-use* — it can either dig a fresh
+S-notch (the digger role, `applyStep_L_skyline_flat_isSnotchSkyline`) or, as here, act as a flat filler
+elsewhere on the band; this lemma covers the scheduler's choice to spend the bag's `L` as a spacer
+while both reserved notches already stand, leaving them untouched. It does NOT close the every-order
+obligation — crux #66/#72 remains open and `TetrisSolvableValid` is NOT proven. Proof: apply the
+single-notch `L` frame twice (once per triple) to read each notch column's height back to its pre-`L`
+value, then close the four shape relations by the pre-`L` notch hypotheses. -/
+theorem applyStep_L_skyline_preserves_both_notches {cfg : GameConfig} {h : ℕ → ℕ}
+    {c sc zc w : ℕ}
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
+    (heqL1 : h (c + 1) = h c) (heqL2 : h (c + 2) = h c)
+    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
+    (hw0 : h w = 0)
+    (hsc : sc < cfg.cols) (hsc1 : sc + 1 < cfg.cols) (hsc2 : sc + 2 < cfg.cols)
+    (heqS : h sc = h (sc + 1)) (hstepS : h (sc + 2) = h sc + 1)
+    (hzc : zc < cfg.cols) (hzc1 : zc + 1 < cfg.cols) (hzc2 : zc + 2 < cfg.cols)
+    (heqZ : h (zc + 1) = h (zc + 2)) (hstepZ : h zc = h (zc + 1) + 1)
+    (hsepS : sc + 2 < c ∨ c + 2 < sc) (hsepZ : zc + 2 < c ∨ c + 2 < zc) :
+    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+        { piece := Piece.L, rot := 0, col := c }) sc
+      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+        { piece := Piece.L, rot := 0, col := c }) (sc + 1) ∧
+    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+        { piece := Piece.L, rot := 0, col := c }) (sc + 2)
+      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+        { piece := Piece.L, rot := 0, col := c }) sc + 1 ∧
+    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+        { piece := Piece.L, rot := 0, col := c }) (zc + 1)
+      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+        { piece := Piece.L, rot := 0, col := c }) (zc + 2) ∧
+    Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+        { piece := Piece.L, rot := 0, col := c }) zc
+      = Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+        { piece := Piece.L, rot := 0, col := c }) (zc + 1) + 1 := by
+  obtain ⟨e0, e1, e2⟩ :=
+    colHeight_applyStep_L_skyline_preserves_notch hc hc1 hc2 heqL1 heqL2
+      hw hwc hwc1 hwc2 hw0 hsc hsc1 hsc2 hsepS
+  obtain ⟨f0, f1, f2⟩ :=
+    colHeight_applyStep_L_skyline_preserves_notch hc hc1 hc2 heqL1 heqL2
+      hw hwc hwc1 hwc2 hw0 hzc hzc1 hzc2 hsepZ
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · rw [e0, e1, heqS]
+  · rw [e2, e0, hstepS]
+  · rw [f1, f2, heqZ]
+  · rw [f0, f1, hstepZ]
+
 /-- **An intervening `O` keeps both the band and a standing notch — the band-level threading frame.**
 The colHeight frame `colHeight_applyStep_O_skyline_preserves_notch` shows an intervening `O` leaves a
 reserved notch's three heights fixed; this lemma upgrades that to the band vocabulary the carrier
