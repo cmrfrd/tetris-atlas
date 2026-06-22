@@ -9598,6 +9598,63 @@ theorem isSpreadBoundedRWSkylineAt_applyStep_flatFiller_band_preserves_notch {cf
   · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_J_band_preserves_notch hc hc1 hc2 heq1 heq2
       hw hwc hwc1 hwc2 hw0 hband hfit hslack hnc hnc1 hnc2 (by omega)⟩
 
+/-- **Every flat-filler — `O`, horizontal `I`, `T`, `L`, `J` — admits a band-and-BOTH-notches-preserving
+drop on a flat quad: the complete two-notch flat-filler dispatcher.** The two-notch upgrade of
+`isSpreadBoundedRWSkylineAt_applyStep_flatFiller_band_preserves_notch`, unifying the five per-piece
+two-notch band frames (`O`, horizontal-`I`, `T`, `L`, `J`) behind one `Piece` variable. On an in-band
+flat run of width four `c .. c+3` (`heq1, heq2, heq3`, with the tall print fitting under the band top
+via `h c + 2 ≤ base + s`) that is column-disjoint from TWO reserved notch windows — an S-notch on
+`sc, sc+1, sc+2` and a Z-notch on `zc, zc+1, zc+2` (`hsepS`, `hsepZ : _ + 2 < c ∨ c + 3 < _`) — whichever
+flat filler the adversary draws admits a rotation whose no-clear drop both re-enters
+`IsSpreadBoundedRWSkylineAt cfg s base` AND leaves ALL SIX notch heights untouched. This is exactly the
+mid-bag invariant a per-bag site-regeneration argument threads: between a notch's producer and its
+deferred consumer, ANY interposed flat filler keeps both owed landing sites open while staying
+height-bounded. The flat quad is the strongest shape hypothesis and the quad separation the strongest
+disjointness, so each narrower piece reuses them through omega: the pair (`O`) and triple (`T`, `L`, `J`)
+fits and separations all follow, and the horizontal-`I` keeps the quad. It does NOT close the every-order
+obligation — crux #66/#72 remains open and `TetrisSolvableValid` is NOT proven. Proof: case on `hp` and
+discharge each branch with its two-notch band frame, weakening the fit and both separations by omega
+where the piece is narrower. -/
+theorem isSpreadBoundedRWSkylineAt_applyStep_flatFiller_band_preserves_both_notches {cfg : GameConfig}
+    {h : ℕ → ℕ} {base s c w sc zc : ℕ} {p : Piece}
+    (hp : p = Piece.O ∨ p = Piece.I ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J)
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols) (hc3 : c + 3 < cfg.cols)
+    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c) (heq3 : h (c + 3) = h c)
+    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2) (hwc3 : w ≠ c + 3)
+    (hw0 : h w = 0)
+    (hband : ∀ j < cfg.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + s)
+    (hfit : h c + 2 ≤ base + s) (hslack : base + s ≤ cfg.rows)
+    (hsc : sc < cfg.cols) (hsc1 : sc + 1 < cfg.cols) (hsc2 : sc + 2 < cfg.cols)
+    (hzc : zc < cfg.cols) (hzc1 : zc + 1 < cfg.cols) (hzc2 : zc + 2 < cfg.cols)
+    (hsepS : sc + 2 < c ∨ c + 3 < sc) (hsepZ : zc + 2 < c ∨ c + 3 < zc) :
+    ∃ rot : Rotation,
+      IsSpreadBoundedRWSkylineAt cfg s base
+          (Placement.applyStep cfg (skyline cfg h) { piece := p, rot := rot, col := c }) ∧
+        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+            { piece := p, rot := rot, col := c }) sc = h sc ∧
+        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+            { piece := p, rot := rot, col := c }) (sc + 1) = h (sc + 1) ∧
+        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+            { piece := p, rot := rot, col := c }) (sc + 2) = h (sc + 2) ∧
+        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+            { piece := p, rot := rot, col := c }) zc = h zc ∧
+        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+            { piece := p, rot := rot, col := c }) (zc + 1) = h (zc + 1) ∧
+        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+            { piece := p, rot := rot, col := c }) (zc + 2) = h (zc + 2) := by
+  rcases hp with rfl | rfl | rfl | rfl | rfl
+  · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_O_band_preserves_both_notches hc hc1 heq1.symm
+      hw hwc hwc1 hw0 hband hfit hslack hsc hsc1 hsc2 hzc hzc1 hzc2 (by omega) (by omega)⟩
+  · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_horizI_band_preserves_both_notches hc hc1 hc2 hc3
+      heq1 heq2 heq3 hw hwc hwc1 hwc2 hwc3 hw0 hband (by omega) hslack hsc hsc1 hsc2 hzc hzc1 hzc2
+      hsepS hsepZ⟩
+  · exact ⟨2, isSpreadBoundedRWSkylineAt_applyStep_T_band_preserves_both_notches hc hc1 hc2 heq1 heq2
+      hw hwc hwc1 hwc2 hw0 hband hfit hslack hsc hsc1 hsc2 hzc hzc1 hzc2 (by omega) (by omega)⟩
+  · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_L_band_preserves_both_notches hc hc1 hc2 heq1 heq2
+      hw hwc hwc1 hwc2 hw0 hband hfit hslack hsc hsc1 hsc2 hzc hzc1 hzc2 (by omega) (by omega)⟩
+  · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_J_band_preserves_both_notches hc hc1 hc2 heq1 heq2
+      hw hwc hwc1 hwc2 hw0 hband hfit hslack hsc hsc1 hsc2 hzc hzc1 hzc2 (by omega) (by omega)⟩
+
 /-- **An owed staircase consumer — `S` or `Z` — admits a band-and-notch-preserving drop on its own
 notch: the consumer-side piece dispatcher.** This is the staircase counterpart of the flat-filler
 dispatcher, unifying the two notch consumers behind one `Piece` variable. Because `S` and `Z` consume
