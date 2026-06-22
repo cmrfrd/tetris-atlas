@@ -26770,6 +26770,49 @@ theorem isFlatFrontBandAt_flatFiller_then_notchPairs_JZLS_drain_safe {s base : �
           simp only [List.length_cons, List.length_nil]; omega)]
       exact hIsafe
 
+/-- **Flat fillers may sit BETWEEN the two notch pairs without leaving the flat-front band** (iter587).
+A new inter-pair interleaving relaxing the favorable-order whole-bag family
+(`isFlatFrontBandAt_LS_then_JZ`, iter557, which forces the two notch pairs to be adjacent): from a
+flat-front band at front `c`, the bag's `L`-then-`S` pair marches the front to `c + 3`
+(`isFlatFrontBandAt_LS_step`, iter555), then an arbitrary run `ps` of strictly-flat fillers
+(`O`, `T`, `L`, `J` — never `S`, `Z`, or the regulator `I`) marches the front rightward across the
+layer to some `c'` with `c + 3 ≤ c' ≤ c + 3 + 3·ps.length`
+(`isFlatFrontBandAt_flatFiller_fill_list`, iter511), and finally the bag's `J`-then-`Z` pair lands at
+the fresh front triple `(c', c'+1, c'+2)` to advance to `c' + 3` (`isFlatFrontBandAt_JZ_step`,
+iter556). The floor `base` stays pinned, the spread `s ≥ 3` is unchanged (each pair peaks at
+`base + 3 ≤ base + s`), the reserved well at column `0` is never touched, and each placement is valid
+and emitted in order (`List.Forall₂`). This relaxes the rigid "both pairs adjacent" schedule of
+iter557/iter570: the adversary may now deal the bag's flat fillers in the gap between the two
+staircase pairs, and the surface still re-lands a flat-front band ready for the once-per-bag `I`
+drain. Honest caveats unchanged: it still bakes in the `L`-before-`S`, `J`-before-`Z`, and
+`LS`-before-`JZ` orders (the digger precedes its owed staircase), so it does not cover the within-pair
+adversarial reversal, and it is a multi-piece edge, not the per-piece `hstep`. The every-order balance
+against the single shared `I` regulator remains the open closure; crux #66 and #72 stay open and
+`TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_LS_then_fillers_then_JZ {s base : ℕ} {c : ℕ} {b : Board}
+    {ps : List Piece}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
+    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
+    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) :
+    ∃ (pls : List Placement) (c' : ℕ),
+      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
+      c + 3 ≤ c' ∧ c' ≤ c + 3 + 3 * ps.length ∧
+      IsFlatFrontBandAt (c' + 3) s base
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (pls.foldl (Placement.applyStep GameConfig.standard)
+              (Placement.applyStep GameConfig.standard
+                (Placement.applyStep GameConfig.standard b
+                  { piece := Piece.L, rot := 0, col := c })
+                { piece := Piece.S, rot := 0, col := c }))
+            { piece := Piece.J, rot := 0, col := c' })
+          { piece := Piece.Z, rot := 0, col := c' }) := by
+  have hLS := isFlatFrontBandAt_LS_step hb hs hc0 (by omega)
+  obtain ⟨pls, c', hforall, hlo, hhi, hbn⟩ :=
+    isFlatFrontBandAt_flatFiller_fill_list ps hLS (by omega) (by omega) hmem (by omega)
+  exact ⟨pls, c', hforall, hlo, by omega,
+    isFlatFrontBandAt_JZ_step hbn hs (by omega) (by omega)⟩
+
 /-- **Pairing an owed `S` with a preceding `L` keeps the master carrier on a flat band** (iter518).
 The first carrier-level two-piece transition that absorbs an `S` hole-free without any pre-existing
 notch: on a band flat at `base` with the reserved well parked at column `0` and spread `s ≥ 3`, drop
