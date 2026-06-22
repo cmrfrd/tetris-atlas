@@ -24711,6 +24711,21 @@ theorem isFlatFrontBandAt_mono {c s s' base : ℕ} {b : Board}
   obtain ⟨hlo, hhi⟩ := hband j hj hj0
   exact ⟨hlo, by omega⟩
 
+/-- **Front-position monotonicity for the flat-front band.** The front index `c` only records HOW FAR
+the flat shelf reaches back: `IsFlatFrontBandAt c s base` asserts `h j = base` for every `c ≤ j <
+cols`. So retracting the claim to a LATER front `c' ≥ c` is a pure weakening — the shelf `[c', cols)`
+is a sub-interval of `[c, cols)`, every column of which is already pinned to `base`, while the well and
+band conjuncts (which never mention `c`) carry over unchanged. This is the fill-front dual of
+`isFlatRunReservoirAt_width_mono` (iter604): both discard a structural-extent claim to align two
+partially-filled surfaces at a common front before composing their fills, the bookkeeping a bag-phase
+schedule needs when independent fill segments end at different fronts. Enabling infrastructure, not the
+closure — crux #66/#72 remain open and `TetrisSolvableValid` is NOT yet proven. -/
+theorem isFlatFrontBandAt_front_mono {c c' s base : ℕ} {b : Board}
+    (hb : IsFlatFrontBandAt c s base b) (hcc' : c ≤ c') :
+    IsFlatFrontBandAt c' s base b := by
+  obtain ⟨h, rfl, hw0, hband, hcap, hflat⟩ := hb
+  exact ⟨h, rfl, hw0, hband, hcap, fun j hj hjcols => hflat j (le_trans hcc' hj) hjcols⟩
+
 /-- **Every non-`S` non-`Z` piece advances the fill front and stays a flat-front band** (iter480).
 The chainable companion of `reservoirSpreadCarrier_flatFront_nonSZ_fill_step` (iter422): where that
 dispatcher forgets each landing to the spread carrier, this one keeps the richer
