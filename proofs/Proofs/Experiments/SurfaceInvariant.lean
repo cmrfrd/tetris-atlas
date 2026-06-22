@@ -15634,6 +15634,75 @@ theorem isSpreadBoundedRWSkyline_all7_valley_of_pocket_Snotch_Znotch_not_isLost
       hw hw0 hspread hband hslack p
   exact ⟨pl, hpiece, hvalid, not_isLost_of_isSpreadBoundedRWSkyline hband'⟩
 
+/-- **The two-notch valley menu lands every piece at a PINNED floor.** The floor-magnitude-tracking
+upgrade of `isSpreadBoundedRWSkyline_all7_valley_of_pocket_Snotch_Znotch`: same single-board geometry
+(reserved well `w`, width-four level pocket at `c..c+3`, ascending `S`-notch at `d..d+2`, descending
+`Z`-notch at `e..e+2`, all sitting at `floor`), but the landing board is reported in the
+floor-PINNED predicate `IsSpreadBoundedRWSkylineAt cfg spread floor` rather than the existential
+`IsSpreadBoundedRWSkyline`. Dispatch is the pinned per-piece atom set: O/I/T/L/J seat in the level
+pocket via the `..._flat_at` atoms, `S` in its ascending notch and `Z` in its descending notch via the
+`..._notch_at` atoms — every one concluding at the SAME pinned floor, so the carrier ledger
+(`base + spread + T.card + 1 ≤ rows`) stays available across the step. This is the magnitude-tracking
+brick the iter603 frontier docstring flagged as missing: the existential menu plus the
+`isSpreadBoundedRWSkylineAt_of_isSpreadBoundedRWSkyline` bridge recover only floor EXISTENCE, losing
+the floor value the reservoir ledger needs. It is NOT the closure: it is a from-surface menu that
+still requires the caller to supply pocket + S-notch + Z-notch sites at the floor; cross-step
+site-regeneration and the all-orders per-bag accounting (crux #66/#72) remain open, and
+`TetrisSolvableValid` is NOT proven. No sorry. -/
+theorem isSpreadBoundedRWSkylineAt_all7_valley_of_pocket_Snotch_Znotch {cfg : GameConfig} {spread : ℕ}
+    {h : ℕ → ℕ} {floor w c d e : ℕ}
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols) (hc3 : c + 3 < cfg.cols)
+    (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2) (hwc3 : w ≠ c + 3)
+    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c) (heq3 : h (c + 3) = h c)
+    (hcfloor : h c = floor)
+    (hd : d < cfg.cols) (hd1 : d + 1 < cfg.cols) (hd2 : d + 2 < cfg.cols)
+    (hwd : w ≠ d) (hwd1 : w ≠ d + 1) (hwd2 : w ≠ d + 2)
+    (hSnotch : h d = h (d + 1) ∧ h (d + 2) = h d + 1 ∧ h d = floor)
+    (he : e < cfg.cols) (he1 : e + 1 < cfg.cols) (he2 : e + 2 < cfg.cols)
+    (hwe : w ≠ e) (hwe1 : w ≠ e + 1) (hwe2 : w ≠ e + 2)
+    (hZnotch : h (e + 1) = h (e + 2) ∧ h e = h (e + 1) + 1 ∧ h (e + 1) = floor)
+    (hw : w < cfg.cols) (hw0 : h w = 0) (hspread : 2 ≤ spread)
+    (hband : ∀ j < cfg.cols, j ≠ w → floor ≤ h j ∧ h j ≤ floor + spread)
+    (hslack : floor + spread ≤ cfg.rows)
+    (p : Piece) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧
+      IsSpreadBoundedRWSkylineAt cfg spread floor
+        (Placement.applyStep cfg (skyline cfg h) pl) := by
+  cases p with
+  | O =>
+    refine ⟨{ piece := Piece.O, rot := 0, col := c }, rfl, valid_O hc1, ?_⟩
+    exact isSpreadBoundedRWSkylineAt_applyStep_O_flat_at hc hc1 hw hwc hwc1 hw0
+      hcfloor (heq1.trans hcfloor) hband (le_refl floor) (by omega) hslack
+  | I =>
+    refine ⟨{ piece := Piece.I, rot := 0, col := c }, rfl, valid_horizI hc3, ?_⟩
+    exact isSpreadBoundedRWSkylineAt_applyStep_horizI_flat_at hc hc1 hc2 hc3 hw hwc hwc1 hwc2 hwc3 hw0
+      hcfloor (heq1.trans hcfloor) (heq2.trans hcfloor) (heq3.trans hcfloor) hband (le_refl floor)
+      (by omega) hslack
+  | T =>
+    refine ⟨{ piece := Piece.T, rot := 2, col := c }, rfl, valid_T hc2, ?_⟩
+    exact isSpreadBoundedRWSkylineAt_applyStep_T_flat_at hc hc1 hc2 hw hwc hwc1 hwc2 hw0
+      hcfloor (heq1.trans hcfloor) (heq2.trans hcfloor) hband (le_refl floor) (by omega) hslack
+  | L =>
+    refine ⟨{ piece := Piece.L, rot := 0, col := c }, rfl, valid_L hc2, ?_⟩
+    exact isSpreadBoundedRWSkylineAt_applyStep_L_flat_at hc hc1 hc2 hw hwc hwc1 hwc2 hw0
+      hcfloor (heq1.trans hcfloor) (heq2.trans hcfloor) hband (le_refl floor) (by omega) hslack
+  | J =>
+    refine ⟨{ piece := Piece.J, rot := 0, col := c }, rfl, valid_J hc2, ?_⟩
+    exact isSpreadBoundedRWSkylineAt_applyStep_J_flat_at hc hc1 hc2 hw hwc hwc1 hwc2 hw0
+      hcfloor (heq1.trans hcfloor) (heq2.trans hcfloor) hband (le_refl floor) (by omega) hslack
+  | S =>
+    obtain ⟨hSeq1, hSeq2, hSfloor⟩ := hSnotch
+    refine ⟨{ piece := Piece.S, rot := 0, col := d }, rfl, valid_S hd2, ?_⟩
+    exact isSpreadBoundedRWSkylineAt_applyStep_S_notch_at hd hd1 hd2 hw hwd hwd1 hwd2 hw0
+      hSfloor (hSeq1.symm.trans hSfloor) (by rw [hSeq2, hSfloor]) hband (le_refl floor) (by omega)
+      hslack
+  | Z =>
+    obtain ⟨hZeq1, hZeq2, hZfloor⟩ := hZnotch
+    refine ⟨{ piece := Piece.Z, rot := 0, col := e }, rfl, valid_Z he2, ?_⟩
+    exact isSpreadBoundedRWSkylineAt_applyStep_Z_notch_at he he1 he2 hw hwe hwe1 hwe2 hw0
+      (by rw [hZeq2, hZfloor]) hZfloor (hZeq1.symm.trans hZfloor) hband (le_refl floor) (by omega)
+      hslack
+
 /-- **The phase-conditional landing surface is realizable in ten standard columns.** A concrete
 witness that the single-notch carrier geometry — reserved well, ONE staircase notch, and a
 width-four level pocket — fits inside `GameConfig.standard`'s ten columns with room to spare. The
