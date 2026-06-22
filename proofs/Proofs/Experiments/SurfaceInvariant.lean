@@ -25387,6 +25387,53 @@ theorem reservoirSpreadCarrier_flatFront_JZ_step {T : Bag} {b : Board} {c s base
   exact reservoirSpreadCarrier_of_isFlatFrontBandAt
     (isFlatFrontBandAt_JZ_step hb hs hc0 hc2) hledger
 
+/-- **Both notch pairs, scheduled back to back, close the master carrier at an arbitrary fill front**
+(iter563). The carrier-vocabulary consolidation of `reservoirSpreadCarrier_flatFront_LS_step` (iter561)
+and `reservoirSpreadCarrier_flatFront_JZ_step` (iter562), standing to them exactly as the band-level
+`isFlatFrontBandAt_LS_then_JZ` (iter557) stands to iter555/iter556. From `IsFlatFrontBandAt c s base b`
+with spread `s ≥ 3`, a reserved well (`0 < c`), and room for both front triples (`c + 5 < cols`), spend
+the bag's `L`-then-`S` at the front triple `(c, c+1, c+2)` and then its `J`-then-`Z` at the next triple
+`(c+3, c+4, c+5)`: each pair re-digs its single-step notch and seats the owed staircase, marching the
+fill front `c → c + 6` while the floor `base` stays pinned and the spread `s` is unchanged (every pair
+peaks at `base + 3 ≤ base + s`). The endpoint band `IsFlatFrontBandAt (c+6) s base` is forgotten into
+`reservoirSpreadCarrier ((((T.draw L).draw S).draw J).draw Z)` by the front-agnostic membership bridge
+(`reservoirSpreadCarrier_of_isFlatFrontBandAt`, iter420) under the four-draw carrier ledger.
+
+This is the single carrier edge a per-bag schedule quotes to consume all four notch pieces of a bag as
+one block — alongside the strict flats `O, T` and the regulator `I` via the non-notch dispatcher
+(`reservoirSpreadCarrier_flatFront_nonSZ_fill_step`, iter422) — so one bag's six non-`I` pieces march
+the front by at most `4 × 3 = 12` before the once-per-bag `I` drains the floor back to a reset surface.
+Honest caveats unchanged: it bakes in the favorable arrangement `L`-before-`S`, `J`-before-`Z`, and
+`LS`-before-`JZ`, so it covers the orders where each notch is partnered behind its hole-maker, not the
+adversarial case where a notch is drawn first; it is a four-piece edge, not the per-piece carrier
+`hstep`. The every-order interleaving against the drain — and the richer all-7 carrier that regenerates
+the landing sites cross-step — remain the bag-phase closure #66 and #72 still demand.
+`TetrisSolvableValid` is NOT proven. -/
+theorem reservoirSpreadCarrier_flatFront_notchPairs_step {T : Bag} {b : Board} {c s base : ℕ}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
+    (hc0 : 0 < c) (hc5 : c + 5 < GameConfig.standard.cols)
+    (hledger : base + s + ((((T.draw Piece.L).draw Piece.S).draw Piece.J).draw Piece.Z).card + 1
+      ≤ GameConfig.standard.rows) :
+    ∃ pl1 : Placement, pl1.piece = Piece.L ∧ pl1.Valid GameConfig.standard ∧
+      ∃ pl2 : Placement, pl2.piece = Piece.S ∧ pl2.Valid GameConfig.standard ∧
+        ∃ pl3 : Placement, pl3.piece = Piece.J ∧ pl3.Valid GameConfig.standard ∧
+          ∃ pl4 : Placement, pl4.piece = Piece.Z ∧ pl4.Valid GameConfig.standard ∧
+            reservoirSpreadCarrier ((((T.draw Piece.L).draw Piece.S).draw Piece.J).draw Piece.Z)
+              (Placement.applyStep GameConfig.standard
+                (Placement.applyStep GameConfig.standard
+                  (Placement.applyStep GameConfig.standard
+                    (Placement.applyStep GameConfig.standard b
+                      { piece := Piece.L, rot := 0, col := c })
+                    { piece := Piece.S, rot := 0, col := c })
+                  { piece := Piece.J, rot := 0, col := c + 3 })
+                { piece := Piece.Z, rot := 0, col := c + 3 }) := by
+  refine ⟨{ piece := Piece.L, rot := 0, col := c }, rfl, Board.valid_L (by omega),
+    { piece := Piece.S, rot := 0, col := c }, rfl, Board.valid_S (by omega),
+    { piece := Piece.J, rot := 0, col := c + 3 }, rfl, Board.valid_J (by omega),
+    { piece := Piece.Z, rot := 0, col := c + 3 }, rfl, Board.valid_Z (by omega), ?_⟩
+  exact reservoirSpreadCarrier_of_isFlatFrontBandAt
+    (isFlatFrontBandAt_LS_then_JZ hb hs hc0 hc5) hledger
+
 /-- **The `L`-then-`S` front step survives at every intermediate placement** (iter558). The transient
 survival face of `isFlatFrontBandAt_LS_step` (iter555): not just the completed pair's endpoint band,
 but BOTH boards the adversary's clock passes through — the board after the `L` lands (an exposed
