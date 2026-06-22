@@ -26239,6 +26239,46 @@ theorem isFlatFrontBandAt_flatFiller_then_notchPairs {s base : ℕ} {c : ℕ} {b
   exact ⟨pls, c', hforall, hlo, hhi,
     isFlatFrontBandAt_LS_then_JZ hbn hs (by omega) (by omega)⟩
 
+/-- **A layer of flat fillers, then both owed notch pairs in the reversed order, stays a flat band**
+(iter581). The reversed-notch-order mirror of `isFlatFrontBandAt_flatFiller_then_notchPairs` (iter570):
+chains the same layer-tiling flat-filler fill list (`isFlatFrontBandAt_flatFiller_fill_list`, iter511)
+into the reversed-order both-notch-pairs block (`isFlatFrontBandAt_JZ_then_LS`, iter576) instead of the
+favorable `isFlatFrontBandAt_LS_then_JZ` (iter557). From `IsFlatFrontBandAt c s base b`, the adversary's
+chosen order of strictly-flat fillers `ps` (`O`/`T`/`L`/`J`, each advancing the front by at most three)
+marches the fill front to some `c'` with `c ≤ c' ≤ c + 3·|ps|`, the surface staying a flat band at floor
+`base`; then the two owed notch pieces route through their valleys in the reversed pair order
+(`J@c', Z@c', L@(c'+3), S@(c'+3)`), and the board lands an `IsFlatFrontBandAt (c'+6) s base` at the
+*same* floor `base`. With iter570 the whole non-`I` content of a bag now accumulates onto one flat band
+regardless of which notch pair the adversary delivers first, so the single once-per-bag `I` can drain it
+all at the end either way. The honest caveats are unchanged: it still bakes in the fillers-before-notches
+and partner-before-notch order (`L`-before-`S`, `J`-before-`Z` within each pair), and the combined
+front-advance can exhaust the ten-column width before the layer closes — which is exactly why the
+invariant must be bag-phase-aware and drain mid-bag rather than only at the end; the every-order per-bag
+raise-versus-drain balance is the bag-phase closure cruxes #66 and #72 still demand.
+`TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_flatFiller_then_notchPairs_JZLS {s base : ℕ} {c : ℕ} {b : Board}
+    {ps : List Piece}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
+    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
+    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) :
+    ∃ (pls : List Placement) (c' : ℕ),
+      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
+      c ≤ c' ∧ c' ≤ c + 3 * ps.length ∧
+      IsFlatFrontBandAt (c' + 6) s base
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard
+                (pls.foldl (Placement.applyStep GameConfig.standard) b)
+                { piece := Piece.J, rot := 0, col := c' })
+              { piece := Piece.Z, rot := 0, col := c' })
+            { piece := Piece.L, rot := 0, col := c' + 3 })
+          { piece := Piece.S, rot := 0, col := c' + 3 }) := by
+  obtain ⟨pls, c', hforall, hlo, hhi, hbn⟩ :=
+    isFlatFrontBandAt_flatFiller_fill_list ps hb (by omega) hc0 hmem (by omega)
+  exact ⟨pls, c', hforall, hlo, hhi,
+    isFlatFrontBandAt_JZ_then_LS hbn hs (by omega) (by omega)⟩
+
 /-- **Full favorable-order single-layer bag cycle: fillers, both notch pairs, then one drain**
 (iter571). Cap iter570 with the once-per-bag vertical-`I` drain: from a flat-front band at floor
 `base`, lay any adversarial order of strictly-flat fillers (`O`/`T`/`L`/`J`) advancing the front to
