@@ -25556,6 +25556,56 @@ theorem isFlatFrontBandAt_LS_then_JZ_safe {c s base : ℕ} {b : Board}
   obtain ⟨hJ, hJZ⟩ := isFlatFrontBandAt_JZ_step_safe hb2 hs (by omega) (by omega)
   exact ⟨hL, hLS, hJ, hJZ⟩
 
+/-- **The fully-certified four-piece notch block** (iter565). The single edge a per-bag survival
+schedule consumes at the favorable-order notch block: it fuses the carrier re-entry of
+`reservoirSpreadCarrier_flatFront_notchPairs_step` (iter563) with the per-prefix transient safety of
+`isFlatFrontBandAt_LS_then_JZ_safe` (iter564) into one statement. From a flat-front band at front `c`,
+scheduling the bag's `L`, `S`, `J`, `Z` into the working front — `L@c` digs the `S`-notch, the owed
+`S` drops in, `J@(c+3)` digs the `Z`-notch, the owed `Z` drops in — yields four valid placements, each
+of whose intermediate boards is certified NOT lost, and whose final board re-enters
+`reservoirSpreadCarrier` under the four-times-drawn bag. So the caller gets, in one move, the
+destination carrier AND the safety of every drop in between, with no per-piece re-derivation. The
+carrier face is delivered by `reservoirSpreadCarrier_of_isFlatFrontBandAt` (iter420) on the endpoint
+band `isFlatFrontBandAt_LS_then_JZ` (iter557); the four safety faces are exactly iter564's tuple. As in
+its two halves, this bakes in the LS-before-JZ, partner-before-notch placement SCHEDULE the flat-front
+band uses; it is the favorable-order notch block, not the adversarial every-order closure. What stays
+open is the every-order availability of a drain before the limit and the per-bag raise/drain balance —
+crux #66 and #72 remain open and `TetrisSolvableValid` is NOT proven. -/
+theorem reservoirSpreadCarrier_flatFront_notchPairs_step_safe {T : Bag} {b : Board} {c s base : ℕ}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
+    (hc0 : 0 < c) (hc5 : c + 5 < GameConfig.standard.cols)
+    (hledger : base + s + ((((T.draw Piece.L).draw Piece.S).draw Piece.J).draw Piece.Z).card + 1
+      ≤ GameConfig.standard.rows) :
+    ∃ pl1 : Placement, pl1.piece = Piece.L ∧ pl1.Valid GameConfig.standard ∧
+      ¬ Board.isLost GameConfig.standard (Placement.applyStep GameConfig.standard b pl1) ∧
+      ∃ pl2 : Placement, pl2.piece = Piece.S ∧ pl2.Valid GameConfig.standard ∧
+        ¬ Board.isLost GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard b pl1) pl2) ∧
+        ∃ pl3 : Placement, pl3.piece = Piece.J ∧ pl3.Valid GameConfig.standard ∧
+          ¬ Board.isLost GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard
+                (Placement.applyStep GameConfig.standard b pl1) pl2) pl3) ∧
+          ∃ pl4 : Placement, pl4.piece = Piece.Z ∧ pl4.Valid GameConfig.standard ∧
+            ¬ Board.isLost GameConfig.standard
+              (Placement.applyStep GameConfig.standard
+                (Placement.applyStep GameConfig.standard
+                  (Placement.applyStep GameConfig.standard
+                    (Placement.applyStep GameConfig.standard b pl1) pl2) pl3) pl4) ∧
+            reservoirSpreadCarrier ((((T.draw Piece.L).draw Piece.S).draw Piece.J).draw Piece.Z)
+              (Placement.applyStep GameConfig.standard
+                (Placement.applyStep GameConfig.standard
+                  (Placement.applyStep GameConfig.standard
+                    (Placement.applyStep GameConfig.standard b pl1) pl2) pl3) pl4) := by
+  obtain ⟨hL, hLS, hJ, hJZ⟩ := isFlatFrontBandAt_LS_then_JZ_safe hb hs hc0 hc5
+  refine ⟨{ piece := Piece.L, rot := 0, col := c }, rfl, Board.valid_L (by omega), hL,
+    { piece := Piece.S, rot := 0, col := c }, rfl, Board.valid_S (by omega), hLS,
+    { piece := Piece.J, rot := 0, col := c + 3 }, rfl, Board.valid_J (by omega), hJ,
+    { piece := Piece.Z, rot := 0, col := c + 3 }, rfl, Board.valid_Z (by omega), hJZ, ?_⟩
+  exact reservoirSpreadCarrier_of_isFlatFrontBandAt
+    (isFlatFrontBandAt_LS_then_JZ hb hs hc0 hc5) hledger
+
 /-- **A full layer of flat fillers fits and marches the front, in any order** (iter511). Tightens
 the room budget of `isFlatFrontBandAt_nonSZ_fill_list` (iter482) by excluding the width-four
 horizontal `I`: a run `ps` of strictly-flat fillers (each `O`, `T`, `L`, or `J`, advancing the front
