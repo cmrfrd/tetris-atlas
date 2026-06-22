@@ -26064,6 +26064,42 @@ theorem isFlatFrontBandAt_flatFiller_then_notchPairs {s base : ℕ} {c : ℕ} {b
   exact ⟨pls, c', hforall, hlo, hhi,
     isFlatFrontBandAt_LS_then_JZ hbn hs (by omega) (by omega)⟩
 
+/-- **Full favorable-order single-layer bag cycle: fillers, both notch pairs, then one drain**
+(iter571). Cap iter570 with the once-per-bag vertical-`I` drain: from a flat-front band at floor
+`base`, lay any adversarial order of strictly-flat fillers (`O`/`T`/`L`/`J`) advancing the front to
+`c'`, route both owed notch pieces (`L`@`c'`, `S`@`c'`, `J`@`(c'+3)`, `Z`@`(c'+3)`), then drop the
+vertical `I` into the reserved well at column `0` — clearing four rows and landing in a spread band
+at floor `base - 4`. This is the closest single brick yet to a whole-bag cycle: it consumes the
+entire non-`I` content of a favorable-order bag onto one flat layer and spends the bag's single `I`
+once, as a regulator, returning a net `-4` descent. The honest caveats are exactly the open content:
+it bakes in the favorable order (fillers-before-notches, partner-before-notch, drain last), so it
+does not settle the adversarial case where the `I` is drawn first or mid-bag, nor the column-width
+limit that forces a phase-aware mid-bag drain. Those are the obstructions #66 and #72 still demand. -/
+theorem isFlatFrontBandAt_flatFiller_then_notchPairs_drain {s base : ℕ} {c : ℕ} {b : Board}
+    {ps : List Piece}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
+    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
+    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
+    ∃ (pls : List Placement) (c' : ℕ),
+      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
+      c ≤ c' ∧ c' ≤ c + 3 * ps.length ∧
+      Board.IsSpreadBoundedRWSkylineAt GameConfig.standard s (base - 4)
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard
+                (Placement.applyStep GameConfig.standard
+                  (pls.foldl (Placement.applyStep GameConfig.standard) b)
+                  { piece := Piece.L, rot := 0, col := c' })
+                { piece := Piece.S, rot := 0, col := c' })
+              { piece := Piece.J, rot := 0, col := c' + 3 })
+            { piece := Piece.Z, rot := 0, col := c' + 3 })
+          { piece := Piece.I, rot := 1, col := 0 }) := by
+  obtain ⟨pls, c', hforall, hlo, hhi, hbn⟩ :=
+    isFlatFrontBandAt_flatFiller_then_notchPairs hb hs hc0 hmem hroom
+  exact ⟨pls, c', hforall, hlo, hhi,
+    isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain hbn hbase4⟩
+
 /-- **Pairing an owed `S` with a preceding `L` keeps the master carrier on a flat band** (iter518).
 The first carrier-level two-piece transition that absorbs an `S` hole-free without any pre-existing
 notch: on a band flat at `base` with the reserved well parked at column `0` and spread `s ≥ 3`, drop
