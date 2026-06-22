@@ -26233,6 +26233,79 @@ theorem isFlatFrontBandAt_flatFiller_then_notchPairs_safe {s base : ℕ} {c : �
           simp only [List.length_cons, List.length_nil]; omega)]
       exact hJZ
 
+/-- **The fully-certified favorable-order whole-bag segment: every drop, including the drain,
+survives** (iter575). The drain-inclusive per-prefix transient-survival face — iter574 extended by
+the once-per-bag vertical `I` — and the most end-to-end certified bag segment in the family. From a
+flat-front band at floor `base`, the schedule `pls ++ [L, S, J, Z, I]` lays the strictly-flat fillers
+`ps`, routes both owed notch pairs, and drops the regulator `I` into the reserved well; the endpoint
+settles into a spread band at floor `base - 4`, and *every* prefix of the whole schedule folds to a
+board that has not topped out. The proof mirrors iter574's `List.take_append`/`List.foldl_append`
+split, now enumerating a five-element tail: the first four boards are iter564's notch-block conjuncts
+on the post-filler band, and the fifth — after the drain — is not-lost because the post-drain spread
+band keeps its reserved well under the ceiling. This is the complete certified `-4`-per-bag segment
+(endpoint band, iter571; height cap, iter572; net descent, iter573; non-`I` prefix safety, iter574;
+drain prefix safety, here) for the favorable order. What it still does not do — the entire remaining
+content — is schedule the single shared `I` against an adversarial interleaving or guarantee a drain
+is reachable before the ceiling for *every* order; crux #66 and #72 remain open and
+`TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_flatFiller_then_notchPairs_drain_safe {s base : ℕ} {c : ℕ} {b : Board}
+    {ps : List Piece}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
+    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
+    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
+    ∃ (pls : List Placement) (c' : ℕ),
+      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
+      c ≤ c' ∧ c' ≤ c + 3 * ps.length ∧
+      Board.IsSpreadBoundedRWSkylineAt GameConfig.standard s (base - 4)
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard
+                (Placement.applyStep GameConfig.standard
+                  (pls.foldl (Placement.applyStep GameConfig.standard) b)
+                  { piece := Piece.L, rot := 0, col := c' })
+                { piece := Piece.S, rot := 0, col := c' })
+              { piece := Piece.J, rot := 0, col := c' + 3 })
+            { piece := Piece.Z, rot := 0, col := c' + 3 })
+          { piece := Piece.I, rot := 1, col := 0 }) ∧
+      (∀ k, ¬ Board.isLost GameConfig.standard
+        (((pls ++ [({ piece := Piece.L, rot := 0, col := c' } : Placement),
+                   { piece := Piece.S, rot := 0, col := c' },
+                   { piece := Piece.J, rot := 0, col := c' + 3 },
+                   { piece := Piece.Z, rot := 0, col := c' + 3 },
+                   { piece := Piece.I, rot := 1, col := 0 }]).take k).foldl
+          (Placement.applyStep GameConfig.standard) b)) := by
+  obtain ⟨pls, c', hforall, hlo, hhi, hbn, hsafe⟩ :=
+    isFlatFrontBandAt_flatFiller_fill_list_safe ps hb (by omega) hc0 hmem (by omega)
+  obtain ⟨hL, hLS, hJ, hJZ⟩ := isFlatFrontBandAt_LS_then_JZ_safe hbn hs (by omega) (by omega)
+  have hdrain := isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain
+    (isFlatFrontBandAt_LS_then_JZ hbn hs (by omega) (by omega)) hbase4
+  have hIsafe := Board.not_isLost_of_isSpreadBoundedRWSkyline
+    (Board.isSpreadBoundedRWSkyline_of_isSpreadBoundedRWSkylineAt hdrain)
+  refine ⟨pls, c', hforall, hlo, hhi, hdrain, ?_⟩
+  intro k
+  rcases Nat.lt_or_ge k (pls.length + 1) with hk | hk
+  · rw [List.take_append, Nat.sub_eq_zero_of_le (Nat.le_of_lt_succ hk), List.take_zero,
+      List.append_nil]
+    exact hsafe k
+  · rw [List.take_append, List.take_of_length_le (show pls.length ≤ k by omega),
+      List.foldl_append]
+    rcases Nat.lt_or_ge (k - pls.length) 5 with hj5 | hj5
+    · have hcase : k - pls.length = 1 ∨ k - pls.length = 2 ∨ k - pls.length = 3 ∨
+          k - pls.length = 4 := by omega
+      rcases hcase with h | h | h | h
+      · rw [h]; exact hL
+      · rw [h]; exact hLS
+      · rw [h]; exact hJ
+      · rw [h]; exact hJZ
+    · rw [List.take_of_length_le (show ([({ piece := Piece.L, rot := 0, col := c' } : Placement),
+            { piece := Piece.S, rot := 0, col := c' },
+            { piece := Piece.J, rot := 0, col := c' + 3 },
+            { piece := Piece.Z, rot := 0, col := c' + 3 },
+            { piece := Piece.I, rot := 1, col := 0 }]).length ≤ k - pls.length by
+          simp only [List.length_cons, List.length_nil]; omega)]
+      exact hIsafe
+
 /-- **Pairing an owed `S` with a preceding `L` keeps the master carrier on a flat band** (iter518).
 The first carrier-level two-piece transition that absorbs an `S` hole-free without any pre-existing
 notch: on a band flat at `base` with the reserved well parked at column `0` and spread `s ≥ 3`, drop
