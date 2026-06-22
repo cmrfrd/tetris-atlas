@@ -25219,6 +25219,50 @@ theorem reservoirSpreadCarrier_flat_nonStaircase_step {T : Bag} {s base : ℕ} {
   | L => exact reservoirSpreadCarrier_flat_L_step hs hw0 hflat hledger
   | J => exact reservoirSpreadCarrier_flat_J_step hs hw0 hflat hledger
 
+/-- **The non-staircase vstack dispatcher behind one flat-quad site** (iter630). The vstack-track
+analogue of `reservoirSpreadCarrier_nonRegulator_fill_step` (iter346) and the vertical companion of
+`reservoirSpreadCarrier_flat_nonStaircase_step` (iter407): it unifies the five per-piece vertical-stack
+carrier steps (`O`, horizontal-`I`, `T`, `L`, `J`) behind a SINGLE landing premise — a flat quad of
+four adjacent off-well columns `c, c+1, c+2, c+3` all at a common height `f` ANYWHERE inside the band
+(`base ≤ f`, `f + 2 ≤ base + s`), with the reserved empty well parked at `w`. The quad is the widest
+footprint any non-staircase piece needs (`O` uses the pair `c, c+1`; `T`/`L`/`J` the triple
+`c, c+1, c+2`; the horizontal `I` the whole quad), so the one site discharges every routing: each piece
+drops flush on its prefix of the quad and re-enters `reservoirSpreadCarrier (T.draw p)` at the SAME
+floor `base` and spread `s`, spending vertical headroom rather than run width. This is the move that
+dodges the `4 * 6 + 4 = 28 > 9` column wall of `isFlatRunReservoirAt_iter_nonStaircase_drain` — a band
+at spread `≥ 3` stacks a fresh layer on a plateau without ever widening the run. The two staircases
+`S`, `Z` are excluded by `hp` because they alone need a `+1` notch underneath (their vstack atoms take a
+staircase site, not a flat quad), so they stay supplied separately by the bag-phase invariant. What
+stays open is exactly the adversarial-order availability of such a flat quad after the band is partly
+raised (regeneration), plus the once-per-bag `I` drain — crux `#66`. `TetrisSolvableValid` is NOT
+proven; no sorry. -/
+theorem reservoirSpreadCarrier_nonStaircase_vstack_step {T : Bag} {s base f : ℕ} {h : ℕ → ℕ}
+    {w c : ℕ} {p : Piece}
+    (hw : w < GameConfig.standard.cols) (hw0 : h w = 0)
+    (hband : ∀ j < GameConfig.standard.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + s)
+    (hc3 : c + 3 < GameConfig.standard.cols)
+    (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2) (hwc3 : w ≠ c + 3)
+    (hcf : h c = f) (hc1f : h (c + 1) = f) (hc2f : h (c + 2) = f) (hc3f : h (c + 3) = f)
+    (hflo : base ≤ f) (hfhi : f + 2 ≤ base + s)
+    (hp : p = Piece.O ∨ p = Piece.I ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J)
+    (hledger : base + s + (T.draw p).card + 1 ≤ GameConfig.standard.rows) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
+      reservoirSpreadCarrier (T.draw p)
+        (Placement.applyStep GameConfig.standard (Board.skyline GameConfig.standard h) pl) := by
+  have hc : c < GameConfig.standard.cols := by omega
+  have hc1 : c + 1 < GameConfig.standard.cols := by omega
+  have hc2 : c + 2 < GameConfig.standard.cols := by omega
+  rcases hp with rfl | rfl | rfl | rfl | rfl
+  · exact reservoirSpreadCarrier_O_vstack_step hw hw0 hband hc hc1 hwc hwc1 hcf hc1f hflo hfhi hledger
+  · exact reservoirSpreadCarrier_horizI_vstack_step hw hw0 hband hc hc1 hc2 hc3
+      hwc hwc1 hwc2 hwc3 hcf hc1f hc2f hc3f hflo hfhi hledger
+  · exact reservoirSpreadCarrier_T_vstack_step hw hw0 hband hc hc1 hc2
+      hwc hwc1 hwc2 hcf hc1f hc2f hflo hfhi hledger
+  · exact reservoirSpreadCarrier_L_vstack_step hw hw0 hband hc hc1 hc2
+      hwc hwc1 hwc2 hcf hc1f hc2f hflo hfhi hledger
+  · exact reservoirSpreadCarrier_J_vstack_step hw hw0 hband hc hc1 hc2
+      hwc hwc1 hwc2 hcf hc1f hc2f hflo hfhi hledger
+
 /-- **The flat-front spread band: a flat layer caught mid fill** (iter408). The inductable shape
 the adversarial-order closure actually needs, abstracting the ad-hoc regeneration of
 `reservoirSpreadCarrier_flat_OO_regen` (iter400). A skyline `h` with the reserved empty well parked
