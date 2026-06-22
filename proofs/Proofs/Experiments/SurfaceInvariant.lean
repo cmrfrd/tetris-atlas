@@ -26021,6 +26021,49 @@ theorem isFlatFrontBandAt_flatFiller_fill_list_drain_netDescent {c s base : ℕ}
     isFlatFrontBandAt_flatFiller_fill_list_drain_height hb hs hc0 hmem hroom hbase4
   exact ⟨pls, hforall, by omega⟩
 
+/-- **A layer of flat fillers, then both owed notch pairs, stays a flat band** (iter570). The first
+brick that composes the two favorable-order non-`I` halves of a bag into a *single* flat layer at one
+floor, rather than against two separate drains. Chains the layer-tiling flat-filler fill list
+(`isFlatFrontBandAt_flatFiller_fill_list`, iter511) into the both-notch-pairs block
+(`isFlatFrontBandAt_LS_then_JZ`, iter557): from `IsFlatFrontBandAt c s base b`, the adversary's chosen
+order of strictly-flat fillers `ps` (`O`, `T`, `L`, `J`, each advancing the front by at most three)
+marches the fill front rightward to some `c'` with `c ≤ c' ≤ c + 3·|ps|`, the surface staying a flat
+band at floor `base`; then the two owed notch pieces route through their `L`/`J`-manufactured valleys
+(`L@c', S@c', J@(c'+3), Z@(c'+3)`), and the board lands an `IsFlatFrontBandAt (c'+6) s base` at the
+*same* floor `base`. The room budget `c + 3·|ps| + 5 < cols` reserves both the filler run and the
+six-wide notch block within the ten-column field. Unlike the half-cycle bricks (iter514, iter566) this
+does not drain — it accumulates the whole non-`I` content of a favorable bag (the flat fillers `O`/`T`
+plus the remaining `L`/`J` tiling the layer, and the two notch pieces `S`/`Z` seated behind their
+partners) onto one flat band before any reset, so the single once-per-bag `I` can drain it all at the
+end. The honest caveats are the open content: it still bakes in the fillers-before-notches and
+partner-before-notch order (not the adversarial case where an `S`/`Z` arrives before its `L`/`J`, or
+interleaved among the fillers), and the combined front-advance can exhaust the ten-column width before
+the layer closes — which is exactly why the invariant must be bag-phase-aware and drain mid-bag rather
+than only at the end; the every-order per-bag raise-versus-drain balance is the bag-phase closure #66
+and #72 still demand. `TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_flatFiller_then_notchPairs {s base : ℕ} {c : ℕ} {b : Board}
+    {ps : List Piece}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
+    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
+    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) :
+    ∃ (pls : List Placement) (c' : ℕ),
+      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
+      c ≤ c' ∧ c' ≤ c + 3 * ps.length ∧
+      IsFlatFrontBandAt (c' + 6) s base
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard
+                (pls.foldl (Placement.applyStep GameConfig.standard) b)
+                { piece := Piece.L, rot := 0, col := c' })
+              { piece := Piece.S, rot := 0, col := c' })
+            { piece := Piece.J, rot := 0, col := c' + 3 })
+          { piece := Piece.Z, rot := 0, col := c' + 3 }) := by
+  obtain ⟨pls, c', hforall, hlo, hhi, hbn⟩ :=
+    isFlatFrontBandAt_flatFiller_fill_list ps hb (by omega) hc0 hmem (by omega)
+  exact ⟨pls, c', hforall, hlo, hhi,
+    isFlatFrontBandAt_LS_then_JZ hbn hs (by omega) (by omega)⟩
+
 /-- **Pairing an owed `S` with a preceding `L` keeps the master carrier on a flat band** (iter518).
 The first carrier-level two-piece transition that absorbs an `S` hole-free without any pre-existing
 notch: on a band flat at `base` with the reserved well parked at column `0` and spread `s ≥ 3`, drop
