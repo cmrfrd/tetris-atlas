@@ -27094,6 +27094,43 @@ theorem bagOrder_interI_segment_count_le {ps1 ps2 : List Piece}
   rw [List.count_append]
   omega
 
+/-- **Inter-regulator cell budget across a bag boundary** (iter648). The area consequence of the
+inter-regulator segment length bound `bagOrder_interI_segment` (iter646). Between two consecutive
+`I`-drains — one guaranteed per bag, so the worst-case gap spans a bag boundary with the first bag's
+`I` arriving first and the second bag's `I` arriving last — the intervening non-`I` fillers number at
+most twelve. Hence ANY placement schedule that realises that segment piece for piece
+(`pls.map (·.piece) = post1 ++ pre2`) adds at most `4 * 12 = 48` cells over whatever board it starts
+from, by the validity-free `+4`-per-drop area growth `card_foldl_applyStep_le` (a hard drop adds at
+most four cells, clears only ever remove). The bound is order independent: the `≤ 12` length holds for
+EVERY adversary pair of bag orders, so this caps the area debit the reservoir accrues between drains
+uniformly. Set against the once-per-bag credit — a single `I` into the reserved well erases four full
+rows = forty cells — the worst-case `48`-cell debit slightly exceeds one drain's `40`-cell refund, but
+that `12`-filler gap is transient (it cannot recur every window, since two `I`-first-then-`I`-last gaps
+cannot abut); the amortised per-bag debit is the `6` fillers = `24` cells one bag actually owes, well
+under the `40`-cell drain credit. This is pure area accounting (HOW MANY cells), NOT the
+column-resolved height/spread balance (#66, #72) nor the placement schedule (WHERE and WHEN each
+filler lands): it bounds the budget without exhibiting a surface that realises it under the
+ten-column ceiling. `TetrisSolvableValid` stays unproven; no `sorry`. -/
+theorem bagOrder_interI_segment_card_budget {ps1 ps2 : List Piece}
+    (h1 : ps1.Perm [Piece.O, Piece.I, Piece.S, Piece.Z, Piece.T, Piece.L, Piece.J])
+    (h2 : ps2.Perm [Piece.O, Piece.I, Piece.S, Piece.Z, Piece.T, Piece.L, Piece.J]) :
+    ∃ (pre1 post1 pre2 post2 : List Piece),
+      ps1 = pre1 ++ Piece.I :: post1 ∧ ps2 = pre2 ++ Piece.I :: post2 ∧
+      Piece.I ∉ pre1 ∧ Piece.I ∉ post1 ∧ Piece.I ∉ pre2 ∧ Piece.I ∉ post2 ∧
+      Piece.I ∉ (post1 ++ pre2) ∧
+      ∀ (b : Board) (pls : List Placement), pls.map (·.piece) = post1 ++ pre2 →
+        (pls.foldl (fun acc pl => pl.applyStep GameConfig.standard acc) b).card ≤ b.card + 48 := by
+  obtain ⟨pre1, post1, pre2, post2, hsplit1, hsplit2, hpre1, hpost1, hpre2, hpost2, hmemSeg, hlen⟩ :=
+    bagOrder_interI_segment h1 h2
+  refine ⟨pre1, post1, pre2, post2, hsplit1, hsplit2, hpre1, hpost1, hpre2, hpost2, hmemSeg, ?_⟩
+  intro b pls hmap
+  have hpls_len : pls.length ≤ 12 := by
+    have hlmap : pls.length = (post1 ++ pre2).length := by
+      rw [← hmap, List.length_map]
+    omega
+  have hcard := Board.card_foldl_applyStep_le (cfg := GameConfig.standard) pls (b := b)
+  omega
+
 /-- **Pocket-preserving maximal drain: `n` vertical-`I` drops keep the level pocket band** (iter507).
 The pocket-PRESERVING analogue of the pocket-less iterated drain `isSpreadBoundedRWSkylineAt_iter_drain`
 (iter496). Each single step `isLevelPocketBandAt_vertI_descends` drops the regulator `I` into the
