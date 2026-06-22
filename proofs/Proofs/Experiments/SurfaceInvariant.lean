@@ -9513,6 +9513,54 @@ theorem isSpreadBoundedRWSkylineAt_applyStep_S_band_preserves_both_notches {cfg 
       hw hwc hwc1 hwc2 hw0 hband hfit hslack hzc hzc1 hzc2 hsepZ
   exact ⟨hband', hs0, hs1, hs2, hz0, hz1, hz2⟩
 
+/-- **An owed Z consuming its own notch threads the band while preserving TWO disjoint reserved
+notches — the mirror consumer-side two-notch frame, completing the staircase-consumer pair.** This
+mirrors `isSpreadBoundedRWSkylineAt_applyStep_S_band_preserves_both_notches`: when the adversary
+finally spends the deferred Z onto its standing Z-notch shape at `c` (`h (c+1) = h (c+2)`,
+`h c = h (c+1) + 1`), the post-drop board is still a member of the same
+`IsSpreadBoundedRWSkylineAt cfg s base` band, and BOTH a reserved S-window `sc, sc+1, sc+2` and a
+reserved Z-window `zc, zc+1, zc+2` — each column-disjoint from the Z footprint `c, c+1, c+2` — keep
+their three colHeights untouched. So spending one owed Z leaves the height band intact and disturbs
+neither of two other reserved staircase sites a later owed S and owed Z are still waiting to consume.
+Together with the S two-notch frame this closes the consumer side of the two-notch frame menu, the
+band-level companion of the flat-filler dispatcher. Proof: apply the single-notch Z consumer frame
+`isSpreadBoundedRWSkylineAt_applyStep_Z_band_preserves_notch` twice — once at `sc` with `hsepS`, once
+at `zc` with `hsepZ` — discarding the duplicate band re-entry from the second call and bundling the
+7-way conjunction. Honest crux: this is one staircase-consumer brick; the all-orders per-bag drain
+accounting (crux #66/#72) stays open, and `TetrisSolvableValid` is NOT proven. -/
+theorem isSpreadBoundedRWSkylineAt_applyStep_Z_band_preserves_both_notches {cfg : GameConfig}
+    {h : ℕ → ℕ} {base s c w sc zc : ℕ}
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
+    (heq : h (c + 1) = h (c + 2)) (hstep : h c = h (c + 1) + 1)
+    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
+    (hw0 : h w = 0)
+    (hband : ∀ j < cfg.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + s)
+    (hfit : h (c + 1) + 2 ≤ base + s) (hslack : base + s ≤ cfg.rows)
+    (hsc : sc < cfg.cols) (hsc1 : sc + 1 < cfg.cols) (hsc2 : sc + 2 < cfg.cols)
+    (hzc : zc < cfg.cols) (hzc1 : zc + 1 < cfg.cols) (hzc2 : zc + 2 < cfg.cols)
+    (hsepS : sc + 2 < c ∨ c + 2 < sc) (hsepZ : zc + 2 < c ∨ c + 2 < zc) :
+    IsSpreadBoundedRWSkylineAt cfg s base
+        (Placement.applyStep cfg (skyline cfg h) { piece := Piece.Z, rot := 0, col := c }) ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.Z, rot := 0, col := c }) sc = h sc ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.Z, rot := 0, col := c }) (sc + 1) = h (sc + 1) ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.Z, rot := 0, col := c }) (sc + 2) = h (sc + 2) ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.Z, rot := 0, col := c }) zc = h zc ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.Z, rot := 0, col := c }) (zc + 1) = h (zc + 1) ∧
+      Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+          { piece := Piece.Z, rot := 0, col := c }) (zc + 2) = h (zc + 2) := by
+  obtain ⟨hband', hs0, hs1, hs2⟩ :=
+    isSpreadBoundedRWSkylineAt_applyStep_Z_band_preserves_notch hc hc1 hc2 heq hstep
+      hw hwc hwc1 hwc2 hw0 hband hfit hslack hsc hsc1 hsc2 hsepS
+  obtain ⟨_, hz0, hz1, hz2⟩ :=
+    isSpreadBoundedRWSkylineAt_applyStep_Z_band_preserves_notch hc hc1 hc2 heq hstep
+      hw hwc hwc1 hwc2 hw0 hband hfit hslack hzc hzc1 hzc2 hsepZ
+  exact ⟨hband', hs0, hs1, hs2, hz0, hz1, hz2⟩
+
 /-- **Any 3-wide flat-filler the adversary inserts admits a band-and-notch-preserving drop —
 the first piece-variable composition brick.** This unifies the `T`, `L`, and `J` band-level
 frames behind a single `Piece` variable: whichever of the three the adversary draws mid-bag, if
