@@ -25059,6 +25059,38 @@ theorem reservoirCarrier_maximal_drain_reset {floor : ℕ} {b : Board}
   have hr : GameConfig.standard.rows = 20 := rfl
   omega
 
+/-- **Survival face of the carrier-level maximal regulator drain to a fresh-bag reset** (iter552).
+The every-prefix `¬ isLost` companion of `reservoirCarrier_maximal_drain_reset` (iter510): from any
+spread-`2` level pocket band at arbitrary floor `floor`, firing the reserved-well vertical-`I` drain
+`floor / 4` times not only lands in `reservoirCarrier Bag.full` — the carrier state for a fresh
+seven-piece bag at the bounded reset floor `floor % 4` — it ALSO keeps every prefix of the drain
+un-lost. The transition and reset ledger are exactly those of the unsafe reset, but routed through the
+transient-survival iterated drain `isLevelPocketBandAt_vertI_iter_safe` at `n := floor / 4`: that
+supplies the same length-`(floor / 4)` list of valid `I`-placements landing in the band at
+`floor - 4 * (floor / 4) = floor % 4`, plus the per-prefix `¬ isLost` certificate, and the reset
+ledger reads `floor % 4 + 7 + 1 < 4 + 8 = 12 ≤ 20` on the full bag (`Bag.full_card`). This is the
+fully-certified "drain back down and reset" half of the per-bag cycle: a per-bag survival schedule may
+run the whole inter-bag collapse blind to the intermediate boards, and this brick guarantees no
+top-out at any clear AND that the surface re-enters a fresh-bag-ready reservoir state. It packages the
+inter-bag reset as a survival certificate; the complementary fill side and the adversarial S and Z
+notch routing remain the open closure (#66, #72). -/
+theorem reservoirCarrier_maximal_drain_reset_safe {floor : ℕ} {b : Board}
+    (hband : Board.IsLevelPocketBandAt GameConfig.standard 2 floor b) :
+    ∃ pls : List Placement,
+      pls.length = floor / 4 ∧
+      (∀ pl ∈ pls, pl.piece = Piece.I ∧ pl.Valid GameConfig.standard) ∧
+      reservoirCarrier Bag.full (pls.foldl (Placement.applyStep GameConfig.standard) b) ∧
+      (∀ k, ¬ Board.isLost GameConfig.standard
+        ((pls.take k).foldl (Placement.applyStep GameConfig.standard) b)) := by
+  obtain ⟨pls, hlen, hmem, hband', hsafe⟩ :=
+    Board.isLevelPocketBandAt_vertI_iter_safe (floor / 4) hband (by omega)
+  have hmod : floor - 4 * (floor / 4) = floor % 4 := by omega
+  rw [hmod] at hband'
+  refine ⟨pls, hlen, hmem, ⟨floor % 4, hband', ?_⟩, hsafe⟩
+  rw [Bag.full_card]
+  have hr : GameConfig.standard.rows = 20 := rfl
+  omega
+
 /-- **A full layer of flat fillers fits and marches the front, in any order** (iter511). Tightens
 the room budget of `isFlatFrontBandAt_nonSZ_fill_list` (iter482) by excluding the width-four
 horizontal `I`: a run `ps` of strictly-flat fillers (each `O`, `T`, `L`, or `J`, advancing the front
