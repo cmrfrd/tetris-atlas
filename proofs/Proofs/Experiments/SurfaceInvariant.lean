@@ -20306,6 +20306,37 @@ theorem reservoirDoubleSZSurface_S_valley1_preserves_well (base : ℕ) :
       (by decide) (by decide) (reservoirDoubleSZSurface_well base) (by decide) (by decide),
     reservoirDoubleSZSurface_well]
 
+/-- **First staircase `Z` lands, valley1 survives — the order-mirror of the two-staircase payoff.**
+The every-order companion of `reservoirDoubleSZSurface_S_valley1_preserves_valley2`: when the
+adversary opens the bag with `Z` instead of `S`, seating it in the SECOND valley
+(`{Z, rot 0, col 5}`, the mirror notch) leaves the FIRST valley at columns `1, 2, 3, 4` in its
+original notch profile `(base + 1, base, base, base + 1)`. The `Z` move dodges the well (column `0`)
+and every column of valley1 (`1 .. 4`), so the valley-preservation primitive
+`colHeight_applyStep_skyline_valley4_of_avoid` holds all four heights at their pre-move values. This
+is the reason two DISJOINT valleys defeat the reversed `Z`-then-`S` order just as they defeat
+`S`-then-`Z`: after `Z` consumes valley2, the still-owed `S` finds a pristine valley1 — lips
+intact at `base + 1`, floor at `base` — to seat into, with no mid-bag valley regeneration required.
+Together with the proven `S`-first lemma this establishes that EITHER staircase may arrive first
+into EITHER valley while preserving the other, the order-independence the adversarial bag demands. -/
+theorem reservoirDoubleSZSurface_Z_valley2_preserves_valley1 (base : ℕ) :
+    Board.colHeight (Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
+        { piece := Piece.Z, rot := 0, col := 5 }) 1 = base + 1 ∧
+    Board.colHeight (Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
+        { piece := Piece.Z, rot := 0, col := 5 }) 2 = base ∧
+    Board.colHeight (Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
+        { piece := Piece.Z, rot := 0, col := 5 }) 3 = base ∧
+    Board.colHeight (Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
+        { piece := Piece.Z, rot := 0, col := 5 }) 4 = base + 1 :=
+  Board.colHeight_applyStep_skyline_valley4_of_avoid (w := 0) (vc := 1) (base := base)
+    (by decide) (by decide) (reservoirDoubleSZSurface_well base)
+    (by simp [reservoirDoubleSZSurface]) (by simp [reservoirDoubleSZSurface])
+    (by simp [reservoirDoubleSZSurface]) (by simp [reservoirDoubleSZSurface])
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
 /-- **The post-S board stays a spread-2 band off the well.** After the valley1 `S` move
 `{S, rot 0, col 2}` (a valid S-notch placement on the right lip of valley1 — `h 2 = h 3 = base`,
 `h 4 = base + 1` — rewritten to a skyline by `applyStep_S_skyline_noclear`), every working column
