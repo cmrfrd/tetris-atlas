@@ -25195,6 +25195,62 @@ theorem isFlatFrontBandAt_LS_step {c s base : ℕ} {b : Board}
       hjcols (by omega) (by omega) (by omega)]
     exact hflat j (by omega) hjcols
 
+/-- **The owed `Z`, paired behind its `J`, advances the fill front by three — staying in
+flat-front-band vocabulary** (iter556). The mirror of `isFlatFrontBandAt_LS_step` (iter555) and the
+second notch-piece companion of the flat-filler front-advance menu `isFlatFrontBandAt_filler_step`
+(iter411), which excludes `S` and `Z` because a bare flat shelf cannot host them hole-free. Here the
+bag's `J` is spent first to re-dig the single-step `Z`-notch at the front triple `(c, c+1, c+2)`, then
+the owed `Z` drops into it: the worked triple rises to `(base+3, base+3, base+2)`
+(`colHeight_applyStep_JZ_skyline_band_at` at level `f = base`), which with spread `s ≥ 3` stays inside
+the band `[base, base + s]`; the reserved well at column `0` is untouched (`0 < c`), and the shelf
+`[c+3, cols)` keeps its flat heights at `base` (`colHeight_applyStep_JZ_skyline_frame`). Hence the
+`J`-then-`Z` pair lands an `IsFlatFrontBandAt (c+3) s base` board — the front has marched three columns
+right exactly as a flat triple-filler would, but with the owed `Z` consumed.
+
+Together with iter555 this closes the front-advance machinery under BOTH notch pairs, so a single bag's
+`L, S, J, Z` are scheduled as two front-marching pairs (alongside the strict flats `O, T` via iter411)
+without ever dropping to the generic spread band. Honest caveats unchanged: it bakes in the
+`J`-before-`Z` order (the all-orders adversary may draw the `Z` first), and it is a two-piece edge, not
+the per-piece `hstep`. The once-per-bag drain scheduling and the every-order balance are the remaining
+bag-phase content; crux #66 and #72 stay open and `TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_JZ_step {c s base : ℕ} {b : Board}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
+    (hc0 : 0 < c) (hc2 : c + 2 < GameConfig.standard.cols) :
+    IsFlatFrontBandAt (c + 3) s base
+      (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard b { piece := Piece.J, rot := 0, col := c })
+        { piece := Piece.Z, rot := 0, col := c }) := by
+  obtain ⟨h, rfl, hw0, hband, hcap, hflat⟩ := hb
+  have hc : c < GameConfig.standard.cols := by omega
+  have hc1 : c + 1 < GameConfig.standard.cols := by omega
+  have ecc : h c = base := hflat c (le_refl c) hc
+  have ec1 : h (c + 1) = base := hflat (c + 1) (by omega) hc1
+  have ec2 : h (c + 2) = base := hflat (c + 2) (by omega) hc2
+  obtain ⟨hJZ, hJZeq, hJZw0⟩ :=
+    Board.applyStep_JZ_skyline_flat_well (w := 0) hc hc1 hc2
+      (by rw [ec1, ecc]) (by rw [ec2, ecc]) (by decide) (by omega) (by omega) (by omega) hw0
+  refine ⟨hJZ, hJZeq, hJZw0, ?_, hcap, ?_⟩
+  · intro j hj hj0
+    have hbridge : hJZ j = Board.colHeight (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard (Board.skyline GameConfig.standard h)
+          { piece := Piece.J, rot := 0, col := c })
+        { piece := Piece.Z, rot := 0, col := c }) j := by
+      rw [hJZeq, Board.colHeight_skyline hj]
+    rw [hbridge]
+    exact Board.colHeight_applyStep_JZ_skyline_band_at (w := 0) hc hc1 hc2
+      (by decide) (by omega) (by omega) (by omega) hw0 ecc ec1 ec2 hband
+      (le_refl base) (by omega) j hj hj0
+  · intro j hjc3 hjcols
+    have hbridge : hJZ j = Board.colHeight (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard (Board.skyline GameConfig.standard h)
+          { piece := Piece.J, rot := 0, col := c })
+        { piece := Piece.Z, rot := 0, col := c }) j := by
+      rw [hJZeq, Board.colHeight_skyline hjcols]
+    rw [hbridge, Board.colHeight_applyStep_JZ_skyline_frame (w := 0) hc hc1 hc2
+      (by rw [ec1, ecc]) (by rw [ec2, ecc]) (by decide) (by omega) (by omega) (by omega) hw0
+      hjcols (by omega) (by omega) (by omega)]
+    exact hflat j (by omega) hjcols
+
 /-- **A full layer of flat fillers fits and marches the front, in any order** (iter511). Tightens
 the room budget of `isFlatFrontBandAt_nonSZ_fill_list` (iter482) by excluding the width-four
 horizontal `I`: a run `ps` of strictly-flat fillers (each `O`, `T`, `L`, or `J`, advancing the front
