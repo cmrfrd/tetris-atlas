@@ -22934,6 +22934,53 @@ theorem reservoirSpreadCarrier_SZPhase_SZ_fill_step {T : Bag} {base : ℕ} {b : 
   exact reservoirSpreadCarrier_valley_SZ_fill_step hp hslack hw0 hband hvc1 hord hpc3
     hv0 hv1 hv2 hv3 hs0 hs1 hs2 hs3 hledger
 
+/-- **The floor-pinned all-7 valley menu lifts to a spread-carrier re-entry for EVERY piece.** The
+carrier-vocabulary lift of `Board.isSpreadBoundedRWSkylineAt_all7_valley_of_pocket_Snotch_Znotch`:
+given a spread-`2` band (well `w`, off-well columns in `[base, base + 2]`) that exposes a width-four
+level pocket, an ascending `S`-notch, and a descending `Z`-notch — all sitting at the floor `base` —
+WHATEVER piece `p` the adversary draws has a valid placement re-entering
+`reservoirSpreadCarrier (T.draw p)` at the SAME floor `base`. This is the payoff of the pinned menu
+over the existential one (task `#629`): because the landing floor is tracked as `base` (not merely
+"some floor"), the carrier ledger `base + 2 + (T.draw p).card + 1 ≤ rows` transports verbatim — the
+drawn bag is one piece smaller, so the ledger only gets easier. Unlike
+`reservoirSpreadCarrier_nonRegulator_fill_step`, which handles only the five non-`I` fillers behind a
+type-matched site and leaves `S`/`Z` to a separate valley site, this closes the carrier for ALL seven
+pieces (including the regulator `I` and both staircases) from a SINGLE board carrying all three sites
+at once.
+
+Honesty: NOT the per-bag closure. It is still a from-surface step requiring the caller to SUPPLY the
+pocket + `S`-notch + `Z`-notch sites at the floor; the genuine open work is regenerating those three
+sites across the step (a fill consumes its site) and the all-orders per-bag drain accounting (crux
+`#66`/`#72`). `TetrisSolvableValid` is NOT proven. No sorry. -/
+theorem reservoirSpreadCarrier_all7Valley_step {T : Bag} {base : ℕ} {h : ℕ → ℕ} {p : Piece}
+    {w c d e : ℕ}
+    (hc : c < GameConfig.standard.cols) (hc1 : c + 1 < GameConfig.standard.cols)
+    (hc2 : c + 2 < GameConfig.standard.cols) (hc3 : c + 3 < GameConfig.standard.cols)
+    (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2) (hwc3 : w ≠ c + 3)
+    (heq1 : h (c + 1) = h c) (heq2 : h (c + 2) = h c) (heq3 : h (c + 3) = h c)
+    (hcfloor : h c = base)
+    (hd : d < GameConfig.standard.cols) (hd1 : d + 1 < GameConfig.standard.cols)
+    (hd2 : d + 2 < GameConfig.standard.cols)
+    (hwd : w ≠ d) (hwd1 : w ≠ d + 1) (hwd2 : w ≠ d + 2)
+    (hSnotch : h d = h (d + 1) ∧ h (d + 2) = h d + 1 ∧ h d = base)
+    (he : e < GameConfig.standard.cols) (he1 : e + 1 < GameConfig.standard.cols)
+    (he2 : e + 2 < GameConfig.standard.cols)
+    (hwe : w ≠ e) (hwe1 : w ≠ e + 1) (hwe2 : w ≠ e + 2)
+    (hZnotch : h (e + 1) = h (e + 2) ∧ h e = h (e + 1) + 1 ∧ h (e + 1) = base)
+    (hw : w < GameConfig.standard.cols) (hw0 : h w = 0)
+    (hband : ∀ j < GameConfig.standard.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + 2)
+    (hslack : base + 2 ≤ GameConfig.standard.rows)
+    (hledger : base + 2 + (T.draw p).card + 1 ≤ GameConfig.standard.rows) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
+      reservoirSpreadCarrier (T.draw p)
+        (Placement.applyStep GameConfig.standard (Board.skyline GameConfig.standard h) pl) := by
+  obtain ⟨pl, hpiece, hvalid, hbandAt⟩ :=
+    Board.isSpreadBoundedRWSkylineAt_all7_valley_of_pocket_Snotch_Znotch
+      hc hc1 hc2 hc3 hwc hwc1 hwc2 hwc3 heq1 heq2 heq3 hcfloor
+      hd hd1 hd2 hwd hwd1 hwd2 hSnotch he he1 he2 hwe hwe1 hwe2 hZnotch
+      hw hw0 (le_refl 2) hband hslack p
+  exact ⟨pl, hpiece, hvalid, base, 2, hbandAt, hledger⟩
+
 /-- **The phase-matched per-piece fill dispatcher into the spread carrier.** Unifies the two
 phase bridges (`reservoirSpreadCarrier_flatPhase_flat_fill_step` and
 `reservoirSpreadCarrier_SZPhase_SZ_fill_step`) behind one disjunctive `hsite` premise that pairs the
