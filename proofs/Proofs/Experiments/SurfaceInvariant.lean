@@ -28554,6 +28554,51 @@ theorem isFlatFrontBandAt_LS_then_JZ_then_fillers {s base : ℕ} {c : ℕ} {b : 
     isFlatFrontBandAt_flatFiller_fill_list ps hLSJZ (by omega) (by omega) hmem (by omega)
   exact ⟨pls, c', hforall, hlo, hhi, hbn⟩
 
+/-- **`JZ`-pair, then `LS`-pair, then the filler block, on a flat front** (iter628). The sixth and
+final block-ordering of `{fillers, LS-pair, JZ-pair}` on the spread-`s` reserved-well flat band, the
+reversed-pair mirror of `isFlatFrontBandAt_LS_then_JZ_then_fillers` (iter627): first spend the bag's
+`J`-then-`Z` at column `c` (the `J` re-digs the single-step `Z`-notch, the `Z` seats into it), then
+the `L`-then-`S` at column `c + 3` (the `L` manufactures the `S`-notch), each pair advancing the fill
+front by six columns total via `isFlatFrontBandAt_JZ_then_LS` (iter576); the front then absorbs the
+remaining non-`S`/`Z`/`I` fillers left-to-right through `isFlatFrontBandAt_flatFiller_fill_list`
+(iter511), each filler advancing the front by at most three columns and leaving the band flat at
+`base`. The result is again a flat front at the same floor `base` and spread `s`, ready for the
+once-per-bag vertical-`I` drain. Together with iter627 and the four earlier orderings (fillers-LS-JZ
+iter570, fillers-JZ-LS iter581, LS-fillers-JZ iter587, JZ-fillers-LS iter589) this **completes all six
+block-orderings** of the two notch pairs and the filler block on the flat front. Honest caveats —
+exactly the open content: this is a block-level composition, not the per-piece `hstep`; like all six
+it bakes in the `L`-before-`S` / `J`-before-`Z` order WITHIN each notch pair, so it does not settle
+the adversarial case where an `S` precedes its paired `L` (which on a bare flat front has no hole-free
+skyline placement — the genuine column-budget obstruction that forces a pre-dug-notch surface), nor
+does it yet feed a bag-indexed carrier whose per-piece `hstep` is actually true (the width-eight
+`IsFlatPhaseReservoirAtS` underlying `bandPhaseReservoirS` is NOT closed under a single filler, so the
+run-width-tracked `IsFlatRunReservoirAt` / front-tracked `IsFlatFrontBandAt` carrier is the one the
+closure must be re-pinned onto). The genuine all-orders per-bag drain accounting feeding the final
+reduction — crux #66 and #72 — remains open; `TetrisSolvableValid` is NOT proven by this lemma; no
+`sorry`. -/
+theorem isFlatFrontBandAt_JZ_then_LS_then_fillers {s base : ℕ} {c : ℕ} {b : Board}
+    {ps : List Piece}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
+    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
+    (hroom : c + 6 + 3 * ps.length ≤ GameConfig.standard.cols) :
+    ∃ (pls : List Placement) (c' : ℕ),
+      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
+      c + 6 ≤ c' ∧ c' ≤ c + 6 + 3 * ps.length ∧
+      IsFlatFrontBandAt c' s base
+        (pls.foldl (Placement.applyStep GameConfig.standard)
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard
+                (Placement.applyStep GameConfig.standard b
+                  { piece := Piece.J, rot := 0, col := c })
+                { piece := Piece.Z, rot := 0, col := c })
+              { piece := Piece.L, rot := 0, col := c + 3 })
+            { piece := Piece.S, rot := 0, col := c + 3 })) := by
+  have hJZLS := isFlatFrontBandAt_JZ_then_LS hb hs hc0 (by omega)
+  obtain ⟨pls, c', hforall, hlo, hhi, hbn⟩ :=
+    isFlatFrontBandAt_flatFiller_fill_list ps hJZLS (by omega) (by omega) hmem (by omega)
+  exact ⟨pls, c', hforall, hlo, hhi, hbn⟩
+
 /-- **Pairing an owed `S` with a preceding `L` keeps the master carrier on a flat band** (iter518).
 The first carrier-level two-piece transition that absorbs an `S` hole-free without any pre-existing
 notch: on a band flat at `base` with the reserved well parked at column `0` and spread `s ≥ 3`, drop
