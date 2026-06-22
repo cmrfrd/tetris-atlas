@@ -23886,6 +23886,34 @@ theorem reservoirSpreadCarrier_richSurface_vertI_drain_carrier {T : Bag} {base :
   rw [reservoirRichSurface_vertI_well_drain hbase]
   exact reservoirSpreadCarrier_richSurface_mem hledger
 
+/-- **Survival face of the universal rich-surface well drain** (iter633). The rich-surface analogue of
+`reservoirDoubleSZSurface_vertI_well_drain_safe` (iter363): bundles the three facts a cycle step needs
+about the once-per-bag vertical-`I` drain on the all-7-hosting reset surface — the placement is valid,
+it rewrites `reservoirRichSurface base` to the same rich profile lowered by `4`
+(`reservoirRichSurface_vertI_well_drain`, iter631), and the lowered surface has not topped out. The
+height bound `base + 1 ≤ rows` on the pre-drain surface carries to the post-drain surface for free
+(natural subtraction only shrinks the floor, and the two notch lips ride at `(base - 4) + 1 ≤ base + 1`),
+so `not_isLost_skyline` discharges survival from the profile cap by `split_ifs <;> omega` over the four
+height cases (well `0`, the two `base - 4 + 1` notch lips, the `base - 4` floor). This is the
+survival-carrying regenerator face the final reduction's edges must each provide: the drain returns a
+fresh rich shape at floor `base - 4`, pocket and both notches intact, ready to host the next bag.
+Honest caveat (unchanged): this is the GIVEN-surface drain at `base ≥ 4`; it neither schedules the drain
+against the across-bag fillers that raise the floor nor proves the all-orders raise-versus-drain balance.
+Crux `#66`/`#72` remain open; `TetrisSolvableValid` is NOT proven; no sorry. -/
+theorem reservoirRichSurface_vertI_well_drain_safe {base : ℕ} (hbase : 4 ≤ base)
+    (hrows : base + 1 ≤ GameConfig.standard.rows) :
+    ({ piece := Piece.I, rot := 1, col := 0 } : Placement).Valid GameConfig.standard ∧
+    Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirRichSurface base))
+        { piece := Piece.I, rot := 1, col := 0 }
+      = Board.skyline GameConfig.standard (reservoirRichSurface (base - 4)) ∧
+    ¬ Board.isLost GameConfig.standard
+      (Board.skyline GameConfig.standard (reservoirRichSurface (base - 4))) :=
+  ⟨Board.valid_vertI (by decide),
+   reservoirRichSurface_vertI_well_drain hbase,
+   Board.not_isLost_skyline (fun j _ => by
+     simp only [reservoirRichSurface]; split_ifs <;> omega)⟩
+
 /-- **The phase-matched per-piece fill dispatcher into the spread carrier.** Unifies the two
 phase bridges (`reservoirSpreadCarrier_flatPhase_flat_fill_step` and
 `reservoirSpreadCarrier_SZPhase_SZ_fill_step`) behind one disjunctive `hsite` premise that pairs the
