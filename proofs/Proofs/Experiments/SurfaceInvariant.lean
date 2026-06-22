@@ -25382,6 +25382,36 @@ theorem isFlatFrontBandAt_JZ_then_LS_drain {c s base : ℕ} {b : Board}
   isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain
     (isFlatFrontBandAt_JZ_then_LS hb hs hc0 hc5) hbase4
 
+/-- **The reversed notch-pair drain caps the surface at `base - 4 + s`, the same height as the
+favorable order** (iter579). The reversed-order mirror of `isFlatFrontBandAt_notchPairs_drain_height`
+(iter568): reading the post-drain spread band of `isFlatFrontBandAt_JZ_then_LS_drain` (iter577)
+through `Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt`, the maximum column height after the
+adversary's reversed notch pairs (`J`-then-`Z`, then `L`-then-`S`) followed by the once-per-bag
+vertical `I` drain is at most `base - 4 + s`. Together with iter568 the bag-phase height ledger now
+records the SAME post-drain cap for BOTH notch-pair orders, so the all-orders height accounting can
+quote a single `base - 4 + s` bound regardless of which notch pair the adversary draws first — one
+more order-symmetry retired from the height side of the closure. Honest caveats unchanged from
+iter577: this still bakes in `L`-before-`S` and `J`-before-`Z` WITHIN each pair, and drains the four
+notch pieces against their own `I` rather than interleaving them with the flat fillers against one
+shared drain; the within-pair reversal and the every-order raise-versus-drain balance remain the
+bag-phase closure that cruxes #66 and #72 still demand. `TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_JZ_then_LS_drain_height {c s base : ℕ} {b : Board}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
+    (hc0 : 0 < c) (hc5 : c + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
+    Board.maxColHeight GameConfig.standard
+      (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard b
+                { piece := Piece.J, rot := 0, col := c })
+              { piece := Piece.Z, rot := 0, col := c })
+            { piece := Piece.L, rot := 0, col := c + 3 })
+          { piece := Piece.S, rot := 0, col := c + 3 })
+        { piece := Piece.I, rot := 1, col := 0 }) ≤ base - 4 + s :=
+  Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt
+    (isFlatFrontBandAt_JZ_then_LS_drain hb hs hc0 hc5 hbase4)
+
 /-- **The owed `S`, paired behind its `L`, closes the master carrier at an arbitrary fill front**
 (iter561). The flat-front-band, arbitrary-`c` lift of `reservoirSpreadCarrier_flat_LS_step` (iter518),
 which routed the `L`-then-`S` notch pair only on the special level reset surface (front pinned at
