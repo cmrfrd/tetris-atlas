@@ -8499,6 +8499,40 @@ theorem colHeight_applyStep_Z_skyline_preserves_notch {cfg : GameConfig} {h : �
   · rw [colHeight_skyline hnc2, Function.update_of_ne (by omega), Function.update_of_ne (by omega),
         Function.update_of_ne (by omega)]
 
+/-- **The once-per-bag well-clear drain carries an S-notch down by four — notch survival across the
+reset.** The drain atom complementing the no-clear intervening-piece frames
+(`colHeight_applyStep_S_skyline_preserves_notch` and siblings, which keep a disjoint notch fixed under
+an ordinary fill): here the vertical-`I` well-clear that resets the layer is shown to *preserve the
+very S-notch it descends through*, just lowered four rows. Starting from a profile with a reserved
+empty well `w` whose every other column is at least four high (`hothers`, the drain precondition) and
+an S-notch `(h c = h (c+1)`, `h (c+2) = h c + 1)` on a triple `c, c+1, c+2` separate from the well, the
+well-clearing `I` (`applyStep_vertI_well`, which subtracts four from every non-well column and empties
+the well) lands on `skyline cfg h'` whose same triple is again an S-notch one floor lower:
+`h' c = h c - 4`, `h' (c+1) = h c - 4`, `h' (c+2) = h c - 4 + 1`, with the well still empty. The `+1`
+step survives the truncated subtraction precisely because `4 ≤ h c` (read off `hothers` at the notch
+floor), so the carry does not clip. This is the structural fact behind handling a *staircase-before-
+digger* bag order: a notch dug in one bag is not destroyed by that bag's drain but reappears, four
+lower, at the next reset — so an `S` drawn before its `L` in the following bag still finds a notch to
+land in. It does not by itself close the every-order interleaving obligation (crux #66/#72 remains
+open, and `TetrisSolvableValid` is NOT proven): the surrounding bag-phase scheduler that keeps both an
+`S`-notch and a `Z`-notch reserved at every reset, within the ten-column budget, is the open content.
+Proof: rewrite the board through `applyStep_vertI_well`; each notch column and the well unfold from the
+explicit drained profile by `split_ifs` (the well dodges discharge the `= w` branches) and `omega`
+(using `4 ≤ h c` for the `+1` carry). -/
+theorem applyStep_vertI_well_Snotch_descend {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
+    (heq : h c = h (c + 1)) (hstep : h (c + 2) = h c + 1)
+    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
+    (hw0 : h w = 0)
+    (hothers : ∀ j, j < cfg.cols → j ≠ w → 4 ≤ h j) :
+    ∃ h' : ℕ → ℕ,
+      Placement.applyStep cfg (skyline cfg h) { piece := Piece.I, rot := 1, col := w }
+        = skyline cfg h' ∧
+      h' c = h c - 4 ∧ h' (c + 1) = h c - 4 ∧ h' (c + 2) = h c - 4 + 1 ∧ h' w = 0 := by
+  have hc4 : 4 ≤ h c := hothers c hc (by omega)
+  refine ⟨_, applyStep_vertI_well hw hw0 hothers, ?_, ?_, ?_, ?_⟩ <;>
+    split_ifs with hh <;> omega
+
 /-- **An intervening `O` keeps both the band and a standing notch — the band-level threading frame.**
 The colHeight frame `colHeight_applyStep_O_skyline_preserves_notch` shows an intervening `O` leaves a
 reserved notch's three heights fixed; this lemma upgrades that to the band vocabulary the carrier
