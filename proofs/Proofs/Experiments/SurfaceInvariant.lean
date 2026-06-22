@@ -25314,6 +25314,40 @@ theorem isFlatFrontBandAt_LS_then_JZ {c s base : ℕ} {b : Board}
   have h2 := isFlatFrontBandAt_JZ_step h1 hs (by omega) (by omega)
   exact h2
 
+/-- **Both notch pairs in the reversed order also march the fill front by six** (iter576). The
+adversarial-order sibling of `isFlatFrontBandAt_LS_then_JZ` (iter557): the bag may deliver its
+`Z`-notch pair before its `S`-notch pair, so here the `J`-then-`Z` pair is spent first at the front
+triple `(c, c+1, c+2)` to advance to front `c + 3`, and only then the `L`-then-`S` pair at the next
+triple `(c+3, c+4, c+5)` to advance to front `c + 6` — again landing an `IsFlatFrontBandAt (c+6) s
+base` board. It is the same two front-steps `isFlatFrontBandAt_JZ_step` (iter556) and
+`isFlatFrontBandAt_LS_step` (iter555) composed in the opposite sequence, and because each pair is a
+self-contained flat triple that pins the floor `base`, leaves the well at column `0` untouched, and
+peaks at `base + 3 ≤ base + s` for `s ≥ 3`, the endpoint band is identical to iter557's regardless of
+which notch pair the adversary draws first.
+
+This retires one genuine dimension of the all-orders obstruction — the relative order of the two
+notch PAIRS — by showing both arrangements land the same flat-front band, so the bag-level closure
+need not assume the favorable `LS`-before-`JZ` arrangement. Honest caveats: it still bakes in the
+`L`-before-`S` and `J`-before-`Z` order WITHIN each pair (the partner-before-notch routing the skyline
+carrier needs to host an `S` or `Z` hole-free), and it is a four-piece block edge, not the per-piece
+`hstep`; the within-pair reversal and the once-per-bag drain interleaving remain the open bag-phase
+content. Crux #66 and #72 stay open and `TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_JZ_then_LS {c s base : ℕ} {b : Board}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
+    (hc0 : 0 < c) (hc5 : c + 5 < GameConfig.standard.cols) :
+    IsFlatFrontBandAt (c + 6) s base
+      (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard b
+              { piece := Piece.J, rot := 0, col := c })
+            { piece := Piece.Z, rot := 0, col := c })
+          { piece := Piece.L, rot := 0, col := c + 3 })
+        { piece := Piece.S, rot := 0, col := c + 3 }) := by
+  have h1 := isFlatFrontBandAt_JZ_step hb hs hc0 (by omega)
+  have h2 := isFlatFrontBandAt_LS_step h1 hs (by omega) (by omega)
+  exact h2
+
 /-- **The owed `S`, paired behind its `L`, closes the master carrier at an arbitrary fill front**
 (iter561). The flat-front-band, arbitrary-`c` lift of `reservoirSpreadCarrier_flat_LS_step` (iter518),
 which routed the `L`-then-`S` notch pair only on the special level reset surface (front pinned at
