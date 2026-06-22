@@ -23982,6 +23982,32 @@ theorem reservoirRichSurface_Z_notch_carrier {T : Bag} {base : ℕ}
     split_ifs <;> omega
   · omega
 
+/-- **The owed-`S` notch landing exits safely into the carrier** (iter641). The survival face of
+`reservoirRichSurface_S_notch_carrier` (iter639), and the rich-surface analogue of
+`reservoirDoubleSZSurface_S_carrier_safe` (iter391): when the universal phase opens the bag with the
+owed `S`, seating it in the rich surface's S-notch (`{S, rot 0, col 6}`) not only re-enters
+`reservoirSpreadCarrier (T.draw S)` at the unchanged floor `base`, the post-`S` board is certified to
+have not topped out (`reservoirSpreadCarrier_not_isLost`). The final per-piece reduction consumes the
+paired carrier-plus-safety face, so a universal-phase survival schedule can quote this brick to
+discharge the `S`-opening without re-deriving either the notch landing or its safety.
+
+Honest caveat (unchanged from iter639): the rich surface's two notches OVERLAP at columns `6, 7`, so
+this brick hosts ONE owed staircase, not both — it EXHIBITS, not overcomes, the iter608 notch-overlap
+obstruction. It does NOT close crux `#66`/`#72` (both-staircase all-orders bag accounting);
+`TetrisSolvableValid` is NOT proven; no sorry. -/
+theorem reservoirRichSurface_S_notch_carrier_safe {T : Bag} {base : ℕ}
+    (hledger : base + 2 + (T.draw Piece.S).card + 1 ≤ GameConfig.standard.rows) :
+    reservoirSpreadCarrier (T.draw Piece.S)
+      (Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirRichSurface base))
+        { piece := Piece.S, rot := 0, col := 6 }) ∧
+    ¬ Board.isLost GameConfig.standard
+      (Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirRichSurface base))
+        { piece := Piece.S, rot := 0, col := 6 }) := by
+  have hcarrier := reservoirRichSurface_S_notch_carrier (T := T) (base := base) hledger
+  exact ⟨hcarrier, reservoirSpreadCarrier_not_isLost _ _ hcarrier⟩
+
 /-- **The once-per-bag regulator drain regenerates the universal rich surface, lowered by four**
 (iter631). The rich-surface analogue of `reservoirDoubleSZSurface_vertI_well_drain` (iter362), and the
 regeneration linchpin the universal-phase thread (iter608–625) was missing. The rich reset surface
