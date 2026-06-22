@@ -22981,6 +22981,45 @@ theorem reservoirSpreadCarrier_all7Valley_step {T : Bag} {base : ℕ} {h : ℕ �
       hw hw0 (le_refl 2) hband hslack p
   exact ⟨pl, hpiece, hvalid, base, 2, hbandAt, hledger⟩
 
+/-- **A concrete floor-pinned rich surface** carrying all three landing motifs at once over the
+width-ten board: a reserved empty well at column 0; a width-four flat pocket across columns 1 to 4;
+a Z-notch at columns 5 to 7 (a `base+1` rise at column 5 over the flat 6,7); and an S-notch at
+columns 6 to 8 (the flat 6,7 then a `base+1` rise at column 8). The Z and S notches SHARE the flat
+columns 6,7 — the column-budget overlap that lets a single width-ten board host the well, the
+pocket, and both notches at once (without overlap, well 1 plus pocket 4 plus two width-three
+notches exceeds ten columns). This is the same profile already used by the `richStandard` surface
+family. -/
+def reservoirRichSurface (base : ℕ) : ℕ → ℕ := fun j =>
+  if j = 0 then 0 else if j = 5 then base + 1 else if j = 8 then base + 1 else base
+
+/-- **Floor-pinned all-7 carrier step on the concrete `reservoirRichSurface`.** Instantiates the
+abstract three-site valley menu `reservoirSpreadCarrier_all7Valley_step` (iter607) at the concrete
+floor-pinned board `Board.skyline GameConfig.standard (reservoirRichSurface base)`, with the pocket
+front at `c = 1`, the S-notch at `d = 6`, the Z-notch at `e = 5`, and the well at `w = 0`. For ANY
+drawn piece `p` (with the spread-2 slack and ledger room), this produces a valid placement landing
+back inside `reservoirSpreadCarrier (T.draw p)` at spread 2, floor `base`. This closes the
+*magnitude* gap flagged by iter603 (whose existential `IsSpreadBoundedRWSkyline 2` vocabulary
+recovered only the EXISTENCE of a pinned floor, not its value): here the floor is the concrete
+symbolic `base`, so the re-entered spread band carries its actual magnitude.
+**Open residue (NOT closed here):** the conclusion lands in a bare `reservoirSpreadCarrier`, whose
+board the next `hstep` invocation receives as an ARBITRARY carrier — so this does not by itself
+discharge the front-door `hstep` obligation (which is handed an arbitrary carrier board, not this
+concrete one). The genuine open work remains site regeneration across the step (a fill consumes its
+landing site) and the all-orders per-bag drain accounting (crux `#66`, `#72`). `TetrisSolvableValid`
+is NOT proven. -/
+theorem reservoirSpreadCarrier_richSurface_all7_step {T : Bag} {base : ℕ} {p : Piece}
+    (hslack : base + 2 ≤ GameConfig.standard.rows)
+    (hledger : base + 2 + (T.draw p).card + 1 ≤ GameConfig.standard.rows) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
+      reservoirSpreadCarrier (T.draw p)
+        (Placement.applyStep GameConfig.standard
+          (Board.skyline GameConfig.standard (reservoirRichSurface base)) pl) := by
+  apply reservoirSpreadCarrier_all7Valley_step (base := base) (c := 1) (d := 6) (e := 5) (w := 0)
+  all_goals try assumption
+  all_goals try decide
+  all_goals try (intro j hj hj0; simp only [reservoirRichSurface] <;> split_ifs <;> omega)
+  all_goals simp [reservoirRichSurface]
+
 /-- **The phase-matched per-piece fill dispatcher into the spread carrier.** Unifies the two
 phase bridges (`reservoirSpreadCarrier_flatPhase_flat_fill_step` and
 `reservoirSpreadCarrier_SZPhase_SZ_fill_step`) behind one disjunctive `hsite` premise that pairs the
