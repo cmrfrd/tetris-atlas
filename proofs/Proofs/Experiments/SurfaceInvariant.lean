@@ -24685,6 +24685,98 @@ theorem reservoirSpreadCarrier_flat_OO_regen {T : Bag} {s base : ℕ} {h : ℕ �
   · rw [hval 3 (by decide) (by decide), hflat 3 (by decide) (by decide)]
   · rw [hval (3 + 1) (by decide) (by decide), hflat (3 + 1) (by decide) (by decide)]
 
+/-- **`n`-fold disjoint-`O` regeneration: a flat band absorbs `k` vertical `O`s left to right** (iter626).
+The inductive generalization of `reservoirSpreadCarrier_flat_OO_regen` (iter400) from two `O`s to an
+arbitrary count `k`. Starting from a band flat at the floor `base` with the reserved empty well at column
+`0`, drop one `O` flush across each disjoint column pair `(2i+1, 2i+2)` for `i < k`. Because every fill
+seats on a FRESH floor pair (cols `2i+1, 2i+2` are still at `base`, never previously raised), each is a
+valid no-clear placement (`applyStep_O_skyline_noclear`) that lifts only its own two columns to `base + 2`,
+leaving the un-raised suffix flat — so the whole post-fill profile stays inside the spread-`2` band
+`[base, base + 2]` and the left-fold of the `k` placements lands back in `IsSpreadBoundedRWSkylineAt 2 base`.
+The pair budget `2 * k < cols` caps `k ≤ 4` on the ten-wide board (cols `1..8`, leaving col `9`), which is
+the concrete content of the vertical-stacking dodge: where the run-width track spends one floor column per
+piece and hits the `4 * 6 + 4 = 28 > 9` wall (`isFlatRunReservoirAt_iter_nonStaircase_drain`), this spends
+only vertical headroom and seats four `O`s in eight columns at a fixed floor. This is regeneration made
+quantitative — each fill regenerates the next landing pair in the flat suffix — but it is NOT the bag-phase
+closure: it is single-piece-typed (`O` only, the heights differ for `T`/`S`/`Z`), and a full bag's six
+non-`I` pieces plus the all-orders adversarial scheduling and the once-per-bag `I` drain back to a reset
+surface (crux `#66`/`#72`) remain open. `TetrisSolvableValid` is NOT proven. No sorry. -/
+theorem isSpreadBoundedRWSkylineAt_flat_O_fill_pairs {base : ℕ} {h : ℕ → ℕ} (k : ℕ)
+    (hw0 : h 0 = 0)
+    (hflat : ∀ j, 0 < j → j < GameConfig.standard.cols → h j = base)
+    (h2k : 2 * k < GameConfig.standard.cols)
+    (hslack : base + 2 ≤ GameConfig.standard.rows) :
+    (∀ i < k, ({ piece := Piece.O, rot := 0, col := 2 * i + 1 } : Placement).Valid GameConfig.standard) ∧
+      Board.IsSpreadBoundedRWSkylineAt GameConfig.standard 2 base
+        (((List.range k).map
+              (fun i => ({ piece := Piece.O, rot := 0, col := 2 * i + 1 } : Placement))).foldl
+          (fun b' pl => Placement.applyStep GameConfig.standard b' pl)
+          (Board.skyline GameConfig.standard h)) := by
+  refine ⟨fun i hi => Board.valid_O (by omega), ?_⟩
+  have hfold : ∀ m, 2 * m < GameConfig.standard.cols →
+      (((List.range m).map
+            (fun i => ({ piece := Piece.O, rot := 0, col := 2 * i + 1 } : Placement))).foldl
+          (fun b' pl => Placement.applyStep GameConfig.standard b' pl)
+          (Board.skyline GameConfig.standard h))
+        = Board.skyline GameConfig.standard
+            (fun j => if 0 < j ∧ j ≤ 2 * m then base + 2 else h j) := by
+    intro m
+    induction m with
+    | zero =>
+      intro _
+      simp only [List.range_zero, List.map_nil, List.foldl_nil]
+      refine congrArg (Board.skyline GameConfig.standard) ?_
+      funext j
+      rw [if_neg (by omega)]
+    | succ n ih =>
+      intro hsucc
+      have hc1lt : 2 * n + 1 < GameConfig.standard.cols := by omega
+      have hc2lt : 2 * n + 1 + 1 < GameConfig.standard.cols := by omega
+      have hgc : (fun j => if 0 < j ∧ j ≤ 2 * n then base + 2 else h j) (2 * n + 1) = base := by
+        show (if 0 < 2 * n + 1 ∧ 2 * n + 1 ≤ 2 * n then base + 2 else h (2 * n + 1)) = base
+        rw [if_neg (by omega)]; exact hflat (2 * n + 1) (by omega) hc1lt
+      have hgc1 : (fun j => if 0 < j ∧ j ≤ 2 * n then base + 2 else h j) (2 * n + 1 + 1) = base := by
+        show (if 0 < 2 * n + 1 + 1 ∧ 2 * n + 1 + 1 ≤ 2 * n then base + 2 else h (2 * n + 1 + 1)) = base
+        rw [if_neg (by omega)]; exact hflat (2 * n + 1 + 1) (by omega) hc2lt
+      have hg0 : (fun j => if 0 < j ∧ j ≤ 2 * n then base + 2 else h j) 0 = 0 := by
+        show (if 0 < 0 ∧ 0 ≤ 2 * n then base + 2 else h 0) = 0
+        rw [if_neg (by omega)]; exact hw0
+      have hgcb : (if 0 < 2 * n + 1 ∧ 2 * n + 1 ≤ 2 * n then base + 2 else h (2 * n + 1)) = base := by
+        rw [if_neg (by omega)]; exact hflat (2 * n + 1) (by omega) hc1lt
+      have heq_h : (fun j => if 0 < j ∧ j ≤ 2 * n then base + 2 else h j) (2 * n + 1)
+          = (fun j => if 0 < j ∧ j ≤ 2 * n then base + 2 else h j) (2 * n + 1 + 1) := by
+        rw [hgc, hgc1]
+      rw [List.range_succ, List.map_append, List.foldl_append, ih (by omega)]
+      simp only [List.map_cons, List.map_nil, List.foldl_cons, List.foldl_nil]
+      rw [Board.applyStep_O_skyline_noclear
+          (h := fun j => if 0 < j ∧ j ≤ 2 * n then base + 2 else h j) (w := 0)
+          hc1lt hc2lt heq_h (by decide) (by omega) (by omega) hg0, hgcb]
+      refine congrArg (Board.skyline GameConfig.standard) ?_
+      funext j
+      show Function.update (Function.update
+              (fun j => if 0 < j ∧ j ≤ 2 * n then base + 2 else h j) (2 * n + 1) (base + 2))
+            (2 * n + 1 + 1) (base + 2) j
+          = (if 0 < j ∧ j ≤ 2 * (n + 1) then base + 2 else h j)
+      rcases eq_or_ne j (2 * n + 1 + 1) with rfl | hj2
+      · rw [Function.update_self, if_pos (by omega)]
+      · rw [Function.update_of_ne hj2]
+        rcases eq_or_ne j (2 * n + 1) with rfl | hj1
+        · rw [Function.update_self, if_pos (by omega)]
+        · rw [Function.update_of_ne hj1]
+          show (if 0 < j ∧ j ≤ 2 * n then base + 2 else h j)
+            = (if 0 < j ∧ j ≤ 2 * (n + 1) then base + 2 else h j)
+          split_ifs <;> omega
+  rw [hfold k h2k]
+  refine Board.isSpreadBoundedRWSkylineAt_skyline (w := 0) (by decide) ?_ ?_ hslack
+  · show (if 0 < 0 ∧ 0 ≤ 2 * k then base + 2 else h 0) = 0
+    rw [if_neg (by omega)]; exact hw0
+  · intro j hj hj0
+    show base ≤ (if 0 < j ∧ j ≤ 2 * k then base + 2 else h j)
+      ∧ (if 0 < j ∧ j ≤ 2 * k then base + 2 else h j) ≤ base + 2
+    split_ifs with hc
+    · omega
+    · rw [hflat j (Nat.pos_of_ne_zero hj0) hj]; omega
+
 /-- **The vertical-stacking `T` atom** (iter401). The `T` analogue of
 `isSpreadBoundedRWSkylineAt_O_vstack` (iter396): the flat-bottom `T` (`rot := 2`) dropped onto a level
 triple of columns `(c, c+1, c+2)` all at height `f` writes `+1, +2, +1`
