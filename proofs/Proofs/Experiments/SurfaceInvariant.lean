@@ -27054,6 +27054,46 @@ theorem bagOrder_interI_segment {ps1 ps2 : List Piece}
     rw [List.length_append]
     omega
 
+/-- **Each piece type appears at most twice in the inter-regulator segment** (iter647). The
+per-type refinement of `bagOrder_interI_segment` (iter646): where iter646 bounds the TOTAL length of
+the run `post1 ++ pre2` between two consecutive regulator `I`s by twelve, this bounds the count of
+EACH individual piece type by two. The reason is that every piece — `I` included — occurs exactly once
+per bag (`bagOrder_count_eq_one`, iter493), so a given shape can contribute at most one copy from the
+first bag's post-drain suffix and at most one from the second bag's pre-drain prefix, hence at most two
+across the boundary. This is the per-column substrate the height balance needs: between two drains the
+reservoir receives at most two `O`s, at most two `T`s, at most two `S`s, and so on, so no single column
+family is asked to absorb more than two same-shape pieces before the next guaranteed drain. The two
+hardest pieces obey it too — at most two `S` and at most two `Z` notches arrive between drains — which
+caps the notch-routing obligation across the bag boundary.
+
+Honest caveat: this is all-orders accounting, not scheduling. It pins HOW MANY of each shape the
+reservoir owes between drains, not WHEN they arrive or WHERE to place them, and it does not bridge the
+column-budget obstruction or close the per-bag raise versus drain ledger. `TetrisSolvableValid` is NOT
+proven; crux #66/#72 (all-orders per-bag I-drain accounting against the single shared regulator)
+remains the genuine open gap; no sorry. -/
+theorem bagOrder_interI_segment_count_le {ps1 ps2 : List Piece}
+    (h1 : ps1.Perm [Piece.O, Piece.I, Piece.S, Piece.Z, Piece.T, Piece.L, Piece.J])
+    (h2 : ps2.Perm [Piece.O, Piece.I, Piece.S, Piece.Z, Piece.T, Piece.L, Piece.J]) :
+    ∃ (pre1 post1 pre2 post2 : List Piece),
+      ps1 = pre1 ++ Piece.I :: post1 ∧ ps2 = pre2 ++ Piece.I :: post2 ∧
+      Piece.I ∉ pre1 ∧ Piece.I ∉ post1 ∧ Piece.I ∉ pre2 ∧ Piece.I ∉ post2 ∧
+      ∀ p, (post1 ++ pre2).count p ≤ 2 := by
+  obtain ⟨pre1, post1, hsplit1, hpre1, hpost1⟩ := bagOrder_split_at_unique_I h1
+  obtain ⟨pre2, post2, hsplit2, hpre2, hpost2⟩ := bagOrder_split_at_unique_I h2
+  refine ⟨pre1, post1, pre2, post2, hsplit1, hsplit2, hpre1, hpost1, hpre2, hpost2, ?_⟩
+  intro p
+  have hc1 : post1.count p ≤ 1 := by
+    have hh := bagOrder_count_eq_one h1 p
+    rw [hsplit1, List.count_append,
+      show (Piece.I :: post1) = [Piece.I] ++ post1 from rfl, List.count_append] at hh
+    omega
+  have hc2 : pre2.count p ≤ 1 := by
+    have hh := bagOrder_count_eq_one h2 p
+    rw [hsplit2, List.count_append] at hh
+    omega
+  rw [List.count_append]
+  omega
+
 /-- **Pocket-preserving maximal drain: `n` vertical-`I` drops keep the level pocket band** (iter507).
 The pocket-PRESERVING analogue of the pocket-less iterated drain `isSpreadBoundedRWSkylineAt_iter_drain`
 (iter496). Each single step `isLevelPocketBandAt_vertI_descends` drops the regulator `I` into the
