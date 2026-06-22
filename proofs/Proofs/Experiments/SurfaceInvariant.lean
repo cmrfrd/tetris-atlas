@@ -27014,6 +27014,46 @@ theorem bagOrder_filler_SZ_perm {ps : List Piece}
       = [Piece.S, Piece.Z] := by decide
   rwa [heq] at hf
 
+/-- **The inter-regulator segment across a bag boundary is non-`I` and at most 12 pieces long**
+(iter646). The two-bag extension of the single-bag split `bagOrder_split_at_unique_I` (iter492):
+the goal's adversary places the regulator `I` "first, last, or anywhere", so the surface's true
+drain-to-drain cycle is NOT one bag but the run between two CONSECUTIVE regulators, which straddles a
+bag boundary. Splitting each adversarial bag order at its unique `I` as `pre ++ I :: post`, the pieces
+strictly between the `I` of bag one and the `I` of bag two are exactly `post1 ++ pre2` — the suffix of
+the first bag after its drain concatenated with the prefix of the second bag before its drain. This
+lemma proves that segment carries NO regulator (every piece in it is non-`I`, so the reservoir gets no
+help draining inside it) and has length at most twelve (`post1.length ≤ 6` and `pre2.length ≤ 6`, each
+from the seven-piece bag length minus the one `I`). Twelve is tight: the adversary achieves it by
+drawing `I` first in bag one (`pre1 = []`, six fillers owed after) and `I` last in bag two
+(`post2 = []`, six fillers owed before), forcing twelve non-`I` pieces to stack between two drains.
+
+This is the worst-case buffer-depth input the height balance (#66, #72) must survive: a bag-phase-aware
+reservoir on ten columns must absorb up to twelve fillers — spread over the nine non-well columns that
+is up to forty-eight cells, about five rows — before the next guaranteed `I` arrives to drain. It pins
+WHAT the reservoir owes between drains (at most 12 non-`I` pieces) for every adversary order; it does
+NOT schedule those fillers, re-establish a landing surface across the drain, or close the per-bag
+raise versus drain ledger. `TetrisSolvableValid` is NOT proven; crux #66/#72 (all-orders per-bag
+I-drain accounting against the single shared regulator) remains the genuine open gap; no sorry. -/
+theorem bagOrder_interI_segment {ps1 ps2 : List Piece}
+    (h1 : ps1.Perm [Piece.O, Piece.I, Piece.S, Piece.Z, Piece.T, Piece.L, Piece.J])
+    (h2 : ps2.Perm [Piece.O, Piece.I, Piece.S, Piece.Z, Piece.T, Piece.L, Piece.J]) :
+    ∃ (pre1 post1 pre2 post2 : List Piece),
+      ps1 = pre1 ++ Piece.I :: post1 ∧ ps2 = pre2 ++ Piece.I :: post2 ∧
+      Piece.I ∉ pre1 ∧ Piece.I ∉ post1 ∧ Piece.I ∉ pre2 ∧ Piece.I ∉ post2 ∧
+      Piece.I ∉ (post1 ++ pre2) ∧
+      (post1 ++ pre2).length ≤ 12 := by
+  obtain ⟨pre1, post1, hsplit1, hpre1, hpost1⟩ := bagOrder_split_at_unique_I h1
+  obtain ⟨pre2, post2, hsplit2, hpre2, hpost2⟩ := bagOrder_split_at_unique_I h2
+  refine ⟨pre1, post1, pre2, post2, hsplit1, hsplit2, hpre1, hpost1, hpre2, hpost2, ?_, ?_⟩
+  · simp only [List.mem_append, not_or]
+    exact ⟨hpost1, hpre2⟩
+  · have hlen1 : ps1.length = 7 := by simpa using h1.length_eq
+    have hlen2 : ps2.length = 7 := by simpa using h2.length_eq
+    rw [hsplit1, List.length_append, List.length_cons] at hlen1
+    rw [hsplit2, List.length_append, List.length_cons] at hlen2
+    rw [List.length_append]
+    omega
+
 /-- **Pocket-preserving maximal drain: `n` vertical-`I` drops keep the level pocket band** (iter507).
 The pocket-PRESERVING analogue of the pocket-less iterated drain `isSpreadBoundedRWSkylineAt_iter_drain`
 (iter496). Each single step `isLevelPocketBandAt_vertI_descends` drops the regulator `I` into the
