@@ -23045,6 +23045,51 @@ theorem reservoirSpreadCarrier_richSurface_mem {T : Bag} {base : ℕ}
     split_ifs <;> omega
   · omega
 
+/-- **Site regeneration, step one: an `O` filler in the rich pocket keeps BOTH notches** (iter610).
+The first concrete multi-piece site-regeneration brick on the iter608 reset surface
+`reservoirRichSurface base`. Instantiating the abstract two-valley frame
+`Board.applyStep_O_skyline_preserves_both_notches` (iter596) at the rich geometry — `O` at the pocket
+front `col = 1`, the S-notch on columns `6,7,8`, the Z-notch on columns `5,6,7`, the reserved well at
+`col = 0` — shows that after the flat `O` lands in the pocket, the post-`O` board still carries the
+S-notch shape (`colHeight 6 = colHeight 7`, `colHeight 8 = colHeight 6 + 1`) and the Z-notch shape
+(`colHeight 5 = colHeight 6 + 1`). So a filler arriving mid-bag does NOT destroy the reserved `S`/`Z`
+landing spots: the same rich surface that hosts every single piece (iter608) keeps hosting the owed
+staircases after one pocket fill. This is the concrete witness that the reset surface's landing menu
+*regenerates* across an intervening filler — the property the bag-phase scheduler needs to chain
+iter608's all-7 step across a whole bag.
+**Open residue (NOT closed here):** this handles ONE `O` in the pocket and only certifies the notch
+shapes survive; it does not yet re-establish full carrier membership after the fill, nor handle the
+pocket filling up across many fillers (the spread growth), nor the all-orders per-bag drain accounting
+(crux `#66`, `#72`). `TetrisSolvableValid` is NOT proven. -/
+theorem reservoirRichSurface_O_pocket_preserves_both_notches {base : ℕ} :
+    Board.colHeight (Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirRichSurface base))
+        { piece := Piece.O, rot := 0, col := 1 }) 6
+      = Board.colHeight (Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirRichSurface base))
+        { piece := Piece.O, rot := 0, col := 1 }) 7 ∧
+    Board.colHeight (Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirRichSurface base))
+        { piece := Piece.O, rot := 0, col := 1 }) 8
+      = Board.colHeight (Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirRichSurface base))
+        { piece := Piece.O, rot := 0, col := 1 }) 6 + 1 ∧
+    Board.colHeight (Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirRichSurface base))
+        { piece := Piece.O, rot := 0, col := 1 }) 5
+      = Board.colHeight (Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirRichSurface base))
+        { piece := Piece.O, rot := 0, col := 1 }) 6 + 1 := by
+  have key := Board.applyStep_O_skyline_preserves_both_notches
+    (cfg := GameConfig.standard) (h := reservoirRichSurface base)
+    (c := 1) (sc := 6) (zc := 5) (w := 0)
+    (by decide) (by decide) (by simp [reservoirRichSurface]) (by decide) (by decide)
+    (by decide) (by simp [reservoirRichSurface]) (by decide) (by decide) (by decide)
+    (by simp [reservoirRichSurface]) (by simp [reservoirRichSurface]) (by decide) (by decide)
+    (by decide) (by simp [reservoirRichSurface]) (by simp [reservoirRichSurface])
+    (by decide) (by decide)
+  exact ⟨key.1, key.2.1, key.2.2.2⟩
+
 /-- **The phase-matched per-piece fill dispatcher into the spread carrier.** Unifies the two
 phase bridges (`reservoirSpreadCarrier_flatPhase_flat_fill_step` and
 `reservoirSpreadCarrier_SZPhase_SZ_fill_step`) behind one disjunctive `hsite` premise that pairs the
