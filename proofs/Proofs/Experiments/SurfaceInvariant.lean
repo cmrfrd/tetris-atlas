@@ -29006,6 +29006,46 @@ theorem isFlatFrontBandAt_JZ_then_fillers_then_LS_drain_height {s base c : ℕ} 
   exact ⟨pls, c', hforall, hlo, hhi,
     Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt hdrain⟩
 
+/-- **Scalar height cap for the favorable-pair "fillers between the two notch pairs" drain** (iter643).
+The `maxColHeight` face of iter588 (`isFlatFrontBandAt_LS_then_fillers_then_JZ_drain`), the `LS`-first
+mirror of the reversed-pair height cap iter602
+(`isFlatFrontBandAt_JZ_then_fillers_then_LS_drain_height`). From a flat-front band at front `c`, run the
+bag's `L`-then-`S` pair first, deal the strictly-flat fillers `ps` in the gap, land the `J`-then-`Z`
+pair at the fresh front `c'`, and spend the once-per-bag vertical `I` down the reserved well: the
+resulting peak column height is at most `(base - 4) + s`, i.e. four rows below the incoming `base + s`
+ceiling. It just reads the spread-bounded skyline endpoint of iter588 through
+`Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt`, turning the carrier-shaped drain certificate into
+the scalar `maxColHeight ≤ rows`-style bound the strategy reduction consumes. With iter602 this completes
+the height companion for BOTH inter-pair (fillers-between) orders (`LS`-first here, `JZ`-first in
+iter602). Honest caveats are unchanged: this bounds the endpoint of a single half-cycle that bakes in the
+`L`-before-`S`, `J`-before-`Z`, and `LS`-before-`JZ` orders against a drain-last schedule; it does not
+discharge the every-order availability of a drain before the ceiling. Crux #66 and #72 stay open and
+`TetrisSolvableValid` is NOT proven; no `sorry`. -/
+theorem isFlatFrontBandAt_LS_then_fillers_then_JZ_drain_height {s base c : ℕ} {b : Board}
+    {ps : List Piece}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
+    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
+    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
+    ∃ (pls : List Placement) (c' : ℕ),
+      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
+      c + 3 ≤ c' ∧ c' ≤ c + 3 + 3 * ps.length ∧
+      Board.maxColHeight GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (pls.foldl (Placement.applyStep GameConfig.standard)
+                (Placement.applyStep GameConfig.standard
+                  (Placement.applyStep GameConfig.standard b
+                    { piece := Piece.L, rot := 0, col := c })
+                  { piece := Piece.S, rot := 0, col := c }))
+              { piece := Piece.J, rot := 0, col := c' })
+            { piece := Piece.Z, rot := 0, col := c' })
+          { piece := Piece.I, rot := 1, col := 0 }) ≤ (base - 4) + s := by
+  obtain ⟨pls, c', hforall, hlo, hhi, hdrain⟩ :=
+    isFlatFrontBandAt_LS_then_fillers_then_JZ_drain hb hs hc0 hmem hroom hbase4
+  exact ⟨pls, c', hforall, hlo, hhi,
+    Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt hdrain⟩
+
 /-- **`LS`-pair, then `JZ`-pair, then the filler block, on a flat front** (iter627). The fifth of the
 six block-orderings of `{fillers, LS-pair, JZ-pair}` on the spread-`s` reserved-well flat band: first
 spend the bag's `L`-then-`S` at column `c` (the `L` re-digs the single-step `S`-notch, the `S` seats
