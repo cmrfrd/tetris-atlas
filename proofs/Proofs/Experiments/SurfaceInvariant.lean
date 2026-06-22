@@ -25275,6 +25275,72 @@ theorem reservoirSpreadCarrier_flat_T_then_Z_notch_step {T : Bag} {s base : ℕ}
       · rw [h3v]; omega
       · rw [hval j hj1 hj2 hj3, hflat j (Nat.pos_of_ne_zero hj0) hj]; omega
 
+/-- **Notch creation: a `T` sets up the staircase a following `S` consumes** (iter636). The LEFT-shoulder
+mirror of iter635's `T`-then-`Z`. A *flat* band carries no `+1` step, so a hole-maker `S` can never land
+on it directly — its ascending notch must be manufactured by an earlier piece. Starting from a band flat
+at the floor `base` with the reserved empty well at column `0` and spread at least `2`, the flat-bottom
+`T` at columns `(3, 4, 5)` writes `(base+1, base+2, base+1)` (`applyStep_T_skyline_noclear`), so its LEFT
+shoulder leaves the ascending step `(h 1, h 2, h 3) = (base, base, base+1)` — exactly the notch the
+no-clear `S` requires. The `S` then drops flush at column `1` (`reservoirSpreadCarrier_S_vstack_step`),
+writing `(base+1, base+1, base+2)`, and the whole profile stays inside `[base, base+2] ⊆ [base, base+s]`,
+re-entering `reservoirSpreadCarrier ((T.draw Piece.T).draw Piece.S)`. Together with iter635 this shows the
+symmetric `T` can pay for EITHER staircase — a left `S`-notch or a right `Z`-notch — so a `T` already in
+hand serves whichever the bag still owes, widening the scheduler's options. It bakes in the order `T`
+before `S`; the adversary's `S`-before-`T` order needs a different notch source (crux `#66`/`#72`), and the
+once-per-bag `I` drain back to a reset surface is still open. `TetrisSolvableValid` is NOT proven.
+No sorry. -/
+theorem reservoirSpreadCarrier_flat_T_then_S_notch_step {T : Bag} {s base : ℕ} {h : ℕ → ℕ}
+    (hs : 2 ≤ s) (hw0 : h 0 = 0)
+    (hflat : ∀ j, 0 < j → j < GameConfig.standard.cols → h j = base)
+    (hledger : base + s + ((T.draw Piece.T).draw Piece.S).card + 1 ≤ GameConfig.standard.rows) :
+    ∃ pl1 : Placement, pl1.piece = Piece.T ∧ pl1.Valid GameConfig.standard ∧
+      ∃ pl2 : Placement, pl2.piece = Piece.S ∧ pl2.Valid GameConfig.standard ∧
+        reservoirSpreadCarrier ((T.draw Piece.T).draw Piece.S)
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard (Board.skyline GameConfig.standard h) pl1) pl2) := by
+  refine ⟨{ piece := Piece.T, rot := 2, col := 3 }, rfl, Board.valid_T (by decide), ?_⟩
+  have hT : Placement.applyStep GameConfig.standard (Board.skyline GameConfig.standard h)
+        { piece := Piece.T, rot := 2, col := 3 }
+      = Board.skyline GameConfig.standard
+          (Function.update (Function.update (Function.update h 3 (h 3 + 1)) 4 (h 3 + 2))
+            5 (h 3 + 1)) :=
+    Board.applyStep_T_skyline_noclear (w := 0) (by decide) (by decide) (by decide)
+      (by rw [hflat 4 (by decide) (by decide), hflat 3 (by decide) (by decide)])
+      (by rw [hflat 5 (by decide) (by decide), hflat 3 (by decide) (by decide)])
+      (by decide) (by decide) (by decide) (by decide) hw0
+  rw [hT]
+  set h' := Function.update (Function.update (Function.update h 3 (h 3 + 1)) 4 (h 3 + 2))
+    5 (h 3 + 1) with hh'
+  have hval : ∀ j : ℕ, j ≠ 3 → j ≠ 4 → j ≠ 5 → h' j = h j := by
+    intro j hj3 hj4 hj5
+    rw [hh', Function.update_of_ne hj5, Function.update_of_ne hj4, Function.update_of_ne hj3]
+  have h3v : h' 3 = base + 1 := by
+    rw [hh', Function.update_of_ne (by decide : (3 : ℕ) ≠ 5),
+      Function.update_of_ne (by decide : (3 : ℕ) ≠ 4), Function.update_self,
+      hflat 3 (by decide) (by decide)]
+  have h4v : h' 4 = base + 2 := by
+    rw [hh', Function.update_of_ne (by decide : (4 : ℕ) ≠ 5), Function.update_self,
+      hflat 3 (by decide) (by decide)]
+  have h5v : h' 5 = base + 1 := by
+    rw [hh', Function.update_self, hflat 3 (by decide) (by decide)]
+  have h0v : h' 0 = 0 := by
+    rw [hval 0 (by decide) (by decide) (by decide)]; exact hw0
+  have h1v : h' 1 = base := by
+    rw [hval 1 (by decide) (by decide) (by decide)]; exact hflat 1 (by decide) (by decide)
+  have h2v : h' 2 = base := by
+    rw [hval 2 (by decide) (by decide) (by decide)]; exact hflat 2 (by decide) (by decide)
+  refine reservoirSpreadCarrier_S_vstack_step (T := T.draw Piece.T) (w := 0) (c := 1) (f := base)
+    (by decide) h0v ?_ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+    h1v h2v h3v (le_refl base) (by omega) hledger
+  intro j hj hj0
+  rcases eq_or_ne j 3 with rfl | hj3
+  · rw [h3v]; omega
+  · rcases eq_or_ne j 4 with rfl | hj4
+    · rw [h4v]; omega
+    · rcases eq_or_ne j 5 with rfl | hj5
+      · rw [h5v]; omega
+      · rw [hval j hj3 hj4 hj5, hflat j (Nat.pos_of_ne_zero hj0) hj]; omega
+
 /-- **The vertical-stacking horizontal-`I` atom for the spread-band carrier** (iter406). The cheapest
 absorber: the no-clear horizontal `I` lands on a level quad (columns `c, c+1, c+2, c+3` all read `f`)
 and writes `f+1` into each, a peak of only `f+1` (`applyStep_horizI_skyline_noclear`). As long as the
