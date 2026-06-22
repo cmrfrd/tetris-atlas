@@ -1688,6 +1688,39 @@ theorem richReadyBoard_band_floor (base : ℕ) (j : ℕ) (hj0 : j ≠ 0)
   dsimp [ReservoirProfile]
   split_ifs <;> omega
 
+/-- **The solid floor survives a non-I filler.**  A non-I `phasePlacement` lands at
+column `≥ 1`, dodges the empty well, and clears nothing, so `colHeight` is monotone
+(`colHeight_le_applyStep_of_no_fullRows`): every non-well column of `richStepBoard`
+stays at least `base` tall.  Together with `richStepBoard_well_empty` this carries the
+clearability structure (bottom `base` rows solid except the well) one rung up the rich
+ladder — the floor a later I-drop needs in order to clear the bottom rows. -/
+theorem richStepBoard_band_floor (p : Piece) (hp : p ≠ Piece.I) (base : ℕ)
+    (j : ℕ) (hj0 : j ≠ 0) (hjc : j < GameConfig.standard.cols) :
+    base ≤ Board.colHeight (richStepBoard p base) j := by
+  have hfloor : base ≤ Board.colHeight (richReadyBoard base) j :=
+    richReadyBoard_band_floor base j hj0 hjc
+  have hwell : Board.colHeight (richReadyBoard base) 0 = 0 :=
+    richReadyBoard_well_empty base
+  have havoid :
+      ∀ cell ∈ (phasePlacement p).shapeUp, (phasePlacement p).col + cell.1 ≠ 0 := by
+    have hcol : 1 ≤ (phasePlacement p).col := by
+      cases p with
+      | I => exact absurd rfl hp
+      | _ => decide
+    intro cell _
+    omega
+  have hclear :
+      Board.fullRows GameConfig.standard
+        ((phasePlacement p).place (richReadyBoard base)) = ∅ :=
+    Board.fullRows_place_eq_empty_of_well (cfg := GameConfig.standard)
+      (b := richReadyBoard base) (pl := phasePlacement p) (w := 0)
+      (by decide) hwell havoid
+  have hmono : Board.colHeight (richReadyBoard base) j
+      ≤ Board.colHeight (richStepBoard p base) j :=
+    Board.colHeight_le_applyStep_of_no_fullRows (cfg := GameConfig.standard)
+      (b := richReadyBoard base) (pl := phasePlacement p) hclear j
+  exact le_trans hfloor hmono
+
 theorem phaseCarrier_height {T : Bag} {b : Board}
     (h : PhaseCarrier T b) :
     ∀ j, Board.colHeight b j ≤ GameConfig.standard.rows := by
