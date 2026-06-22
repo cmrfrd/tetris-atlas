@@ -23767,6 +23767,61 @@ theorem reservoirRichSurface_J_pocket_carrier_both_notches {T : Bag} {base : ℕ
   · rw [hs1]; simp [reservoirRichSurface]
   · rw [hs2]; simp [reservoirRichSurface]
 
+/-- **Any flat filler `p ∈ {O,I,T,L,J}` re-enters the spread carrier through the rich pocket while
+keeping BOTH standing notches.** The unifying dispatcher over the five flat-filler rich-surface
+bricks (`reservoirRichSurface_{O,horizI,T,L,J}_pocket_carrier_both_notches`, iter620–624): for every
+non-staircase piece there EXISTS a pocket placement (the concrete `col 1` landing each brick uses —
+`O,L,J` at `rot 0`, horizontal-`I` at `rot 0`, `T` at `rot 2`) that drops the piece into the flat
+pocket of `reservoirRichSurface base`, re-enters `reservoirSpreadCarrier (T.draw p)` at floor `base`
+(spread exactly `2`), AND leaves both reserved staircase landing sites standing — the S-notch shape
+(`colHeight 6 = colHeight 7`, `colHeight 8 = colHeight 6 + 1`) and the Z-notch shape
+(`colHeight 5 = colHeight 6 + 1`). This is the notch-STRENGTHENED analogue of iter608's all-7 hosting
+step (`reservoirSpreadCarrier_richSurface_all7_step`): that step only certified carrier re-entry (plus
+validity) for the existential landing it happens to pick, whereas this dispatcher pins the landing to
+the pocket and additionally guarantees neither owed staircase is consumed — exactly the regeneration
+property the bag-phase scheduler needs to chain a flat filler mid-bag without spending an `S`/`Z`
+spot. Proof: `rcases` the five-way piece disjunction, supply each brick's concrete placement, and
+turn its explicit `base+1,base,base,base+1` notch read-backs (or, for `O`, the relational shapes
+directly) into the relational notch conjunct by `omega`. NOTE the placements differ per piece, so the
+statement is existential; validity is NOT re-proven here (iter608 already carries it). It does NOT
+close the pocket-fills-up spread growth across many chained fillers, nor the all-orders per-bag drain
+accounting (crux `#66`, `#72`); `TetrisSolvableValid` is NOT proven. -/
+theorem reservoirRichSurface_flatFiller_pocket_carrier_both_notches {T : Bag} {base : ℕ} {p : Piece}
+    (hp : p = Piece.O ∨ p = Piece.I ∨ p = Piece.T ∨ p = Piece.L ∨ p = Piece.J)
+    (hslack : base + 2 ≤ GameConfig.standard.rows)
+    (hledger : base + 2 + (T.draw p).card + 1 ≤ GameConfig.standard.rows) :
+    ∃ pl : Placement, pl.piece = p ∧
+      reservoirSpreadCarrier (T.draw p)
+        (Placement.applyStep GameConfig.standard
+          (Board.skyline GameConfig.standard (reservoirRichSurface base)) pl) ∧
+      (Board.colHeight (Placement.applyStep GameConfig.standard
+          (Board.skyline GameConfig.standard (reservoirRichSurface base)) pl) 6
+        = Board.colHeight (Placement.applyStep GameConfig.standard
+          (Board.skyline GameConfig.standard (reservoirRichSurface base)) pl) 7 ∧
+      Board.colHeight (Placement.applyStep GameConfig.standard
+          (Board.skyline GameConfig.standard (reservoirRichSurface base)) pl) 8
+        = Board.colHeight (Placement.applyStep GameConfig.standard
+          (Board.skyline GameConfig.standard (reservoirRichSurface base)) pl) 6 + 1 ∧
+      Board.colHeight (Placement.applyStep GameConfig.standard
+          (Board.skyline GameConfig.standard (reservoirRichSurface base)) pl) 5
+        = Board.colHeight (Placement.applyStep GameConfig.standard
+          (Board.skyline GameConfig.standard (reservoirRichSurface base)) pl) 6 + 1) := by
+  rcases hp with rfl | rfl | rfl | rfl | rfl
+  · exact ⟨{ piece := Piece.O, rot := 0, col := 1 }, rfl,
+      reservoirRichSurface_O_pocket_carrier_both_notches hslack hledger⟩
+  · obtain ⟨hc, h5, h6, h7, h8⟩ :=
+      reservoirRichSurface_horizI_pocket_carrier_both_notches hslack hledger
+    exact ⟨{ piece := Piece.I, rot := 0, col := 1 }, rfl, hc, by omega, by omega, by omega⟩
+  · obtain ⟨hc, h5, h6, h7, h8⟩ :=
+      reservoirRichSurface_T_pocket_carrier_both_notches hslack hledger
+    exact ⟨{ piece := Piece.T, rot := 2, col := 1 }, rfl, hc, by omega, by omega, by omega⟩
+  · obtain ⟨hc, h5, h6, h7, h8⟩ :=
+      reservoirRichSurface_L_pocket_carrier_both_notches hslack hledger
+    exact ⟨{ piece := Piece.L, rot := 0, col := 1 }, rfl, hc, by omega, by omega, by omega⟩
+  · obtain ⟨hc, h5, h6, h7, h8⟩ :=
+      reservoirRichSurface_J_pocket_carrier_both_notches hslack hledger
+    exact ⟨{ piece := Piece.J, rot := 0, col := 1 }, rfl, hc, by omega, by omega, by omega⟩
+
 /-- **The phase-matched per-piece fill dispatcher into the spread carrier.** Unifies the two
 phase bridges (`reservoirSpreadCarrier_flatPhase_flat_fill_step` and
 `reservoirSpreadCarrier_SZPhase_SZ_fill_step`) behind one disjunctive `hsite` premise that pairs the
