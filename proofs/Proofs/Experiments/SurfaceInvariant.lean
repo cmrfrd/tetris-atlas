@@ -25091,6 +25091,31 @@ theorem reservoirCarrier_maximal_drain_reset_safe {floor : ℕ} {b : Board}
   have hr : GameConfig.standard.rows = 20 := rfl
   omega
 
+/-- **Floor-hiding carrier form of the certified inter-bag reset drain** (iter553). The
+arbitrary-member lift of `reservoirCarrier_maximal_drain_reset_safe` (iter552) into the
+`IsBoundedPocketBandCarrier 2` vocabulary — the surface a bag-indexed strategy actually holds, since
+it hides the exact floor behind an existential. From ANY spread-`2` bounded pocket-band carrier board,
+whatever hidden floor it carries, the reserved-well vertical-`I` drain empties the stack all the way
+down to a fresh-bag reset: the result re-enters `reservoirCarrier Bag.full` (the carrier state for a
+full seven-piece bag) and every prefix of the drain is un-lost. The proof forgets the carrier to its
+hidden floor (`obtain ⟨floor, hband⟩`) and hands that level band to the explicit-floor reset-safe,
+dropping only the now-unstatable length face. This is the inter-bag transition a per-bag survival
+schedule quotes at the bag boundary: it holds a bounded carrier (not an explicit floor), and this
+brick certifies the regulator collapses it to a fresh-bag-ready reservoir without ever topping out.
+The complementary fill side and the adversarial S and Z notch routing remain the open closure
+(#66, #72). -/
+theorem isBoundedPocketBandCarrier_maximal_drain_to_reservoir_safe {b : Board}
+    (hb : Board.IsBoundedPocketBandCarrier 2 b) :
+    ∃ pls : List Placement,
+      (∀ pl ∈ pls, pl.piece = Piece.I ∧ pl.Valid GameConfig.standard) ∧
+      reservoirCarrier Bag.full (pls.foldl (Placement.applyStep GameConfig.standard) b) ∧
+      (∀ k, ¬ Board.isLost GameConfig.standard
+        ((pls.take k).foldl (Placement.applyStep GameConfig.standard) b)) := by
+  obtain ⟨floor, hband⟩ := hb
+  obtain ⟨pls, _, hmem, hcarrier, hsafe⟩ :=
+    reservoirCarrier_maximal_drain_reset_safe hband
+  exact ⟨pls, hmem, hcarrier, hsafe⟩
+
 /-- **A full layer of flat fillers fits and marches the front, in any order** (iter511). Tightens
 the room budget of `isFlatFrontBandAt_nonSZ_fill_list` (iter482) by excluding the width-four
 horizontal `I`: a run `ps` of strictly-flat fillers (each `O`, `T`, `L`, or `J`, advancing the front
