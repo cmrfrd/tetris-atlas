@@ -9749,6 +9749,54 @@ theorem isSpreadBoundedRWSkylineAt_applyStep_flatFiller_band_preserves_both_notc
   · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_J_band_preserves_both_notches hc hc1 hc2 heq1 heq2
       hw hwc hwc1 hwc2 hw0 hband hfit hslack hsc hsc1 hsc2 hzc hzc1 hzc2 (by omega) (by omega)⟩
 
+/-- **An owed staircase consumer — `S` or `Z` — admits a band-and-BOTH-notches-preserving drop on its
+own notch: the consumer-side two-notch dispatcher.** This is the two-notch upgrade of
+`isSpreadBoundedRWSkylineAt_applyStep_SZ_band_preserves_notch` (iter471) and the consumer mirror of the
+flat-filler two-notch dispatcher (iter616): whichever staircase consumer the adversary draws, spending
+it on its own notch at `c, c+1, c+2` (the mirror-image shapes carried inside `hshape` — `S` wants
+`h c = h (c+1)`, `h (c+2) = h c + 1`; `Z` wants `h (c+1) = h (c+2)`, `h c = h (c+1) + 1`, each with its
+own fit) admits a rotation whose no-clear drop both re-enters `IsSpreadBoundedRWSkylineAt cfg s base`
+AND leaves TWO column-disjoint reserved notch windows `sc, sc+1, sc+2` and `zc, zc+1, zc+2` (`hsepS`,
+`hsepZ`) with all six heights untouched. So when the adversary spends one owed staircase piece while two
+further staircase sites are still reserved for later owed pieces, neither of those sites is disturbed —
+exactly the ledger fact the all-orders per-bag accounting needs at a consumer step. Proof: case on
+`hshape`, peeling each branch's piece equation, shape pair, and fit, then discharge with the matching
+`S` or `Z` both-notches band frame at rotation `0`. Honest crux: this is one consumer-step brick; the
+all-orders per-bag drain accounting (crux #66/#72) stays open, and `TetrisSolvableValid` is NOT
+proven. -/
+theorem isSpreadBoundedRWSkylineAt_applyStep_SZ_band_preserves_both_notches {cfg : GameConfig}
+    {h : ℕ → ℕ} {base s c w sc zc : ℕ} {p : Piece}
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
+    (hshape : (p = Piece.S ∧ h c = h (c + 1) ∧ h (c + 2) = h c + 1 ∧ h c + 2 ≤ base + s)
+            ∨ (p = Piece.Z ∧ h (c + 1) = h (c + 2) ∧ h c = h (c + 1) + 1 ∧ h (c + 1) + 2 ≤ base + s))
+    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
+    (hw0 : h w = 0)
+    (hband : ∀ j < cfg.cols, j ≠ w → base ≤ h j ∧ h j ≤ base + s)
+    (hslack : base + s ≤ cfg.rows)
+    (hsc : sc < cfg.cols) (hsc1 : sc + 1 < cfg.cols) (hsc2 : sc + 2 < cfg.cols)
+    (hzc : zc < cfg.cols) (hzc1 : zc + 1 < cfg.cols) (hzc2 : zc + 2 < cfg.cols)
+    (hsepS : sc + 2 < c ∨ c + 2 < sc) (hsepZ : zc + 2 < c ∨ c + 2 < zc) :
+    ∃ rot : Rotation,
+      IsSpreadBoundedRWSkylineAt cfg s base
+          (Placement.applyStep cfg (skyline cfg h) { piece := p, rot := rot, col := c }) ∧
+        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+            { piece := p, rot := rot, col := c }) sc = h sc ∧
+        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+            { piece := p, rot := rot, col := c }) (sc + 1) = h (sc + 1) ∧
+        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+            { piece := p, rot := rot, col := c }) (sc + 2) = h (sc + 2) ∧
+        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+            { piece := p, rot := rot, col := c }) zc = h zc ∧
+        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+            { piece := p, rot := rot, col := c }) (zc + 1) = h (zc + 1) ∧
+        Board.colHeight (Placement.applyStep cfg (skyline cfg h)
+            { piece := p, rot := rot, col := c }) (zc + 2) = h (zc + 2) := by
+  rcases hshape with ⟨rfl, heq, hstep, hfit⟩ | ⟨rfl, heq, hstep, hfit⟩
+  · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_S_band_preserves_both_notches hc hc1 hc2 heq hstep
+      hw hwc hwc1 hwc2 hw0 hband hfit hslack hsc hsc1 hsc2 hzc hzc1 hzc2 hsepS hsepZ⟩
+  · exact ⟨0, isSpreadBoundedRWSkylineAt_applyStep_Z_band_preserves_both_notches hc hc1 hc2 heq hstep
+      hw hwc hwc1 hwc2 hw0 hband hfit hslack hsc hsc1 hsc2 hzc hzc1 hzc2 hsepS hsepZ⟩
+
 /-- **An owed staircase consumer — `S` or `Z` — admits a band-and-notch-preserving drop on its own
 notch: the consumer-side piece dispatcher.** This is the staircase counterpart of the flat-filler
 dispatcher, unifying the two notch consumers behind one `Piece` variable. Because `S` and `Z` consume
