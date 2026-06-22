@@ -25251,6 +25251,38 @@ theorem isFlatFrontBandAt_JZ_step {c s base : ℕ} {b : Board}
       hjcols (by omega) (by omega) (by omega)]
     exact hflat j (by omega) hjcols
 
+/-- **Both notch pairs, scheduled back to back, march the fill front by six** (iter557). The first
+composition of the two notch-pair front-steps `isFlatFrontBandAt_LS_step` (iter555) and
+`isFlatFrontBandAt_JZ_step` (iter556): from a flat-front band at front `c`, spend the bag's `L`-then-`S`
+at the front triple `(c, c+1, c+2)` to advance to front `c + 3`, then the bag's `J`-then-`Z` at the
+next triple `(c+3, c+4, c+5)` to advance to front `c + 6` — landing an `IsFlatFrontBandAt (c+6) s base`
+board. All four notch pieces `L, S, J, Z` of one bag are thus consumed in two adjacent triples while the
+floor `base` stays pinned, the spread `s` is unchanged (each pair peaks at `base + 3 ≤ base + s` for
+`s ≥ 3`), and the reserved well at column `0` is never touched. The room precondition `c + 5 < cols`
+guarantees both triples sit strictly left of the wall.
+
+This is the brick that schedules the four notch pieces as a block alongside the strict flats `O, T`
+(`isFlatFrontBandAt_filler_step`, iter411) — together one bag's six non-`I` pieces march the front by
+at most `4 × 3 = 12`, with the once-per-bag `I` left as the regulator drain. Honest caveats unchanged:
+it bakes in the `L`-before-`S` and `J`-before-`Z` (and `LS`-before-`JZ`) order, so it covers the
+favorable adversarial arrangements, not every order; the every-order balance and the bag-boundary drain
+scheduling remain open. Crux #66 and #72 stay open and `TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_LS_then_JZ {c s base : ℕ} {b : Board}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
+    (hc0 : 0 < c) (hc5 : c + 5 < GameConfig.standard.cols) :
+    IsFlatFrontBandAt (c + 6) s base
+      (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard b
+              { piece := Piece.L, rot := 0, col := c })
+            { piece := Piece.S, rot := 0, col := c })
+          { piece := Piece.J, rot := 0, col := c + 3 })
+        { piece := Piece.Z, rot := 0, col := c + 3 }) := by
+  have h1 := isFlatFrontBandAt_LS_step hb hs hc0 (by omega)
+  have h2 := isFlatFrontBandAt_JZ_step h1 hs (by omega) (by omega)
+  exact h2
+
 /-- **A full layer of flat fillers fits and marches the front, in any order** (iter511). Tightens
 the room budget of `isFlatFrontBandAt_nonSZ_fill_list` (iter482) by excluding the width-four
 horizontal `I`: a run `ps` of strictly-flat fillers (each `O`, `T`, `L`, or `J`, advancing the front
