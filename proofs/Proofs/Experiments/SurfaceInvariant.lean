@@ -25314,6 +25314,43 @@ theorem isFlatFrontBandAt_LS_then_JZ {c s base : ℕ} {b : Board}
   have h2 := isFlatFrontBandAt_JZ_step h1 hs (by omega) (by omega)
   exact h2
 
+/-- **The owed `S`, paired behind its `L`, closes the master carrier at an arbitrary fill front**
+(iter561). The flat-front-band, arbitrary-`c` lift of `reservoirSpreadCarrier_flat_LS_step` (iter518),
+which routed the `L`-then-`S` notch pair only on the special level reset surface (front pinned at
+`c = 1`, every working column flat at `base`). Here the same pairing runs at any fill front `c` the
+strategy has marched to: from `IsFlatFrontBandAt c s base b` with spread `s ≥ 3`, a reserved well
+(`0 < c`), and room for the front triple (`c + 2 < cols`), spend the bag's `L` flat across the front
+triple `(c, c+1, c+2)` to re-dig the single-step `S`-notch, then seat the owed `S` into it; the worked
+triple rises to `(base+1, base+1, base+2)` and the board lands an `IsFlatFrontBandAt (c+3) s base` band
+(`isFlatFrontBandAt_LS_step`, iter555), which the front-agnostic membership bridge
+(`reservoirSpreadCarrier_of_isFlatFrontBandAt`, iter420) forgets into `reservoirSpreadCarrier
+((T.draw L).draw S)` under the two-draw carrier ledger `base + s + ((T.draw L).draw S).card + 1 ≤ rows`.
+
+This is the notch-pair companion completing `reservoirSpreadCarrier_flatFront_nonSZ_fill_step`
+(iter422): that dispatcher closed the master carrier under the whole non-notch alphabet `{O, I, T, L,
+J}` at an arbitrary front, leaving exactly the two notch pieces unscheduled at general `c`; with this
+step (and the `J`-then-`Z` mirror) the master carrier is closed under both notch pairs anywhere the
+front has reached, not just at the `c = 1` reset surface. Honest caveats unchanged: it is a two-piece
+edge, not the per-piece carrier `hstep`, and it bakes in the `L`-before-`S` order, so it covers the
+favorable adversarial arrangement, not the case where the `S` is drawn before its paired `L`; the
+every-order interleaving against the once-per-bag drain is the bag-phase closure #66 and #72 still
+demand. `TetrisSolvableValid` is NOT proven. -/
+theorem reservoirSpreadCarrier_flatFront_LS_step {T : Bag} {b : Board} {c s base : ℕ}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
+    (hc0 : 0 < c) (hc2 : c + 2 < GameConfig.standard.cols)
+    (hledger : base + s + ((T.draw Piece.L).draw Piece.S).card + 1 ≤ GameConfig.standard.rows) :
+    ∃ pl1 : Placement, pl1.piece = Piece.L ∧ pl1.Valid GameConfig.standard ∧
+      ∃ pl2 : Placement, pl2.piece = Piece.S ∧ pl2.Valid GameConfig.standard ∧
+        reservoirSpreadCarrier ((T.draw Piece.L).draw Piece.S)
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard b
+              { piece := Piece.L, rot := 0, col := c })
+            { piece := Piece.S, rot := 0, col := c }) := by
+  refine ⟨{ piece := Piece.L, rot := 0, col := c }, rfl, Board.valid_L hc2,
+    { piece := Piece.S, rot := 0, col := c }, rfl, Board.valid_S hc2, ?_⟩
+  exact reservoirSpreadCarrier_of_isFlatFrontBandAt
+    (isFlatFrontBandAt_LS_step hb hs hc0 hc2) hledger
+
 /-- **The `L`-then-`S` front step survives at every intermediate placement** (iter558). The transient
 survival face of `isFlatFrontBandAt_LS_step` (iter555): not just the completed pair's endpoint band,
 but BOTH boards the adversary's clock passes through — the board after the `L` lands (an exposed
