@@ -27398,6 +27398,45 @@ theorem isFlatFrontBandAt_JZ_then_fillers_then_LS_drain {s base c : ℕ} {b : Bo
   exact ⟨pls, c', hforall, hlo, hhi,
     isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain hbn hbase4⟩
 
+/-- **Scalar height cap for the reversed-pair "fillers between the two notch pairs" drain** (iter602).
+The `maxColHeight` face of iter601 (`isFlatFrontBandAt_JZ_then_fillers_then_LS_drain`), mirroring the
+favorable-order height cap iter572 (`isFlatFrontBandAt_flatFiller_then_notchPairs_drain_height`). From a
+flat-front band at front `c`, run the bag's `J`-then-`Z` pair first, deal the strictly-flat fillers `ps`
+in the gap, land the `L`-then-`S` pair, and spend the once-per-bag vertical `I` down the reserved well:
+the resulting peak column height is at most `(base - 4) + s`, i.e. four rows below the incoming
+`base + s` ceiling. It just reads the spread-bounded skyline endpoint of iter601 through
+`Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt`, turning the carrier-shaped drain certificate into
+the scalar `maxColHeight ≤ rows`-style bound the strategy reduction consumes. This completes the height
+companion for the OTHER inter-pair order (the `JZ`-first mirror of iter572's favorable order). Honest
+caveats are unchanged: this bounds the endpoint of a single half-cycle that bakes in the `J`-before-`Z`,
+`L`-before-`S`, and `JZ`-before-`LS` orders against a drain-last schedule; it does not discharge the
+every-order availability of a drain before the ceiling. Crux #66 and #72 stay open and
+`TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_JZ_then_fillers_then_LS_drain_height {s base c : ℕ} {b : Board}
+    {ps : List Piece}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
+    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
+    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
+    ∃ (pls : List Placement) (c' : ℕ),
+      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
+      c + 3 ≤ c' ∧ c' ≤ c + 3 + 3 * ps.length ∧
+      Board.maxColHeight GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (pls.foldl (Placement.applyStep GameConfig.standard)
+                (Placement.applyStep GameConfig.standard
+                  (Placement.applyStep GameConfig.standard b
+                    { piece := Piece.J, rot := 0, col := c })
+                  { piece := Piece.Z, rot := 0, col := c }))
+              { piece := Piece.L, rot := 0, col := c' })
+            { piece := Piece.S, rot := 0, col := c' })
+          { piece := Piece.I, rot := 1, col := 0 }) ≤ (base - 4) + s := by
+  obtain ⟨pls, c', hforall, hlo, hhi, hdrain⟩ :=
+    isFlatFrontBandAt_JZ_then_fillers_then_LS_drain hb hs hc0 hmem hroom hbase4
+  exact ⟨pls, c', hforall, hlo, hhi,
+    Board.maxColHeight_le_of_isSpreadBoundedRWSkylineAt hdrain⟩
+
 /-- **Pairing an owed `S` with a preceding `L` keeps the master carrier on a flat band** (iter518).
 The first carrier-level two-piece transition that absorbs an `S` hole-free without any pre-existing
 notch: on a band flat at `base` with the reserved well parked at column `0` and spread `s ≥ 3`, drop
