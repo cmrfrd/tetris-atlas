@@ -28778,6 +28778,50 @@ theorem isFlatFrontBandAt_JZ_then_LS_then_fillers_drain {s base : ℕ} {c : ℕ}
     isFlatFrontBandAt_JZ_then_LS_then_fillers hb hs hc0 hmem hroom
   exact ⟨pls, hforall, isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain hbn hbase4⟩
 
+/-- **The `LS`-`JZ`-fillers bag block, then the regulator drain, nets a four-row descent** (iter634).
+The drain face of `isFlatFrontBandAt_LS_then_JZ_then_fillers` (iter627), the LS-first mirror of the
+sixth-ordering drain `isFlatFrontBandAt_JZ_then_LS_then_fillers_drain` (iter629), and the LAST of the
+six block-ordering drains to be filled in. From `IsFlatFrontBandAt c s base b` the adversary spends
+`L`-then-`S` at column `c` (the `L` re-digs the single-step `S`-notch, the `S` seats into it), then
+`J`-then-`Z` at `c + 3` (the `J` manufactures the `Z`-notch), then the remaining strictly-flat fillers
+`ps` left-to-right, landing a flat front at the same floor `base` (iter627); the once-per-bag vertical
+`I` dropped into the reserved well at column `0` then clears four rows and the surface settles into a
+spread band at the lowered floor `base - 4`
+(`isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain`, iter412). With iter571/588/601/629 and
+this lemma, all six block-orderings of `{fillers, LS-pair, JZ-pair}` now have a net-negative
+raise-versus-drain cycle, the four-row descent budget a bounded carrier needs so chaining cannot let
+the cap drift upward. Honest caveats — exactly the open content: this is a block-level composition, not
+the per-piece `hstep`; it bakes in the `L`-before-`S` / `J`-before-`Z` order within each notch pair
+(the adversarial `S`-before-its-paired-`L` case has no hole-free skyline placement on a bare flat
+front — the column-budget obstruction, #90/#151), and the post-drain band is spread, not flat, so
+re-establishing a flat front at floor `base - 4` is the remaining packing content. It still does not
+feed a bag-indexed carrier whose per-piece `hstep` is true. The all-orders per-bag drain accounting
+feeding the final reduction — crux #66/#72 — remains open; `TetrisSolvableValid` is NOT proven by this
+lemma; no `sorry`. -/
+theorem isFlatFrontBandAt_LS_then_JZ_then_fillers_drain {s base : ℕ} {c : ℕ} {b : Board}
+    {ps : List Piece}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
+    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
+    (hroom : c + 6 + 3 * ps.length ≤ GameConfig.standard.cols)
+    (hbase4 : 4 ≤ base) :
+    ∃ (pls : List Placement),
+      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
+      Board.IsSpreadBoundedRWSkylineAt GameConfig.standard s (base - 4)
+        (Placement.applyStep GameConfig.standard
+          (pls.foldl (Placement.applyStep GameConfig.standard)
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard
+                (Placement.applyStep GameConfig.standard
+                  (Placement.applyStep GameConfig.standard b
+                    { piece := Piece.L, rot := 0, col := c })
+                  { piece := Piece.S, rot := 0, col := c })
+                { piece := Piece.J, rot := 0, col := c + 3 })
+              { piece := Piece.Z, rot := 0, col := c + 3 }))
+          { piece := Piece.I, rot := 1, col := 0 }) := by
+  obtain ⟨pls, c', hforall, _, _, hbn⟩ :=
+    isFlatFrontBandAt_LS_then_JZ_then_fillers hb hs hc0 hmem hroom
+  exact ⟨pls, hforall, isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain hbn hbase4⟩
+
 /-- **Pairing an owed `S` with a preceding `L` keeps the master carrier on a flat band** (iter518).
 The first carrier-level two-piece transition that absorbs an `S` hole-free without any pre-existing
 notch: on a band flat at `base` with the reserved well parked at column `0` and spread `s ≥ 3`, drop
