@@ -26559,6 +26559,70 @@ theorem isFlatFrontBandAt_flatFiller_then_notchPairs_safe {s base : ℕ} {c : �
           simp only [List.length_cons, List.length_nil]; omega)]
       exact hJZ
 
+/-- **The reversed-notch-order single-layer non-`I` bag content survives at every intermediate
+placement** (iter585). The reversed-notch-order mirror of `isFlatFrontBandAt_flatFiller_then_notchPairs_safe`
+(iter574): as the bag feeds its strictly-flat fillers `ps` and then both owed notch pairs in the reversed
+order (`J`@`c'`, `Z`@`c'`, `L`@`(c'+3)`, `S`@`(c'+3)`) onto one flat layer, *every* prefix of the combined
+schedule `pls ++ [J, Z, L, S]` folds to a board that has not topped out — so the game is alive at each of
+the bag's non-`I` drops. It is the same clean composition of two prefix-safety certificates as iter574:
+inside the filler run the survival is iter513's per-prefix face
+(`isFlatFrontBandAt_flatFiller_fill_list_safe`), and past the run the four notch boards are exactly the
+four conjuncts of iter578 (`isFlatFrontBandAt_JZ_then_LS_safe`) on the post-filler band, glued by the
+standard `List.take_append` / `List.foldl_append` decomposition with the four-element notch tail
+enumerated by its length. With iter574 the per-prefix transient-survival face now holds for BOTH
+notch-pair orders. Like every brick in the family it certifies a fillers-before-notches,
+partner-before-notch schedule, not an adversarial interleaving against the single shared `I`; the
+every-order availability of a drain before the ceiling is the bag-phase closure cruxes #66 and #72 still
+demand. `TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_flatFiller_then_notchPairs_JZLS_safe {s base : ℕ} {c : ℕ} {b : Board}
+    {ps : List Piece}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
+    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
+    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) :
+    ∃ (pls : List Placement) (c' : ℕ),
+      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
+      c ≤ c' ∧ c' ≤ c + 3 * ps.length ∧
+      IsFlatFrontBandAt (c' + 6) s base
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard
+                (pls.foldl (Placement.applyStep GameConfig.standard) b)
+                { piece := Piece.J, rot := 0, col := c' })
+              { piece := Piece.Z, rot := 0, col := c' })
+            { piece := Piece.L, rot := 0, col := c' + 3 })
+          { piece := Piece.S, rot := 0, col := c' + 3 }) ∧
+      (∀ k, ¬ Board.isLost GameConfig.standard
+        (((pls ++ [({ piece := Piece.J, rot := 0, col := c' } : Placement),
+                   { piece := Piece.Z, rot := 0, col := c' },
+                   { piece := Piece.L, rot := 0, col := c' + 3 },
+                   { piece := Piece.S, rot := 0, col := c' + 3 }]).take k).foldl
+          (Placement.applyStep GameConfig.standard) b)) := by
+  obtain ⟨pls, c', hforall, hlo, hhi, hbn, hsafe⟩ :=
+    isFlatFrontBandAt_flatFiller_fill_list_safe ps hb (by omega) hc0 hmem (by omega)
+  obtain ⟨hJ, hJZ, hL, hLS⟩ := isFlatFrontBandAt_JZ_then_LS_safe hbn hs (by omega) (by omega)
+  refine ⟨pls, c', hforall, hlo, hhi,
+    isFlatFrontBandAt_JZ_then_LS hbn hs (by omega) (by omega), ?_⟩
+  intro k
+  rcases Nat.lt_or_ge k (pls.length + 1) with hk | hk
+  · rw [List.take_append, Nat.sub_eq_zero_of_le (Nat.le_of_lt_succ hk), List.take_zero,
+      List.append_nil]
+    exact hsafe k
+  · rw [List.take_append, List.take_of_length_le (show pls.length ≤ k by omega),
+      List.foldl_append]
+    rcases Nat.lt_or_ge (k - pls.length) 4 with hj4 | hj4
+    · have hcase : k - pls.length = 1 ∨ k - pls.length = 2 ∨ k - pls.length = 3 := by omega
+      rcases hcase with h | h | h
+      · rw [h]; exact hJ
+      · rw [h]; exact hJZ
+      · rw [h]; exact hL
+    · rw [List.take_of_length_le (show ([({ piece := Piece.J, rot := 0, col := c' } : Placement),
+            { piece := Piece.Z, rot := 0, col := c' },
+            { piece := Piece.L, rot := 0, col := c' + 3 },
+            { piece := Piece.S, rot := 0, col := c' + 3 }]).length ≤ k - pls.length by
+          simp only [List.length_cons, List.length_nil]; omega)]
+      exact hLS
+
 /-- **The fully-certified favorable-order whole-bag segment: every drop, including the drain,
 survives** (iter575). The drain-inclusive per-prefix transient-survival face — iter574 extended by
 the once-per-bag vertical `I` — and the most end-to-end certified bag segment in the family. From a
