@@ -1721,6 +1721,45 @@ theorem richStepBoard_band_floor (p : Piece) (hp : p ≠ Piece.I) (base : ℕ)
       (b := richReadyBoard base) (pl := phasePlacement p) hclear j
   exact le_trans hfloor hmono
 
+/-- **Floor solidity, rung two.**  Every non-well column of `richPairBoard` (a second
+non-I filler on top of the rich surface) still stands at height `≥ base`.  The reset
+surface's band floor (`richReadyBoard_band_floor`) is carried up `richStepBoard` (rung
+one) and now one rung further: the second filler is non-I, so it dodges the empty well,
+clears nothing (`fullRows_place_eq_empty_of_well` keyed on the held-empty well), and
+no-clear monotonicity (`colHeight_le_applyStep_of_no_fullRows`) can only *raise* each
+column.  Together with the well-emptiness ladder this is the clearability scaffolding a
+vertical-I well-drain consumes: rows `0 … base-1` are spanned by the solid band on cols
+`1 … 9` while col 0 waits empty for the regulator I.  (Geometry caveat: at the rich4
+frontier `PhaseMargin = 17` forces `base ≤ 3 < 4`, so a *clean* 4-row drain needs a
+flatter rich profile; this floor lemma is geometry-agnostic and reused under any fix.) -/
+theorem richPairBoard_band_floor (first second : Piece)
+    (h1 : first ≠ Piece.I) (h2 : second ≠ Piece.I) (base : ℕ)
+    (j : ℕ) (hj0 : j ≠ 0) (hjc : j < GameConfig.standard.cols) :
+    base ≤ Board.colHeight (richPairBoard first second base) j := by
+  have hfloor : base ≤ Board.colHeight (richStepBoard first base) j :=
+    richStepBoard_band_floor first h1 base j hj0 hjc
+  have hwell : Board.colHeight (richStepBoard first base) 0 = 0 :=
+    richStepBoard_well_empty first h1 base
+  have havoid :
+      ∀ cell ∈ (phasePlacement second).shapeUp, (phasePlacement second).col + cell.1 ≠ 0 := by
+    have hcol : 1 ≤ (phasePlacement second).col := by
+      cases second with
+      | I => exact absurd rfl h2
+      | _ => decide
+    intro cell _
+    omega
+  have hclear :
+      Board.fullRows GameConfig.standard
+        ((phasePlacement second).place (richStepBoard first base)) = ∅ :=
+    Board.fullRows_place_eq_empty_of_well (cfg := GameConfig.standard)
+      (b := richStepBoard first base) (pl := phasePlacement second) (w := 0)
+      (by decide) hwell havoid
+  have hmono : Board.colHeight (richStepBoard first base) j
+      ≤ Board.colHeight (richPairBoard first second base) j :=
+    Board.colHeight_le_applyStep_of_no_fullRows (cfg := GameConfig.standard)
+      (b := richStepBoard first base) (pl := phasePlacement second) hclear j
+  exact le_trans hfloor hmono
+
 theorem phaseCarrier_height {T : Bag} {b : Board}
     (h : PhaseCarrier T b) :
     ∀ j, Board.colHeight b j ≤ GameConfig.standard.rows := by
