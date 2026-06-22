@@ -22199,6 +22199,37 @@ theorem reservoirSpreadCarrier_fill_step {T : Bag} {b : Board} {p : Piece} {base
   obtain ⟨pl, hpiece, hvalid, hband'⟩ := hfill
   exact ⟨pl, hpiece, hvalid, base', s, hband', by omega⟩
 
+/-- **The spread-band carrier's unified band-top fill edge.** The band-top generalization of
+`reservoirSpreadCarrier_fill_step`, which only books a floor rise at a *fixed* buffer `s`. The
+spread-carrier ledger `base + s + T.card + 1 ≤ rows` constrains only the *band top* `base + s` (the
+highest a working column may sit), so the accounting that keeps the carrier closed cares about how
+far the band top moves, not whether it moved by raising the floor or by widening the buffer. This
+edge makes that explicit: given a geometric fill witness landing the post-move board in a
+floor-pinned spread band `IsSpreadBoundedRWSkylineAt standard s' base'` at ANY floor `base'` and ANY
+buffer `s'`, the single hypothesis `base' + s' ≤ base + s + 1` (the band top rose by at most one)
+together with the ledger and a non-refill draw (`(T.draw p).card < T.card`) re-enters
+`reservoirSpreadCarrier (T.draw p)`. The arithmetic is the dual reading of the bag clock: each draw
+ticks `T.card` down by one, buying exactly one unit of band-top headroom, so a unit band-top rise is
+paid for by the unit clock tick —
+`base' + s' + (T.draw p).card + 1 ≤ (base + s + 1) + (T.card - 1) + 1 = base + s + T.card + 1 ≤ rows`.
+Setting `s' = s` recovers the floor-rise edge (`base' ≤ base + 1`); setting `base' = base, s' = s + 1`
+gives its missing dual — the buffer *widens* by one at a pinned floor — which is exactly the slack a
+stack of absorbing fills consumes as the non-`I` pieces of a bag arrive before the regulator `I`
+drains them back down. -/
+theorem reservoirSpreadCarrier_fill_step_bandtop {T : Bag} {b : Board} {p : Piece}
+    {base base' s s' : ℕ}
+    (hfill : ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
+      Board.IsSpreadBoundedRWSkylineAt GameConfig.standard s' base'
+        (Placement.applyStep GameConfig.standard b { pl with piece := p }))
+    (hbandtop : base' + s' ≤ base + s + 1)
+    (hledger : base + s + T.card + 1 ≤ GameConfig.standard.rows)
+    (hcard : (T.draw p).card < T.card) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
+      reservoirSpreadCarrier (T.draw p)
+        (Placement.applyStep GameConfig.standard b { pl with piece := p }) := by
+  obtain ⟨pl, hpiece, hvalid, hband'⟩ := hfill
+  exact ⟨pl, hpiece, hvalid, base', s', hband', by omega⟩
+
 /-- **The spread-band carrier's wide-pocket flat fill closes in place.** The concrete flat branch of
 the `reservoirSpreadCarrier` non-`I` half, and the spread analogue of
 `reservoirCarrier_widePocket_flat_fill_step`. From an ARBITRARY spread-`2` band member `skyline h`
