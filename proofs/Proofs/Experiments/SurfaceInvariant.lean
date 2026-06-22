@@ -8533,6 +8533,38 @@ theorem applyStep_vertI_well_Snotch_descend {cfg : GameConfig} {h : ℕ → ℕ}
   refine ⟨_, applyStep_vertI_well hw hw0 hothers, ?_, ?_, ?_, ?_⟩ <;>
     split_ifs with hh <;> omega
 
+/-- **The once-per-bag well-clear drain carries a Z-notch down by four — the mirror of the S-notch
+descent.** The `Z`-piece counterpart of `applyStep_vertI_well_Snotch_descend`, completing the staircase
+pair: the vertical-`I` well-clear that resets the layer preserves a standing Z-notch, just lowered four
+rows. Starting from a profile with a reserved empty well `w` whose every other column is at least four
+high (`hothers`, the drain precondition) and a Z-notch `(h (c+1) = h (c+2)`, `h c = h (c+1) + 1)` on a
+triple `c, c+1, c+2` separate from the well, the well-clearing `I` (`applyStep_vertI_well`, subtracting
+four from every non-well column and emptying the well) lands on `skyline cfg h'` whose same triple is
+again a Z-notch one floor lower: `h' c = h (c+1) - 4 + 1`, `h' (c+1) = h (c+1) - 4`,
+`h' (c+2) = h (c+1) - 4`, with the well still empty. The `+1` step survives the truncated subtraction
+because the notch floor `4 ≤ h (c+1)` (read off `hothers`), so the carry does not clip. Paired with the
+S-notch descent this gives both staircases the same survival-across-the-reset guarantee: a Z-notch dug
+in one bag reappears, four lower, at the next reset, so a `Z` drawn before its `J` in the following bag
+still finds a notch. It does not by itself close the every-order interleaving obligation (crux #66/#72
+remains open, and `TetrisSolvableValid` is NOT proven): the bag-phase scheduler that keeps both notches
+reserved at every reset, within the ten-column budget, is the open content. Proof: rewrite through
+`applyStep_vertI_well`; each notch column and the well unfold from the drained profile by `split_ifs`
+(the well dodges discharge the `= w` branches) and `omega` (using `4 ≤ h (c+1)` for the `+1` carry). -/
+theorem applyStep_vertI_well_Znotch_descend {cfg : GameConfig} {h : ℕ → ℕ} {c w : ℕ}
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
+    (heq : h (c + 1) = h (c + 2)) (hstep : h c = h (c + 1) + 1)
+    (hw : w < cfg.cols) (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
+    (hw0 : h w = 0)
+    (hothers : ∀ j, j < cfg.cols → j ≠ w → 4 ≤ h j) :
+    ∃ h' : ℕ → ℕ,
+      Placement.applyStep cfg (skyline cfg h) { piece := Piece.I, rot := 1, col := w }
+        = skyline cfg h' ∧
+      h' c = h (c + 1) - 4 + 1 ∧ h' (c + 1) = h (c + 1) - 4 ∧ h' (c + 2) = h (c + 1) - 4 ∧
+      h' w = 0 := by
+  have hc4 : 4 ≤ h (c + 1) := hothers (c + 1) hc1 (by omega)
+  refine ⟨_, applyStep_vertI_well hw hw0 hothers, ?_, ?_, ?_, ?_⟩ <;>
+    split_ifs with hh <;> omega
+
 /-- **An intervening `O` keeps both the band and a standing notch — the band-level threading frame.**
 The colHeight frame `colHeight_applyStep_O_skyline_preserves_notch` shows an intervening `O` leaves a
 reserved notch's three heights fixed; this lemma upgrades that to the band vocabulary the carrier
