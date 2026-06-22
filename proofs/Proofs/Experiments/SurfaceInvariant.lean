@@ -8565,6 +8565,48 @@ theorem applyStep_vertI_well_Znotch_descend {cfg : GameConfig} {h : ℕ → ℕ}
   refine ⟨_, applyStep_vertI_well hw hw0 hothers, ?_, ?_, ?_, ?_⟩ <;>
     split_ifs with hh <;> omega
 
+/-- **Both staircases survive one reset together — the two-valley descent.** Combines
+`applyStep_vertI_well_Snotch_descend` and `applyStep_vertI_well_Znotch_descend` into a single
+well-clear that preserves an S-notch and a Z-notch at once, the exact geometry the bag-phase carrier
+must maintain: within the ten-column budget a reserved empty well plus two four-wide valleys
+(`well 1 + valley 4 + valley 4 = 9 ≤ 10`) is the only layout that hosts both staircases, and this
+lemma shows the once-per-bag vertical-`I` drain keeps that layout intact, four rows lower. From a
+profile with a reserved empty well `w` whose every other column is at least four high (`hothers`), an
+S-notch `(h c = h (c+1)`, `h (c+2) = h c + 1)` on a triple `c, c+1, c+2`, and a Z-notch
+`(h (d+1) = h (d+2)`, `h d = h (d+1) + 1)` on a triple `d, d+1, d+2`, both triples separate from the
+well, the well-clearing `I` (`applyStep_vertI_well`) lands on `skyline cfg h'` carrying the same two
+notches one floor lower: `h' c = h c - 4`, `h' (c+1) = h c - 4`, `h' (c+2) = h c - 4 + 1` and
+`h' d = h (d+1) - 4 + 1`, `h' (d+1) = h (d+1) - 4`, `h' (d+2) = h (d+1) - 4`, with the well still
+empty. Both `+1` carries survive the truncated subtraction because each notch floor is at least four
+(`4 ≤ h c`, `4 ≤ h (d+1)`, read off `hothers`). This packages the simultaneous-survival fact the
+scheduler needs: after a reset an early `S` *and* an early `Z` in the next bag each find a pre-dug
+notch. It does NOT by itself close the every-order interleaving obligation — crux #66/#72 remains
+open and `TetrisSolvableValid` is NOT proven; the bag-phase scheduler that actually keeps both notches
+reserved across every adversarial order is the open content. Proof: rewrite through
+`applyStep_vertI_well`; each of the six notch columns and the well unfold from the drained profile by
+`split_ifs` (the well dodges discharge the `= w` branches) and `omega` (using `4 ≤ h c` and
+`4 ≤ h (d+1)` for the two `+1` carries). -/
+theorem applyStep_vertI_well_both_notches_descend {cfg : GameConfig} {h : ℕ → ℕ} {c d w : ℕ}
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hc2 : c + 2 < cfg.cols)
+    (hd : d < cfg.cols) (hd1 : d + 1 < cfg.cols) (hd2 : d + 2 < cfg.cols)
+    (heqS : h c = h (c + 1)) (hstepS : h (c + 2) = h c + 1)
+    (heqZ : h (d + 1) = h (d + 2)) (hstepZ : h d = h (d + 1) + 1)
+    (hw : w < cfg.cols)
+    (hwc : w ≠ c) (hwc1 : w ≠ c + 1) (hwc2 : w ≠ c + 2)
+    (hwd : w ≠ d) (hwd1 : w ≠ d + 1) (hwd2 : w ≠ d + 2)
+    (hw0 : h w = 0)
+    (hothers : ∀ j, j < cfg.cols → j ≠ w → 4 ≤ h j) :
+    ∃ h' : ℕ → ℕ,
+      Placement.applyStep cfg (skyline cfg h) { piece := Piece.I, rot := 1, col := w }
+        = skyline cfg h' ∧
+      h' c = h c - 4 ∧ h' (c + 1) = h c - 4 ∧ h' (c + 2) = h c - 4 + 1 ∧
+      h' d = h (d + 1) - 4 + 1 ∧ h' (d + 1) = h (d + 1) - 4 ∧ h' (d + 2) = h (d + 1) - 4 ∧
+      h' w = 0 := by
+  have hc4 : 4 ≤ h c := hothers c hc (by omega)
+  have hd4 : 4 ≤ h (d + 1) := hothers (d + 1) hd1 (by omega)
+  refine ⟨_, applyStep_vertI_well hw hw0 hothers, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
+    split_ifs with hh <;> omega
+
 /-- **An intervening `O` keeps both the band and a standing notch — the band-level threading frame.**
 The colHeight frame `colHeight_applyStep_O_skyline_preserves_notch` shows an intervening `O` leaves a
 reserved notch's three heights fixed; this lemma upgrades that to the band vocabulary the carrier
