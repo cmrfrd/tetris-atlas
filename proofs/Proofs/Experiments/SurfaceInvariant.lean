@@ -23020,6 +23020,31 @@ theorem reservoirSpreadCarrier_richSurface_all7_step {T : Bag} {base : ℕ} {p :
   all_goals try (intro j hj hj0; simp only [reservoirRichSurface] <;> split_ifs <;> omega)
   all_goals simp [reservoirRichSurface]
 
+/-- **The concrete `reservoirRichSurface` is a spread-band carrier member.** The carrier-membership
+companion to iter608's all-7 hosting step (`reservoirSpreadCarrier_richSurface_all7_step`): the same
+rich reset surface that hosts every drawn piece is itself a `reservoirSpreadCarrier` board, at spread
+`1` and floor `base` — its off-well columns sit in `[base, base+1]` (the two `base+1` notch columns
+and the `base` floor elsewhere) and the well at column 0 is empty. So the rich surface is a valid
+*reset state*: the drain target the once-per-bag I returns the stack to, and the start state from
+which iter608's step fires. Proof: the floor-pinned smart constructor
+`Board.isSpreadBoundedRWSkylineAt_skyline` at well `w = 0`, the band bound discharged by
+`split_ifs <;> omega` over the four height cases, and the ledger inherited from the `T.card` slack.
+**Open residue (NOT closed here):** this is reset-state membership, not a step — it hosts no piece
+and does not discharge the front-door `hstep` (which is handed an arbitrary carrier board). Site
+regeneration across a fill and the all-orders per-bag drain accounting (crux `#66`, `#72`) remain
+open; `TetrisSolvableValid` is NOT proven. -/
+theorem reservoirSpreadCarrier_richSurface_mem {T : Bag} {base : ℕ}
+    (hledger : base + 1 + T.card + 1 ≤ GameConfig.standard.rows) :
+    reservoirSpreadCarrier T (Board.skyline GameConfig.standard (reservoirRichSurface base)) := by
+  refine ⟨base, 1, ?_, hledger⟩
+  apply Board.isSpreadBoundedRWSkylineAt_skyline (w := 0)
+  · decide
+  · simp [reservoirRichSurface]
+  · intro j hj hjw
+    simp only [reservoirRichSurface]
+    split_ifs <;> omega
+  · omega
+
 /-- **The phase-matched per-piece fill dispatcher into the spread carrier.** Unifies the two
 phase bridges (`reservoirSpreadCarrier_flatPhase_flat_fill_step` and
 `reservoirSpreadCarrier_SZPhase_SZ_fill_step`) behind one disjunctive `hsite` premise that pairs the
