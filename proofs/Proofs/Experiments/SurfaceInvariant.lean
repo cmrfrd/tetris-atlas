@@ -27131,6 +27131,32 @@ theorem bagOrder_interI_segment_card_budget {ps1 ps2 : List Piece}
   have hcard := Board.card_foldl_applyStep_le (cfg := GameConfig.standard) pls (b := b)
   omega
 
+/-- **The worst-case inter-drain window still leaves a low landing site** (iter649). The
+site-existence payoff of the inter-regulator cell budget `bagOrder_interI_segment_card_budget`
+(iter648): that lemma caps the cells the at-most-twelve non-`I` fillers add between two consecutive
+drains at `48`. A reset surface near floor `base` holds about `9 * base` cells over its nine non-well
+columns, so a post-fill skyline holds at most `9 * base + 48` cells. Dividing through the nine non-well
+columns by the reserved-well pigeonhole `exists_ne_well_colHeight_le_of_card_le`, SOME non-well column
+then sits at height at most `base + 6` — because `9 * (base + 6) = 9 * base + 54 ≥ 9 * base + 48`, and
+`48` over nine columns rounds up to a `+6` rise on the lowest column. That column is a guaranteed
+landing site within spread six of the floor: whatever order the adversary feeds the twelve fillers, a
+piece can be dropped there without breaching a spread-six band cap. This is the quantitative form of
+the goal's "the surface stays under the height limit no matter the order" — the area the worst-case
+window can pile up translates to a bounded rise on the lowest column, so a drain stays reachable before
+the band fills. It is gated on the post-fill board being a hole-free skyline of the stated card (the
+fillers must pack without holes) and does NOT by itself schedule WHICH filler lands WHERE; the
+per-order placement that realises the band, and the S and Z notch column budget (#90), stay open.
+`TetrisSolvableValid` is NOT proven; crux #66 and #72 remain open; no sorry. -/
+theorem exists_ne_well_lowsite_inter_drain {h : ℕ → ℕ} {base : ℕ}
+    (hcard : (Board.skyline GameConfig.standard h).card ≤ 9 * base + 48) :
+    ∃ j ∈ Finset.range GameConfig.standard.cols, j ≠ 0 ∧
+      Board.colHeight (Board.skyline GameConfig.standard h) j ≤ base + 6 := by
+  refine Board.exists_ne_well_colHeight_le_of_card_le (cfg := GameConfig.standard)
+    (w := 0) (M := base + 6) (by decide) (by decide) ?_
+  have hcols : GameConfig.standard.cols - 1 = 9 := by decide
+  rw [hcols]
+  omega
+
 /-- **Pocket-preserving maximal drain: `n` vertical-`I` drops keep the level pocket band** (iter507).
 The pocket-PRESERVING analogue of the pocket-less iterated drain `isSpreadBoundedRWSkylineAt_iter_drain`
 (iter496). Each single step `isLevelPocketBandAt_vertI_descends` drops the regulator `I` into the
