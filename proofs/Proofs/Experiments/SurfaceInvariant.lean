@@ -23942,6 +23942,46 @@ theorem reservoirRichSurface_S_notch_carrier {T : Bag} {base : ℕ}
     split_ifs <;> omega
   · omega
 
+/-- **The owed-`Z` mirror: seating the owed `Z` into the rich surface's Z-notch re-enters the spread
+carrier** (iter640). The `Z`-staircase companion of `reservoirRichSurface_S_notch_carrier` (iter639)
+and the mirror of `reservoirDoubleSZSurface_Z_carrier` (iter390). On `reservoirRichSurface base` the
+columns `5, 6, 7` read `base + 1, base, base` — exactly the descending notch a `Z` (rotation `0`,
+column `5`) seats into without a hole (`Board.applyStep_Z_skyline_noclear`, whose mirror premises
+`h 6 = h 7` and `h 5 = h 6 + 1` the surface meets): the post-`Z` board is the explicit skyline
+`(0, base, base, base, base, base+2, base+2, base+1, base+1, base)`, a reserved-well spread-`2` band
+at floor `base`, which re-enters `reservoirSpreadCarrier (T.draw Z)` via the floor-pinned smart
+constructor `Board.isSpreadBoundedRWSkylineAt_skyline`. This is the move the universal phase plays
+when the adversary opens the bag with the owed `Z`.
+
+Honest caveat: the rich surface's two notches OVERLAP at columns `6, 7` (the Z-notch is `5,6,7`, the
+S-notch is `6,7,8`), so seating the `Z` here RAISES columns `6, 7` and destroys the S-notch — this
+brick hosts ONE owed staircase, not both, exactly the overlap obstruction flagged in iter608. With
+iter639 it completes the owed-staircase opening pair on the rich surface, but it does NOT close crux
+`#66`/`#72` (both-staircase all-orders bag accounting); `TetrisSolvableValid` is NOT proven; no sorry. -/
+theorem reservoirRichSurface_Z_notch_carrier {T : Bag} {base : ℕ}
+    (hledger : base + 2 + (T.draw Piece.Z).card + 1 ≤ GameConfig.standard.rows) :
+    reservoirSpreadCarrier (T.draw Piece.Z)
+      (Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirRichSurface base))
+        { piece := Piece.Z, rot := 0, col := 5 }) := by
+  rw [Board.applyStep_Z_skyline_noclear (c := 5) (w := 0) (by decide) (by decide) (by decide)
+      (by simp [reservoirRichSurface]) (by simp [reservoirRichSurface])
+      (by decide) (by decide) (by decide) (by decide) (by simp [reservoirRichSurface])]
+  refine ⟨base, 2, ?_, hledger⟩
+  apply Board.isSpreadBoundedRWSkylineAt_skyline (w := 0)
+  · decide
+  · simp [Function.update_apply, reservoirRichSurface]
+  · intro j hj hjw
+    rcases eq_or_ne j 5 with rfl | h5
+    · simp [reservoirRichSurface]
+    rcases eq_or_ne j 6 with rfl | h6
+    · simp [reservoirRichSurface]
+    rcases eq_or_ne j 7 with rfl | h7
+    · simp [reservoirRichSurface]
+    simp only [Function.update_apply, reservoirRichSurface]
+    split_ifs <;> omega
+  · omega
+
 /-- **The once-per-bag regulator drain regenerates the universal rich surface, lowered by four**
 (iter631). The rich-surface analogue of `reservoirDoubleSZSurface_vertI_well_drain` (iter362), and the
 regeneration linchpin the universal-phase thread (iter608–625) was missing. The rich reset surface
