@@ -27542,6 +27542,42 @@ theorem reservoirSpreadCarrier_all7Standard {T : Bag}
   have hj10 : j < 10 := hj
   interval_cases j <;> revert hjw <;> decide
 
+/-- **One-step adversarial survival of the all-seven fixed standard surface, in carrier vocabulary**
+(iter603). Packages the iter520 single-board all-seven finding for the eventual `hstep`: for ANY bag
+`T` whose remaining card fits the headroom ledger `card + 7 ≤ rows`, the ONE concrete fixed surface
+`σ = (0, 4, 4, 5, 5, 4, 4, 4, 4, 4)` is simultaneously (a) a master `reservoirSpreadCarrier T` member
+(`reservoirSpreadCarrier_all7Standard`, iter520) AND (b) a from-surface with a guaranteed valid,
+non-losing reply to WHATEVER piece `p` the adversary draws
+(`isSpreadBoundedRWSkyline_all7_valley_standard_not_isLost`, the survival face of the two-notch valley
+menu). Unlike the order-baking notch-pair ladder (iter587 onward), this is anchored on the SINGLE
+fixed all-seven board — the well at column `0`, the ascending `S`-notch at `1..3`, the descending
+`Z`-notch at `4..6` sharing column `6` with the width-four pocket at `6..9` — so it is genuinely
+order-free for the first move: the adversary may draw any of the seven and the strategy answers
+without topping out. This is precisely the from-surface the iter520 docstring flags that a true
+`bagPhaseCarrier` `hstep` (task #66) quotes.
+
+Honest caveat — this is the FIRST-MOVE survival, not the closure. It certifies that `σ` survives one
+arbitrary draw, but it does NOT yet certify the post-board is again a carrier member ready for the
+NEXT owed piece: the all-seven menu emits its landing in the existential-floor
+`IsSpreadBoundedRWSkyline 2` vocabulary, and the iter523 bridge recovers only the EXISTENCE of a
+pinned floor, not its magnitude, so the carrier ledger `floor + 2 + (T.draw p).card + 1 ≤ rows` for
+the post-board is not yet available — it needs a floor-pinned all-seven menu (a separate, larger
+obligation). The cross-step site-regeneration that keeps `σ` all-seven-ready as the bag drains, under
+every order, is exactly the open content. Crux #66 and #72 stay open and `TetrisSolvableValid` is NOT
+proven. -/
+theorem reservoirSpreadCarrier_all7Standard_step_not_isLost {T : Bag}
+    (hcard : T.card + 7 ≤ GameConfig.standard.rows) (p : Piece) :
+    reservoirSpreadCarrier T
+        (Board.skyline GameConfig.standard
+          (fun j => if j = 0 then 0 else if j = 3 then 5 else if j = 4 then 5 else 4)) ∧
+      ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
+        ¬ Board.isLost GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Board.skyline GameConfig.standard
+              (fun j => if j = 0 then 0 else if j = 3 then 5 else if j = 4 then 5 else 4)) pl) :=
+  ⟨reservoirSpreadCarrier_all7Standard hcard,
+   Board.isSpreadBoundedRWSkyline_all7_valley_standard_not_isLost p⟩
+
 /-- **Floor-pinned per-piece regeneration, lifted into the master carrier** (iter521). For any single
 piece `p` the adversary draws from a mid-bag `T` (card at least two, so the draw genuinely decrements
 rather than refilling), there is a reset surface `s` and a valid placement `pl` of `p` whose
