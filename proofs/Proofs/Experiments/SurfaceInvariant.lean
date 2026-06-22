@@ -27353,6 +27353,51 @@ theorem isFlatFrontBandAt_JZ_then_fillers_then_LS {s base : ℕ} {c : ℕ} {b : 
   exact ⟨pls, c', hforall, hlo, by omega,
     isFlatFrontBandAt_LS_step hbn hs (by omega) (by omega)⟩
 
+/-- **The reversed-pair "fillers between the two notch pairs" schedule closes into the once-per-bag
+`I` drain** (iter601). The `JZ`-first mirror of iter588
+(`isFlatFrontBandAt_LS_then_fillers_then_JZ_drain`): from a flat-front band at front `c`, run the bag's
+`J`-then-`Z` pair first (`isFlatFrontBandAt_JZ_step`, iter556), deal an arbitrary run `ps` of
+strictly-flat fillers (`O`, `T`, `L`, `J` — never `S`, `Z`, or the regulator `I`) in the gap, land the
+`L`-then-`S` pair at the fresh front `c'` (`isFlatFrontBandAt_LS_step`, iter555), and then spend the
+bag's single vertical `I` down the reserved well at column `0` to drain the whole layer back to the
+spread-bounded skyline at floor `base - 4`
+(`isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain`, iter412). Composing iter589 with the
+drain edge gives one complete certified bag half-cycle for the OTHER inter-pair order — every non-`I`
+piece of the bag absorbed flat, then the once-per-bag `I` regulator reclaiming the four rows the two
+staircases cost. With iter588 this now closes BOTH inter-pair orders (`LS`-first and `JZ`-first) into a
+full fill-then-drain half-cycle: the adversary may deal either notch pair first and slot the bag's flat
+fillers into the gap, and the surface still re-lands a spread-bounded skyline at floor `base - 4` after
+the drain. The floor returns to `base - 4`, exactly the height the `I` drain reclaims, and every
+placement is valid and emitted in bag order (`List.Forall₂`). Honest caveats are unchanged and are the
+open content: this still bakes in the `J`-before-`Z`, `L`-before-`S`, and `JZ`-before-`LS` orders (each
+digger precedes its owed staircase), so it does not cover the within-pair adversarial reversal; it is a
+multi-piece bag edge, not the per-piece `hstep`; and the every-order balance against the single shared
+`I` regulator remains the open closure. Crux #66 and #72 stay open and `TetrisSolvableValid` is NOT
+proven. -/
+theorem isFlatFrontBandAt_JZ_then_fillers_then_LS_drain {s base c : ℕ} {b : Board} {ps : List Piece}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s) (hc0 : 0 < c)
+    (hmem : ∀ p ∈ ps, p ≠ Piece.S ∧ p ≠ Piece.Z ∧ p ≠ Piece.I)
+    (hroom : c + 3 * ps.length + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
+    ∃ (pls : List Placement) (c' : ℕ),
+      List.Forall₂ (fun pl p => pl.piece = p ∧ pl.Valid GameConfig.standard) pls ps ∧
+      c + 3 ≤ c' ∧ c' ≤ c + 3 + 3 * ps.length ∧
+      Board.IsSpreadBoundedRWSkylineAt GameConfig.standard s (base - 4)
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (pls.foldl (Placement.applyStep GameConfig.standard)
+                (Placement.applyStep GameConfig.standard
+                  (Placement.applyStep GameConfig.standard b
+                    { piece := Piece.J, rot := 0, col := c })
+                  { piece := Piece.Z, rot := 0, col := c }))
+              { piece := Piece.L, rot := 0, col := c' })
+            { piece := Piece.S, rot := 0, col := c' })
+          { piece := Piece.I, rot := 1, col := 0 }) := by
+  obtain ⟨pls, c', hforall, hlo, hhi, hbn⟩ :=
+    isFlatFrontBandAt_JZ_then_fillers_then_LS hb hs hc0 hmem hroom
+  exact ⟨pls, c', hforall, hlo, hhi,
+    isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain hbn hbase4⟩
+
 /-- **Pairing an owed `S` with a preceding `L` keeps the master carrier on a flat band** (iter518).
 The first carrier-level two-piece transition that absorbs an `S` hole-free without any pre-existing
 notch: on a band flat at `base` with the reserved well parked at column `0` and spread `s ≥ 3`, drop
