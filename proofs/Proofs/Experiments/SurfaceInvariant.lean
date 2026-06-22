@@ -25643,6 +25643,63 @@ theorem isFlatFrontBandAt_notchPairs_drain {c s base : ℕ} {b : Board}
   isSpreadBoundedRWSkylineAt_of_isFlatFrontBandAt_vertI_drain
     (isFlatFrontBandAt_LS_then_JZ hb hs hc0 hc5) hbase4
 
+/-- **The both-notch-pairs-then-drain half-cycle survives at every step** (iter567). The transient
+survival certificate for `isFlatFrontBandAt_notchPairs_drain` (iter566), exactly as
+`isFlatFrontBandAt_flatFiller_fill_list_drain_safe` (iter515) certifies the flat-filler half-cycle:
+every one of the five intermediate boards along the schedule `L@c, S@c, J@(c+3), Z@(c+3), I-well`
+has not topped out. The four notch-placement boards are discharged verbatim by the four-step
+transient-survival certificate `isFlatFrontBandAt_LS_then_JZ_safe` (iter564); the fifth — the board
+after the once-per-bag regulator `I` drains four rows from the reserved well — is not lost because it
+is a spread band (`isFlatFrontBandAt_notchPairs_drain`, iter566), forgotten to a raw spread skyline
+(`Board.isSpreadBoundedRWSkyline_of_isSpreadBoundedRWSkylineAt`) whose reserved well keeps it under
+the ceiling (`Board.not_isLost_of_isSpreadBoundedRWSkyline`). Together with iter515 this gives the
+fully-certified survival face for both halves of the favorable-order per-bag cycle: the adversary's
+chosen order of the flat fillers tiles one layer and drains (iter515), and the two owed notch pieces
+route through their `L`/`J`-manufactured valleys and drain (this lemma), neither half ever topping
+out at any intermediate placement. The honest caveats are unchanged: this still bakes in the
+partner-before-notch order and the fillers-versus-notches split, and certifies the two halves against
+*separate* drains rather than interleaving them against one shared once-per-bag `I`; the every-order
+per-bag raise-versus-drain balance is the bag-phase closure #66 and #72 still demand.
+`TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_notchPairs_drain_safe {c s base : ℕ} {b : Board}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
+    (hc0 : 0 < c) (hc5 : c + 5 < GameConfig.standard.cols) (hbase4 : 4 ≤ base) :
+    ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c }) ∧
+      ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c })
+          { piece := Piece.S, rot := 0, col := c }) ∧
+      ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c })
+            { piece := Piece.S, rot := 0, col := c })
+          { piece := Piece.J, rot := 0, col := c + 3 }) ∧
+      ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c })
+              { piece := Piece.S, rot := 0, col := c })
+            { piece := Piece.J, rot := 0, col := c + 3 })
+          { piece := Piece.Z, rot := 0, col := c + 3 }) ∧
+      ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard
+                (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c })
+                { piece := Piece.S, rot := 0, col := c })
+              { piece := Piece.J, rot := 0, col := c + 3 })
+            { piece := Piece.Z, rot := 0, col := c + 3 })
+          { piece := Piece.I, rot := 1, col := 0 }) := by
+  obtain ⟨hL, hLS, hJ, hJZ⟩ := isFlatFrontBandAt_LS_then_JZ_safe hb hs hc0 hc5
+  refine ⟨hL, hLS, hJ, hJZ, ?_⟩
+  exact Board.not_isLost_of_isSpreadBoundedRWSkyline
+    (Board.isSpreadBoundedRWSkyline_of_isSpreadBoundedRWSkylineAt
+      (isFlatFrontBandAt_notchPairs_drain hb hs hc0 hc5 hbase4))
+
 /-- **A full layer of flat fillers fits and marches the front, in any order** (iter511). Tightens
 the room budget of `isFlatFrontBandAt_nonSZ_fill_list` (iter482) by excluding the width-four
 horizontal `I`: a run `ps` of strictly-flat fillers (each `O`, `T`, `L`, or `J`, advancing the front
