@@ -25283,6 +25283,46 @@ theorem isFlatFrontBandAt_LS_then_JZ {c s base : ℕ} {b : Board}
   have h2 := isFlatFrontBandAt_JZ_step h1 hs (by omega) (by omega)
   exact h2
 
+/-- **The `L`-then-`S` front step survives at every intermediate placement** (iter558). The transient
+survival face of `isFlatFrontBandAt_LS_step` (iter555): not just the completed pair's endpoint band,
+but BOTH boards the adversary's clock passes through — the board after the `L` lands (an exposed
+`S`-notch, columns `(c, c+1, c+2)` at `(base+1, base+1, base+2)`) and the board after the owed `S`
+drops into it — keep every cell strictly under the `rows` ceiling, so the game is not lost at any step
+of the pair. The post-`L` board is certified directly through the spread-band non-loss chain
+(`isSpreadBoundedRWSkylineAt_applyStep_L_flat_at_notch` at level `f = base`, then
+`not_isLost_of_isSpreadBoundedRWSkyline`), needing only `base + s ≤ rows` — which the band's own cap
+`hcap` supplies — so it holds REGARDLESS of piece order; the post-`S` board is the endpoint band of
+iter555, certified by `isFlatFrontBandAt_not_isLost` (iter484). This is the per-prefix height
+obligation for the notch pair, the analogue of `isFlatFrontBandAt_nonSZ_fill_list_safe` (iter485) for
+the strict-flat run: as the bag feeds its `L` then `S`, the surface never tops out in between. It is
+order-INDEPENDENT (a pure height bound on the two boards), unlike the endpoint-invariant direction of
+iter555 which assumes the `L`-before-`S` arrival; the every-order availability of a drain before the
+limit, and the bag-level raise/drain balance, remain the open closure. Crux #66 and #72 stay open and
+`TetrisSolvableValid` is NOT proven. -/
+theorem isFlatFrontBandAt_LS_step_safe {c s base : ℕ} {b : Board}
+    (hb : IsFlatFrontBandAt c s base b) (hs : 3 ≤ s)
+    (hc0 : 0 < c) (hc2 : c + 2 < GameConfig.standard.cols) :
+    ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c }) ∧
+      ¬ Board.isLost GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard b { piece := Piece.L, rot := 0, col := c })
+          { piece := Piece.S, rot := 0, col := c }) := by
+  obtain ⟨h, rfl, hw0, hband, hcap, hflat⟩ := hb
+  have hc : c < GameConfig.standard.cols := by omega
+  have hc1 : c + 1 < GameConfig.standard.cols := by omega
+  have ecc : h c = base := hflat c (le_refl c) hc
+  have ec1 : h (c + 1) = base := hflat (c + 1) (by omega) hc1
+  have ec2 : h (c + 2) = base := hflat (c + 2) (by omega) hc2
+  refine ⟨?_, ?_⟩
+  · have hL := (Board.isSpreadBoundedRWSkylineAt_applyStep_L_flat_at_notch (w := 0) hc hc1 hc2
+      (by decide) (by omega) (by omega) (by omega) hw0 ecc ec1 ec2 hband
+      (le_refl base) (by omega) hcap).1
+    exact Board.not_isLost_of_isSpreadBoundedRWSkyline
+      (Board.isSpreadBoundedRWSkyline_of_isSpreadBoundedRWSkylineAt hL)
+  · exact isFlatFrontBandAt_not_isLost
+      (isFlatFrontBandAt_LS_step ⟨h, rfl, hw0, hband, hcap, hflat⟩ hs hc0 hc2)
+
 /-- **A full layer of flat fillers fits and marches the front, in any order** (iter511). Tightens
 the room budget of `isFlatFrontBandAt_nonSZ_fill_list` (iter482) by excluding the width-four
 horizontal `I`: a run `ps` of strictly-flat fillers (each `O`, `T`, `L`, or `J`, advancing the front
