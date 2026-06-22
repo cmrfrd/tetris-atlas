@@ -21353,6 +21353,43 @@ theorem reservoirDoubleSZSurface_afterZ_spreadBandAt (base : ℕ)
     split_ifs <;> omega
   · exact hbase
 
+/-- **Skyline normal form for the post-`S` double-valley board.** Collapses the awkward triple
+`Function.update` that `applyStep_S_skyline_noclear` emits for the valley1 `S` move
+(`{S, rot 0, col 2}`) into ONE explicit closed-form skyline profile. The `S` writes `base + 1` into
+column `2` and `base + 2` into columns `3, 4` (filling the right lip of valley1) and touches nothing
+else, so the post-`S` board equals `Board.skyline` of the named piecewise profile
+`(0, base+1, base+1, base+2, base+2, base+1, base, base, base+1, base)`. Every downstream obligation
+on the `S`-first leg — seating the still-owed `Z` into the pristine valley2 (`h 5 = base + 1`,
+`h 6 = h 7 = base`), draining through the empty well, or bounding the height — can now pattern-match
+this single explicit skyline rather than re-peeling the nested update each time, the reusable carrier
+face the `S`-first arm of the adversarial bag hands back. -/
+theorem reservoirDoubleSZSurface_afterS_eq_skyline (base : ℕ) :
+    Placement.applyStep GameConfig.standard
+        (Board.skyline GameConfig.standard (reservoirDoubleSZSurface base))
+        { piece := Piece.S, rot := 0, col := 2 }
+      = Board.skyline GameConfig.standard
+          (fun j => if j = 0 then 0
+                    else if j = 1 then base + 1
+                    else if j = 2 then base + 1
+                    else if j = 3 then base + 2
+                    else if j = 4 then base + 2
+                    else if j = 5 then base + 1
+                    else if j = 8 then base + 1
+                    else base) := by
+  rw [Board.applyStep_S_skyline_noclear (c := 2) (w := 0) (by decide) (by decide) (by decide)
+      (by simp [reservoirDoubleSZSurface]) (by simp [reservoirDoubleSZSurface])
+      (by decide) (by decide) (by decide) (by decide) (reservoirDoubleSZSurface_well base)]
+  congr 1
+  funext j
+  rcases eq_or_ne j 2 with rfl | h2
+  · simp [reservoirDoubleSZSurface]
+  rcases eq_or_ne j 3 with rfl | h3
+  · simp [reservoirDoubleSZSurface]
+  rcases eq_or_ne j 4 with rfl | h4
+  · simp [reservoirDoubleSZSurface]
+  simp only [Function.update_apply, reservoirDoubleSZSurface]
+  split_ifs <;> omega
+
 /-- **Reserved well survives BOTH staircases.** The two-staircase analogue of
 `reservoirDoubleSZSurface_S_valley1_preserves_well`: seating `S` in valley1 (`{S, rot 0, col 2}`)
 and then `Z` in valley2 (`{Z, rot 0, col 5}`, the mirror notch on the left lip of valley2 where
