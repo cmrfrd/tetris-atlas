@@ -78,9 +78,61 @@ theorem headroom_le_clearLines (cfg : GameConfig) (b : Board) :
   have := surfaceArea_clearLines_le cfg b
   omega
 
+/-! ## The hole-free fiber is the surface arena
+
+The energy game lives on surfaces. The bridge: when `debt = 0` every column is a *gapless*
+stack, so a hole-free board is completely determined by its column-height vector. Hence the
+hole-free fiber is in bijection with the surface space — the finite arena on which the
+surface automaton (`SurfaceFiber`) and the energy (`headroom`) operate. -/
+
+/-- **Hole-free columns are gapless:** for a board with `debt = 0`, a valid column is filled
+in exactly the rows below its height. (`debt = 0` ⇒ each `colHoles = 0` ⇒ filled-count =
+height ⇒ the filled rows are all of `[0, colHeight)`.) -/
+theorem holeFree_filled_iff {cfg : GameConfig} {b : Board} (hd : debt cfg b = 0)
+    {j : ℕ} (hj : j < cfg.cols) (r : ℕ) :
+    (j, r) ∈ b ↔ r < b.colHeight j := by
+  have hcolHoles : colHoles b j = 0 := by
+    unfold debt at hd
+    exact (Finset.sum_eq_zero_iff.mp hd) j (Finset.mem_range.mpr hj)
+  have hcard : (b.colRows j).card = b.colHeight j := by
+    unfold colHoles at hcolHoles
+    have hle := card_colRows_le_colHeight b j
+    omega
+  have hsub : b.colRows j ⊆ Finset.range (b.colHeight j) := by
+    intro x hx
+    rw [Finset.mem_range]
+    have hx1 : x + 1 ≤ b.colHeight j := by unfold Board.colHeight; exact Finset.le_sup hx
+    omega
+  have heq : b.colRows j = Finset.range (b.colHeight j) :=
+    Finset.eq_of_subset_of_card_le hsub (by rw [Finset.card_range]; omega)
+  have hmem : (j, r) ∈ b ↔ r ∈ b.colRows j := by
+    simp only [Board.colRows, Finset.mem_image, Finset.mem_filter]
+    constructor
+    · intro h; exact ⟨(j, r), ⟨h, rfl⟩, rfl⟩
+    · rintro ⟨x, ⟨hxb, hxj⟩, hxr⟩
+      have hxe : x = (j, r) := Prod.ext hxj hxr
+      exact hxe ▸ hxb
+  rw [hmem, heq, Finset.mem_range]
+
+/-- **Hole-free boards are determined by their surface:** two hole-free, well-formed boards
+with equal column heights are equal. So the hole-free fiber injects into the surface space
+(the energy-game arena), one board per height vector. -/
+theorem holeFree_ext {cfg : GameConfig} {b β : Board}
+    (hb : debt cfg b = 0) (hβ : debt cfg β = 0)
+    (hwfb : Board.WF cfg b) (hwfβ : Board.WF cfg β)
+    (h : ∀ j, b.colHeight j = β.colHeight j) : b = β := by
+  ext ⟨j, r⟩
+  by_cases hj : j < cfg.cols
+  · rw [holeFree_filled_iff hb hj, holeFree_filled_iff hβ hj, h]
+  · constructor
+    · intro hmem; exact absurd (hwfb (j, r) hmem) hj
+    · intro hmem; exact absurd (hwfβ (j, r) hmem) hj
+
 #print axioms capacity_conservation
 #print axioms headroom_place_le
 #print axioms headroom_le_clearLines
+#print axioms holeFree_filled_iff
+#print axioms holeFree_ext
 
 /-! ## Next (energy-game backlog)
 
