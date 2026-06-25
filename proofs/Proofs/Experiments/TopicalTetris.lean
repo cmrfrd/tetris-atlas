@@ -433,12 +433,56 @@ piece, `EnergyGame.survival_forces_clears`), and the homogeneity-breaking clears
 term that can pull the net rate down to `≤ 0`. The carrier-as-eigenvector and the
 energy/clearing law are the same statement, viewed spectrally vs. by conservation. -/
 
+/-! ## The rate is a COMPUTABLE integer (shape-repeat detection)
+
+Combining everything: iterate the (computable) strategy map; compute each surface's **shape
+key** (heights normalized by column 0 — a *decidable* equality on `Fin n → ℤ`); on the first
+repeated shape, the rate is the basepoint lift `(Tᵇv)₀ − (Tᵃv)₀`, a single integer. Survival
+is then the sign check `rate ≤ 0`. No graph, no spectral theorem — a finite arithmetic
+procedure whose termination is exactly "bounded roughness." -/
+
+/-- The **shape key**: a surface normalized by its column-0 height. Same shape ⟺ same key. -/
+def shapeKey {n : ℕ} [NeZero n] (h : Surface n) : Surface n :=
+  fun j => h j - h ⟨0, Nat.pos_of_ne_zero (NeZero.ne n)⟩
+
+/-- Two surfaces differ by a uniform lift **iff** they have the same (decidable) shape key —
+so eigen-cycle detection is computable. -/
+theorem sameShape_iff_shapeKey {n : ℕ} [NeZero n] (h h' : Surface n) :
+    (∃ c, h' = shift h c) ↔ shapeKey h = shapeKey h' := by
+  constructor
+  · rintro ⟨c, rfl⟩
+    funext j; simp only [shapeKey, shift_apply]; omega
+  · intro hk
+    refine ⟨h' ⟨0, Nat.pos_of_ne_zero (NeZero.ne n)⟩ - h ⟨0, Nat.pos_of_ne_zero (NeZero.ne n)⟩, ?_⟩
+    funext j
+    have hj := congrFun hk j
+    simp only [shapeKey] at hj
+    simp only [shift]
+    omega
+
+/-- **The computable rate.** A detected shape-repeat (`shapeKey (Tᵃv) = shapeKey (Tᵇv)`,
+`a < b`) yields an eigen-cycle whose rate is the *explicit, computable* basepoint difference
+`(Tᵇv)₀ − (Tᵃv)₀`. So for any concrete strategy the eigen rate is read off by iteration and a
+decidable shape comparison; `≤ 0` is then the survival certificate. -/
+theorem rate_of_shapeKey_eq {n : ℕ} [NeZero n] (T : Surface n → Surface n) (v : Surface n)
+    {a b : ℕ} (hab : a < b) (hk : shapeKey (T^[a] v) = shapeKey (T^[b] v)) :
+    IsEigenCycle T (T^[a] v) (b - a)
+      ((T^[b] v) ⟨0, Nat.pos_of_ne_zero (NeZero.ne n)⟩
+        - (T^[a] v) ⟨0, Nat.pos_of_ne_zero (NeZero.ne n)⟩) := by
+  apply eigen_cycle_of_sameShape T v hab
+  funext j
+  have hj := congrFun hk j
+  simp only [shapeKey] at hj
+  simp only [shift]
+  omega
+
 #print axioms eigen_surface_bounded
 #print axioms dropMap_topical
 #print axioms bagMap_topical
 #print axioms exists_eigen_cycle
 #print axioms eigen_cycle_bounded
 #print axioms eigen_cycle_survives_iff
+#print axioms rate_of_shapeKey_eq
 
 /-! ## Where this points (the analytic program, no enumeration)
 
