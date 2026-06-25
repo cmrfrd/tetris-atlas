@@ -208,6 +208,77 @@ theorem dropMap_topical {n : ℕ} (p : PieceProfile n) : Topical (dropMap p) :=
 theorem dropMap_nonexpansive {n : ℕ} (p : PieceProfile n) : Nonexpansive (dropMap p) :=
   (dropMap_topical p).nonexpansive
 
+/-! ## Sharper: the drop is max-plus LINEAR (each piece is a tropical matrix)
+
+Topical is monotone + homogeneous. The drop satisfies the stronger **max-plus linearity**:
+it preserves pointwise `max` *and* `+c`. A map that is `⊔`-preserving and homogeneous is
+exactly a **tropical (max-plus) matrix action** `h ↦ A ⊗ h`, `(A⊗h)ⱼ = maxₖ(Aⱼₖ + hₖ)` —
+here `Aⱼₖ = topⱼ + 1 − botₖ` on the footprint, `0` on the diagonal off it. This is the
+representation that turns the cycle rate into a **max cycle-mean** (Cuninghame-Green / Karp),
+a finite computation on the bag-matrix. -/
+
+/-- `Finset.sup'` distributes over pointwise `max` (the tropical-additive structure). -/
+theorem sup'_max {α : Type*} {s : Finset α} (hs : s.Nonempty) (f g : α → ℤ) :
+    (s.sup' hs fun k => max (f k) (g k)) = max (s.sup' hs f) (s.sup' hs g) := by
+  apply le_antisymm
+  · apply Finset.sup'_le
+    intro k hk
+    exact max_le_max (Finset.le_sup' f hk) (Finset.le_sup' g hk)
+  · apply max_le
+    · apply Finset.sup'_le
+      intro k hk
+      exact le_trans (le_max_left (f k) (g k))
+        (Finset.le_sup' (fun k => max (f k) (g k)) hk)
+    · apply Finset.sup'_le
+      intro k hk
+      exact le_trans (le_max_right (f k) (g k))
+        (Finset.le_sup' (fun k => max (f k) (g k)) hk)
+
+theorem base_sup {n : ℕ} (p : PieceProfile n) (h h' : Surface n) :
+    base p (fun j => max (h j) (h' j)) = max (base p h) (base p h') := by
+  unfold base
+  rw [show (fun k => max (h k) (h' k) - p.bot k)
+        = (fun k => max (h k - p.bot k) (h' k - p.bot k)) by funext k; omega]
+  exact sup'_max p.ne _ _
+
+/-- **The drop preserves pointwise `max`** — the max-plus additivity. -/
+theorem dropMap_sup {n : ℕ} (p : PieceProfile n) (h h' : Surface n) :
+    dropMap p (fun j => max (h j) (h' j)) = fun j => max (dropMap p h j) (dropMap p h' j) := by
+  funext j
+  unfold dropMap
+  by_cases hj : j ∈ p.occ
+  · simp only [if_pos hj, base_sup]; omega
+  · simp only [if_neg hj]
+
+/-- **Max-plus linear** = preserves pointwise `max` and `+c` (a tropical matrix action). -/
+def MaxPlusLinear {n : ℕ} (T : Surface n → Surface n) : Prop :=
+  (∀ h h', T (fun j => max (h j) (h' j)) = fun j => max (T h j) (T h' j)) ∧ Homogeneous T
+
+/-- The Tetris drop is max-plus linear. -/
+theorem dropMap_maxplus {n : ℕ} (p : PieceProfile n) : MaxPlusLinear (dropMap p) :=
+  ⟨dropMap_sup p, dropMap_homog p⟩
+
+/-- Max-plus linear ⇒ monotone (preserving `max` forces order-preservation), hence topical. -/
+theorem MaxPlusLinear.mono {n : ℕ} {T : Surface n → Surface n} (hT : MaxPlusLinear T) :
+    Monotone T := by
+  intro h h' hle j
+  have hmax : (fun j => max (h j) (h' j)) = h' := by funext k; exact max_eq_right (hle k)
+  have h2 : (T h') j = max (T h j) (T h' j) := by
+    have hc := congrFun (hT.1 h h') j
+    rwa [hmax] at hc
+  exact le_trans (le_max_left _ _) h2.ge
+
+theorem MaxPlusLinear.topical {n : ℕ} {T : Surface n → Surface n} (hT : MaxPlusLinear T) :
+    Topical T := ⟨hT.mono, hT.2⟩
+
+/-- Max-plus linear maps compose (so a bag-strategy is a tropical matrix *product*). -/
+theorem MaxPlusLinear.comp {n : ℕ} {T S : Surface n → Surface n}
+    (hT : MaxPlusLinear T) (hS : MaxPlusLinear S) : MaxPlusLinear (T ∘ S) := by
+  refine ⟨fun h h' => ?_, (hT.topical.comp hS.topical).homog⟩
+  funext j
+  simp only [Function.comp_apply]
+  rw [hS.1 h h', hT.1 (S h) (S h')]
+
 /-! ## The bag-strategy map, and existence of the eigen-surface
 
 A bag-strategy is the player's seven placements chained — a composition of `dropMap`s, hence
