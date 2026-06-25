@@ -2,6 +2,7 @@ import Mathlib
 import Proofs.Board
 import Proofs.Placement
 import Proofs.SafeSet
+import Proofs.Theorems.ColumnCount
 import Proofs.Experiments.WqoCarrier
 import Proofs.Experiments.HoleyCarrier
 import Proofs.Experiments.SurfaceFiber
@@ -249,26 +250,121 @@ theorem holes_card_le_place (cfg : GameConfig) (b : Board) (pl : Placement) :
 #print axioms surfaceArea_le_place
 #print axioms place_holes_subset
 
-/-! ## Next targets (analysis)
+/-! ## Pure debt monotonicity under clears
 
-The energy law gives `debt' + card' ≤ debt + card` but not yet the *pure* debt
-monotonicity `debt(clearLines b) ≤ debt b`. By the energy identity that is equivalent to
+The deep target: `debt(clearLines b) ≤ debt b`. The codebase already provides the hard
+injectivity half — `Board.colCount_clearLines_add`: each clear removes exactly one cell per
+column (`colCount b j = colCount(clearLines b) j + |fullRows|`). What remains is the matching
+*height* drop: each column loses at least `|fullRows|` from its height. -/
 
-  `(surfaceArea b − surfaceArea (clearLines b)) ≥ (b.card − (clearLines b).card)`,
+/-- Every full row is a filled row of every valid column (it is filled in all columns). -/
+theorem fullRows_subset_colRows {cfg : GameConfig} {b : Board} {j : ℕ} (hj : j < cfg.cols) :
+    Board.fullRows cfg b ⊆ b.colRows j := by
+  intro r hr
+  simp only [Board.fullRows, Finset.mem_filter] at hr
+  have hmem : (j, r) ∈ b := hr.2 j (Finset.mem_range.mpr hj)
+  simp only [Board.colRows, Finset.mem_image, Finset.mem_filter]
+  exact ⟨(j, r), ⟨hmem, rfl⟩, rfl⟩
 
-i.e. **the total height dropped by a clear is at least the number of cells removed.** Both
-sides equal `cfg.cols * (fullRows cfg b).card`:
+/-- **The height-drop bound (P3):** a clear lowers every valid column's height by at least
+the number of cleared rows. A surviving row `s = r − clearedBelow r` (with `r` a non-full
+filled row `< colHeight`) satisfies `s + |fullRows| < colHeight`: the full rows at or above
+`r` are distinct integers in `(r, colHeight)`, so they leave exactly that much headroom. -/
+theorem clearLines_colHeight_add_le {cfg : GameConfig} {b : Board} {j : ℕ}
+    (hj : j < cfg.cols) :
+    (Board.clearLines cfg b).colHeight j + (Board.fullRows cfg b).card ≤ b.colHeight j := by
+  have hk : (Board.fullRows cfg b).card ≤ b.colHeight j :=
+    le_trans (Finset.card_le_card (fullRows_subset_colRows hj)) (card_colRows_le_colHeight b j)
+  have key : ∀ s ∈ (Board.clearLines cfg b).colRows j,
+      s + (Board.fullRows cfg b).card < b.colHeight j := by
+    intro s hs
+    simp only [Board.colRows, Finset.mem_image, Finset.mem_filter] at hs
+    obtain ⟨cell, ⟨hcl, hcj⟩, hcs⟩ := hs
+    rw [Board.mem_clearLines_iff] at hcl
+    obtain ⟨p, hpb, hpnf, hpq⟩ := hcl
+    have hcell1 : cell.1 = p.1 := by rw [← hpq]
+    have hcell2 : cell.2 = p.2 - Board.clearedBelow cfg b p.2 := by rw [← hpq]
+    have hp1 : p.1 = j := by rw [← hcell1, hcj]
+    have hpe : p = (j, p.2) := Prod.ext hp1 rfl
+    have hpjb : (j, p.2) ∈ b := hpe ▸ hpb
+    have hpd : p.2 < b.colHeight j := Board.lt_colHeight hpjb
+    have hseq : s = p.2 - Board.clearedBelow cfg b p.2 := by rw [← hcs, hcell2]
+    have ha := Board.clearedBelow_le_row cfg b p.2
+    have hb := Finset.filter_card_add_filter_neg_card_eq_card
+      (s := Board.fullRows cfg b) (p := fun f => f < p.2)
+    have hcbeq : Board.clearedBelow cfg b p.2
+        = ((Board.fullRows cfg b).filter (fun f => f < p.2)).card := rfl
+    have hsub : (Board.fullRows cfg b).filter (fun f => ¬ f < p.2)
+        ⊆ Finset.Ioo p.2 (b.colHeight j) := by
+      intro f hf
+      rw [Finset.mem_filter] at hf
+      rw [Finset.mem_Ioo]
+      have hffull : Board.isFull cfg b f := by
+        have hf1 := hf.1
+        simp only [Board.fullRows, Finset.mem_filter] at hf1
+        exact hf1.2
+      have hflt : f < b.colHeight j := by
+        have hfc : f ∈ b.colRows j := fullRows_subset_colRows hj hf.1
+        have hf1 : f + 1 ≤ (b.colRows j).sup (· + 1) := Finset.le_sup hfc
+        unfold Board.colHeight
+        omega
+      have hfne : f ≠ p.2 := fun h => hpnf (h ▸ hffull)
+      exact ⟨by omega, hflt⟩
+    have hc : ((Board.fullRows cfg b).filter (fun f => ¬ f < p.2)).card
+        ≤ b.colHeight j - p.2 - 1 := by
+      calc ((Board.fullRows cfg b).filter (fun f => ¬ f < p.2)).card
+          ≤ (Finset.Ioo p.2 (b.colHeight j)).card := Finset.card_le_card hsub
+        _ = b.colHeight j - p.2 - 1 := Nat.card_Ioo _ _
+    omega
+  have hsup : (Board.clearLines cfg b).colHeight j
+      ≤ b.colHeight j - (Board.fullRows cfg b).card := by
+    have hcl : (Board.clearLines cfg b).colHeight j
+        = ((Board.clearLines cfg b).colRows j).sup (· + 1) := rfl
+    rw [hcl]
+    apply Finset.sup_le
+    intro s hs
+    have := key s hs
+    omega
+  omega
 
-* `b.card − (clearLines b).card = cfg.cols * |fullRows|` — each cleared full row removes
-  exactly `cols` cells (needs: the shift map is injective on survivors, and each full row
-  is `cols` cells for an in-field board).
-* `surfaceArea b − surfaceArea (clearLines b) ≥ cfg.cols * |fullRows|` — every column loses
-  at least `|fullRows|` from its height (all full rows lie below every column's top).
+/-- **Pure debt monotonicity under clears:** `debt(clearLines b) ≤ debt b`. Per column,
+`colCount` drops by exactly `|fullRows|` (`colCount_clearLines_add`) while `colHeight` drops
+by at least `|fullRows|` (`clearLines_colHeight_add_le`); their difference `colHoles` can
+only fall. Summed over columns, the debt counter is non-increasing under a line clear — the
+Lyapunov fact the WSTS survival argument needs. -/
+theorem clearLines_debt_le {cfg : GameConfig} {b : Board} (_hwf : Board.WF cfg b) :
+    debt cfg (Board.clearLines cfg b) ≤ debt cfg b := by
+  unfold debt
+  apply Finset.sum_le_sum
+  intro j hj
+  rw [Finset.mem_range] at hj
+  have hcount := Board.colCount_clearLines_add cfg b hj
+  have hcb : (b.colRows j).card
+      = ((Board.clearLines cfg b).colRows j).card + (Board.fullRows cfg b).card := by
+    rw [card_colRows_eq_card_filter b j,
+      card_colRows_eq_card_filter (Board.clearLines cfg b) j]
+    simpa [Board.colCount] using hcount
+  have hheight := @clearLines_colHeight_add_le cfg b j hj
+  unfold colHoles
+  omega
 
-Proving those two yields `clearLines_debt_le : debt (clearLines b) ≤ debt b` — the debt
-counter is non-increasing under clears, the Lyapunov fact the WSTS survival argument needs.
-The companion `place` bound `debt b ≤ debt (place b pl) ≤ debt b + 3` (a tetromino buries
-at most 3 cells) bounds debt growth per piece; together they make `debt` a bounded counter
-whenever the clear rate matches the ≥4-energy-per-piece placement rate. -/
+#print axioms clearLines_debt_le
+
+/-! ## Status and next targets
+
+The debt counter is now fully characterised under both transitions:
+* **placement** — `debt` is non-decreasing (`holes_card_le_place`, via `place_holes_subset`);
+* **line clear** — `debt` is non-increasing (`clearLines_debt_le`), proved per-column from
+  `colCount_clearLines_add` (each clear removes one cell per column) and
+  `clearLines_colHeight_add_le` (each column drops by ≥ `|fullRows|`).
+
+So `debt` rises only on placement and falls only on clears — a genuine Lyapunov counter.
+
+Remaining for the WSTS survival argument:
+* a per-piece *upper* bound `debt (place b pl) ≤ debt b + 3` (a tetromino buries ≤ 3 cells),
+  bounding debt growth per move; combined with `clearLines_debt_le` this makes `debt` a
+  bounded counter whenever the clear rate keeps pace;
+* lifting the bounded-debt + bounded-height invariant into a `Carrier`/`TetrisSolvableValid`
+  reduction (the explicit, atlas-style closed set the non-congruence result demands). -/
 
 end Tetris.HoleDebt
