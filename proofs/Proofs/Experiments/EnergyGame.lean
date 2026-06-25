@@ -350,6 +350,33 @@ theorem SZ_handled_with_budget1 :
 
 #print axioms SZ_handled_with_budget1
 
+/-! ## The discharge mechanism: buried holes are cleared by completing their covering row
+
+A buried hole cannot be filled directly (it is covered). It is discharged by completing and
+clearing the row *above* it: the clear removes the covering cell and drops the column, so the
+empty cell is no longer buried. This verifies the second half of the hole lifecycle (iter6/10
+showed holes are *created* by S/Z, bounded at 1; here a hole is *removed*). Together they
+frame debt as a counter that S/Z increment and a covering-row completion decrements — the
+clearing-equilibrium whose long-horizon balance is the remaining crux. -/
+
+/-- Witness board: a single buried hole at `(0,0)` (covered by `(0,1)`), with its covering
+row `1` filled in columns `0..8` and only column `9` missing. `debt = 1`. -/
+def dischargeBoard : Board :=
+  ({(0,1),(1,1),(2,1),(3,1),(4,1),(5,1),(6,1),(7,1),(8,1),
+    (1,0),(2,0),(3,0),(4,0),(5,0),(6,0),(7,0),(8,0),(9,0)} : Finset Coord)
+
+/-- **Buried holes are dischargeable.** On `dischargeBoard` (`debt = 1`), some valid I
+placement completes the covering row, clears it, and drops the debt to `0`. So a buried hole
+is removed by completing its covering row — the decrement side of the debt counter. -/
+theorem hole_dischargeable :
+    debt GameConfig.standard dischargeBoard = 1 ∧
+    ∃ pl ∈ Placement.allValidFor GameConfig.standard Piece.I,
+      debt GameConfig.standard
+        (Placement.applyStep GameConfig.standard dischargeBoard pl) = 0 := by
+  native_decide
+
+#print axioms hole_dischargeable
+
 /-! ## Next (energy-game backlog)
 
 With headroom established as the energy, the next iterations build toward "survival ⟺ player
