@@ -564,6 +564,100 @@ theorem fullStep_shapeKey {n : ℕ} [NeZero n] (p : PieceProfile n) (h : Surface
 #print axioms clearMap_shapeKey
 #print axioms maxHt_fullStep
 
+/-! ## The Hilbert projective metric — topical maps are non-expansive, eigen-surface ⇒ bounded
+
+The natural metric for "bounded roughness" is the **Hopf oscillation** `osc(x−y) = roughness
+(x−y) = max(x−y) − min(x−y)` — the Hilbert projective metric (vanishing iff `x,y` share a
+shape). The Birkhoff–Hopf foundation: **topical maps are non-expansive in it**
+(`Topical.oscDist_nonexpansive`), because `min(x−y)·𝟙 ≤ x − y ≤ max(x−y)·𝟙` is preserved by a
+monotone homogeneous map. The payoff (`eigen_global_roughness`): a single eigen-surface `v`
+bounds the roughness of **every** trajectory by `osc(x−v) + osc(v)` — so one fixed shape is a
+*global attractor*, and "bounded roughness from any start" reduces to "one bounded-roughness
+eigen-surface exists." This is where a *symbolic* (contraction) survival proof can live. -/
+
+theorem minHt_le {n : ℕ} [NeZero n] (h : Surface n) (j : Fin n) : minHt h ≤ h j :=
+  Finset.inf'_le h (Finset.mem_univ j)
+theorem le_maxHt {n : ℕ} [NeZero n] (h : Surface n) (j : Fin n) : h j ≤ maxHt h :=
+  Finset.le_sup' h (Finset.mem_univ j)
+theorem maxHt_le {n : ℕ} [NeZero n] {h : Surface n} {c : ℤ} (H : ∀ j, h j ≤ c) : maxHt h ≤ c :=
+  Finset.sup'_le fin_univ_ne h (fun j _ => H j)
+theorem le_minHt {n : ℕ} [NeZero n] {h : Surface n} {c : ℤ} (H : ∀ j, c ≤ h j) : c ≤ minHt h :=
+  Finset.le_inf' fin_univ_ne h (fun j _ => H j)
+
+theorem maxHt_shift {n : ℕ} [NeZero n] (h : Surface n) (c : ℤ) :
+    maxHt (shift h c) = maxHt h + c := by
+  unfold maxHt shift; exact sup'_add_const fin_univ_ne h c
+
+/-- Oscillation (roughness) is translation-invariant: it's a *projective* quantity. -/
+theorem roughness_shift {n : ℕ} [NeZero n] (h : Surface n) (c : ℤ) :
+    roughness (shift h c) = roughness h := by
+  unfold roughness; rw [minHt_shift, maxHt_shift]; ring
+
+/-- Oscillation is sub-additive (a seminorm). -/
+theorem roughness_add_le {n : ℕ} [NeZero n] (x y : Surface n) :
+    roughness (x + y) ≤ roughness x + roughness y := by
+  unfold roughness
+  have h1 : maxHt (x + y) ≤ maxHt x + maxHt y := by
+    apply maxHt_le; intro j; simp only [Pi.add_apply]
+    exact add_le_add (le_maxHt x j) (le_maxHt y j)
+  have h2 : minHt x + minHt y ≤ minHt (x + y) := by
+    apply le_minHt; intro j; simp only [Pi.add_apply]
+    exact add_le_add (minHt_le x j) (minHt_le y j)
+  linarith
+
+/-- **Birkhoff–Hopf: topical maps are non-expansive in the projective metric.** From
+`min(x−y)·𝟙 ≤ x − y ≤ max(x−y)·𝟙`, monotone+homogeneous gives the same envelope for
+`Tx − Ty`, so its oscillation can only shrink. -/
+theorem Topical.oscDist_nonexpansive {n : ℕ} [NeZero n] {T : Surface n → Surface n}
+    (hT : Topical T) (x y : Surface n) : roughness (T x - T y) ≤ roughness (x - y) := by
+  have hax : shift y (minHt (x - y)) ≤ x := by
+    intro j; have := minHt_le (x - y) j
+    simp only [Pi.sub_apply] at this; simp only [shift_apply]; linarith
+  have hxb : x ≤ shift y (maxHt (x - y)) := by
+    intro j; have := le_maxHt (x - y) j
+    simp only [Pi.sub_apply] at this; simp only [shift_apply]; linarith
+  have hTa : shift (T y) (minHt (x - y)) ≤ T x := by
+    have := hT.mono hax; rwa [hT.homog] at this
+  have hTb : T x ≤ shift (T y) (maxHt (x - y)) := by
+    have := hT.mono hxb; rwa [hT.homog] at this
+  have hmin : minHt (x - y) ≤ minHt (T x - T y) := by
+    apply le_minHt; intro j; have := hTa j
+    simp only [shift_apply] at this; simp only [Pi.sub_apply]; linarith
+  have hmax : maxHt (T x - T y) ≤ maxHt (x - y) := by
+    apply maxHt_le; intro j; have := hTb j
+    simp only [shift_apply] at this; simp only [Pi.sub_apply]; linarith
+  unfold roughness; linarith
+
+/-- Iterated non-expansiveness. -/
+theorem Topical.oscDist_iterate {n : ℕ} [NeZero n] {T : Surface n → Surface n}
+    (hT : Topical T) (x y : Surface n) (k : ℕ) :
+    roughness (T^[k] x - T^[k] y) ≤ roughness (x - y) := by
+  induction k with
+  | zero => simp
+  | succ k ih =>
+    rw [Function.iterate_succ_apply', Function.iterate_succ_apply']
+    exact le_trans (hT.oscDist_nonexpansive _ _) ih
+
+/-- **One eigen-surface globally bounds roughness.** If `T v = v + λ·𝟙`, then for every start
+`x`, `roughness (Tᵏ x) ≤ osc(x−v) + osc(v)` for all `k`: a fixed shape is a global attractor.
+So "the player keeps roughness bounded from any board" follows from exhibiting **one**
+bounded-roughness eigen-surface. -/
+theorem eigen_global_roughness {n : ℕ} [NeZero n] {T : Surface n → Surface n} {v : Surface n}
+    {lam : ℤ} (hT : Topical T) (he : T v = shift v lam) (x : Surface n) (k : ℕ) :
+    roughness (T^[k] x) ≤ roughness (x - v) + roughness v := by
+  have hsplit : T^[k] x = (T^[k] x - T^[k] v) + T^[k] v := by
+    funext j; simp only [Pi.add_apply, Pi.sub_apply]; ring
+  calc roughness (T^[k] x)
+      = roughness ((T^[k] x - T^[k] v) + T^[k] v) := by rw [← hsplit]
+    _ ≤ roughness (T^[k] x - T^[k] v) + roughness (T^[k] v) := roughness_add_le _ _
+    _ ≤ roughness (x - v) + roughness (T^[k] v) := by
+        have := hT.oscDist_iterate x v k; linarith
+    _ = roughness (x - v) + roughness v := by
+        rw [eigen_iterate hT he k, roughness_shift]
+
+#print axioms Topical.oscDist_nonexpansive
+#print axioms eigen_global_roughness
+
 /-! ## Concrete computation: watch the rate come out as the clearing equilibrium
 
 The theory is now executable. `eigenRate` iterates the (computable) strategy map, detects the
