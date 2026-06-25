@@ -476,6 +476,49 @@ theorem rate_of_shapeKey_eq {n : ℕ} [NeZero n] (T : Surface n → Surface n) (
   simp only [shift]
   omega
 
+/-! ## Concrete computation: watch the rate come out as the clearing equilibrium
+
+The theory is now executable. `eigenRate` iterates the (computable) strategy map, detects the
+first repeated shape key, and returns `(period, rate)`. The rate of any flat-filling strategy
+is `4·(pieces) / cols` — the proven clearing equilibrium — now a literal `#eval`. -/
+
+/-- Computable eigen-rate finder: iterate `T` from `v`, detect the first repeated shape, and
+return `(period, rate)` (rate = basepoint lift over the period). `none` if no repeat within
+`fuel` steps (unbounded roughness). Verified shape: a returned `(b−a, c)` is exactly the
+`IsEigenCycle` of `rate_of_shapeKey_eq`. -/
+def eigenRate {n : ℕ} [NeZero n] [DecidableEq (Surface n)] (T : Surface n → Surface n)
+    (v : Surface n) (fuel : ℕ) : Option (ℕ × ℤ) := Id.run do
+  let b0 : Fin n := ⟨0, Nat.pos_of_ne_zero (NeZero.ne n)⟩
+  let mut seen : List (Surface n × ℤ × ℕ) := []
+  let mut cur : Surface n := v
+  for a in List.range fuel do
+    let key := shapeKey cur
+    match seen.find? (fun p => decide (p.1 = key)) with
+    | some (_, base0, a0) => return some (a - a0, cur b0 - base0)
+    | none =>
+      seen := (key, cur b0, a) :: seen
+      cur := T cur
+  return none
+
+/-- I-piece flat across all 4 columns of a width-4 board (4 cells, 1 row). -/
+def I4 : PieceProfile 4 := ⟨{0, 1, 2, 3}, by decide, fun _ => 0, fun _ => 0⟩
+/-- O-piece (2×2) on a width-2 board (4 cells, 2 rows). -/
+def O2 : PieceProfile 2 := ⟨{0, 1}, by decide, fun _ => 0, fun _ => 1⟩
+/-- A flat-filling 5-O "bag" tiling a full layer of a width-10 board. -/
+def bag5O : List (PieceProfile 10) :=
+  [⟨{0, 1}, by decide, fun _ => 0, fun _ => 1⟩,
+   ⟨{2, 3}, by decide, fun _ => 0, fun _ => 1⟩,
+   ⟨{4, 5}, by decide, fun _ => 0, fun _ => 1⟩,
+   ⟨{6, 7}, by decide, fun _ => 0, fun _ => 1⟩,
+   ⟨{8, 9}, by decide, fun _ => 0, fun _ => 1⟩]
+
+-- width 4, one I per period: rate 1 = 4/4 per piece.
+#eval eigenRate (dropMap I4) (fun _ => 0) 20
+-- width 2, one O per period: rate 2 = 4/2 per piece.
+#eval eigenRate (dropMap O2) (fun _ => 0) 20
+-- width 10, five O's per period: rate 2 over 5 pieces = 0.4/piece = 4/10 = **2.8 per 7-bag**.
+#eval eigenRate (bagMap bag5O) (fun _ => 0) 20
+
 #print axioms eigen_surface_bounded
 #print axioms dropMap_topical
 #print axioms bagMap_topical
