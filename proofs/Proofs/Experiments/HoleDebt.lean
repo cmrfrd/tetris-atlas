@@ -99,6 +99,69 @@ theorem debt_add_card_eq_sum_colHeight {cfg : GameConfig} {b : Board} (hwf : Boa
   exact Finset.sum_congr rfl
     (fun j _ => Nat.sub_add_cancel (card_colRows_le_colHeight b j))
 
+/-! ## Bridge: the columnwise debt equals the geometric hole count `|holes|`
+
+`debt` is defined columnwise (`Σ colHoles`); `HoleyCarrier.holes` is the geometric set of
+buried empties. They coincide (for an in-field board), unifying the two debt notions used
+across these experiments. -/
+
+/-- The filled rows of column `j`, characterised inside `range (colHeight)`: a row `r` is
+filled iff `r < colHeight b j` and `(j, r) ∈ b`. -/
+theorem colRows_eq_filter_range (b : Board) (j : ℕ) :
+    b.colRows j = (Finset.range (b.colHeight j)).filter (fun r => (j, r) ∈ b) := by
+  ext r
+  simp only [Board.colRows, Finset.mem_image, Finset.mem_filter, Finset.mem_range]
+  constructor
+  · rintro ⟨x, ⟨hxb, hxj⟩, hxr⟩
+    have hxe : x = (j, r) := Prod.ext hxj hxr
+    rw [hxe] at hxb
+    exact ⟨Board.lt_colHeight hxb, hxb⟩
+  · rintro ⟨_, hmem⟩
+    exact ⟨(j, r), ⟨hmem, rfl⟩, rfl⟩
+
+/-- Per-column buried empties as a row set: rows below the stack height that are unfilled. -/
+def rowHoles (b : Board) (j : ℕ) : Finset ℕ :=
+  (Finset.range (b.colHeight j)).filter (fun r => (j, r) ∉ b)
+
+/-- The row-hole set has cardinality `colHoles b j` (`colHeight − filled`). -/
+theorem rowHoles_card (b : Board) (j : ℕ) :
+    (rowHoles b j).card = colHoles b j := by
+  unfold rowHoles colHoles
+  rw [colRows_eq_filter_range]
+  have h := Finset.filter_card_add_filter_neg_card_eq_card
+    (s := Finset.range (b.colHeight j)) (p := fun r => (j, r) ∈ b)
+  rw [Finset.card_range] at h
+  omega
+
+/-- **Bridge: `|holes cfg b| = debt cfg b`** for an in-field board (every column height at
+most `cfg.rows`). Counts `holes` column-by-column: the fiber over column `j` is exactly
+`rowHoles b j` carried up by `r ↦ (j, r)`, whose card is `colHoles b j`. -/
+theorem holes_card_eq_debt {cfg : GameConfig} {b : Board}
+    (hcol : ∀ j, b.colHeight j ≤ cfg.rows) :
+    (holes cfg b).card = debt cfg b := by
+  have hf : ∀ p ∈ holes cfg b, p.1 ∈ Finset.range cfg.cols := by
+    intro p hp
+    rw [mem_holes_iff] at hp
+    exact (Finset.mem_product.mp hp.1).1
+  rw [Finset.card_eq_sum_card_fiberwise hf]
+  unfold debt
+  apply Finset.sum_congr rfl
+  intro j hj
+  rw [← rowHoles_card b j]
+  have himg : (holes cfg b).filter (fun p => p.1 = j)
+      = (rowHoles b j).image (fun r => (j, r)) := by
+    ext p
+    simp only [Finset.mem_filter, Finset.mem_image, rowHoles, Finset.mem_range,
+      mem_holes_iff, Finset.mem_product]
+    constructor
+    · rintro ⟨⟨⟨_, _⟩, hpnb, hplt⟩, hpj⟩
+      have hpe : (j, p.2) = p := Prod.ext hpj.symm rfl
+      exact ⟨p.2, ⟨by rw [← hpj]; exact hplt, by rw [hpe]; exact hpnb⟩, hpe⟩
+    · rintro ⟨r, ⟨hrlt, hrnb⟩, hrp⟩
+      subst hrp
+      exact ⟨⟨⟨Finset.mem_range.mp hj, lt_of_lt_of_le hrlt (hcol j)⟩, hrnb, hrlt⟩, rfl⟩
+  rw [himg, Finset.card_image_of_injective _ (fun a c h => by simpa using h)]
+
 /-! ## Wiring the dynamics into the energy -/
 
 /-- **Placement raises energy.** `place b = b ∪ dropped`, and `colHeight` of a union is the
@@ -181,6 +244,7 @@ theorem holes_card_le_place (cfg : GameConfig) (b : Board) (pl : Placement) :
   Finset.card_le_card (place_holes_subset cfg b pl)
 
 #print axioms debt_add_card_eq_sum_colHeight
+#print axioms holes_card_eq_debt
 #print axioms debt_clearLines_add_card_le
 #print axioms surfaceArea_le_place
 #print axioms place_holes_subset
