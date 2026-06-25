@@ -128,11 +128,58 @@ theorem holeFree_ext {cfg : GameConfig} {b β : Board}
     · intro hmem; exact absurd (hwfb (j, r) hmem) hj
     · intro hmem; exact absurd (hwfβ (j, r) hmem) hj
 
+/-! ## The loss boundary is `maxHeight`, not total headroom
+
+Subtlety (recorded): topping out is a *per-column max* condition — one tall column loses even
+if total `surfaceArea` is small. So total `headroom ≥ 0` is necessary but NOT sufficient for
+survival. The loss certificate is `maxHeight ≤ rows`. This splits the energy game into two
+quantities: `maxHeight` (the safety boundary, a sup) and `surfaceArea`/`headroom` (the
+progress/clearing measure, a sum). A controller survives by keeping `maxHeight ≤ rows`, which
+requires bounding *roughness* so the sum-bound controls the max-bound. -/
+
+/-- The maximum column height across the valid columns. Loss ⟺ this exceeds `rows`. -/
+def maxHeight (cfg : GameConfig) (b : Board) : ℕ :=
+  (Finset.range cfg.cols).sup b.colHeight
+
+/-- A well-formed board has height `0` outside its valid columns. -/
+theorem colHeight_eq_zero_of_cols_le {cfg : GameConfig} {b : Board} {j : ℕ}
+    (hwf : Board.WF cfg b) (hj : cfg.cols ≤ j) : b.colHeight j = 0 := by
+  have hempty : b.colRows j = ∅ := by
+    rw [Finset.eq_empty_iff_forall_notMem]
+    intro r hr
+    simp only [Board.colRows, Finset.mem_image, Finset.mem_filter] at hr
+    obtain ⟨x, ⟨hxb, hxj⟩, _⟩ := hr
+    have hlt := hwf x hxb
+    rw [hxj] at hlt
+    omega
+  unfold Board.colHeight
+  rw [hempty]
+  simp
+
+/-- **The loss boundary as a single scalar:** a well-formed board is non-lost iff its
+`maxHeight` is at most `rows`. This is the safety objective of the energy game. -/
+theorem not_isLost_iff_maxHeight_le {cfg : GameConfig} {b : Board} (hwf : Board.WF cfg b) :
+    ¬ Board.isLost cfg b ↔ maxHeight cfg b ≤ cfg.rows := by
+  unfold maxHeight
+  rw [Finset.sup_le_iff]
+  constructor
+  · intro hnl j _
+    rw [Board.not_isLost_iff_forall_row_lt] at hnl
+    exact Board.colHeight_le_rows_of_in_field hnl j
+  · intro hsup
+    apply Board.not_isLost_of_colHeight_le
+    intro j
+    by_cases hj : j < cfg.cols
+    · exact hsup j (Finset.mem_range.mpr hj)
+    · rw [colHeight_eq_zero_of_cols_le hwf (Nat.le_of_not_lt hj)]
+      exact Nat.zero_le _
+
 #print axioms capacity_conservation
 #print axioms headroom_place_le
 #print axioms headroom_le_clearLines
 #print axioms holeFree_filled_iff
 #print axioms holeFree_ext
+#print axioms not_isLost_iff_maxHeight_le
 
 /-! ## Next (energy-game backlog)
 
