@@ -316,6 +316,40 @@ theorem O_on_empty_forces_height :
 #print axioms S_holeFree_on_step
 #print axioms O_on_empty_forces_height
 
+/-! ## K=1 viability on the hardest interaction: consecutive S then Z
+
+The only debt-sources are `{S, Z}` (iter7), and they demand opposite notches — so the
+worst case for a budget-1 controller is the adversary playing S and Z back-to-back (no
+repair piece between). This checks both orders from the empty board: can the player keep
+`debt ≤ 1` through both hole-forcers? A `native_decide` `∃∃` over the (finite) placement
+choices for each order. A positive result is strong evidence that `K = 1` absorbs a whole
+bag (the other five pieces stay hole-free, iter7); a negative result would raise the budget
+floor to `K ≥ 2`. -/
+
+/-- **The player absorbs consecutive S,Z (both orders) from empty with `debt ≤ 1`.** For
+each of the orders `S→Z` and `Z→S`, there exist valid placements keeping the buried-hole
+count at most one throughout. So the two hole-forcers, even adjacent, need only a single
+unit of transient-hole budget. Verified by `native_decide`. -/
+theorem SZ_handled_with_budget1 :
+    (∃ pl1 ∈ Placement.allValidFor GameConfig.standard Piece.S,
+        debt GameConfig.standard
+          (Placement.applyStep GameConfig.standard Board.empty pl1) ≤ 1 ∧
+        ∃ pl2 ∈ Placement.allValidFor GameConfig.standard Piece.Z,
+          debt GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard Board.empty pl1) pl2) ≤ 1)
+    ∧
+    (∃ pl1 ∈ Placement.allValidFor GameConfig.standard Piece.Z,
+        debt GameConfig.standard
+          (Placement.applyStep GameConfig.standard Board.empty pl1) ≤ 1 ∧
+        ∃ pl2 ∈ Placement.allValidFor GameConfig.standard Piece.S,
+          debt GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard Board.empty pl1) pl2) ≤ 1) := by
+  native_decide
+
+#print axioms SZ_handled_with_budget1
+
 /-! ## Next (energy-game backlog)
 
 With headroom established as the energy, the next iterations build toward "survival ⟺ player
