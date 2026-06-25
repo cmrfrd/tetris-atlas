@@ -300,11 +300,74 @@ theorem exists_eigen_cycle {n : ℕ} (T : Surface n → Surface n) (v : Surface 
   · exact mk h hgeq
   · exact mk h hgeq.symm
 
+/-! ## Survival ⟺ the cycle rate is ≤ 0 (the spectral dichotomy)
+
+The rate `c` of an eigen-cycle `Tᵏ(v) = v + c·𝟙` is the net height gained per period (its
+*cycle time* is `c/k` per step). The whole survival question collapses to its **sign**: the
+orbit is bounded forever iff `c ≤ 0`. -/
+
+/-- Rate `≤ 0` ⇒ every column's orbit is bounded above (`eigen_cycle_bounded` made a uniform
+bound: the sup over the first `k` iterates). -/
+theorem eigen_cycle_orbit_bddAbove {n : ℕ} {T : Surface n → Surface n} {v : Surface n}
+    {k : ℕ} {c : ℤ} (hT : Topical T) (he : IsEigenCycle T v k c) (hc : c ≤ 0) (j : Fin n) :
+    BddAbove (Set.range fun m => (T^[m] v) j) := by
+  refine ⟨(Finset.range k).sup' ⟨0, Finset.mem_range.mpr he.1⟩ (fun r => (T^[r] v) j), ?_⟩
+  rintro x ⟨m, rfl⟩
+  exact le_trans (eigen_cycle_bounded hT he hc m j)
+    (Finset.le_sup' (fun r => (T^[r] v) j) (Finset.mem_range.mpr (Nat.mod_lt m he.1)))
+
+/-- Rate `> 0` ⇒ heights exceed every bound (`Tᵏⁱ(v) j = v j + i·c → ∞`). -/
+theorem eigen_cycle_grows {n : ℕ} {T : Surface n → Surface n} {v : Surface n} {k : ℕ} {c : ℤ}
+    (hT : Topical T) (he : IsEigenCycle T v k c) (hc : 0 < c) (j : Fin n) (B : ℤ) :
+    ∃ m, B < (T^[m] v) j := by
+  obtain ⟨hk, heq⟩ := he
+  obtain ⟨i, hi⟩ := exists_nat_gt (B - v j)
+  refine ⟨k * i, ?_⟩
+  have hiter : T^[k * i] v = shift v ((i : ℤ) * c) := by
+    rw [Function.iterate_mul]; exact eigen_iterate (hT.iterate k) heq i
+  rw [hiter, shift_apply]
+  have hc1 : (1 : ℤ) ≤ c := by omega
+  have h2 : (i : ℤ) ≤ (i : ℤ) * c := le_mul_of_one_le_right (Int.natCast_nonneg i) hc1
+  linarith
+
+/-- **The spectral survival dichotomy.** An eigen-cycle's orbit stays bounded (the player
+survives forever) **iff its rate `c ≤ 0`**. The entire problem reduces to the sign of one
+spectral number. -/
+theorem eigen_cycle_survives_iff {n : ℕ} [NeZero n] {T : Surface n → Surface n}
+    {v : Surface n} {k : ℕ} {c : ℤ} (hT : Topical T) (he : IsEigenCycle T v k c) :
+    (∀ j, BddAbove (Set.range fun m => (T^[m] v) j)) ↔ c ≤ 0 := by
+  constructor
+  · intro hbdd
+    by_contra hcon
+    push_neg at hcon
+    have j : Fin n := ⟨0, Nat.pos_of_ne_zero (NeZero.ne n)⟩
+    obtain ⟨B, hB⟩ := hbdd j
+    obtain ⟨m, hm⟩ := eigen_cycle_grows hT he hcon j B
+    exact absurd (hB ⟨m, rfl⟩) (not_le.mpr hm)
+  · intro hc j
+    exact eigen_cycle_orbit_bddAbove hT he hc j
+
+/-! ## The rate IS the clearing equilibrium
+
+The dichotomy `c ≤ 0` is not abstract — it is exactly our proven clearing law. In the
+hole-free surface model, dropping a piece raises the total height `Σⱼ hⱼ` by the cells it
+adds (`+4` per tetromino, by `HoleDebt.card_applyStep`), and clearing a line lowers every
+column by 1 (`−cols` total). Over an eigen-cycle period the total height returns up to the
+uniform lift, so `cols·c = 4·(pieces) − cols·(lines)`, i.e.
+
+  `c = 4·(pieces)/cols − (lines)`,   and   `c ≤ 0  ⟺  (lines)/(pieces) ≥ 4/cols`.
+
+So **the cycle rate `≤ 0` is precisely the proven clearing equilibrium** (`4/cols` lines per
+piece, `EnergyGame.survival_forces_clears`), and the homogeneity-breaking clears are the only
+term that can pull the net rate down to `≤ 0`. The carrier-as-eigenvector and the
+energy/clearing law are the same statement, viewed spectrally vs. by conservation. -/
+
 #print axioms eigen_surface_bounded
 #print axioms dropMap_topical
 #print axioms bagMap_topical
 #print axioms exists_eigen_cycle
 #print axioms eigen_cycle_bounded
+#print axioms eigen_cycle_survives_iff
 
 /-! ## Where this points (the analytic program, no enumeration)
 
