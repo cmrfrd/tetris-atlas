@@ -128,6 +128,14 @@ theorem holeFree_ext {cfg : GameConfig} {b β : Board}
     · intro hmem; exact absurd (hwfb (j, r) hmem) hj
     · intro hmem; exact absurd (hwfβ (j, r) hmem) hj
 
+/-- **The hole-free fiber is closed under line clears.** Clearing a gapless stack lowers
+columns gaplessly, so no holes appear: `debt = 0 ⇒ debt(clearLines) = 0`. Immediate from
+`clearLines_debt_le` (debt is non-increasing, and `0` is the floor). So a controller staying
+hole-free only has to avoid *creating* holes on placement — clears never break the invariant. -/
+theorem holeFree_clearLines {cfg : GameConfig} {b : Board} (hwf : Board.WF cfg b)
+    (hd : debt cfg b = 0) : debt cfg (Board.clearLines cfg b) = 0 :=
+  Nat.le_zero.mp (hd ▸ clearLines_debt_le hwf)
+
 /-! ## The loss boundary is `maxHeight`, not total headroom
 
 Subtlety (recorded): topping out is a *per-column max* condition — one tall column loses even
