@@ -174,12 +174,43 @@ theorem not_isLost_iff_maxHeight_le {cfg : GameConfig} {b : Board} (hwf : Board.
     · rw [colHeight_eq_zero_of_cols_le hwf (Nat.le_of_not_lt hj)]
       exact Nat.zero_le _
 
+/-! ## Wiring to the finish line: a `maxHeight`-bounded controller suffices
+
+Repackages the codebase reduction `tetrisSolvableValid_of_height_bounded_invariant` so the
+safety obligation is the single scalar `maxHeight ≤ rows` (instead of a per-column bound).
+This leaves the *only* remaining obligation as the controller's closure `hstep` — the
+energy-game's strategy. Everything upstream (init, safety) is discharged here. -/
+
+/-- **Survival from a `maxHeight`-bounded closed invariant.** If `S` contains `init`, every
+state in `S` is well-formed with `maxHeight ≤ rows`, and `S` is closed under some valid
+placement for every drawable piece, then Tetris is solvable. The height obligation of the
+underlying reduction is discharged from `maxHeight ≤ rows` via `Finset.le_sup` (valid
+columns) and `colHeight_eq_zero_of_cols_le` (the rest). -/
+theorem tetrisSolvableValid_of_maxHeight_invariant
+    (S : Set GameState) (hinit : GameState.init ∈ S)
+    (hwf : ∀ g ∈ S, Board.WF GameConfig.standard g.board)
+    (hmax : ∀ g ∈ S, maxHeight GameConfig.standard g.board ≤ GameConfig.standard.rows)
+    (hstep : ∀ g ∈ S, ∀ p, p ∈ g.bag →
+      ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
+        adversarialStep GameConfig.standard g p pl ∈ S) :
+    TetrisSolvableValid := by
+  refine tetrisSolvableValid_of_height_bounded_invariant S hinit ?_ hstep
+  intro g hg j
+  by_cases hj : j < GameConfig.standard.cols
+  · calc g.board.colHeight j
+        ≤ maxHeight GameConfig.standard g.board := by
+          unfold maxHeight; exact Finset.le_sup (Finset.mem_range.mpr hj)
+      _ ≤ GameConfig.standard.rows := hmax g hg
+  · rw [colHeight_eq_zero_of_cols_le (hwf g hg) (Nat.le_of_not_lt hj)]
+    exact Nat.zero_le _
+
 #print axioms capacity_conservation
 #print axioms headroom_place_le
 #print axioms headroom_le_clearLines
 #print axioms holeFree_filled_iff
 #print axioms holeFree_ext
 #print axioms not_isLost_iff_maxHeight_le
+#print axioms tetrisSolvableValid_of_maxHeight_invariant
 
 /-! ## Next (energy-game backlog)
 
