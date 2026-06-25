@@ -298,11 +298,23 @@ theorem S_holeFree_on_step :
         (Placement.applyStep GameConfig.standard {((2 : ℕ), (0 : ℕ))} pl) = 0 := by
   native_decide
 
+/-- **The certificate needs height ≥ 2.** Every valid O placement on the empty board reaches
+`maxHeight = 2` (the 2×2 O occupies two rows and cannot clear). So any closed invariant
+containing `init` must admit states with `maxHeight ≥ 2` (adversary draws O). Together with
+`no_holeFree_invariant` (needs `K ≥ 1`), these are the proven lower bounds on the energy-game
+certificate: `maxHeight ≥ 2`, `debt-budget ≥ 1`. -/
+theorem O_on_empty_forces_height :
+    ∀ pl ∈ Placement.allValidFor GameConfig.standard Piece.O,
+      2 ≤ maxHeight GameConfig.standard
+        (Placement.applyStep GameConfig.standard Board.empty pl) := by
+  native_decide
+
 #print axioms S_on_empty_forces_debt
 #print axioms no_holeFree_invariant
 #print axioms Z_on_empty_forces_debt
 #print axioms nonSZ_has_holeFree_placement
 #print axioms S_holeFree_on_step
+#print axioms O_on_empty_forces_height
 
 /-! ## Next (energy-game backlog)
 
