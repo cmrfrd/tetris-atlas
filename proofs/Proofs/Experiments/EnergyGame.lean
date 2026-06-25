@@ -220,6 +220,55 @@ theorem tetrisSolvableValid_of_maxHeight_invariant
 #print axioms not_isLost_iff_maxHeight_le
 #print axioms tetrisSolvableValid_of_maxHeight_invariant
 
+/-! ## Make-or-break (item 4, K=0 case): strict hole-free invariants are IMPOSSIBLE
+
+The S-piece on flat ground always overhangs — both orientations leave a covered empty — and
+a single piece (4 cells) can never complete a row, so no clear fires. Hence from the empty
+board EVERY valid S placement creates a hole. The adversary draws S from the `debt = 0` init
+state and forces `debt ≥ 1` no matter how the player responds: a strictly hole-free invariant
+containing `init` cannot exist. **Numbers-backed floor: the K=0 sub-path is impossible; the
+controller must carry a transient-hole budget K ≥ 1** (matching the empirical S-bootstrap
+hole). This localizes the make-or-break to the K ≥ 1 regime. -/
+
+/-- Every valid S placement on the empty board creates a hole (`debt ≥ 1`). Verified by
+`native_decide` over the full finite set of valid S placements (`allValidFor`). -/
+theorem S_on_empty_forces_debt :
+    ∀ pl ∈ Placement.allValidFor GameConfig.standard Piece.S,
+      1 ≤ debt GameConfig.standard
+        (Placement.applyStep GameConfig.standard Board.empty pl) := by
+  native_decide
+
+/-- **K=0 is impossible.** No set of states with `debt ≡ 0` that contains `init` can be
+closed under adversarial steps: drawing S from `init` (full bag ⇒ S drawable) forces
+`debt ≥ 1` under every valid placement (`S_on_empty_forces_debt`), contradicting closure in a
+`debt = 0` set. The hole-free energy sub-game has no solution. -/
+theorem no_holeFree_invariant
+    (S : Set GameState) (hinit : GameState.init ∈ S)
+    (hdebt0 : ∀ g ∈ S, debt GameConfig.standard g.board = 0)
+    (hstep : ∀ g ∈ S, ∀ p, p ∈ g.bag →
+      ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard ∧
+        adversarialStep GameConfig.standard g p pl ∈ S) :
+    False := by
+  have hSbag : Piece.S ∈ GameState.init.bag := by
+    rw [GameState.init_bag]; exact Bag.mem_full _
+  obtain ⟨pl, hpiece, hvalid, hmem⟩ := hstep GameState.init hinit Piece.S hSbag
+  have hpl_mem : pl ∈ Placement.allValidFor GameConfig.standard Piece.S :=
+    (Placement.mem_allValidFor _ _ _).mpr ⟨hpiece, hvalid⟩
+  have hpleq : ({pl with piece := Piece.S} : Placement) = pl := by rw [← hpiece]
+  have hboard : (adversarialStep GameConfig.standard GameState.init Piece.S pl).board
+      = Placement.applyStep GameConfig.standard Board.empty pl := by
+    rw [show (adversarialStep GameConfig.standard GameState.init Piece.S pl).board
+          = Placement.applyStep GameConfig.standard GameState.init.board
+              {pl with piece := Piece.S} from rfl,
+      GameState.init_board, hpleq]
+  have hd0 := hdebt0 _ hmem
+  rw [hboard] at hd0
+  have key := S_on_empty_forces_debt pl hpl_mem
+  omega
+
+#print axioms S_on_empty_forces_debt
+#print axioms no_holeFree_invariant
+
 /-! ## Next (energy-game backlog)
 
 With headroom established as the energy, the next iterations build toward "survival ⟺ player
