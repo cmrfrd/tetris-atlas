@@ -287,10 +287,22 @@ theorem nonSZ_has_holeFree_placement :
           (Placement.applyStep GameConfig.standard Board.empty pl) = 0 := by
   native_decide
 
+/-- **S is hole-free on a stepped surface.** On the board `{(2,0)}` (a single one-cell step:
+heights `[0,0,1]`), the S-piece has a valid placement landing flush with `debt = 0`. Contrast
+`S_on_empty_forces_debt` (flat ⇒ every S placement holes): S-safety is a *roughness*
+condition — the controller absorbs S exactly by maintaining an S-notch. This is the concrete
+mechanism the `K ≥ 1` controller uses to keep the forced S/Z debt transient. -/
+theorem S_holeFree_on_step :
+    ∃ pl ∈ Placement.allValidFor GameConfig.standard Piece.S,
+      debt GameConfig.standard
+        (Placement.applyStep GameConfig.standard {((2 : ℕ), (0 : ℕ))} pl) = 0 := by
+  native_decide
+
 #print axioms S_on_empty_forces_debt
 #print axioms no_holeFree_invariant
 #print axioms Z_on_empty_forces_debt
 #print axioms nonSZ_has_holeFree_placement
+#print axioms S_holeFree_on_step
 
 /-! ## Next (energy-game backlog)
 
