@@ -266,8 +266,31 @@ theorem no_holeFree_invariant
   have key := S_on_empty_forces_debt pl hpl_mem
   omega
 
+/-- Z, like S, forces a hole on flat ground: every valid Z placement on the empty board
+yields `debt ≥ 1`. -/
+theorem Z_on_empty_forces_debt :
+    ∀ pl ∈ Placement.allValidFor GameConfig.standard Piece.Z,
+      1 ≤ debt GameConfig.standard
+        (Placement.applyStep GameConfig.standard Board.empty pl) := by
+  native_decide
+
+/-- **The other five pieces can be placed hole-free on flat ground.** Each of O, I, T, L, J
+has a valid placement on the empty board with `debt = 0`. Together with
+`S_on_empty_forces_debt`/`Z_on_empty_forces_debt`, this pins the debt sources to exactly
+`{S, Z}`: on a flat surface, only S and Z force a hole. So per bag the *forced* debt is
+bounded by the number of S/Z draws (≤ 2), and the `K ≥ 1` controller's job reduces to
+absorbing S and Z (and discharging via clears) — the I/O/T/L/J draws can stay hole-free. -/
+theorem nonSZ_has_holeFree_placement :
+    ∀ p ∈ ({Piece.O, Piece.I, Piece.T, Piece.L, Piece.J} : Finset Piece),
+      ∃ pl ∈ Placement.allValidFor GameConfig.standard p,
+        debt GameConfig.standard
+          (Placement.applyStep GameConfig.standard Board.empty pl) = 0 := by
+  native_decide
+
 #print axioms S_on_empty_forces_debt
 #print axioms no_holeFree_invariant
+#print axioms Z_on_empty_forces_debt
+#print axioms nonSZ_has_holeFree_placement
 
 /-! ## Next (energy-game backlog)
 
