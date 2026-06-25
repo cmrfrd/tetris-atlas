@@ -658,6 +658,80 @@ theorem eigen_global_roughness {n : ℕ} [NeZero n] {T : Surface n → Surface n
 #print axioms Topical.oscDist_nonexpansive
 #print axioms eigen_global_roughness
 
+/-! ## The Banach step: projective contraction ⇒ survival, no search
+
+A strategy `T` is a **projective contraction** if it strictly shrinks the Hilbert metric on
+non-degenerate pairs. Over `ℤ` "strict" means "by at least 1", so consecutive iterate-gaps
+`osc(Tᵐ⁺¹x − Tᵐx)` strictly descend and hit `0` in finitely many steps — at which point `Tᵐx`
+is a **fixed-shape eigen-surface**. By `eigen_global_roughness` that bounds roughness from
+every start. So: **a contraction ⇒ a bounded-roughness eigen-surface ⇒ infinite bounded play.**
+Any strategy *verified to contract roughness* is automatically a survival certificate. -/
+
+theorem roughness_nonneg {n : ℕ} [NeZero n] (h : Surface n) : 0 ≤ roughness h := by
+  have j : Fin n := ⟨0, Nat.pos_of_ne_zero (NeZero.ne n)⟩
+  unfold roughness
+  have := le_trans (minHt_le h j) (le_maxHt h j)
+  linarith
+
+/-- `osc(a − b) = 0` means `a` and `b` differ by a constant. -/
+theorem eq_shift_of_roughness_sub_zero {n : ℕ} [NeZero n] {a b : Surface n}
+    (h : roughness (a - b) = 0) : ∃ c, a = shift b c := by
+  refine ⟨minHt (a - b), ?_⟩
+  funext j
+  have hmin := minHt_le (a - b) j
+  have hmax := le_maxHt (a - b) j
+  have heq : maxHt (a - b) = minHt (a - b) := by unfold roughness at h; linarith
+  simp only [Pi.sub_apply] at hmin hmax
+  simp only [shift_apply]; linarith
+
+/-- A non-negative integer sequence that is non-increasing and strictly decreases while
+positive must reach `0`. -/
+theorem descent (f : ℕ → ℤ) (hnn : ∀ m, 0 ≤ f m) (hanti : ∀ m, f (m + 1) ≤ f m)
+    (hstrict : ∀ m, 0 < f m → f (m + 1) < f m) : ∃ m, f m = 0 := by
+  by_contra hcon
+  push_neg at hcon
+  have hpos : ∀ m, 0 < f m := fun m => lt_of_le_of_ne (hnn m) (Ne.symm (hcon m))
+  have hbound : ∀ m, f m ≤ f 0 - m := by
+    intro m
+    induction m with
+    | zero => simp
+    | succ k ih => have := hstrict k (hpos k); push_cast; omega
+  have h1 := hbound ((f 0).toNat + 1)
+  have h2 := hnn ((f 0).toNat + 1)
+  have h3 := hnn 0
+  omega
+
+/-- **Projective contraction**: strictly shrinks the Hilbert metric on non-degenerate pairs. -/
+def ProjContraction {n : ℕ} [NeZero n] (T : Surface n → Surface n) : Prop :=
+  ∀ x y, 0 < roughness (x - y) → roughness (T x - T y) < roughness (x - y)
+
+/-- **Contraction ⇒ a fixed-shape eigen-surface exists.** The consecutive-gap sequence
+descends to `0`; at that point `Tᵐx` is fixed up to a uniform lift. -/
+theorem contraction_eigen {n : ℕ} [NeZero n] {T : Surface n → Surface n}
+    (hT : Topical T) (hc : ProjContraction T) (x : Surface n) :
+    ∃ (v : Surface n) (lam : ℤ), T v = shift v lam := by
+  obtain ⟨m, hm⟩ := descent (fun m => roughness (T^[m + 1] x - T^[m] x))
+    (fun m => roughness_nonneg _)
+    (fun m => by
+      have := hT.oscDist_nonexpansive (T^[m + 1] x) (T^[m] x)
+      rwa [← Function.iterate_succ_apply' T m, ← Function.iterate_succ_apply' T (m + 1)] at this)
+    (fun m hpos => by
+      have := hc (T^[m + 1] x) (T^[m] x) hpos
+      rwa [← Function.iterate_succ_apply' T m, ← Function.iterate_succ_apply' T (m + 1)] at this)
+  obtain ⟨c, hcc⟩ := eq_shift_of_roughness_sub_zero hm
+  exact ⟨T^[m] x, c, by rw [← Function.iterate_succ_apply' T m]; exact hcc⟩
+
+/-- **The survival certificate from contraction.** A projective-contraction strategy keeps the
+roughness of *every* trajectory bounded forever — infinite bounded play, with no enumeration. -/
+theorem contraction_bounded_roughness {n : ℕ} [NeZero n] {T : Surface n → Surface n}
+    (hT : Topical T) (hc : ProjContraction T) (x y : Surface n) :
+    ∃ B, ∀ k, roughness (T^[k] y) ≤ B := by
+  obtain ⟨v, lam, hv⟩ := contraction_eigen hT hc x
+  exact ⟨roughness (y - v) + roughness v, fun k => eigen_global_roughness hT hv y k⟩
+
+#print axioms contraction_eigen
+#print axioms contraction_bounded_roughness
+
 /-! ## Concrete computation: watch the rate come out as the clearing equilibrium
 
 The theory is now executable. `eigenRate` iterates the (computable) strategy map, detects the
