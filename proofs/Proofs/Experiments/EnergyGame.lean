@@ -377,6 +377,47 @@ theorem hole_dischargeable :
 
 #print axioms hole_dischargeable
 
+/-! ## The cell-conservation law (the clearing-equilibrium, exactly)
+
+The exact mass balance underlying survival: a placement adds exactly 4 cells, a clear removes
+exactly `cols` per line. So over any play, `mass` changes by `+4` per piece and `−cols` per
+cleared line. Survival forces the long-run clear rate to `4/cols` lines per piece
+(`= 2.8` lines/bag on a 10-wide board) — the equilibrium the controller must sustain. This
+is structural (no `native_decide`), so it holds at full scale. -/
+
+/-- **Clears remove exactly `cols` cells per line.** `mass(clearLines b) + cols·|fullRows| =
+mass(b)`. Summed `colCount_clearLines_add` over the columns, with `sum_colCount` on both
+sides. -/
+theorem card_clearLines_add {cfg : GameConfig} {b : Board} (hwf : Board.WF cfg b) :
+    (Board.clearLines cfg b).count + cfg.cols * (Board.fullRows cfg b).card = b.count := by
+  have h2 := Board.sum_colCount hwf
+  have h1 := Board.sum_colCount (Board.clearLines_wf hwf)
+  have hadd : ∑ j ∈ Finset.range cfg.cols, b.colCount j
+      = ∑ j ∈ Finset.range cfg.cols,
+          ((Board.clearLines cfg b).colCount j + (Board.fullRows cfg b).card) :=
+    Finset.sum_congr rfl (fun j hj =>
+      Board.colCount_clearLines_add cfg b (Finset.mem_range.mp hj))
+  rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_range, smul_eq_mul, h2, h1] at hadd
+  omega
+
+/-- **Cell conservation for a full step:** `mass(applyStep b pl) + cols·(lines cleared) =
+mass(b) + 4`. Each piece is `+4` cells; each cleared line is `−cols`. This is the exact
+ledger whose long-run balance (clear rate `= 4/cols` per piece) is the survival equilibrium —
+and whose only obstruction is permanently buried cells (debt), tying survival to bounded
+debt. -/
+theorem card_applyStep {cfg : GameConfig} {b : Board} {pl : Placement} (hwf : Board.WF cfg b)
+    (hv : pl.Valid cfg) :
+    (Placement.applyStep cfg b pl).count
+      + cfg.cols * (Board.fullRows cfg (pl.place b)).card = b.count + 4 := by
+  have hwfp : Board.WF cfg (pl.place b) := Placement.place_wf hwf hv
+  have hc := card_clearLines_add hwfp
+  rw [Placement.count_place b pl] at hc
+  rw [Placement.applyStep]
+  omega
+
+#print axioms card_clearLines_add
+#print axioms card_applyStep
+
 /-! ## Next (energy-game backlog)
 
 With headroom established as the energy, the next iterations build toward "survival ⟺ player
