@@ -775,6 +775,41 @@ def bag5O : List (PieceProfile 10) :=
 -- width 10, five O's per period: rate 2 over 5 pieces = 0.4/piece = 4/10 = **2.8 per 7-bag**.
 #eval eigenRate (bagMap bag5O) (fun _ => 0) 20
 
+/-! ## A VERIFIED certificate: one eigen-surface, no contraction needed
+
+Strict `ProjContraction` is too strong (single drops leave columns untouched; the 5-O bag
+pairs columns independently — neutral directions). The *operative* criterion is the weaker,
+true one: **a single bounded-roughness eigen-surface bounds every trajectory**
+(`eigen_global_roughness`). Here the flat surface is an eigen-surface of the 5-O strategy
+(`fiveO_eigen`, by `decide`), and that *one verified vector* certifies that the strategy never
+increases roughness from any start (`fiveO_bounds_roughness`) — a survival-grade bound proved
+through the topical machinery, with a single decidable check standing in for the whole
+carrier. -/
+
+/-- The flat surface is an eigen-surface of the 5-O bag strategy (rate `2`), checked by
+`decide` — a single vector, not a carrier. -/
+theorem fiveO_eigen : IsEigen (bagMap bag5O) (fun _ => 0) 2 := by
+  show bagMap bag5O (fun _ => 0) = shift (fun _ => 0) 2
+  funext j
+  fin_cases j <;> native_decide
+
+theorem roughness_const_zero : roughness (fun _ => (0 : ℤ) : Surface 10) = 0 := by
+  unfold roughness maxHt minHt
+  simp [Finset.sup'_const, Finset.inf'_const]
+
+/-- **The certificate.** The 5-O strategy never increases roughness from any start `y`:
+`roughness (Tᵏ y) ≤ roughness y` for all `k` — globally bounded play, delivered by the one
+verified eigen-surface via `eigen_global_roughness`. -/
+theorem fiveO_bounds_roughness (y : Surface 10) (k : ℕ) :
+    roughness ((bagMap bag5O)^[k] y) ≤ roughness y := by
+  have h := eigen_global_roughness (bagMap_topical bag5O) fiveO_eigen y k
+  have e2 : y - (fun _ => (0 : ℤ)) = y := by funext j; simp
+  rw [e2, roughness_const_zero, add_zero] at h
+  exact h
+
+#print axioms fiveO_eigen
+#print axioms fiveO_bounds_roughness
+
 #print axioms eigen_surface_bounded
 #print axioms dropMap_topical
 #print axioms bagMap_topical
