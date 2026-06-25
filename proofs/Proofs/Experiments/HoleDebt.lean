@@ -4,6 +4,7 @@ import Proofs.Placement
 import Proofs.SafeSet
 import Proofs.Experiments.WqoCarrier
 import Proofs.Experiments.HoleyCarrier
+import Proofs.Experiments.SurfaceFiber
 
 /-!
 # Hole-debt and board energy — wiring clears into the debt counter
@@ -42,7 +43,7 @@ single sum.
 
 namespace Tetris.HoleDebt
 
-open Tetris Tetris.WqoCarrier Tetris.HoleyCarrier
+open Tetris Tetris.WqoCarrier Tetris.HoleyCarrier Tetris.SurfaceFiber
 
 /-! ## Definitions -/
 
@@ -133,9 +134,56 @@ theorem debt_clearLines_add_card_le {cfg : GameConfig} {b : Board} (hwf : Board.
     debt_add_card_eq_sum_colHeight hwf]
   exact surfaceArea_clearLines_le cfg b
 
+/-! ## The placement side of the debt counter: holes only grow
+
+The clear side lowers `debt + mass`; the placement side handles `debt` directly. A hard
+drop adds cells *on top of* the stack (`dropped` cells sit at or above their column's
+height), so it can never fill an existing buried empty — every hole of `b` survives into
+`place b`. Hence debt (as the geometric hole count `|holes|`) is non-decreasing under
+placement. -/
+
+/-- A dropped cell sits at or above its column's stack height: if `p ∈ dropped b` then
+`colHeight b p.1 ≤ p.2`. (The drop offset is the `sup` of the per-cell clearances, so each
+landed cell clears the stack.) -/
+theorem le_row_of_mem_dropped {b : Board} {pl : Placement} {p : Coord}
+    (hp : p ∈ pl.dropped b) : b.colHeight p.1 ≤ p.2 := by
+  rw [Placement.dropped_eq_image, Finset.mem_image] at hp
+  obtain ⟨cell, hcell, rfl⟩ := hp
+  have hle := Placement.le_sup_sub pl.shapeUp b.colHeight pl.col hcell
+  rw [← Placement.dropOffset_eq_sup] at hle
+  change b.colHeight (pl.col + cell.1) ≤ pl.dropOffset b + cell.2
+  omega
+
+/-- **No-clear placement never removes a hole.** Every buried empty of `b` is still a
+buried empty of `place b`: it is not among the dropped cells (those land at/above the
+surface, while a hole sits strictly below it), and the column height only grows. -/
+theorem place_holes_subset (cfg : GameConfig) (b : Board) (pl : Placement) :
+    holes cfg b ⊆ holes cfg (pl.place b) := by
+  intro p hp
+  rw [mem_holes_iff] at hp ⊢
+  obtain ⟨hgrid, hnotin, hlt⟩ := hp
+  refine ⟨hgrid, ?_, ?_⟩
+  · rw [Placement.place_eq_union_dropped, Finset.mem_union]
+    rintro (hb | hd)
+    · exact hnotin hb
+    · have := le_row_of_mem_dropped hd
+      omega
+  · have hmono : b.colHeight p.1 ≤ (pl.place b).colHeight p.1 := by
+      rw [Placement.place_eq_union_dropped, colHeight_union]; exact le_max_left _ _
+    omega
+
+/-- **Debt is non-decreasing under placement** (debt as the geometric hole count). Direct
+from `place_holes_subset`. This is the placement-side counterpart of
+`debt_clearLines_add_card_le`: holes accumulate as you place and are only discharged by
+clears — exactly the hole-debt counter dynamics. -/
+theorem holes_card_le_place (cfg : GameConfig) (b : Board) (pl : Placement) :
+    (holes cfg b).card ≤ (holes cfg (pl.place b)).card :=
+  Finset.card_le_card (place_holes_subset cfg b pl)
+
 #print axioms debt_add_card_eq_sum_colHeight
 #print axioms debt_clearLines_add_card_le
 #print axioms surfaceArea_le_place
+#print axioms place_holes_subset
 
 /-! ## Next targets (analysis)
 
