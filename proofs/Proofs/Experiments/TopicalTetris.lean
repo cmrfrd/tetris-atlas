@@ -208,8 +208,103 @@ theorem dropMap_topical {n : ℕ} (p : PieceProfile n) : Topical (dropMap p) :=
 theorem dropMap_nonexpansive {n : ℕ} (p : PieceProfile n) : Nonexpansive (dropMap p) :=
   (dropMap_topical p).nonexpansive
 
+/-! ## The bag-strategy map, and existence of the eigen-surface
+
+A bag-strategy is the player's seven placements chained — a composition of `dropMap`s, hence
+itself topical. The **carrier-as-eigenvector** question becomes: does the bag map have an
+eigen-surface `T(v) = v + λ·𝟙`? We attack it the way tropical/topical spectral theory does —
+on the *projective quotient* (heights mod translation): if the surface-*shape* orbit stays in
+a finite set (bounded roughness — exactly our search finding), then by pigeonhole an
+**eigen-cycle** exists. That periodic eigen-surface, with rate `≤ 0`, *is* the carrier. -/
+
+/-- The bag-strategy surface map: drop the listed pieces in order. -/
+def bagMap {n : ℕ} (ps : List (PieceProfile n)) (h : Surface n) : Surface n :=
+  ps.foldl (fun acc p => dropMap p acc) h
+
+theorem bagMap_cons {n : ℕ} (p : PieceProfile n) (ps : List (PieceProfile n)) :
+    bagMap (p :: ps) = bagMap ps ∘ dropMap p := by
+  funext h; simp [bagMap, Function.comp]
+
+/-- A whole bag-strategy is topical — so it has a cycle time and eigen-surfaces of its own. -/
+theorem bagMap_topical {n : ℕ} (ps : List (PieceProfile n)) : Topical (bagMap ps) := by
+  induction ps with
+  | nil => exact ⟨monotone_id, fun h c => rfl⟩
+  | cons p ps ih => rw [bagMap_cons]; exact ih.comp (dropMap_topical p)
+
+/-- Iterates of a topical map are topical. -/
+theorem Topical.iterate {n : ℕ} {T : Surface n → Surface n} (hT : Topical T) :
+    ∀ k, Topical (T^[k])
+  | 0 => ⟨monotone_id, fun h c => rfl⟩
+  | k + 1 => by rw [Function.iterate_succ]; exact (hT.iterate k).comp hT
+
+/-- A **periodic eigen-surface** (eigen-cycle): `Tᵏ(w) = w + c·𝟙` with period `k > 0` and
+rate `c`. The recurrent carrier shape, returning to itself (up to a uniform lift) every `k`
+steps. -/
+def IsEigenCycle {n : ℕ} (T : Surface n → Surface n) (w : Surface n) (k : ℕ) (c : ℤ) : Prop :=
+  0 < k ∧ T^[k] w = shift w c
+
+/-- **Constructive existence: a repeated *shape* yields an eigen-cycle.** If two iterates
+`Tᵃ(v)` and `Tᵇ(v)` (`a < b`) differ only by a uniform lift, then `Tᵃ(v)` is a periodic
+eigen-surface of period `b − a`. (Pure iteration algebra — no topical hypothesis needed.) -/
+theorem eigen_cycle_of_sameShape {n : ℕ} (T : Surface n → Surface n) (v : Surface n)
+    {a b : ℕ} {c : ℤ} (hab : a < b) (hs : T^[b] v = shift (T^[a] v) c) :
+    IsEigenCycle T (T^[a] v) (b - a) c := by
+  refine ⟨Nat.sub_pos_of_lt hab, ?_⟩
+  rw [← Function.iterate_add_apply, Nat.sub_add_cancel hab.le]
+  exact hs
+
+/-- **An eigen-cycle with non-positive rate keeps every height bounded forever.** Every
+iterate `Tᵐ(v)` is bounded by one of the first `k` iterates (`Tᵐ ᵐᵒᵈ ᵏ(v)`), because
+`m = k·(m/k) + m%k` and the `k`-periodic lift contributes `(m/k)·c ≤ 0`. So the orbit lives
+in the finite set `{T⁰v, …, Tᵏ⁻¹v}` shifted down — a bounded invariant region, i.e. survival.
+-/
+theorem eigen_cycle_bounded {n : ℕ} {T : Surface n → Surface n} {v : Surface n} {k : ℕ} {c : ℤ}
+    (hT : Topical T) (he : IsEigenCycle T v k c) (hc : c ≤ 0) (m : ℕ) (j : Fin n) :
+    (T^[m] v) j ≤ (T^[m % k] v) j := by
+  obtain ⟨hk, heq⟩ := he
+  have hmul : T^[k * (m / k)] v = shift v ((m / k : ℤ) * c) := by
+    rw [Function.iterate_mul]
+    have h := eigen_iterate (hT.iterate k) heq (m / k)
+    rw [h]; push_cast; ring_nf
+  have hstep : (T^[m] v) j = (T^[m % k] v) j + (m / k : ℤ) * c := by
+    conv_lhs => rw [show m = m % k + k * (m / k) from (Nat.mod_add_div m k).symm]
+    rw [Function.iterate_add_apply, hmul, (hT.iterate (m % k)).homog]
+    simp [shift]
+  rw [hstep]
+  have : (m / k : ℤ) * c ≤ 0 := mul_nonpos_of_nonneg_of_nonpos (by positivity) hc
+  linarith
+
+/-- **The existence theorem (pigeonhole on the projective quotient).** If every iterate of
+`v` is a uniform lift of some surface in a *finite* set `F` (the surface-shape orbit is
+bounded — bounded roughness), then an **eigen-cycle exists**. This is the spectral form of
+"the carrier exists": bounded shapes ⇒ a recurrent eigen-surface. Combined with
+`eigen_cycle_bounded`, a non-positive rate then certifies infinite bounded play. -/
+theorem exists_eigen_cycle {n : ℕ} (T : Surface n → Surface n) (v : Surface n)
+    (F : Finset (Surface n)) (hF : ∀ k, ∃ f ∈ F, ∃ c, T^[k] v = shift f c) :
+    ∃ (a k : ℕ) (c : ℤ), IsEigenCycle T (T^[a] v) k c := by
+  classical
+  choose g hg cc hcc using hF
+  obtain ⟨a, b, hab, hgab⟩ :=
+    Finite.exists_ne_map_eq_of_infinite (fun k => (⟨g k, hg k⟩ : {x // x ∈ F}))
+  have hgeq : g a = g b := congrArg Subtype.val hgab
+  have mk : ∀ {x y : ℕ}, x < y → g x = g y →
+      ∃ (a k : ℕ) (c : ℤ), IsEigenCycle T (T^[a] v) k c := by
+    intro x y hxy hxyg
+    have hgx : g x = shift (T^[x] v) (- cc x) := by
+      rw [hcc x, shift_shift]; funext j; simp [shift]
+    have hb : T^[y] v = shift (T^[x] v) (cc y - cc x) := by
+      rw [hcc y, ← hxyg, hgx, shift_shift]
+      funext j; simp [shift]; ring
+    exact ⟨x, y - x, cc y - cc x, eigen_cycle_of_sameShape T v hxy hb⟩
+  rcases lt_or_gt_of_ne hab with h | h
+  · exact mk h hgeq
+  · exact mk h hgeq.symm
+
 #print axioms eigen_surface_bounded
 #print axioms dropMap_topical
+#print axioms bagMap_topical
+#print axioms exists_eigen_cycle
+#print axioms eigen_cycle_bounded
 
 /-! ## Where this points (the analytic program, no enumeration)
 
