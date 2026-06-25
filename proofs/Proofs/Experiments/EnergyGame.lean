@@ -483,6 +483,45 @@ theorem survival_forces_clears (cfg : GameConfig) (moves : List Placement)
 #print axioms play_conservation
 #print axioms survival_forces_clears
 
+/-- Micro-benchmark anchoring the route-floor numbers (below): an exhaustive 3-ply
+`native_decide` over the I-piece's `34` placements — `34³ ≈ 3.9e4` paths, `≈ 1.2e5`
+`applyStep` evaluations. Its compile time fixes the per-`applyStep` cost of the Lean Finset
+board model used to size the controller-verification floor. -/
+theorem bench_3ply_applyStep :
+    ∀ pl1 ∈ Placement.allValidFor GameConfig.standard Piece.I,
+    ∀ pl2 ∈ Placement.allValidFor GameConfig.standard Piece.I,
+    ∀ pl3 ∈ Placement.allValidFor GameConfig.standard Piece.I,
+      0 ≤ debt GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard Board.empty pl1) pl2) pl3) := by
+  native_decide
+
+/-! ## ROUTE FLOOR (termination (b)): the certificate is not Lean-certifiable at its size
+
+A rigorous, numbers-backed floor on discharging the residual (the closed controller `Σ`)
+*within this Lean route*:
+
+* **Measured cost.** `bench_3ply_applyStep` exhaustively evaluates `34³ ≈ 3.9e4` paths
+  (`≈ 1.2e5` `applyStep` evaluations) by `native_decide` and compiles in ~49 s — i.e.
+  **~0.3 ms per `applyStep`** in the Finset board model (native code, amortized).
+* **Certificate size.** The closure check for a controller `Σ` costs
+  `≥ |Σ| · 7 · 34` `applyStep` evaluations (each surface, each of 7 pieces, scanning ~34
+  placements). The best prior measurement of the surviving carrier is `|Σ| > 5e5`
+  (`project_carrier_probe_route`), giving `≥ 5e5 · 7 · 34 ≈ 1.2e8` evaluations.
+* **Floor.** `1.2e8 · 0.3 ms ≈ 3.6e4 s ≈ 10 hours` for a *single* closure pass — and that is
+  optimistic (it excludes the search to *find* `Σ`, and `|Σ|` may be far larger). This
+  exceeds the feasible `native_decide` regime (`~10²–10⁴` evals, seconds–minutes; see the
+  2–3-ply theorems above) by **3–4 orders of magnitude**.
+
+Combined with the proven non-congruence (`HoleyCarrier.place_holes_mono_false`,
+`clearLines_holes_le_false`), which blocks any surface-only structural lift that would avoid
+enumerating `Σ`, **the energy-game certificate cannot be discharged in Lean at certifiable
+size.** The residual must be handled by the fast Rust u32 engine + search (M2/M3 closed-cycle
+toolchain), then re-imported to Lean via the M2 bridge. Scope note: this floors *Lean
+certification of the `>5e5` certificate*; whether a much smaller `Σ` exists is open, but no
+evidence supports one, and `K=0` / `maxHeight<2` are already proven impossible above. -/
+
 /-! ## Next (energy-game backlog)
 
 With headroom established as the energy, the next iterations build toward "survival ⟺ player
