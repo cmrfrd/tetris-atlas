@@ -476,6 +476,94 @@ theorem rate_of_shapeKey_eq {n : ℕ} [NeZero n] (T : Surface n → Surface n) (
   simp only [shift]
   omega
 
+/-! ## Completing the model: clears, and survival ⟺ bounded roughness (the projective view)
+
+Line clears are **not topical** — `clearMap` (drop the floor to 0 by subtracting the min
+height) is not even monotone (raising one column changes the min, lowering another's cleared
+height). That is the proven non-congruence (`HoleyCarrier.place_holes_mono_false`) in the
+surface model. But clears subtract a *constant* from every column, so they **preserve the
+shape** — they are *invisible on the projective quotient* (heights mod translation). Hence:
+
+* the **shape dynamics is purely the topical drops** (`clearMap_shapeKey`), so `exists_eigen_cycle`
+  applies to it;
+* after a clear the floor is 0, so **`maxHt = roughness`** (`maxHt_clearMap`), making
+  `roughness` the **Hilbert projective diameter**;
+* therefore **survival (bounded height) ⟺ bounded roughness ⟺ bounded shape orbit**.
+
+This is the natural metric: roughness is the projective diameter, topical drops act on it, and
+"can the player keep roughness bounded?" is the whole game. -/
+
+theorem fin_univ_ne {n : ℕ} [NeZero n] : (Finset.univ : Finset (Fin n)).Nonempty :=
+  ⟨⟨0, Nat.pos_of_ne_zero (NeZero.ne n)⟩, Finset.mem_univ _⟩
+
+/-- Max / min column height, and **roughness** = their difference (the Hilbert projective
+diameter of the shape). -/
+def maxHt {n : ℕ} [NeZero n] (h : Surface n) : ℤ := Finset.univ.sup' fin_univ_ne h
+def minHt {n : ℕ} [NeZero n] (h : Surface n) : ℤ := Finset.univ.inf' fin_univ_ne h
+def roughness {n : ℕ} [NeZero n] (h : Surface n) : ℤ := maxHt h - minHt h
+
+/-- The clear operation in the hole-free model: drop the floor to 0 (subtract the min). -/
+def clearMap {n : ℕ} [NeZero n] (h : Surface n) : Surface n := shift h (- minHt h)
+
+theorem inf'_sub_const {α : Type*} {s : Finset α} (hs : s.Nonempty) (g : α → ℤ) (c : ℤ) :
+    (s.inf' hs fun k => g k - c) = s.inf' hs g - c := by
+  apply le_antisymm
+  · have : (s.inf' hs fun k => g k - c) + c ≤ s.inf' hs g := by
+      apply Finset.le_inf'
+      intro k hk
+      have := Finset.inf'_le (fun k => g k - c) hk
+      linarith
+    linarith
+  · apply Finset.le_inf'
+    intro k hk
+    have := Finset.inf'_le g hk
+    linarith
+
+/-- **Clears preserve the shape** — they subtract a constant, so the shape key is unchanged.
+Clears are invisible on the projective quotient; the shape dynamics is the topical drops. -/
+theorem clearMap_shapeKey {n : ℕ} [NeZero n] (h : Surface n) :
+    shapeKey (clearMap h) = shapeKey h :=
+  ((sameShape_iff_shapeKey h (clearMap h)).mp ⟨- minHt h, rfl⟩).symm
+
+/-- Min height shifts with the surface. -/
+theorem minHt_shift {n : ℕ} [NeZero n] (h : Surface n) (c : ℤ) :
+    minHt (shift h c) = minHt h + c := by
+  have hsub := inf'_sub_const (s := (Finset.univ : Finset (Fin n))) fin_univ_ne h (-c)
+  unfold minHt shift
+  rw [show (fun j => h j + c) = (fun j => h j - (-c)) by funext j; ring, hsub]
+  ring
+
+/-- After a clear the floor is 0. -/
+theorem clearMap_minHt {n : ℕ} [NeZero n] (h : Surface n) : minHt (clearMap h) = 0 := by
+  unfold clearMap
+  rw [minHt_shift]; ring
+
+/-- **After a clear, max height equals roughness** — so the absolute height the player must
+keep `≤ rows` is exactly the projective diameter. -/
+theorem maxHt_clearMap {n : ℕ} [NeZero n] (h : Surface n) :
+    maxHt (clearMap h) = roughness (clearMap h) := by
+  unfold roughness
+  rw [clearMap_minHt]; ring
+
+/-- One full game step: drop, then clear the floor to 0. -/
+def fullStep {n : ℕ} [NeZero n] (p : PieceProfile n) (h : Surface n) : Surface n :=
+  clearMap (dropMap p h)
+
+/-- The full step normalizes the floor (`minHt = 0`), so its max height *is* its roughness:
+**survival = keeping roughness ≤ rows**. -/
+theorem maxHt_fullStep {n : ℕ} [NeZero n] (p : PieceProfile n) (h : Surface n) :
+    maxHt (fullStep p h) = roughness (fullStep p h) :=
+  maxHt_clearMap _
+
+/-- The full step has the same shape as the bare drop — clears don't change shapes, so the
+shape orbit of the *real* game (with clears) is exactly the topical drop dynamics. -/
+theorem fullStep_shapeKey {n : ℕ} [NeZero n] (p : PieceProfile n) (h : Surface n) :
+    shapeKey (fullStep p h) = shapeKey (dropMap p h) :=
+  clearMap_shapeKey _
+
+#print axioms clearMap_shapeKey
+#print axioms maxHt_fullStep
+
 /-! ## Concrete computation: watch the rate come out as the clearing equilibrium
 
 The theory is now executable. `eigenRate` iterates the (computable) strategy map, detects the
