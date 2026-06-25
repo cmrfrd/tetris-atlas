@@ -418,6 +418,71 @@ theorem card_applyStep {cfg : GameConfig} {b : Board} {pl : Placement} (hwf : Bo
 #print axioms card_clearLines_add
 #print axioms card_applyStep
 
+/-! ## The clearing equilibrium as a law over arbitrary plays
+
+Lift single-step conservation to a whole play: the mass ledger `+4/piece, −cols/line`
+accumulated over any move list. The corollary quantifies the equilibrium — surviving `N`
+pieces from empty forces at least `(4N − cols·rows)/cols` line clears — turning "the
+controller must keep the clear rate up" into a proven necessary condition at full scale. -/
+
+/-- One ledger step: apply the placement and accumulate the lines it cleared. -/
+def playStep (cfg : GameConfig) (acc : Board × ℕ) (pl : Placement) : Board × ℕ :=
+  (Placement.applyStep cfg acc.1 pl, acc.2 + (Board.fullRows cfg (pl.place acc.1)).card)
+
+/-- Play a list of placements from `b`, tracking the board and total lines cleared. -/
+def play (cfg : GameConfig) (b : Board) (moves : List Placement) : Board × ℕ :=
+  moves.foldl (playStep cfg) (b, 0)
+
+/-- **Mass conservation over a play (general accumulator).** -/
+theorem play_conservation_aux (cfg : GameConfig) :
+    ∀ (moves : List Placement) (acc : Board × ℕ),
+      Board.WF cfg acc.1 → (∀ pl ∈ moves, pl.Valid cfg) →
+      (moves.foldl (playStep cfg) acc).1.count
+        + cfg.cols * (moves.foldl (playStep cfg) acc).2
+        = acc.1.count + cfg.cols * acc.2 + 4 * moves.length := by
+  intro moves
+  induction moves with
+  | nil => intro acc _ _; simp
+  | cons pl rest ih =>
+    intro acc hwf hv
+    have hvpl : pl.Valid cfg := hv pl (List.mem_cons.mpr (Or.inl rfl))
+    have hwf' : Board.WF cfg (playStep cfg acc pl).1 := Placement.applyStep_wf hwf hvpl
+    have hv' : ∀ p ∈ rest, p.Valid cfg := fun p hp => hv p (List.mem_cons.mpr (Or.inr hp))
+    have hstep := card_applyStep (b := acc.1) (pl := pl) hwf hvpl
+    have hrec := ih (playStep cfg acc pl) hwf' hv'
+    have e1 : (playStep cfg acc pl).1 = Placement.applyStep cfg acc.1 pl := rfl
+    have e2 : (playStep cfg acc pl).2
+        = acc.2 + (Board.fullRows cfg (pl.place acc.1)).card := rfl
+    rw [List.foldl_cons, List.length_cons]
+    rw [e1, e2, Nat.mul_add] at hrec
+    omega
+
+/-- **Mass conservation over a play from a WF board:** final mass plus `cols·(lines cleared)`
+equals initial mass plus `4·(pieces placed)`. -/
+theorem play_conservation (cfg : GameConfig) (b : Board) (moves : List Placement)
+    (hwf : Board.WF cfg b) (hv : ∀ pl ∈ moves, pl.Valid cfg) :
+    (play cfg b moves).1.count + cfg.cols * (play cfg b moves).2
+      = b.count + 4 * moves.length := by
+  have h := play_conservation_aux cfg moves (b, 0) hwf hv
+  simpa [play] using h
+
+/-- **Survival forces clears (the equilibrium, quantified).** If a play of `moves` from the
+empty board stays in-field (`mass ≤ cols·rows`), then the total lines cleared satisfy
+`cols·(lines) + cols·rows ≥ 4·(pieces)`, i.e. the clear rate is at least `4/cols` lines per
+piece asymptotically. A *necessary* condition for survival — and cell conservation shows the
+only obstruction to meeting it is permanently buried cells (debt). -/
+theorem survival_forces_clears (cfg : GameConfig) (moves : List Placement)
+    (hv : ∀ pl ∈ moves, pl.Valid cfg)
+    (hbound : (play cfg Board.empty moves).1.count ≤ cfg.cols * cfg.rows) :
+    4 * moves.length ≤ cfg.cols * (play cfg Board.empty moves).2 + cfg.cols * cfg.rows := by
+  have h := play_conservation cfg Board.empty moves (Board.empty_wf cfg) hv
+  have hempty : (Board.empty : Board).count = 0 := by simp [Board.count, Board.empty]
+  rw [hempty] at h
+  omega
+
+#print axioms play_conservation
+#print axioms survival_forces_clears
+
 /-! ## Next (energy-game backlog)
 
 With headroom established as the energy, the next iterations build toward "survival ⟺ player
