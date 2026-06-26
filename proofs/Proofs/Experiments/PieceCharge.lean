@@ -138,4 +138,27 @@ theorem massCharge_conserved_iff (w : Fin 10 → ℤ) :
   · intro hw v
     exact massCharge_clearRow_invariant hw v
 
+/-! ## Are the conserved charges controllable?
+
+A conserved charge is only an obstruction if the adversary can force it to *grow*. We test the
+middle-vs-edge charge — the one that reads exactly the empirical "middle pump" — and find the player
+can always push it *down*: the conserved shape-charges are freely controllable, so the middle pump
+is not a charge obstruction but a coupling to height-feasibility. -/
+
+/-- Column weight reading middle-vs-edge mass: the two edge columns weigh `-4`, the middle eight
+weigh `+1`. Balanced (`∑_{0..9} = 0`), so its charge is conserved under clears. -/
+def wMid : ℕ → ℤ := fun c => if c = 0 ∨ c = 9 then -4 else 1
+
+/-- The middle-vs-edge charge increment of placing piece `p` (rotation `r`) at column offset `j`. -/
+def incrMid (p : Piece) (r : Rotation) (j : ℕ) : ℤ := ∑ cell ∈ p.shape r, wMid (cell.1 + j)
+
+/-- **The conserved shape-charge is player-reducible.** For *every* piece the player has a placement
+that strictly decreases the middle-vs-edge charge — so the adversary can never force it to grow. The
+conserved shape-charges are freely controllable; the empirically-observed middle pump is therefore
+NOT a charge obstruction but a coupling to height-feasibility: the player cannot always place where
+the charge says to, because the chosen columns may be too tall. -/
+theorem incrMid_reducible :
+    ∀ p : Piece, ∃ (r : Rotation) (j : Fin 7), incrMid p r j.val < 0 := by
+  decide
+
 end Tetris.PieceCharge
