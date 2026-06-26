@@ -76,4 +76,66 @@ theorem chargeC_shift_invariant {s : Finset (ℕ × ℕ)} (hs : s.card = 4) (dc 
     rw [nsmul_eq_mul, this, zero_mul]
   rw [chargeC_shift, hs, h4, add_zero]
 
+/-! ## Which charges survive a line-clear
+
+The checkerboard charge above is *broken* by clears: clearing a row shifts everything above it down,
+flipping the colour of every shifted cell. This section finds the charges that ARE conserved. A
+line-clear removes exactly one cell from *every* column, so a **column** charge — a weighting of the
+columns alone, ignoring rows — with *zero total weight* is exactly preserved, holes and all. These
+balanced column colourings are the genuine conservation laws of Tetris. -/
+
+/-- The column-mass charge of a column-count vector `v` under column weights `w`. -/
+def massCharge (w v : Fin 10 → ℤ) : ℤ := ∑ c, w c * v c
+
+/-- Placement is linear: a piece adds its column profile, so the charge adds the profile's charge —
+a *board-independent* increment (the landing height is irrelevant to a column charge). -/
+theorem massCharge_add (w v p : Fin 10 → ℤ) :
+    massCharge w (v + p) = massCharge w v + massCharge w p := by
+  simp only [massCharge, Pi.add_apply, mul_add, Finset.sum_add_distrib]
+
+/-- A line-clear removes one cell from every column. -/
+def clearRow (v : Fin 10 → ℤ) : Fin 10 → ℤ := fun c => v c - 1
+
+/-- A clear drops the charge by the total weight `∑ w`. -/
+theorem massCharge_clearRow (w v : Fin 10 → ℤ) :
+    massCharge w (clearRow v) = massCharge w v - ∑ c, w c := by
+  simp only [massCharge, clearRow, mul_sub, mul_one, Finset.sum_sub_distrib]
+
+/-- **The conservation law.** A column-mass charge with zero total weight is invariant under every
+line-clear — regardless of holes, of which row clears, or how many. The conserved charges of Tetris
+are exactly the balanced column colourings (the `9`-dimensional space `∑ w = 0`). -/
+theorem massCharge_clearRow_invariant {w : Fin 10 → ℤ} (hw : ∑ c, w c = 0) (v : Fin 10 → ℤ) :
+    massCharge w (clearRow v) = massCharge w v := by
+  rw [massCharge_clearRow, hw, sub_zero]
+
+/-- **The uniform level law.** Every one of the seven pieces is exactly four cells, at every
+rotation — so every placement adds exactly `4` to the total mass, identically for all pieces. The
+"level" direction is uniform; only the *shape* (the balanced charges) is piece-specific. -/
+theorem shape_card : ∀ (p : Piece) (r : Rotation), (p.shape r).card = 4 := by decide
+
+/-- The horizontal-moment weight `w c = 2c - 9`: balanced (`∑ w = 0`), so its charge — a signed
+left/right mass imbalance — is a conserved quantity of the dynamics. A concrete conservation law. -/
+def wLR : Fin 10 → ℤ := fun c => 2 * (c : ℤ) - 9
+
+theorem wLR_balanced : ∑ c, wLR c = 0 := by decide
+
+/-- The left/right horizontal-moment charge is conserved under every line-clear. -/
+theorem massCharge_wLR_conserved (v : Fin 10 → ℤ) :
+    massCharge wLR (clearRow v) = massCharge wLR v :=
+  massCharge_clearRow_invariant wLR_balanced v
+
+/-- **Characterization of the conservation laws.** A column-mass charge is conserved by clears (on
+every board) *iff* its total weight is zero — iff it vanishes on a complete row. The conservation
+laws of Tetris are exactly the column colourings blind to full rows: they read only the *incomplete*
+part of the board — its jaggedness and holes — which is exactly the part that decides survival. -/
+theorem massCharge_conserved_iff (w : Fin 10 → ℤ) :
+    (∀ v, massCharge w (clearRow v) = massCharge w v) ↔ ∑ c, w c = 0 := by
+  constructor
+  · intro h
+    have e := massCharge_clearRow w 0
+    rw [h 0] at e
+    linarith
+  · intro hw v
+    exact massCharge_clearRow_invariant hw v
+
 end Tetris.PieceCharge
