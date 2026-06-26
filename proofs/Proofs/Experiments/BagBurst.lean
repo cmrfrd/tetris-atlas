@@ -100,4 +100,16 @@ theorem drain_budget_ge_clearing_need {bags : List (List Piece)} (h : ∀ b ∈ 
     14 * bags.length ≤ 20 * bags.flatten.countP isI := by
   rw [countP_isI_flatten h]; omega
 
+/-- **Recovery budget:** every bag delivers exactly five non-S/Z pieces — the player's guaranteed
+window to rebuild a usable well between roughness injections. This is the `≥5`-recovery half of the
+renewal structure: a burst of consecutive S/Z (capped at 4, since it can only straddle one bag
+boundary) is always separated from the next burst by these recovery pieces. -/
+theorem countP_nonSZ {l : List Piece} (h : IsBagOrder l) : l.countP (fun p => !isSZ p) = 5 := by
+  rw [h.countP_eq (fun p => !isSZ p)]; decide
+
+/-- The seven pieces of every bag split exactly as **2 roughness + 5 recovery**. -/
+theorem roughness_add_recovery {l : List Piece} (h : IsBagOrder l) :
+    l.countP isSZ + l.countP (fun p => !isSZ p) = 7 := by
+  rw [countP_isSZ h, countP_nonSZ h]
+
 end Tetris.BagBurst
