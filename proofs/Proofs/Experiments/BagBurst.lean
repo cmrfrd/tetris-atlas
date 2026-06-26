@@ -59,4 +59,45 @@ theorem countP_isI_two {l₁ l₂ : List Piece} (h₁ : IsBagOrder l₁) (h₂ :
     (l₁ ++ l₂).countP isI = 2 := by
   rw [List.countP_append, countP_isI h₁, countP_isI h₂]
 
+/-- **Global roughness density:** a stream of `n` bag orders contains exactly `2n` S/Z pieces. -/
+theorem countP_isSZ_flatten {bags : List (List Piece)} (h : ∀ b ∈ bags, IsBagOrder b) :
+    bags.flatten.countP isSZ = 2 * bags.length := by
+  revert h
+  induction bags with
+  | nil => intro _; simp
+  | cons b bs ih =>
+    intro h
+    have hb : IsBagOrder b := h b (List.mem_cons.mpr (Or.inl rfl))
+    have hbs : bs.flatten.countP isSZ = 2 * bs.length :=
+      ih (fun b' hb' => h b' (List.mem_cons.mpr (Or.inr hb')))
+    rw [List.flatten_cons, List.countP_append, countP_isSZ hb, hbs]
+    simp only [List.length_cons]; omega
+
+/-- **Global drain density:** a stream of `n` bag orders contains exactly `n` I pieces. -/
+theorem countP_isI_flatten {bags : List (List Piece)} (h : ∀ b ∈ bags, IsBagOrder b) :
+    bags.flatten.countP isI = bags.length := by
+  revert h
+  induction bags with
+  | nil => intro _; simp
+  | cons b bs ih =>
+    intro h
+    have hb : IsBagOrder b := h b (List.mem_cons.mpr (Or.inl rfl))
+    have hbs : bs.flatten.countP isI = bs.length :=
+      ih (fun b' hb' => h b' (List.mem_cons.mpr (Or.inr hb')))
+    rw [List.flatten_cons, List.countP_append, countP_isI hb, hbs]
+    simp only [List.length_cons]; omega
+
+/-- **Drain-budget feasibility — the make-or-break is geometry, not budget.**
+
+Each bag adds `28` cells, i.e. `2.8` rows over the 10-wide board, so keeping height bounded over `n`
+bags requires clearing on average `2.8` rows per bag — at most `14 n` rows per `5 n` bags. The I
+pieces alone supply `n` potential four-line drains, i.e. `4 n = 20 n / 5` clearable rows. Hence the
+drain *budget* strictly exceeds the clearing *requirement* with a fixed `20 : 14` margin: the player
+is never starved of drains. What the order-switching adversary attacks (per `tetris_preview`) is the
+*geometry* of cashing those drains — keeping a usable well while the middle is pumped — never the
+count of I pieces. -/
+theorem drain_budget_ge_clearing_need {bags : List (List Piece)} (h : ∀ b ∈ bags, IsBagOrder b) :
+    14 * bags.length ≤ 20 * bags.flatten.countP isI := by
+  rw [countP_isI_flatten h]; omega
+
 end Tetris.BagBurst
