@@ -161,4 +161,42 @@ theorem incrMid_reducible :
     ∀ p : Piece, ∃ (r : Rotation) (j : Fin 7), incrMid p r j.val < 0 := by
   decide
 
+/-! ## The level/shape dichotomy — where survival is actually decided
+
+The conserved charges (`∑ w = 0`) are the SHAPE, and we just showed they are freely controllable.
+The remaining direction is the LEVEL — total mass, the weight `w = 1`, the one weighting with
+`∑ w ≠ 0`. It is the exact opposite of conserved: every placement raises it by the piece size `4`,
+and only a clear lowers it (by the board width `10`). So the level is the sole *un*-controllable
+coordinate, and survival reduces entirely to keeping it bounded — to the clearing rate — with the
+shape free. This is the charge theory's dissection of the crux: not the shape, but the level. -/
+
+/-- The level (total mass) of a column-count vector. -/
+abbrev level (v : Fin 10 → ℤ) : ℤ := massCharge 1 v
+
+/-- A clear lowers the level by the board width `10` (ten cells leave per cleared row). -/
+theorem level_clearRow (v : Fin 10 → ℤ) : level (clearRow v) = level v - 10 := by
+  unfold level
+  rw [massCharge_clearRow, show (∑ c : Fin 10, (1 : Fin 10 → ℤ) c) = 10 from by simp]
+
+/-- Placing any piece (total mass `4`, uniformly — see `shape_card`) raises the level by exactly
+`4`. The level rises monotonically under placement; only clears reduce it. -/
+theorem level_place {prof : Fin 10 → ℤ} (h : level prof = 4) (v : Fin 10 → ℤ) :
+    level (v + prof) = level v + 4 := by
+  unfold level at *
+  rw [massCharge_add, h]
+
+/-- **The clearing coupling — where the otherwise-free shape control finally bites.** Clearing `m`
+lines lowers every column by `m` and the level by `10 m`, but it is legal only when *every* column
+has height ≥ m: a complete row needs all ten columns. So the clearable depth — the only way down for
+the level — is capped by the **minimum** column height. A well (one low column) starves clearing no
+matter how tall the rest. This is the coupling: to flush the level you must fill the wells, yet the
+wells are exactly what the I-piece drains, so the adversary attacks by delaying the I. -/
+theorem level_clear (h : Fin 10 → ℤ) (m : ℤ) (hm : ∀ c, m ≤ h c) :
+    level (fun c => h c - m) = level h - 10 * m ∧ ∀ c, 0 ≤ h c - m := by
+  refine ⟨?_, fun c => by linarith [hm c]⟩
+  unfold level massCharge
+  simp only [Pi.one_apply, one_mul]
+  rw [Finset.sum_sub_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin]
+  ring
+
 end Tetris.PieceCharge
