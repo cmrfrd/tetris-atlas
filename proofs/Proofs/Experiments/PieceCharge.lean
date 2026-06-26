@@ -199,4 +199,29 @@ theorem level_clear (h : Fin 10 → ℤ) (m : ℤ) (hm : ∀ c, m ≤ h c) :
   rw [Finset.sum_sub_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin]
   ring
 
+/-! ## An actionable lever: clearing capacity = the minimum column height
+
+The dichotomy reduces survival to keeping the level bounded, and `level_clear` says a clear only
+goes as deep as the lowest column. Turned into a strategy lever: a hole-free board can clear exactly
+`minHt` lines right now, dropping the level by `10 · minHt`. So — *alongside* "reduce roughness"
+from the tropical theory — **"raise the minimum column height" is a provable survival lever** an
+agent can put straight into its evaluation function. -/
+
+/-- The minimum column height of a (hole-free) board. -/
+def minHt (h : Fin 10 → ℤ) : ℤ := Finset.univ.inf' ⟨0, Finset.mem_univ 0⟩ h
+
+/-- **Clearing capacity = the minimum column height.** A depth-`m` clear is legal iff `m ≤` every
+column iff `m ≤ minHt`; so the most lines a hole-free board can clear at once is exactly its minimum
+column height. Raising the minimum raises the clearing capacity — a directly-optimizable lever. -/
+theorem clearable_iff_le_minHt (h : Fin 10 → ℤ) (m : ℤ) :
+    (∀ c, m ≤ h c) ↔ m ≤ minHt h := by
+  rw [minHt, Finset.le_inf'_iff]
+  simp
+
+/-- Clearing at full capacity drops the level by `10 · minHt` — the level-reduction per clearing
+event is exactly ten times the minimum column height. To flush more level, raise the minimum. -/
+theorem level_clear_capacity (h : Fin 10 → ℤ) :
+    level (fun c => h c - minHt h) = level h - 10 * minHt h :=
+  (level_clear h (minHt h) ((clearable_iff_le_minHt h (minHt h)).mpr le_rfl)).1
+
 end Tetris.PieceCharge
