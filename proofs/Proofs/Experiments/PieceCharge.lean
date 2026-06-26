@@ -52,4 +52,28 @@ theorem bag_checkerCharge (rot : Piece → Rotation) :
   simp only [checkerCharge_classification]
   decide
 
+/-- Shifting every cell by `(dc, dr)` shifts the charge by `|s| • (dc + dr)`. -/
+theorem chargeC_shift (s : Finset (ℕ × ℕ)) (dc dr : ℕ) :
+    chargeC (s.image (fun c => (c.1 + dc, c.2 + dr)))
+      = chargeC s + s.card • ((dc + dr : ℕ) : ZMod 2) := by
+  unfold chargeC
+  rw [Finset.sum_image (fun a _ b _ hab => by
+    simp only [Prod.mk.injEq, add_left_inj] at hab
+    exact Prod.ext hab.1 hab.2)]
+  have key : ∀ c : ℕ × ℕ, (((c.1 + dc) + (c.2 + dr) : ℕ) : ZMod 2)
+      = ((c.1 + c.2 : ℕ) : ZMod 2) + ((dc + dr : ℕ) : ZMod 2) := by
+    intro c; push_cast; ring
+  simp_rw [key]
+  rw [Finset.sum_add_distrib, Finset.sum_const]
+
+/-- **The checkerboard charge is translation-invariant** on every 4-cell set — so it is a genuine
+invariant of each tetromino, independent of *where* on the board it is placed (only its shape
+matters). This is what makes `checkerCharge` a well-defined charge, not a positional artifact. -/
+theorem chargeC_shift_invariant {s : Finset (ℕ × ℕ)} (hs : s.card = 4) (dc dr : ℕ) :
+    chargeC (s.image (fun c => (c.1 + dc, c.2 + dr))) = chargeC s := by
+  have h4 : (4 : ℕ) • ((dc + dr : ℕ) : ZMod 2) = 0 := by
+    have : ((4 : ℕ) : ZMod 2) = 0 := by decide
+    rw [nsmul_eq_mul, this, zero_mul]
+  rw [chargeC_shift, hs, h4, add_zero]
+
 end Tetris.PieceCharge
