@@ -60,11 +60,12 @@ use std::path::Path;
 use std::time::Instant;
 
 use anyhow::{Result, bail};
-use clap::Parser;
+use clap::{Args, Parser, Subcommand};
 use rayon::prelude::*;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use tetris_game::{
-    IsLost, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPiecePlacement,
+    IsLost, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
+    TetrisPiecePlacement,
 };
 use tetris_search::height_mse_distance_from_empty;
 
@@ -87,8 +88,26 @@ static ALL_BAG_PERMUTATIONS: [ForcedBag; BAG_PERM_COUNT] = generate_forced_bag_p
 
 #[derive(Parser, Debug)]
 #[command(name = "tetris_phase_atlas")]
-#[command(about = "Phase-layered 5-bag perfect-clear atlas (cooperative discovery)")]
+#[command(about = "Phase-layered N-bag perfect-clear atlas")]
 struct Cli {
+    #[command(subcommand)]
+    mode: Mode,
+}
+
+#[derive(Subcommand, Debug)]
+enum Mode {
+    /// Cooperative discovery: beam-search 5-bag tuples for perfect clears and
+    /// build a candidate phase carrier. Measures the (full-lookahead) PC rate.
+    Discover(DiscoverArgs),
+    /// Adversarial certification: exact per-piece AND-OR check of whether the
+    /// empty board can be forced back to empty after `bag_cycles` bags against
+    /// every adversarial bag order. A YES is a constructive infinite-play
+    /// certificate (within the height cap as the proven-safe region).
+    Certify(CertifyArgs),
+}
+
+#[derive(Args, Debug)]
+struct DiscoverArgs {
     /// First 5-bag ordinal (base-5040 tuple index) to scan.
     #[arg(long, default_value_t = 0)]
     start: u128,
@@ -114,39 +133,66 @@ struct Cli {
     out_dir: String,
 }
 
+#[derive(Args, Debug)]
+struct CertifyArgs {
+    /// Number of complete bags in the reset cycle. Must be a multiple of 5 so
+    /// that returning to empty is cell-count feasible (28*N divisible by 10).
+    #[arg(long, default_value_t = 5)]
+    bag_cycles: usize,
+
+    /// Maximum board height permitted at any intermediate placement. This is the
+    /// proof's admissible region: a YES proves a reset that never exceeds it.
+    #[arg(long, default_value_t = 6)]
+    max_height: u32,
+
+    /// Abort and report INCONCLUSIVE after exploring this many AND-OR nodes.
+    #[arg(long, default_value_t = 200_000_000)]
+    node_budget: u64,
+
+    /// Directory for the JSON summary.
+    #[arg(long, default_value = "artifacts/output/tetris_phase_atlas")]
+    out_dir: String,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    validate_cli(&cli)?;
-    fs::create_dir_all(&cli.out_dir)?;
+    match cli.mode {
+        Mode::Discover(args) => run_discover(&args),
+        Mode::Certify(args) => run_certify(&args),
+    }
+}
 
-    println!("=== tetris_phase_atlas (cooperative discovery) ===");
+fn run_discover(args: &DiscoverArgs) -> Result<()> {
+    validate_discover(args)?;
+    fs::create_dir_all(&args.out_dir)?;
+
+    println!("=== tetris_phase_atlas: discover (cooperative) ===");
     println!("total_pieces         = {TOTAL_PIECES}");
     println!("lines_for_pc         = {LINES_FOR_PC}");
-    println!("bag_perm_count       = {BAG_PERM_COUNT}");
     println!("total_5bag_sequences = {TOTAL_FIVE_BAG_SEQUENCES}");
-    println!("start                = {}", cli.start);
-    println!("limit                = {}", cli.limit);
-    println!("beam_width           = {}", cli.beam_width);
-    println!("max_height           = {}", cli.max_height);
-    println!("chunk                = {}", cli.chunk);
-    println!("out_dir              = {}", cli.out_dir);
+    println!("start                = {}", args.start);
+    println!("limit                = {}", args.limit);
+    println!("beam_width           = {}", args.beam_width);
+    println!("max_height           = {}", args.max_height);
+    println!("chunk                = {}", args.chunk);
+    println!("out_dir              = {}", args.out_dir);
     println!("threads              = {}", rayon::current_num_threads());
     println!();
 
-    run_scan(&cli)
+    run_scan(args)
 }
 
-fn validate_cli(cli: &Cli) -> Result<()> {
-    if cli.start >= TOTAL_FIVE_BAG_SEQUENCES {
+fn validate_discover(args: &DiscoverArgs) -> Result<()> {
+    if args.start >= TOTAL_FIVE_BAG_SEQUENCES {
         bail!("--start must be < {TOTAL_FIVE_BAG_SEQUENCES}");
     }
-    if cli.beam_width == 0 {
+    if args.beam_width == 0 {
         bail!("--beam-width must be > 0");
     }
-    if cli.chunk == 0 {
+    if args.chunk == 0 {
         bail!("--chunk must be > 0");
     }
-    if cli.max_height == 0 || cli.max_height > StandardTetris::ROWS as u32 {
+    if args.max_height == 0 || args.max_height > StandardTetris::ROWS as u32 {
         bail!("--max-height must be in 1..={}", StandardTetris::ROWS);
     }
     Ok(())
@@ -360,7 +406,7 @@ impl ScanStats {
     }
 }
 
-fn run_scan(cli: &Cli) -> Result<()> {
+fn run_scan(cli: &DiscoverArgs) -> Result<()> {
     let started = Instant::now();
     let mut carrier = PhaseCarrier::new();
     let mut stats = ScanStats::default();
@@ -433,7 +479,12 @@ fn log_progress(stats: &ScanStats, sizes: &[usize; BAG_COUNT + 1], started: Inst
     );
 }
 
-fn print_summary(cli: &Cli, stats: &ScanStats, sizes: &[usize; BAG_COUNT + 1], started: Instant) {
+fn print_summary(
+    cli: &DiscoverArgs,
+    stats: &ScanStats,
+    sizes: &[usize; BAG_COUNT + 1],
+    started: Instant,
+) {
     let secs = started.elapsed().as_secs_f64();
     println!();
     println!("--- summary ---");
@@ -457,7 +508,7 @@ fn print_summary(cli: &Cli, stats: &ScanStats, sizes: &[usize; BAG_COUNT + 1], s
 }
 
 fn write_summary_json(
-    cli: &Cli,
+    cli: &DiscoverArgs,
     stats: &ScanStats,
     sizes: &[usize; BAG_COUNT + 1],
     started: Instant,
@@ -536,6 +587,219 @@ impl CsvLogger {
         self.file.flush()?;
         Ok(())
     }
+}
+
+// --- Adversarial closure certification -------------------------------------
+
+/// State of the exact per-piece AND-OR search over one N-bag reset cycle.
+///
+/// `good(board, step, bag)` is true iff, from this state, the player can force
+/// the board back to empty exactly at `total_steps`, against every adversarial
+/// choice of which remaining bag piece is drawn next:
+///
+/// - AND over the pieces the adversary may draw (`bag.iter_next_states()`).
+/// - OR over the player's legal hard-drop placements of that piece.
+/// - terminal: at `total_steps`, the board must be empty.
+///
+/// Boards taller than `max_height` are inadmissible, and a perfect-clear
+/// feasibility filter prunes boards whose cell count can never reach 0.
+struct CertCtx {
+    total_steps: usize,
+    max_height: u32,
+    node_budget: u64,
+    memo: FxHashMap<(TetrisBoard, u16, u8), bool>,
+    nodes: u64,
+    terminal_hits: u64,
+    budget_exceeded: bool,
+}
+
+impl CertCtx {
+    fn new(total_steps: usize, max_height: u32, node_budget: u64) -> Self {
+        Self {
+            total_steps,
+            max_height,
+            node_budget,
+            memo: FxHashMap::default(),
+            nodes: 0,
+            terminal_hits: 0,
+            budget_exceeded: false,
+        }
+    }
+
+    /// Recursive AND-OR evaluation. Short-circuits on the first adversary piece
+    /// the player cannot answer (fast NO) and on the first winning placement
+    /// (fast OR). Returns `false` conservatively once the node budget is hit,
+    /// flagging `budget_exceeded` so the caller can report INCONCLUSIVE.
+    fn good(&mut self, board: TetrisBoard, step: usize, bag: TetrisPieceBagState) -> bool {
+        if step == self.total_steps {
+            let win = board == TetrisBoard::EMPTY_BOARD;
+            if win {
+                self.terminal_hits += 1;
+            }
+            return win;
+        }
+
+        let key = (board, step as u16, u8::from(bag));
+        if let Some(&cached) = self.memo.get(&key) {
+            return cached;
+        }
+
+        if self.budget_exceeded {
+            return false;
+        }
+        self.nodes += 1;
+        if self.nodes > self.node_budget {
+            self.budget_exceeded = true;
+            return false;
+        }
+
+        // Perfect-clear feasibility: each line clear removes 10 cells, so the
+        // board can only reach empty if the running cell count plus all future
+        // cells is a multiple of 10.
+        let remaining = (self.total_steps - step) as u32;
+        if (board.count() + 4 * remaining) % 10 != 0 {
+            self.memo.insert(key, false);
+            return false;
+        }
+
+        let mut result = true;
+        for (piece, next_bag) in bag.iter_next_states() {
+            let mut answered = false;
+            for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+                let mut child = board;
+                let drop = child.apply_piece_placement(placement);
+                if drop.is_lost == IsLost::LOST || child.height() > self.max_height {
+                    continue;
+                }
+                if self.good(child, step + 1, next_bag) {
+                    answered = true;
+                    break;
+                }
+                if self.budget_exceeded {
+                    return false;
+                }
+            }
+            if !answered {
+                result = false;
+                break;
+            }
+        }
+
+        if !self.budget_exceeded {
+            self.memo.insert(key, result);
+        }
+        result
+    }
+
+    /// Per-first-piece coverage at the root: how many of the 7 opening pieces the
+    /// player can answer with at least one placement leading to a winning state.
+    fn root_coverage(&mut self, board: TetrisBoard) -> (u32, [bool; 7]) {
+        let bag = TetrisPieceBagState::new();
+        let mut covered = 0;
+        let mut per_piece = [false; 7];
+        for (piece, next_bag) in bag.iter_next_states() {
+            let mut answered = false;
+            for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+                let mut child = board;
+                let drop = child.apply_piece_placement(placement);
+                if drop.is_lost == IsLost::LOST || child.height() > self.max_height {
+                    continue;
+                }
+                if self.good(child, 1, next_bag) {
+                    answered = true;
+                    break;
+                }
+            }
+            per_piece[piece.index() as usize] = answered;
+            if answered {
+                covered += 1;
+            }
+        }
+        (covered, per_piece)
+    }
+}
+
+fn run_certify(args: &CertifyArgs) -> Result<()> {
+    if args.bag_cycles == 0 || args.bag_cycles % BAG_COUNT != 0 {
+        bail!("--bag-cycles must be a positive multiple of {BAG_COUNT}");
+    }
+    if args.max_height == 0 || args.max_height > StandardTetris::ROWS as u32 {
+        bail!("--max-height must be in 1..={}", StandardTetris::ROWS);
+    }
+    fs::create_dir_all(&args.out_dir)?;
+
+    let total_steps = args.bag_cycles * PIECES_PER_BAG;
+    let lines_needed = (total_steps as u32 * 4) / 10;
+
+    println!("=== tetris_phase_atlas: certify (adversarial) ===");
+    println!("bag_cycles   = {}", args.bag_cycles);
+    println!("total_steps  = {total_steps}");
+    println!("lines_needed = {lines_needed}");
+    println!("max_height   = {}", args.max_height);
+    println!("node_budget  = {}", args.node_budget);
+    println!("opponent     = per-piece online adversary (sees current piece, no lookahead)");
+    println!();
+
+    let started = Instant::now();
+    let mut ctx = CertCtx::new(total_steps, args.max_height, args.node_budget);
+    let root = TetrisBoard::EMPTY_BOARD;
+    let bag = TetrisPieceBagState::new();
+    let winning = ctx.good(root, 0, bag);
+    let solve_secs = started.elapsed().as_secs_f64();
+
+    // Root coverage (best-effort; reuses the memo populated above).
+    let (covered, per_piece) = ctx.root_coverage(root);
+    let elapsed = started.elapsed().as_secs_f64();
+
+    let status = if ctx.budget_exceeded {
+        "INCONCLUSIVE"
+    } else if winning {
+        "WINNING"
+    } else {
+        "NOT-WINNING"
+    };
+
+    println!("--- result ---");
+    println!("status            = {status}");
+    if !ctx.budget_exceeded {
+        println!("winning           = {winning}");
+    }
+    println!("root_coverage     = {covered}/7");
+    print!("opening_pieces    = [");
+    for piece in TetrisPiece::all() {
+        let ok = per_piece[piece.index() as usize];
+        print!("{}:{} ", piece, if ok { "+" } else { "." });
+    }
+    println!("]");
+    println!("nodes             = {}", ctx.nodes);
+    println!("memo_entries      = {}", ctx.memo.len());
+    println!("terminal_hits     = {}", ctx.terminal_hits);
+    println!("budget_exceeded   = {}", ctx.budget_exceeded);
+    println!("solve_time        = {solve_secs:.2}s");
+    println!("total_time        = {elapsed:.2}s");
+
+    let path = format!("{}/certify_summary.json", args.out_dir);
+    let json = format!(
+        "{{\n  \"bag_cycles\": {},\n  \"total_steps\": {},\n  \"max_height\": {},\n  \
+         \"status\": \"{}\",\n  \"winning\": {},\n  \"root_coverage\": {},\n  \"nodes\": {},\n  \
+         \"memo_entries\": {},\n  \"terminal_hits\": {},\n  \"budget_exceeded\": {},\n  \
+         \"elapsed_secs\": {:.3}\n}}\n",
+        args.bag_cycles,
+        total_steps,
+        args.max_height,
+        status,
+        winning && !ctx.budget_exceeded,
+        covered,
+        ctx.nodes,
+        ctx.memo.len(),
+        ctx.terminal_hits,
+        ctx.budget_exceeded,
+        elapsed,
+    );
+    let mut file = File::create(&path)?;
+    file.write_all(json.as_bytes())?;
+    println!("summary -> {path}");
+    Ok(())
 }
 
 // --- Bag-permutation enumeration (base-5040 tuples) -------------------------
@@ -732,5 +996,44 @@ mod tests {
                 assert_eq!(node.boundaries[BAG_COUNT - 1], TetrisBoard::EMPTY_BOARD);
             }
         }
+    }
+
+    fn one_o_board() -> TetrisBoard {
+        let mut b: TetrisBoard = TetrisBoard::EMPTY_BOARD;
+        b.apply_piece_placement(TetrisPiecePlacement::all_from_piece(TetrisPiece::O_PIECE)[0]);
+        b
+    }
+
+    #[test]
+    fn certify_terminal_base_cases() {
+        let mut ctx = CertCtx::new(TOTAL_PIECES, 6, 1_000_000);
+        // At the terminal step only the empty board is a win.
+        assert!(ctx.good(
+            TetrisBoard::EMPTY_BOARD,
+            TOTAL_PIECES,
+            TetrisPieceBagState::new()
+        ));
+        assert!(!ctx.good(one_o_board(), TOTAL_PIECES, TetrisPieceBagState::new()));
+    }
+
+    #[test]
+    fn certify_feasibility_prune() {
+        // 4 cells with 1 piece remaining: 4 + 4 = 8, not a multiple of 10, so
+        // empty is unreachable and the state is pruned to false.
+        let mut ctx = CertCtx::new(TOTAL_PIECES, 6, 1_000_000);
+        assert!(!ctx.good(one_o_board(), TOTAL_PIECES - 1, TetrisPieceBagState::new()));
+    }
+
+    #[test]
+    fn certify_deterministic_and_terminates() {
+        let run = || {
+            let mut ctx = CertCtx::new(TOTAL_PIECES, 3, 50_000_000);
+            let winning = ctx.good(TetrisBoard::EMPTY_BOARD, 0, TetrisPieceBagState::new());
+            (winning, ctx.budget_exceeded)
+        };
+        let a = run();
+        let b = run();
+        assert_eq!(a, b, "certify must be deterministic");
+        assert!(!a.1, "cap=3 5-bag search should finish within budget");
     }
 }
