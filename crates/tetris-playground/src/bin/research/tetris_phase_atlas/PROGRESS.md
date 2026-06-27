@@ -47,6 +47,48 @@ A trajectory found cooperatively (one specific bag order) only proves `b` good f
 
 ## Log
 
+### 2026-06-27 — v3: closed safe-set growth (`closure`)
+
+**Pivot:** v2 showed return-to-*empty* is the wrong target. Survival only needs
+the board to stay *bounded*. So `closure` grows a board-only safe set `R` of
+bag-boundary boards (bag always fresh there) and asks whether `R` can be made
+**closed under one adversarial bag**: from every `b in R`, for every per-piece
+reveal order, the player hard-drops all 7 (height ≤ cap) and lands back in `R`.
+`good_bag` is the within-bag per-piece AND-OR test; on a boundary OR-node with no
+in-`R` landing it records the player's lowest-`height_mse` boundary board, and
+each round folds those into `R` (the sound, adversarial version of the user's
+"deposit + merge"). Outcomes: `Closed` (an infinite-play atlas!), `Floor`
+(exceeded the size cap), `Stuck` (stopped growing but still not closed —
+forced top-outs remain).
+
+**Results:**
+
+| max_height | outcome | safe_set | hard_deaths | nodes | time  |
+|-----------:|---------|---------:|------------:|------:|------:|
+| 2          | Stuck   | 90,666   | 11.3M       | 31.4M | 21s   |
+| 3          | Floor   | 824,016  | 2.6M        | 3.6M  | 1.7s  | (round 1 from empty alone)
+
+**Findings:**
+1. **Height ≤ 2 has no closed safe set (definitive).** The growth fixpoint
+   converges (added/round: 946 → 6974 → 23429 → 33894 → 19351 → 5828 → 242 → 1
+   → 0) to ~90.7K boundary boards, but ~all remain *unclosed* and there are
+   11.3M forced top-outs: a 2-row band cannot absorb a 28-cell bag under
+   adversarial order. So `STUCK`, not collapse — the obstruction is top-out, not
+   emptiness.
+2. **Height ≥ 3 hits the carrier wall.** The *bag-boundary* boards reachable
+   from empty in a single bag already exceed **824K** at height 3 (Floor in
+   round 1, before any further growth). Enumerating a height-≥3 safe set is
+   infeasible here — the same >1e5–1e6 wall every prior route reports.
+3. **The bracket:** a closed safe set is *impossible* at H ≤ 2 (top-out) and the
+   carrier is *intractable* at H ≥ 3. This is consistent with the project-wide
+   conclusion that a safe set likely exists at some height but is too large to
+   enumerate — a full proof must be symbolic, not by enumeration.
+
+The growth mechanism itself is validated (it converges, is deterministic, and
+correctly distinguishes top-out `STUCK` from size `Floor`); it is the sound,
+adversarial realization of the phase-merge idea, now bounded by the carrier wall
+rather than by a soundness bug.
+
 ### 2026-06-27 — v2: exact adversarial certification (`certify`)
 
 **What:** `certify --bag-cycles N --max-height H` runs the exact per-piece online

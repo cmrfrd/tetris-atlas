@@ -104,6 +104,10 @@ enum Mode {
     /// every adversarial bag order. A YES is a constructive infinite-play
     /// certificate (within the height cap as the proven-safe region).
     Certify(CertifyArgs),
+    /// Closed safe-set growth: grow a board-only safe set `R` at bag boundaries
+    /// from {empty} until it is closed under one adversarial bag (survival, not
+    /// return-to-empty). A closed R with empty in it is an infinite-play atlas.
+    Closure(ClosureArgs),
 }
 
 #[derive(Args, Debug)]
@@ -154,11 +158,31 @@ struct CertifyArgs {
     out_dir: String,
 }
 
+#[derive(Args, Debug)]
+struct ClosureArgs {
+    /// Maximum board height permitted at any placement (the admissible band).
+    #[arg(long, default_value_t = 4)]
+    max_height: u32,
+
+    /// Stop and report FLOOR once the safe set exceeds this many boards.
+    #[arg(long, default_value_t = 2_000_000)]
+    max_boards: usize,
+
+    /// Maximum growth rounds before giving up.
+    #[arg(long, default_value_t = 1000)]
+    max_rounds: u32,
+
+    /// Directory for the JSON summary.
+    #[arg(long, default_value = "artifacts/output/tetris_phase_atlas")]
+    out_dir: String,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.mode {
         Mode::Discover(args) => run_discover(&args),
         Mode::Certify(args) => run_certify(&args),
+        Mode::Closure(args) => run_closure(&args),
     }
 }
 
@@ -802,6 +826,240 @@ fn run_certify(args: &CertifyArgs) -> Result<()> {
     Ok(())
 }
 
+// --- Closed safe-set growth ------------------------------------------------
+
+/// Full 7-piece bag mask (bits 0..6 set).
+const FULL_BAG_MASK: u8 = 0b0111_1111;
+
+/// Growth state for the board-only safe-set closure search.
+///
+/// A board set `R` (at bag boundaries, where the bag is always fresh) is
+/// **closed** iff from every `b in R` and every order in which the adversary may
+/// reveal the 7 bag pieces, the player can hard-drop them — never exceeding the
+/// height cap — and land on some board again in `R`. `good_bag` is the within-bag
+/// per-piece AND-OR test of that property against the *current* `R`.
+struct GrowCtx {
+    max_height: u32,
+    /// Memo of `(board, remaining_mask) -> can reach R`. Valid only for the
+    /// current `R`; cleared every growth round.
+    memo: FxHashMap<(TetrisBoard, u8), bool>,
+    /// Boards the best-effort player is forced onto when `R` is insufficient;
+    /// folded into `R` at the end of each round to grow the set.
+    additions: FxHashSet<TetrisBoard>,
+    /// Boards in `R` that have a piece with no admissible placement at all (a
+    /// forced top-out): these can never be made safe at this height cap.
+    hard_deaths: u64,
+    nodes: u64,
+}
+
+impl GrowCtx {
+    fn new(max_height: u32) -> Self {
+        Self {
+            max_height,
+            memo: FxHashMap::default(),
+            additions: FxHashSet::default(),
+            hard_deaths: 0,
+            nodes: 0,
+        }
+    }
+
+    /// Within one bag from `board` with `remaining` pieces undrawn: can the
+    /// player answer every adversarial reveal order and finish (all 7 placed) on
+    /// a board in `R`? On a failing OR-node (no placement keeps the line in `R`)
+    /// the player's lowest-`height_mse` fallback board is recorded in
+    /// `additions` so the next round can grow `R` toward closure.
+    fn good_bag(
+        &mut self,
+        board: TetrisBoard,
+        remaining: u8,
+        set: &FxHashSet<TetrisBoard>,
+    ) -> bool {
+        if remaining == 0 {
+            return set.contains(&board);
+        }
+        if let Some(&cached) = self.memo.get(&(board, remaining)) {
+            return cached;
+        }
+        self.nodes += 1;
+
+        let mut result = true;
+        // AND over the pieces the adversary may reveal next.
+        for piece_idx in 0..7u8 {
+            if remaining & (1 << piece_idx) == 0 {
+                continue;
+            }
+            let piece = TetrisPiece::from_index(piece_idx);
+            let next_remaining = remaining & !(1 << piece_idx);
+
+            // OR over the player's placements of that piece.
+            let mut answered = false;
+            let mut best: Option<(f32, TetrisBoard)> = None;
+            for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+                let mut child = board;
+                let drop = child.apply_piece_placement(placement);
+                if drop.is_lost == IsLost::LOST || child.height() > self.max_height {
+                    continue;
+                }
+                let dist = height_mse_distance_from_empty(child);
+                if best.is_none_or(|(bd, _)| dist < bd) {
+                    best = Some((dist, child));
+                }
+                if self.good_bag(child, next_remaining, set) {
+                    answered = true;
+                    break;
+                }
+            }
+
+            if !answered {
+                result = false;
+                match best {
+                    // Only fully-placed bags (a fresh boundary) are members of
+                    // R; record the player's best boundary board to grow toward.
+                    Some((_, fallback)) if next_remaining == 0 => {
+                        self.additions.insert(fallback);
+                    }
+                    // Mid-bag dead end: propagate failure, nothing to add here.
+                    Some(_) => {}
+                    // No admissible placement at all: a forced top-out at the cap.
+                    None => self.hard_deaths += 1,
+                }
+                // Keep scanning the other pieces to collect more additions.
+            }
+        }
+
+        self.memo.insert((board, remaining), result);
+        result
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClosureOutcome {
+    /// `R` is closed: every board answers every bag order back into `R`.
+    Closed,
+    /// `R` exceeded the size cap before closing.
+    Floor,
+    /// `R` stopped growing but is still not closed (forced top-outs remain).
+    Stuck,
+    /// Ran out of growth rounds.
+    RoundsExhausted,
+}
+
+fn run_closure(args: &ClosureArgs) -> Result<()> {
+    if args.max_height == 0 || args.max_height > StandardTetris::ROWS as u32 {
+        bail!("--max-height must be in 1..={}", StandardTetris::ROWS);
+    }
+    fs::create_dir_all(&args.out_dir)?;
+
+    println!("=== tetris_phase_atlas: closure (safe-set growth) ===");
+    println!("max_height = {}", args.max_height);
+    println!("max_boards = {}", args.max_boards);
+    println!("max_rounds = {}", args.max_rounds);
+    println!(
+        "opponent   = per-piece online adversary; period = 1 bag; target = survival (bounded)"
+    );
+    println!();
+
+    let started = Instant::now();
+    let mut ctx = GrowCtx::new(args.max_height);
+    let mut set: FxHashSet<TetrisBoard> = FxHashSet::default();
+    set.insert(TetrisBoard::EMPTY_BOARD);
+
+    let mut outcome = ClosureOutcome::RoundsExhausted;
+    let mut rounds = 0u32;
+    while rounds < args.max_rounds {
+        rounds += 1;
+        ctx.memo.clear();
+        ctx.additions.clear();
+        ctx.hard_deaths = 0;
+
+        let mut all_closed = true;
+        let mut unclosed = 0u64;
+        for &board in &set {
+            if !ctx.good_bag(board, FULL_BAG_MASK, &set) {
+                all_closed = false;
+                unclosed += 1;
+            }
+        }
+
+        if all_closed {
+            outcome = ClosureOutcome::Closed;
+            break;
+        }
+        if ctx.additions.is_empty() {
+            outcome = ClosureOutcome::Stuck;
+            break;
+        }
+
+        let before = set.len();
+        for &board in &ctx.additions {
+            set.insert(board);
+        }
+        let added = set.len() - before;
+
+        println!(
+            "round={rounds} |R|={} unclosed={unclosed} added={added} hard_deaths={} nodes={} t={:.1}s",
+            set.len(),
+            ctx.hard_deaths,
+            ctx.nodes,
+            started.elapsed().as_secs_f64(),
+        );
+
+        if set.len() > args.max_boards {
+            outcome = ClosureOutcome::Floor;
+            break;
+        }
+    }
+
+    let elapsed = started.elapsed().as_secs_f64();
+    let max_h = set.iter().map(|b| b.height()).max().unwrap_or(0);
+    let solved = outcome == ClosureOutcome::Closed && set.contains(&TetrisBoard::EMPTY_BOARD);
+
+    println!();
+    println!("--- result ---");
+    println!("outcome        = {outcome:?}");
+    println!("solved         = {solved}");
+    println!("safe_set_size  = {}", set.len());
+    println!(
+        "empty_in_set   = {}",
+        set.contains(&TetrisBoard::EMPTY_BOARD)
+    );
+    println!("max_height_seen= {max_h}");
+    println!("rounds         = {rounds}");
+    println!("nodes          = {}", ctx.nodes);
+    println!("hard_deaths    = {}", ctx.hard_deaths);
+    println!("time           = {elapsed:.2}s");
+    if solved {
+        println!();
+        println!(
+            "*** CLOSED SAFE SET FOUND: {} boards, height <= {}, empty included. ***",
+            set.len(),
+            args.max_height
+        );
+        println!("*** Infinite play under the per-piece 7-bag adversary (within the cap). ***");
+    }
+
+    let path = format!("{}/closure_summary.json", args.out_dir);
+    let json = format!(
+        "{{\n  \"max_height\": {},\n  \"outcome\": \"{:?}\",\n  \"solved\": {},\n  \
+         \"safe_set_size\": {},\n  \"empty_in_set\": {},\n  \"max_height_seen\": {},\n  \
+         \"rounds\": {},\n  \"nodes\": {},\n  \"hard_deaths\": {},\n  \"elapsed_secs\": {:.3}\n}}\n",
+        args.max_height,
+        outcome,
+        solved,
+        set.len(),
+        set.contains(&TetrisBoard::EMPTY_BOARD),
+        max_h,
+        rounds,
+        ctx.nodes,
+        ctx.hard_deaths,
+        elapsed,
+    );
+    let mut file = File::create(&path)?;
+    file.write_all(json.as_bytes())?;
+    println!("summary -> {path}");
+    Ok(())
+}
+
 // --- Bag-permutation enumeration (base-5040 tuples) -------------------------
 
 const fn pow_u128(base: u128, exp: u32) -> u128 {
@@ -1022,6 +1280,32 @@ mod tests {
         // empty is unreachable and the state is pruned to false.
         let mut ctx = CertCtx::new(TOTAL_PIECES, 6, 1_000_000);
         assert!(!ctx.good(one_o_board(), TOTAL_PIECES - 1, TetrisPieceBagState::new()));
+    }
+
+    #[test]
+    fn good_bag_terminal_membership() {
+        let mut ctx = GrowCtx::new(6);
+        let mut set = FxHashSet::default();
+        set.insert(TetrisBoard::EMPTY_BOARD);
+        assert!(ctx.good_bag(TetrisBoard::EMPTY_BOARD, 0, &set));
+        assert!(!ctx.good_bag(one_o_board(), 0, &set));
+    }
+
+    #[test]
+    fn good_bag_records_fallback() {
+        // With only the O piece left to place and R = {empty}, no placement ends
+        // in R (the O leaves four cells), so the player's lowest-`height_mse`
+        // fallback board is recorded for the next growth round. (Single-piece
+        // mask keeps the within-bag DAG tiny and the test fast.)
+        let mut ctx = GrowCtx::new(6);
+        let mut set = FxHashSet::default();
+        set.insert(TetrisBoard::EMPTY_BOARD);
+        let mask = 1u8 << TetrisPiece::O_PIECE.index();
+        assert!(!ctx.good_bag(TetrisBoard::EMPTY_BOARD, mask, &set));
+        assert!(
+            !ctx.additions.is_empty(),
+            "growth must record a fallback board"
+        );
     }
 
     #[test]
