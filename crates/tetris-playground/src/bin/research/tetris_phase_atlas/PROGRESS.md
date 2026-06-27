@@ -84,13 +84,19 @@ explodes R to **91,166** with **59,127 top-outs** in the next batch → heading 
 Floor. So even the weaker per-bag adversary, under a greedy min-height policy,
 **walls and tops out** at cap 4.
 
+**Refinement (prefer-R policy):** the BFS now lands on an already-in-`R` board
+when one is reachable, only adding a new board when forced — the minimal-growth
+closure policy. It gives the **same** result at cap 4 (91,166 boards / 59,127
+top-outs in the first frontier batch): `R` starts too small to contain the ~91K
+distinct landings of 1,127 height-4 boards, so the early explosion is unchanged.
+
 **Finding:** the wall is robust across adversary models (per-piece *and*
-per-bag) and the greedy policy is not survival-preserving (it lets boards drift
-into states some bag can't be placed into). A *survival-aware* policy (prefer
-landings that stay safe / in R) is the lever, but that reintroduces the
-fixpoint — and the carrier it would need is still the >1e5 wall. Forward BFS
-processes each board once (no fixpoint rework), so the bottleneck is purely the
-carrier size, not the algorithm.
+per-bag) and across policies (greedy *and* prefer-R). The carrier breadth — 1,127
+boards from empty fan out to ~91K landings — is intrinsic, not a policy artifact.
+Forward BFS processes each board once (no fixpoint rework), so the bottleneck is
+purely the carrier size. The cap-4 top-outs are also partly beam-64 narrowness
+(a tight valid placement can be pruned); a wider beam would lower the death count
+but not the carrier explosion.
 
 ### 2026-06-27 — v3: closed safe-set growth (`closure`)
 

@@ -1088,21 +1088,24 @@ fn run_closure(args: &ClosureArgs) -> Result<()> {
     Ok(())
 }
 
-/// Per-bag, full-lookahead within-bag reachability. Places the 7 pieces of
-/// `bag` *in the given order* (the adversary's chosen reveal order), with the
-/// player choosing placements knowing the whole bag, via a beam ranked by
-/// `height_mse`. Returns `(reached_set, best_ending)`:
-/// - `reached_set`: some height-capped placement sequence ends on a board in
-///   `set` (beam-found, hence a real player strategy — sound for closure);
-/// - `best_ending`: the lowest-`height_mse` reachable boundary board, or `None`
+/// Per-bag, full-lookahead within-bag landings. Places the 7 pieces of `bag`
+/// *in the given order* (the adversary's reveal order), the player choosing
+/// placements knowing the whole bag, via a beam ranked by `height_mse`.
+/// Returns `(in_set, any)`:
+/// - `in_set`: the lowest-`height_mse` reachable boundary board that is already
+///   in `set` (so the player can stay in `R` — no growth), or `None`;
+/// - `any`: the lowest-`height_mse` reachable boundary board overall, or `None`
 ///   if the bag cannot be placed at all under the cap (a forced top-out).
-fn within_bag_reach_or_best(
+///
+/// The BFS uses `in_set` when present and only falls back to `any` (growing
+/// `R`) when forced — the "prefer to stay in R" policy that keeps `R` minimal.
+fn within_bag_landings(
     start: TetrisBoard,
     bag: &ForcedBag,
     set: &FxHashSet<TetrisBoard>,
     max_height: u32,
     beam_width: usize,
-) -> (bool, Option<TetrisBoard>) {
+) -> (Option<TetrisBoard>, Option<TetrisBoard>) {
     let mut beam: Vec<(f32, TetrisBoard)> = vec![(0.0, start)];
     let mut next: Vec<(f32, TetrisBoard)> = Vec::new();
     let mut seen: FxHashSet<TetrisBoard> = FxHashSet::default();
@@ -1123,7 +1126,7 @@ fn within_bag_reach_or_best(
             }
         }
         if next.is_empty() {
-            return (false, None);
+            return (None, None);
         }
         if next.len() > beam_width {
             next.select_nth_unstable_by(beam_width, |a, b| {
@@ -1134,12 +1137,19 @@ fn within_bag_reach_or_best(
         std::mem::swap(&mut beam, &mut next);
     }
 
-    let reached = beam.iter().any(|(_, board)| set.contains(board));
-    let best = beam
+    let cmp = |a: &(f32, TetrisBoard), b: &(f32, TetrisBoard)| {
+        a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)
+    };
+    let any = beam
         .iter()
-        .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+        .min_by(|a, b| cmp(a, b))
         .map(|(_, board)| *board);
-    (reached, best)
+    let in_set = beam
+        .iter()
+        .filter(|(_, board)| set.contains(board))
+        .min_by(|a, b| cmp(a, b))
+        .map(|(_, board)| *board);
+    (in_set, any)
 }
 
 /// Per-bag (full within-bag lookahead) closure via forward BFS under a fixed
@@ -1181,26 +1191,24 @@ fn run_closure_bag(args: &ClosureArgs) -> Result<()> {
         let batch: Vec<TetrisBoard> = std::mem::take(&mut frontier);
 
         // Answer all 5040 bag orders for every board in the batch, in parallel.
+        // Prefer staying in R; only add a new board when forced (no in-R landing).
         let results: Vec<(Vec<TetrisBoard>, u64)> = batch
             .par_iter()
             .map(|&board| {
-                let mut landings = Vec::new();
+                let mut additions = Vec::new();
                 let mut deaths = 0u64;
                 for bag in ALL_BAG_PERMUTATIONS.iter() {
-                    match within_bag_reach_or_best(
-                        board,
-                        bag,
-                        &set,
-                        args.max_height,
-                        args.beam_width,
-                    )
-                    .1
-                    {
-                        Some(landing) => landings.push(landing),
-                        None => deaths += 1,
+                    let (in_set, any) =
+                        within_bag_landings(board, bag, &set, args.max_height, args.beam_width);
+                    if in_set.is_some() {
+                        // Player stays in R — no growth, no death.
+                    } else if let Some(landing) = any {
+                        additions.push(landing);
+                    } else {
+                        deaths += 1;
                     }
                 }
-                (landings, deaths)
+                (additions, deaths)
             })
             .collect();
 
@@ -1537,16 +1545,15 @@ mod tests {
     }
 
     #[test]
-    fn within_bag_reach_basics() {
+    fn within_bag_landings_basics() {
         let mut set = FxHashSet::default();
         set.insert(TetrisBoard::EMPTY_BOARD);
         let bag = ALL_BAG_PERMUTATIONS[0];
-        let (reached, best) =
-            within_bag_reach_or_best(TetrisBoard::EMPTY_BOARD, &bag, &set, 6, 256);
-        // One bag (28 cells) can never return to empty.
-        assert!(!reached);
+        let (in_set, any) = within_bag_landings(TetrisBoard::EMPTY_BOARD, &bag, &set, 6, 256);
+        // One bag (28 cells) can never return to empty, so no in-R landing.
+        assert!(in_set.is_none());
         // But a low landing board is always reachable at height cap 6.
-        let landing = best.expect("a landing board exists");
+        let landing = any.expect("a landing board exists");
         assert_ne!(landing, TetrisBoard::EMPTY_BOARD);
         assert!(landing.height() <= 6);
     }
