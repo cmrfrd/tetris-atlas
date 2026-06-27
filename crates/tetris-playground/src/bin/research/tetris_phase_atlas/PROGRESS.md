@@ -45,6 +45,27 @@ A trajectory found cooperatively (one specific bag order) only proves `b` good f
 
 ---
 
+## Status (2026-06-27)
+
+Three subcommands, all sorry-free of soundness shortcuts, fmt/clippy/test clean:
+
+- `discover` — cooperative beam search for 5-bag perfect clears; **~64% PC rate**
+  (beam lower bound), candidate phase carrier with a strong late-cycle funnel.
+- `certify` — exact per-piece adversarial AND-OR for the N-bag empty reset;
+  strict 5-bag reset is **NOT-WINNING** (exact at H≤3) and explodes at H≥4.
+  Empty-every-5-bags is a dead end.
+- `closure` — grow a closed board-only safe set (survival, not empty): **no set
+  at H≤2** (top-out), **carrier wall at H≥3** (>800K boards from empty in one
+  bag); height-dominance compresses only ~4–7×.
+
+**Bottom line so far:** the 5-bag phase atlas is correct and the machinery works,
+but every lens lands on the same carrier wall the rest of the project reports.
+The believed-survivable adversarial 7-bag has a safe set too large to enumerate
+at the heights where it can exist. **The most promising untried lever is the
+hole-debt decomposition** (surface = height-WQO basis + a scalar drain debt),
+which prior Lean work floored on at the O(N²) closure step — but that closure is
+trivial in Rust for N~thousands, so porting it here is the next experiment.
+
 ## Log
 
 ### 2026-06-27 — v3: closed safe-set growth (`closure`)
@@ -63,10 +84,13 @@ forced top-outs remain).
 
 **Results:**
 
-| max_height | outcome | safe_set | hard_deaths | nodes | time  |
-|-----------:|---------|---------:|------------:|------:|------:|
-| 2          | Stuck   | 90,666   | 11.3M       | 31.4M | 21s   |
-| 3          | Floor   | 824,016  | 2.6M        | 3.6M  | 1.7s  | (round 1 from empty alone)
+| max_height | outcome | safe_set | surfaces | hard_deaths | nodes | time |
+|-----------:|---------|---------:|---------:|------------:|------:|-----:|
+| 2          | Stuck   | 90,666   | 26,179   | 11.3M       | 31.4M | 21s  |
+| 3          | Floor   | 824,016  | 120,235  | 2.6M        | 3.6M  | 1.7s | (round 1 from empty alone)
+
+(`surfaces` = distinct column-height profiles, i.e. the height-dominance
+compression of the board set.)
 
 **Findings:**
 1. **Height ≤ 2 has no closed safe set (definitive).** The growth fixpoint
@@ -83,6 +107,11 @@ forced top-outs remain).
    carrier is *intractable* at H ≥ 3. This is consistent with the project-wide
    conclusion that a safe set likely exists at some height but is too large to
    enumerate — a full proof must be symbolic, not by enumeration.
+4. **Height-dominance compresses only ~4–7×.** Collapsing boards to their
+   column-height profile gives 26K surfaces at H=2 and 120K at H=3 — still tens
+   of thousands. So a pure surface (height-WQO) basis does not by itself reach
+   tractability here; the buried-hole dimension matters, which is exactly the
+   hole-debt route's separation (surface = height-WQO + scalar drain debt).
 
 The growth mechanism itself is validated (it converges, is deterministic, and
 correctly distinguishes top-out `STUCK` from size `Floor`); it is the sound,

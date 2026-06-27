@@ -1014,11 +1014,19 @@ fn run_closure(args: &ClosureArgs) -> Result<()> {
     let max_h = set.iter().map(|b| b.height()).max().unwrap_or(0);
     let solved = outcome == ClosureOutcome::Closed && set.contains(&TetrisBoard::EMPTY_BOARD);
 
+    // Distinct column-height profiles ("surfaces"). If this is far smaller than
+    // the board count, a height-dominance basis could compress the safe set
+    // (the hole-debt / WQO route): boards sharing a surface differ only in
+    // buried holes.
+    let surfaces: FxHashSet<[u32; StandardTetris::COLS]> =
+        set.iter().map(|b| b.heights()).collect();
+
     println!();
     println!("--- result ---");
     println!("outcome        = {outcome:?}");
     println!("solved         = {solved}");
     println!("safe_set_size  = {}", set.len());
+    println!("distinct_surfaces = {}", surfaces.len());
     println!(
         "empty_in_set   = {}",
         set.contains(&TetrisBoard::EMPTY_BOARD)
@@ -1041,12 +1049,14 @@ fn run_closure(args: &ClosureArgs) -> Result<()> {
     let path = format!("{}/closure_summary.json", args.out_dir);
     let json = format!(
         "{{\n  \"max_height\": {},\n  \"outcome\": \"{:?}\",\n  \"solved\": {},\n  \
-         \"safe_set_size\": {},\n  \"empty_in_set\": {},\n  \"max_height_seen\": {},\n  \
-         \"rounds\": {},\n  \"nodes\": {},\n  \"hard_deaths\": {},\n  \"elapsed_secs\": {:.3}\n}}\n",
+         \"safe_set_size\": {},\n  \"distinct_surfaces\": {},\n  \"empty_in_set\": {},\n  \
+         \"max_height_seen\": {},\n  \"rounds\": {},\n  \"nodes\": {},\n  \"hard_deaths\": {},\n  \
+         \"elapsed_secs\": {:.3}\n}}\n",
         args.max_height,
         outcome,
         solved,
         set.len(),
+        surfaces.len(),
         set.contains(&TetrisBoard::EMPTY_BOARD),
         max_h,
         rounds,
