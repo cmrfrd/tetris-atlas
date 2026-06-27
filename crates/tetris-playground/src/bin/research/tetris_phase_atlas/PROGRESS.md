@@ -47,6 +47,42 @@ A trajectory found cooperatively (one specific bag order) only proves `b` good f
 
 ## Log
 
+### 2026-06-27 — v2: exact adversarial certification (`certify`)
+
+**What:** `certify --bag-cycles N --max-height H` runs the exact per-piece online
+AND-OR game over an N-bag cycle: `good(board, step, bag)` = AND over the
+adversary's possible next pieces, OR over the player's hard-drop placements,
+terminal = empty at step `N*7`. Memoized on `(board, step, bag)`; pruned by PC
+feasibility and the height cap. **Holes are allowed** during intermediates (only
+height is capped) — the prior hole-free solvers can't even contain the empty
+board (a known Lean result: an S-piece forces a transient hole).
+
+**Results (bag_cycles=5):**
+
+| max_height | status        | root_cov | nodes  | time   |
+|-----------:|---------------|---------:|-------:|-------:|
+| 3          | NOT-WINNING   | 0/7      | 19.5M  | 6.1s   |
+| 4          | INCONCLUSIVE  | 0/7      | 150M+  | 190s   | (hit node budget; ~7.5 GB memo)
+
+**Findings:**
+1. The strict 5-bag empty reset is **NOT-WINNING and exact at height ≤ 3** —
+   the adversary defeats *every* opening piece (0/7 coverage).
+2. **Why this is expected (impossibility argument):** if even one full 35-piece
+   bag sequence admits *no* perfect clear, the per-piece adversary can realize
+   exactly that sequence, so the player cannot force empty. v1 found ~36% of
+   sequences with no beam-PC, i.e. strong evidence such no-PC sequences exist.
+   So the strict 5-bag empty reset is (almost surely) impossible at full height,
+   and provably impossible at height ≤ 3. **The empty-every-5-bags target is a
+   dead end** — exactly the case the user anticipated for "the other 40%".
+3. **The carrier wall, reproduced:** at height ≥ 4 the per-piece search explodes
+   (150M+ `(board,step,bag)` states, multi-GB memo) — consistent with every
+   prior route flooring at >1e5–5e5 carrier boards. Naive enumeration of the
+   adversarial cycle does not scale past height 3.
+
+**Consequence for direction:** stop chasing return-to-*empty*. Survival only
+needs the board to stay *bounded* under a policy that answers every bag order —
+a closed safe set that need never be empty again after the start. That is v3.
+
 ### 2026-06-27 — v1: cooperative discovery (beam + candidate carrier)
 
 **What:** `search_pc` beam-searches one fixed 5-bag sequence for any perfect
