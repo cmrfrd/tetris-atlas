@@ -172,6 +172,17 @@ struct ClosureArgs {
     #[arg(long, default_value_t = 1000)]
     max_rounds: u32,
 
+    /// Use the weaker per-bag adversary with full within-bag lookahead (the
+    /// player sees the whole 7-piece bag before placing, ~6-piece preview) and
+    /// answers each of the 5040 bag orders. Default is the per-piece online
+    /// adversary (no lookahead).
+    #[arg(long, default_value_t = false)]
+    bag_lookahead: bool,
+
+    /// Beam width for the per-bag within-bag reachability search.
+    #[arg(long, default_value_t = 512)]
+    beam_width: usize,
+
     /// Directory for the JSON summary.
     #[arg(long, default_value = "artifacts/output/tetris_phase_atlas")]
     out_dir: String,
@@ -948,7 +959,14 @@ fn run_closure(args: &ClosureArgs) -> Result<()> {
     if args.max_height == 0 || args.max_height > StandardTetris::ROWS as u32 {
         bail!("--max-height must be in 1..={}", StandardTetris::ROWS);
     }
+    if args.beam_width == 0 {
+        bail!("--beam-width must be > 0");
+    }
     fs::create_dir_all(&args.out_dir)?;
+
+    if args.bag_lookahead {
+        return run_closure_bag(args);
+    }
 
     println!("=== tetris_phase_atlas: closure (safe-set growth) ===");
     println!("max_height = {}", args.max_height);
@@ -1062,6 +1080,206 @@ fn run_closure(args: &ClosureArgs) -> Result<()> {
         rounds,
         ctx.nodes,
         ctx.hard_deaths,
+        elapsed,
+    );
+    let mut file = File::create(&path)?;
+    file.write_all(json.as_bytes())?;
+    println!("summary -> {path}");
+    Ok(())
+}
+
+/// Per-bag, full-lookahead within-bag reachability. Places the 7 pieces of
+/// `bag` *in the given order* (the adversary's chosen reveal order), with the
+/// player choosing placements knowing the whole bag, via a beam ranked by
+/// `height_mse`. Returns `(reached_set, best_ending)`:
+/// - `reached_set`: some height-capped placement sequence ends on a board in
+///   `set` (beam-found, hence a real player strategy — sound for closure);
+/// - `best_ending`: the lowest-`height_mse` reachable boundary board, or `None`
+///   if the bag cannot be placed at all under the cap (a forced top-out).
+fn within_bag_reach_or_best(
+    start: TetrisBoard,
+    bag: &ForcedBag,
+    set: &FxHashSet<TetrisBoard>,
+    max_height: u32,
+    beam_width: usize,
+) -> (bool, Option<TetrisBoard>) {
+    let mut beam: Vec<(f32, TetrisBoard)> = vec![(0.0, start)];
+    let mut next: Vec<(f32, TetrisBoard)> = Vec::new();
+    let mut seen: FxHashSet<TetrisBoard> = FxHashSet::default();
+
+    for &piece in bag {
+        next.clear();
+        seen.clear();
+        for &(_, board) in &beam {
+            for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+                let mut child = board;
+                let drop = child.apply_piece_placement(placement);
+                if drop.is_lost == IsLost::LOST || child.height() > max_height {
+                    continue;
+                }
+                if seen.insert(child) {
+                    next.push((height_mse_distance_from_empty(child), child));
+                }
+            }
+        }
+        if next.is_empty() {
+            return (false, None);
+        }
+        if next.len() > beam_width {
+            next.select_nth_unstable_by(beam_width, |a, b| {
+                a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            next.truncate(beam_width);
+        }
+        std::mem::swap(&mut beam, &mut next);
+    }
+
+    let reached = beam.iter().any(|(_, board)| set.contains(board));
+    let best = beam
+        .iter()
+        .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(_, board)| *board);
+    (reached, best)
+}
+
+/// Per-bag (full within-bag lookahead) closure via forward BFS under a fixed
+/// policy. The policy is: for each of the 5040 bag orders, play the lowest-
+/// `height_mse` landing. Starting from empty, BFS collects every landing board
+/// the policy can produce. Because the landings *define* the reachable set `R`,
+/// `R` is closed by construction; the only failure is a forced top-out (a bag
+/// that cannot be placed under the cap). So:
+///
+/// - BFS completes with **no** top-out  →  `R` is a finite closed safe set and
+///   the policy survives every bag forever (an infinite-play atlas).
+/// - any top-out  →  the fixed policy fails at this cap (`Stuck`).
+/// - `R` exceeds the cap  →  `Floor` (finite certificate not established here).
+///
+/// Each board is processed exactly once (unlike a fixpoint), and the 5040 orders
+/// for a frontier batch are answered in parallel.
+fn run_closure_bag(args: &ClosureArgs) -> Result<()> {
+    println!("=== tetris_phase_atlas: closure (per-bag lookahead, forward BFS) ===");
+    println!("max_height = {}", args.max_height);
+    println!("max_boards = {}", args.max_boards);
+    println!("beam_width = {}", args.beam_width);
+    println!(
+        "opponent   = per-bag adversary (5040 orders), full within-bag lookahead; survival target"
+    );
+    println!("policy     = lowest-height_mse landing per bag order");
+    println!("threads    = {}", rayon::current_num_threads());
+    println!();
+
+    let started = Instant::now();
+    let mut set: FxHashSet<TetrisBoard> = FxHashSet::default();
+    set.insert(TetrisBoard::EMPTY_BOARD);
+    let mut frontier: Vec<TetrisBoard> = vec![TetrisBoard::EMPTY_BOARD];
+
+    let mut outcome = ClosureOutcome::Closed;
+    let mut hard_deaths = 0u64;
+    let mut processed = 0u64;
+
+    while !frontier.is_empty() {
+        let batch: Vec<TetrisBoard> = std::mem::take(&mut frontier);
+
+        // Answer all 5040 bag orders for every board in the batch, in parallel.
+        let results: Vec<(Vec<TetrisBoard>, u64)> = batch
+            .par_iter()
+            .map(|&board| {
+                let mut landings = Vec::new();
+                let mut deaths = 0u64;
+                for bag in ALL_BAG_PERMUTATIONS.iter() {
+                    match within_bag_reach_or_best(
+                        board,
+                        bag,
+                        &set,
+                        args.max_height,
+                        args.beam_width,
+                    )
+                    .1
+                    {
+                        Some(landing) => landings.push(landing),
+                        None => deaths += 1,
+                    }
+                }
+                (landings, deaths)
+            })
+            .collect();
+
+        processed += batch.len() as u64;
+        for (landings, deaths) in &results {
+            hard_deaths += *deaths;
+            for &landing in landings {
+                if set.insert(landing) {
+                    frontier.push(landing);
+                }
+            }
+        }
+
+        println!(
+            "processed={processed} |R|={} frontier={} hard_deaths={hard_deaths} t={:.1}s",
+            set.len(),
+            frontier.len(),
+            started.elapsed().as_secs_f64(),
+        );
+
+        if set.len() > args.max_boards {
+            outcome = ClosureOutcome::Floor;
+            break;
+        }
+    }
+
+    if outcome != ClosureOutcome::Floor && hard_deaths > 0 {
+        // Reachable but the policy tops out somewhere — not a survival proof.
+        outcome = ClosureOutcome::Stuck;
+    }
+
+    let elapsed = started.elapsed().as_secs_f64();
+    let surfaces: FxHashSet<[u32; StandardTetris::COLS]> =
+        set.iter().map(|b| b.heights()).collect();
+    let max_h = set.iter().map(|b| b.height()).max().unwrap_or(0);
+    let solved = outcome == ClosureOutcome::Closed && set.contains(&TetrisBoard::EMPTY_BOARD);
+
+    println!();
+    println!("--- result ---");
+    println!("outcome           = {outcome:?}");
+    println!("solved            = {solved}");
+    println!("safe_set_size     = {}", set.len());
+    println!("distinct_surfaces = {}", surfaces.len());
+    println!(
+        "empty_in_set      = {}",
+        set.contains(&TetrisBoard::EMPTY_BOARD)
+    );
+    println!("max_height_seen   = {max_h}");
+    println!("boards_processed  = {processed}");
+    println!("hard_deaths       = {hard_deaths}");
+    println!("time              = {elapsed:.2}s");
+    if solved {
+        println!();
+        println!(
+            "*** CLOSED SAFE SET FOUND: {} boards, height <= {}, empty included. ***",
+            set.len(),
+            args.max_height
+        );
+        println!(
+            "*** Infinite play under the per-bag (full-lookahead) 7-bag adversary (within cap). ***"
+        );
+    }
+
+    let path = format!("{}/closure_bag_summary.json", args.out_dir);
+    let json = format!(
+        "{{\n  \"model\": \"bag_lookahead\",\n  \"max_height\": {},\n  \"beam_width\": {},\n  \
+         \"outcome\": \"{:?}\",\n  \"solved\": {},\n  \"safe_set_size\": {},\n  \
+         \"distinct_surfaces\": {},\n  \"empty_in_set\": {},\n  \"max_height_seen\": {},\n  \
+         \"boards_processed\": {},\n  \"hard_deaths\": {},\n  \"elapsed_secs\": {:.3}\n}}\n",
+        args.max_height,
+        args.beam_width,
+        outcome,
+        solved,
+        set.len(),
+        surfaces.len(),
+        set.contains(&TetrisBoard::EMPTY_BOARD),
+        max_h,
+        processed,
+        hard_deaths,
         elapsed,
     );
     let mut file = File::create(&path)?;
@@ -1316,6 +1534,21 @@ mod tests {
             !ctx.additions.is_empty(),
             "growth must record a fallback board"
         );
+    }
+
+    #[test]
+    fn within_bag_reach_basics() {
+        let mut set = FxHashSet::default();
+        set.insert(TetrisBoard::EMPTY_BOARD);
+        let bag = ALL_BAG_PERMUTATIONS[0];
+        let (reached, best) =
+            within_bag_reach_or_best(TetrisBoard::EMPTY_BOARD, &bag, &set, 6, 256);
+        // One bag (28 cells) can never return to empty.
+        assert!(!reached);
+        // But a low landing board is always reachable at height cap 6.
+        let landing = best.expect("a landing board exists");
+        assert_ne!(landing, TetrisBoard::EMPTY_BOARD);
+        assert!(landing.height() <= 6);
     }
 
     #[test]

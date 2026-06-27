@@ -54,9 +54,11 @@ Three subcommands, all sorry-free of soundness shortcuts, fmt/clippy/test clean:
 - `certify` — exact per-piece adversarial AND-OR for the N-bag empty reset;
   strict 5-bag reset is **NOT-WINNING** (exact at H≤3) and explodes at H≥4.
   Empty-every-5-bags is a dead end.
-- `closure` — grow a closed board-only safe set (survival, not empty): **no set
-  at H≤2** (top-out), **carrier wall at H≥3** (>800K boards from empty in one
-  bag); height-dominance compresses only ~4–7×.
+- `closure` — grow a closed board-only safe set (survival, not empty):
+  per-piece adversary → **no set at H≤2** (top-out), **carrier wall at H≥3**
+  (>800K boards from empty in one bag); height-dominance compresses only ~4–7×.
+  `--bag-lookahead` (weaker per-bag adversary, forward BFS) → also walls (91K
+  boards + 59K top-outs from the first frontier batch at H=4).
 
 **Bottom line so far:** the 5-bag phase atlas is correct and the machinery works,
 but every lens lands on the same carrier wall the rest of the project reports.
@@ -67,6 +69,28 @@ which prior Lean work floored on at the O(N²) closure step — but that closure
 trivial in Rust for N~thousands, so porting it here is the next experiment.
 
 ## Log
+
+### 2026-06-27 — v4: per-bag full-lookahead closure (`closure --bag-lookahead`)
+
+**Idea:** weaken the adversary to *per-bag* (it picks one of the 5040 orders; the
+player sees the whole bag — ~6-piece preview) and run a **forward BFS** under a
+fixed policy (lowest-`height_mse` landing per order), processing each board once.
+If the reachable set is finite and never tops out, the policy survives every bag
+forever — a constructive infinite-play atlas under this (realistic) model.
+
+**Result (cap 4, beam 64):** from empty the policy lands on ~1,127 boards with
+**0 top-outs** (survival from empty is easy). But processing those 1,127 boards
+explodes R to **91,166** with **59,127 top-outs** in the next batch → heading to
+Floor. So even the weaker per-bag adversary, under a greedy min-height policy,
+**walls and tops out** at cap 4.
+
+**Finding:** the wall is robust across adversary models (per-piece *and*
+per-bag) and the greedy policy is not survival-preserving (it lets boards drift
+into states some bag can't be placed into). A *survival-aware* policy (prefer
+landings that stay safe / in R) is the lever, but that reintroduces the
+fixpoint — and the carrier it would need is still the >1e5 wall. Forward BFS
+processes each board once (no fixpoint rework), so the bottleneck is purely the
+carrier size, not the algorithm.
 
 ### 2026-06-27 — v3: closed safe-set growth (`closure`)
 
