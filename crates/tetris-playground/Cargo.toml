@@ -109,6 +109,10 @@ path = "src/bin/research/tetris_cycle_atlas/main.rs"
 name = "tetris_state_trajectory"
 path = "src/bin/visualizations/state_trajectory/main.rs"
 
+[[bin]]
+name = "tetris_phase_atlas"
+path = "src/bin/research/tetris_phase_atlas/main.rs"
+
 [features]
 default = []
 candle-cuda = ["candle-core/cuda", "candle-nn/cuda"]
