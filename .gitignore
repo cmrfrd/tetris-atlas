@@ -18,8 +18,8 @@ artifacts/
 crates/tetris-playground/archive/*
 !crates/tetris-playground/archive/.gitkeep
 
-# generated protobuf bindings
-crates/tensorboard/src/tensorboard_generated/
+# generated protobuf bindings are checked in so clean builds skip the
+# prost-build toolchain (regenerate with `--features regen-protos`)
 
 # generated local outputs
 *.bin

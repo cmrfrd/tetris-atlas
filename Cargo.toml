@@ -53,7 +53,9 @@ ratatui = "0.29"
 crossterm = "0.28"
 
 # Utilities
-image = "0.25.8"
+# PNG-only: tensorboard encodes PNG summaries, tetris-ml builds RgbImage in
+# memory. Dropping default features avoids compiling jpeg/gif/webp/tiff/bmp codecs.
+image = { version = "0.25.8", default-features = false, features = ["png"] }
 gethostname = "1.0.2"
 
 [workspace.lints.clippy]

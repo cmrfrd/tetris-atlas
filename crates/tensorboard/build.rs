@@ -1,14 +1,21 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
+#[cfg(feature = "regen-protos")]
 use std::process::Command;
+#[cfg(feature = "regen-protos")]
 use std::thread;
+#[cfg(feature = "regen-protos")]
 use std::time::Duration;
 
 // File paths and directories
+#[cfg(feature = "regen-protos")]
 const DOWNLOAD_SCRIPT_PATH: &str = "../../scripts/download_tensorboard_protos.sh";
 const CHECKED_IN_GENERATED_DIR: &str = "src/tensorboard_generated";
+#[cfg(feature = "regen-protos")]
 const TENSORBOARD_TMP_DIR: &str = "/tmp/tensorboard";
+#[cfg(feature = "regen-protos")]
 const TENSORBOARD_LOCK_DIR: &str = "/tmp/tensorboard-build-lock";
+#[cfg(feature = "regen-protos")]
 const PROTO_SUBPATH: &[&str] = &["tensorboard", "compat", "proto"];
 const MOD_FILE_NAME: &str = "mod.rs";
 
@@ -139,10 +146,12 @@ fn copy_generated_sources(
     Ok(copied_any)
 }
 
+#[cfg(feature = "regen-protos")]
 struct BuildLock {
     path: PathBuf,
 }
 
+#[cfg(feature = "regen-protos")]
 impl BuildLock {
     fn acquire(path: impl Into<PathBuf>) -> Result<Self, Box<dyn std::error::Error>> {
         let path = path.into();
@@ -158,6 +167,7 @@ impl BuildLock {
     }
 }
 
+#[cfg(feature = "regen-protos")]
 impl Drop for BuildLock {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir(&self.path);
@@ -165,17 +175,33 @@ impl Drop for BuildLock {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("cargo:rerun-if-changed={}", DOWNLOAD_SCRIPT_PATH);
     println!("cargo:rerun-if-changed={CHECKED_IN_GENERATED_DIR}");
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
     let generated_dir = out_dir.join("tensorboard_generated");
     std::fs::create_dir_all(&generated_dir)?;
 
-    // If generated bindings already exist in-repo, copy them into OUT_DIR and use them as-is.
+    // Default path: copy the checked-in bindings into OUT_DIR and use them as-is.
+    // This avoids pulling in the prost-build toolchain on every clean build.
     if copy_generated_sources(Path::new(CHECKED_IN_GENERATED_DIR), &generated_dir)? {
         return Ok(());
     }
+
+    #[cfg(not(feature = "regen-protos"))]
+    return Err(format!(
+        "No checked-in protobuf bindings in {CHECKED_IN_GENERATED_DIR} and the `regen-protos` \
+         feature is disabled. Run `cargo build -p tensorboard --features regen-protos` to \
+         regenerate them from .proto sources, then commit src/tensorboard_generated/."
+    )
+    .into());
+
+    #[cfg(feature = "regen-protos")]
+    regenerate(&generated_dir)
+}
+
+#[cfg(feature = "regen-protos")]
+fn regenerate(generated_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    println!("cargo:rerun-if-changed={DOWNLOAD_SCRIPT_PATH}");
 
     let tensorboard_dir = PathBuf::from(TENSORBOARD_TMP_DIR);
     let proto_path = PROTO_SUBPATH
@@ -230,10 +256,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut prost_build = prost_build::Config::new();
     prost_build
-        .out_dir(&generated_dir)
+        .out_dir(generated_dir)
         .compile_well_known_types()
         .compile_protos(&proto_files, &[&tensorboard_dir])?;
 
-    generate_mod_file(&generated_dir)?;
+    generate_mod_file(generated_dir)?;
     Ok(())
 }
