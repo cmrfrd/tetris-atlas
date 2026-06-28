@@ -25,8 +25,8 @@ separate** from the `Proofs` default target so the standard library stays
   large carrier/surface scaffolds. That is fine here; it must never leak into
   `Proofs`.
 - Build explicitly with: `lake build ProofsExperiments` (foreground only).
-- `Proofs/Experiments/AbstractSafe.lean` is intentionally **excluded**: it is an
-  unbuilt scaffold whose proofs are `sorry` (the realization crux #66/#72).
+- The `sorry` scaffold lives in `Proofs/Archive/AbstractSafe.lean` — built by
+  **neither** lake target (record only; its proofs are the realization crux #66/#72).
 
 Promoted into the green `Proofs` library: `BagBurst` (→ `Combinatorics.BagBurst`),
 the WQO/hole/fiber/debt **primitives** (→ `Invariants.{Wqo,HoleyCarrier,SurfaceFiber,

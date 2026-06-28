@@ -42,14 +42,15 @@ lake build ProofsExperiments  # research routes (foreground only)
 from the lib root. Previously `Proofs.lean` rooted `FiveBagReset` and
 `OnlineReservoir`, both of which use `native_decide`, so the *default build was
 not base-axiom clean*. Moving the experiment imports into `ProofsExperiments.lean`
-restores a clean spine. `AbstractSafe.lean` is imported by **neither** target —
-it is an unbuilt scaffold whose proofs are `sorry` (the realization crux).
+restores a clean spine. The `sorry` scaffold `Archive/AbstractSafe.lean` is imported
+by **neither** target (record only; its proofs are the realization crux #66/#72).
 
 **Verification (run after any spine change).**
 ```sh
-# 1. green build must succeed with no sorry/native_decide in Proofs/ (excl. Experiments/)
-lake build
-! grep -rE 'native_decide' Proofs --include='*.lean' | grep -v '/Experiments/'
+# 1. green hygiene gate — fails if any sorry/native_decide leaks into the green tree
+#    (scans Proofs/ minus Experiments/ and Archive/). Wire into CI / pre-commit.
+scripts/check-green-clean.sh
+lake build                  # green build must succeed
 # 2. axiom gate — must print exactly [propext, Classical.choice, Quot.sound]
 cat > axiom_gate_check.lean <<'EOF'
 import Proofs
@@ -178,14 +179,16 @@ Proofs/
                  Wqo HoleyCarrier SurfaceFiber HoleDebt                        ✓
   Survival/      Survival                                                      ✓
   Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite      ✓
+  Archive/       AbstractSafe                                                ✓ (built by neither lib)
 ProofsExperiments.lean       -- separate lib (route reductions, native_decide, Scratch/*)
 Proofs/Experiments/          -- WqoCarrier/HoleyCarrier reductions, EnergyGame, PieceCharge,
                                 carrier zoo (SurfaceInvariant, FiveBagReset), Scratch/*
+scripts/check-green-clean.sh -- the green hygiene gate (no sorry/native_decide)
 ```
 ✓ = in place and building. `Theorems/` is **dissolved**; the root holds only `Proofs.lean`
 (+ `ProofsExperiments.lean`). Not-yet-created (future): `Invariants/RoughnessBudget`,
-`Safety/Atlas`, `Structure/{Skyline,Topical}`, `Api.lean`, `Archive/` — these arrive with
-the deferred promotions (§3). `Gameplay`+`GameplayExtra` are two files for now (merge optional).
+`Safety/Atlas`, `Structure/{Skyline,Topical}`, `Api.lean` — these arrive with the deferred
+promotions (§3). `Gameplay`+`GameplayExtra` are two files for now (merge optional).
 The `Invariants/{Wqo,HoleyCarrier,SurfaceFiber,HoleDebt}` are the green primitive halves;
 their `tetrisSolvableValid_of_*` reductions remain in `Experiments/`.
 
@@ -210,8 +213,10 @@ Note `Survival` is **below** `Safety` (because `Adversarial` imports
    `EnergyGame` core, `FiveBagReset`→`Atlas`, `SurfaceInvariant`→`Skyline`) — but only when
    foundationally useful: the `EnergyGame capacity_conservation` / `SurfaceInvariant skyline`
    pair were evaluated and **deferred** (redundant / not-yet-load-bearing) on 2026-06-28.
-8. ⏳ (Optional) merge `Gameplay`+`GameplayExtra`; write `Api.lean`; add a CI grep gate
-   (`! grep -rE 'sorry|native_decide' <green files>`).
+8. ✅ Green hygiene gate `scripts/check-green-clean.sh` (fails on sorry/native_decide in
+   the green tree); archived the `sorry` scaffold to `Archive/AbstractSafe.lean`.
+9. ⏳ (Optional, deferred) merge `Gameplay`+`GameplayExtra`; write `Api.lean` façade;
+   wire `scripts/check-green-clean.sh` into actual CI (no `.github/` workflows exist yet).
 
 ---
 

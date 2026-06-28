@@ -25,7 +25,7 @@ different **surface**. See `place_holes_mono_within_hole_fiber_false`.
 ## What this file proves (the right fiber: the surface)
 
 The correct fiber is the **surface profile** — the column-height vector `colHeight`. The
-key structural fact, proven sorry-free here, is that **where a piece lands depends only on
+key structural fact, proven here, is that **where a piece lands depends only on
 the surface, never on the buried holes**:
 
 * `dropOffset_eq_of_colHeight_eq` — equal surfaces ⇒ identical hard-drop offset.

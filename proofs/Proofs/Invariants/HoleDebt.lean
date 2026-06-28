@@ -20,7 +20,7 @@ height minus the number of filled cells in the column — exactly the buried emp
 the total **debt** `debt cfg b := Σ_{j<cols} colHoles b j`. Define the **board energy**
 `surfaceArea cfg b := Σ_{j<cols} colHeight b j`.
 
-The keystone (`debt_add_card_eq_sum_colHeight`, sorry-free):
+The keystone (`debt_add_card_eq_sum_colHeight`, fully proven):
 
   **`debt cfg b + b.card = surfaceArea cfg b`**     (for well-formed `b`)
 
@@ -29,7 +29,7 @@ cells. This is the bridge between the surface representation (`Σ colHeight`) an
 counter, and it turns the otherwise-combinatorial debt dynamics into monotonicity of a
 single sum.
 
-## The wired dynamics (all sorry-free)
+## The wired dynamics (all fully proven)
 
 * `surfaceArea_le_place` — placement *raises* energy (`colHeight` only grows under `∪`).
 * `surfaceArea_clearLines_le` — line clears *lower* energy (`clearLines_domLE`).
