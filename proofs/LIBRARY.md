@@ -30,7 +30,7 @@ Two `lean_lib` targets (`lakefile.toml`):
 
 | Target | Root | Contents | Axiom status |
 |---|---|---|---|
-| **`Proofs`** (default) | `Proofs.lean` | game model, `Theorems/*`, safe-set/Atlas/solvability spine, promoted results | base axioms only: `propext, Classical.choice, Quot.sound`; no `sorry`, no `native_decide` |
+| **`Proofs`** (default) | `Proofs.lean` | game model (`Model/`), `Combinatorics/`, `Invariants/`, safe-set/Atlas/solvability spine (`Safety/`, `Survival/`), promoted results | base axioms only: `propext, Classical.choice, Quot.sound`; no `sorry`, no `native_decide` |
 | `ProofsExperiments` (manual) | `ProofsExperiments.lean` | active + floored research routes | may use `native_decide` (→ `Lean.ofReduceBool`); still `sorry`-free |
 
 ```sh

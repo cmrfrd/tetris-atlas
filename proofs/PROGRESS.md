@@ -5,15 +5,24 @@ new tick — it tells you where the prior tick left off.
 
 ---
 
+> **Structure note (2026-06-28):** the library was reorganized into dependency layers
+> (`Proofs/{Model,Combinatorics,Invariants,Survival,Safety,Experiments}/`; `Theorems/`
+> dissolved) and split into two lake targets. See `LIBRARY.md` for the authoritative
+> module map + curated spine. Historical tick entries below predate this and use the old
+> flat paths (`Proofs/SafeSet.lean`, `Proofs/Theorems/*`) — left intact as a record.
+
 ## Current build status
 
-- `lake build` — **PASSING** (all 8268+ jobs)
-- `grep -rn 'sorry' Proofs/` — **0 sorries**
-- All headline theorems axiom-clean (only `propext`, `Classical.choice`, `Quot.sound`)
+- `lake build` (green `Proofs`) — **PASSING** (8274 jobs); base-axiom-clean
+  (`propext`, `Classical.choice`, `Quot.sound`), **no `sorry`, no `native_decide`**.
+- `lake build ProofsExperiments` (research routes) — **PASSING** (8284 jobs); may use
+  `native_decide`.
 
 ## Sorry count
 
-**0**.
+Green standard library: **0**. The only `sorry`s in the tree are 3 in
+`Proofs/Experiments/AbstractSafe.lean` — an unbuilt scaffold (imported by neither lake
+target; statements are the deliverable, proofs are the open realization crux #66/#72).
 
 When sorries are added as scaffolding, list them here with `file:line — why`.
 

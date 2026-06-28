@@ -10,7 +10,11 @@ By `safe_extract`, this reduces to **one** membership claim:
 
 > `GameState.init ∈ safe GameConfig.standard`
 
-`safe` is the greatest fixed point of `safeOp` (defined in `Proofs/SafeSet.lean`).
+`safe` is the greatest fixed point of `safeOp` (defined in `Proofs/Safety/SafeSet.lean`).
+
+> For the module/layer structure and the curated theorem spine, see `LIBRARY.md`.
+> Build the green standard library with `lake build`; the research routes with
+> `lake build ProofsExperiments`.
 
 The question is **mathematically open**. Project memory (see
 `~/.claude/projects/.../memory/project_7bag_atlas_findings.md`) shows the

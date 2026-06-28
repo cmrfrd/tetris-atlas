@@ -13,26 +13,30 @@ Uses Lean (pinned in `lean-toolchain`) and mathlib via lake.
 
 ```sh
 cd proofs
-lake exe cache get   # download prebuilt mathlib (first time only)
-lake build
+lake exe cache get            # download prebuilt mathlib (first time only)
+lake build                    # the green standard library (base-axiom-clean)
+lake build ProofsExperiments  # the research routes (may use native_decide)
 ```
+
+The build is split into two lake libraries: the default `Proofs` target is the
+curated standard library (no `sorry`, no `native_decide`, only the base axioms
+`propext`/`Classical.choice`/`Quot.sound`); `ProofsExperiments` holds the active and
+floored research routes. See `LIBRARY.md` for the full module map and curated theorem
+spine, and `ROADMAP.md` for the proof strategy.
 
 ## Module layout
 
-| Module | Contents |
+The library is organized bottom-up by dependency layer (`LIBRARY.md` has the full
+module map and the curated theorem spine):
+
+| Layer (`Proofs/…`) | Contents |
 |---|---|
-| `Proofs.Model.Config` | `GameConfig` (board dimensions); `standard` = 10×20 |
-| `Proofs.Model.Piece` | `Piece`, `Rotation`, `shape` and bottom-up `shapeUp` for all 7 tetrominoes |
-| `Proofs.Model.Board` | `Board` as a `Finset` of filled cells; `count`, `colHeight`, `isLost`, `isFull`, `clearLines` (gravity), `WF` |
-| `Proofs.Model.Placement` | hard-drop placement: `dropOffset`, `dropped`, `place`, `applyStep` |
-| `Proofs.Model.Bag` | the 7-bag randomizer: `full`, `canDraw`, `draw` |
-| `Proofs.Model.Game` | `GameState`, `step`, `lost`, in-bounds `Valid`, inductive `Reachable` |
-| `Proofs.Combinatorics.PieceGeometry` | every piece/rotation has exactly 4 cells |
-| `Proofs.Combinatorics.BoardCount` | empty/set/clear/full-row cell-count facts |
-| `Proofs.Invariants.StepInvariants` | loss basics, well-formedness, line-clear counts, reachable-parity |
-| `Proofs.Invariants.Gameplay` | line-clearing correctness and loss characterization |
-| `Proofs.Invariants.GameplayExtra` | line-clear algebra, hard-drop maximality, 7-bag & reachability invariants, piece geometry |
-| `Proofs.Experiments.FiveBagReset` | five-bag reset arithmetic, backward winning layers, online solver extraction, and finite-search solvability reduction |
+| `Model/` | the game model: `Config`, `Piece`, `Board`, `Placement`, `Bag`, `Game` |
+| `Combinatorics/` | piece geometry, board/column cell-counting, 7-bag renewal (`BagBurst`) |
+| `Invariants/` | reachability/WF/line-clear invariants (`StepInvariants`, `Gameplay`), `Holes`, hole-debt (`HoleDebt`), surface fiber (`SurfaceFiber`), WQO monotonicity (`Wqo`), finite state space (`StateSpace`) |
+| `Survival/` | `Policy`, `trace`, `SurvivesForever`, `safe_invariant`, `ClosedCycle` |
+| `Safety/` | the safe-set GFP, `Atlas`, the `safe_extract` solvability reduction, computable safe-set iteration (`SafeIterateFinite`), pigeonhole obstructions (`Safety`) |
+| `Experiments/` | active + floored research routes (the separate `ProofsExperiments` lake target; may use `native_decide`) |
 
 ## Key theorems
 
@@ -65,11 +69,20 @@ coordinates over `ℕ`) rather than the Rust bit-column layout, to keep
 counting/geometry proofs natural. A bit-column representation with a proven
 equivalence can be added later if `decide`-style computation is needed.
 
-## Next steps (not yet implemented)
+## Status & the open question
 
-- Survivability: define a policy and prove non-losing play over infinite
-  horizons (the project's ultimate goal).
-- Five-bag reset experiment: construct or machine-check a `Certificate` proving
-  that one online solver survives every legal 35-piece branch and clears
-  exactly 14 lines.
-- Connect the Lean model to the Rust engine (extraction or a proven bridge).
+The survivability **framework is built and base-axiom-clean**. The goal
+`TetrisSolvable` is reduced — with proof — to a single membership claim,
+`GameState.init ∈ safe GameConfig.standard`, characterized equivalently as a greatest
+fixed point, a reachable closed cycle, and a nonempty closed `Atlas` (`safe_extract`
+plus the M2/M3/M4 equivalences in `Safety/`). The survival vocabulary (`Policy`,
+`SurvivesForever`, `ClosedCycle`, `safe_invariant`) and the computable safe-set
+iteration (`safeIterFinite`, `decideSafeFromUniverse`) are all in place.
+
+What remains **open** is that one membership claim — the *witness*, not the framework.
+See `ROADMAP.md` for the attack plan and `LIBRARY.md` §5 for the single open crux
+(the I-drain regulator geometry).
+
+Still genuinely not done:
+- A concrete `AdversarialClosedCycle` / closed-`Atlas` witness (even on a degenerate config).
+- Connecting the Lean model to the Rust engine (extraction or a proven bridge).
