@@ -1,11 +1,10 @@
 import Mathlib
 import Proofs.Board
 import Proofs.Placement
-import Proofs.SafeSet
 import Proofs.Theorems.ColumnCount
-import Proofs.Experiments.WqoCarrier
-import Proofs.Experiments.HoleyCarrier
-import Proofs.Experiments.SurfaceFiber
+import Proofs.Invariants.Wqo
+import Proofs.Invariants.HoleyCarrier
+import Proofs.Invariants.SurfaceFiber
 
 /-!
 # Hole-debt and board energy — wiring clears into the debt counter

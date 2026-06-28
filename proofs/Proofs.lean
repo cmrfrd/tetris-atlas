@@ -21,4 +21,7 @@ import Proofs.Theorems.Holes
 -- Promoted from Experiments/: base-axiom-clean, native_decide-free reusable results.
 -- (Active research lives in the separate `ProofsExperiments` lake_lib, not this green target.)
 import Proofs.Combinatorics.BagBurst
-import Proofs.Invariants.Charge
+import Proofs.Invariants.Wqo
+import Proofs.Invariants.HoleyCarrier
+import Proofs.Invariants.SurfaceFiber
+import Proofs.Invariants.HoleDebt

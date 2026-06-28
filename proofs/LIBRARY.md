@@ -132,17 +132,19 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 
 ## 3. Promotion catalog (bubbling results out of `Experiments/`)
 
-Sorry-free, reusable results worth lifting into the green library. **DONE** =
-already promoted; **TODO** = pending (with the blocker).
+Promotion is **value-driven, not convenience-driven**: a result earns the green library
+if it's a foundational fact about the dynamics any survival proof must respect, or is
+demonstrably used by the spine. Cleanliness alone does not qualify. **DONE** = promoted;
+**TODO** = pending; **DEMOTED** = moved back to research (not yet earned).
 
 | Result | From | Target module | Status |
 |---|---|---|---|
 | Bag renewal: `countP_isSZ`, `countP_isI`, `renewal_ratio`, `drain_budget_ge_clearing_need` | `BagBurst` | `Combinatorics/BagBurst` | **DONE** (clean, Piece-only) |
-| Piece-charge parity: `checkerCharge_classification` (only T charged), `massCharge_clearRow_invariant`, `clearable_iff_le_minHt` | `PieceCharge` | `Invariants/Charge` | **DONE** (clean, Piece-only) |
-| Hole-debt Lyapunov: `debt`, `debt_add_card_eq_sum_colHeight`, `holes_card_eq_debt`, `holes_card_le_place` (↑ place), `clearLines_debt_le` (↓ clear) | `HoleDebt` | `Invariants/HoleDebt` | TODO — split (imports `SafeSet`) |
-| Surface-fiber: `colHeight_place_eq_of_colHeight_eq` (keystone) + refutation `place_holes_mono_within_hole_fiber_false` | `SurfaceFiber` | `Invariants/SurfaceFiber` | TODO — split (imports `SafeSet`) |
-| WQO keystone: `domLE`, `place_domLE_mono`, `clearLines_domLE`; reduction `tetrisSolvableValid_of_wqo` | `WqoCarrier` | `Invariants/Wqo` (+ reduction → `Safety`) | TODO — split; commit (untracked) |
-| Hole-monotone FALSE (refutations): `place_holes_mono_false`, `clearLines_holes_le_false` | `HoleyCarrier` | `Invariants/HoleyCarrier` | TODO — split |
+| Hole-debt Lyapunov: `debt`, `debt_add_card_eq_sum_colHeight`, `holes_card_eq_debt`, `holes_card_le_place` (↑ place), `clearLines_debt_le` (↓ clear) | `HoleDebt` | `Invariants/HoleDebt` | **DONE** (split: SafeSet import pruned) |
+| Surface-fiber: `colHeight_place_eq_of_colHeight_eq` (keystone) + refutation `place_holes_mono_within_hole_fiber_false` | `SurfaceFiber` | `Invariants/SurfaceFiber` | **DONE** (split) |
+| WQO keystone: `domLE`, `place_domLE_mono`, `clearLines_domLE`, `domLE_trans` | `WqoCarrier` | `Invariants/Wqo` | **DONE** (primitives green; reduction `tetrisSolvableValid_of_wqo` stays in `Experiments/WqoCarrier`) |
+| Hole-monotone FALSE (refutations): `place_holes_mono_false`, `clearLines_holes_le_false`; `safeLE`, `HoleyBoard` | `HoleyCarrier` | `Invariants/HoleyCarrier` | **DONE** (primitives green; reduction `tetrisSolvableValid_of_holey_wqo_basis` stays in `Experiments/HoleyCarrier`) |
+| Piece-charge parity: `checkerCharge_classification` (only T charged) | `PieceCharge` | (was `Invariants/Charge`) | **DEMOTED** → `Experiments/PieceCharge` — clean/classic but **not used by any survival argument**; re-promote when it is |
 | Roughness budget (Board-native): cert `not_isLost_of_holes_add_fullRows_add_roughness_le`; refutation `clearLines_uniform_shift_false` | `HoleyTopical` | `Invariants/RoughnessBudget` | TODO — cut its `SurfaceInvariant` import first; commit |
 | Topical/max-plus: `dropMap_topical`, `dropMap_maxplus`, `eigen_cycle_survives_iff`, `oscDist_nonexpansive`, `contraction_bounded_roughness` | `TopicalTetris` | `Structure/Topical` | TODO — decouple `native_decide` evals (`fiveO_eigen`) |
 | Energy game: `headroom`, `capacity_conservation` (master identity), reduction `tetrisSolvableValid_of_maxHeight_invariant`, `survival_forces_clears` | `EnergyGame` | `Survival/EnergyGame` | TODO — decouple `native_decide` witnesses |
@@ -155,11 +157,13 @@ already promoted; **TODO** = pending (with the blocker).
 `applyStep_S/Z_ne_empty`, `no_holes_zero_closed_table_contains_init` are *proven
 theorems* that stop the team re-attempting dead routes — keep them green.
 
-> **The hard part of the remaining promotions is layering, not correctness.**
-> `WqoCarrier → HoleyCarrier → SurfaceFiber → HoleDebt → EnergyGame` all
-> `import Proofs.SafeSet`, so each must be **split** — primitives/refutations
-> down into `Invariants` (with the `SafeSet` import pruned), the
-> `tetrisSolvableValid_of_*` reductions up into `Safety`. These are not `git mv`s.
+> **The split pattern (done for Wqo/Holey/SurfaceFiber/HoleDebt).** These files mixed
+> `Invariants`-layer primitives with `Safety`-layer reductions, glued by a (mostly
+> vestigial) `import Proofs.SafeSet`. The split puts the primitives/refutations in green
+> `Invariants/` (SafeSet import removed) and leaves the route-specific
+> `tetrisSolvableValid_of_*` reductions in `Experiments/` (importing the green primitives).
+> `EnergyGame` was repointed to the green `Invariants` modules. Remaining `HoleyTopical`/
+> `EnergyGame`/`FiveBagReset`/`SurfaceInvariant` promotions follow the same recipe.
 
 ---
 
@@ -171,16 +175,18 @@ Proofs/
   Model/         Config Piece Board Placement Bag Game
   Combinatorics/ PieceGeometry BoardCount ColumnCount  BagBurst✓
   Invariants/    StepInvariants Gameplay(⊕GameplayExtra) Holes StateSpace
-                 Charge✓ HoleDebt SurfaceFiber RoughnessBudget Wqo(+Holey refutations)
+                 Wqo✓ HoleyCarrier✓ SurfaceFiber✓ HoleDebt✓  RoughnessBudget
   Survival/      Survival   OnlineControlMachine EnergyGame SurfaceStrategy
   Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite  Atlas
   Structure/     Skyline  Topical
   Api.lean       -- doc-indexed façade of the ~12 spine theorems
-ProofsExperiments.lean       -- separate lib (✓ created)
-Proofs/Experiments/          -- carrier zoo, native_decide witnesses, Scratch/*
+ProofsExperiments.lean✓      -- separate lib (route reductions, native_decide, Scratch/*)
+Proofs/Experiments/          -- WqoCarrier/HoleyCarrier reductions, EnergyGame, PieceCharge,
+                             --   carrier zoo, native_decide witnesses, Scratch/*
 Proofs/Archive/              -- AbstractSafe, FiveBag phase-decomposition (built by neither)
 ```
-✓ = already in place.
+✓ = already in place. (`Invariants/Wqo,HoleyCarrier,SurfaceFiber,HoleDebt` are the green
+primitive halves; their `tetrisSolvableValid_of_*` reductions remain in `Experiments/`.)
 
 **Dependency layering (strict, bottom-up; verified against actual imports):**
 ```
@@ -194,12 +200,14 @@ Note `Survival` is **below** `Safety` (because `Adversarial` imports
 1. ✅ Baseline axiom gate on the spine (`#print axioms`).
 2. ✅ Split lakefile into `Proofs` + `ProofsExperiments`.
 3. ✅ De-taint green root (drop the 4 experiment imports; add `Theorems.Holes`).
-4. ✅ Promote the two clean Piece-only files (`BagBurst`, `Charge`).
-5. ⏳ `git mv` core files into `Model/Combinatorics/Invariants/Survival/Safety`
-   one layer at a time (namespaces unchanged ⇒ theorem names stable); merge
-   `Gameplay`+`GameplayExtra`.
-6. ⏳ Promote the split-required experiment results (Q3, lowest-dependency first).
-7. ⏳ Archive dead-ends; write `Api.lean`; add a CI grep gate
+4. ✅ Promote the clean Piece-only `BagBurst`; later demoted `PieceCharge` (unearned).
+5. ✅ Split `Wqo`/`HoleyCarrier` (primitives→`Invariants`, reductions→`Experiments`);
+   relocate `SurfaceFiber`/`HoleDebt` to `Invariants`; repoint `EnergyGame`.
+6. ⏳ `git mv` the core files into `Model/Combinatorics/Invariants/Survival/Safety` one
+   layer at a time (namespaces unchanged ⇒ names stable); merge `Gameplay`+`GameplayExtra`.
+7. ⏳ Promote the remaining split-required results (`HoleyTopical`→`RoughnessBudget`,
+   `EnergyGame` core, `FiveBagReset`→`Atlas`, `SurfaceInvariant`→`Skyline`).
+8. ⏳ Archive dead-ends; write `Api.lean`; add a CI grep gate
    (`! grep -rE 'sorry|native_decide' <green files>`).
 
 ---

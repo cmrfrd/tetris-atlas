@@ -1,9 +1,8 @@
 import Mathlib
 import Proofs.Board
 import Proofs.Placement
-import Proofs.SafeSet
-import Proofs.Experiments.WqoCarrier
-import Proofs.Experiments.HoleyCarrier
+import Proofs.Invariants.Wqo
+import Proofs.Invariants.HoleyCarrier
 
 /-!
 # Surface fibers — the placement dynamics are HOLE-INDEPENDENT (a positive foundation)

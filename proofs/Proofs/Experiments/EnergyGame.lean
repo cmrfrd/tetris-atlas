@@ -2,9 +2,9 @@ import Mathlib
 import Proofs.Board
 import Proofs.Placement
 import Proofs.SafeSet
-import Proofs.Experiments.WqoCarrier
-import Proofs.Experiments.HoleyCarrier
-import Proofs.Experiments.HoleDebt
+import Proofs.Invariants.Wqo
+import Proofs.Invariants.HoleyCarrier
+import Proofs.Invariants.HoleDebt
 
 /-!
 # The energy-game framing — headroom, capacity conservation, and its monotonicity
