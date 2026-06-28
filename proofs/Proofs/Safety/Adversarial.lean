@@ -1,5 +1,5 @@
 import Mathlib
-import Proofs.Survival
+import Proofs.Survival.Survival
 
 /-!
 # The adversarial game: solvers vs. legal piece sequences

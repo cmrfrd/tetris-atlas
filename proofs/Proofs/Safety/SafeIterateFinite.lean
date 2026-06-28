@@ -1,7 +1,7 @@
 import Mathlib
-import Proofs.SafeSet
-import Proofs.Theorems.StateSpace
-import Proofs.Theorems.Gameplay
+import Proofs.Safety.SafeSet
+import Proofs.Invariants.StateSpace
+import Proofs.Invariants.Gameplay
 
 /-!
 # Computable safety operator on `Finset GameState`

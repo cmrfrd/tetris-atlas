@@ -167,26 +167,27 @@ theorems* that stop the team re-attempting dead routes — keep them green.
 
 ---
 
-## 4. Target reorganization tree
+## 4. Reorganization tree (now the actual layout)
 
 ```
 Proofs.lean                  -- curated GREEN re-export root (native_decide-free)
 Proofs/
-  Model/         Config Piece Board Placement Bag Game
-  Combinatorics/ PieceGeometry BoardCount ColumnCount  BagBurst✓
-  Invariants/    StepInvariants Gameplay(⊕GameplayExtra) Holes StateSpace
-                 Wqo✓ HoleyCarrier✓ SurfaceFiber✓ HoleDebt✓  RoughnessBudget
-  Survival/      Survival   OnlineControlMachine EnergyGame SurfaceStrategy
-  Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite  Atlas
-  Structure/     Skyline  Topical
-  Api.lean       -- doc-indexed façade of the ~12 spine theorems
-ProofsExperiments.lean✓      -- separate lib (route reductions, native_decide, Scratch/*)
+  Model/         Config Piece Board Placement Bag Game                         ✓
+  Combinatorics/ PieceGeometry BoardCount ColumnCount  BagBurst                ✓
+  Invariants/    StepInvariants Gameplay GameplayExtra Holes StateSpace
+                 Wqo HoleyCarrier SurfaceFiber HoleDebt                        ✓
+  Survival/      Survival                                                      ✓
+  Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite      ✓
+ProofsExperiments.lean       -- separate lib (route reductions, native_decide, Scratch/*)
 Proofs/Experiments/          -- WqoCarrier/HoleyCarrier reductions, EnergyGame, PieceCharge,
-                             --   carrier zoo, native_decide witnesses, Scratch/*
-Proofs/Archive/              -- AbstractSafe, FiveBag phase-decomposition (built by neither)
+                                carrier zoo (SurfaceInvariant, FiveBagReset), Scratch/*
 ```
-✓ = already in place. (`Invariants/Wqo,HoleyCarrier,SurfaceFiber,HoleDebt` are the green
-primitive halves; their `tetrisSolvableValid_of_*` reductions remain in `Experiments/`.)
+✓ = in place and building. `Theorems/` is **dissolved**; the root holds only `Proofs.lean`
+(+ `ProofsExperiments.lean`). Not-yet-created (future): `Invariants/RoughnessBudget`,
+`Safety/Atlas`, `Structure/{Skyline,Topical}`, `Api.lean`, `Archive/` — these arrive with
+the deferred promotions (§3). `Gameplay`+`GameplayExtra` are two files for now (merge optional).
+The `Invariants/{Wqo,HoleyCarrier,SurfaceFiber,HoleDebt}` are the green primitive halves;
+their `tetrisSolvableValid_of_*` reductions remain in `Experiments/`.
 
 **Dependency layering (strict, bottom-up; verified against actual imports):**
 ```
@@ -203,11 +204,13 @@ Note `Survival` is **below** `Safety` (because `Adversarial` imports
 4. ✅ Promote the clean Piece-only `BagBurst`; later demoted `PieceCharge` (unearned).
 5. ✅ Split `Wqo`/`HoleyCarrier` (primitives→`Invariants`, reductions→`Experiments`);
    relocate `SurfaceFiber`/`HoleDebt` to `Invariants`; repoint `EnergyGame`.
-6. ⏳ `git mv` the core files into `Model/Combinatorics/Invariants/Survival/Safety` one
-   layer at a time (namespaces unchanged ⇒ names stable); merge `Gameplay`+`GameplayExtra`.
+6. ✅ Dissolved `Theorems/`; moved all core files into `Model/Combinatorics/Invariants/
+   Survival/Safety` (namespaces unchanged ⇒ theorem names stable; only import paths changed).
 7. ⏳ Promote the remaining split-required results (`HoleyTopical`→`RoughnessBudget`,
-   `EnergyGame` core, `FiveBagReset`→`Atlas`, `SurfaceInvariant`→`Skyline`).
-8. ⏳ Archive dead-ends; write `Api.lean`; add a CI grep gate
+   `EnergyGame` core, `FiveBagReset`→`Atlas`, `SurfaceInvariant`→`Skyline`) — but only when
+   foundationally useful: the `EnergyGame capacity_conservation` / `SurfaceInvariant skyline`
+   pair were evaluated and **deferred** (redundant / not-yet-load-bearing) on 2026-06-28.
+8. ⏳ (Optional) merge `Gameplay`+`GameplayExtra`; write `Api.lean`; add a CI grep gate
    (`! grep -rE 'sorry|native_decide' <green files>`).
 
 ---

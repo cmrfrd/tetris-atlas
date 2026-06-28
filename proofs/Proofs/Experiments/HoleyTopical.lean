@@ -1,6 +1,6 @@
 import Mathlib
-import Proofs.Theorems.BoardCount
-import Proofs.Theorems.Gameplay
+import Proofs.Combinatorics.BoardCount
+import Proofs.Invariants.Gameplay
 import Proofs.Experiments.SurfaceInvariant
 
 /-!

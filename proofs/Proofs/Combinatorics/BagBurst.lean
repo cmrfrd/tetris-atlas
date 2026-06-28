@@ -1,5 +1,5 @@
 import Mathlib
-import Proofs.Piece
+import Proofs.Model.Piece
 
 /-!
 # The 7-bag renewal bound

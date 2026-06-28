@@ -1,5 +1,5 @@
 import Mathlib
-import Proofs.Piece
+import Proofs.Model.Piece
 
 /-!
 # Coloring charges of the seven pieces — the additive (parity) theory

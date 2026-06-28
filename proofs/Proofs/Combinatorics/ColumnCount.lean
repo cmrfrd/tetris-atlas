@@ -1,5 +1,5 @@
 import Mathlib
-import Proofs.Theorems.GameplayExtra
+import Proofs.Invariants.GameplayExtra
 
 /-!
 # Per-column cell counts

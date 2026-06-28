@@ -1,7 +1,7 @@
 import Mathlib
-import Proofs.Board
-import Proofs.Placement
-import Proofs.SafeSet
+import Proofs.Model.Board
+import Proofs.Model.Placement
+import Proofs.Safety.SafeSet
 import Proofs.Invariants.Wqo
 import Proofs.Invariants.HoleyCarrier
 import Proofs.Invariants.HoleDebt

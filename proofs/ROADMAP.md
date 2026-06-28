@@ -103,13 +103,13 @@ Historical sub-tasks (kept only as a record of what was/wasn't done):
 
 | Module | Contents |
 |---|---|
-| `Proofs.Adversarial` | `Solver`, `LegalSequence`, `SolvesTetris`, `TetrisSolvable` |
-| `Proofs.SafeSet` | `safeOp`, `safe`, `safe_extract`, `AdversarialClosedCycle` |
-| `Proofs.SafeIterate` | abstract `safeIterate` from top + chain lemmas |
-| `Proofs.SafeIterateFinite` | computable `safeIterFinite`, convergence, soundness, completeness, `decideSafeFromUniverse`, `inFieldStates` |
-| `Proofs.Survival` | `Policy`, `trace`, `SurvivesForever`, `safe_invariant`, `ClosedCycle` |
-| `Proofs.Theorems.Safety` | universal safety / pigeonhole obstructions |
-| `Proofs.Theorems.StateSpace` | `InFieldBoard` finite type (computable Fintype) |
+| `Proofs.Safety.Adversarial` | `Solver`, `LegalSequence`, `SolvesTetris`, `TetrisSolvable` |
+| `Proofs.Safety.SafeSet` | `safeOp`, `safe`, `safe_extract`, `AdversarialClosedCycle` |
+| `Proofs.Safety.SafeIterate` | abstract `safeIterate` from top + chain lemmas |
+| `Proofs.Safety.SafeIterateFinite` | computable `safeIterFinite`, convergence, soundness, completeness, `decideSafeFromUniverse`, `inFieldStates` |
+| `Proofs.Survival.Survival` | `Policy`, `trace`, `SurvivesForever`, `safe_invariant`, `ClosedCycle` |
+| `Proofs.Safety.Safety` | universal safety / pigeonhole obstructions |
+| `Proofs.Invariants.StateSpace` | `InFieldBoard` finite type (computable Fintype) |
 | ... | (game model, gameplay, etc.) |
 
 ---

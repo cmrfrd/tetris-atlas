@@ -1,8 +1,8 @@
 import Mathlib
-import Proofs.Board
-import Proofs.Placement
-import Proofs.Bag
-import Proofs.Theorems.PieceGeometry
+import Proofs.Model.Board
+import Proofs.Model.Placement
+import Proofs.Model.Bag
+import Proofs.Combinatorics.PieceGeometry
 
 /-!
 # Game states and reachability

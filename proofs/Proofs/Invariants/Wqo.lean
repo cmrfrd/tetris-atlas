@@ -1,6 +1,6 @@
 import Mathlib
-import Proofs.Board
-import Proofs.Placement
+import Proofs.Model.Board
+import Proofs.Model.Placement
 
 /-!
 # WQO / height-domination monotonicity primitives

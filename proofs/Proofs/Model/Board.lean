@@ -1,5 +1,5 @@
 import Mathlib
-import Proofs.Config
+import Proofs.Model.Config
 
 /-!
 # Boards

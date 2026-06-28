@@ -20,9 +20,9 @@ proof — a finite, uniform obligation, NOT a 5040-order argument. The whole har
 content of the theorem (the part Burgiel guarantees is irreducible) lives in the
 single `abs_simulation` keystone below.
 -/
-import Proofs.SafeSet
-import Proofs.Adversarial
-import Proofs.SafeIterateFinite
+import Proofs.Safety.SafeSet
+import Proofs.Safety.Adversarial
+import Proofs.Safety.SafeIterateFinite
 
 set_option maxRecDepth 4000
 

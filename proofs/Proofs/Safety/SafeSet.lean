@@ -1,5 +1,5 @@
 import Mathlib
-import Proofs.Adversarial
+import Proofs.Safety.Adversarial
 
 /-!
 # The safe set, and the reduction of `TetrisSolvable` to a single membership

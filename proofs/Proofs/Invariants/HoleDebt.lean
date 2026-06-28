@@ -1,7 +1,7 @@
 import Mathlib
-import Proofs.Board
-import Proofs.Placement
-import Proofs.Theorems.ColumnCount
+import Proofs.Model.Board
+import Proofs.Model.Placement
+import Proofs.Combinatorics.ColumnCount
 import Proofs.Invariants.Wqo
 import Proofs.Invariants.HoleyCarrier
 import Proofs.Invariants.SurfaceFiber

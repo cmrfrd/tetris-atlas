@@ -1,5 +1,5 @@
 import Mathlib
-import Proofs.Game
+import Proofs.Model.Game
 
 /-!
 # Survival framework

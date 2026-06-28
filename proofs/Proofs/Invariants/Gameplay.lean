@@ -1,5 +1,5 @@
 import Mathlib
-import Proofs.Theorems.StepInvariants
+import Proofs.Invariants.StepInvariants
 
 /-!
 # Gameplay theorems

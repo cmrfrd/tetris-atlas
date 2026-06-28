@@ -1,5 +1,5 @@
 import Mathlib
-import Proofs.Board
+import Proofs.Model.Board
 
 /-!
 # In-field boards form a finite type

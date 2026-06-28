@@ -1,6 +1,6 @@
 import Mathlib
-import Proofs.Board
-import Proofs.Placement
+import Proofs.Model.Board
+import Proofs.Model.Placement
 import Proofs.Invariants.Wqo
 import Proofs.Invariants.HoleyCarrier
 

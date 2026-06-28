@@ -1,5 +1,5 @@
 import Mathlib
-import Proofs.SafeSet
+import Proofs.Safety.SafeSet
 
 /-!
 # Iterating the safety operator from the top

@@ -1,9 +1,9 @@
-import Proofs.SafeSet
-import Proofs.Theorems.GameplayExtra
-import Proofs.Theorems.ColumnCount
-import Proofs.Theorems.Holes
-import Proofs.Theorems.PieceGeometry
-import Proofs.SafeIterateFinite
+import Proofs.Safety.SafeSet
+import Proofs.Invariants.GameplayExtra
+import Proofs.Combinatorics.ColumnCount
+import Proofs.Invariants.Holes
+import Proofs.Combinatorics.PieceGeometry
+import Proofs.Safety.SafeIterateFinite
 
 /-!
 # Experiment: five-bag reset
@@ -3267,7 +3267,7 @@ theorem uniform_open_close_impossible
 
 /-! ### Per-column budget
 
-`Proofs.Theorems.ColumnCount` refines the cell-count law to each column:
+`Proofs.Combinatorics.ColumnCount` refines the cell-count law to each column:
 a placement adds its per-column profile and every line clear removes
 exactly **one** cell from every valid column. Threading that law through
 the winning induction gives a *vector* bridge: all ten column equations
@@ -6151,7 +6151,7 @@ A *hole* is an empty cell strictly below the topmost filled cell of its
 column. Holes are created by overhanging piece placements (S/Z most
 prominently) and can be eliminated only by line clears — a row strictly
 above a hole filling completely. The `colHoles`/`holes` definitions and
-their general algebra now live in `Proofs.Theorems.Holes`; this subsection
+their general algebra now live in `Proofs.Invariants.Holes`; this subsection
 exhibits per-rotation "hole-creating column" witnesses for S and Z, and
 shows that **dropping an S (resp. Z) onto the empty board creates at least
 one hole**. The empirical (∅,full)-died-at-sweep-1
@@ -13082,7 +13082,7 @@ theorem holes_lt_holes_place_of_buried {cfg : GameConfig} {b : Board} {pl : Plac
 
 `maxHeight` itself — its empty value, the per-column lower bound
 `colHeight_le_maxHeight`, and the `count ≤ cols * maxHeight` volume bounds — now
-lives in `Proofs.Theorems.BoardCount` as `Board.maxHeight` (reachable here as bare
+lives in `Proofs.Combinatorics.BoardCount` as `Board.maxHeight` (reachable here as bare
 `maxHeight` via `open Board`). This section keeps the *game-step* height-monotonicity
 lemmas (hard drop / no-clear / adversarial step) — the height analogues of the
 `holes_le_holes_place` chain feeding the `f := maxHeight + holes` Lyapunov argument. -/

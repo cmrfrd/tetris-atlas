@@ -1,5 +1,5 @@
 import Mathlib
-import Proofs.Theorems.Gameplay
+import Proofs.Invariants.Gameplay
 
 /-!
 # Further gameplay theorems

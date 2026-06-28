@@ -21,17 +21,17 @@ lake build
 
 | Module | Contents |
 |---|---|
-| `Proofs.Config` | `GameConfig` (board dimensions); `standard` = 10×20 |
-| `Proofs.Piece` | `Piece`, `Rotation`, `shape` and bottom-up `shapeUp` for all 7 tetrominoes |
-| `Proofs.Board` | `Board` as a `Finset` of filled cells; `count`, `colHeight`, `isLost`, `isFull`, `clearLines` (gravity), `WF` |
-| `Proofs.Placement` | hard-drop placement: `dropOffset`, `dropped`, `place`, `applyStep` |
-| `Proofs.Bag` | the 7-bag randomizer: `full`, `canDraw`, `draw` |
-| `Proofs.Game` | `GameState`, `step`, `lost`, in-bounds `Valid`, inductive `Reachable` |
-| `Proofs.Theorems.PieceGeometry` | every piece/rotation has exactly 4 cells |
-| `Proofs.Theorems.BoardCount` | empty/set/clear/full-row cell-count facts |
-| `Proofs.Theorems.StepInvariants` | loss basics, well-formedness, line-clear counts, reachable-parity |
-| `Proofs.Theorems.Gameplay` | line-clearing correctness and loss characterization |
-| `Proofs.Theorems.GameplayExtra` | line-clear algebra, hard-drop maximality, 7-bag & reachability invariants, piece geometry |
+| `Proofs.Model.Config` | `GameConfig` (board dimensions); `standard` = 10×20 |
+| `Proofs.Model.Piece` | `Piece`, `Rotation`, `shape` and bottom-up `shapeUp` for all 7 tetrominoes |
+| `Proofs.Model.Board` | `Board` as a `Finset` of filled cells; `count`, `colHeight`, `isLost`, `isFull`, `clearLines` (gravity), `WF` |
+| `Proofs.Model.Placement` | hard-drop placement: `dropOffset`, `dropped`, `place`, `applyStep` |
+| `Proofs.Model.Bag` | the 7-bag randomizer: `full`, `canDraw`, `draw` |
+| `Proofs.Model.Game` | `GameState`, `step`, `lost`, in-bounds `Valid`, inductive `Reachable` |
+| `Proofs.Combinatorics.PieceGeometry` | every piece/rotation has exactly 4 cells |
+| `Proofs.Combinatorics.BoardCount` | empty/set/clear/full-row cell-count facts |
+| `Proofs.Invariants.StepInvariants` | loss basics, well-formedness, line-clear counts, reachable-parity |
+| `Proofs.Invariants.Gameplay` | line-clearing correctness and loss characterization |
+| `Proofs.Invariants.GameplayExtra` | line-clear algebra, hard-drop maximality, 7-bag & reachability invariants, piece geometry |
 | `Proofs.Experiments.FiveBagReset` | five-bag reset arithmetic, backward winning layers, online solver extraction, and finite-search solvability reduction |
 
 ## Key theorems

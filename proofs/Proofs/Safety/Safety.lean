@@ -1,6 +1,6 @@
 import Mathlib
-import Proofs.Theorems.GameplayExtra
-import Proofs.Theorems.PieceGeometry
+import Proofs.Invariants.GameplayExtra
+import Proofs.Combinatorics.PieceGeometry
 
 /-!
 # Universal safety / loss obstructions

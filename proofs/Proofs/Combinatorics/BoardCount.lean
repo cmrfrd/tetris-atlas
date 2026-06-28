@@ -1,5 +1,5 @@
 import Mathlib
-import Proofs.Board
+import Proofs.Model.Board
 
 /-!
 # Board cell-count theorems

@@ -1,6 +1,6 @@
 import Mathlib
-import Proofs.Game
-import Proofs.Theorems.BoardCount
+import Proofs.Model.Game
+import Proofs.Combinatorics.BoardCount
 
 /-!
 # Step invariants

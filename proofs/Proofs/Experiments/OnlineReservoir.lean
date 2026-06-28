@@ -1,5 +1,5 @@
 import Proofs.Experiments.SurfaceInvariant
-import Proofs.Theorems.Safety
+import Proofs.Safety.Safety
 
 /-!
 # Online reservoir strategy: symbolic Atlas roadmap
