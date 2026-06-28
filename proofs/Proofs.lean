@@ -17,6 +17,8 @@ import Proofs.SafeIterate
 import Proofs.SafeIterateFinite
 import Proofs.Theorems.Safety
 import Proofs.Theorems.StateSpace
-import Proofs.Experiments.FiveBagReset
-import Proofs.Experiments.SurfaceInvariant
-import Proofs.Experiments.OnlineReservoir
+import Proofs.Theorems.Holes
+-- Promoted from Experiments/: base-axiom-clean, native_decide-free reusable results.
+-- (Active research lives in the separate `ProofsExperiments` lake_lib, not this green target.)
+import Proofs.Combinatorics.BagBurst
+import Proofs.Invariants.Charge

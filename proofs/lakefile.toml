@@ -14,5 +14,12 @@ name = "mathlib"
 scope = "leanprover-community"
 rev = "v4.29.1"
 
+# Green standard library: builds only modules transitively imported from
+# `Proofs.lean`. Kept sorry-free and native_decide-free (base axioms only).
 [[lean_lib]]
 name = "Proofs"
+
+# Research routes (active + floored). Manual target: `lake build ProofsExperiments`.
+# May use native_decide / large scaffolds; never imported by `Proofs`.
+[[lean_lib]]
+name = "ProofsExperiments"
