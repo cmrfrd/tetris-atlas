@@ -147,8 +147,5 @@ theorem place_holes_mono_within_hole_fiber_false :
         (Placement.place {((2 : ℕ), (0 : ℕ))} ⟨Piece.S, 0, 0⟩) := by decide
   exact hnot (hsub hmem)
 
-#print axioms colHeight_place_eq_of_colHeight_eq
-#print axioms holes_place_subset_of_colHeight_eq
-#print axioms place_holes_mono_within_hole_fiber_false
 
 end Tetris.SurfaceFiber

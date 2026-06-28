@@ -128,7 +128,5 @@ the `HoleyBoard` mirror of `safeLE`. (Same non-congruence applies; this type is 
 def HoleyBoard.le {cfg : GameConfig} {K : ℕ} (g β : HoleyBoard cfg K) : Prop :=
   (∀ j, g.height j ≤ β.height j) ∧ g.buried ⊆ β.buried
 
-#print axioms place_holes_mono_false
-#print axioms clearLines_holes_le_false
 
 end Tetris.HoleyCarrier

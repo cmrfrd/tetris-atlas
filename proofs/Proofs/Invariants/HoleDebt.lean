@@ -243,11 +243,6 @@ theorem holes_card_le_place (cfg : GameConfig) (b : Board) (pl : Placement) :
     (holes cfg b).card ≤ (holes cfg (pl.place b)).card :=
   Finset.card_le_card (place_holes_subset cfg b pl)
 
-#print axioms debt_add_card_eq_sum_colHeight
-#print axioms holes_card_eq_debt
-#print axioms debt_clearLines_add_card_le
-#print axioms surfaceArea_le_place
-#print axioms place_holes_subset
 
 /-! ## Pure debt monotonicity under clears
 
@@ -347,7 +342,6 @@ theorem clearLines_debt_le {cfg : GameConfig} {b : Board} (_hwf : Board.WF cfg b
   unfold colHoles
   omega
 
-#print axioms clearLines_debt_le
 
 /-! ## Status and next targets
 
