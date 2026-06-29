@@ -482,4 +482,16 @@ theorem safeSolver_init_choice_safe (h : GameState.init ∈ safe cfg) (p : Piece
     adversarialStep cfg GameState.init p (safeSolver cfg GameState.init p) ∈ safe cfg :=
   safeSolver_init_step_mem_safe h p
 
+/-! ## Part 17 — The output as one bounded integer -/
+
+/-- **Each answer encodes to a single integer `< 4·cols`.** The pair `(rot, col)` packs into
+`4·col + rot < 4·cols`. So the function's content per query is one bounded natural number — the
+information it emits at each input is `< 4·cols` choices wide. -/
+theorem solver_output_code_lt (hv : ValidSolver cfg σ) {g : GameState}
+    {p : Piece} (hp : p ∈ g.bag) :
+    4 * (σ g p).col + ((σ g p).rot : ℕ) < 4 * cfg.cols := by
+  have hc := solver_col_lt_cols hv hp
+  have hr := (σ g p).rot.isLt
+  omega
+
 end Tetris
