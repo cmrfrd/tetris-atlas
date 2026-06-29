@@ -731,4 +731,21 @@ theorem solver_clearing_lowers_skyline (b : Board) :
     WqoCarrier.domLE (Board.clearLines cfg b) b :=
   WqoCarrier.clearLines_domLE cfg b
 
+/-! ## Q40. How does the program's hole-debt move — is it a one-directional counter? -/
+
+/-- **Placement never removes holes.** Dropping any piece can only keep or increase the buried-hole
+count. So the program cannot shed hole-debt by placing pieces — debt is a ratchet placement only
+winds up. -/
+theorem solver_placement_never_removes_holes (b : Board) (pl : Placement) :
+    (HoleyCarrier.holes cfg b).card ≤ (HoleyCarrier.holes cfg (pl.place b)).card :=
+  HoleDebt.holes_card_le_place cfg b pl
+
+/-- **Only clearing reduces debt.** A line clear can only keep or lower the hole-debt. Combined with
+the previous fact, hole-debt is a Lyapunov counter with a single discharge channel: it rises on
+placement and falls only on clears — so the program's debt management is hostage to the same
+obstructed clearing lever that governs height. -/
+theorem solver_clearing_reduces_debt {b : Board} (hwf : Board.WF cfg b) :
+    HoleDebt.debt cfg (Board.clearLines cfg b) ≤ HoleDebt.debt cfg b :=
+  HoleDebt.clearLines_debt_le hwf
+
 end Tetris
