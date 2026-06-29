@@ -925,4 +925,14 @@ theorem solver_low_stack_comfort_zone (hcols : 4 ≤ cfg.cols) (hrows : 4 ≤ cf
       ¬ Board.isLost cfg (Placement.applyStep cfg b pl) :=
   exists_safe_placement hcols hrows hWF hlow p
 
+/-! ## Q55. Can the program lose on its very first move? -/
+
+/-- **The opening is unconditionally non-losing.** From the empty board, *any* valid placement keeps
+the board not lost — the empty board is far enough below the ceiling that no single piece tops it
+out, whatever the program does. Danger is never present at the start; it can only build up over
+time, which is exactly why the difficulty is a long-horizon control problem, not an opening trap. -/
+theorem solver_opening_cannot_lose (hrows : 4 ≤ cfg.rows) (pl : Placement) (hv : pl.Valid cfg) :
+    ¬ Board.isLost cfg (Placement.applyStep cfg GameState.init.board pl) :=
+  init_applyStep_not_lost_of_valid hrows pl hv
+
 end Tetris
