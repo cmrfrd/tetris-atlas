@@ -504,4 +504,15 @@ theorem solver_move_cols_bounded (b : Board) (g : GameState) (p : Piece) {c : Co
   have h4 := Piece.shapeUp_col_lt_four (σ g p).piece (σ g p).rot cell hcell
   exact ⟨Nat.le_add_right _ _, by show (σ g p).col + cell.1 < (σ g p).col + 4; omega⟩
 
+/-- **The move spans at most four rows.** Every dropped cell sits in a row in `[dropOffset,
+dropOffset+4)` — the output is a ≤4-tall shape resting at the drop height. -/
+theorem solver_move_rows_bounded (b : Board) (g : GameState) (p : Piece) {c : Coord}
+    (hc : c ∈ (σ g p).dropped b) :
+    (σ g p).dropOffset b ≤ c.2 ∧ c.2 < (σ g p).dropOffset b + 4 := by
+  rw [Placement.dropped, Placement.cellsAt, Finset.mem_image] at hc
+  obtain ⟨cell, hcell, rfl⟩ := hc
+  have h4 := Piece.shapeUp_row_lt_four (σ g p).piece (σ g p).rot cell hcell
+  exact ⟨Nat.le_add_right _ _,
+    by show (σ g p).dropOffset b + cell.2 < (σ g p).dropOffset b + 4; omega⟩
+
 end Tetris
