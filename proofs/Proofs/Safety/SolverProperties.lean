@@ -672,4 +672,17 @@ theorem solver_states_reachable_from_empty (h : SolvesTetrisValid cfg σ) {g : G
     (hr : solverReachable σ g) : Reachable cfg g :=
   solverReachable_implies_reachable_of_solves h.1 h.2 hr
 
+/-! ## Q36. Where on the board does the program forbid cells? -/
+
+/-- **No cell ever enters the death zone.** Every filled cell on the program's board sits strictly
+below row `rows`: a single cell at row `≥ rows` is an immediate top-out (`isLost_of_mem_row_ge`), so
+a surviving program keeps rows `rows, rows+1, …` permanently empty. Survival is, cell-by-cell, "stay
+out of the death zone." -/
+theorem solver_no_cell_in_death_zone (h : SolvesTetris cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) {c : Coord}
+    (hc : c ∈ (adversarialTrace cfg σ s GameState.init n).board) :
+    c.2 < cfg.rows := by
+  by_contra hcon
+  exact h s hl n (Board.isLost_of_mem_row_ge (Nat.le_of_not_lt hcon) hc)
+
 end Tetris
