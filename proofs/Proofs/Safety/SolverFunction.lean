@@ -299,4 +299,25 @@ theorem solver_trace_determined_by_visited (s : ℕ → Piece) {σ₁ σ₂ : So
       have ihk := ih (fun j hj => h j (Nat.lt_succ_of_lt hj))
       rw [adversarialTrace_succ, adversarialTrace_succ, ← ihk, h k (Nat.lt_succ_self k)]
 
+/-! ## Part 11 — Image bounds: the function compresses regardless of input size -/
+
+/-- **Fixed-piece image lands in the action set.** For a fixed piece, the outputs over any set of
+states (all drawing that piece) form a subset of `allValidFor cfg p`. -/
+theorem solver_image_per_piece_subset (hv : ValidSolver cfg σ) {p : Piece}
+    (T : Finset GameState) (hT : ∀ g ∈ T, p ∈ g.bag) :
+    T.image (fun g => σ g p) ⊆ Placement.allValidFor cfg p := by
+  intro pl hpl
+  rw [Finset.mem_image] at hpl
+  obtain ⟨g, hg, rfl⟩ := hpl
+  exact solver_output_in_action_set hv (hT g hg)
+
+/-- **Fixed-piece image has at most `4·cols` values — for *any* input size.** However many states
+draw a given piece, the function maps them onto at most `4·cols` distinct placements. The output
+count is capped by the action set, independent of the (arbitrarily large) input set. -/
+theorem solver_image_per_piece_card_le (hv : ValidSolver cfg σ) {p : Piece}
+    (T : Finset GameState) (hT : ∀ g ∈ T, p ∈ g.bag) :
+    (T.image (fun g => σ g p)).card ≤ cfg.cols * 4 :=
+  le_trans (Finset.card_le_card (solver_image_per_piece_subset hv T hT))
+    (card_allValidFor_le cfg p)
+
 end Tetris
