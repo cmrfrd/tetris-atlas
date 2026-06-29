@@ -1044,4 +1044,12 @@ theorem solver_move_effect_portrait (hv : ValidSolver cfg σ) {g : GameState} {p
   ⟨solver_move_count_le hv hp hWF, solver_move_maxHeight_le hv hp b,
    Placement.count_place b (σ g p), solver_applyStep_wf hv hp hWF⟩
 
+/-- Canonical-function portrait: valid, piece-announcing, trivial outside the winning region. -/
+theorem safeSolver_portrait (hcols : 4 ≤ cfg.cols) :
+    ValidSolver cfg (safeSolver cfg) ∧
+    (∀ g p, (safeSolver cfg g p).piece = p) ∧
+    (∀ g p, ¬ (g ∈ safe cfg ∧ p ∈ g.bag) → safeSolver cfg g p = ⟨p, 0, 0⟩) :=
+  ⟨safeSolver_validSolver hcols, fun g p => safeSolver_piece cfg g p,
+   fun _ _ h => safeSolver_eq_trivial_of_not_safe_and_in_bag h⟩
+
 end Tetris
