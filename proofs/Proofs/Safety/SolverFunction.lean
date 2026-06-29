@@ -977,4 +977,11 @@ theorem solver_place_raises_columns (g : GameState) (p : Piece) (b : Board) (j :
     Board.colHeight b j ≤ Board.colHeight ((σ g p).place b) j :=
   colHeight_le_place b (σ g p) j
 
+/-- The function's clear phase can only reduce hole-debt. -/
+theorem solver_clear_reduces_debt (hv : ValidSolver cfg σ) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b) :
+    HoleDebt.debt cfg ((σ g p).applyStep cfg b)
+      ≤ HoleDebt.debt cfg ((σ g p).place b) :=
+  HoleDebt.clearLines_debt_le (Board.WF_place hWF (solver_output_valid hv hp))
+
 end Tetris
