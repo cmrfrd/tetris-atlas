@@ -996,4 +996,11 @@ theorem solver_move_skyline_hole_independent (g : GameState) (p : Piece) {b β :
     ((σ g p).place b).colHeight j = ((σ g p).place β).colHeight j :=
   SurfaceFiber.colHeight_place_eq_of_colHeight_eq (σ g p) h j
 
+/-- The function's resulting board obeys the energy split `debt + count = surfaceArea`. -/
+theorem solver_move_energy_split (hv : ValidSolver cfg σ) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b) :
+    HoleDebt.debt cfg ((σ g p).applyStep cfg b) + ((σ g p).applyStep cfg b).count
+      = HoleDebt.surfaceArea cfg ((σ g p).applyStep cfg b) :=
+  HoleDebt.debt_add_card_eq_sum_colHeight (solver_applyStep_wf hv hp hWF)
+
 end Tetris
