@@ -1425,4 +1425,21 @@ theorem solving_program_all_or_nothing :
     rwa [GameConfig.standard_rows] at hm
   · exact Or.inr fun σ hσ => hinit ((solver_exists_iff_init_safe (by decide)).mp ⟨σ, hσ⟩)
 
+/-- **The irreducible difficulty (Q12 ∘ Q25 ∘ Q29).** Three independent obstructions, together: the
+loss boundary is hit at *every* cell count (so no additive/energy potential certifies survival), a
+maximally-tall board can still be safe (so height alone does not decide danger), and the safety step
+is non-congruent (so no dominated-basis abstraction captures the winning region). The program's
+correctness cannot be reduced to any simple scalar or finite basis — it is irreducibly an atlas. -/
+theorem solving_program_irreducible_difficulty (hcols : 0 < cfg.cols) (hrows : 0 < cfg.rows) :
+    (∃ b₁ b₂ : Board,
+      (Board.WF cfg b₁ ∧ b₁.count = 1 ∧ Board.maxHeight cfg b₁ = cfg.rows) ∧
+      (Board.WF cfg b₂ ∧ b₂.count = cfg.cols * cfg.rows ∧
+        Board.maxHeight cfg b₂ = cfg.rows)) ∧
+    (∃ b : Board, Board.WF cfg b ∧ Board.maxHeight cfg b = cfg.rows ∧ ¬ Board.isLost cfg b) ∧
+    (¬ ∀ (cfg' : GameConfig) (b β : Board) (pl : Placement), HoleyCarrier.safeLE cfg' b β →
+        HoleyCarrier.holes cfg' (pl.place b) ⊆ HoleyCarrier.holes cfg' (pl.place β)) :=
+  ⟨brink_decoupled_from_count hcols hrows,
+   maxHeight_alone_does_not_decide_loss hcols hrows,
+   solver_region_not_dominated_basis.1⟩
+
 end Tetris
