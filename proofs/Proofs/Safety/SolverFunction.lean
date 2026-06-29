@@ -1060,4 +1060,10 @@ theorem solver_response_portrait (hv : ValidSolver cfg σ) (g : GameState) :
   ⟨fun _ hp => solver_output_in_action_set hv hp,
    solver_response_table_card_eq hv g, solver_slice_injOn_bag hv g⟩
 
+/-- Footprint portrait: finite active domain and finite range. -/
+theorem solver_footprint_portrait (h : SolvesTetrisValid cfg σ) :
+    (∀ g, solverReachable σ g → g ∈ inFieldStates cfg) ∧
+    {pl : Placement | ∃ g p, p ∈ g.bag ∧ σ g p = pl}.Finite :=
+  ⟨fun _ hr => solver_active_domain_finite h hr, solver_range_finite h.1⟩
+
 end Tetris
