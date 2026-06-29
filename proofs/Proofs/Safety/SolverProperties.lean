@@ -127,4 +127,23 @@ theorem solver_table_size_bounded (hcols : 4 ≤ cfg.cols)
       C.toAdversarialClosedCycle.states.card ≤ (inFieldStates cfg).card :=
   tetrisSolvableValidFor_gives_cycle_card_envelope hcols hex
 
+/-! ## Q8. When is a solving program impossible — and is existence all-or-nothing? -/
+
+/-- **From an unsafe start, no program survives.** If `init ∉ safe cfg`, then *no* valid solver
+wins: the impossibility is not "we failed to find one" but a theorem. Death is forced against the
+worst-case sequence regardless of how clever the program is. -/
+theorem no_solver_from_unsafe_init (hcols : 4 ≤ cfg.cols) (h : GameState.init ∉ safe cfg) :
+    ¬ ∃ σ : Solver cfg, SolvesTetrisValid cfg σ :=
+  fun hex => h ((solver_exists_iff_init_safe hcols).mp hex)
+
+/-- **Solving is all-or-nothing.** Either the one canonical program `safeSolver` already wins, or
+*every* program loses. There is no middle ground where survival is possible but only via some exotic
+strategy: the maximal safe set decides it, and when survival is possible the explicit memoryless
+lookup achieves it. -/
+theorem solver_dichotomy (hcols : 4 ≤ cfg.cols) :
+    SolvesTetrisValid cfg (safeSolver cfg) ∨ (∀ σ : Solver cfg, ¬ SolvesTetrisValid cfg σ) := by
+  by_cases h : GameState.init ∈ safe cfg
+  · exact Or.inl (canonical_memoryless_solver hcols h)
+  · exact Or.inr fun σ hσ => h ((solver_exists_iff_init_safe hcols).mp ⟨σ, hσ⟩)
+
 end Tetris
