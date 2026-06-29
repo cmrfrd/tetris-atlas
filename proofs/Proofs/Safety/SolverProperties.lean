@@ -1268,4 +1268,16 @@ theorem solver_region_greatest_fixed_point (T : Set GameState) (hT : safeOp cfg 
     T ⊆ safe cfg :=
   safe_greatest T hT.ge
 
+/-! ## Q81. What determines the program's next state? -/
+
+/-- **Each transition is Markov.** The next state is computed from the current state and the drawn
+piece alone, via the program's fixed rule `σ`: `trace (n+1) = adversarialStep (trace n) (s n) (σ
+(trace n) (s n))`. No history beyond the present state enters — the operational, one-step form of
+memorylessness, and the reason the whole game is a transition system over a finite state set. -/
+theorem solver_markov_step (s : ℕ → Piece) (n : ℕ) :
+    adversarialTrace cfg σ s GameState.init (n + 1) =
+      adversarialStep cfg (adversarialTrace cfg σ s GameState.init n) (s n)
+        (σ (adversarialTrace cfg σ s GameState.init n) (s n)) := by
+  rw [adversarialTrace_succ]
+
 end Tetris
