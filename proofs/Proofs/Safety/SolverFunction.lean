@@ -790,4 +790,12 @@ theorem solver_toAtlas_isSome (g : GameState) (p : Piece) :
 theorem solver_toAtlas_toSolver : σ.toAtlas.toSolver = σ :=
   Solver.toAtlas_toSolver σ
 
+/-- The atlas faithfully encodes the function: distinct functions have distinct atlases. -/
+theorem solver_toAtlas_inj {σ₁ σ₂ : Solver cfg} (h : σ₁.toAtlas = σ₂.toAtlas) : σ₁ = σ₂ :=
+  Solver.toAtlas_inj h
+
+/-- The function is determined by its values (extensionality). -/
+theorem solver_ext {σ₁ σ₂ : Solver cfg} (h : ∀ g p, σ₁ g p = σ₂ g p) : σ₁ = σ₂ := by
+  funext g p; exact h g p
+
 end Tetris
