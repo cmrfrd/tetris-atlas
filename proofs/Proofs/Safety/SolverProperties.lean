@@ -1062,4 +1062,17 @@ theorem solver_solvable_iff_init_cycle :
   standard_solver_exists_iff_init_safe.trans
     (init_safe_iff_exists_init_adversarialClosedCycleWF GameConfig.standard)
 
+/-! ## Q67. Are both roughness pieces hole-injectors? -/
+
+/-- **Both `S` and `Z` inject holes.** Dropped at column 0 on the empty board, the `S`-piece buries
+cell `(2,0)` and the `Z`-piece likewise creates at least one buried empty. So both of the bag's two
+roughness pieces are hole-injectors — the adversary gets up to two forced hole-plantings per bag
+(Q28) against the program's single guaranteed `I`-drain — completing the roughness picture. -/
+theorem solver_both_roughness_inject_holes :
+    ((2 : ℕ), (0 : ℕ)) ∈ HoleyCarrier.holes GameConfig.standard
+        (Placement.place ∅ ⟨Piece.S, 0, 0⟩)
+    ∧ 0 < (HoleyCarrier.holes GameConfig.standard
+        (Placement.place ∅ ⟨Piece.Z, 0, 0⟩)).card :=
+  ⟨Board.S_buries_hole, Board.Z_buries_hole⟩
+
 end Tetris
