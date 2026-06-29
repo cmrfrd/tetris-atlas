@@ -262,6 +262,24 @@ theorem debt_place_eq {cfg : GameConfig} {b : Board} {pl : Placement}
   have h3 : (pl.place b).card = b.card + 4 := Placement.count_place b pl
   omega
 
+/-- **Energy rises by at least 4 per placement** — the Lyapunov *lower bound*. For an in-field
+board and a valid drop whose result stays in-field, the board energy `surfaceArea = Σ colHeight`
+increases by at least 4. Proof: the hard drop adds exactly 4 cells and never fills a buried hole,
+so `debt` is non-decreasing (`holes_card_le_place`, bridged to `debt` by `holes_card_eq_debt`),
+and `debt_place_eq` (`ΔsurfaceArea = Δdebt + 4`) then forces `ΔsurfaceArea ≥ 4`. Against a fixed
+surface ceiling this is what compels a matching clear rate over long play — the forcing engine of
+the WSTS survival argument, and the proven form of the "energy strictly rises per piece" claim. -/
+theorem surfaceArea_place_ge_add_four {cfg : GameConfig} {b : Board} {pl : Placement}
+    (hwf : Board.WF cfg b) (hv : pl.Valid cfg)
+    (hin : ∀ j, b.colHeight j ≤ cfg.rows)
+    (hin' : ∀ j, (pl.place b).colHeight j ≤ cfg.rows) :
+    surfaceArea cfg b + 4 ≤ surfaceArea cfg (pl.place b) := by
+  have hmono : debt cfg b ≤ debt cfg (pl.place b) := by
+    rw [← holes_card_eq_debt hin, ← holes_card_eq_debt hin']
+    exact holes_card_le_place cfg b pl
+  have he := debt_place_eq hwf hv
+  omega
+
 /-! ## Pure debt monotonicity under clears
 
 The deep target: `debt(clearLines b) ≤ debt b`. The codebase already provides the hard
