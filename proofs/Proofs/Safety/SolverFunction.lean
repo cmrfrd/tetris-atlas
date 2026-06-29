@@ -911,4 +911,18 @@ theorem safeSolver_trace_reachable (hcols : 4 ≤ cfg.cols) (h : GameState.init 
   solver_states_reachable_from_empty (canonical_memoryless_solver hcols h)
     (adversarialTrace_solverReachable (safeSolver cfg) hl n)
 
+/-! ## Part 36 — Grand synthesis -/
+
+/-- The complete characterization of a single query's answer: a structured, bounded-code output in
+the finite menu, lifting to a total atlas and placing exactly four cells. -/
+theorem solving_function_characterization (hv : ValidSolver cfg σ) {g : GameState}
+    {p : Piece} (hp : p ∈ g.bag) :
+    ((σ g p).piece = p ∧ (σ g p).Valid cfg ∧
+        4 * (σ g p).col + ((σ g p).rot : ℕ) < 4 * cfg.cols) ∧
+    σ g p ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg) ∧
+    σ.toAtlas g p = some (σ g p) ∧
+    (∀ b : Board, ((σ g p).place b).count = b.count + 4) :=
+  ⟨⟨solver_output_announces_piece hv hp, solver_output_valid hv hp, solver_output_code_lt hv hp⟩,
+   solver_output_in_total_action_set hv hp, rfl, fun b => Placement.count_place b (σ g p)⟩
+
 end Tetris
