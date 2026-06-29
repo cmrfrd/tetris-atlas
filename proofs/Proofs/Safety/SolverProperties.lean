@@ -1002,4 +1002,15 @@ theorem solver_loss_monotone {b b' : Board} (h : b ⊆ b') (hlost : Board.isLost
     Board.isLost cfg b' :=
   Board.isLost_mono h hlost
 
+/-! ## Q62. Does the program's board stay structurally valid? -/
+
+/-- **The board is always well-formed.** Every state the program reaches has a well-formed board:
+all cells live in a valid column (`< cols`). Placement and clearing both preserve well-formedness,
+so no cell ever escapes the field sideways — a structural invariant underpinning the count, height,
+parity bounds. -/
+theorem solver_board_wf (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    Board.WF cfg (adversarialTrace cfg σ s GameState.init n).board :=
+  reachable_WF (solver_states_reachable_from_empty h (adversarialTrace_solverReachable σ hl n))
+
 end Tetris
