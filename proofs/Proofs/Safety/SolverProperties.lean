@@ -1163,4 +1163,17 @@ theorem solver_loss_dichotomy (b : Board) :
     Board.isLost cfg b ∨ ∀ j, Board.colHeight b j ≤ cfg.rows :=
   isLost_or_bounded cfg b
 
+/-! ## Q73. What are the master equivalences, side by side? -/
+
+/-- **The two faces of the conjecture.** Solvability of canonical Tetris is equivalent both to a
+single set-membership (`init ∈ safe`) and to the existence of a finite WF closed cycle through
+`init`. The abstract fixed-point face and the concrete finite-artifact face are the same theorem —
+the program exists exactly when either witness does. -/
+theorem solver_master_equivalences :
+    (TetrisSolvableValid ↔ GameState.init ∈ safe GameConfig.standard) ∧
+    (TetrisSolvableValid ↔
+      ∃ C : AdversarialClosedCycleWF GameConfig.standard,
+        GameState.init ∈ C.toAdversarialClosedCycle.states) :=
+  ⟨standard_solver_exists_iff_init_safe, solver_solvable_iff_init_cycle⟩
+
 end Tetris
