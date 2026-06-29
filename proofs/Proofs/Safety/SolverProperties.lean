@@ -284,4 +284,18 @@ theorem solver_no_dead_ends (h : SolvesTetrisValid cfg σ) {g : GameState}
     (hr : solverReachable σ g) : g ∈ safe cfg :=
   solverReachable_subset_safe h hr
 
+/-! ## Q16. What aggregate energy does the program hold down? -/
+
+/-- **The program caps the surface-area energy at `cols·rows`.** The total stack energy
+`surfaceArea = Σ colHeight` is at most `cols · maxHeight`, and the program holds `maxHeight ≤ rows`,
+so it keeps `surfaceArea ≤ cols·rows` forever. Even though no single additive potential *certifies*
+survival (Q12), a surviving program does keep this aggregate bounded as a consequence. -/
+theorem solver_surfaceArea_le_capacity (h : SolvesTetris cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    HoleDebt.surfaceArea cfg (adversarialTrace cfg σ s GameState.init n).board
+      ≤ cfg.cols * cfg.rows := by
+  refine le_trans (HoleDebt.surfaceArea_le_cols_mul_maxHeight cfg _) ?_
+  gcongr
+  exact solver_maintains_maxHeight h hl n
+
 end Tetris
