@@ -523,4 +523,17 @@ theorem solver_hole_obstruction {b : Board} {p : Coord}
     ¬ Board.isFull cfg b p.2 ∧ ∃ r, p.2 < r ∧ (p.1, r) ∈ b :=
   ⟨Board.not_isFull_of_mem_holes hp, Board.exists_cover_of_hole hp⟩
 
+/-! ## Q27. What hole-creating power does the adversary wield from move one? -/
+
+/-- **A roughness piece can bury an unclearable hole from the empty board.** Placing `S` at column 0
+on the empty standard board leaves cell `(2,0)` a buried hole whose row can never be cleared while
+it stands. The program is not *forced* into this (it chooses the placement), but it shows the
+S/Z pieces carry hole-injecting power from the very first move — the program must spend genuine care
+to avoid it, on a board that hands it two such pieces every bag. -/
+theorem adversary_S_can_plant_unclearable_hole :
+    ((2 : ℕ), (0 : ℕ)) ∈ HoleyCarrier.holes GameConfig.standard
+        (Placement.place ∅ ⟨Piece.S, 0, 0⟩)
+      ∧ ¬ Board.isFull GameConfig.standard (Placement.place ∅ ⟨Piece.S, 0, 0⟩) 0 :=
+  ⟨Board.S_buries_hole, Board.S_hole_row_not_isFull⟩
+
 end Tetris
