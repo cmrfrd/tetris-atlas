@@ -450,4 +450,11 @@ theorem solver_lowstack_move_safe (hv : ValidSolver cfg σ) (hrows : 4 ≤ cfg.r
     ¬ Board.isLost cfg ((σ g p).applyStep cfg b) :=
   Tetris.low_stack_safe hrows hWF hlow (σ g p) (solver_output_valid hv hp)
 
+/-- **The induced step's board is the output applied to the current board.** For a valid solver,
+`(solverStep p g).board = (σ g p).applyStep g.board` — the dynamics are "apply the output". -/
+theorem solver_next_board (hv : ValidSolver cfg σ) {g : GameState}
+    {p : Piece} (hp : p ∈ g.bag) :
+    (solverStep cfg σ p g).board = (σ g p).applyStep cfg g.board := by
+  simp [solverStep, adversarialStep, Placement.eta_of_piece_eq (hv g p hp).1]
+
 end Tetris
