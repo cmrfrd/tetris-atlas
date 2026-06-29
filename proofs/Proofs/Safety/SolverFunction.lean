@@ -1155,4 +1155,22 @@ theorem safeSolver_grand_portrait (hcols : 4 ≤ cfg.cols) (h : GameState.init �
    fun _ hg _ hp => safeSolver_step_mem_safe hg hp,
    fun _ hl n => safeSolver_trace_mem_safe hcols h hl n⟩
 
+/-- Orbit-survival portrait: at every step the canonical orbit is safe, WF, not-lost, bounded,
+in-field, and reachable. -/
+theorem safeSolver_orbit_grand_portrait (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    (adversarialTrace cfg (safeSolver cfg) s GameState.init n ∈ safe cfg) ∧
+    Board.WF cfg (adversarialTrace cfg (safeSolver cfg) s GameState.init n).board ∧
+    (¬ (adversarialTrace cfg (safeSolver cfg) s GameState.init n).lost cfg) ∧
+    (Board.maxHeight cfg
+      (adversarialTrace cfg (safeSolver cfg) s GameState.init n).board ≤ cfg.rows) ∧
+    ((adversarialTrace cfg (safeSolver cfg) s GameState.init n).board.count
+      ≤ cfg.cols * cfg.rows) ∧
+    (adversarialTrace cfg (safeSolver cfg) s GameState.init n ∈ inFieldStates cfg) ∧
+    Reachable cfg (adversarialTrace cfg (safeSolver cfg) s GameState.init n) :=
+  ⟨safeSolver_trace_mem_safe hcols h hl n, safeSolver_trace_wf hcols h hl n,
+   safeSolver_trace_not_lost hcols h hl n, safeSolver_trace_maxHeight_le hcols h hl n,
+   safeSolver_trace_count_le hcols h hl n, safeSolver_trace_in_field hcols h hl n,
+   safeSolver_trace_reachable hcols h hl n⟩
+
 end Tetris
