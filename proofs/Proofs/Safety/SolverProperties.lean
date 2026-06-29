@@ -102,4 +102,29 @@ theorem any_solver_implies_canonical (hcols : 4 ≤ cfg.cols)
   init_safe_implies_solvesTetrisValid hcols
     ((init_safe_iff_exists_solvesTetrisValid hcols).mpr hex)
 
+/-! ## Q7. Can the solving program be a finite object (a table / cycle)? -/
+
+/-- **A solving program exists iff a finite closed cycle through `init` exists.** The program is not
+merely *some* infinite-horizon strategy — it is equivalent to a concrete, finite `AdversarialClosed
+CycleWF`: a finite set of states, closed under every adversary draw, containing `init`. This is the
+M2/M3/M4 artifact: "solving Tetris" = "exhibit a finite closed cycle from the empty board." -/
+theorem solver_exists_iff_init_cycle (hcols : 4 ≤ cfg.cols) :
+    (∃ σ : Solver cfg, SolvesTetrisValid cfg σ) ↔
+      ∃ C : AdversarialClosedCycleWF cfg,
+        GameState.init ∈ C.toAdversarialClosedCycle.states :=
+  (solver_exists_iff_init_safe hcols).trans
+    (init_safe_iff_exists_init_adversarialClosedCycleWF cfg)
+
+/-- **The program's table is finite and bounded.** Whenever a solver exists, its realizing cycle —
+the finite lookup table the program is — has between `28` and `|inFieldStates cfg|` states. So the
+Atlas is a genuinely finite object with an a-priori size envelope: not just abstractly finite, but
+bounded by the number of in-field game states, the moment solvability is known. -/
+theorem solver_table_size_bounded (hcols : 4 ≤ cfg.cols)
+    (hex : ∃ σ : Solver cfg, SolvesTetrisValid cfg σ) :
+    ∃ C : AdversarialClosedCycleWF cfg,
+      GameState.init ∈ C.toAdversarialClosedCycle.states ∧
+      28 ≤ C.toAdversarialClosedCycle.states.card ∧
+      C.toAdversarialClosedCycle.states.card ≤ (inFieldStates cfg).card :=
+  tetrisSolvableValidFor_gives_cycle_card_envelope hcols hex
+
 end Tetris
