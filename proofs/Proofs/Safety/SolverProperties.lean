@@ -662,4 +662,14 @@ theorem solver_columns_le_rows (h : SolvesTetris cfg σ) {s : ℕ → Piece}
     Board.colHeight (adversarialTrace cfg σ s GameState.init n).board j ≤ cfg.rows :=
   le_trans (Board.colHeight_le_maxHeight hj) (solver_maintains_maxHeight h hl n)
 
+/-! ## Q35. Is the program's region actually reachable from the empty board (M3)? -/
+
+/-- **Every state the program uses is reachable from the empty board.** A solving program never
+relies on configurations unreachable from `init`: its entire operating region is `Reachable cfg`. So
+the winning region is not an abstract island but is genuinely entered from a real game started
+empty — the M3 reachability bridge that turns a closed cycle into a survivable real game. -/
+theorem solver_states_reachable_from_empty (h : SolvesTetrisValid cfg σ) {g : GameState}
+    (hr : solverReachable σ g) : Reachable cfg g :=
+  solverReachable_implies_reachable_of_solves h.1 h.2 hr
+
 end Tetris
