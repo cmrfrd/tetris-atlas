@@ -886,4 +886,17 @@ theorem solver_trace_compose (s : ℕ → Piece) (g0 : GameState) (n m : ℕ) :
       adversarialTrace cfg σ (fun k => s (n + k)) (adversarialTrace cfg σ s g0 n) m :=
   adversarialTrace_add cfg σ s g0 n m
 
+/-! ## Q52. Under periodic input, does the program settle into a true cycle? -/
+
+/-- **A recurrence under periodic input makes play genuinely periodic.** If the program reaches the
+same state at times `b` and `b + d`, and the input sequence is `d`-periodic from `b` on, then the
+whole `[b, ∞)` suffix of play is `d`-periodic. So against periodic adversarial input a recurrence is
+not a coincidence — it locks the program into a real cycle, the dynamical realization of the M2
+closed cycle. -/
+theorem solver_periodic_play (s : ℕ → Piece) (g0 : GameState) {b d : ℕ}
+    (htrace : adversarialTrace cfg σ s g0 b = adversarialTrace cfg σ s g0 (b + d))
+    (hs : ∀ k, s (b + k) = s (b + d + k)) (k : ℕ) :
+    adversarialTrace cfg σ s g0 (b + k) = adversarialTrace cfg σ s g0 (b + d + k) :=
+  adversarialTrace_periodic_of_periodic_suffix cfg σ s g0 htrace hs k
+
 end Tetris
