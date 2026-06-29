@@ -409,6 +409,21 @@ theorem maxHeight_le_surfaceArea (cfg : GameConfig) (b : Board) :
   unfold Board.maxHeight surfaceArea
   exact Finset.sup_le (fun j hj => Finset.single_le_sum (fun _ _ => Nat.zero_le _) hj)
 
+/-- **The energy is at most `cols` times the max height** — the converse bracket. With
+`maxHeight_le_surfaceArea` this gives `maxHeight ≤ surfaceArea ≤ cols · maxHeight`: the energy
+and the loss-relevant max height determine each other only up to the `cols` factor. The slack
+in this inequality (a flat board of height `h` has `surfaceArea = cols·h = cols·maxHeight`,
+while a single spike of height `h` has `surfaceArea = h = maxHeight`) is exactly the room a
+sum-Lyapunov leaves uncontrolled in the max. -/
+theorem surfaceArea_le_cols_mul_maxHeight (cfg : GameConfig) (b : Board) :
+    surfaceArea cfg b ≤ cfg.cols * Board.maxHeight cfg b := by
+  unfold surfaceArea
+  calc ∑ j ∈ Finset.range cfg.cols, b.colHeight j
+      ≤ ∑ _j ∈ Finset.range cfg.cols, Board.maxHeight cfg b :=
+        Finset.sum_le_sum (fun j hj => Board.colHeight_le_maxHeight (Finset.mem_range.mp hj))
+    _ = cfg.cols * Board.maxHeight cfg b := by
+        rw [Finset.sum_const, Finset.card_range, smul_eq_mul]
+
 
 /-! ## Status and next targets
 
