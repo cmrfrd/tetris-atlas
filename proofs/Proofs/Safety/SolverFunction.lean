@@ -600,4 +600,17 @@ theorem solver_trace_board_succ (hv : ValidSolver cfg σ) {s : ℕ → Piece}
   rw [solver_trace_eq_solverStep]
   exact solver_next_board hv (solver_queried_in_bag s hl n)
 
+/-- The canonical function's move from any safe state never tops out. -/
+theorem safeSolver_step_not_lost {g : GameState} (hg : g ∈ safe cfg)
+    {p : Piece} (hp : p ∈ g.bag) :
+    ¬ (adversarialStep cfg g p (safeSolver cfg g p)).lost cfg :=
+  safe_not_lost (safeSolver_step_mem_safe hg hp)
+
+/-- The output, applied to a not-near-capacity board, keeps the count under capacity. -/
+theorem solver_move_count_le_capacity (hv : ValidSolver cfg σ) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b)
+    (hbelow : b.count + 4 ≤ cfg.cols * cfg.rows) :
+    ((σ g p).applyStep cfg b).count ≤ cfg.cols * cfg.rows :=
+  le_trans (solver_move_count_le hv hp hWF) hbelow
+
 end Tetris
