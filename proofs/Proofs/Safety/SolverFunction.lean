@@ -1235,4 +1235,14 @@ theorem solver_two_number_portrait (hv : ValidSolver cfg σ) {g : GameState}
    fun _ hp₂ hr hc => solver_eq_of_rotcol hv hp hp₂ hr hc,
    solver_output_in_grid hv hp⟩
 
+/-- Collapse portrait: bounded per-piece image, forced collisions once inputs outgrow the menu. -/
+theorem solver_collapse_portrait (hv : ValidSolver cfg σ) (p : Piece)
+    (T : Finset GameState) (hT : ∀ g ∈ T, p ∈ g.bag) :
+    (T.image (fun g => σ g p) ⊆ Placement.allValidFor cfg p) ∧
+    ((T.image (fun g => σ g p)).card ≤ cfg.cols * 4) ∧
+    ((Placement.allValidFor cfg p).card < T.card →
+      ∃ g₁ ∈ T, ∃ g₂ ∈ T, g₁ ≠ g₂ ∧ σ g₁ p = σ g₂ p) :=
+  ⟨solver_image_per_piece_subset hv T hT, solver_image_per_piece_card_le hv T hT,
+   fun hcard => solver_per_piece_noninjective hv T hT hcard⟩
+
 end Tetris
