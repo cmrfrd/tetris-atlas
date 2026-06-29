@@ -659,4 +659,16 @@ theorem safeSolver_trace_mem_safe (hcols : 4 ≤ cfg.cols) (h : GameState.init �
     adversarialTrace cfg (safeSolver cfg) s GameState.init n ∈ safe cfg :=
   solver_trace_mem_safe (canonical_memoryless_solver hcols h) hl n
 
+/-- The canonical orbit's boards are well-formed. -/
+theorem safeSolver_trace_wf (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Board.WF cfg (adversarialTrace cfg (safeSolver cfg) s GameState.init n).board :=
+  solver_board_wf (canonical_memoryless_solver hcols h) hl n
+
+/-- The canonical orbit never tops out. -/
+theorem safeSolver_trace_not_lost (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    ¬ (adversarialTrace cfg (safeSolver cfg) s GameState.init n).lost cfg :=
+  safe_not_lost (safeSolver_trace_mem_safe hcols h hl n)
+
 end Tetris
