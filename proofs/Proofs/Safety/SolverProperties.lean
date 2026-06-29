@@ -369,4 +369,21 @@ theorem safe_step_clear_progress {g : GameState} (hwf : Board.WF cfg g.board)
   have h := Board.count_applyStep_lt_of_clear hwf hv hcols hclear
   simpa [adversarialStep, Placement.eta_of_piece_eq hpl] using h
 
+/-! ## Q19. What must the program have built to survive at the brink? -/
+
+/-- **At the brink the program must have assembled a full row.** A near-capacity safe move is forced
+to clear (Q10), and a clear can only remove a *full* `cols`-wide row. So at the moment of forced
+clearing, the program's placement has completed an entire row — it cannot survive on a ragged
+surface near the top; it must have pre-built a clean line, exactly what the adversary's holes fight
+to deny (`cols_le_card_row_of_isFull`, `not_isFull_of_mem_holes`). -/
+theorem safe_near_capacity_assembles_full_row {g : GameState} (hwf : Board.WF cfg g.board)
+    {p : Piece} {pl : Placement} (hpl : pl.piece = p) (hv : pl.Valid cfg)
+    (hnear : cfg.cols * cfg.rows < g.board.count + 4)
+    (hsafe' : adversarialStep cfg g p pl ∈ safe cfg) :
+    ∃ r, Board.isFull cfg (pl.place g.board) r := by
+  have hpos := safe_near_capacity_must_clear hwf hpl hv hnear hsafe'
+  have hcard : 0 < (Board.fullRows cfg (pl.place g.board)).card := hpos
+  obtain ⟨r, hr⟩ := Finset.card_pos.mp hcard
+  exact ⟨r, (Finset.mem_filter.mp hr).2⟩
+
 end Tetris
