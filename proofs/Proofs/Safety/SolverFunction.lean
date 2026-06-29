@@ -627,4 +627,15 @@ theorem solver_trace_eq_of_agree_on_reachable (s : ℕ → Piece) {σ₁ σ₂ :
     (adversarialTrace_solverReachable σ₁ hl k) (s k)
     (by rw [adversarialTrace_bag]; exact hl k)
 
+/-! ## Part 23 — Orbit = iteration -/
+
+/-- For a constant piece stream the play is the iterated self-map of the function. -/
+theorem solver_trace_const_eq_iterate (p : Piece) (n : ℕ) :
+    adversarialTrace cfg σ (fun _ => p) GameState.init n
+      = (solverStep cfg σ p)^[n] GameState.init := by
+  induction n with
+  | zero => simp
+  | succ k ih =>
+      rw [solver_trace_eq_solverStep, ih, Function.iterate_succ_apply']
+
 end Tetris
