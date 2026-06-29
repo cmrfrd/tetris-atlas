@@ -875,4 +875,15 @@ theorem tiny_solver_exists_iff_init_safe :
       ↔ GameState.init ∈ safe GameConfig.tiny :=
   solver_exists_iff_init_safe (by decide)
 
+/-! ## Q51. Does the program's evolution compose like a dynamical system? -/
+
+/-- **The dynamics compose (memoryless semigroup).** Running the program for `n + m` steps equals
+running it `n` steps, then continuing `m` steps *from the reached state* under the time-shifted
+sequence. The future depends only on the current state and the remaining input — the operational
+restatement of memorylessness: the program is a transition system, splittable at any time. -/
+theorem solver_trace_compose (s : ℕ → Piece) (g0 : GameState) (n m : ℕ) :
+    adversarialTrace cfg σ s g0 (n + m) =
+      adversarialTrace cfg σ (fun k => s (n + k)) (adversarialTrace cfg σ s g0 n) m :=
+  adversarialTrace_add cfg σ s g0 n m
+
 end Tetris
