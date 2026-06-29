@@ -1073,4 +1073,19 @@ theorem safeSolver_clears_within (hcols : 4 ≤ cfg.cols) (h : GameState.init �
            ≠ (adversarialTrace cfg (safeSolver cfg) s GameState.init k).board.count + 4 :=
   solver_clears_within (canonical_memoryless_solver hcols h) hl hM
 
+/-- The canonical orbit's cell count is 4-Lipschitz. -/
+theorem safeSolver_count_lipschitz (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    (adversarialTrace cfg (safeSolver cfg) s GameState.init (n + 1)).board.count
+      ≤ (adversarialTrace cfg (safeSolver cfg) s GameState.init n).board.count + 4 :=
+  solver_trace_count_le_succ (canonical_memoryless_solver hcols h) hl n
+
+/-- The canonical orbit's max height is 4-Lipschitz. -/
+theorem safeSolver_maxHeight_lipschitz (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Board.maxHeight cfg (adversarialTrace cfg (safeSolver cfg) s GameState.init (n + 1)).board
+      ≤ Board.maxHeight cfg
+          (adversarialTrace cfg (safeSolver cfg) s GameState.init n).board + 4 :=
+  solver_trace_maxHeight_le_succ (canonical_memoryless_solver hcols h) hl n
+
 end Tetris
