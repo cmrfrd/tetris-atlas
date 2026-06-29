@@ -248,4 +248,22 @@ theorem solver_move_preserves_wf (hv : ValidSolver cfg σ) {g : GameState} {p : 
     Board.WF cfg ((σ g p).place b) :=
   Board.WF_place hWF (solver_output_valid hv hp)
 
+/-! ## Part 9 — The canonical function `safeSolver` as a compressed object -/
+
+/-- **The canonical function is constant outside the winning region.** Wherever the state is unsafe
+or the piece is not drawable, `safeSolver` returns the fixed default `⟨p, 0, 0⟩`. All of the
+function's genuine content lives on `safe ∩ (p ∈ bag)`; on the rest of its infinite domain it is a
+single constant per piece — maximally compressed. -/
+theorem safeSolver_trivial_outside {g : GameState} {p : Piece}
+    (h : ¬ (g ∈ safe cfg ∧ p ∈ g.bag)) :
+    safeSolver cfg g p = ⟨p, 0, 0⟩ :=
+  safeSolver_eq_trivial_of_not_safe_and_in_bag h
+
+/-- **The canonical function always announces the piece — unconditionally.** Even outside the safe
+region, `(safeSolver g p).piece = p`. The piece field is pinned for the canonical solver with no
+hypothesis at all. -/
+theorem safeSolver_always_announces_piece (g : GameState) (p : Piece) :
+    (safeSolver cfg g p).piece = p :=
+  safeSolver_piece cfg g p
+
 end Tetris
