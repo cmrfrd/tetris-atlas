@@ -1184,4 +1184,14 @@ theorem solver_move_geometry_portrait (g : GameState) (p : Piece) (b : Board) :
    fun _ hc => solver_move_cols_bounded b g p hc,
    fun _ hc => solver_move_rows_bounded b g p hc⟩
 
+/-- Under-determination portrait: any safe-staying policy survives, and good moves always exist. -/
+theorem solver_under_determination_portrait :
+    (∀ (σ' : Solver cfg),
+      (∀ g ∈ safe cfg, ∀ p ∈ g.bag, adversarialStep cfg g p (σ' g p) ∈ safe cfg) →
+        GameState.init ∈ safe cfg → SolvesTetris cfg σ') ∧
+    (∀ g, g ∈ safe cfg → ∀ p ∈ g.bag,
+      ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧ adversarialStep cfg g p pl ∈ safe cfg) :=
+  ⟨fun _ hclose hinit => any_safe_selector_survives hclose hinit,
+   fun _ hg _ hp => solver_selects_from_good_moves hg hp⟩
+
 end Tetris
