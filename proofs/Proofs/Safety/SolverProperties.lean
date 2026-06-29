@@ -446,4 +446,20 @@ theorem solver_no_clear_window_bounded (h : SolvesTetrisValid cfg σ) {s : ℕ �
   calc 4 * n = (adversarialTrace cfg σ s GameState.init n).board.count := (key n hno).symm
     _ ≤ cfg.cols * cfg.rows := solver_count_le_capacity h hl n
 
+/-! ## Q22. Can the program be written down as an explicit lookup table (the Atlas)? -/
+
+/-- **A solving program yields an explicit closed Atlas covering `init`.** Whenever a solver exists,
+there is a concrete `Atlas` (a partial `GameState → Piece → Option Placement` table) and a finite
+state set `S ∋ init` on which it is `IsClosedOn`: every state is non-lost, every drawable piece has
+a table entry, and following it stays in `S`. This `(A, S)` is the M4 proof artifact — the Atlas —
+and its mere existence is equivalent to Tetris being solvable. -/
+theorem solver_exists_yields_closed_atlas (hcols : 4 ≤ cfg.cols)
+    (hex : ∃ σ : Solver cfg, SolvesTetrisValid cfg σ) :
+    ∃ (A : Atlas cfg) (S : Finset GameState),
+      A.IsClosedOn cfg S ∧ GameState.init ∈ S := by
+  obtain ⟨C, hinit⟩ := (init_safe_iff_exists_init_adversarialClosedCycleWF cfg).mp
+    ((solver_exists_iff_init_safe hcols).mp hex)
+  exact ⟨C.toAdversarialClosedCycle.solver.toAtlas, C.toAdversarialClosedCycle.states,
+    C.toAdversarialClosedCycle.solver_toAtlas_isClosedOn_states, hinit⟩
+
 end Tetris
