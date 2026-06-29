@@ -651,4 +651,15 @@ theorem safe_step_recovery_bounded {g : GameState} (hwf : Board.WF cfg g.board)
   have h := Board.count_le_count_applyStep_add hwf hv hnf
   simpa [adversarialStep, Placement.eta_of_piece_eq hpl] using h
 
+/-! ## Q34. What invariant does the program hold on each individual column? -/
+
+/-- **Every playable column stays within the ceiling.** For each column `j < cols`, the program
+keeps `colHeight j ≤ rows` at all times (its height is at most the max height, held under `rows`).
+Loss is exactly some column exceeding `rows`, so this per-column bound is the survival invariant
+decomposed coordinate-by-coordinate. -/
+theorem solver_columns_le_rows (h : SolvesTetris cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) {j : ℕ} (hj : j < cfg.cols) :
+    Board.colHeight (adversarialTrace cfg σ s GameState.init n).board j ≤ cfg.rows :=
+  le_trans (Board.colHeight_le_maxHeight hj) (solver_maintains_maxHeight h hl n)
+
 end Tetris
