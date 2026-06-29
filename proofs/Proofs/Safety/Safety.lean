@@ -387,13 +387,13 @@ theorem tiny_init_invariants_with_wf :
 
 /-- The bag after one step from init has positive cardinality. -/
 theorem init_step_bag_card_pos {cfg : GameConfig} (pl : Placement) :
-    0 < (GameState.init.step cfg pl).bag.card := by
-  rw [GameState.init_step_bag_card]; decide
+    0 < (GameState.init.step cfg pl).bag.card :=
+  GameState.init_step_bag_card_pos pl
 
 /-- The bag after one step from init is nonempty. -/
 theorem init_step_bag_nonempty {cfg : GameConfig} (pl : Placement) :
     (GameState.init.step cfg pl).bag.Nonempty :=
-  Finset.card_pos.mp (init_step_bag_card_pos pl)
+  GameState.init_step_bag_nonempty pl
 
 /-- The bag after one step from init has nonzero card. -/
 theorem init_step_bag_card_ne_zero {cfg : GameConfig} (pl : Placement) :
@@ -407,13 +407,13 @@ theorem init_step_bag_ne_empty {cfg : GameConfig} (pl : Placement) :
 
 /-- The bag after one step from init has fewer than 7 pieces. -/
 theorem init_step_bag_card_lt_seven {cfg : GameConfig} (pl : Placement) :
-    (GameState.init.step cfg pl).bag.card < 7 := by
-  rw [GameState.init_step_bag_card]; decide
+    (GameState.init.step cfg pl).bag.card < 7 :=
+  GameState.init_step_bag_card_lt_seven pl
 
 /-- The bag after one step from init has at most 6 pieces. -/
 theorem init_step_bag_card_le_six {cfg : GameConfig} (pl : Placement) :
-    (GameState.init.step cfg pl).bag.card ≤ 6 := by
-  rw [GameState.init_step_bag_card]
+    (GameState.init.step cfg pl).bag.card ≤ 6 :=
+  GameState.init_step_bag_card_le_six pl
 
 /-- The bag after one step from init has card in `[1, 6]`. -/
 theorem init_step_bag_card_interval {cfg : GameConfig} (pl : Placement) :

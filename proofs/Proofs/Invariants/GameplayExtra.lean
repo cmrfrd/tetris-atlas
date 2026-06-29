@@ -98,15 +98,10 @@ theorem colHeight_mono {b b' : Board} (h : b ⊆ b') (j : ℕ) :
   apply Finset.image_subset_image
   exact Finset.filter_subset_filter _ h
 
-/-- A placement only adds cells. -/
-theorem subset_place (b : Board) (pl : Placement) : b ⊆ pl.place b := by
-  unfold Placement.place
-  exact Finset.subset_union_left
-
 /-- A placement never lowers a column's height. -/
 theorem colHeight_le_place (b : Board) (pl : Placement) (j : ℕ) :
     Board.colHeight b j ≤ Board.colHeight (pl.place b) j :=
-  colHeight_mono (subset_place b pl) j
+  colHeight_mono (Placement.subset_place b pl) j
 
 /-- Dropping onto the empty board lands on the floor (no shift). -/
 theorem dropOffset_empty (pl : Placement) : pl.dropOffset Board.empty = 0 := by
@@ -167,9 +162,6 @@ theorem not_isLost_place_of_heights (cfg : GameConfig) (b : Board) (pl : Placeme
   rw [Board.isLost_iff]; push Not; exact h
 
 /-! ## 7-bag randomizer -/
-
-/-- Every piece is drawable from a full bag. -/
-theorem canDraw_full (p : Piece) : Bag.full.canDraw p := Finset.mem_univ p
 
 /-- A draw either removes one piece or refills to a full bag. -/
 theorem draw_card (bag : Bag) (p : Piece) (hp : p ∈ bag) :
