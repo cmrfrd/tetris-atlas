@@ -983,4 +983,13 @@ theorem solver_clears_at_most_four {b : Board} (pl : Placement)
     Board.linesCleared cfg (pl.place b) ≤ 4 :=
   linesCleared_place_le_four cfg b pl hnf
 
+/-! ## Q60. Does the program ever have a "double clear" pending? -/
+
+/-- **Clearing is idempotent.** Clearing a board and then clearing again gives the same board: once
+the program clears, no full rows remain to clear. So there is never a free second clear waiting —
+the board settles after one pass, and every later clear must be assembled afresh from new pieces. -/
+theorem solver_clearing_idempotent (b : Board) (hcol : 0 < cfg.cols) :
+    Board.clearLines cfg (Board.clearLines cfg b) = Board.clearLines cfg b :=
+  clearLines_idem cfg b hcol
+
 end Tetris
