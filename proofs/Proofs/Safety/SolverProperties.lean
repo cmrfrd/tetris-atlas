@@ -146,4 +146,29 @@ theorem solver_dichotomy (hcols : 4 ≤ cfg.cols) :
   · exact Or.inl (canonical_memoryless_solver hcols h)
   · exact Or.inr fun σ hσ => h ((solver_exists_iff_init_safe hcols).mp ⟨σ, hσ⟩)
 
+/-! ## Q9. How is a candidate program verified — must we unroll forever? -/
+
+/-- **A one-step certificate suffices (coinduction).** Any set `S` that is *locally* controlled-
+invariant — every `g ∈ S` is not lost and, for every drawable piece, has a valid placement landing
+back in `S` — is automatically a winning region (`S ⊆ safe`). The infinite-horizon guarantee follows
+from a single-step closure check; no unbounded lookahead is needed to certify the program. -/
+theorem solver_region_local_certificate (S : Set GameState)
+    (hS : ∀ g ∈ S, ¬ g.lost cfg ∧
+      ∀ p, p ∈ g.bag → ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧
+        adversarialStep cfg g p pl ∈ S) :
+    S ⊆ safe cfg :=
+  safe_greatest S hS
+
+/-- **The Atlas verification recipe.** To prove a solving program exists it suffices to exhibit a
+set `S` containing `init` that is closed under one adversarial step. This is exactly the M4 proof
+obligation: build a finite closed `S ∋ init`, check local closure, and survival-forever is implied
+— turning an infinite property into a finite, mechanically checkable one. -/
+theorem solver_exists_of_local_certificate (hcols : 4 ≤ cfg.cols) (S : Set GameState)
+    (hinit : GameState.init ∈ S)
+    (hS : ∀ g ∈ S, ¬ g.lost cfg ∧
+      ∀ p, p ∈ g.bag → ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧
+        adversarialStep cfg g p pl ∈ S) :
+    ∃ σ : Solver cfg, SolvesTetrisValid cfg σ :=
+  (solver_exists_iff_init_safe hcols).mpr (solver_region_local_certificate S hS hinit)
+
 end Tetris
