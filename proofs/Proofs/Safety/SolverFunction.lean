@@ -870,4 +870,18 @@ theorem safeSolver_trace_debt_le (hcols : 4 ≤ cfg.cols) (h : GameState.init �
       ≤ cfg.cols * cfg.rows :=
   solver_debt_le_capacity (canonical_memoryless_solver hcols h) hl n
 
+/-- The canonical orbit keeps every playable column within the ceiling. -/
+theorem safeSolver_trace_columns_le (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) {j : ℕ} (hj : j < cfg.cols) :
+    Board.colHeight (adversarialTrace cfg (safeSolver cfg) s GameState.init n).board j
+      ≤ cfg.rows :=
+  solver_columns_le_rows (canonical_memoryless_solver hcols h).2 hl n hj
+
+/-- The canonical orbit never places a cell in the death zone. -/
+theorem safeSolver_trace_no_death_cell (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) {c : Coord}
+    (hc : c ∈ (adversarialTrace cfg (safeSolver cfg) s GameState.init n).board) :
+    c.2 < cfg.rows :=
+  solver_no_cell_in_death_zone (canonical_memoryless_solver hcols h).2 hl n hc
+
 end Tetris
