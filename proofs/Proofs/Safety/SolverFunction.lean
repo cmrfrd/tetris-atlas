@@ -380,4 +380,14 @@ theorem solver_realized_outputs_finite (hv : ValidSolver cfg σ) (s : ℕ → Pi
   exact Finset.mem_coe.mpr (Finset.mem_biUnion.mpr
     ⟨s n, Finset.mem_univ _, solver_play_outputs_in_menu hv s hl n⟩)
 
+/-! ## Part 14 — The function as a finite table -/
+
+/-- **The relevant table has a finite, exact domain.** A solving function only matters on the finite
+product `inFieldStates × Piece`, whose size is exactly `|inFieldStates|·|Piece|`. So the function
+compresses to a finite lookup with an explicitly counted input domain. -/
+theorem solver_table_domain_card :
+    ((inFieldStates cfg) ×ˢ (Finset.univ : Finset Piece)).card
+      = (inFieldStates cfg).card * Fintype.card Piece := by
+  rw [Finset.card_product, Finset.card_univ]
+
 end Tetris
