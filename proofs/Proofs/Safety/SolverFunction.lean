@@ -240,4 +240,12 @@ theorem solver_output_dropped_card (b : Board) (g : GameState) (p : Piece) :
     ((σ g p).dropped b).card = 4 :=
   Placement.card_dropped b (σ g p)
 
+/-- **The move preserves well-formedness.** Applying a valid solver's output to a well-formed board
+yields a well-formed board — every resulting cell is still in a real column. The output respects the
+field width on every board, because its validity (`col + cell < cols`) is board-independent. -/
+theorem solver_move_preserves_wf (hv : ValidSolver cfg σ) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b) :
+    Board.WF cfg ((σ g p).place b) :=
+  Board.WF_place hWF (solver_output_valid hv hp)
+
 end Tetris
