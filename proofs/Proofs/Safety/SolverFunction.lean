@@ -751,4 +751,14 @@ theorem solver_reads_board_bag (g₁ g₂ : GameState) (p : Piece)
   obtain rfl : bag1 = bag2 := hbag
   rfl
 
+/-- Unpacking the state: the input is literally `(board, bag, piece)`. -/
+theorem solver_eta (g : GameState) (p : Piece) :
+    σ g p = σ ⟨g.board, g.bag⟩ p := by
+  obtain ⟨b, bag⟩ := g; rfl
+
+/-- The function is equivalently the uncurried map `(GameState × Piece) → Placement`. -/
+theorem solver_uncurry_apply (g : GameState) (p : Piece) :
+    Function.uncurry σ (g, p) = σ g p :=
+  rfl
+
 end Tetris
