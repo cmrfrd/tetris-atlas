@@ -697,4 +697,16 @@ theorem safeSolver_opening_piece (p : Piece) :
     (safeSolver cfg GameState.init p).piece = p :=
   safeSolver_piece cfg GameState.init p
 
+/-! ## Part 27 — Synthesis: the function as a dynamical system -/
+
+/-- Dynamical-system portrait: orbit = iteration, bag advances by draw, board applies the output. -/
+theorem solver_dynamical_portrait (hv : ValidSolver cfg σ) (p : Piece) :
+    (∀ n, adversarialTrace cfg σ (fun _ => p) GameState.init n
+        = (solverStep cfg σ p)^[n] GameState.init) ∧
+    (∀ g, (solverStep cfg σ p g).bag = g.bag.draw p) ∧
+    (∀ g, p ∈ g.bag →
+      (solverStep cfg σ p g).board = (σ g p).applyStep cfg g.board) :=
+  ⟨fun n => solver_trace_const_eq_iterate p n, fun g => solver_next_bag g p,
+   fun _ hp => solver_next_board hv hp⟩
+
 end Tetris
