@@ -298,4 +298,17 @@ theorem solver_surfaceArea_le_capacity (h : SolvesTetris cfg σ) {s : ℕ → Pi
   gcongr
   exact solver_maintains_maxHeight h hl n
 
+/-- **The program keeps hole-debt bounded.** Buried holes (`debt = Σ colHoles`) spend the same
+energy budget as filled cells, so `debt ≤ surfaceArea ≤ cols·rows`. A surviving program cannot let
+unclearable debt accumulate without bound — it must keep digging holes out, since debt competes with
+height for the fixed `cols·rows` of capacity. -/
+theorem solver_debt_le_capacity (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    HoleDebt.debt cfg (adversarialTrace cfg σ s GameState.init n).board
+      ≤ cfg.cols * cfg.rows := by
+  have hwf : Board.WF cfg (adversarialTrace cfg σ s GameState.init n).board :=
+    reachable_WF (solverReachable_implies_reachable_of_solves h.1 h.2
+      (adversarialTrace_solverReachable σ hl n))
+  exact le_trans (HoleDebt.debt_le_surfaceArea hwf) (solver_surfaceArea_le_capacity h.2 hl n)
+
 end Tetris
