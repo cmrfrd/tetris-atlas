@@ -200,4 +200,18 @@ theorem card_allValidFor_le (cfg : GameConfig) (p : Piece) :
   refine le_trans (Finset.card_filter_le _ _) (le_trans Finset.card_image_le ?_)
   simp [Finset.card_product, Finset.card_range, Finset.card_univ, Fintype.card_fin]
 
+/-- **The whole output menu has at most `|Piece|·4·cols` entries.** Summing the per-piece bound over
+the seven pieces, the entire range a valid solver can ever produce sits in a `Finset` of size
+`≤ |Piece|·(4·cols)`. A fixed, config-explicit ceiling on the function's distinct outputs. -/
+theorem card_total_action_set_le (cfg : GameConfig) :
+    ((Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg)).card
+      ≤ Fintype.card Piece * (cfg.cols * 4) :=
+  calc ((Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg)).card
+      ≤ ∑ p ∈ (Finset.univ : Finset Piece), (Placement.allValidFor cfg p).card :=
+        Finset.card_biUnion_le
+    _ ≤ ∑ _p ∈ (Finset.univ : Finset Piece), cfg.cols * 4 :=
+        Finset.sum_le_sum (fun p _ => card_allValidFor_le cfg p)
+    _ = Fintype.card Piece * (cfg.cols * 4) := by
+        rw [Finset.sum_const, Finset.card_univ, smul_eq_mul]
+
 end Tetris
