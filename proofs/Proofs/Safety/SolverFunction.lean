@@ -1118,4 +1118,16 @@ theorem solver_output_finiteness_portrait (p : Piece) :
       ≤ Fintype.card Piece * (cfg.cols * 4) :=
   ⟨card_allValidFor_le cfg p, card_total_action_set_le cfg⟩
 
+/-! ## Part 42 — Grand portraits -/
+
+/-- Compressibility portrait: one code per query, finite range, reads exactly `(board, bag, piece)`,
+lifts to a total atlas. -/
+theorem solver_compressibility_grand_portrait (hv : ValidSolver cfg σ) :
+    (∀ g p, p ∈ g.bag → 4 * (σ g p).col + ((σ g p).rot : ℕ) < 4 * cfg.cols) ∧
+    {pl : Placement | ∃ g p, p ∈ g.bag ∧ σ g p = pl}.Finite ∧
+    (∀ g₁ g₂ p, g₁.board = g₂.board → g₁.bag = g₂.bag → σ g₁ p = σ g₂ p) ∧
+    (∀ g p, σ.toAtlas g p = some (σ g p)) :=
+  ⟨fun _ _ hp => solver_output_code_lt hv hp, solver_range_finite hv,
+   fun g₁ g₂ p hb hbag => solver_reads_board_bag g₁ g₂ p hb hbag, fun _ _ => rfl⟩
+
 end Tetris
