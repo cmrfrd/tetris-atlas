@@ -700,4 +700,16 @@ theorem solver_not_lost_iff_maxHeight (h : SolvesTetrisValid cfg σ) {s : ℕ �
       (adversarialTrace_solverReachable σ hl n))
   exact Board.not_isLost_iff_maxHeight_le hwf
 
+/-! ## Q38. Can the program separate skyline reasoning from hole reasoning? -/
+
+/-- **Where a piece lands depends only on the skyline, never the holes.** Two boards with identical
+column-height profiles have identical profiles after the same placement — buried holes do not affect
+where a piece comes to rest. So the program's height management is governed by a hole-independent
+surface automaton; holes matter only for *clearability*. The program may reason about the skyline
+and the hole-debt as two separable channels — the basis of the surface × debt decomposition. -/
+theorem solver_surface_evolution_hole_independent {b β : Board} (pl : Placement)
+    (h : ∀ j, b.colHeight j = β.colHeight j) (j : ℕ) :
+    (pl.place b).colHeight j = (pl.place β).colHeight j :=
+  SurfaceFiber.colHeight_place_eq_of_colHeight_eq pl h j
+
 end Tetris
