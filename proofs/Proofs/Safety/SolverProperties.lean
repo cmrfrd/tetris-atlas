@@ -1234,4 +1234,13 @@ theorem solver_computed_region_sound (N : ℕ)
     (↑(safeIterFinite cfg (inFieldStates cfg) N) : Set GameState) ⊆ safe cfg :=
   safeIterFinite_subset_safe cfg (inFieldStates cfg) N hfix
 
+/-- **Completeness: a covering universe recovers `safe` exactly.** If the search universe `S₀`
+contains all of `safe`, then at the fixed point membership in the computed set is *equivalent*
+to safety — nothing safe is dropped. With soundness (Q78), the builder computes the program's
+winning region precisely: the converged finite set is the safe set, on the nose. -/
+theorem solver_computed_region_complete {S₀ : Finset GameState} (hS₀ : safe cfg ⊆ ↑S₀) (N : ℕ)
+    (hfix : safeIterFinite cfg S₀ (N + 1) = safeIterFinite cfg S₀ N) (g : GameState) :
+    g ∈ safe cfg ↔ g ∈ (↑(safeIterFinite cfg S₀ N) : Set GameState) :=
+  safe_iff_mem_fixedPoint cfg S₀ N hS₀ hfix g
+
 end Tetris
