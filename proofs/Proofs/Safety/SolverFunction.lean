@@ -806,4 +806,15 @@ theorem solver_representable (hv : ValidSolver cfg σ) :
     (∀ g p, σ.toAtlas g p = some (σ g p)) :=
   ⟨solver_range_finite hv, fun _ _ => rfl⟩
 
+/-- On standard Tetris, the outputs over any finite set of valid inputs number at most 280. -/
+theorem solver_image_card_le_standard (σ : Solver GameConfig.standard)
+    (hv : ValidSolver GameConfig.standard σ) (T : Finset (GameState × Piece))
+    (hT : ∀ gp ∈ T, gp.2 ∈ gp.1.bag) :
+    (T.image (fun gp => σ gp.1 gp.2)).card ≤ 280 := by
+  refine le_trans (Finset.card_le_card ?_) card_total_action_set_standard_le
+  intro pl hpl
+  rw [Finset.mem_image] at hpl
+  obtain ⟨gp, hgp, rfl⟩ := hpl
+  exact solver_output_in_total_action_set hv (hT gp hgp)
+
 end Tetris
