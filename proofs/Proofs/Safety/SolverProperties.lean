@@ -345,4 +345,17 @@ theorem no_solver_of_safeIterFinite_empty {S₀ : Finset GameState}
   rw [safe_eq_empty_of_safeIterFinite_empty hS₀ hempty]
   exact Set.notMem_empty _
 
+/-! ## Q18. What does the program pay for not clearing? -/
+
+/-- **Every non-clearing move spends exactly 4 cells of headroom.** If the program's move clears no
+line, the board's cell count rises by precisely 4. So between clears the stack climbs monotonically
+toward the `cols·rows` cap — a deterministic countdown. The program cannot *stall*: each move that
+declines to clear permanently consumes 4 of its finite headroom, forcing a clear before long. -/
+theorem safe_step_no_clear_count {g : GameState} (hwf : Board.WF cfg g.board)
+    {p : Piece} {pl : Placement} (hpl : pl.piece = p) (hv : pl.Valid cfg)
+    (hno : Board.linesCleared cfg (pl.place g.board) = 0) :
+    (adversarialStep cfg g p pl).board.count = g.board.count + 4 := by
+  have h := Board.count_applyStep_eq_of_no_clear hwf hv hno
+  simpa [adversarialStep, Placement.eta_of_piece_eq hpl] using h
+
 end Tetris
