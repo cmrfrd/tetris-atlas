@@ -1049,4 +1049,17 @@ theorem solver_bag_renewal (bag : Bag) (p : Piece) (hp : p ∈ bag) :
     (bag.draw p).card = bag.card - 1 ∨ bag.draw p = Bag.full :=
   draw_card bag p hp
 
+/-! ## Q66. What is the single headline equivalence the whole project rests on? -/
+
+/-- **Solvable ⟺ a finite closed cycle through the empty board.** Chaining the reductions: canonical
+Tetris is solvable by a valid program if and only if there exists a finite, WF, adversary-closed
+cycle of states containing `init`. This is the M2/M3/M4 headline — the proof artifact reduces an
+infinite survival property to exhibiting one finite closed cycle from the empty board. -/
+theorem solver_solvable_iff_init_cycle :
+    TetrisSolvableValid ↔
+      ∃ C : AdversarialClosedCycleWF GameConfig.standard,
+        GameState.init ∈ C.toAdversarialClosedCycle.states :=
+  standard_solver_exists_iff_init_safe.trans
+    (init_safe_iff_exists_init_adversarialClosedCycleWF GameConfig.standard)
+
 end Tetris
