@@ -823,4 +823,14 @@ the exact object the program is a witness of membership in. -/
 theorem solver_region_fixed_point : safeOp cfg (safe cfg) = safe cfg :=
   safe_eq cfg
 
+/-! ## Q47. Does the game ever stall for lack of input? -/
+
+/-- **There is always a next piece.** Along any play, the bag the program faces is nonempty (the
+7-bag refills before emptying). So the game never stalls: at every step the adversary hands the
+program a piece, and the program must (and, when safe, can) respond. -/
+theorem solver_always_has_a_piece (σ : Solver cfg) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    (adversarialTrace cfg σ s GameState.init n).bag.Nonempty :=
+  adversarialTrace_bag_nonempty σ hl n
+
 end Tetris
