@@ -864,4 +864,15 @@ theorem solver_distinct_bags_le (hcols : 4 ≤ cfg.cols)
     ((solver_exists_iff_init_safe hcols).mp hex)
   exact ⟨C, hinit, C.toAdversarialClosedCycle.image_bag_card_le_128⟩
 
+/-! ## Q50. Is the characterization special to 10×20, or config-generic? -/
+
+/-- **The characterization is config-generic.** The same reduction holds for the 4×4 toy config: a
+solving program exists iff the empty board is `safe`. None of the structure is special to 10×20 —
+the safe-set / atlas framework is parametric in any board with `≥ 4` columns, so the toy config is a
+faithful (and finitely searchable) model of the full problem. -/
+theorem tiny_solver_exists_iff_init_safe :
+    (∃ σ : Solver GameConfig.tiny, SolvesTetrisValid GameConfig.tiny σ)
+      ↔ GameState.init ∈ safe GameConfig.tiny :=
+  solver_exists_iff_init_safe (by decide)
+
 end Tetris
