@@ -938,4 +938,19 @@ theorem safeSolver_opening_card (hcols : 4 ≤ cfg.cols) :
       = GameState.init.bag.card :=
   solver_response_table_card_eq (safeSolver_validSolver hcols) GameState.init
 
+/-- Concrete standard canonical orbit: height ≤ 20 and cells ≤ 200. -/
+theorem safeSolver_standard_bounds (h : GameState.init ∈ safe GameConfig.standard)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Board.maxHeight GameConfig.standard
+        (adversarialTrace GameConfig.standard (safeSolver GameConfig.standard)
+          s GameState.init n).board ≤ 20 ∧
+    (adversarialTrace GameConfig.standard (safeSolver GameConfig.standard)
+      s GameState.init n).board.count ≤ 200 := by
+  refine ⟨?_, ?_⟩
+  · have hm := safeSolver_trace_maxHeight_le (by decide) h hl n
+    rwa [GameConfig.standard_rows] at hm
+  · have hc := safeSolver_trace_count_le (by decide) h hl n
+    rw [GameConfig.standard_cols, GameConfig.standard_rows] at hc
+    omega
+
 end Tetris
