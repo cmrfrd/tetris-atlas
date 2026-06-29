@@ -231,4 +231,21 @@ theorem solver_trace_mem_inFieldStates (h : SolvesTetrisValid cfg σ) {s : ℕ �
       (adversarialTrace_solverReachable σ hl n))
     (solver_trace_mem_safe h hl n)
 
+/-- **The program's play is eventually periodic.** Against any fixed legal sequence the trace runs
+forever inside a finite set, so by pigeonhole two distinct times share the same state. Survival is
+therefore inherently *cyclic*: the program cannot keep producing genuinely new positions — it is
+forced to loop, which is the structural seed of the M2 closed cycle. -/
+theorem solver_play_eventually_repeats (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) :
+    ∃ i j : ℕ, i ≠ j ∧
+      adversarialTrace cfg σ s GameState.init i
+        = adversarialTrace cfg σ s GameState.init j := by
+  have hmaps : Set.MapsTo (fun n => adversarialTrace cfg σ s GameState.init n)
+      Set.univ ↑(inFieldStates cfg) :=
+    fun n _ => Finset.mem_coe.mpr (solver_trace_mem_inFieldStates h hl n)
+  obtain ⟨i, _, j, _, hij, heq⟩ :=
+    Set.Infinite.exists_ne_map_eq_of_mapsTo Set.infinite_univ hmaps
+      (inFieldStates cfg).finite_toSet
+  exact ⟨i, j, hij, heq⟩
+
 end Tetris
