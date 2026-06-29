@@ -637,4 +637,18 @@ theorem solver_repeats_within_inFieldStates (h : SolvesTetrisValid cfg σ) {s : 
   · exact ⟨j, i, lt_of_le_of_ne hge (Ne.symm hij),
       by have := Finset.mem_range.mp hi; omega, heq.symm⟩
 
+/-! ## Q33. How much can one move undo? -/
+
+/-- **Recovery is bounded: one move removes at most `4·cols` cells.** From a settled board (no
+already-full rows), a single placement-and-clear cannot drop the cell count by more than `4·cols`
+(at most a Tetris of `cols`-wide rows). So the program has no reset button: it cannot erase an
+accumulated deficit in one move — survival is necessarily incremental, chipping against the `+4`
+inflow. -/
+theorem safe_step_recovery_bounded {g : GameState} (hwf : Board.WF cfg g.board)
+    {p : Piece} {pl : Placement} (hpl : pl.piece = p) (hv : pl.Valid cfg)
+    (hnf : ∀ r, ¬ Board.isFull cfg g.board r) :
+    g.board.count + 4 ≤ (adversarialStep cfg g p pl).board.count + cfg.cols * 4 := by
+  have h := Board.count_le_count_applyStep_add hwf hv hnf
+  simpa [adversarialStep, Placement.eta_of_piece_eq hpl] using h
+
 end Tetris
