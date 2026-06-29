@@ -390,4 +390,14 @@ theorem solver_table_domain_card :
       = (inFieldStates cfg).card * Fintype.card Piece := by
   rw [Finset.card_product, Finset.card_univ]
 
+/-! ## Part 15 — Geometric shape of what the output places -/
+
+/-- **The move is purely additive before clears.** Placing the output is monotone in the board: the
+original board is a subset of the placed board (`b ⊆ place b`). The output only *adds* its four
+cells; the only way cells leave is the subsequent clear phase. -/
+theorem solver_move_superset (b : Board) (g : GameState) (p : Piece) :
+    b ⊆ (σ g p).place b := by
+  rw [Placement.place_eq_union_dropped]
+  exact Finset.subset_union_left
+
 end Tetris
