@@ -43,4 +43,17 @@ theorem maxHeight_applyStep_le_place (cfg : GameConfig) (b : Board) (pl : Placem
     maxHeight cfg (pl.applyStep cfg b) ≤ maxHeight cfg (pl.place b) :=
   maxHeight_clearLines_le cfg (pl.place b)
 
+/-! ## The survival target is exactly `maxHeight ≤ rows` -/
+
+/-- **Survival forces a bounded max height.** `¬ isLost b → maxHeight b ≤ rows`: not losing
+means every column is within the ceiling, hence so is their max. Together with the ratchet
+asymmetry this is the difficulty in one line — the player must hold `maxHeight ≤ rows` forever,
+and the only lever that pushes it down is a line clear. So the entire survival problem is:
+keep this single sup under the ceiling using only the clear primitive, against an adversary who
+picks the pieces. -/
+theorem maxHeight_le_rows_of_not_isLost (cfg : GameConfig) {b : Board} (h : ¬ isLost cfg b) :
+    maxHeight cfg b ≤ cfg.rows := by
+  unfold maxHeight
+  exact Finset.sup_le (fun j _ => colHeight_le_rows_of_not_isLost cfg h j)
+
 end Tetris.Board

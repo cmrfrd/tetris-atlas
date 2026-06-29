@@ -424,6 +424,20 @@ theorem surfaceArea_le_cols_mul_maxHeight (cfg : GameConfig) (b : Board) :
     _ = cfg.cols * Board.maxHeight cfg b := by
         rw [Finset.sum_const, Finset.card_range, smul_eq_mul]
 
+/-- **Holes consume the energy budget:** `debt ≤ surfaceArea`. Since `surfaceArea = debt + card`,
+buried holes spend energy with no clearable cell to show for it — debt is a pure drain on the
+budget that must stay under the ceiling. -/
+theorem debt_le_surfaceArea {cfg : GameConfig} {b : Board} (hwf : Board.WF cfg b) :
+    debt cfg b ≤ surfaceArea cfg b := by
+  have := debt_add_card_eq_sum_colHeight hwf; omega
+
+/-- **Filled cells consume the energy budget:** `card ≤ surfaceArea`. The other half of
+`surfaceArea = debt + card`; both the (clearable) mass and the (stuck) holes draw on the same
+bounded energy, so roughness and fill compete for survival headroom. -/
+theorem card_le_surfaceArea {cfg : GameConfig} {b : Board} (hwf : Board.WF cfg b) :
+    b.card ≤ surfaceArea cfg b := by
+  have := debt_add_card_eq_sum_colHeight hwf; omega
+
 
 /-! ## Status and next targets
 
