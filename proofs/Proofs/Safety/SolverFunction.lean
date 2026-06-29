@@ -1032,4 +1032,16 @@ theorem solver_move_recovery_bounded (hv : ValidSolver cfg σ) {g : GameState} {
     b.count + 4 ≤ ((σ g p).applyStep cfg b).count + cfg.cols * 4 :=
   Board.count_le_count_applyStep_add hWF (solver_output_valid hv hp) hnf
 
+/-! ## Part 40 — Portraits -/
+
+/-- Move-effect portrait: count ≤ +4, height ≤ +4, places exactly 4 cells, preserves WF. -/
+theorem solver_move_effect_portrait (hv : ValidSolver cfg σ) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b) :
+    (((σ g p).applyStep cfg b).count ≤ b.count + 4) ∧
+    (Board.maxHeight cfg ((σ g p).applyStep cfg b) ≤ Board.maxHeight cfg b + 4) ∧
+    (((σ g p).place b).count = b.count + 4) ∧
+    Board.WF cfg ((σ g p).applyStep cfg b) :=
+  ⟨solver_move_count_le hv hp hWF, solver_move_maxHeight_le hv hp b,
+   Placement.count_place b (σ g p), solver_applyStep_wf hv hp hWF⟩
+
 end Tetris
