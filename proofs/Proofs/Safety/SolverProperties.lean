@@ -1,4 +1,5 @@
 import Proofs.Safety.SafeIterateFinite
+import Proofs.Safety.Safety
 import Proofs.Invariants.HeightControl
 import Proofs.Combinatorics.BagBurst
 
@@ -909,5 +910,19 @@ theorem solver_is_causal (s s' : ℕ → Piece) (g0 : GameState) (n : ℕ)
     (h : ∀ i < n, s i = s' i) (k : ℕ) (hk : k ≤ n) :
     adversarialTrace cfg σ s g0 k = adversarialTrace cfg σ s' g0 k :=
   adversarialTrace_eq_of_eq_below σ s s' g0 n h k hk
+
+/-! ## Q54. Is there a simple comfort zone where the program cannot be killed next move? -/
+
+/-- **A low stack is a one-step-safe comfort zone.** On any well-formed board whose columns are all
+at height `≤ rows - 4`, *every* piece has a valid placement that does not lose — the piece (≤4 tall)
+still fits under the ceiling. So the program has a coarse sufficient tactic for one-step survival:
+keep the stack at least 4 below the top. The difficulty is that adversarial roughness can force the
+stack up out of this zone (the deeper safe-set question is whether it can be kept there forever). -/
+theorem solver_low_stack_comfort_zone (hcols : 4 ≤ cfg.cols) (hrows : 4 ≤ cfg.rows)
+    {b : Board} (hWF : Board.WF cfg b) (hlow : ∀ j, Board.colHeight b j ≤ cfg.rows - 4)
+    (p : Piece) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧
+      ¬ Board.isLost cfg (Placement.applyStep cfg b pl) :=
+  exists_safe_placement hcols hrows hWF hlow p
 
 end Tetris
