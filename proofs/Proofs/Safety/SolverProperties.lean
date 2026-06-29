@@ -1212,4 +1212,14 @@ theorem solver_region_computable :
       safeIterFinite cfg (inFieldStates cfg) (N + 1) = safeIterFinite cfg (inFieldStates cfg) N :=
   safeIterFinite_converges cfg (inFieldStates cfg)
 
+/-! ## Q77. Is the death-propagation computing the region monotone? -/
+
+/-- **Death propagation only shrinks the surviving set.** The finite iteration is antitone: deeper
+iterations are subsets of shallower ones, so a state once removed (proven to lead to forced loss)
+never returns. This monotone retraction is why the Atlas builder both terminates and is correct —
+the surviving subgraph converges down to the program's winning region. -/
+theorem solver_death_propagation_monotone {n m : ℕ} (hnm : n ≤ m) :
+    safeIterFinite cfg (inFieldStates cfg) m ⊆ safeIterFinite cfg (inFieldStates cfg) n :=
+  safeIterFinite_antitone cfg (inFieldStates cfg) hnm
+
 end Tetris
