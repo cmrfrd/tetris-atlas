@@ -1280,4 +1280,25 @@ theorem solver_markov_step (s : ℕ → Piece) (n : ℕ) :
         (σ (adversarialTrace cfg σ s GameState.init n) (s n)) := by
   rw [adversarialTrace_succ]
 
+/-! ## Q82. What exactly makes a live state unsurvivable? -/
+
+/-- **An alive state is unsafe iff the adversary has a "killer piece".** A not-lost state fails
+`safe` exactly when there is some drawable piece for which *every* valid placement leaves `safe`. So
+unsafety is concrete: the adversary holds a piece against which no response keeps the program alive
+forever. The program's task is to occupy only states where no such killer piece exists. -/
+theorem solver_unsafe_iff_killer_piece {g : GameState} (hnl : ¬ g.lost cfg) :
+    g ∉ safe cfg ↔ ∃ p ∈ g.bag, ∀ pl : Placement,
+      pl.piece = p → pl.Valid cfg → adversarialStep cfg g p pl ∉ safe cfg := by
+  constructor
+  · intro hns
+    by_contra hcon
+    apply hns
+    apply mem_safe_of_not_lost_and_forall_step hnl
+    intro p hp
+    by_contra hcon2
+    exact hcon ⟨p, hp, fun pl hpiece hv hmem => hcon2 ⟨pl, hpiece, hv, hmem⟩⟩
+  · rintro ⟨p, hp, hkill⟩ hsafe
+    obtain ⟨pl, hpiece, hv, hmem⟩ := safe_forall_step hsafe p hp
+    exact hkill pl hpiece hv hmem
+
 end Tetris
