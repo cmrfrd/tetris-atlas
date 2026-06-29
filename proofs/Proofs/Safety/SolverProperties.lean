@@ -1100,4 +1100,24 @@ theorem solver_operates_in_safe_and_reachable (h : SolvesTetrisValid cfg σ) {g 
     g ∈ safe cfg ∧ Reachable cfg g :=
   ⟨solver_no_dead_ends h hr, solver_states_reachable_from_empty h hr⟩
 
+/-! ## Q70. Can we pin down *when* the program is forced to clear? -/
+
+/-- **A clear occurs within any window whose budget exceeds capacity.** If `4·M > cols·rows`, then
+among the first `M` moves at least one fails to add 4 cells — i.e. clears a line. Concretely the
+program cannot defer clearing past `⌊cols·rows / 4⌋` moves: forced clearing is not just bounded
+(Q21) but *located* — it must happen inside the next capacity-sized window. -/
+theorem solver_clears_within (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) {M : ℕ} (hM : cfg.cols * cfg.rows < 4 * M) :
+    ∃ k < M, (adversarialTrace cfg σ s GameState.init (k + 1)).board.count
+             ≠ (adversarialTrace cfg σ s GameState.init k).board.count + 4 := by
+  by_contra hcon
+  have hall : ∀ k < M,
+      (adversarialTrace cfg σ s GameState.init (k + 1)).board.count
+        = (adversarialTrace cfg σ s GameState.init k).board.count + 4 := by
+    intro k hk
+    by_contra hne
+    exact hcon ⟨k, hk, hne⟩
+  have hb := solver_no_clear_window_bounded h hl M hall
+  omega
+
 end Tetris
