@@ -1025,4 +1025,11 @@ theorem solver_move_clears_le_four (g : GameState) (p : Piece) {b : Board}
     Board.linesCleared cfg ((σ g p).place b) ≤ 4 :=
   linesCleared_place_le_four cfg b (σ g p) hnf
 
+/-- The function's recovery is bounded: one move removes at most `4·cols` cells. -/
+theorem solver_move_recovery_bounded (hv : ValidSolver cfg σ) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b)
+    (hnf : ∀ r, ¬ Board.isFull cfg b r) :
+    b.count + 4 ≤ ((σ g p).applyStep cfg b).count + cfg.cols * 4 :=
+  Board.count_le_count_applyStep_add hWF (solver_output_valid hv hp) hnf
+
 end Tetris
