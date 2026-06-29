@@ -554,4 +554,17 @@ theorem solver_output_compressed (hv : ValidSolver cfg σ) {g : GameState}
   ⟨solver_output_announces_piece hv hp, solver_col_lt_cols hv hp, (σ g p).rot.isLt,
    solver_output_code_lt hv hp, solver_output_in_total_action_set hv hp⟩
 
+/-! ## Part 19 — Closure properties of applying the output -/
+
+/-- The full move (place then clear) preserves well-formedness. -/
+theorem solver_applyStep_wf (hv : ValidSolver cfg σ) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b) :
+    Board.WF cfg ((σ g p).applyStep cfg b) :=
+  Placement.applyStep_wf hWF (solver_output_valid hv hp)
+
+/-- The trace starts at the empty-board init state. -/
+theorem solver_trace_zero (s : ℕ → Piece) :
+    adversarialTrace cfg σ s GameState.init 0 = GameState.init := by
+  simp
+
 end Tetris
