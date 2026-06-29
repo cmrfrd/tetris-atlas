@@ -347,4 +347,12 @@ theorem solver_trace_eq_solverStep (s : ℕ → Piece) (n : ℕ) :
       = solverStep cfg σ (s n) (adversarialTrace cfg σ s GameState.init n) := by
   rw [adversarialTrace_succ]; rfl
 
+/-- **For the canonical solver, the winning region is invariant under the induced map.** The map
+`solverStep` of `safeSolver`, for any drawable piece, sends `safe` into `safe`. So `safe` is an
+invariant set of the induced dynamical system — an orbit started inside it can never leave. -/
+theorem safeSolver_solverStep_preserves_safe {g : GameState} (hg : g ∈ safe cfg)
+    {p : Piece} (hp : p ∈ g.bag) :
+    solverStep cfg (safeSolver cfg) p g ∈ safe cfg :=
+  safeSolver_step_mem_safe hg hp
+
 end Tetris
