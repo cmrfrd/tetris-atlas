@@ -953,4 +953,18 @@ theorem safeSolver_standard_bounds (h : GameState.init ∈ safe GameConfig.stand
     rw [GameConfig.standard_cols, GameConfig.standard_rows] at hc
     omega
 
+/-! ## Part 38 — Move-level height behaviour -/
+
+/-- The function's move raises the max height by at most 4. -/
+theorem solver_move_maxHeight_le (hv : ValidSolver cfg σ) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) (b : Board) :
+    Board.maxHeight cfg ((σ g p).applyStep cfg b) ≤ Board.maxHeight cfg b + 4 :=
+  Board.maxHeight_applyStep_le_add_four b (solver_output_valid hv hp)
+
+/-- The function's placement (before clears) raises the max height by at most 4. -/
+theorem solver_place_maxHeight_le (hv : ValidSolver cfg σ) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) (b : Board) :
+    Board.maxHeight cfg ((σ g p).place b) ≤ Board.maxHeight cfg b + 4 :=
+  Board.maxHeight_place_le_add_four b (solver_output_valid hv hp)
+
 end Tetris
