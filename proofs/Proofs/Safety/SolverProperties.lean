@@ -1358,4 +1358,18 @@ theorem atlas_certificate_yields_bounded_solver (hcols : 4 ≤ cfg.cols) (S : Se
   exact ⟨σ, hσ, fun s hl n => ⟨solver_trace_mem_safe hσ hl n,
     solver_maintains_maxHeight hσ.2 hl n, solver_count_le_capacity hσ hl n⟩⟩
 
+/-- **The three faces of solvability (Q66 ∘ Q22 ∘ Q73).** For canonical Tetris, a solving program's
+existence shows three equivalent faces: the *abstract* one (`init ∈ safe`), the *combinatorial* one
+(a finite WF closed cycle through `init`), and the *constructive* one (a closed `Atlas` table over a
+finite state set containing `init`). The same proposition, viewed as a fixed point, a cycle, and a
+lookup table — the whole M2/M3/M4 hierarchy collapsed onto one existence claim. -/
+theorem solver_three_faces_of_solvability :
+    (TetrisSolvableValid ↔ GameState.init ∈ safe GameConfig.standard) ∧
+    (TetrisSolvableValid ↔ ∃ C : AdversarialClosedCycleWF GameConfig.standard,
+        GameState.init ∈ C.toAdversarialClosedCycle.states) ∧
+    (TetrisSolvableValid → ∃ (A : Atlas GameConfig.standard) (S : Finset GameState),
+        A.IsClosedOn GameConfig.standard S ∧ GameState.init ∈ S) :=
+  ⟨standard_solver_exists_iff_init_safe, solver_solvable_iff_init_cycle,
+   fun hex => solver_exists_yields_closed_atlas (by decide) hex⟩
+
 end Tetris
