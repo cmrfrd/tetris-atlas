@@ -925,4 +925,11 @@ theorem solving_function_characterization (hv : ValidSolver cfg σ) {g : GameSta
   ⟨⟨solver_output_announces_piece hv hp, solver_output_valid hv hp, solver_output_code_lt hv hp⟩,
    solver_output_in_total_action_set hv hp, rfl, fun b => Placement.count_place b (σ g p)⟩
 
+/-! ## Part 37 — The canonical opening book -/
+
+/-- The canonical opening book maps the seven pieces to seven distinct placements. -/
+theorem safeSolver_opening_injective (hcols : 4 ≤ cfg.cols) :
+    Set.InjOn (fun p => safeSolver cfg GameState.init p) GameState.init.bag :=
+  solver_slice_injOn_bag (safeSolver_validSolver hcols) GameState.init
+
 end Tetris
