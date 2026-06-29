@@ -935,4 +935,17 @@ theorem solver_opening_cannot_lose (hrows : 4 ≤ cfg.rows) (pl : Placement) (hv
     ¬ Board.isLost cfg (Placement.applyStep cfg GameState.init.board pl) :=
   init_applyStep_not_lost_of_valid hrows pl hv
 
+/-! ## Q56. What is the program's ideal board shape? -/
+
+/-- **Hole-free means all energy is clearable.** When the program keeps the board hole-free (`debt =
+0`), the stack energy equals the filled mass: `surfaceArea = count`. No headroom is wasted on buried
+debt — every unit of height is a clearable cell. This is the program's ideal: a hole-free surface
+where the entire `cols·rows` budget is recoverable — the opposite of the adversary's roughness. -/
+theorem solver_hole_free_energy_all_clearable {b : Board} (hwf : Board.WF cfg b)
+    (h0 : HoleDebt.debt cfg b = 0) :
+    HoleDebt.surfaceArea cfg b = b.count := by
+  have heq : HoleDebt.debt cfg b + b.count = HoleDebt.surfaceArea cfg b :=
+    solver_energy_split hwf
+  omega
+
 end Tetris
