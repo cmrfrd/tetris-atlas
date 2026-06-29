@@ -538,4 +538,20 @@ theorem solverStep_congr {σ₁ σ₂ : Solver cfg} (g : GameState) (p : Piece)
     solverStep cfg σ₁ p g = solverStep cfg σ₂ p g := by
   rw [solverStep, solverStep, h]
 
+/-! ## Part 18 — Synthesis: the output is maximally compressed -/
+
+/-- **Output compressibility, assembled.** Each output of a valid solver has a redundant piece
+field (forced to the input), a bounded column (`< cols`), a bounded rotation (`< 4`), hence a single
+integer code `< 4·cols`, and membership in the fixed finite menu — the placement collapses to one
+bounded number. -/
+theorem solver_output_compressed (hv : ValidSolver cfg σ) {g : GameState}
+    {p : Piece} (hp : p ∈ g.bag) :
+    (σ g p).piece = p ∧
+    (σ g p).col < cfg.cols ∧
+    ((σ g p).rot : ℕ) < 4 ∧
+    4 * (σ g p).col + ((σ g p).rot : ℕ) < 4 * cfg.cols ∧
+    σ g p ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg) :=
+  ⟨solver_output_announces_piece hv hp, solver_col_lt_cols hv hp, (σ g p).rot.isLt,
+   solver_output_code_lt hv hp, solver_output_in_total_action_set hv hp⟩
+
 end Tetris
