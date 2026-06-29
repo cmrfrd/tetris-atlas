@@ -833,4 +833,13 @@ theorem solver_always_has_a_piece (σ : Solver cfg) {s : ℕ → Piece}
     (adversarialTrace cfg σ s GameState.init n).bag.Nonempty :=
   adversarialTrace_bag_nonempty σ hl n
 
+/-! ## Q48. Is the program's very first move already safe? -/
+
+/-- **The opening move is safe whatever the first piece.** From the empty board, the canonical
+program's response to any first piece lands back in `safe`. So solving begins immediately: the
+program does not need a lucky opening — every first tetromino has a safe answer it plays. -/
+theorem canonical_solver_first_move_safe (h : GameState.init ∈ safe cfg) (p : Piece) :
+    adversarialStep cfg GameState.init p (safeSolver cfg GameState.init p) ∈ safe cfg :=
+  safeSolver_init_step_mem_safe h p
+
 end Tetris
