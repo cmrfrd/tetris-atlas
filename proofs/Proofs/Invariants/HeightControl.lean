@@ -166,4 +166,31 @@ theorem notMem_fullRows_of_mem_holes {cfg : GameConfig} {b : Board} {p : Coord}
   rw [SurfaceFiber.mem_holes_iff] at hp
   exact notMem_fullRows_of_notMem (Finset.mem_range.mp (Finset.mem_product.mp hp.1).1) hp.2.1
 
+/-! ## Energy and material do not control survival — a single cell at the brink -/
+
+/-- **One cell can sit at the loss boundary.** On a nonempty field the one-cell board
+`{(0, rows-1)}` has `count = 1` yet `maxHeight = rows`: a lone cell floating at the top (which
+buried holes beneath it permit) is one move from a top-out. Survival is governed by the *position
+of the highest cell*, not the amount of material — `cols·rows` capacity gives no safety if a
+single cell sits at the ceiling. So the `count`/`surfaceArea` budgets (here tiny: energy `= rows`,
+far below `cols·rows`) cannot certify safety; the loss metric `maxHeight` is decoupled from them,
+exactly the slack in `maxHeight ≤ surfaceArea ≤ cols·maxHeight`. This is *why* a Lyapunov function
+on a sum/budget alone is provably insufficient — the adversary aims a single cell at the top. -/
+theorem exists_one_cell_at_brink {cfg : GameConfig}
+    (hcols : 0 < cfg.cols) (hrows : 0 < cfg.rows) :
+    ∃ b : Board, WF cfg b ∧ b.count = 1 ∧ maxHeight cfg b = cfg.rows := by
+  refine ⟨{(0, cfg.rows - 1)}, ?_, ?_, ?_⟩
+  · intro p hp
+    rw [Finset.mem_singleton] at hp; subst hp
+    exact hcols
+  · exact Finset.card_singleton _
+  · apply le_antisymm
+    · apply maxHeight_le_rows_of_not_isLost
+      rw [not_isLost_iff_forall_row_lt]
+      intro p hp
+      rw [Finset.mem_singleton] at hp; subst hp
+      exact Nat.sub_lt hrows Nat.one_pos
+    · have hlt := Board.lt_colHeight (Finset.mem_singleton_self ((0 : ℕ), cfg.rows - 1))
+      exact le_trans (by omega) (colHeight_le_maxHeight hcols)
+
 end Tetris.Board
