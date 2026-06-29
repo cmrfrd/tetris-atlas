@@ -84,17 +84,6 @@ theorem applyStep_count_le {cfg : GameConfig} (b : Board) (pl : Placement) :
 
 
 
-/-- Two non-full rows with the same post-clear position are the same row: the
-gravity row-map is injective on non-full rows. -/
-theorem row_map_eq_of_not_full {cfg : GameConfig} {b : Board} {r1 r2 : ℕ}
-    (h1 : ¬ isFull cfg b r1) (h2 : ¬ isFull cfg b r2)
-    (he : r1 - clearedBelow cfg b r1 = r2 - clearedBelow cfg b r2) : r1 = r2 := by
-  by_contra hne
-  rcases Nat.lt_or_ge r1 r2 with hlt | hge
-  · have := row_map_lt cfg b hlt h1; omega
-  · have hgt : r2 < r1 := by omega
-    have := row_map_lt cfg b hgt h2; omega
-
 /-- **Clearing actually clears every full line:** after `clearLines`, no row is
 full. (Gravity only relocates surviving rows, and being injective it never
 recombines two partial rows into a full one.) -/

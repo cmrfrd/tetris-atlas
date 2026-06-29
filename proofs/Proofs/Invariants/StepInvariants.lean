@@ -113,6 +113,18 @@ theorem row_map_lt (cfg : GameConfig) (b : Board) {r1 r2 : ℕ}
     clearedBelow_le_add cfg b (by omega)
   omega
 
+/-- Two non-full rows with the same post-clear position are the same row: the gravity
+row-map is injective on non-full rows. The shared injectivity core consumed by
+`clearLines_card`, `colCount_clearLines_add`, and `clearLines_no_full`. -/
+theorem row_map_eq_of_not_full {cfg : GameConfig} {b : Board} {r1 r2 : ℕ}
+    (h1 : ¬ isFull cfg b r1) (h2 : ¬ isFull cfg b r2)
+    (he : r1 - clearedBelow cfg b r1 = r2 - clearedBelow cfg b r2) : r1 = r2 := by
+  by_contra hne
+  rcases Nat.lt_or_ge r1 r2 with hlt | hge
+  · have := row_map_lt cfg b hlt h1; omega
+  · have hgt : r2 < r1 := by omega
+    have := row_map_lt cfg b hgt h2; omega
+
 /-! ## Line-clear cell counts -/
 
 /-- After clearing lines, the surviving cells are exactly the non-full-row
@@ -125,12 +137,7 @@ theorem clearLines_card (cfg : GameConfig) (b : Board) :
   simp only [Finset.mem_coe, Finset.mem_filter] at hp hq
   simp only [Prod.mk.injEq] at hpq
   obtain ⟨h1, h2⟩ := hpq
-  have heq2 : p.2 = q.2 := by
-    by_contra hne
-    rcases Nat.lt_or_ge p.2 q.2 with hlt | hge
-    · have := row_map_lt cfg b hlt hp.2; omega
-    · have hgt : q.2 < p.2 := by omega
-      have := row_map_lt cfg b hgt hq.2; omega
+  have heq2 : p.2 = q.2 := row_map_eq_of_not_full hp.2 hq.2 h2
   exact Prod.ext_iff.mpr ⟨h1, heq2⟩
 
 /-- The full-row cells are the union of the complete rows. -/

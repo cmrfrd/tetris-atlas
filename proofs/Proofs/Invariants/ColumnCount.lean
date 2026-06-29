@@ -83,12 +83,7 @@ theorem colCount_clearLines_add (cfg : GameConfig) (b : Board) {j : ℕ}
     simp only [Finset.mem_coe, Finset.mem_filter] at hp hq
     simp only [Prod.mk.injEq] at hpq
     obtain ⟨h1, h2⟩ := hpq
-    have heq2 : p.2 = q.2 := by
-      by_contra hne
-      rcases Nat.lt_or_ge p.2 q.2 with hlt | hge
-      · have := row_map_lt cfg b hlt hp.2; omega
-      · have hgt : q.2 < p.2 := by omega
-        have := row_map_lt cfg b hgt hq.2; omega
+    have heq2 : p.2 = q.2 := row_map_eq_of_not_full hp.2 hq.2 h2
     exact Prod.ext_iff.mpr ⟨h1, heq2⟩
   unfold colCount
   omega
