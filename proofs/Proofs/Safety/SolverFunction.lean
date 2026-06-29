@@ -613,4 +613,18 @@ theorem solver_move_count_le_capacity (hv : ValidSolver cfg σ) {g : GameState} 
     ((σ g p).applyStep cfg b).count ≤ cfg.cols * cfg.rows :=
   le_trans (solver_move_count_le hv hp hWF) hbelow
 
+/-! ## Part 22 — The function is determined by its reachable restriction -/
+
+/-- Two solvers agreeing on the reachable region produce identical play. -/
+theorem solver_trace_eq_of_agree_on_reachable (s : ℕ → Piece) {σ₁ σ₂ : Solver cfg}
+    (hl : LegalSequence s)
+    (hagree : ∀ g, solverReachable σ₁ g → ∀ p ∈ g.bag, σ₁ g p = σ₂ g p) (n : ℕ) :
+    adversarialTrace cfg σ₁ s GameState.init n
+      = adversarialTrace cfg σ₂ s GameState.init n := by
+  apply solver_trace_determined_by_visited s n
+  intro k _
+  exact hagree (adversarialTrace cfg σ₁ s GameState.init k)
+    (adversarialTrace_solverReachable σ₁ hl k) (s k)
+    (by rw [adversarialTrace_bag]; exact hl k)
+
 end Tetris
