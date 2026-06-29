@@ -759,4 +759,16 @@ theorem solver_energy_split {b : Board} (hwf : Board.WF cfg b) :
     HoleDebt.debt cfg b + b.count = HoleDebt.surfaceArea cfg b :=
   HoleDebt.debt_add_card_eq_sum_colHeight hwf
 
+/-! ## Q42. How tightly does aggregate energy track the loss-relevant max height? -/
+
+/-- **Energy brackets max height only up to a factor of `cols`.** Always `maxHeight ≤ surfaceArea ≤
+cols·maxHeight`. The lower bound says energy can't hide a tall spike; the upper bound is loose by a
+full `cols` factor (a flat board of height `h` has `surfaceArea = cols·h`, a single spike has
+`surfaceArea = h`). That slack is exactly the room a sum/energy potential leaves uncontrolled in the
+max — the quantitative reason (Q12) the program cannot steer by aggregate energy alone. -/
+theorem solver_energy_brackets_maxHeight (b : Board) :
+    Board.maxHeight cfg b ≤ HoleDebt.surfaceArea cfg b ∧
+    HoleDebt.surfaceArea cfg b ≤ cfg.cols * Board.maxHeight cfg b :=
+  ⟨HoleDebt.maxHeight_le_surfaceArea cfg b, HoleDebt.surfaceArea_le_cols_mul_maxHeight cfg b⟩
+
 end Tetris
