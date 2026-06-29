@@ -584,4 +584,9 @@ theorem solver_slice_injOn_bag (hv : ValidSolver cfg σ) (g : GameState) :
   by_contra hne
   exact solver_outputs_differ_by_piece hv hp hp' hne he
 
+/-- The response table has exactly `|bag|` entries — one distinct output per drawable piece. -/
+theorem solver_response_table_card_eq (hv : ValidSolver cfg σ) (g : GameState) :
+    (g.bag.image (fun p => σ g p)).card = g.bag.card :=
+  Finset.card_image_of_injOn (solver_slice_injOn_bag hv g)
+
 end Tetris
