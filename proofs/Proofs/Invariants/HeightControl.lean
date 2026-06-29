@@ -321,6 +321,18 @@ theorem not_isLost_of_maxHeight_le {cfg : GameConfig} {b : Board}
       exact absurd (hwf (j, r) hr) (by omega)
     omega
 
+/-- **The whole problem in one line: `¬ isLost b ↔ maxHeight b ≤ rows`** (for well-formed `b`).
+Surviving forever is exactly: keep this single scalar under the ceiling for every reachable board.
+The difficulty assembled in this file is that this one number is (1) a one-way ratchet only clears
+lower, (2) climbing a hard `+4` per move with no reset, while clears are (3) forced near capacity
+yet (4) obstructed by the coordination they need and the holes the adversary plants, and (5) the
+number is decoupled from every additive budget a Lyapunov argument could bound — danger is jointly
+height *and* holes. That is why `init ∈ safe` resists a scalar potential and demands a two-axis,
+non-congruent (atlas-style) invariant. -/
+theorem not_isLost_iff_maxHeight_le {cfg : GameConfig} {b : Board} (hwf : WF cfg b) :
+    ¬ isLost cfg b ↔ maxHeight cfg b ≤ cfg.rows :=
+  ⟨fun h => maxHeight_le_rows_of_not_isLost cfg h, not_isLost_of_maxHeight_le hwf⟩
+
 /-! ## The per-move material speed limit -/
 
 /-- **Cells grow by at most 4 per move.** `count (applyStep b) ≤ count b + 4`: a piece deposits 4
