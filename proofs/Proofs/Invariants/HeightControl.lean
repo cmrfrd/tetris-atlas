@@ -279,4 +279,44 @@ theorem cols_mul_linesCleared_le {cfg : GameConfig} {b : Board} {pl : Placement}
     cfg.cols * Board.linesCleared cfg (pl.place b) ≤ b.count + 4 := by
   have := applyStep_count cfg b pl hwf hv; omega
 
+/-- **Only clearing makes real progress.** A move that clears at least one line strictly beats the
+`+4` cell gain: `count (applyStep b) < count b + 4`. So the steady material inflow is reversed only
+on the moves that clear — and (`cols_le_card_row_of_isFull`) those require assembling a full
+`cols`-wide row the adversary fights to prevent. -/
+theorem count_applyStep_lt_of_clear {cfg : GameConfig} {b : Board} {pl : Placement}
+    (hwf : WF cfg b) (hv : pl.Valid cfg) (hcols : 0 < cfg.cols)
+    (hclear : 0 < Board.linesCleared cfg (pl.place b)) :
+    (pl.applyStep cfg b).count < b.count + 4 := by
+  have hstep := applyStep_count cfg b pl hwf hv
+  have hge : cfg.cols ≤ cfg.cols * Board.linesCleared cfg (pl.place b) :=
+    Nat.le_mul_of_pos_right _ hclear
+  omega
+
+/-! ## Synthesis — why the crux is hard, assembled from the above
+
+The survival problem is exactly to hold `maxHeight ≤ rows` forever
+(`maxHeight_le_rows_of_not_isLost`, `isLost_of_mem_row_ge`). The theorems above show why that is
+hard against a piece-picking adversary:
+
+1. **One-way ratchet.** Placement only *raises* the max (`maxHeight_le_place`); the *sole* way to
+   lower it is a line clear (`maxHeight_clearLines_le`). Height is irreversible except by clearing.
+2. **Bounded but relentless climb.** Each move pushes the ceiling up by a hard `+4`
+   (`maxHeight_applyStep_le_add_four`) and the cell count likewise (`count_applyStep_le_add_four`);
+   no single move resets the danger (`cols_mul_linesCleared_le`).
+3. **Clearing is forced.** A surviving board fits the field (`count_le_capacity_of_not_isLost`), so
+   near capacity the player *must* clear (`must_clear_near_capacity`) — stacking is not an option.
+4. **Clearing is obstructed.** A clear needs a coordinated full `cols`-wide row
+   (`cols_le_card_row_of_isFull`), and the adversary's S/Z holes make their rows permanently
+   unclearable (`not_isFull_of_mem_holes`, `notMem_fullRows_of_mem_holes`); only clearing makes
+   real progress (`count_applyStep_lt_of_clear`).
+5. **The danger metric is decoupled from every budget.** `maxHeight ≤ surfaceArea ≤ cols·maxHeight`
+   (in `HoleDebt`) and the witnesses `exists_one_cell_at_brink` / `exists_full_board_at_brink` show
+   a board can sit at the loss boundary with *any* amount of material or energy. So a Lyapunov
+   function on a sum/budget alone provably cannot certify survival — the player must control the
+   *max*, which no additive potential sees.
+
+Together: the player is forced to keep clearing a height that only clears can lower, while the
+adversary buries holes and scatters fills to deny the coordinated full rows clearing needs — and
+no budget the player might bound actually tracks the max-height danger. That is the crux. -/
+
 end Tetris.Board
