@@ -645,4 +645,18 @@ theorem solverStep_ne_of_bag_ne {g : GameState} {p : Piece} (h : g.bag.draw p �
   apply h
   rw [← solver_next_bag g p, he]
 
+/-! ## Part 24 — Algebraic and invariance facts -/
+
+/-- `σ g` is a section of the piece-projection on the bag: projecting recovers the input piece. -/
+theorem solver_section_of_piece (hv : ValidSolver cfg σ) (g : GameState)
+    {p : Piece} (hp : p ∈ g.bag) :
+    (Placement.piece ∘ σ g) p = p :=
+  (hv g p hp).1
+
+/-- The canonical function's orbit from a safe start stays in `safe` forever. -/
+theorem safeSolver_trace_mem_safe (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg (safeSolver cfg) s GameState.init n ∈ safe cfg :=
+  solver_trace_mem_safe (canonical_memoryless_solver hcols h) hl n
+
 end Tetris
