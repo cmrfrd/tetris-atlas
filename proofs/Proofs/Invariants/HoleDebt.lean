@@ -394,6 +394,21 @@ theorem debt_applyStep_le {cfg : GameConfig} {b : Board} {pl : Placement}
   have he := debt_place_eq hwf hv
   omega
 
+/-! ## Energy bounds the loss-relevant max height -/
+
+/-- **The energy bounds the max column height.** `maxHeight ≤ surfaceArea`: the loss-relevant
+quantity — the tallest column, since loss is `maxHeight > rows` — is dominated by the total
+energy `surfaceArea = Σ colHeight` (a max is at most a sum of non-negatives). So any ceiling on
+the energy yields a ceiling on the max height, hence on survival. This is the link from the
+debt/energy Lyapunov theory to the actual `isLost` condition; the bound is loose — the converse
+`surfaceArea ≤ cols · maxHeight` shows a tall single spike costs little total energy, which is
+exactly why a *sum*-controlling Lyapunov function alone cannot certify the *max*-based survival
+goal (the structural reason the crux is hard). -/
+theorem maxHeight_le_surfaceArea (cfg : GameConfig) (b : Board) :
+    Board.maxHeight cfg b ≤ surfaceArea cfg b := by
+  unfold Board.maxHeight surfaceArea
+  exact Finset.sup_le (fun j hj => Finset.single_le_sum (fun _ _ => Nat.zero_le _) hj)
+
 
 /-! ## Status and next targets
 
