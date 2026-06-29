@@ -1144,4 +1144,14 @@ theorem standard_solver_bounds {σ : Solver GameConfig.standard}
     rw [GameConfig.standard_cols, GameConfig.standard_rows] at hc
     omega
 
+/-! ## Q71. What is the survival condition at the level of individual cells? -/
+
+/-- **Survival ⟺ every cell below row `rows`.** The not-lost predicate expands to a uniform per-cell
+ceiling: a board is alive exactly when every occupied cell lies strictly below row `rows`. So the
+program's task, cell by cell, is to keep the field's top rows empty — the simplest possible form of
+the loss test, with no aggregate quantity involved. -/
+theorem solver_not_lost_iff_cells_below_rows (b : Board) :
+    ¬ Board.isLost cfg b ↔ ∀ p ∈ b, p.2 < cfg.rows :=
+  Board.not_isLost_iff_forall_row_lt cfg b
+
 end Tetris
