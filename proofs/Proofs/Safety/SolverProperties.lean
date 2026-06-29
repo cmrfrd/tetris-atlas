@@ -1040,4 +1040,13 @@ theorem solver_no_repeat_within_bag (bag : Bag) (p : Piece) (hp : p ∈ bag)
     ¬ (bag.draw p).canDraw p :=
   not_canDraw_after_draw bag p hp hne
 
+/-! ## Q65. What renewal process feeds the program its pieces? -/
+
+/-- **The bag renews: count down, then refill.** Each draw either depletes the bag by one piece or
+(on the last piece) resets it to the full seven. So the input is a deterministic renewal loop of
+period 7 — the program faces a predictable, fair cadence of pieces, never an arbitrary stream. -/
+theorem solver_bag_renewal (bag : Bag) (p : Piece) (hp : p ∈ bag) :
+    (bag.draw p).card = bag.card - 1 ∨ bag.draw p = Bag.full :=
+  draw_card bag p hp
+
 end Tetris
