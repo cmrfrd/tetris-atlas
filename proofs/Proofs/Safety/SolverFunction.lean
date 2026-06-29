@@ -1096,4 +1096,11 @@ theorem solver_move_energy_brackets (g : GameState) (p : Piece) (b : Board) :
         ≤ cfg.cols * Board.maxHeight cfg ((σ g p).applyStep cfg b) :=
   ⟨HoleDebt.maxHeight_le_surfaceArea cfg _, HoleDebt.surfaceArea_le_cols_mul_maxHeight cfg _⟩
 
+/-! ## Part 41 — The policy graph -/
+
+/-- Each state has at most `|bag|` successors in the induced policy graph (bounded out-degree). -/
+theorem solver_outdegree_le (g : GameState) :
+    (g.bag.image (fun p => solverStep cfg σ p g)).card ≤ g.bag.card :=
+  Finset.card_image_le
+
 end Tetris
