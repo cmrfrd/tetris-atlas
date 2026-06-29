@@ -100,4 +100,29 @@ theorem solver_output_in_total_action_set (hv : ValidSolver cfg σ) {g : GameSta
     σ g p ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg) :=
   Finset.mem_biUnion.mpr ⟨p, Finset.mem_univ p, solver_output_in_action_set hv hp⟩
 
+/-! ## Part 3 — Compressibility: finite range, finite active domain -/
+
+/-- **The function's range is finite.** The set of *all* placements a valid solver ever returns
+(over every state and every drawable piece) is a finite set — contained in the fixed finite menu
+`⋃ₚ allValidFor cfg p`. However astronomically large the input space, the function emits only
+finitely many distinct outputs: as a relation it is a *finite-image* map, hence compressible on the
+output side to a bounded table of placements. -/
+theorem solver_range_finite (hv : ValidSolver cfg σ) :
+    {pl : Placement | ∃ g p, p ∈ g.bag ∧ σ g p = pl}.Finite := by
+  apply Set.Finite.subset
+    ((Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg)).finite_toSet
+  rintro pl ⟨g, p, hp, rfl⟩
+  exact Finset.mem_coe.mpr (solver_output_in_total_action_set hv hp)
+
+/-- **The active domain is finite.** A solving program is only ever *queried* on states it can
+reach, and every such state lies in the finite `inFieldStates cfg`. So the survival-relevant part of
+the function is a map on `inFieldStates × Piece` — a finite lookup table — even though its type
+domain (all `GameState`) is infinite. Together with finite range, the solver compresses to a finite
+object: this is exactly the Atlas. -/
+theorem solver_active_domain_finite (h : SolvesTetrisValid cfg σ) {g : GameState}
+    (hr : solverReachable σ g) :
+    g ∈ inFieldStates cfg :=
+  reachable_safe_mem_inFieldStates
+    (solver_states_reachable_from_empty h hr) (solver_no_dead_ends h hr)
+
 end Tetris
