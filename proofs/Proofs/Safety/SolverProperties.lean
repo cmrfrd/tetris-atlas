@@ -1129,4 +1129,19 @@ theorem standard_solver_clears_within_51 {σ : Solver GameConfig.standard}
              ≠ (adversarialTrace GameConfig.standard σ s GameState.init k).board.count + 4 :=
   solver_clears_within h hl (by decide)
 
+/-- **Concrete standard bounds: height ≤ 20, cells ≤ 200, forever.** Instantiating the survival
+metric and material budget for the canonical 10×20 board: a solving program holds the stack at most
+20 rows tall and at most 200 cells, at every step against every sequence. -/
+theorem standard_solver_bounds {σ : Solver GameConfig.standard}
+    (h : SolvesTetrisValid GameConfig.standard σ) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Board.maxHeight GameConfig.standard
+        (adversarialTrace GameConfig.standard σ s GameState.init n).board ≤ 20 ∧
+    (adversarialTrace GameConfig.standard σ s GameState.init n).board.count ≤ 200 := by
+  refine ⟨?_, ?_⟩
+  · have hm := solver_maintains_maxHeight h.2 hl n
+    rwa [GameConfig.standard_rows] at hm
+  · have hc := solver_count_le_capacity h hl n
+    rw [GameConfig.standard_cols, GameConfig.standard_rows] at hc
+    omega
+
 end Tetris
