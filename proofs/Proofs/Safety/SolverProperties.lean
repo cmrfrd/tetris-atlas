@@ -617,4 +617,24 @@ theorem any_safe_selector_survives
         rw [adversarialTrace_bag]; exact hl k
       exact hstep _ ih (s k) hbag
 
+/-! ## Q32. How soon must the program start repeating? -/
+
+/-- **The program revisits a state within `|inFieldStates|` steps.** Sharpening Q14's eventual
+repeat: among the first `|inFieldStates cfg| + 1` states on the trace, two must coincide (pigeonhole
+on the finite arena). So the loop the program is forced into begins after a bounded prefix — the
+pre-period is at most the size of the in-field state space, not unboundedly far out. -/
+theorem solver_repeats_within_inFieldStates (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) :
+    ∃ i j : ℕ, i < j ∧ j ≤ (inFieldStates cfg).card ∧
+      adversarialTrace cfg σ s GameState.init i
+        = adversarialTrace cfg σ s GameState.init j := by
+  obtain ⟨i, hi, j, hj, hij, heq⟩ := Finset.exists_ne_map_eq_of_card_lt_of_maps_to
+    (s := Finset.range ((inFieldStates cfg).card + 1)) (t := inFieldStates cfg)
+    (by rw [Finset.card_range]; exact Nat.lt_succ_self _)
+    (fun a _ => solver_trace_mem_inFieldStates h hl a)
+  rcases Nat.lt_or_ge i j with hlt | hge
+  · exact ⟨i, j, hlt, by have := Finset.mem_range.mp hj; omega, heq⟩
+  · exact ⟨j, i, lt_of_le_of_ne hge (Ne.symm hij),
+      by have := Finset.mem_range.mp hi; omega, heq.symm⟩
+
 end Tetris
