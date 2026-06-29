@@ -193,8 +193,8 @@ theorem exists_one_cell_at_brink {cfg : GameConfig}
     · have hlt := Board.lt_colHeight (Finset.mem_singleton_self ((0 : ℕ), cfg.rows - 1))
       exact le_trans (by omega) (colHeight_le_maxHeight hcols)
 
-/-- Every row of the full rectangle is full (hence clearable): `(c, r)` is present for all in-range
-`c`, `r`. The full board is entirely hole-free, the opposite extreme from a board of buried holes. -/
+/-- Every row of the full rectangle is full (hence clearable): `(c, r)` is present for all
+in-range `c`, `r`. The full board is hole-free — the opposite extreme from a board of holes. -/
 theorem isFull_full_board {cfg : GameConfig} {r : ℕ} (hr : r < cfg.rows) :
     isFull cfg (Finset.range cfg.cols ×ˢ Finset.range cfg.rows) r := by
   intro c hc
