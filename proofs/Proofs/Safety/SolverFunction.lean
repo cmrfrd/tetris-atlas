@@ -515,4 +515,20 @@ theorem solver_move_rows_bounded (b : Board) (g : GameState) (p : Piece) {c : Co
   exact ⟨Nat.le_add_right _ _,
     by show (σ g p).dropOffset b + cell.2 < (σ g p).dropOffset b + 4; omega⟩
 
+/-- **The move adds at most 4 net cells.** Applying the output (with the clear phase) grows the cell
+count by at most 4 — a tetromino's worth, before any clears subtract more. -/
+theorem solver_move_count_le (hv : ValidSolver cfg σ) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b) :
+    ((σ g p).applyStep cfg b).count ≤ b.count + 4 :=
+  Board.count_applyStep_le_add_four hWF (solver_output_valid hv hp)
+
+/-- **Near capacity a surviving move must clear.** If the board is within 4 of capacity and the
+output's move stays alive, it cleared a line — the function is forced to clear there. -/
+theorem solver_move_must_clear (hv : ValidSolver cfg σ) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b)
+    (hnear : cfg.cols * cfg.rows < b.count + 4)
+    (hsurv : ¬ Board.isLost cfg ((σ g p).applyStep cfg b)) :
+    0 < Board.linesCleared cfg ((σ g p).place b) :=
+  Board.must_clear_near_capacity hWF (solver_output_valid hv hp) hnear hsurv
+
 end Tetris
