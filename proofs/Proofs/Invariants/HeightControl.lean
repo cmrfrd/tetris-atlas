@@ -124,4 +124,26 @@ theorem maxHeight_applyStep_le_add_four {cfg : GameConfig} (b : Board) {pl : Pla
     (hv : pl.Valid cfg) : maxHeight cfg (pl.applyStep cfg b) ≤ maxHeight cfg b + 4 :=
   le_trans (maxHeight_applyStep_le_place cfg b pl) (maxHeight_place_le_add_four b hv)
 
+/-! ## Near capacity, clearing is forced -/
+
+/-- **A surviving move near capacity must clear a line.** If a well-formed board is within 4
+cells of the field capacity (`cols·rows < count + 4`) and a valid move keeps it alive, then that
+move cleared at least one line. Proof: the cell ledger `applyStep_count`
+(`count' + cols·linesCleared = count + 4`) with no clear gives `count' = count + 4 > cols·rows`,
+contradicting `count_le_capacity_of_not_isLost`. So the player cannot merely stack near the top —
+survival *requires* completing full rows there, exactly where the board is most constrained.
+This is the bind the adversary exploits: force the stack up, then make the needed full rows hard
+to assemble. -/
+theorem must_clear_near_capacity {cfg : GameConfig} {b : Board} {pl : Placement}
+    (hwf : WF cfg b) (hv : pl.Valid cfg)
+    (hfull : cfg.cols * cfg.rows < b.count + 4)
+    (hsurvive : ¬ isLost cfg (pl.applyStep cfg b)) :
+    0 < Board.linesCleared cfg (pl.place b) := by
+  by_contra hzero
+  have hz : Board.linesCleared cfg (pl.place b) = 0 := by omega
+  have hcount := applyStep_count cfg b pl hwf hv
+  rw [hz, Nat.mul_zero, Nat.add_zero] at hcount
+  have hcap := count_le_capacity_of_not_isLost (Placement.applyStep_wf hwf hv) hsurvive
+  omega
+
 end Tetris.Board
