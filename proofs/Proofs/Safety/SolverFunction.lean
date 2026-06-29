@@ -400,4 +400,16 @@ theorem solver_move_superset (b : Board) (g : GameState) (p : Piece) :
   rw [Placement.place_eq_union_dropped]
   exact Finset.subset_union_left
 
+/-- **The output's four new cells are disjoint from the board.** The dropped tetromino never
+overlaps existing cells — it rests on top, adding four genuinely new cells. -/
+theorem solver_dropped_disjoint (b : Board) (g : GameState) (p : Piece) :
+    Disjoint b ((σ g p).dropped b) :=
+  (Placement.dropped_disjoint b (σ g p)).symm
+
+/-- **Each state's response table has at most `|bag|` entries.** The function's outputs for a state,
+over its drawable pieces, number at most the bag size (`≤ 7`) — a tiny per-state slice. -/
+theorem solver_response_table_card_le (g : GameState) :
+    (g.bag.image (fun p => σ g p)).card ≤ g.bag.card :=
+  Finset.card_image_le
+
 end Tetris
