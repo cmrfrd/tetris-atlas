@@ -547,4 +547,14 @@ theorem solver_per_bag_resource {l : List Piece} (h : BagBurst.IsBagOrder l) :
     l.countP BagBurst.isI = 1 ∧ l.countP BagBurst.isSZ = 2 :=
   ⟨BagBurst.countP_isI h, BagBurst.countP_isSZ h⟩
 
+/-- **The program's drain budget exceeds its clearing need.** Over `n` bags the I-pieces supply
+`20·(#I) = 20·n` rows of draining capacity, comfortably above the `14·n` that roughness recovery
+requires. So the program is never *starved* of draining resource — which localizes the real
+difficulty: the obstruction is the *geometry* of cashing each I-drain into an actual clear, not any
+shortage of drains. The budget is there; cashing it into clears against holes is the crux. -/
+theorem solver_drain_budget_suffices {bags : List (List Piece)}
+    (h : ∀ b ∈ bags, BagBurst.IsBagOrder b) :
+    14 * bags.length ≤ 20 * bags.flatten.countP BagBurst.isI :=
+  BagBurst.drain_budget_ge_clearing_need h
+
 end Tetris
