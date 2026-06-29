@@ -1013,4 +1013,20 @@ theorem solver_board_wf (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
     Board.WF cfg (adversarialTrace cfg σ s GameState.init n).board :=
   reachable_WF (solver_states_reachable_from_empty h (adversarialTrace_solverReachable σ hl n))
 
+/-! ## Q63. Is placement reversible, or a one-way ratchet? -/
+
+/-- **Placement never lowers a column.** Dropping a piece can only keep or raise each column height.
+So the program cannot reduce height by placing — only the obstructed clear lever brings columns
+down. This per-column irreversibility is the height ratchet at the heart of the difficulty. -/
+theorem solver_placement_raises_columns (b : Board) (pl : Placement) (j : ℕ) :
+    Board.colHeight b j ≤ Board.colHeight (pl.place b) j :=
+  colHeight_le_place b pl j
+
+/-- **Placement never lowers the max height either.** The aggregate ratchet: `maxHeight b ≤
+maxHeight (place b)`. With "clearing only lowers" (Q39), height moves up freely on every placement
+and down only through assembled clears — irreversible except via the obstructed lever. -/
+theorem solver_placement_raises_maxHeight (b : Board) (pl : Placement) :
+    Board.maxHeight cfg b ≤ Board.maxHeight cfg (pl.place b) :=
+  Board.maxHeight_le_place cfg b pl
+
 end Tetris
