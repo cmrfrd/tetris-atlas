@@ -1223,4 +1223,16 @@ theorem solver_input_portrait (hv : ValidSolver cfg σ) (s : ℕ → Piece) (hl 
   ⟨fun n => adversarialTrace_bag_nonempty σ hl n, fun n => solver_queried_in_bag s hl n,
    fun n => solver_play_outputs_in_menu hv s hl n⟩
 
+/-- Two-number portrait: the output is `⟨p, rot, col⟩`, determined by `(rot, col)`, a grid point. -/
+theorem solver_two_number_portrait (hv : ValidSolver cfg σ) {g : GameState}
+    {p : Piece} (hp : p ∈ g.bag) :
+    (σ g p = ⟨p, (σ g p).rot, (σ g p).col⟩) ∧
+    (∀ g₂, p ∈ g₂.bag →
+      (σ g p).rot = (σ g₂ p).rot → (σ g p).col = (σ g₂ p).col → σ g p = σ g₂ p) ∧
+    (((σ g p).rot, (σ g p).col)
+      ∈ (Finset.univ : Finset Rotation) ×ˢ Finset.range cfg.cols) :=
+  ⟨solver_output_eq_mk hv hp,
+   fun _ hp₂ hr hc => solver_eq_of_rotcol hv hp hp₂ hr hc,
+   solver_output_in_grid hv hp⟩
+
 end Tetris
