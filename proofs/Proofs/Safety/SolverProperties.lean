@@ -598,4 +598,23 @@ theorem closed_atlas_yields_solver {A : Atlas cfg} {S : Finset GameState}
     TetrisSolvableFor cfg :=
   h.tetrisSolvableFor_of_init_mem hinit
 
+/-! ## Q31. How constrained is the program's choice — must it play one specific move? -/
+
+/-- **Any policy that stays in `safe` survives — the program is free in its choices.** A solver need
+not follow one prescribed move: *every* policy `σ` whose move from each safe state lands back in
+`safe` survives forever from a safe start. Survival is not a unique strategy but a whole family —
+the only invariant it must respect is membership in `safe`; within that, all choices win. -/
+theorem any_safe_selector_survives
+    (hstep : ∀ g ∈ safe cfg, ∀ p ∈ g.bag, adversarialStep cfg g p (σ g p) ∈ safe cfg)
+    (hinit : GameState.init ∈ safe cfg) : SolvesTetris cfg σ := by
+  intro s hl n
+  suffices h : adversarialTrace cfg σ s GameState.init n ∈ safe cfg from safe_not_lost h
+  induction n with
+  | zero => simpa using hinit
+  | succ k ih =>
+      rw [adversarialTrace_succ]
+      have hbag : s k ∈ (adversarialTrace cfg σ s GameState.init k).bag := by
+        rw [adversarialTrace_bag]; exact hl k
+      exact hstep _ ih (s k) hbag
+
 end Tetris
