@@ -494,4 +494,14 @@ theorem solver_output_code_lt (hv : ValidSolver cfg σ) {g : GameState}
   have hr := (σ g p).rot.isLt
   omega
 
+/-- **The move touches at most four columns.** Every cell the output drops sits in a column in
+`[col, col+4)` — the function makes a local move spanning ≤ 4 columns, never a global edit. -/
+theorem solver_move_cols_bounded (b : Board) (g : GameState) (p : Piece) {c : Coord}
+    (hc : c ∈ (σ g p).dropped b) :
+    (σ g p).col ≤ c.1 ∧ c.1 < (σ g p).col + 4 := by
+  rw [Placement.dropped, Placement.cellsAt, Finset.mem_image] at hc
+  obtain ⟨cell, hcell, rfl⟩ := hc
+  have h4 := Piece.shapeUp_col_lt_four (σ g p).piece (σ g p).rot cell hcell
+  exact ⟨Nat.le_add_right _ _, by show (σ g p).col + cell.1 < (σ g p).col + 4; omega⟩
+
 end Tetris
