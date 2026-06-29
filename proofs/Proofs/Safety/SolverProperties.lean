@@ -1,5 +1,6 @@
 import Proofs.Safety.SafeIterateFinite
 import Proofs.Invariants.HeightControl
+import Proofs.Combinatorics.BagBurst
 
 /-!
 # Properties of a Tetris-solving program — the solver-characterization experiment
@@ -535,5 +536,15 @@ theorem adversary_S_can_plant_unclearable_hole :
         (Placement.place ∅ ⟨Piece.S, 0, 0⟩)
       ∧ ¬ Board.isFull GameConfig.standard (Placement.place ∅ ⟨Piece.S, 0, 0⟩) 0 :=
   ⟨Board.S_buries_hole, Board.S_hole_row_not_isFull⟩
+
+/-! ## Q28. What resource structure does the 7-bag hand the program each cycle? -/
+
+/-- **A fixed per-bag resource mix: one I-drain against two S/Z roughness.** Every bag the program
+faces is a permutation of the seven pieces, so it contains exactly one `I` (its sole guaranteed
+height-draining piece) and exactly two roughness pieces `S`/`Z`. The program's survival schedule is
+clocked by this renewal: a steady supply of one drain and two hole-injectors per bag. -/
+theorem solver_per_bag_resource {l : List Piece} (h : BagBurst.IsBagOrder l) :
+    l.countP BagBurst.isI = 1 ∧ l.countP BagBurst.isSZ = 2 :=
+  ⟨BagBurst.countP_isI h, BagBurst.countP_isSZ h⟩
 
 end Tetris
