@@ -193,6 +193,34 @@ theorem exists_one_cell_at_brink {cfg : GameConfig}
     · have hlt := Board.lt_colHeight (Finset.mem_singleton_self ((0 : ℕ), cfg.rows - 1))
       exact le_trans (by omega) (colHeight_le_maxHeight hcols)
 
+/-- **A completely full board is at the same brink.** The full rectangle has `count = cols·rows`
+(maximal material) yet `maxHeight = rows` and is not lost — the identical danger level as the
+one-cell board. So the survival boundary `maxHeight = rows` is reached at *every* material level
+from 1 cell (`exists_one_cell_at_brink`) up to `cols·rows`. Material says nothing about how close
+to death the player is; only the highest cell does. The danger metric and every additive budget
+are orthogonal. -/
+theorem exists_full_board_at_brink {cfg : GameConfig}
+    (hcols : 0 < cfg.cols) (hrows : 0 < cfg.rows) :
+    ∃ b : Board, WF cfg b ∧ b.count = cfg.cols * cfg.rows ∧
+      ¬ isLost cfg b ∧ maxHeight cfg b = cfg.rows := by
+  refine ⟨Finset.range cfg.cols ×ˢ Finset.range cfg.rows, ?_, ?_, ?_, ?_⟩
+  · intro p hp
+    exact Finset.mem_range.mp (Finset.mem_product.mp hp).1
+  · unfold Board.count
+    rw [Finset.card_product, Finset.card_range, Finset.card_range]
+  · rw [not_isLost_iff_forall_row_lt]
+    intro p hp
+    exact Finset.mem_range.mp (Finset.mem_product.mp hp).2
+  · apply le_antisymm
+    · apply maxHeight_le_rows_of_not_isLost
+      rw [not_isLost_iff_forall_row_lt]
+      intro p hp
+      exact Finset.mem_range.mp (Finset.mem_product.mp hp).2
+    · have hmem : ((0 : ℕ), cfg.rows - 1) ∈ Finset.range cfg.cols ×ˢ Finset.range cfg.rows :=
+        Finset.mem_product.mpr ⟨Finset.mem_range.mpr hcols, Finset.mem_range.mpr (by omega)⟩
+      have hlt := Board.lt_colHeight hmem
+      exact le_trans (by omega) (colHeight_le_maxHeight hcols)
+
 /-! ## Clearing is a coordinated, expensive operation -/
 
 /-- **A clearable row costs a full width of cells.** A full row contains at least `cols` cells
