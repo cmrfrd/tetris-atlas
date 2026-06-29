@@ -511,4 +511,16 @@ theorem maxHeight_alone_does_not_decide_loss (hcols : 0 < cfg.cols) (hrows : 0 <
   obtain ⟨b, hwf, _, hnl, hm⟩ := Board.exists_full_board_at_brink hcols hrows
   exact ⟨b, hwf, hm, hnl⟩
 
+/-! ## Q26. What does a single hole cost the program? -/
+
+/-- **A hole is a double obstruction.** Each buried hole `p` simultaneously (1) blocks its own row
+from ever being a full row — so the program's line-clear primitive cannot touch it directly — and
+(2) sits under a filled cell, so it is exposed only by first clearing the rows *above* it. Holes are
+sticky debt: unclearable in place, removable only by digging from the top, exactly the lever the
+adversary's S/Z roughness attacks. -/
+theorem solver_hole_obstruction {b : Board} {p : Coord}
+    (hp : p ∈ HoleyCarrier.holes cfg b) :
+    ¬ Board.isFull cfg b p.2 ∧ ∃ r, p.2 < r ∧ (p.1, r) ∈ b :=
+  ⟨Board.not_isFull_of_mem_holes hp, Board.exists_cover_of_hole hp⟩
+
 end Tetris
