@@ -463,4 +463,17 @@ theorem solver_next_bag (g : GameState) (p : Piece) :
     (solverStep cfg σ p g).bag = g.bag.draw p :=
   rfl
 
+/-- **The bag-evolution is choice-independent.** Any two solvers advance the bag identically — the
+bag component of the dynamics ignores the function. Only the board evolution carries the choice. -/
+theorem solver_bag_evolution_independent (σ₁ σ₂ : Solver cfg) (g : GameState) (p : Piece) :
+    (solverStep cfg σ₁ p g).bag = (solverStep cfg σ₂ p g).bag :=
+  rfl
+
+/-- **The canonical choice is a definite witness on the winning region.** On `safe ∩ bag`,
+`safeSolver g p` is the `Classical.choose` of `safe_step` — a fixed (noncomputable) selection. -/
+theorem safeSolver_choice_eq_choose {g : GameState} (hg : g ∈ safe cfg)
+    {p : Piece} (hp : p ∈ g.bag) :
+    safeSolver cfg g p = Classical.choose (safe_step hg hp) :=
+  safeSolver_eq_choose_of_safe_and_in_bag hg hp
+
 end Tetris
