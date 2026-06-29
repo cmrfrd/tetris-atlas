@@ -193,12 +193,23 @@ theorem exists_one_cell_at_brink {cfg : GameConfig}
     · have hlt := Board.lt_colHeight (Finset.mem_singleton_self ((0 : ℕ), cfg.rows - 1))
       exact le_trans (by omega) (colHeight_le_maxHeight hcols)
 
-/-- **A completely full board is at the same brink.** The full rectangle has `count = cols·rows`
-(maximal material) yet `maxHeight = rows` and is not lost — the identical danger level as the
-one-cell board. So the survival boundary `maxHeight = rows` is reached at *every* material level
-from 1 cell (`exists_one_cell_at_brink`) up to `cols·rows`. Material says nothing about how close
-to death the player is; only the highest cell does. The danger metric and every additive budget
-are orthogonal. -/
+/-- Every row of the full rectangle is full (hence clearable): `(c, r)` is present for all in-range
+`c`, `r`. The full board is entirely hole-free, the opposite extreme from a board of buried holes. -/
+theorem isFull_full_board {cfg : GameConfig} {r : ℕ} (hr : r < cfg.rows) :
+    isFull cfg (Finset.range cfg.cols ×ˢ Finset.range cfg.rows) r := by
+  intro c hc
+  exact Finset.mem_product.mpr ⟨hc, Finset.mem_range.mpr hr⟩
+
+/-- **A completely full board reaches the boundary too — but is the SAFE extreme.** The full
+rectangle has `count = cols·rows` (maximal material) and `maxHeight = rows`, yet — unlike the
+one-cell board — it is hole-free, so *every* row is full and clearable (`isFull_full_board`): a
+piece placed on top leaves rows `0…rows-1` complete, so the move clears them all and the board
+survives. Two lessons. (a) `maxHeight = rows` is reached at *every* material level from 1 cell
+(`exists_one_cell_at_brink`) to `cols·rows`, so the loss metric is decoupled from `count`/energy.
+(b) At that same boundary the hole-free board is *safe* while the holey one-cell board is
+*precarious* — danger is governed by `maxHeight` **together with** clearability (holes), neither
+alone. So even tracking `maxHeight` is insufficient; a survival invariant must also see the hole
+structure — exactly the two-axis difficulty `HoleyCarrier`'s non-congruence refutations expose. -/
 theorem exists_full_board_at_brink {cfg : GameConfig}
     (hcols : 0 < cfg.cols) (hrows : 0 < cfg.rows) :
     ∃ b : Board, WF cfg b ∧ b.count = cfg.cols * cfg.rows ∧
@@ -309,14 +320,19 @@ hard against a piece-picking adversary:
    (`cols_le_card_row_of_isFull`), and the adversary's S/Z holes make their rows permanently
    unclearable (`not_isFull_of_mem_holes`, `notMem_fullRows_of_mem_holes`); only clearing makes
    real progress (`count_applyStep_lt_of_clear`).
-5. **The danger metric is decoupled from every budget.** `maxHeight ≤ surfaceArea ≤ cols·maxHeight`
-   (in `HoleDebt`) and the witnesses `exists_one_cell_at_brink` / `exists_full_board_at_brink` show
-   a board can sit at the loss boundary with *any* amount of material or energy. So a Lyapunov
-   function on a sum/budget alone provably cannot certify survival — the player must control the
-   *max*, which no additive potential sees.
+5. **The danger is decoupled from every budget — and is two-axis.** `maxHeight ≤ surfaceArea ≤
+   cols·maxHeight` (in `HoleDebt`) and the witnesses `exists_one_cell_at_brink` /
+   `exists_full_board_at_brink` show `maxHeight = rows` occurs at *any* material/energy, so no
+   additive (sum) potential tracks the loss metric. Worse, at that same boundary the hole-free full
+   board is *safe* (every row clears, `isFull_full_board`) while the holey one-cell board is
+   *precarious* — danger needs `maxHeight` **and** clearability (holes). So even a max-height
+   potential is insufficient: a survival invariant must jointly track the height envelope and the
+   hole structure, and (`HoleyCarrier`) holes are non-congruent under the dynamics.
 
 Together: the player is forced to keep clearing a height that only clears can lower, while the
 adversary buries holes and scatters fills to deny the coordinated full rows clearing needs — and
-no budget the player might bound actually tracks the max-height danger. That is the crux. -/
+no single scalar (height, energy, count) tracks the joint height-and-hole danger. That is the
+crux: it demands a two-axis, non-congruent invariant, which is why every scalar-potential route in
+this project floored. -/
 
 end Tetris.Board
