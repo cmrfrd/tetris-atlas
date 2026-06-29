@@ -1089,4 +1089,15 @@ theorem solver_action_space_nonempty (hcols : 4 ≤ cfg.cols) (p : Piece) :
   change 0 + cell.1 < cfg.cols
   omega
 
+/-! ## Q69. What set does the program's operating region equal? -/
+
+/-- **The program operates inside `safe ∩ reachable`.** Every state it can reach is both survivable
+(`safe`) and genuinely reachable from the empty board. That intersection — survivable *and*
+reachable states — is precisely the Atlas the project builds: not all of `safe` (some is unreachable
+junk) and not all of `reachable` (some is doomed), but exactly their overlap. -/
+theorem solver_operates_in_safe_and_reachable (h : SolvesTetrisValid cfg σ) {g : GameState}
+    (hr : solverReachable σ g) :
+    g ∈ safe cfg ∧ Reachable cfg g :=
+  ⟨solver_no_dead_ends h hr, solver_states_reachable_from_empty h hr⟩
+
 end Tetris
