@@ -972,4 +972,15 @@ theorem solver_even_count (hcols : Even cfg.cols) (h : SolvesTetrisValid cfg σ)
   reachable_even_count hcols
     (solver_states_reachable_from_empty h (adversarialTrace_solverReachable σ hl n))
 
+/-! ## Q59. How much height can the program recover in one move? -/
+
+/-- **A single move clears at most 4 rows.** From a settled board (no pending full rows), one
+placement completes at most 4 full rows — and only the `I`-piece can reach 4. So the program's
+per-move height recovery is capped at a Tetris, the rarest and hardest-to-assemble clear: survival
+cannot rely on big one-shot recoveries, only on a steady cadence of small clears. -/
+theorem solver_clears_at_most_four {b : Board} (pl : Placement)
+    (hnf : ∀ r, ¬ Board.isFull cfg b r) :
+    Board.linesCleared cfg (pl.place b) ≤ 4 :=
+  linesCleared_place_le_four cfg b pl hnf
+
 end Tetris
