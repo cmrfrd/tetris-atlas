@@ -564,4 +564,20 @@ theorem solver_roughness_two_per_drain {l : List Piece} (h : BagBurst.IsBagOrder
     l.countP BagBurst.isSZ = 2 * l.countP BagBurst.isI :=
   BagBurst.renewal_ratio h
 
+/-! ## Q29. Can the program's winning region be compressed to a dominated basis? -/
+
+/-- **No: the safety step is non-congruent, so no dominated-basis abstraction captures it.** Under
+the hole-aware order `safeLE` (taller *and* holier), neither placement nor line-clearing is
+hole-monotone: an emptier board can become holier after the same drop (`place_holes_mono_false`),
+and clears can manufacture new holes (`clearLines_holes_le_false`). Hence a survival certificate
+cannot be a finite basis of dominated worst-cases — the program's region is irreducibly an
+*explicit* enumeration (an atlas). This is why every Lyapunov / WQO / dominated-basis route
+floors. -/
+theorem solver_region_not_dominated_basis :
+    (¬ ∀ (cfg : GameConfig) (b β : Board) (pl : Placement), HoleyCarrier.safeLE cfg b β →
+        HoleyCarrier.holes cfg (pl.place b) ⊆ HoleyCarrier.holes cfg (pl.place β))
+    ∧ (¬ ∀ (cfg : GameConfig) (b : Board),
+        HoleyCarrier.holes cfg (Board.clearLines cfg b) ⊆ HoleyCarrier.holes cfg b) :=
+  ⟨HoleyCarrier.place_holes_mono_false, HoleyCarrier.clearLines_holes_le_false⟩
+
 end Tetris
