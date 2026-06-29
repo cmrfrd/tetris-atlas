@@ -248,4 +248,22 @@ theorem solver_play_eventually_repeats (h : SolvesTetrisValid cfg σ) {s : ℕ �
       (inFieldStates cfg).finite_toSet
   exact ⟨i, j, hij, heq⟩
 
+/-! ## Q14. How does the program react to which piece is drawn? -/
+
+/-- **A safe response for every drawable piece.** From any safe state, each piece the bag can yield
+has a valid placement that lands back in `safe`. The program is genuinely *reactive*: its move is a
+function of the drawn piece, and for each of them it has a survival-preserving answer. -/
+theorem solver_safe_response_each_piece {g : GameState} (hg : g ∈ safe cfg)
+    {p : Piece} (hp : p ∈ g.bag) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧ adversarialStep cfg g p pl ∈ safe cfg :=
+  safe_forall_step hg p hp
+
+/-- **From the empty board the program must answer all seven tetrominoes.** `init`'s bag is full, so
+a solving program needs a safe placement for every one of O, I, S, Z, T, L, J as the very first
+piece — no opening is allowed to be a piece it cannot safely absorb. -/
+theorem solver_handles_all_seven_at_init (h : GameState.init ∈ safe cfg) (p : Piece) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧
+      adversarialStep cfg GameState.init p pl ∈ safe cfg :=
+  safe_forall_step h p (GameState.init_bag.symm ▸ Bag.mem_full p)
+
 end Tetris
