@@ -56,4 +56,17 @@ theorem maxHeight_le_rows_of_not_isLost (cfg : GameConfig) {b : Board} (h : ¬ i
   unfold maxHeight
   exact Finset.sup_le (fun j _ => colHeight_le_rows_of_not_isLost cfg h j)
 
+/-! ## A surviving board is resource-tight, so the player is forced to clear -/
+
+/-- **A surviving board fits inside the field.** `¬ isLost b → count b ≤ cols·rows` (well-formed
+`b`): the volume bound `count ≤ cols·maxHeight` composed with `maxHeight ≤ rows`. Since
+`count_place` adds exactly 4 cells per piece, the board climbs 4 cells per move toward this cap
+of `cols·rows`, so a run with no line clears lasts at most `cols·rows / 4` pieces — the player
+is *forced* to clear. The whole adversarial difficulty is then concentrated in making the full
+rows a clear requires as expensive as possible to assemble. -/
+theorem count_le_capacity_of_not_isLost {cfg : GameConfig} {b : Board}
+    (hwf : WF cfg b) (h : ¬ isLost cfg b) : b.count ≤ cfg.cols * cfg.rows := by
+  calc b.count ≤ cfg.cols * maxHeight cfg b := count_le_cols_mul_maxHeight b hwf
+    _ ≤ cfg.cols * cfg.rows := by gcongr; exact maxHeight_le_rows_of_not_isLost cfg h
+
 end Tetris.Board
