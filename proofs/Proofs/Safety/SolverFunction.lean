@@ -761,4 +761,17 @@ theorem solver_uncurry_apply (g : GameState) (p : Piece) :
     Function.uncurry σ (g, p) = σ g p :=
   rfl
 
+/-! ## Part 31 — The canonical function's reachable set -/
+
+/-- Every state the canonical function reaches is safe. -/
+theorem safeSolver_reachable_safe (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {g : GameState} (hr : solverReachable (safeSolver cfg) g) : g ∈ safe cfg :=
+  solver_no_dead_ends (canonical_memoryless_solver hcols h) hr
+
+/-- The canonical function's reachable set is forward-closed. -/
+theorem safeSolver_reachable_step_closed {g : GameState}
+    (hr : solverReachable (safeSolver cfg) g) {p : Piece} (hp : p ∈ g.bag) :
+    solverReachable (safeSolver cfg) (adversarialStep cfg g p (safeSolver cfg g p)) :=
+  solverReachable.step p hr hp
+
 end Tetris
