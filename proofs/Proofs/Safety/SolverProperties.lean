@@ -842,4 +842,26 @@ theorem canonical_solver_first_move_safe (h : GameState.init ∈ safe cfg) (p : 
     adversarialStep cfg GameState.init p (safeSolver cfg GameState.init p) ∈ safe cfg :=
   safeSolver_init_step_mem_safe h p
 
+/-! ## Q49. What is the scale of the universe the program lives in? -/
+
+/-- **The universe is vast but finite: exactly `2^207` states.** For canonical 10×20 Tetris the set
+of well-formed, in-field game states has cardinality `2^207` (`2^200` boards × `128` bags). The
+program's Atlas is a subset of this enormous-but-finite space — precisely why brute force is
+hopeless yet a finite proof artifact exists at all. -/
+theorem solver_universe_size_standard :
+    (inFieldStates GameConfig.standard).card = 2 ^ 207 :=
+  standard_inFieldStates_card_eq_two_pow_207
+
+/-- **The program's table uses at most 128 distinct bag-states.** Across its realizing cycle the
+program sees at most `128 = 2^7` distinct bag values (subsets of the 7 pieces). So while the board
+dimension is huge (Q24), the bag dimension is small and bounded — the table is board-dominated. -/
+theorem solver_distinct_bags_le (hcols : 4 ≤ cfg.cols)
+    (hex : ∃ σ : Solver cfg, SolvesTetrisValid cfg σ) :
+    ∃ C : AdversarialClosedCycleWF cfg,
+      GameState.init ∈ C.toAdversarialClosedCycle.states ∧
+      (C.toAdversarialClosedCycle.states.image GameState.bag).card ≤ 128 := by
+  obtain ⟨C, hinit⟩ := (init_safe_iff_exists_init_adversarialClosedCycleWF cfg).mp
+    ((solver_exists_iff_init_safe hcols).mp hex)
+  exact ⟨C, hinit, C.toAdversarialClosedCycle.image_bag_card_le_128⟩
+
 end Tetris
