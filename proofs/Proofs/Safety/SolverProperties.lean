@@ -325,4 +325,24 @@ theorem solver_existence_decidable {S₀ : Finset GameState} (hcols : 4 ≤ cfg.
   obtain ⟨N, _, hfix⟩ := safeIterFinite_converges cfg S₀
   exact ⟨N, tetrisSolvableValidFor_iff_init_mem_safeIterFinite hcols hS₀ N hfix⟩
 
+/-- **A finite refutation certificate.** If at *any* iteration step `init` has already fallen out of
+the shrinking approximation `safeIterFinite cfg S₀ n`, then no solving program exists — no need to
+run to convergence. One snapshot showing `init` is gone is a complete proof of unsolvability. -/
+theorem no_solver_of_init_not_mem_safeIterFinite {S₀ : Finset GameState}
+    (hcols : 4 ≤ cfg.cols) (hS₀ : safe cfg ⊆ ↑S₀) (n : ℕ)
+    (h : GameState.init ∉ safeIterFinite cfg S₀ n) :
+    ¬ ∃ σ : Solver cfg, SolvesTetrisValid cfg σ :=
+  fun hex => init_not_safe_of_init_not_mem_safeIterFinite hS₀ n h
+    ((solver_exists_iff_init_safe hcols).mp hex)
+
+/-- **An empty winning region kills every start.** If the finite iteration collapses to `∅`, then
+`safe = ∅`, so no program can solve the game from `init` — survival is impossible from anywhere. -/
+theorem no_solver_of_safeIterFinite_empty {S₀ : Finset GameState}
+    (hcols : 4 ≤ cfg.cols) (hS₀ : safe cfg ⊆ ↑S₀) {n : ℕ}
+    (hempty : safeIterFinite cfg S₀ n = ∅) :
+    ¬ ∃ σ : Solver cfg, SolvesTetrisValid cfg σ := by
+  refine no_solver_from_unsafe_init hcols ?_
+  rw [safe_eq_empty_of_safeIterFinite_empty hS₀ hempty]
+  exact Set.notMem_empty _
+
 end Tetris
