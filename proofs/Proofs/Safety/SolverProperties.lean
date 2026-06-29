@@ -771,4 +771,22 @@ theorem solver_energy_brackets_maxHeight (b : Board) :
     HoleDebt.surfaceArea cfg b ≤ cfg.cols * Board.maxHeight cfg b :=
   ⟨HoleDebt.maxHeight_le_surfaceArea cfg b, HoleDebt.surfaceArea_le_cols_mul_maxHeight cfg b⟩
 
+/-! ## Q43. Is this section's subject literally the project's conjecture, on real Tetris? -/
+
+/-- **"A solving program exists" is exactly `TetrisSolvableValid`.** For the canonical 10×20 game,
+the existence of a valid solving program is, by definition, the project's headline conjecture. This
+whole section is therefore a characterization of *what `TetrisSolvableValid` would entail*. -/
+theorem solver_exists_iff_tetrisSolvableValid :
+    (∃ σ : Solver GameConfig.standard, SolvesTetrisValid GameConfig.standard σ)
+      ↔ TetrisSolvableValid :=
+  Iff.rfl
+
+/-- **On real Tetris, the conjecture reduces to one membership.** The standard `10 ≥ 4` columns
+satisfy the precondition, so a solving program for canonical Tetris exists iff the empty-board state
+lies in `safe` — the single decidable question the Atlas project sets out to answer. -/
+theorem standard_solver_exists_iff_init_safe :
+    (∃ σ : Solver GameConfig.standard, SolvesTetrisValid GameConfig.standard σ)
+      ↔ GameState.init ∈ safe GameConfig.standard :=
+  solver_exists_iff_init_safe (by decide)
+
 end Tetris
