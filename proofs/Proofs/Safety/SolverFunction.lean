@@ -149,4 +149,18 @@ theorem solvers_agree_on_survival {σ₁ σ₂ : Solver cfg}
     SolvesTetris cfg σ₁ ∧ SolvesTetris cfg σ₂ :=
   ⟨any_safe_selector_survives h₁ hinit, any_safe_selector_survives h₂ hinit⟩
 
+/-! ## Part 5 — The function genuinely collapses its input space -/
+
+/-- **Pigeonhole: the function must give two states the same move.** Fix a piece `p`. If a set `T`
+of states all drawing `p` is larger than the action menu `allValidFor cfg p`, then two distinct
+states in `T` receive the *same* placement. So the solver, viewed as `state ↦ placement` for a fixed
+piece, cannot be injective once the input set outgrows the (small, fixed) output set — it provably
+*loses information*, compressing many distinct boards onto one response. -/
+theorem solver_per_piece_noninjective (hv : ValidSolver cfg σ) {p : Piece}
+    (T : Finset GameState) (hT : ∀ g ∈ T, p ∈ g.bag)
+    (hcard : (Placement.allValidFor cfg p).card < T.card) :
+    ∃ g₁ ∈ T, ∃ g₂ ∈ T, g₁ ≠ g₂ ∧ σ g₁ p = σ g₂ p :=
+  Finset.exists_ne_map_eq_of_card_lt_of_maps_to hcard
+    (fun g hg => solver_output_in_action_set hv (hT g hg))
+
 end Tetris
