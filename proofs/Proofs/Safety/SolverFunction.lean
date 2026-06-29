@@ -567,4 +567,21 @@ theorem solver_trace_zero (s : ℕ → Piece) :
     adversarialTrace cfg σ s GameState.init 0 = GameState.init := by
   simp
 
+/-! ## Part 20 — The function across pieces at one state -/
+
+/-- The function gives distinct pieces distinct outputs (injective in the piece). -/
+theorem solver_outputs_differ_by_piece (hv : ValidSolver cfg σ) {g : GameState}
+    {p p' : Piece} (hp : p ∈ g.bag) (hp' : p' ∈ g.bag) (hne : p ≠ p') :
+    σ g p ≠ σ g p' := by
+  intro he
+  apply hne
+  rw [← solver_output_announces_piece hv hp, ← solver_output_announces_piece hv hp', he]
+
+/-- The per-state response slice `σ g` is injective on the bag. -/
+theorem solver_slice_injOn_bag (hv : ValidSolver cfg σ) (g : GameState) :
+    Set.InjOn (fun p => σ g p) g.bag := by
+  intro p hp p' hp' he
+  by_contra hne
+  exact solver_outputs_differ_by_piece hv hp hp' hne he
+
 end Tetris
