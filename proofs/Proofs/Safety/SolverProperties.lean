@@ -462,4 +462,25 @@ theorem solver_exists_yields_closed_atlas (hcols : 4 ≤ cfg.cols)
   exact ⟨C.toAdversarialClosedCycle.solver.toAtlas, C.toAdversarialClosedCycle.states,
     C.toAdversarialClosedCycle.solver_toAtlas_isClosedOn_states, hinit⟩
 
+/-! ## Q23. Does the program rely on luck, or beat the worst case? -/
+
+/-- **No legal sequence ever beats the program.** A solving program tops out under *no* legal 7-bag
+sequence, at *no* horizon. Survival is not luck against a random bag: it is a guarantee against the
+worst-case adversary, universally over all sequences the randomizer could ever produce. -/
+theorem solver_no_killing_sequence (h : SolvesTetris cfg σ) :
+    ¬ ∃ (s : ℕ → Piece) (n : ℕ),
+        LegalSequence s ∧ (adversarialTrace cfg σ s GameState.init n).lost cfg :=
+  fun ⟨s, n, hl, hlost⟩ => h s hl n hlost
+
+/-- **Conversely, from an unsafe start the adversary defeats every valid program.** If `init ∉
+safe`, then for any valid solver there is a legal sequence and a horizon at which it tops out. The
+bag, as an adversary, wins exactly when no program does — the safety game is determined. -/
+theorem adversary_beats_every_valid_solver (hcols : 4 ≤ cfg.cols)
+    (h : GameState.init ∉ safe cfg) (σ : Solver cfg) (hv : ValidSolver cfg σ) :
+    ∃ (s : ℕ → Piece) (n : ℕ),
+      LegalSequence s ∧ (adversarialTrace cfg σ s GameState.init n).lost cfg := by
+  by_contra hcon
+  push_neg at hcon
+  exact h ((solver_exists_iff_init_safe hcols).mp ⟨σ, hv, fun s hl n => hcon s n hl⟩)
+
 end Tetris
