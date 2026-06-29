@@ -214,4 +214,15 @@ theorem card_total_action_set_le (cfg : GameConfig) :
     _ = Fintype.card Piece * (cfg.cols * 4) := by
         rw [Finset.sum_const, Finset.card_univ, smul_eq_mul]
 
+/-- **On standard Tetris the function emits at most 280 distinct placements.** With `|Piece| = 7`
+and `cols = 10`, the whole output menu has `≤ 7·40 = 280` entries. The input space has `2^207`
+states, so as a map it compresses an astronomical domain onto a range of fewer than 300 values. -/
+theorem card_total_action_set_standard_le :
+    ((Finset.univ : Finset Piece).biUnion
+      (Placement.allValidFor GameConfig.standard)).card ≤ 280 := by
+  have h := card_total_action_set_le GameConfig.standard
+  have hp : Fintype.card Piece = 7 := by decide
+  rw [hp, GameConfig.standard_cols] at h
+  omega
+
 end Tetris
