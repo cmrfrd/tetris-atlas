@@ -580,4 +580,22 @@ theorem solver_region_not_dominated_basis :
         HoleyCarrier.holes cfg (Board.clearLines cfg b) ⊆ HoleyCarrier.holes cfg b) :=
   ⟨HoleyCarrier.place_holes_mono_false, HoleyCarrier.clearLines_holes_le_false⟩
 
+/-! ## Q30. Can the program's table be built piecewise — and is a table already a program? -/
+
+/-- **Closed tables compose.** If atlas `A` is closed on `S₁` and `B` on `S₂`, their `unionOn` is
+closed on `S₁ ∪ S₂`. So the Atlas can be assembled incrementally — absorb one closed region at a
+time — rather than synthesized monolithically. -/
+theorem solver_atlas_composes {A B : Atlas cfg} {S₁ S₂ : Finset GameState}
+    (hA : A.IsClosedOn cfg S₁) (hB : B.IsClosedOn cfg S₂) :
+    (A.unionOn B S₁ S₂).IsClosedOn cfg (S₁ ∪ S₂) :=
+  hA.unionOn hB
+
+/-- **A closed table already is a program.** Any atlas closed on a set containing `init` yields a
+solver that survives forever — the lookup table is not a description of a program, it *is* one. This
+is the M4 artifact discharging the whole conjecture: build the closed table, get the survivor. -/
+theorem closed_atlas_yields_solver {A : Atlas cfg} {S : Finset GameState}
+    (h : A.IsClosedOn cfg S) (hinit : GameState.init ∈ S) :
+    TetrisSolvableFor cfg :=
+  h.tetrisSolvableFor_of_init_mem hinit
+
 end Tetris
