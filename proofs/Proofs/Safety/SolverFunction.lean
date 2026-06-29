@@ -967,4 +967,14 @@ theorem solver_place_maxHeight_le (hv : ValidSolver cfg σ) {g : GameState} {p :
     Board.maxHeight cfg ((σ g p).place b) ≤ Board.maxHeight cfg b + 4 :=
   Board.maxHeight_place_le_add_four b (solver_output_valid hv hp)
 
+/-- The function's placement never reduces the buried-hole count. -/
+theorem solver_place_never_removes_holes (g : GameState) (p : Piece) (b : Board) :
+    (HoleyCarrier.holes cfg b).card ≤ (HoleyCarrier.holes cfg ((σ g p).place b)).card :=
+  HoleDebt.holes_card_le_place cfg b (σ g p)
+
+/-- The function's move only raises each column (placement) before clears. -/
+theorem solver_place_raises_columns (g : GameState) (p : Piece) (b : Board) (j : ℕ) :
+    Board.colHeight b j ≤ Board.colHeight ((σ g p).place b) j :=
+  colHeight_le_place b (σ g p) j
+
 end Tetris
