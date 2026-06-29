@@ -589,4 +589,15 @@ theorem solver_response_table_card_eq (hv : ValidSolver cfg σ) (g : GameState) 
     (g.bag.image (fun p => σ g p)).card = g.bag.card :=
   Finset.card_image_of_injOn (solver_slice_injOn_bag hv g)
 
+/-! ## Part 21 — The board orbit -/
+
+/-- Each board step applies the function's output to the running board. -/
+theorem solver_trace_board_succ (hv : ValidSolver cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    (adversarialTrace cfg σ s GameState.init (n + 1)).board
+      = (σ (adversarialTrace cfg σ s GameState.init n) (s n)).applyStep cfg
+          (adversarialTrace cfg σ s GameState.init n).board := by
+  rw [solver_trace_eq_solverStep]
+  exact solver_next_board hv (solver_queried_in_bag s hl n)
+
 end Tetris
