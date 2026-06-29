@@ -259,4 +259,24 @@ theorem isLost_of_mem_row_ge {cfg : GameConfig} {b : Board} {j r : ℕ}
   have h2 := Board.lt_colHeight hmem
   omega
 
+/-! ## The per-move material speed limit -/
+
+/-- **Cells grow by at most 4 per move.** `count (applyStep b) ≤ count b + 4`: a piece deposits 4
+cells and clears only remove. The material analogue of the +4 height ceiling
+(`maxHeight_applyStep_le_add_four`) — both the stack height and the cell count advance by a hard
+`+4` per move, so the board's danger budgets tick up at the same bounded rate. -/
+theorem count_applyStep_le_add_four {cfg : GameConfig} {b : Board} {pl : Placement}
+    (hwf : WF cfg b) (hv : pl.Valid cfg) : (pl.applyStep cfg b).count ≤ b.count + 4 := by
+  have := applyStep_count cfg b pl hwf hv; omega
+
+/-- **A single move cannot outrun the accumulation.** `cols·linesCleared ≤ count + 4`: the cells
+one move removes are bounded by those then present (plus the new 4). So clearing only ever chips
+away — the player can never erase the stack in one move, only balance the steady +4 inflow over a
+long horizon. This is why survival is an unbounded balancing act, not a finite puzzle: there is no
+single move that resets the danger. -/
+theorem cols_mul_linesCleared_le {cfg : GameConfig} {b : Board} {pl : Placement}
+    (hwf : WF cfg b) (hv : pl.Valid cfg) :
+    cfg.cols * Board.linesCleared cfg (pl.place b) ≤ b.count + 4 := by
+  have := applyStep_count cfg b pl hwf hv; omega
+
 end Tetris.Board
