@@ -476,4 +476,10 @@ theorem safeSolver_choice_eq_choose {g : GameState} (hg : g ∈ safe cfg)
     safeSolver cfg g p = Classical.choose (safe_step hg hp) :=
   safeSolver_eq_choose_of_safe_and_in_bag hg hp
 
+/-- **The canonical opening choice keeps `init` safe.** If `init` is safe, the step under
+`safeSolver`'s output for any first piece lands back in `safe`. -/
+theorem safeSolver_init_choice_safe (h : GameState.init ∈ safe cfg) (p : Piece) :
+    adversarialStep cfg GameState.init p (safeSolver cfg GameState.init p) ∈ safe cfg :=
+  safeSolver_init_step_mem_safe h p
+
 end Tetris
