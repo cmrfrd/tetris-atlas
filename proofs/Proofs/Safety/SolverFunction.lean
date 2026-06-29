@@ -671,4 +671,11 @@ theorem safeSolver_trace_not_lost (hcols : 4 ≤ cfg.cols) (h : GameState.init �
     ¬ (adversarialTrace cfg (safeSolver cfg) s GameState.init n).lost cfg :=
   safe_not_lost (safeSolver_trace_mem_safe hcols h hl n)
 
+/-! ## Part 25 — The per-piece slice as a finite-codomain map -/
+
+/-- The per-piece slice maps states-drawing-`p` into the finite action set. -/
+theorem solver_slice_mapsTo (hv : ValidSolver cfg σ) (p : Piece) :
+    Set.MapsTo (fun g => σ g p) {g | p ∈ g.bag} ↑(Placement.allValidFor cfg p) :=
+  fun _ hg => Finset.mem_coe.mpr (solver_output_in_action_set hv hg)
+
 end Tetris
