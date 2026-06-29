@@ -53,4 +53,31 @@ theorem solver_maintains_maxHeight (h : SolvesTetris cfg σ) {s : ℕ → Piece}
     Board.maxHeight cfg (adversarialTrace cfg σ s GameState.init n).board ≤ cfg.rows :=
   Board.maxHeight_le_rows_of_not_isLost cfg (h s hl n)
 
+/-! ## Q4. Can a solving program ever be stuck (no legal response)? -/
+
+/-- **A solving program is never stuck.** In every state it reaches, every piece the adversary can
+draw has a *valid* placement available (because the state is `safe`, and safe states have a response
+to each bag piece). So the controller is total — it can never be forced into "no move"; the only
+failure mode it must avoid is a move that *leaves* `safe`. -/
+theorem solver_never_stuck (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) {p : Piece}
+    (hp : p ∈ (adversarialTrace cfg σ s GameState.init n).bag) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg :=
+  safe_has_valid_for_each_bag_piece (solver_trace_mem_safe h hl n) hp
+
+/-! ## Q5. Is the board the program maintains bounded? -/
+
+/-- **A solving program keeps the board inside the field: `count ≤ cols·rows`.** Every reachable
+state is well-formed (`reachable_WF`) and not lost, so by `count_le_capacity_of_not_isLost` it holds
+at most `cols·rows` cells. The program never lets the stack exceed the field's capacity — combined
+with `solver_maintains_maxHeight`, its entire reachable set lives in the finite, bounded box of
+in-field boards. -/
+theorem solver_count_le_capacity (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    (adversarialTrace cfg σ s GameState.init n).board.count ≤ cfg.cols * cfg.rows := by
+  have hwf : Board.WF cfg (adversarialTrace cfg σ s GameState.init n).board :=
+    reachable_WF (solverReachable_implies_reachable_of_solves h.1 h.2
+      (adversarialTrace_solverReachable σ hl n))
+  exact Board.count_le_capacity_of_not_isLost hwf (h.2 s hl n)
+
 end Tetris
