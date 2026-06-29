@@ -266,4 +266,17 @@ theorem safeSolver_always_announces_piece (g : GameState) (p : Piece) :
     (safeSolver cfg g p).piece = p :=
   safeSolver_piece cfg g p
 
+/-- **The canonical function only emits valid placements.** `safeSolver` is a `ValidSolver`: every
+output is in-bounds, on both the safe branch and the default branch. -/
+theorem safeSolver_is_valid (hcols : 4 ≤ cfg.cols) : ValidSolver cfg (safeSolver cfg) :=
+  safeSolver_validSolver hcols
+
+/-- **On safe states the canonical function's choice preserves survival.** From a safe `g` with
+drawable `p`, the step under `safeSolver`'s output lands back in `safe`. The function's *content*
+(its non-default values) is exactly a survival-preserving selection on the winning region. -/
+theorem safeSolver_choice_stays_safe {g : GameState} (hg : g ∈ safe cfg)
+    {p : Piece} (hp : p ∈ g.bag) :
+    adversarialStep cfg g p (safeSolver cfg g p) ∈ safe cfg :=
+  safeSolver_step_mem_safe hg hp
+
 end Tetris
