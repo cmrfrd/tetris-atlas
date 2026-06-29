@@ -685,4 +685,19 @@ theorem solver_no_cell_in_death_zone (h : SolvesTetris cfg σ) {s : ℕ → Piec
   by_contra hcon
   exact h s hl n (Board.isLost_of_mem_row_ge (Nat.le_of_not_lt hcon) hc)
 
+/-! ## Q37. Is survival reducible to a single scalar condition? -/
+
+/-- **Survival is exactly `maxHeight ≤ rows`.** At every step the program's state is non-lost *iff*
+its max column height is within the ceiling. So "solving Tetris" reduces, pointwise in time, to
+holding one scalar under one bound — the entire control problem is keeping `maxHeight ≤ rows`
+forever against the adversary (whose difficulty is that lowering it needs an obstructed clear). -/
+theorem solver_not_lost_iff_maxHeight (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    ¬ (adversarialTrace cfg σ s GameState.init n).lost cfg ↔
+      Board.maxHeight cfg (adversarialTrace cfg σ s GameState.init n).board ≤ cfg.rows := by
+  have hwf : Board.WF cfg (adversarialTrace cfg σ s GameState.init n).board :=
+    reachable_WF (solverReachable_implies_reachable_of_solves h.1 h.2
+      (adversarialTrace_solverReachable σ hl n))
+  exact Board.not_isLost_iff_maxHeight_le hwf
+
 end Tetris
