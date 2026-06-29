@@ -1194,4 +1194,14 @@ theorem solver_under_determination_portrait :
   ⟨fun _ hclose hinit => any_safe_selector_survives hclose hinit,
    fun _ hg _ hp => solver_selects_from_good_moves hg hp⟩
 
+/-- Locality portrait: the step depends only on the local value, and the reachable restriction
+determines all play. -/
+theorem solver_locality_portrait {σ₁ σ₂ : Solver cfg} (s : ℕ → Piece) (hl : LegalSequence s) :
+    (∀ g p, σ₁ g p = σ₂ g p → solverStep cfg σ₁ p g = solverStep cfg σ₂ p g) ∧
+    ((∀ g, solverReachable σ₁ g → ∀ p ∈ g.bag, σ₁ g p = σ₂ g p) →
+      ∀ n, adversarialTrace cfg σ₁ s GameState.init n
+        = adversarialTrace cfg σ₂ s GameState.init n) :=
+  ⟨fun g p h => solverStep_congr g p h,
+   fun hagree n => solver_trace_eq_of_agree_on_reachable s hl hagree n⟩
+
 end Tetris
