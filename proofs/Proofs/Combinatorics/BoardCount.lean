@@ -1078,7 +1078,7 @@ theorem lt_maxHeight_of_cols_mul_lt_count {cfg : GameConfig} {b : Board} {H : �
     (hwf : Board.WF cfg b) (h : cfg.cols * H < b.count) :
     H < maxHeight cfg b := by
   by_contra hcon
-  push_neg at hcon
+  push Not at hcon
   have hle := count_le_of_maxHeight_le hwf hcon
   omega
 
@@ -1090,7 +1090,7 @@ theorem maxHeight_le_rows_of_forall_row_lt {cfg : GameConfig} {b : Board}
   unfold maxHeight
   apply Finset.sup_le
   intro j _
-  show (b.colRows j).sup (· + 1) ≤ cfg.rows
+  change (b.colRows j).sup (· + 1) ≤ cfg.rows
   apply Finset.sup_le
   intro r hr
   have hjr : (j, r) ∈ b := by
@@ -1101,7 +1101,7 @@ theorem maxHeight_le_rows_of_forall_row_lt {cfg : GameConfig} {b : Board}
     subst heq
     exact hcell
   have hlt : r < cfg.rows := h (j, r) hjr
-  show r + 1 ≤ cfg.rows
+  change r + 1 ≤ cfg.rows
   omega
 
 /-- A missing in-field cell `(j, r) ∉ b` with `j < cfg.cols` keeps row `r` from

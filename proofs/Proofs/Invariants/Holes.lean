@@ -160,7 +160,7 @@ Lets hole-creation witnesses (e.g. `one_le_holes_S_place_empty`) certify global 
 theorem holes_pos_iff (cfg : GameConfig) (b : Board) :
     0 < holes cfg b ↔ ∃ j ∈ Finset.range cfg.cols, 0 < colHoles b j := by
   rw [Nat.pos_iff_ne_zero, ne_eq, holes_eq_zero_iff]
-  push_neg
+  push Not
   simp only [Nat.pos_iff_ne_zero, ne_eq]
 
 end Board

@@ -128,7 +128,7 @@ theorem rowHoles_card (b : Board) (j : ℕ) :
     (rowHoles b j).card = colHoles b j := by
   unfold rowHoles colHoles
   rw [colRows_eq_filter_range]
-  have h := Finset.filter_card_add_filter_neg_card_eq_card
+  have h := Finset.card_filter_add_card_filter_not
     (s := Finset.range (b.colHeight j)) (p := fun r => (j, r) ∈ b)
   rw [Finset.card_range] at h
   omega
@@ -284,7 +284,7 @@ theorem clearLines_colHeight_add_le {cfg : GameConfig} {b : Board} {j : ℕ}
     have hpd : p.2 < b.colHeight j := Board.lt_colHeight hpjb
     have hseq : s = p.2 - Board.clearedBelow cfg b p.2 := by rw [← hcs, hcell2]
     have ha := Board.clearedBelow_le_row cfg b p.2
-    have hb := Finset.filter_card_add_filter_neg_card_eq_card
+    have hb := Finset.card_filter_add_card_filter_not
       (s := Board.fullRows cfg b) (p := fun f => f < p.2)
     have hcbeq : Board.clearedBelow cfg b p.2
         = ((Board.fullRows cfg b).filter (fun f => f < p.2)).card := rfl

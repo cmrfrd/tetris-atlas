@@ -74,7 +74,7 @@ theorem colHeight_dropped_mono {b β : Board} (pl : Placement) (j : ℕ)
   have hle : d2 + c.2 + 1 ≤ ((pl.cellsAt d2).colRows j).sup (· + 1) :=
     Finset.le_sup hmem
   have hr_eq : r = d1 + c.2 := by rw [← hxr, hx2]
-  show r + 1 ≤ ((pl.cellsAt d2).colRows j).sup (· + 1)
+  change r + 1 ≤ ((pl.cellsAt d2).colRows j).sup (· + 1)
   omega
 
 /-- **THE no-clear monotonicity keystone.** Domination is preserved by the hard-drop
@@ -115,7 +115,7 @@ theorem clearLines_domLE (cfg : GameConfig) (b : Board) :
     have : (q.1, q.2) ∈ b := by simpa using hqb
     rwa [hq1] at this
   have hlt : q.2 < b.colHeight j := Board.lt_colHeight hqjb
-  show r' + 1 ≤ b.colHeight j
+  change r' + 1 ≤ b.colHeight j
   omega
 
 /-- Domination is transitive. -/
