@@ -1323,4 +1323,20 @@ theorem solving_program_master_invariant (h : SolvesTetrisValid cfg σ) {s : ℕ
    solver_maintains_maxHeight h.2 hl n, solver_count_le_capacity h hl n,
    solver_surfaceArea_le_capacity h.2 hl n, solver_debt_le_capacity h hl n⟩
 
+/-- **The decision procedure (assembled from Q76, Q78, Q79).** Given any finite universe covering
+`safe`, there is a step count `N ≤ |S₀|` at which the iteration is at a fixed point that is (1)
+*bounded* (terminates in `≤ |S₀|` steps), (2) *sound* (`⊆ safe`), and (3) *decisive* — a solving
+program exists iff `init` is in the computed set. One theorem packaging the terminating, correct,
+membership-test algorithm the Atlas builder runs to settle solvability. -/
+theorem solver_decision_procedure {S₀ : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hS₀ : safe cfg ⊆ ↑S₀) :
+    ∃ N, N ≤ S₀.card ∧
+      (↑(safeIterFinite cfg S₀ N) : Set GameState) ⊆ safe cfg ∧
+      ((∃ σ : Solver cfg, SolvesTetrisValid cfg σ)
+        ↔ GameState.init ∈ safeIterFinite cfg S₀ N) := by
+  obtain ⟨N, hN, hfix⟩ := safeIterFinite_converges cfg S₀
+  exact ⟨N, hN, safeIterFinite_subset_safe cfg S₀ N hfix,
+    (solver_exists_iff_init_safe hcols).trans
+      (init_safe_iff_init_mem_safeIterFinite hS₀ N hfix)⟩
+
 end Tetris
