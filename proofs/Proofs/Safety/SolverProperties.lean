@@ -1301,4 +1301,26 @@ theorem solver_unsafe_iff_killer_piece {g : GameState} (hnl : ¬ g.lost cfg) :
     obtain ⟨pl, hpiece, hv, hmem⟩ := safe_forall_step hsafe p hp
     exact hkill pl hpiece hv hmem
 
+/-! ## Q83. Capstone — the master invariant a solving program maintains.
+
+The remaining results *compose* the theorems above into the powerful statements the section was
+building toward. -/
+
+/-- **Master invariant (assembled from Q2–Q41).** At every step against every legal sequence, a
+solving program's state simultaneously satisfies the abstract certificate, the structural invariant,
+the survival metric, the material budget, and the two energy budgets — six properties proved
+separately above, now packaged as one — the complete per-step portrait of "being mid-solve". -/
+theorem solving_program_master_invariant (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg σ s GameState.init n ∈ safe cfg ∧
+    Board.WF cfg (adversarialTrace cfg σ s GameState.init n).board ∧
+    Board.maxHeight cfg (adversarialTrace cfg σ s GameState.init n).board ≤ cfg.rows ∧
+    (adversarialTrace cfg σ s GameState.init n).board.count ≤ cfg.cols * cfg.rows ∧
+    HoleDebt.surfaceArea cfg (adversarialTrace cfg σ s GameState.init n).board
+      ≤ cfg.cols * cfg.rows ∧
+    HoleDebt.debt cfg (adversarialTrace cfg σ s GameState.init n).board ≤ cfg.cols * cfg.rows :=
+  ⟨solver_trace_mem_safe h hl n, solver_board_wf h hl n,
+   solver_maintains_maxHeight h.2 hl n, solver_count_le_capacity h hl n,
+   solver_surfaceArea_le_capacity h.2 hl n, solver_debt_le_capacity h hl n⟩
+
 end Tetris
