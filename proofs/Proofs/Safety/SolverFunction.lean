@@ -817,4 +817,18 @@ theorem solver_image_card_le_standard (σ : Solver GameConfig.standard)
   obtain ⟨gp, hgp, rfl⟩ := hpl
   exact solver_output_in_total_action_set hv (hT gp hgp)
 
+/-- Each piece has at most 40 placements on standard Tetris. -/
+theorem card_allValidFor_standard_le (p : Piece) :
+    (Placement.allValidFor GameConfig.standard p).card ≤ 40 := by
+  have h := card_allValidFor_le GameConfig.standard p
+  rw [GameConfig.standard_cols] at h; omega
+
+/-- On standard Tetris the per-piece image has at most 40 distinct outputs. -/
+theorem solver_image_per_piece_standard_le (σ : Solver GameConfig.standard)
+    (hv : ValidSolver GameConfig.standard σ) {p : Piece}
+    (T : Finset GameState) (hT : ∀ g ∈ T, p ∈ g.bag) :
+    (T.image (fun g => σ g p)).card ≤ 40 := by
+  have h := solver_image_per_piece_card_le hv T hT
+  rw [GameConfig.standard_cols] at h; omega
+
 end Tetris
