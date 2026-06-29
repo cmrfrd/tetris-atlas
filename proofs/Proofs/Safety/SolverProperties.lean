@@ -1188,4 +1188,16 @@ theorem solver_board_in_field (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
     c.1 < cfg.cols ∧ c.2 < cfg.rows :=
   ⟨solver_board_wf h hl n c hc, solver_no_cell_in_death_zone h.2 hl n hc⟩
 
+/-! ## Q75. From what state must the program begin? -/
+
+/-- **The program begins from the canonical clean state.** Empty board, full bag, zero cells: the
+program starts with maximal headroom and complete information about the first bag. Every survival
+proof must originate here — `init` is not an arbitrary state but the unique fresh-game configuration
+that makes solvability the empty-board question. -/
+theorem solver_initial_state :
+    GameState.init.bag = Bag.full ∧
+    GameState.init.board.count = 0 ∧
+    GameState.init.board = (∅ : Board) :=
+  ⟨GameState.init_bag, GameState.init_board_count, GameState.init_board_eq_emptyset⟩
+
 end Tetris
