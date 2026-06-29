@@ -1154,4 +1154,13 @@ theorem solver_not_lost_iff_cells_below_rows (b : Board) :
     ¬ Board.isLost cfg b ↔ ∀ p ∈ b, p.2 < cfg.rows :=
   Board.not_isLost_iff_forall_row_lt cfg b
 
+/-! ## Q72. Is there any state between alive and lost? -/
+
+/-- **The loss dichotomy.** Every board is either lost or has all columns within the ceiling — there
+is no in-between. So the program's whole job is to remain perpetually on the "all columns ≤ rows"
+side of this clean two-way split; survival is staying on the bounded side forever. -/
+theorem solver_loss_dichotomy (b : Board) :
+    Board.isLost cfg b ∨ ∀ j, Board.colHeight b j ≤ cfg.rows :=
+  isLost_or_bounded cfg b
+
 end Tetris
