@@ -368,4 +368,16 @@ theorem solver_play_outputs_in_menu (hv : ValidSolver cfg σ) (s : ℕ → Piece
     rw [adversarialTrace_bag]; exact hl n
   exact solver_output_in_action_set hv hbag
 
+/-- **The realized-move sequence has finite range.** The infinite sequence of placements produced
+along a play takes only finitely many distinct values — its range sits in the finite menu
+`⋃ₚ allValidFor cfg p`. The function's whole history of moves is a finite-alphabet sequence. -/
+theorem solver_realized_outputs_finite (hv : ValidSolver cfg σ) (s : ℕ → Piece)
+    (hl : LegalSequence s) :
+    (Set.range fun n => σ (adversarialTrace cfg σ s GameState.init n) (s n)).Finite := by
+  apply Set.Finite.subset
+    ((Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg)).finite_toSet
+  rintro pl ⟨n, rfl⟩
+  exact Finset.mem_coe.mpr (Finset.mem_biUnion.mpr
+    ⟨s n, Finset.mem_univ _, solver_play_outputs_in_menu hv s hl n⟩)
+
 end Tetris
