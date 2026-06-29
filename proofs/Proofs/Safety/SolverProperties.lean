@@ -419,4 +419,31 @@ theorem solver_trace_maxHeight_le_succ (h : SolvesTetrisValid cfg σ) {s : ℕ �
   rw [adversarialTrace_succ]
   exact safe_step_maxHeight_le_add_four hpiece hv
 
+/-! ## Q21. Can the program postpone clearing indefinitely? -/
+
+/-- **No long run without a clear: `4·n ≤ cols·rows`.** Suppose the program clears no line over the
+first `n` moves — encoded as the count rising by exactly `+4` each step (the Q18 ledger: `+4` ⟺ no
+clear). Then the board holds `4·n` cells, which cannot exceed capacity `cols·rows`. So a surviving
+program clears at least once every `⌊cols·rows / 4⌋` moves — it can *delay* clearing but never
+abandon it; line clears recur on a hard schedule. -/
+theorem solver_no_clear_window_bounded (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ)
+    (hno : ∀ k < n,
+        (adversarialTrace cfg σ s GameState.init (k + 1)).board.count
+          = (adversarialTrace cfg σ s GameState.init k).board.count + 4) :
+    4 * n ≤ cfg.cols * cfg.rows := by
+  have key : ∀ m, (∀ k < m,
+      (adversarialTrace cfg σ s GameState.init (k + 1)).board.count
+        = (adversarialTrace cfg σ s GameState.init k).board.count + 4) →
+      (adversarialTrace cfg σ s GameState.init m).board.count = 4 * m := by
+    intro m
+    induction m with
+    | zero => intro _; simp
+    | succ k ih =>
+        intro hh
+        rw [hh k (Nat.lt_succ_self k), ih (fun j hj => hh j (Nat.lt_succ_of_lt hj))]
+        ring
+  calc 4 * n = (adversarialTrace cfg σ s GameState.init n).board.count := (key n hno).symm
+    _ ≤ cfg.cols * cfg.rows := solver_count_le_capacity h hl n
+
 end Tetris
