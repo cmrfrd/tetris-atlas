@@ -217,4 +217,18 @@ theorem brink_decoupled_from_count (hcols : 0 < cfg.cols) (hrows : 0 < cfg.rows)
   obtain ⟨b₂, hwf₂, hc₂, _, hm₂⟩ := Board.exists_full_board_at_brink hcols hrows
   exact ⟨b₁, b₂, h₁, hwf₂, hc₂, hm₂⟩
 
+/-! ## Q13. How many distinct states does the program visit? -/
+
+/-- **The program's trajectory lives in a finite set.** Every state on the trace is reachable and
+safe, hence in `inFieldStates cfg` — the finite set of well-formed, non-lost game states. So however
+long the game runs, the program only ever occupies finitely many distinct configurations: the
+infinite-horizon play is confined to a finite arena. -/
+theorem solver_trace_mem_inFieldStates (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg σ s GameState.init n ∈ inFieldStates cfg :=
+  reachable_safe_mem_inFieldStates
+    (solverReachable_implies_reachable_of_solves h.1 h.2
+      (adversarialTrace_solverReachable σ hl n))
+    (solver_trace_mem_safe h hl n)
+
 end Tetris
