@@ -984,4 +984,16 @@ theorem solver_clear_reduces_debt (hv : ValidSolver cfg σ) {g : GameState} {p :
       ≤ HoleDebt.debt cfg ((σ g p).place b) :=
   HoleDebt.clearLines_debt_le (Board.WF_place hWF (solver_output_valid hv hp))
 
+/-- The function's placement is monotone in the skyline order. -/
+theorem solver_move_skyline_monotone (g : GameState) (p : Piece) {b β : Board}
+    (h : WqoCarrier.domLE b β) :
+    WqoCarrier.domLE ((σ g p).place b) ((σ g p).place β) :=
+  WqoCarrier.place_domLE_mono (σ g p) h
+
+/-- The function's move evolves the skyline independently of buried holes. -/
+theorem solver_move_skyline_hole_independent (g : GameState) (p : Piece) {b β : Board}
+    (h : ∀ j, b.colHeight j = β.colHeight j) (j : ℕ) :
+    ((σ g p).place b).colHeight j = ((σ g p).place β).colHeight j :=
+  SurfaceFiber.colHeight_place_eq_of_colHeight_eq (σ g p) h j
+
 end Tetris
