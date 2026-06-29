@@ -1173,4 +1173,15 @@ theorem safeSolver_orbit_grand_portrait (hcols : 4 ≤ cfg.cols) (h : GameState.
    safeSolver_trace_count_le hcols h hl n, safeSolver_trace_in_field hcols h hl n,
    safeSolver_trace_reachable hcols h hl n⟩
 
+/-- Geometry portrait: the move is additive, drops 4 cells, spanning ≤4 columns and ≤4 rows. -/
+theorem solver_move_geometry_portrait (g : GameState) (p : Piece) (b : Board) :
+    (b ⊆ (σ g p).place b) ∧
+    (((σ g p).dropped b).card = 4) ∧
+    (∀ c ∈ (σ g p).dropped b, (σ g p).col ≤ c.1 ∧ c.1 < (σ g p).col + 4) ∧
+    (∀ c ∈ (σ g p).dropped b,
+      (σ g p).dropOffset b ≤ c.2 ∧ c.2 < (σ g p).dropOffset b + 4) :=
+  ⟨solver_move_superset b g p, solver_output_dropped_card b g p,
+   fun _ hc => solver_move_cols_bounded b g p hc,
+   fun _ hc => solver_move_rows_bounded b g p hc⟩
+
 end Tetris
