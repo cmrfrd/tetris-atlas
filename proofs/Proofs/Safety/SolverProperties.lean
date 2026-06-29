@@ -800,4 +800,18 @@ theorem solver_reachable_step_closed {g : GameState} (hr : solverReachable σ g)
     solverReachable σ (adversarialStep cfg g p (σ g p)) :=
   solverReachable.step p hr hp
 
+/-! ## Q45. What three invariants, together, capture a solving program's state? -/
+
+/-- **The three pillars, bundled.** At every step against every legal sequence, a solving program's
+state simultaneously (1) lies in `safe`, (2) keeps `maxHeight ≤ rows`, and (3) keeps `count ≤
+cols·rows`. The first is the abstract certificate; the second the operational survival metric; the
+third the material budget. Holding all three forever *is* solving Tetris. -/
+theorem solving_program_pillars (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg σ s GameState.init n ∈ safe cfg ∧
+    Board.maxHeight cfg (adversarialTrace cfg σ s GameState.init n).board ≤ cfg.rows ∧
+    (adversarialTrace cfg σ s GameState.init n).board.count ≤ cfg.cols * cfg.rows :=
+  ⟨solver_trace_mem_safe h hl n, solver_maintains_maxHeight h.2 hl n,
+    solver_count_le_capacity h hl n⟩
+
 end Tetris
