@@ -1222,4 +1222,16 @@ theorem solver_death_propagation_monotone {n m : ℕ} (hnm : n ≤ m) :
     safeIterFinite cfg (inFieldStates cfg) m ⊆ safeIterFinite cfg (inFieldStates cfg) n :=
   safeIterFinite_antitone cfg (inFieldStates cfg) hnm
 
+/-! ## Q78. Is the computed region trustworthy (sound)? -/
+
+/-- **Soundness: the computed fixed point is genuinely safe.** At a fixed point of the finite
+iteration, every surviving state lies in `safe` — the algorithm never keeps a state from which the
+program cannot actually survive. So a fixed point reached by the Atlas builder is a *verified*
+controlled-invariant set: the program built from it really does win from each of its states. -/
+theorem solver_computed_region_sound (N : ℕ)
+    (hfix : safeIterFinite cfg (inFieldStates cfg) (N + 1)
+      = safeIterFinite cfg (inFieldStates cfg) N) :
+    (↑(safeIterFinite cfg (inFieldStates cfg) N) : Set GameState) ⊆ safe cfg :=
+  safeIterFinite_subset_safe cfg (inFieldStates cfg) N hfix
+
 end Tetris
