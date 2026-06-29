@@ -723,4 +723,20 @@ theorem solver_empty_cells_low (g : GameState) (p : Piece) {c : Coord}
   rw [solver_empty_drop_zero] at h
   omega
 
+/-! ## Part 29 — Bounds on the canonical orbit -/
+
+/-- The canonical orbit keeps the cell count within capacity. -/
+theorem safeSolver_trace_count_le (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    (adversarialTrace cfg (safeSolver cfg) s GameState.init n).board.count
+      ≤ cfg.cols * cfg.rows :=
+  solver_count_le_capacity (canonical_memoryless_solver hcols h) hl n
+
+/-- The canonical orbit keeps the max height within the ceiling. -/
+theorem safeSolver_trace_maxHeight_le (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Board.maxHeight cfg (adversarialTrace cfg (safeSolver cfg) s GameState.init n).board
+      ≤ cfg.rows :=
+  solver_maintains_maxHeight (canonical_memoryless_solver hcols h).2 hl n
+
 end Tetris
