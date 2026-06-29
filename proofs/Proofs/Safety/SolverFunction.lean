@@ -739,4 +739,16 @@ theorem safeSolver_trace_maxHeight_le (hcols : 4 ≤ cfg.cols) (h : GameState.in
       ≤ cfg.rows :=
   solver_maintains_maxHeight (canonical_memoryless_solver hcols h).2 hl n
 
+/-! ## Part 30 — The function reads exactly `(board, bag, piece)` -/
+
+/-- The output depends on exactly the board, the bag, and the piece — nothing hidden. Equal boards
+and equal bags give equal outputs. -/
+theorem solver_reads_board_bag (g₁ g₂ : GameState) (p : Piece)
+    (hb : g₁.board = g₂.board) (hbag : g₁.bag = g₂.bag) : σ g₁ p = σ g₂ p := by
+  obtain ⟨b1, bag1⟩ := g₁
+  obtain ⟨b2, bag2⟩ := g₂
+  obtain rfl : b1 = b2 := hb
+  obtain rfl : bag1 = bag2 := hbag
+  rfl
+
 end Tetris
