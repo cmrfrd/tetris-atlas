@@ -1052,4 +1052,12 @@ theorem safeSolver_portrait (hcols : 4 ≤ cfg.cols) :
   ⟨safeSolver_validSolver hcols, fun g p => safeSolver_piece cfg g p,
    fun _ _ h => safeSolver_eq_trivial_of_not_safe_and_in_bag h⟩
 
+/-- Per-state response portrait: every response is in-menu, injective, exactly `|bag|` distinct. -/
+theorem solver_response_portrait (hv : ValidSolver cfg σ) (g : GameState) :
+    (∀ p ∈ g.bag, σ g p ∈ Placement.allValidFor cfg p) ∧
+    (g.bag.image (fun p => σ g p)).card = g.bag.card ∧
+    Set.InjOn (fun p => σ g p) g.bag :=
+  ⟨fun _ hp => solver_output_in_action_set hv hp,
+   solver_response_table_card_eq hv g, solver_slice_injOn_bag hv g⟩
+
 end Tetris
