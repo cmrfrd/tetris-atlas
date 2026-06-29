@@ -186,4 +186,17 @@ theorem safe_near_capacity_must_clear {g : GameState} (hwf : Board.WF cfg g.boar
   have hnl : ¬ (adversarialStep cfg g p pl).lost cfg := safe_not_lost hsafe'
   simpa [GameState.lost, adversarialStep, Placement.eta_of_piece_eq hpl] using hnl
 
+/-! ## Q11. How fast can danger arrive — can the program be caught off guard? -/
+
+/-- **Danger accrues at most 4 height per move.** A single placed piece raises the max column
+height by at most 4. So the program is never surprised: from `maxHeight = m` it has a margin of
+`rows - m` that the adversary can erode only 4 at a time — survival is a slow-moving control
+problem, never a one-step ambush. -/
+theorem safe_step_maxHeight_le_add_four {g : GameState} {p : Piece} {pl : Placement}
+    (hpl : pl.piece = p) (hv : pl.Valid cfg) :
+    Board.maxHeight cfg (adversarialStep cfg g p pl).board
+      ≤ Board.maxHeight cfg g.board + 4 := by
+  have h := Board.maxHeight_applyStep_le_add_four (cfg := cfg) g.board hv
+  simpa [adversarialStep, Placement.eta_of_piece_eq hpl] using h
+
 end Tetris
