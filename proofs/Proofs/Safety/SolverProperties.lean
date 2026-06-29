@@ -712,4 +712,23 @@ theorem solver_surface_evolution_hole_independent {b β : Board} (pl : Placement
     (pl.place b).colHeight j = (pl.place β).colHeight j :=
   SurfaceFiber.colHeight_place_eq_of_colHeight_eq pl h j
 
+/-! ## Q39. On the skyline order, is the program's dynamics well-behaved? -/
+
+/-- **Placement is monotone in the skyline order.** If board `b` is dominated by `β` per-column
+(`domLE`), the same piece drop keeps `place b` dominated by `place β`. So a lower skyline stays
+lower — the no-clear height dynamics are monotone (WQO-compatible). Contrast Q29: the irreducibility
+of the winning region lives entirely in the *hole* dimension, not the skyline. -/
+theorem solver_placement_skyline_monotone {b β : Board} (pl : Placement)
+    (h : WqoCarrier.domLE b β) :
+    WqoCarrier.domLE (pl.place b) (pl.place β) :=
+  WqoCarrier.place_domLE_mono pl h
+
+/-- **Clearing only lowers the skyline.** A line clear can never raise any column height:
+`clearLines b` is dominated by `b`. So both of the program's primitives are skyline-well-behaved —
+placement
+monotone, clearing non-increasing — confirming that the height axis alone is tractable. -/
+theorem solver_clearing_lowers_skyline (b : Board) :
+    WqoCarrier.domLE (Board.clearLines cfg b) b :=
+  WqoCarrier.clearLines_domLE cfg b
+
 end Tetris
