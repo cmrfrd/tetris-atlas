@@ -190,4 +190,14 @@ theorem solver_output_portrait (hv : ValidSolver cfg σ) {g : GameState}
   ⟨solver_output_announces_piece hv hp, solver_output_valid hv hp,
    solver_col_lt_cols hv hp, solver_output_in_total_action_set hv hp⟩
 
+/-! ## Part 7 — Quantitative smallness of the output space -/
+
+/-- **The per-piece action menu has at most `4·cols` entries.** `Rotation = Fin 4`, so the valid
+placements of a piece form a `Finset` of size `≤ 4·cols`. The function's choice for each piece is
+from a tiny, config-explicit set — not the unbounded placement type. -/
+theorem card_allValidFor_le (cfg : GameConfig) (p : Piece) :
+    (Placement.allValidFor cfg p).card ≤ cfg.cols * 4 := by
+  refine le_trans (Finset.card_filter_le _ _) (le_trans Finset.card_image_le ?_)
+  simp [Finset.card_product, Finset.card_range, Finset.card_univ, Fintype.card_fin]
+
 end Tetris
