@@ -302,6 +302,25 @@ theorem isLost_of_mem_row_ge {cfg : GameConfig} {b : Board} {j r : ℕ}
   have h2 := Board.lt_colHeight hmem
   omega
 
+/-- **The survival threshold is exactly `maxHeight ≤ rows`.** The converse of
+`maxHeight_le_rows_of_not_isLost`: for a well-formed board, `maxHeight ≤ rows → ¬ isLost`. In-range
+columns are `≤ maxHeight ≤ rows`; out-of-range columns are empty by `WF`. So (together with the
+forward direction) `¬ isLost b ↔ maxHeight b ≤ rows` for WF boards: the single scalar `maxHeight` is
+*precisely* the loss predicate. The entire game is keeping this one number under the ceiling — yet
+(crux 5–18) the only lever to lower it is an obstructed, coordinated clear, and (crux 13) no
+additive budget tracks it. The danger is one number; controlling it is the whole problem. -/
+theorem not_isLost_of_maxHeight_le {cfg : GameConfig} {b : Board}
+    (hwf : WF cfg b) (h : maxHeight cfg b ≤ cfg.rows) : ¬ isLost cfg b := by
+  rw [not_isLost_iff_forall_colHeight_le]
+  intro j
+  rcases Nat.lt_or_ge j cfg.cols with hj | hj
+  · exact le_trans (colHeight_le_maxHeight hj) h
+  · have hz : b.colHeight j = 0 := by
+      rw [colHeight_eq_zero_iff_forall_not_mem]
+      intro r hr
+      exact absurd (hwf (j, r) hr) (by omega)
+    omega
+
 /-! ## The per-move material speed limit -/
 
 /-- **Cells grow by at most 4 per move.** `count (applyStep b) ≤ count b + 4`: a piece deposits 4
