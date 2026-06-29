@@ -266,4 +266,22 @@ theorem solver_handles_all_seven_at_init (h : GameState.init ∈ safe cfg) (p : 
       adversarialStep cfg GameState.init p pl ∈ safe cfg :=
   safe_forall_step h p (GameState.init_bag.symm ▸ Bag.mem_full p)
 
+/-! ## Q15. Is the program's rule local — does it depend on how the state was reached? -/
+
+/-- **The canonical rule renders `safe` invariant from every safe state.** `safeSolver`'s move from
+*any* safe state (not merely reachable ones) lands back in `safe`. The decision is path-independent:
+the program needs only the present `(state, piece)`, never the history that produced it — the same
+uniform rule is correct everywhere in the safe region — exactly why memorylessness suffices. -/
+theorem canonical_solver_safe_invariant {g : GameState} (hg : g ∈ safe cfg)
+    {p : Piece} (hp : p ∈ g.bag) :
+    adversarialStep cfg g p (safeSolver cfg g p) ∈ safe cfg :=
+  safeSolver_step_mem_safe hg hp
+
+/-- **The program's reachable set has no dead-ends.** Every state a solving program can reach is
+safe — from anywhere it can get to, survival is still possible. The program never paints itself into
+a corner: there is no reachable position that is alive now but doomed under best play. -/
+theorem solver_no_dead_ends (h : SolvesTetrisValid cfg σ) {g : GameState}
+    (hr : solverReachable σ g) : g ∈ safe cfg :=
+  solverReachable_subset_safe h hr
+
 end Tetris
