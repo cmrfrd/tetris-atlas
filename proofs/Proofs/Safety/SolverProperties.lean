@@ -948,4 +948,15 @@ theorem solver_hole_free_energy_all_clearable {b : Board} (hwf : Board.WF cfg b)
     solver_energy_split hwf
   omega
 
+/-! ## Q57. Is every piece a hole-injector, or only the roughness pieces? -/
+
+/-- **The benign pieces place cleanly.** On the empty board, dropping `O` or `I` at column 0 creates
+*no* holes — unlike `S`/`Z` (Q27). So roughness is specific: many pieces can be absorbed
+flat without debt, and only the two roughness pieces force buried holes. The program places the
+benign pieces freely and must spend its finesse only on `S`/`Z`. -/
+theorem solver_benign_pieces_no_holes :
+    HoleyCarrier.holes GameConfig.standard (Placement.place ∅ ⟨Piece.O, 0, 0⟩) = ∅ ∧
+    HoleyCarrier.holes GameConfig.standard (Placement.place ∅ ⟨Piece.I, 0, 0⟩) = ∅ := by
+  decide
+
 end Tetris
