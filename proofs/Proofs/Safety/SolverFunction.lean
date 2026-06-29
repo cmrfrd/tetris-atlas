@@ -898,4 +898,17 @@ theorem safeSolver_trace_eventually_repeats (hcols : 4 ≤ cfg.cols)
         = adversarialTrace cfg (safeSolver cfg) s GameState.init j :=
   solver_play_eventually_repeats (canonical_memoryless_solver hcols h) hl
 
+/-- The canonical orbit keeps an even cell count (even-width boards). -/
+theorem safeSolver_trace_even (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    (hev : Even cfg.cols) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Even (adversarialTrace cfg (safeSolver cfg) s GameState.init n).board.count :=
+  solver_even_count hev (canonical_memoryless_solver hcols h) hl n
+
+/-- Every state of the canonical orbit is reachable from the empty board. -/
+theorem safeSolver_trace_reachable (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Reachable cfg (adversarialTrace cfg (safeSolver cfg) s GameState.init n) :=
+  solver_states_reachable_from_empty (canonical_memoryless_solver hcols h)
+    (adversarialTrace_solverReachable (safeSolver cfg) hl n)
+
 end Tetris
