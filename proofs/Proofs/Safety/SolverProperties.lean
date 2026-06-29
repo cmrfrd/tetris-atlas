@@ -748,4 +748,15 @@ theorem solver_clearing_reduces_debt {b : Board} (hwf : Board.WF cfg b) :
     HoleDebt.debt cfg (Board.clearLines cfg b) ≤ HoleDebt.debt cfg b :=
   HoleDebt.clearLines_debt_le hwf
 
+/-! ## Q41. How does the program's stack energy decompose? -/
+
+/-- **Surface energy splits exactly into stuck debt plus clearable mass.** For any well-formed board
+the program holds, `debt + count = surfaceArea`: the stack energy `Σ colHeight` partitions into
+buried hole-debt (energy with no clearable cell to show) and filled cells (clearable mass). The
+program's headroom is shared between these two competitors — every hole spends energy that filled
+mass could have used toward a clear. -/
+theorem solver_energy_split {b : Board} (hwf : Board.WF cfg b) :
+    HoleDebt.debt cfg b + b.count = HoleDebt.surfaceArea cfg b :=
+  HoleDebt.debt_add_card_eq_sum_colHeight hwf
+
 end Tetris
