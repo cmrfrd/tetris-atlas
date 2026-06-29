@@ -1176,4 +1176,16 @@ theorem solver_master_equivalences :
         GameState.init ∈ C.toAdversarialClosedCycle.states) :=
   ⟨standard_solver_exists_iff_init_safe, solver_solvable_iff_init_cycle⟩
 
+/-! ## Q74. Is the program's board contained in the field rectangle? -/
+
+/-- **Every cell stays in the field `[0,cols) × [0,rows)`.** Well-formedness bounds each cell's
+column (`< cols`) and survival bounds its row (`< rows`), so the program's board is contained in the
+field rectangle at all times — no cell escapes sideways or upward. The two structural axes (Q34,
+Q36) combine into a single containment. -/
+theorem solver_board_in_field (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) {c : Coord}
+    (hc : c ∈ (adversarialTrace cfg σ s GameState.init n).board) :
+    c.1 < cfg.cols ∧ c.2 < cfg.rows :=
+  ⟨solver_board_wf h hl n c hc, solver_no_cell_in_death_zone h.2 hl n hc⟩
+
 end Tetris
