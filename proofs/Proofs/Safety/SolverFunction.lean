@@ -1245,4 +1245,30 @@ theorem solver_collapse_portrait (hv : ValidSolver cfg σ) (p : Piece)
   ⟨solver_image_per_piece_subset hv T hT, solver_image_per_piece_card_le hv T hT,
    fun hcard => solver_per_piece_noninjective hv T hT hcard⟩
 
+/-! ## Part 43 — Grand finale -/
+
+/-- **The solving function, fully characterized.** Treating a solver as a function `(board, bag,
+piece) → placement`, this captures it in one statement, in three registers. (1) *Outputs*: each
+answer pins the input piece, is valid, encodes to one integer `< 4·cols`, and lies in a fixed finite
+menu — the placement collapses to a `(rot, col)` grid point. (2) *Compressible*: the function has
+finite range, reads exactly `(board, bag, piece)` with nothing hidden, and lifts to a total atlas.
+(3) *Dynamical*: it induces a self-map whose constant-stream orbit is plain iteration. The function
+is over-determined as data yet under-determined as a strategy — exactly what the experiment set out
+to show. -/
+theorem the_solving_function_characterized (hv : ValidSolver cfg σ) {g : GameState}
+    {p : Piece} (hp : p ∈ g.bag) :
+    ((σ g p).piece = p ∧ (σ g p).Valid cfg ∧
+      4 * (σ g p).col + ((σ g p).rot : ℕ) < 4 * cfg.cols ∧
+      σ g p ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg)) ∧
+    ({pl : Placement | ∃ g p, p ∈ g.bag ∧ σ g p = pl}.Finite ∧
+      (∀ g₁ g₂ q, g₁.board = g₂.board → g₁.bag = g₂.bag → σ g₁ q = σ g₂ q) ∧
+      (∀ g q, σ.toAtlas g q = some (σ g q))) ∧
+    (∀ n, adversarialTrace cfg σ (fun _ => p) GameState.init n
+      = (solverStep cfg σ p)^[n] GameState.init) :=
+  ⟨⟨solver_output_announces_piece hv hp, solver_output_valid hv hp,
+    solver_output_code_lt hv hp, solver_output_in_total_action_set hv hp⟩,
+   ⟨solver_range_finite hv, fun g₁ g₂ q hb hbag => solver_reads_board_bag g₁ g₂ q hb hbag,
+    fun _ _ => rfl⟩,
+   fun n => solver_trace_const_eq_iterate p n⟩
+
 end Tetris
