@@ -992,4 +992,14 @@ theorem solver_clearing_idempotent (b : Board) (hcol : 0 < cfg.cols) :
     Board.clearLines cfg (Board.clearLines cfg b) = Board.clearLines cfg b :=
   clearLines_idem cfg b hcol
 
+/-! ## Q61. Is the *loss* predicate as subtle as the *survival* question? -/
+
+/-- **Loss is monotone — unlike survival.** Adding cells can only cause loss, never cure it: a
+superset of a lost board is lost. So the one-step *loss* test is simple and order-respecting. The
+contrast with Q29 is the whole story: `isLost` is monotone, yet `safe` (survive-*forever*) is
+non-congruent — the difficulty is not detecting loss but foreseeing it under adversarial play. -/
+theorem solver_loss_monotone {b b' : Board} (h : b ⊆ b') (hlost : Board.isLost cfg b) :
+    Board.isLost cfg b' :=
+  Board.isLost_mono h hlost
+
 end Tetris
