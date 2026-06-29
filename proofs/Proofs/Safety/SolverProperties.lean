@@ -386,4 +386,24 @@ theorem safe_near_capacity_assembles_full_row {g : GameState} (hwf : Board.WF cf
   obtain ⟨r, hr⟩ := Finset.card_pos.mp hcard
   exact ⟨r, (Finset.mem_filter.mp hr).2⟩
 
+/-! ## Q20. How smoothly does the program's board evolve over time? -/
+
+/-- **The cell count is 4-Lipschitz along the trace.** Each step changes the board's cell count by
+at most `+4`. With the `cols·rows` cap (Q5) and `count(0) = 0`, the program's material evolves
+as a slowly-varying bounded sequence — never a jump — which is what makes the finite-arena and
+forced-clear arguments bite. -/
+theorem solver_trace_count_le_succ (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    (adversarialTrace cfg σ s GameState.init (n + 1)).board.count
+      ≤ (adversarialTrace cfg σ s GameState.init n).board.count + 4 := by
+  have hbag : s n ∈ (adversarialTrace cfg σ s GameState.init n).bag := by
+    rw [adversarialTrace_bag]; exact hl n
+  have hwf : Board.WF cfg (adversarialTrace cfg σ s GameState.init n).board :=
+    reachable_WF (solverReachable_implies_reachable_of_solves h.1 h.2
+      (adversarialTrace_solverReachable σ hl n))
+  obtain ⟨hpiece, hv⟩ := h.1 (adversarialTrace cfg σ s GameState.init n) (s n) hbag
+  rw [adversarialTrace_succ]
+  have hc := Board.count_applyStep_le_add_four hwf hv
+  simpa [adversarialStep, Placement.eta_of_piece_eq hpiece] using hc
+
 end Tetris
