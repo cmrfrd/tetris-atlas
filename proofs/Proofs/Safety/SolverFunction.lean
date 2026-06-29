@@ -433,4 +433,21 @@ theorem solver_output_in_grid (hv : ValidSolver cfg σ) {g : GameState}
   rw [Finset.mem_product]
   exact ⟨Finset.mem_univ _, Finset.mem_range.mpr (solver_col_lt_cols hv hp)⟩
 
+/-! ## Part 16 — Semantic guarantees of the output -/
+
+/-- **The function's opening move never loses.** From the empty board, applying any valid output for
+any first piece keeps the board not lost. -/
+theorem solver_opening_move_safe (hv : ValidSolver cfg σ) (hrows : 4 ≤ cfg.rows)
+    {p : Piece} (hp : p ∈ GameState.init.bag) :
+    ¬ Board.isLost cfg ((σ GameState.init p).applyStep cfg GameState.init.board) :=
+  solver_opening_cannot_lose hrows (σ GameState.init p) (solver_output_valid hv hp)
+
+/-- **On a low stack the output never loses.** If the board's columns are all `≤ rows - 4`, applying
+any valid output keeps it not lost — the output is safe in the comfort zone. -/
+theorem solver_lowstack_move_safe (hv : ValidSolver cfg σ) (hrows : 4 ≤ cfg.rows)
+    {g : GameState} {p : Piece} (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b)
+    (hlow : ∀ j, Board.colHeight b j ≤ cfg.rows - 4) :
+    ¬ Board.isLost cfg ((σ g p).applyStep cfg b) :=
+  Tetris.low_stack_safe hrows hWF hlow (σ g p) (solver_output_valid hv hp)
+
 end Tetris
