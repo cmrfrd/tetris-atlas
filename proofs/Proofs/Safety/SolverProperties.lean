@@ -1243,4 +1243,19 @@ theorem solver_computed_region_complete {S₀ : Finset GameState} (hS₀ : safe 
     g ∈ safe cfg ↔ g ∈ (↑(safeIterFinite cfg S₀ N) : Set GameState) :=
   safe_iff_mem_fixedPoint cfg S₀ N hS₀ hfix g
 
+/-! ## Q79. What single concrete test decides whether the program exists? -/
+
+/-- **The program exists iff `init` survives death-propagation.** Given a converged finite iteration
+over a covering universe, a solving program exists if and only if `GameState.init` is a member of
+the computed surviving `Finset`. This is the one decidable membership check the builder performs to
+settle the entire conjecture — solvability collapses to "is the empty board still alive at the fixed
+point?" -/
+theorem solver_exists_iff_init_in_fixedpoint {S₀ : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hS₀ : safe cfg ⊆ ↑S₀) (N : ℕ)
+    (hfix : safeIterFinite cfg S₀ (N + 1) = safeIterFinite cfg S₀ N) :
+    (∃ σ : Solver cfg, SolvesTetrisValid cfg σ)
+      ↔ GameState.init ∈ safeIterFinite cfg S₀ N :=
+  (solver_exists_iff_init_safe hcols).trans
+    (init_safe_iff_init_mem_safeIterFinite hS₀ N hfix)
+
 end Tetris
