@@ -678,4 +678,11 @@ theorem solver_slice_mapsTo (hv : ValidSolver cfg σ) (p : Piece) :
     Set.MapsTo (fun g => σ g p) {g | p ∈ g.bag} ↑(Placement.allValidFor cfg p) :=
   fun _ hg => Finset.mem_coe.mpr (solver_output_in_action_set hv hg)
 
+/-- The integer code `4·col + rot` is a lossless encoding of `(rot, col)`. -/
+theorem grid_encode_injective {r r' : Rotation} {c c' : ℕ}
+    (h : 4 * c + (r : ℕ) = 4 * c' + (r' : ℕ)) : c = c' ∧ (r : ℕ) = (r' : ℕ) := by
+  have h1 := r.isLt
+  have h2 := r'.isLt
+  omega
+
 end Tetris
