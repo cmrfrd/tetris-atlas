@@ -1029,4 +1029,15 @@ theorem solver_placement_raises_maxHeight (b : Board) (pl : Placement) :
     Board.maxHeight cfg b ≤ Board.maxHeight cfg (pl.place b) :=
   Board.maxHeight_le_place cfg b pl
 
+/-! ## Q64. Can the adversary flood the program with one piece? -/
+
+/-- **No repeats within a bag.** Once a piece is drawn (without triggering a refill) it cannot be
+drawn again from the same bag. So the adversary cannot stream the same piece endlessly: roughness is
+rate-limited to two `S`/`Z` per bag (Q28), and the program is guaranteed every other piece arrives
+before any repeat. This fairness is what makes adversarial survival plausible at all. -/
+theorem solver_no_repeat_within_bag (bag : Bag) (p : Piece) (hp : p ∈ bag)
+    (hne : bag.draw p ≠ Bag.full) :
+    ¬ (bag.draw p).canDraw p :=
+  not_canDraw_after_draw bag p hp hne
+
 end Tetris
