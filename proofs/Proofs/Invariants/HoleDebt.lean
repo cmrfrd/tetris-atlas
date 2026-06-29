@@ -37,8 +37,8 @@ single sum.
 * `debt_clearLines_add_card_le` — the wired conservation: after a clear,
   `debt' + card' ≤ debt + card`. Energy is a Lyapunov function: it strictly rises by ≥ 4
   per piece (a tetromino) and can only fall on clears, so unbounded play forces a matching
-  clear rate. (The exact per-piece rise is now `debt_place_eq`; the *pure* debt monotonicity
-  `debt(clearLines b) ≤ debt b` remains — see the closing note.)
+  clear rate. (Exact per-piece rise: `debt_place_eq`; clear-side monotonicity
+  `debt(clearLines b) ≤ debt b`: `clearLines_debt_le`; full-step composition: `debt_applyStep_le`.)
 -/
 
 namespace Tetris.HoleDebt
@@ -376,6 +376,22 @@ theorem clearLines_debt_le {cfg : GameConfig} {b : Board} (_hwf : Board.WF cfg b
     simpa [Board.colCount] using hcount
   have hheight := @clearLines_colHeight_add_le cfg b j hj
   unfold colHoles
+  omega
+
+/-- **Full-step debt Lyapunov bound.** Over a complete move
+`applyStep = clearLines ∘ place`, debt obeys
+`debt (applyStep b) + surfaceArea b + 4 ≤ debt b + surfaceArea (place b)`. It composes the
+exact placement delta (`debt_place_eq`) with the clear-side monotonicity (`clearLines_debt_le`):
+the clear phase only lowers debt, so the whole step is bounded by the placement phase.
+Equivalently the per-move debt increment is at most the placement's surface-area growth minus
+four — the inequality a bounded-debt survival invariant integrates over a play. -/
+theorem debt_applyStep_le {cfg : GameConfig} {b : Board} {pl : Placement}
+    (hwf : Board.WF cfg b) (hv : pl.Valid cfg) :
+    debt cfg (pl.applyStep cfg b) + surfaceArea cfg b + 4
+      ≤ debt cfg b + surfaceArea cfg (pl.place b) := by
+  have hclear : debt cfg (pl.applyStep cfg b) ≤ debt cfg (pl.place b) :=
+    clearLines_debt_le (Placement.place_wf hwf hv)
+  have he := debt_place_eq hwf hv
   omega
 
 
