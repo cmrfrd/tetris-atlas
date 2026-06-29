@@ -125,4 +125,28 @@ theorem solver_active_domain_finite (h : SolvesTetrisValid cfg σ) {g : GameStat
   reachable_safe_mem_inFieldStates
     (solver_states_reachable_from_empty h hr) (solver_no_dead_ends h hr)
 
+/-! ## Part 4 — Under-determination: the function is a choice from a relation -/
+
+/-- **At each safe state the function chooses from a nonempty set of good moves.** For a safe `g`
+and drawable `p`, the placements that are valid *and* keep the state safe form a nonempty set; a
+solving function simply *picks one*. So the survival-essential object is the relation `goodMove g p
+pl := (valid ∧ leads back to safe)`, and the solver is one **uniformization** (choice function). -/
+theorem solver_selects_from_good_moves {g : GameState} (hg : g ∈ safe cfg)
+    {p : Piece} (hp : p ∈ g.bag) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧ adversarialStep cfg g p pl ∈ safe cfg :=
+  safe_forall_step hg p hp
+
+/-- **Survival does not determine the function (non-uniqueness).** Two *different* solvers `σ₁`,
+`σ₂` — which may disagree on the actual placement at every state — *both* survive forever, provided
+each keeps every safe state's move inside `safe`. So the function carries strictly more information
+than its job requires: the survival-relevant content is the shared safe-closure relation, and
+everything beyond that is free. This is compressibility on the *strategy* side — the function is an
+arbitrary section of a coarser relation. -/
+theorem solvers_agree_on_survival {σ₁ σ₂ : Solver cfg}
+    (h₁ : ∀ g ∈ safe cfg, ∀ p ∈ g.bag, adversarialStep cfg g p (σ₁ g p) ∈ safe cfg)
+    (h₂ : ∀ g ∈ safe cfg, ∀ p ∈ g.bag, adversarialStep cfg g p (σ₂ g p) ∈ safe cfg)
+    (hinit : GameState.init ∈ safe cfg) :
+    SolvesTetris cfg σ₁ ∧ SolvesTetris cfg σ₂ :=
+  ⟨any_safe_selector_survives h₁ hinit, any_safe_selector_survives h₂ hinit⟩
+
 end Tetris
