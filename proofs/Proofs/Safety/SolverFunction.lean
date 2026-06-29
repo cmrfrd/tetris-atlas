@@ -225,4 +225,19 @@ theorem card_total_action_set_standard_le :
   rw [hp, GameConfig.standard_cols] at h
   omega
 
+/-! ## Part 8 — What applying the output does to the board -/
+
+/-- **The output always places exactly four cells.** Applying any output of the function to a board
+adds precisely 4 filled cells (a tetromino) before clears: `count (place) = count + 4`. The function
+never produces a "partial" move — every output deposits a full 4-cell piece. -/
+theorem solver_output_places_four (b : Board) (g : GameState) (p : Piece) :
+    ((σ g p).place b).count = b.count + 4 :=
+  Placement.count_place b (σ g p)
+
+/-- **The output's dropped set is exactly four cells.** The cells the function's move newly fills
+form a set of size 4 — independent of board and choice. The output denotes a 4-cell shape. -/
+theorem solver_output_dropped_card (b : Board) (g : GameState) (p : Piece) :
+    ((σ g p).dropped b).card = 4 :=
+  Placement.card_dropped b (σ g p)
+
 end Tetris
