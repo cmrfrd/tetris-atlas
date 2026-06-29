@@ -798,4 +798,12 @@ theorem solver_toAtlas_inj {σ₁ σ₂ : Solver cfg} (h : σ₁.toAtlas = σ₂
 theorem solver_ext {σ₁ σ₂ : Solver cfg} (h : ∀ g p, σ₁ g p = σ₂ g p) : σ₁ = σ₂ := by
   funext g p; exact h g p
 
+/-! ## Part 33 — Synthesis: the function is a representable finite object -/
+
+/-- Representability: a valid solver has finite range and lifts to a total atlas. -/
+theorem solver_representable (hv : ValidSolver cfg σ) :
+    {pl : Placement | ∃ g p, p ∈ g.bag ∧ σ g p = pl}.Finite ∧
+    (∀ g p, σ.toAtlas g p = some (σ g p)) :=
+  ⟨solver_range_finite hv, fun _ _ => rfl⟩
+
 end Tetris
