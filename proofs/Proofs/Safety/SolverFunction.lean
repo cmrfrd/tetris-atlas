@@ -1088,4 +1088,12 @@ theorem safeSolver_maxHeight_lipschitz (hcols : 4 ≤ cfg.cols) (h : GameState.i
           (adversarialTrace cfg (safeSolver cfg) s GameState.init n).board + 4 :=
   solver_trace_maxHeight_le_succ (canonical_memoryless_solver hcols h) hl n
 
+/-- The function's resulting board satisfies the energy bracket. -/
+theorem solver_move_energy_brackets (g : GameState) (p : Piece) (b : Board) :
+    Board.maxHeight cfg ((σ g p).applyStep cfg b)
+        ≤ HoleDebt.surfaceArea cfg ((σ g p).applyStep cfg b) ∧
+    HoleDebt.surfaceArea cfg ((σ g p).applyStep cfg b)
+        ≤ cfg.cols * Board.maxHeight cfg ((σ g p).applyStep cfg b) :=
+  ⟨HoleDebt.maxHeight_le_surfaceArea cfg _, HoleDebt.surfaceArea_le_cols_mul_maxHeight cfg _⟩
+
 end Tetris
