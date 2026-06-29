@@ -1120,4 +1120,13 @@ theorem solver_clears_within (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
   have hb := solver_no_clear_window_bounded h hl M hall
   omega
 
+/-- **Concretely, standard Tetris forces a clear every 51 moves.** Since `4·51 = 204 > 200 = 10·20`,
+a surviving program on the canonical board cannot go 51 moves without clearing a line. A tangible
+survival cadence: a clear at least once per 51 placements. -/
+theorem standard_solver_clears_within_51 {σ : Solver GameConfig.standard}
+    (h : SolvesTetrisValid GameConfig.standard σ) {s : ℕ → Piece} (hl : LegalSequence s) :
+    ∃ k < 51, (adversarialTrace GameConfig.standard σ s GameState.init (k + 1)).board.count
+             ≠ (adversarialTrace GameConfig.standard σ s GameState.init k).board.count + 4 :=
+  solver_clears_within h hl (by decide)
+
 end Tetris
