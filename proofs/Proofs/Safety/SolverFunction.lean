@@ -884,4 +884,18 @@ theorem safeSolver_trace_no_death_cell (hcols : 4 ≤ cfg.cols) (h : GameState.i
     c.2 < cfg.rows :=
   solver_no_cell_in_death_zone (canonical_memoryless_solver hcols h).2 hl n hc
 
+/-- The canonical orbit lives in the finite `inFieldStates`. -/
+theorem safeSolver_trace_in_field (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg (safeSolver cfg) s GameState.init n ∈ inFieldStates cfg :=
+  solver_trace_mem_inFieldStates (canonical_memoryless_solver hcols h) hl n
+
+/-- The canonical orbit is eventually periodic. -/
+theorem safeSolver_trace_eventually_repeats (hcols : 4 ≤ cfg.cols)
+    (h : GameState.init ∈ safe cfg) {s : ℕ → Piece} (hl : LegalSequence s) :
+    ∃ i j : ℕ, i ≠ j ∧
+      adversarialTrace cfg (safeSolver cfg) s GameState.init i
+        = adversarialTrace cfg (safeSolver cfg) s GameState.init j :=
+  solver_play_eventually_repeats (canonical_memoryless_solver hcols h) hl
+
 end Tetris
