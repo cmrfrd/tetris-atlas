@@ -321,6 +321,16 @@ theorem S_hole_row_not_isFull :
     ¬ isFull GameConfig.standard (Placement.place ∅ ⟨Piece.S, 0, 0⟩) 0 :=
   not_isFull_of_mem_holes S_buries_hole
 
+/-- **Z too buries a hole on flat ground.** The mirror roughness piece behaves identically: a Z
+dropped on the empty board also creates a buried empty. So *both* of the 7-bag's two-per-bag
+roughness pieces (`BagBurst.countP_isSZ = 2`) are hole-injectors — the adversary is guaranteed two
+forced hole-plantings every bag, against the player's single guaranteed I-drain. The roughness
+budget exceeds the drain budget in count; that the drains can still keep up is a question of
+*geometry*, not budget — the open crux. -/
+theorem Z_buries_hole :
+    0 < (HoleyCarrier.holes GameConfig.standard (Placement.place ∅ ⟨Piece.Z, 0, 0⟩)).card := by
+  decide
+
 /-! ## Synthesis — why the crux is hard, assembled from the above
 
 The survival problem is exactly to hold `maxHeight ≤ rows` forever
