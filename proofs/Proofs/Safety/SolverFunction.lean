@@ -709,4 +709,18 @@ theorem solver_dynamical_portrait (hv : ValidSolver cfg σ) (p : Piece) :
   ⟨fun n => solver_trace_const_eq_iterate p n, fun g => solver_next_bag g p,
    fun _ hp => solver_next_board hv hp⟩
 
+/-! ## Part 28 — Geometry on the empty board -/
+
+/-- On the empty board the output rests at the floor: drop offset is 0. -/
+theorem solver_empty_drop_zero (g : GameState) (p : Piece) :
+    (σ g p).dropOffset Board.empty = 0 :=
+  dropOffset_empty (σ g p)
+
+/-- On the empty board every placed cell is in a row `< 4`. -/
+theorem solver_empty_cells_low (g : GameState) (p : Piece) {c : Coord}
+    (hc : c ∈ (σ g p).dropped Board.empty) : c.2 < 4 := by
+  have h := solver_move_rows_bounded Board.empty g p hc
+  rw [solver_empty_drop_zero] at h
+  omega
+
 end Tetris
