@@ -1075,4 +1075,18 @@ theorem solver_both_roughness_inject_holes :
         (Placement.place ∅ ⟨Piece.Z, 0, 0⟩)).card :=
   ⟨Board.S_buries_hole, Board.Z_buries_hole⟩
 
+/-! ## Q68. Is the program ever unable to make *any* move? -/
+
+/-- **Every piece has a valid placement.** On a board at least 4 columns wide, each piece can be
+dropped at the left edge (column 0, rotation 0) and stays in bounds — the piece spans `< 4` columns.
+So the program's action space is never empty: it is never literally unable to move (the only danger,
+Q4, is that all moves might leave `safe`, not that no move exists). -/
+theorem solver_action_space_nonempty (hcols : 4 ≤ cfg.cols) (p : Piece) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg := by
+  refine ⟨⟨p, 0, 0⟩, rfl, ?_⟩
+  intro cell hcell
+  have := Piece.shapeUp_col_lt_four p 0 cell hcell
+  change 0 + cell.1 < cfg.cols
+  omega
+
 end Tetris
