@@ -1143,4 +1143,16 @@ theorem solver_dynamical_grand_portrait (hv : ValidSolver cfg σ) (p : Piece) :
    fun g => solver_next_bag g p, fun _ hp => solver_next_board hv hp,
    fun _ hne => solverStep_ne_of_bag_ne hne⟩
 
+/-- Canonical-function portrait: valid, piece-announcing, safe-preserving, orbit stays safe. -/
+theorem safeSolver_grand_portrait (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg) :
+    ValidSolver cfg (safeSolver cfg) ∧
+    (∀ g p, (safeSolver cfg g p).piece = p) ∧
+    (∀ g, g ∈ safe cfg → ∀ p ∈ g.bag,
+      adversarialStep cfg g p (safeSolver cfg g p) ∈ safe cfg) ∧
+    (∀ (s : ℕ → Piece), LegalSequence s → ∀ n,
+      adversarialTrace cfg (safeSolver cfg) s GameState.init n ∈ safe cfg) :=
+  ⟨safeSolver_validSolver hcols, fun g p => safeSolver_piece cfg g p,
+   fun _ hg _ hp => safeSolver_step_mem_safe hg hp,
+   fun _ hl n => safeSolver_trace_mem_safe hcols h hl n⟩
+
 end Tetris
