@@ -1442,4 +1442,23 @@ theorem solving_program_irreducible_difficulty (hcols : 0 < cfg.cols) (hrows : 0
    maxHeight_alone_does_not_decide_loss hcols hrows,
    solver_region_not_dominated_basis.1⟩
 
+/-- **The game structure (Q28 ∘ Q30 ∘ Q23).** The adversary the program faces is both *fair* and
+*determined*: each bag delivers exactly one `I`-drain and two `S`/`Z` roughness pieces; over `n`
+bags the drain budget `20·#I` exceeds the `14·n` clearing requirement; and yet, from an unsafe
+start, the
+adversary defeats *every* valid program. Fairness of the input and determinacy of the outcome,
+assembled from the bag-renewal and determinacy results above. -/
+theorem solving_program_game_structure :
+    (∀ l, BagBurst.IsBagOrder l →
+        l.countP BagBurst.isI = 1 ∧ l.countP BagBurst.isSZ = 2) ∧
+    (∀ bags : List (List Piece), (∀ b ∈ bags, BagBurst.IsBagOrder b) →
+        14 * bags.length ≤ 20 * bags.flatten.countP BagBurst.isI) ∧
+    (GameState.init ∉ safe GameConfig.standard →
+      ∀ σ : Solver GameConfig.standard, ValidSolver GameConfig.standard σ →
+        ∃ (s : ℕ → Piece) (n : ℕ), LegalSequence s ∧
+          (adversarialTrace GameConfig.standard σ s GameState.init n).lost GameConfig.standard) :=
+  ⟨fun l h => solver_per_bag_resource h,
+   fun bags h => solver_drain_budget_suffices h,
+   fun hns σ hv => adversary_beats_every_valid_solver (by decide) hns σ hv⟩
+
 end Tetris
