@@ -774,4 +774,20 @@ theorem safeSolver_reachable_step_closed {g : GameState}
     solverReachable (safeSolver cfg) (adversarialStep cfg g p (safeSolver cfg g p)) :=
   solverReachable.step p hr hp
 
+/-! ## Part 32 — Total function ↔ total atlas -/
+
+/-- The total function lifts to an atlas whose every entry is `some`. -/
+theorem solver_toAtlas_apply (g : GameState) (p : Piece) :
+    σ.toAtlas g p = some (σ g p) :=
+  rfl
+
+/-- The lifted atlas is total: every entry is defined. -/
+theorem solver_toAtlas_isSome (g : GameState) (p : Piece) :
+    (σ.toAtlas g p).isSome = true :=
+  rfl
+
+/-- The function is recovered from its atlas (round-trip). -/
+theorem solver_toAtlas_toSolver : σ.toAtlas.toSolver = σ :=
+  Solver.toAtlas_toSolver σ
+
 end Tetris
