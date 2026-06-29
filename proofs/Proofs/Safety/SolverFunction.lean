@@ -1111,4 +1111,11 @@ theorem safeSolver_successors_safe {g : GameState} (hg : g ∈ safe cfg) {q : Ga
   obtain ⟨p, hp, rfl⟩ := hq
   exact safeSolver_solverStep_preserves_safe hg hp
 
+/-- Output-finiteness portrait: per-piece menu ≤ `4·cols`, total menu ≤ `|Piece|·4·cols`. -/
+theorem solver_output_finiteness_portrait (p : Piece) :
+    (Placement.allValidFor cfg p).card ≤ cfg.cols * 4 ∧
+    ((Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg)).card
+      ≤ Fintype.card Piece * (cfg.cols * 4) :=
+  ⟨card_allValidFor_le cfg p, card_total_action_set_le cfg⟩
+
 end Tetris
