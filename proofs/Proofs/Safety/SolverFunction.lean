@@ -331,4 +331,20 @@ theorem allValidFor_disjoint_of_ne {p p' : Piece} (h : p ≠ p') :
   rw [Placement.mem_allValidFor] at hpl hpl'
   exact h (hpl.1.symm.trans hpl'.1)
 
+/-! ## Part 12 — The function induces a deterministic dynamical system -/
+
+/-- The state-transition the function induces for a fixed drawn piece: place the function's choice
+and draw `p`. The solver, fixed against one piece, *is* a self-map `GameState → GameState`. -/
+def solverStep (cfg : GameConfig) (σ : Solver cfg) (p : Piece) (g : GameState) : GameState :=
+  adversarialStep cfg g p (σ g p)
+
+/-- **The play is the orbit of the induced self-map.** Each step of the trace is one application of
+`solverStep` for the drawn piece: `trace (n+1) = solverStep (s n) (trace n)`. So the function is a
+discrete dynamical system and the game is its orbit from `init` — survival is non-escape of that
+orbit from the non-lost region. -/
+theorem solver_trace_eq_solverStep (s : ℕ → Piece) (n : ℕ) :
+    adversarialTrace cfg σ s GameState.init (n + 1)
+      = solverStep cfg σ (s n) (adversarialTrace cfg σ s GameState.init n) := by
+  rw [adversarialTrace_succ]; rfl
+
 end Tetris
