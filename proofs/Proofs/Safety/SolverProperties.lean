@@ -199,4 +199,22 @@ theorem safe_step_maxHeight_le_add_four {g : GameState} {p : Piece} {pl : Placem
   have h := Board.maxHeight_applyStep_le_add_four (cfg := cfg) g.board hv
   simpa [adversarialStep, Placement.eta_of_piece_eq hpl] using h
 
+/-! ## Q12. What decision rule can the program NOT use — does energy/count suffice? -/
+
+/-- **The loss boundary is decoupled from cell count.** There are two well-formed boards both *at*
+the brink (`maxHeight = rows`): one with a single cell, one completely full (`cols·rows` cells). So
+the distance-to-loss carries no information about how many cells are on the board — and conversely.
+A program therefore cannot steer by minimizing material/energy/`count`: no additive potential
+separates safe from doomed. It must track the *max height* (and, with holes, clearability) — exactly
+the two-axis obstruction that makes the crux hard. This is a property the solver must NOT have:
+greedy scalar-energy descent is provably blind to the danger. -/
+theorem brink_decoupled_from_count (hcols : 0 < cfg.cols) (hrows : 0 < cfg.rows) :
+    ∃ b₁ b₂ : Board,
+      (Board.WF cfg b₁ ∧ b₁.count = 1 ∧ Board.maxHeight cfg b₁ = cfg.rows) ∧
+      (Board.WF cfg b₂ ∧ b₂.count = cfg.cols * cfg.rows ∧
+        Board.maxHeight cfg b₂ = cfg.rows) := by
+  obtain ⟨b₁, h₁⟩ := Board.exists_one_cell_at_brink hcols hrows
+  obtain ⟨b₂, hwf₂, hc₂, _, hm₂⟩ := Board.exists_full_board_at_brink hcols hrows
+  exact ⟨b₁, b₂, h₁, hwf₂, hc₂, hm₂⟩
+
 end Tetris
