@@ -67,6 +67,17 @@ theorem solver_never_stuck (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
     ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg :=
   safe_has_valid_for_each_bag_piece (solver_trace_mem_safe h hl n) hp
 
+/-- **The program's move comes from a finite, searchable action set.** The canonical program's
+response to a drawable piece always lies in `Placement.allValidFor cfg p` — the finite set of valid
+placements for that piece (117 of them on the standard board). So the policy is realizable as a
+*finite search*: at each state the program ranges over finitely many candidate placements and keeps
+a safe one. Totality (never stuck) plus finiteness of the choice set make the controller
+computable. -/
+theorem solver_move_in_finite_action_set (hcols : 4 ≤ cfg.cols) {g : GameState}
+    {p : Piece} (hp : p ∈ g.bag) :
+    safeSolver cfg g p ∈ Placement.allValidFor cfg p :=
+  safeSolver_mem_allValidFor hcols hp
+
 /-! ## Q5. Is the board the program maintains bounded? -/
 
 /-- **A solving program keeps the board inside the field: `count ≤ cols·rows`.** Every reachable
