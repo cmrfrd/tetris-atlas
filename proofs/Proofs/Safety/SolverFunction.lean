@@ -531,4 +531,11 @@ theorem solver_move_must_clear (hv : ValidSolver cfg σ) {g : GameState} {p : Pi
     0 < Board.linesCleared cfg ((σ g p).place b) :=
   Board.must_clear_near_capacity hWF (solver_output_valid hv hp) hnear hsurv
 
+/-- **The induced step depends only on the function's value there.** If two solvers agree at `(g,
+p)`, their `solverStep` at `g` coincides — the next state is a function of `σ g p` alone. -/
+theorem solverStep_congr {σ₁ σ₂ : Solver cfg} (g : GameState) (p : Piece)
+    (h : σ₁ g p = σ₂ g p) :
+    solverStep cfg σ₁ p g = solverStep cfg σ₂ p g := by
+  rw [solverStep, solverStep, h]
+
 end Tetris
