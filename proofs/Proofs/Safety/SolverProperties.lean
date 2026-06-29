@@ -358,4 +358,15 @@ theorem safe_step_no_clear_count {g : GameState} (hwf : Board.WF cfg g.board)
   have h := Board.count_applyStep_eq_of_no_clear hwf hv hno
   simpa [adversarialStep, Placement.eta_of_piece_eq hpl] using h
 
+/-- **Only clearing makes progress.** A move that clears at least one line ends with strictly fewer
+than `count + 4` cells — it is the only way to beat the steady `+4` inflow. So the program's cell
+count is a sawtooth: `+4` on every non-clearing move, a net drop only when it clears. Survival is
+the balancing act of forcing enough downstrokes to offset the relentless climb. -/
+theorem safe_step_clear_progress {g : GameState} (hwf : Board.WF cfg g.board)
+    {p : Piece} {pl : Placement} (hpl : pl.piece = p) (hv : pl.Valid cfg)
+    (hcols : 0 < cfg.cols) (hclear : 0 < Board.linesCleared cfg (pl.place g.board)) :
+    (adversarialStep cfg g p pl).board.count < g.board.count + 4 := by
+  have h := Board.count_applyStep_lt_of_clear hwf hv hcols hclear
+  simpa [adversarialStep, Placement.eta_of_piece_eq hpl] using h
+
 end Tetris
