@@ -789,4 +789,15 @@ theorem standard_solver_exists_iff_init_safe :
       ↔ GameState.init ∈ safe GameConfig.standard :=
   solver_exists_iff_init_safe (by decide)
 
+/-! ## Q44. Is the program's operating region self-contained under play? -/
+
+/-- **The reachable region is forward-closed.** From any state the program can reach, and any piece
+the bag can draw, the program's move lands in another reachable state. So the operating set
+is an invariant region generated from `init` — play never escapes it, which is what lets the finite
+closed cycle / atlas capture the whole game. -/
+theorem solver_reachable_step_closed {g : GameState} (hr : solverReachable σ g)
+    {p : Piece} (hp : p ∈ g.bag) :
+    solverReachable σ (adversarialStep cfg g p (σ g p)) :=
+  solverReachable.step p hr hp
+
 end Tetris
