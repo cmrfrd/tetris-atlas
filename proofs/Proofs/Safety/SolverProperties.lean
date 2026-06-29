@@ -311,4 +311,18 @@ theorem solver_debt_le_capacity (h : SolvesTetrisValid cfg σ) {s : ℕ → Piec
       (adversarialTrace_solverReachable σ hl n))
   exact le_trans (HoleDebt.debt_le_surfaceArea hwf) (solver_surfaceArea_le_capacity h.2 hl n)
 
+/-! ## Q17. Is the existence of a solving program decidable? -/
+
+/-- **Solver existence is decidable.** Given any finite universe `S₀` that over-approximates `safe`,
+the finite safe-iteration converges (it can only shrink, `≤ |S₀|` steps), and at the fixed point a
+program exists iff `init` is in that explicitly-computed `Finset`. So "does a solver exist?" reduces
+to a terminating computation followed by a decidable membership test — solvability is not an
+undecidable mystery but a finite search. -/
+theorem solver_existence_decidable {S₀ : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hS₀ : safe cfg ⊆ ↑S₀) :
+    ∃ N : ℕ, (∃ σ : Solver cfg, SolvesTetrisValid cfg σ) ↔
+      GameState.init ∈ safeIterFinite cfg S₀ N := by
+  obtain ⟨N, _, hfix⟩ := safeIterFinite_converges cfg S₀
+  exact ⟨N, tetrisSolvableValidFor_iff_init_mem_safeIterFinite hcols hS₀ N hfix⟩
+
 end Tetris
