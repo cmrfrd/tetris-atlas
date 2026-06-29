@@ -243,4 +243,20 @@ theorem cols_le_card_row_of_isFull {cfg : GameConfig} {b : Board} {r : ℕ}
         rw [Finset.card_image_of_injective _ (fun a b hab => by simpa using hab), Finset.card_range]
     _ ≤ (b.filter (fun p => p.2 = r)).card := Finset.card_le_card hsub
 
+/-! ## The death zone: any cell at row ≥ rows is an immediate top-out -/
+
+/-- **Reaching row `rows` is death.** The playfield is rows `0 … rows-1`; a single cell at any
+row `r ≥ rows` makes its column overflow (`colHeight > rows`), so the board is lost. This is the
+target the irreversible +4-per-piece ratchet drives every column toward — and (crux 1) the only
+way to retreat is a clear, which (crux 6, crux 8) the adversary obstructs by burying holes and
+scattering the cells a full row needs. The whole game is a race between the ratchet pushing the
+top cell into row `rows` and the player assembling clears to pull it back. -/
+theorem isLost_of_mem_row_ge {cfg : GameConfig} {b : Board} {j r : ℕ}
+    (hr : cfg.rows ≤ r) (hmem : (j, r) ∈ b) : isLost cfg b := by
+  by_contra hcon
+  rw [not_isLost_iff_forall_colHeight_le] at hcon
+  have h1 := hcon j
+  have h2 := Board.lt_colHeight hmem
+  omega
+
 end Tetris.Board
