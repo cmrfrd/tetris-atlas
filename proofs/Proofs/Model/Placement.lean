@@ -1,7 +1,7 @@
 import Mathlib
 import Proofs.Model.Piece
 import Proofs.Model.Board
-import Proofs.Combinatorics.PieceGeometry
+import Proofs.Model.PieceGeometry
 
 /-!
 # Hard-drop placements

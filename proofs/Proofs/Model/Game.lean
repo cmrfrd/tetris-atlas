@@ -2,7 +2,7 @@ import Mathlib
 import Proofs.Model.Board
 import Proofs.Model.Placement
 import Proofs.Model.Bag
-import Proofs.Combinatorics.PieceGeometry
+import Proofs.Model.PieceGeometry
 
 /-!
 # Game states and reachability

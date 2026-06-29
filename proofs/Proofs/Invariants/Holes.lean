@@ -1,5 +1,5 @@
 import Mathlib
-import Proofs.Combinatorics.ColumnCount
+import Proofs.Invariants.ColumnCount
 
 /-!
 # Column holes

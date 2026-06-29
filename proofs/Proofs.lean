@@ -6,21 +6,21 @@
 -- Model — the game model
 import Proofs.Model.Config
 import Proofs.Model.Piece
+import Proofs.Model.PieceGeometry
 import Proofs.Model.Board
 import Proofs.Model.Placement
 import Proofs.Model.Bag
 import Proofs.Model.Game
 
--- Combinatorics — geometry, cell-counting, 7-bag renewal
-import Proofs.Combinatorics.PieceGeometry
+-- Combinatorics — board/column cell-counting, 7-bag renewal
 import Proofs.Combinatorics.BoardCount
-import Proofs.Combinatorics.ColumnCount
 import Proofs.Combinatorics.BagBurst
 
 -- Invariants — reachability/WF/clear invariants, holes, debt, surface fiber, WQO, state space
 import Proofs.Invariants.StepInvariants
 import Proofs.Invariants.Gameplay
 import Proofs.Invariants.GameplayExtra
+import Proofs.Invariants.ColumnCount
 import Proofs.Invariants.Holes
 import Proofs.Invariants.StateSpace
 import Proofs.Invariants.Wqo

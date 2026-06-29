@@ -1,8 +1,8 @@
 import Proofs.Safety.SafeSet
 import Proofs.Invariants.GameplayExtra
-import Proofs.Combinatorics.ColumnCount
+import Proofs.Invariants.ColumnCount
 import Proofs.Invariants.Holes
-import Proofs.Combinatorics.PieceGeometry
+import Proofs.Model.PieceGeometry
 import Proofs.Safety.SafeIterateFinite
 
 /-!
@@ -3267,7 +3267,7 @@ theorem uniform_open_close_impossible
 
 /-! ### Per-column budget
 
-`Proofs.Combinatorics.ColumnCount` refines the cell-count law to each column:
+`Proofs.Invariants.ColumnCount` refines the cell-count law to each column:
 a placement adds its per-column profile and every line clear removes
 exactly **one** cell from every valid column. Threading that law through
 the winning induction gives a *vector* bridge: all ten column equations

@@ -1,6 +1,6 @@
 import Proofs.Safety.SafeSet
 import Proofs.Invariants.Holes
-import Proofs.Combinatorics.PieceGeometry
+import Proofs.Model.PieceGeometry
 
 /-!
 # Surface invariant: the skyline abstraction (positive direction)
