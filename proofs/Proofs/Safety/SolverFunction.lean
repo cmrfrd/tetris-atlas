@@ -1066,4 +1066,11 @@ theorem solver_footprint_portrait (h : SolvesTetrisValid cfg σ) :
     {pl : Placement | ∃ g p, p ∈ g.bag ∧ σ g p = pl}.Finite :=
   ⟨fun _ hr => solver_active_domain_finite h hr, solver_range_finite h.1⟩
 
+/-- The canonical orbit is forced to clear inside every capacity-sized window. -/
+theorem safeSolver_clears_within (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) {M : ℕ} (hM : cfg.cols * cfg.rows < 4 * M) :
+    ∃ k < M, (adversarialTrace cfg (safeSolver cfg) s GameState.init (k + 1)).board.count
+           ≠ (adversarialTrace cfg (safeSolver cfg) s GameState.init k).board.count + 4 :=
+  solver_clears_within (canonical_memoryless_solver hcols h) hl hM
+
 end Tetris
