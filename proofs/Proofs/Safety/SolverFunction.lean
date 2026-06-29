@@ -279,4 +279,24 @@ theorem safeSolver_choice_stays_safe {g : GameState} (hg : g ∈ safe cfg)
     adversarialStep cfg g p (safeSolver cfg g p) ∈ safe cfg :=
   safeSolver_step_mem_safe hg hp
 
+/-! ## Part 10 — The function is determined only by where it is queried -/
+
+/-- **The trajectory depends only on the function's values at visited states.** If two solvers agree
+on every state actually reached along `σ₁`'s play (at the drawn pieces), their entire traces
+coincide. So the function's values off the trajectory are irrelevant — the survival behavior is
+determined by a (finite, reachable) restriction, and everything else is free data. This is the sharp
+form of compressibility: only the *visited* part of the table matters. -/
+theorem solver_trace_determined_by_visited (s : ℕ → Piece) {σ₁ σ₂ : Solver cfg} :
+    ∀ n, (∀ k < n, σ₁ (adversarialTrace cfg σ₁ s GameState.init k) (s k)
+                 = σ₂ (adversarialTrace cfg σ₁ s GameState.init k) (s k)) →
+      adversarialTrace cfg σ₁ s GameState.init n
+        = adversarialTrace cfg σ₂ s GameState.init n := by
+  intro n
+  induction n with
+  | zero => intro _; simp
+  | succ k ih =>
+      intro h
+      have ihk := ih (fun j hj => h j (Nat.lt_succ_of_lt hj))
+      rw [adversarialTrace_succ, adversarialTrace_succ, ← ihk, h k (Nat.lt_succ_self k)]
+
 end Tetris
