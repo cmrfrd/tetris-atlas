@@ -146,4 +146,24 @@ theorem must_clear_near_capacity {cfg : GameConfig} {b : Board} {pl : Placement}
   have hcap := count_le_capacity_of_not_isLost (Placement.applyStep_wf hwf hv) hsurvive
   omega
 
+/-! ## Holes block clearing — the adversary's roughness obstructs the one height lever -/
+
+/-- **A hole's row is not full.** A buried empty cell `p ∈ holes` leaves its row `p.2` incomplete
+(`p ∉ b`, in range), so that row cannot be a full row. The S/Z pieces manufacture exactly such
+holes, and a clear needs the *whole* row — so adversarial roughness disables the player's sole
+height-reducing primitive at every row a hole touches. -/
+theorem not_isFull_of_mem_holes {cfg : GameConfig} {b : Board} {p : Coord}
+    (hp : p ∈ HoleyCarrier.holes cfg b) : ¬ isFull cfg b p.2 := by
+  rw [SurfaceFiber.mem_holes_iff] at hp
+  exact not_isFull_of_notMem (Finset.mem_range.mp (Finset.mem_product.mp hp.1).1) hp.2.1
+
+/-- **A hole's row is never cleared.** Strengthening: the row of a hole is not even in `fullRows`,
+so `clearLines` leaves it — and the hole — in place. A buried hole is removable only by first
+clearing rows *above* it (lowering the column past the hole), never directly: holes are sticky
+debt that the player must dig out from the top. -/
+theorem notMem_fullRows_of_mem_holes {cfg : GameConfig} {b : Board} {p : Coord}
+    (hp : p ∈ HoleyCarrier.holes cfg b) : p.2 ∉ fullRows cfg b := by
+  rw [SurfaceFiber.mem_holes_iff] at hp
+  exact notMem_fullRows_of_notMem (Finset.mem_range.mp (Finset.mem_product.mp hp.1).1) hp.2.1
+
 end Tetris.Board
