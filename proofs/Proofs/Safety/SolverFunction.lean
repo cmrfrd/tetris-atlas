@@ -163,4 +163,31 @@ theorem solver_per_piece_noninjective (hv : ValidSolver cfg σ) {p : Piece}
   Finset.exists_ne_map_eq_of_card_lt_of_maps_to hcard
     (fun g hg => solver_output_in_action_set hv (hT g hg))
 
+/-! ## Part 6 — What the function's output *does*, and a closing portrait -/
+
+/-- **The output's skyline-effect ignores buried holes.** If two boards share a surface and the
+function returns the same placement on both, the resulting surfaces coincide. So whatever the
+function reads to *choose* a move, the move's effect on the skyline is a function of the surface and
+the placement alone — the holes beneath the board play no role in where the piece comes to rest. -/
+theorem solver_skyline_effect_factors_through_surface {g₁ g₂ : GameState} {p : Piece}
+    (hsurf : ∀ j, g₁.board.colHeight j = g₂.board.colHeight j)
+    (hpl : σ g₁ p = σ g₂ p) (j : ℕ) :
+    ((σ g₁ p).place g₁.board).colHeight j = ((σ g₂ p).place g₂.board).colHeight j := by
+  rw [hpl]
+  exact SurfaceFiber.colHeight_place_eq_of_colHeight_eq (σ g₂ p) hsurf j
+
+/-- **Portrait of a single output (Parts 1–2 assembled).** Every value a valid solver returns is, at
+once: a placement that *announces the input piece*, is *in-bounds/valid*, sits in a *real column*
+`< cols`, and belongs to the *fixed finite menu* `⋃ₚ allValidFor cfg p`. Four constraints that
+together pin an output down to a tiny `(rotation, column)` choice from a finite set — the function's
+output is highly structured and highly compressed. -/
+theorem solver_output_portrait (hv : ValidSolver cfg σ) {g : GameState}
+    {p : Piece} (hp : p ∈ g.bag) :
+    (σ g p).piece = p ∧
+    (σ g p).Valid cfg ∧
+    (σ g p).col < cfg.cols ∧
+    σ g p ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg) :=
+  ⟨solver_output_announces_piece hv hp, solver_output_valid hv hp,
+   solver_col_lt_cols hv hp, solver_output_in_total_action_set hv hp⟩
+
 end Tetris
