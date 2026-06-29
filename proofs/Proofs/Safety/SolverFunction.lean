@@ -1019,4 +1019,10 @@ theorem solver_move_count_clear (hv : ValidSolver cfg σ) {g : GameState} {p : P
     ((σ g p).applyStep cfg b).count < b.count + 4 :=
   Board.count_applyStep_lt_of_clear hWF (solver_output_valid hv hp) hcols hclear
 
+/-- A move of the function clears at most 4 rows (from a settled board). -/
+theorem solver_move_clears_le_four (g : GameState) (p : Piece) {b : Board}
+    (hnf : ∀ r, ¬ Board.isFull cfg b r) :
+    Board.linesCleared cfg ((σ g p).place b) ≤ 4 :=
+  linesCleared_place_le_four cfg b (σ g p) hnf
+
 end Tetris
