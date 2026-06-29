@@ -1407,4 +1407,22 @@ theorem solving_program_dynamics_portrait (h : SolvesTetrisValid cfg σ) {s : �
    fun n => solver_trace_maxHeight_le_succ h hl n,
    fun M hM => solver_clears_within h hl hM⟩
 
+/-- **The complete answer (Q1 ∘ Q3 ∘ Q6 ∘ Q8).** For canonical Tetris, exactly one of two things
+holds: either the single explicit memoryless program `safeSolver` is a valid solver that holds the
+stack `≤ 20` rows forever, or *no* valid program survives at all. No third possibility, and no need
+to search a space of clever strategies — the dichotomy is decided by `init`'s membership in `safe`,
+and the witness on the positive side is the one canonical lookup. -/
+theorem solving_program_all_or_nothing :
+    (SolvesTetrisValid GameConfig.standard (safeSolver GameConfig.standard) ∧
+      ∀ s, LegalSequence s → ∀ n, Board.maxHeight GameConfig.standard
+        (adversarialTrace GameConfig.standard (safeSolver GameConfig.standard)
+          s GameState.init n).board ≤ 20)
+    ∨ (∀ σ : Solver GameConfig.standard, ¬ SolvesTetrisValid GameConfig.standard σ) := by
+  by_cases hinit : GameState.init ∈ safe GameConfig.standard
+  · have hcanon := canonical_memoryless_solver (by decide) hinit
+    refine Or.inl ⟨hcanon, fun s hl n => ?_⟩
+    have hm := solver_maintains_maxHeight hcanon.2 hl n
+    rwa [GameConfig.standard_rows] at hm
+  · exact Or.inr fun σ hσ => hinit ((solver_exists_iff_init_safe (by decide)).mp ⟨σ, hσ⟩)
+
 end Tetris
