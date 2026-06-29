@@ -499,4 +499,16 @@ theorem solver_distinct_boards_le (hcols : 4 ≤ cfg.cols)
     ((solver_exists_iff_init_safe hcols).mp hex)
   exact ⟨C, hinit, C.image_board_card_le_two_pow⟩
 
+/-! ## Q25. Is height alone enough for the program to judge danger? -/
+
+/-- **Maximum height does not decide loss.** There is a board *at* the ceiling (`maxHeight = rows`,
+in fact completely full) that is nonetheless not lost — being hole-free, every row clears. So
+the program cannot judge danger from height alone: a tall board can be perfectly safe. It must also
+read clearability (holes), the second axis no height statistic exposes. -/
+theorem maxHeight_alone_does_not_decide_loss (hcols : 0 < cfg.cols) (hrows : 0 < cfg.rows) :
+    ∃ b : Board,
+      Board.WF cfg b ∧ Board.maxHeight cfg b = cfg.rows ∧ ¬ Board.isLost cfg b := by
+  obtain ⟨b, hwf, _, hnl, hm⟩ := Board.exists_full_board_at_brink hcols hrows
+  exact ⟨b, hwf, hm, hnl⟩
+
 end Tetris
