@@ -424,4 +424,13 @@ theorem solver_queried_in_bag (s : ℕ → Piece) (hl : LegalSequence s) (n : �
     s n ∈ (adversarialTrace cfg σ s GameState.init n).bag := by
   rw [adversarialTrace_bag]; exact hl n
 
+/-- **The decision is a point in the `Rotation × range cols` grid.** The genuine output `(rot, col)`
+of a valid solver is a point of the finite `4·cols` grid — the choice is one grid coordinate. -/
+theorem solver_output_in_grid (hv : ValidSolver cfg σ) {g : GameState}
+    {p : Piece} (hp : p ∈ g.bag) :
+    ((σ g p).rot, (σ g p).col)
+      ∈ (Finset.univ : Finset Rotation) ×ˢ Finset.range cfg.cols := by
+  rw [Finset.mem_product]
+  exact ⟨Finset.mem_univ _, Finset.mem_range.mpr (solver_col_lt_cols hv hp)⟩
+
 end Tetris
