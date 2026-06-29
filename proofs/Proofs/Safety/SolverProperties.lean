@@ -406,4 +406,17 @@ theorem solver_trace_count_le_succ (h : SolvesTetrisValid cfg σ) {s : ℕ → P
   have hc := Board.count_applyStep_le_add_four hwf hv
   simpa [adversarialStep, Placement.eta_of_piece_eq hpiece] using hc
 
+/-- **The max height is also 4-Lipschitz along the trace.** The loss-relevant quantity itself moves
+by at most `+4` per step. So the program watches a single bounded, slowly-varying scalar and must
+keep it under `rows` — survival is the control of one Lipschitz signal against an adversary. -/
+theorem solver_trace_maxHeight_le_succ (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    Board.maxHeight cfg (adversarialTrace cfg σ s GameState.init (n + 1)).board
+      ≤ Board.maxHeight cfg (adversarialTrace cfg σ s GameState.init n).board + 4 := by
+  have hbag : s n ∈ (adversarialTrace cfg σ s GameState.init n).bag := by
+    rw [adversarialTrace_bag]; exact hl n
+  obtain ⟨hpiece, hv⟩ := h.1 (adversarialTrace cfg σ s GameState.init n) (s n) hbag
+  rw [adversarialTrace_succ]
+  exact safe_step_maxHeight_le_add_four hpiece hv
+
 end Tetris
