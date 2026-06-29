@@ -1258,4 +1258,14 @@ theorem solver_exists_iff_init_in_fixedpoint {S₀ : Finset GameState} (hcols : 
   (solver_exists_iff_init_safe hcols).trans
     (init_safe_iff_init_mem_safeIterFinite hS₀ N hfix)
 
+/-! ## Q80. Is the maximal winning region unique? -/
+
+/-- **`safe` is the greatest fixed point — the winning region is unique.** Every fixed point `T` of
+the safety operator is contained in `safe`. So there is no larger self-consistent survivable set:
+the maximal controlled-invariant region is *the* answer, and the program is a membership witness
+for this canonical, unique object. -/
+theorem solver_region_greatest_fixed_point (T : Set GameState) (hT : safeOp cfg T = T) :
+    T ⊆ safe cfg :=
+  safe_greatest T hT.ge
+
 end Tetris
