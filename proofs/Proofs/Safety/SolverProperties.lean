@@ -480,7 +480,23 @@ theorem adversary_beats_every_valid_solver (hcols : 4 ≤ cfg.cols)
     ∃ (s : ℕ → Piece) (n : ℕ),
       LegalSequence s ∧ (adversarialTrace cfg σ s GameState.init n).lost cfg := by
   by_contra hcon
-  push_neg at hcon
-  exact h ((solver_exists_iff_init_safe hcols).mp ⟨σ, hv, fun s hl n => hcon s n hl⟩)
+  exact h ((solver_exists_iff_init_safe hcols).mp
+    ⟨σ, hv, fun s hl n hlost => hcon ⟨s, n, hl, hlost⟩⟩)
+
+/-! ## Q24. How large must the program's table be? -/
+
+/-- **The program needs at most `2^(cols·rows)` distinct boards.** The realizing cycle's states
+project onto at most `2^(cols·rows)` distinct board configurations — the count of all board
+bit-masks — independent of the `128` bag values. So the Atlas, keyed by board, is bounded by the
+raw board space; the bag dimension adds at most a constant factor on top. -/
+theorem solver_distinct_boards_le (hcols : 4 ≤ cfg.cols)
+    (hex : ∃ σ : Solver cfg, SolvesTetrisValid cfg σ) :
+    ∃ C : AdversarialClosedCycleWF cfg,
+      GameState.init ∈ C.toAdversarialClosedCycle.states ∧
+      (C.toAdversarialClosedCycle.states.image GameState.board).card
+        ≤ 2 ^ (cfg.cols * cfg.rows) := by
+  obtain ⟨C, hinit⟩ := (init_safe_iff_exists_init_adversarialClosedCycleWF cfg).mp
+    ((solver_exists_iff_init_safe hcols).mp hex)
+  exact ⟨C, hinit, C.image_board_card_le_two_pow⟩
 
 end Tetris
