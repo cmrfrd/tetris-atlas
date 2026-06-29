@@ -1461,4 +1461,32 @@ theorem solving_program_game_structure :
    fun bags h => solver_drain_budget_suffices h,
    fun hns σ hv => adversary_beats_every_valid_solver (by decide) hns σ hv⟩
 
+/-! ## Q84. Grand finale — the complete characterization in one theorem. -/
+
+/-- **The grand characterization of a Tetris-solving program.** Assembling the whole section: for
+canonical 10×20 Tetris, solvability by a valid program is equivalent to the single membership
+`init ∈ safe`, and equivalently to a finite WF closed cycle through `init`; and *whenever* this
+holds, the one explicit, memoryless, deterministic program `safeSolver` is a valid solver that
+keeps its state forever in `safe` with max height `≤ 20`. Existence reduces to one decidable fact;
+the witness is a single canonical lookup; and its survival comes with concrete invariants. This is
+the dual answered: a solving program is a membership-witness of `init ∈ safe`, realizable as a
+finite atlas, achievable by a memoryless controller — all the experiment set out to characterize. -/
+theorem solving_tetris_grand_characterization :
+    (TetrisSolvableValid ↔ GameState.init ∈ safe GameConfig.standard) ∧
+    (TetrisSolvableValid ↔ ∃ C : AdversarialClosedCycleWF GameConfig.standard,
+        GameState.init ∈ C.toAdversarialClosedCycle.states) ∧
+    (GameState.init ∈ safe GameConfig.standard →
+      SolvesTetrisValid GameConfig.standard (safeSolver GameConfig.standard) ∧
+      ∀ s, LegalSequence s → ∀ n,
+        adversarialTrace GameConfig.standard (safeSolver GameConfig.standard)
+            s GameState.init n ∈ safe GameConfig.standard ∧
+        Board.maxHeight GameConfig.standard
+          (adversarialTrace GameConfig.standard (safeSolver GameConfig.standard)
+            s GameState.init n).board ≤ 20) := by
+  refine ⟨standard_solver_exists_iff_init_safe, solver_solvable_iff_init_cycle, fun hinit => ?_⟩
+  have hcanon := canonical_memoryless_solver (by decide) hinit
+  refine ⟨hcanon, fun s hl n => ⟨solver_trace_mem_safe hcanon hl n, ?_⟩⟩
+  have hm := solver_maintains_maxHeight hcanon.2 hl n
+  rwa [GameConfig.standard_rows] at hm
+
 end Tetris
