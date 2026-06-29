@@ -171,4 +171,19 @@ theorem solver_exists_of_local_certificate (hcols : 4 ≤ cfg.cols) (S : Set Gam
     ∃ σ : Solver cfg, SolvesTetrisValid cfg σ :=
   (solver_exists_iff_init_safe hcols).mpr (solver_region_local_certificate S hS hinit)
 
+/-! ## Q10. What must a solving program physically DO — does it have to clear lines? -/
+
+/-- **Near capacity, the program is forced to clear a line.** If the board is within 4 cells of the
+field capacity `cols·rows` and the program's chosen (valid, piece-matching) move keeps the state
+safe, then that move *must* clear at least one line. Survival is not passive stacking: at the brink,
+the only safe moves are clearing moves — the program must use the line-clear primitive. -/
+theorem safe_near_capacity_must_clear {g : GameState} (hwf : Board.WF cfg g.board)
+    {p : Piece} {pl : Placement} (hpl : pl.piece = p) (hv : pl.Valid cfg)
+    (hnear : cfg.cols * cfg.rows < g.board.count + 4)
+    (hsafe' : adversarialStep cfg g p pl ∈ safe cfg) :
+    0 < Board.linesCleared cfg (pl.place g.board) := by
+  refine Board.must_clear_near_capacity hwf hv hnear ?_
+  have hnl : ¬ (adversarialStep cfg g p pl).lost cfg := safe_not_lost hsafe'
+  simpa [GameState.lost, adversarialStep, Placement.eta_of_piece_eq hpl] using hnl
+
 end Tetris
