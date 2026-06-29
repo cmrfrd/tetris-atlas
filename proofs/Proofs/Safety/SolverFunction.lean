@@ -62,4 +62,42 @@ theorem solver_output_eq_mk (hv : ValidSolver cfg σ) {g : GameState}
   rw [Placement.mk.injEq]
   exact ⟨(hv g p hp).1, rfl, rfl⟩
 
+/-! ## Part 2 — The genuine degrees of freedom and the bounded range -/
+
+/-- **The output is determined by `(rot, col)`.** Two outputs of a valid solver for the same piece
+that agree on rotation and column are *equal* — the piece field, being forced, adds nothing. So the
+function's real codomain is the two-number space `(rotation, column)`, not the full placement. -/
+theorem solver_eq_of_rotcol (hv : ValidSolver cfg σ) {g₁ g₂ : GameState} {p : Piece}
+    (hp₁ : p ∈ g₁.bag) (hp₂ : p ∈ g₂.bag)
+    (hr : (σ g₁ p).rot = (σ g₂ p).rot) (hc : (σ g₁ p).col = (σ g₂ p).col) :
+    σ g₁ p = σ g₂ p := by
+  show Placement.mk (σ g₁ p).piece (σ g₁ p).rot (σ g₁ p).col
+      = Placement.mk (σ g₂ p).piece (σ g₂ p).rot (σ g₂ p).col
+  rw [Placement.mk.injEq]
+  exact ⟨(hv g₁ p hp₁).1.trans (hv g₂ p hp₂).1.symm, hr, hc⟩
+
+/-- **The chosen column is in range: `col < cols`.** Every output column is a real board column. So
+the column coordinate of the output is bounded by `cols`, and (with the ≤4 rotations) the per-piece
+output ranges over at most `4·cols` values — a tiny, fixed space. -/
+theorem solver_col_lt_cols (hv : ValidSolver cfg σ) {g : GameState}
+    {p : Piece} (hp : p ∈ g.bag) :
+    (σ g p).col < cfg.cols := by
+  have h := solver_output_in_action_set hv hp
+  unfold Placement.allValidFor at h
+  rw [Finset.mem_filter, Finset.mem_image] at h
+  obtain ⟨⟨rc, hrc, hrceq⟩, _⟩ := h
+  rw [Finset.mem_product] at hrc
+  have hcol : (σ g p).col = rc.1 := by rw [← hrceq]
+  rw [hcol]
+  exact Finset.mem_range.mp hrc.1
+
+/-- **The whole range lives in one fixed finite set.** Every output of a valid solver — over all
+states and all drawable pieces — belongs to `⋃ₚ allValidFor cfg p`, a single `Finset`. The function
+takes only finitely many distinct values, bounded by a quantity that does not depend on the (vast)
+domain. This is the first compressibility fact: the output space is small and fixed. -/
+theorem solver_output_in_total_action_set (hv : ValidSolver cfg σ) {g : GameState}
+    {p : Piece} (hp : p ∈ g.bag) :
+    σ g p ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg) :=
+  Finset.mem_biUnion.mpr ⟨p, Finset.mem_univ p, solver_output_in_action_set hv hp⟩
+
 end Tetris
