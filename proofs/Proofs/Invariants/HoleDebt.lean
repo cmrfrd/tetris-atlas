@@ -37,8 +37,8 @@ single sum.
 * `debt_clearLines_add_card_le` — the wired conservation: after a clear,
   `debt' + card' ≤ debt + card`. Energy is a Lyapunov function: it strictly rises by ≥ 4
   per piece (a tetromino) and can only fall on clears, so unbounded play forces a matching
-  clear rate. (The piece-rise lower bound and the *pure* debt monotonicity
-  `debt(clearLines b) ≤ debt b` are the next targets — see the closing note.)
+  clear rate. (The exact per-piece rise is now `debt_place_eq`; the *pure* debt monotonicity
+  `debt(clearLines b) ≤ debt b` remains — see the closing note.)
 -/
 
 namespace Tetris.HoleDebt
@@ -243,6 +243,24 @@ theorem holes_card_le_place (cfg : GameConfig) (b : Board) (pl : Placement) :
     (holes cfg b).card ≤ (holes cfg (pl.place b)).card :=
   Finset.card_le_card (place_holes_subset cfg b pl)
 
+/-- **Exact per-placement debt delta.** A valid placement changes the debt by exactly the
+change in surface area minus 4 (written subtraction-free):
+`debt (place b) + surfaceArea b + 4 = debt b + surfaceArea (place b)`, i.e.
+`Δdebt = ΔsurfaceArea − 4`. Proof: the energy identity `debt_add_card_eq_sum_colHeight` on
+`b` and on `place b` (well-formed by `place_wf`), plus `count_place` (the hard drop adds
+exactly 4 cells). This is the placement-side EXACT counterpart of the clear-side
+`debt_clearLines_add_card_le`, completing the Lyapunov characterization. NB the growth is
+*unbounded*: `ΔsurfaceArea` can be large on a jagged surface (a piece bridging a deep gap
+buries many cells), refuting the naive `debt (place b) ≤ debt b + 3` (cf.
+`Experiments/EnergyGame.lean`). -/
+theorem debt_place_eq {cfg : GameConfig} {b : Board} {pl : Placement}
+    (hwf : Board.WF cfg b) (hv : pl.Valid cfg) :
+    debt cfg (pl.place b) + surfaceArea cfg b + 4
+      = debt cfg b + surfaceArea cfg (pl.place b) := by
+  have h1 := debt_add_card_eq_sum_colHeight hwf
+  have h2 := debt_add_card_eq_sum_colHeight (Placement.place_wf hwf hv)
+  have h3 : (pl.place b).card = b.card + 4 := Placement.count_place b pl
+  omega
 
 /-! ## Pure debt monotonicity under clears
 
@@ -353,10 +371,15 @@ The debt counter is now fully characterised under both transitions:
 
 So `debt` rises only on placement and falls only on clears — a genuine Lyapunov counter.
 
+The per-piece growth is now EXACT (`debt_place_eq`: `Δdebt = ΔsurfaceArea − 4`). Crucially it
+is **unbounded** — the naive `debt (place b pl) ≤ debt b + 3` is FALSE (a piece bridging a
+deep gap buries many cells; cf. `Experiments/EnergyGame.lean`). So debt growth is governed by
+the surface-area change (roughness), not a constant per-move cap.
+
 Remaining for the WSTS survival argument:
-* a per-piece *upper* bound `debt (place b pl) ≤ debt b + 3` (a tetromino buries ≤ 3 cells),
-  bounding debt growth per move; combined with `clearLines_debt_le` this makes `debt` a
-  bounded counter whenever the clear rate keeps pace;
+* a bound on `ΔsurfaceArea` under a *roughness-controlled* invariant (the surface envelope),
+  which via `debt_place_eq` + `clearLines_debt_le` makes `debt` a bounded counter whenever the
+  clear rate keeps pace;
 * lifting the bounded-debt + bounded-height invariant into a `Carrier`/`TetrisSolvableValid`
   reduction (the explicit, atlas-style closed set the non-congruence result demands). -/
 
