@@ -1390,4 +1390,21 @@ theorem solving_program_structural_portrait (h : SolvesTetrisValid cfg σ) :
    fun s hl => solver_play_eventually_repeats h hl,
    fun s s' n heq k hk => solver_is_causal s s' GameState.init n heq k hk⟩
 
+/-- **The dynamics portrait (Q20 ∘ Q21).** Over time, a solving program's board evolves so that both
+the cell count and the max height change by at most `+4` per step (slowly-varying), yet it is forced
+to clear inside every window whose `4·M` budget exceeds capacity. Smoothness plus a hard clearing
+cadence — the temporal signature of survival, assembled from the per-step bounds above. -/
+theorem solving_program_dynamics_portrait (h : SolvesTetrisValid cfg σ) {s : ℕ → Piece}
+    (hl : LegalSequence s) :
+    (∀ n, (adversarialTrace cfg σ s GameState.init (n + 1)).board.count
+        ≤ (adversarialTrace cfg σ s GameState.init n).board.count + 4) ∧
+    (∀ n, Board.maxHeight cfg (adversarialTrace cfg σ s GameState.init (n + 1)).board
+        ≤ Board.maxHeight cfg (adversarialTrace cfg σ s GameState.init n).board + 4) ∧
+    (∀ M, cfg.cols * cfg.rows < 4 * M → ∃ k < M,
+        (adversarialTrace cfg σ s GameState.init (k + 1)).board.count
+          ≠ (adversarialTrace cfg σ s GameState.init k).board.count + 4) :=
+  ⟨fun n => solver_trace_count_le_succ h hl n,
+   fun n => solver_trace_maxHeight_le_succ h hl n,
+   fun M hM => solver_clears_within h hl hM⟩
+
 end Tetris
