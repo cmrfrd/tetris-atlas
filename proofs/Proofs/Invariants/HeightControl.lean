@@ -303,6 +303,24 @@ theorem count_applyStep_lt_of_clear {cfg : GameConfig} {b : Board} {pl : Placeme
     Nat.le_mul_of_pos_right _ hclear
   omega
 
+/-! ## The adversary's concrete weapon: S/Z roughness manufactures unclearable holes -/
+
+/-- **S on flat ground buries a hole from nothing.** Dropping the S-piece (rotation 0, column 0)
+onto the empty standard board leaves `(2, 0)` a buried empty — a hole created on flat ground, with
+no prior roughness. This is the adversary's lever: the 7-bag hands it two such roughness pieces
+(S and Z) every bag, each able to plant a hole the player did not choose. -/
+theorem S_buries_hole :
+    ((2 : ℕ), (0 : ℕ)) ∈ HoleyCarrier.holes GameConfig.standard
+      (Placement.place ∅ ⟨Piece.S, 0, 0⟩) := by decide
+
+/-- **The buried hole blocks its row.** The hole S plants makes row `0` of the result permanently
+unfull (`not_isFull_of_mem_holes` applied to `S_buries_hole`), so that row cannot be cleared while
+the hole stands — the adversary converts one piece into a standing obstruction to the player's only
+height-reducing primitive. -/
+theorem S_hole_row_not_isFull :
+    ¬ isFull GameConfig.standard (Placement.place ∅ ⟨Piece.S, 0, 0⟩) 0 :=
+  not_isFull_of_mem_holes S_buries_hole
+
 /-! ## Synthesis — why the crux is hard, assembled from the above
 
 The survival problem is exactly to hold `maxHeight ≤ rows` forever
