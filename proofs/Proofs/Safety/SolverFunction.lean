@@ -1003,4 +1003,20 @@ theorem solver_move_energy_split (hv : ValidSolver cfg σ) {g : GameState} {p : 
       = HoleDebt.surfaceArea cfg ((σ g p).applyStep cfg b) :=
   HoleDebt.debt_add_card_eq_sum_colHeight (solver_applyStep_wf hv hp hWF)
 
+/-! ## Part 39 — Move-level count ledger -/
+
+/-- A non-clearing move of the function adds exactly four cells. -/
+theorem solver_move_count_no_clear (hv : ValidSolver cfg σ) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b)
+    (h0 : Board.linesCleared cfg ((σ g p).place b) = 0) :
+    ((σ g p).applyStep cfg b).count = b.count + 4 :=
+  Board.count_applyStep_eq_of_no_clear hWF (solver_output_valid hv hp) h0
+
+/-- A clearing move of the function strictly beats the `+4` inflow. -/
+theorem solver_move_count_clear (hv : ValidSolver cfg σ) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b) (hcols : 0 < cfg.cols)
+    (hclear : 0 < Board.linesCleared cfg ((σ g p).place b)) :
+    ((σ g p).applyStep cfg b).count < b.count + 4 :=
+  Board.count_applyStep_lt_of_clear hWF (solver_output_valid hv hp) hcols hclear
+
 end Tetris
