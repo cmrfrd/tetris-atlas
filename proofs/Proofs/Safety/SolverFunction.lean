@@ -841,4 +841,17 @@ theorem solver_diff_in_rotcol (hv : ValidSolver cfg σ) {g₁ g₂ : GameState} 
   have hc : (σ g₁ p).col = (σ g₂ p).col := by by_contra h; exact hcon (Or.inr h)
   exact solver_eq_of_rotcol hv hp₁ hp₂ hr hc
 
+/-! ## Part 34 — Grid-coordinate memberships -/
+
+/-- The output column is a member of `range cols`. -/
+theorem solver_col_mem_range (hv : ValidSolver cfg σ) {g : GameState}
+    {p : Piece} (hp : p ∈ g.bag) :
+    (σ g p).col ∈ Finset.range cfg.cols :=
+  Finset.mem_range.mpr (solver_col_lt_cols hv hp)
+
+/-- The output rotation is a member of the finite rotation type. -/
+theorem solver_rot_mem_univ (g : GameState) (p : Piece) :
+    (σ g p).rot ∈ (Finset.univ : Finset Rotation) :=
+  Finset.mem_univ _
+
 end Tetris
