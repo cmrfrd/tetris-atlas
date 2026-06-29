@@ -854,4 +854,20 @@ theorem solver_rot_mem_univ (g : GameState) (p : Piece) :
     (σ g p).rot ∈ (Finset.univ : Finset Rotation) :=
   Finset.mem_univ _
 
+/-! ## Part 35 — More invariants of the canonical orbit -/
+
+/-- The canonical orbit keeps the surface-area energy within capacity. -/
+theorem safeSolver_trace_surfaceArea_le (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    HoleDebt.surfaceArea cfg (adversarialTrace cfg (safeSolver cfg) s GameState.init n).board
+      ≤ cfg.cols * cfg.rows :=
+  solver_surfaceArea_le_capacity (canonical_memoryless_solver hcols h).2 hl n
+
+/-- The canonical orbit keeps the hole-debt within capacity. -/
+theorem safeSolver_trace_debt_le (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    HoleDebt.debt cfg (adversarialTrace cfg (safeSolver cfg) s GameState.init n).board
+      ≤ cfg.cols * cfg.rows :=
+  solver_debt_le_capacity (canonical_memoryless_solver hcols h) hl n
+
 end Tetris
