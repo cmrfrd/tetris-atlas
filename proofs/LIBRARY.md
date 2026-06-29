@@ -42,8 +42,9 @@ lake build ProofsExperiments  # research routes (foreground only)
 from the lib root. Previously `Proofs.lean` rooted `FiveBagReset` and
 `OnlineReservoir`, both of which use `native_decide`, so the *default build was
 not base-axiom clean*. Moving the experiment imports into `ProofsExperiments.lean`
-restores a clean spine. The `sorry` scaffold `Archive/AbstractSafe.lean` is imported
-by **neither** target (record only; its proofs are the realization crux #66/#72).
+restores a clean spine. The repo is **`sorry`-free everywhere**: route B
+(`Experiments/AbstractSafe.lean`) is a sorry-free conditional reduction (solvability ⟸
+{per-(class,piece) realization (crux #66/#72), `α init ∈ A`}), not a scaffold.
 
 **Verification (run after any spine change).**
 ```sh
@@ -179,7 +180,6 @@ Proofs/
                  Wqo HoleyCarrier SurfaceFiber HoleDebt                        ✓
   Survival/      Survival                                                      ✓
   Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite      ✓
-  Archive/       AbstractSafe                                                ✓ (built by neither lib)
 ProofsExperiments.lean       -- separate lib (route reductions, native_decide, Scratch/*)
 Proofs/Experiments/          -- WqoCarrier/HoleyCarrier reductions, EnergyGame, PieceCharge,
                                 carrier zoo (SurfaceInvariant, FiveBagReset), Scratch/*
@@ -214,7 +214,8 @@ Note `Survival` is **below** `Safety` (because `Adversarial` imports
    foundationally useful: the `EnergyGame capacity_conservation` / `SurfaceInvariant skyline`
    pair were evaluated and **deferred** (redundant / not-yet-load-bearing) on 2026-06-28.
 8. ✅ Green hygiene gate `scripts/check-green-clean.sh` (fails on sorry/native_decide in
-   the green tree); archived the `sorry` scaffold to `Archive/AbstractSafe.lean`.
+   the green tree); rewrote route B (`Experiments/AbstractSafe.lean`) from a 3-sorry
+   scaffold into a sorry-free conditional reduction → repo is now `sorry`-free everywhere.
 9. ⏳ (Optional, deferred) merge `Gameplay`+`GameplayExtra`; write `Api.lean` façade;
    wire `scripts/check-green-clean.sh` into actual CI (no `.github/` workflows exist yet).
 
@@ -222,8 +223,9 @@ Note `Survival` is **below** `Safety` (because `Adversarial` imports
 
 ## 5. Archive vs keep-active, and the open crux
 
-**Archive (floored — record only, built by neither lib):**
-`AbstractSafe.lean` (3 real `sorry`s = crux #66/#72); the `FiveBagReset`
+**Floored — record only (in `Experiments/`, sorry-free):**
+`AbstractSafe.lean` is route B as a sorry-free conditional reduction (the open content
+is now explicit hypotheses, not `sorry`); the `FiveBagReset`
 phase-decomposition program (`winning_init_iff_phase_decomposition` — *provably
 empty* by its own `no_phase_decomposition`/`not_winning_init`); the
 `SurfaceInvariant` carrier zoo (`isFlatFrontBandAt_*`, `reservoir*Surface_*` —
@@ -244,8 +246,8 @@ concrete reachable-cycle results `safeSolver_sevenBagCycle_reachable_closed_cycl
 > and the unproven content is the *geometry of cashing that drain*: the
 > un-instantiated `ReservoirGeometryCert.I_regulator_geometry` ≡
 > `PhaseGraphCompletion.frontier_step` ≡ SurfaceInvariant crux #66/#72 ≡ the
-> sorried realization half of `AbstractSafe.abs_simulation`. Four lenses, one
-> obligation.
+> `realization` hypothesis of `AbstractSafe.tetrisSolvableValid_of_realization`.
+> Four lenses, one obligation.
 
 Two proven results pin its character:
 - **Budget is sufficient, geometry is the obstruction:**

@@ -11,6 +11,7 @@ import Proofs.Experiments.PieceCharge
 -- because they conclude `TetrisSolvableValid` and depend on `SafeSet`.
 import Proofs.Experiments.WqoCarrier
 import Proofs.Experiments.HoleyCarrier
+import Proofs.Experiments.AbstractSafe
 import Proofs.Experiments.Scratch.RoutePhase.Probe
 import Proofs.Experiments.Scratch.RouteSurface.Probe
 
@@ -25,8 +26,9 @@ separate** from the `Proofs` default target so the standard library stays
   large carrier/surface scaffolds. That is fine here; it must never leak into
   `Proofs`.
 - Build explicitly with: `lake build ProofsExperiments` (foreground only).
-- The `sorry` scaffold lives in `Proofs/Archive/AbstractSafe.lean` — built by
-  **neither** lake target (record only; its proofs are the realization crux #66/#72).
+- `AbstractSafe` is route B (sound finite abstraction) as a **sorry-free** conditional
+  reduction: solvability ⟸ {per-(class,piece) realization (crux #66/#72), `α init ∈ A`}.
+- The repo is now `sorry`-free everywhere (`Archive/` removed).
 
 Promoted into the green `Proofs` library: `BagBurst` (→ `Combinatorics.BagBurst`),
 the WQO/hole/fiber/debt **primitives** (→ `Invariants.{Wqo,HoleyCarrier,SurfaceFiber,
