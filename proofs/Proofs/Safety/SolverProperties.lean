@@ -1200,4 +1200,16 @@ theorem solver_initial_state :
     GameState.init.board = (∅ : Board) :=
   ⟨GameState.init_bag, GameState.init_board_count, GameState.init_board_eq_emptyset⟩
 
+/-! ## Q76. Can the program's winning region actually be computed? -/
+
+/-- **The winning region is computable by a converging finite iteration.** Starting from the finite
+universe `inFieldStates`, the safe-iteration `safeIterFinite` reaches a fixed point within
+`|inFieldStates|` steps — it can only shrink, one state-removal at a time. This is exactly the
+retrograde death-propagation the Atlas builder runs: a terminating algorithm, not just an existence
+claim, whose fixed point (intersected with reachability) is the program's table. -/
+theorem solver_region_computable :
+    ∃ N, N ≤ (inFieldStates cfg).card ∧
+      safeIterFinite cfg (inFieldStates cfg) (N + 1) = safeIterFinite cfg (inFieldStates cfg) N :=
+  safeIterFinite_converges cfg (inFieldStates cfg)
+
 end Tetris
