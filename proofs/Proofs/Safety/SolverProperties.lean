@@ -557,4 +557,11 @@ theorem solver_drain_budget_suffices {bags : List (List Piece)}
     14 * bags.length ≤ 20 * bags.flatten.countP BagBurst.isI :=
   BagBurst.drain_budget_ge_clearing_need h
 
+/-- **Roughness arrives at twice the rate of drains.** In every bag the program absorbs two
+hole-injectors (`S`/`Z`) for each single drain (`I`). This 2:1 structural pressure — not a shortage
+of drains (Q28) — is what the program's placement geometry must continually counter. -/
+theorem solver_roughness_two_per_drain {l : List Piece} (h : BagBurst.IsBagOrder l) :
+    l.countP BagBurst.isSZ = 2 * l.countP BagBurst.isI :=
+  BagBurst.renewal_ratio h
+
 end Tetris
