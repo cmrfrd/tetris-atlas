@@ -355,4 +355,17 @@ theorem safeSolver_solverStep_preserves_safe {g : GameState} (hg : g ∈ safe cf
     solverStep cfg (safeSolver cfg) p g ∈ safe cfg :=
   safeSolver_step_mem_safe hg hp
 
+/-! ## Part 13 — The realized moves over a whole play -/
+
+/-- **Every move actually made comes from the finite menu.** Along any legal play, the placement the
+function returns at step `n` is in `allValidFor cfg (s n)`. So the realized output sequence —
+however long the game runs — lives entirely in the fixed finite menu. -/
+theorem solver_play_outputs_in_menu (hv : ValidSolver cfg σ) (s : ℕ → Piece)
+    (hl : LegalSequence s) (n : ℕ) :
+    σ (adversarialTrace cfg σ s GameState.init n) (s n)
+      ∈ Placement.allValidFor cfg (s n) := by
+  have hbag : s n ∈ (adversarialTrace cfg σ s GameState.init n).bag := by
+    rw [adversarialTrace_bag]; exact hl n
+  exact solver_output_in_action_set hv hbag
+
 end Tetris
