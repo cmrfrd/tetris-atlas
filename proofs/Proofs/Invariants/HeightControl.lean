@@ -166,6 +166,38 @@ theorem notMem_fullRows_of_mem_holes {cfg : GameConfig} {b : Board} {p : Coord}
   rw [SurfaceFiber.mem_holes_iff] at hp
   exact notMem_fullRows_of_notMem (Finset.mem_range.mp (Finset.mem_product.mp hp.1).1) hp.2.1
 
+/-- **A hole is buried under a filled cell.** Every hole `p` has a filled cell strictly above it in
+its column (`∃ r > p.2, (p.1, r) ∈ b`): the column's top cell. So a hole cannot be reached from
+above — to fill or expose it the player must first clear the cell(s) covering it, which means
+clearing rows *above* the hole. Holes are sticky debt that can only be dug out from the top, never
+patched directly; this is the dynamical content of `clearLines_holes_le_false` (clears can even
+create holes). -/
+theorem exists_cover_of_hole {cfg : GameConfig} {b : Board} {p : Coord}
+    (hp : p ∈ HoleyCarrier.holes cfg b) : ∃ r, p.2 < r ∧ (p.1, r) ∈ b := by
+  rw [SurfaceFiber.mem_holes_iff] at hp
+  obtain ⟨_, hpnb, hplt⟩ := hp
+  have hpos : 0 < b.colHeight p.1 := Nat.lt_of_le_of_lt (Nat.zero_le _) hplt
+  obtain ⟨r0, hr0⟩ := (colHeight_pos_iff_exists_mem b p.1).mp hpos
+  have hne : (b.colRows p.1).Nonempty := by
+    refine ⟨r0, ?_⟩
+    rw [Board.colRows, Finset.mem_image]
+    exact ⟨(p.1, r0), Finset.mem_filter.mpr ⟨hr0, rfl⟩, rfl⟩
+  obtain ⟨r, hrmem, hrsup⟩ := Finset.exists_mem_eq_sup (b.colRows p.1) hne (· + 1)
+  have hmem : (p.1, r) ∈ b := by
+    rw [Board.colRows, Finset.mem_image] at hrmem
+    obtain ⟨x, hx, hxr⟩ := hrmem
+    rw [Finset.mem_filter] at hx
+    exact (Prod.ext hx.2 hxr : x = (p.1, r)) ▸ hx.1
+  have hcol : b.colHeight p.1 = r + 1 := hrsup
+  refine ⟨r, ?_, hmem⟩
+  rcases Nat.lt_or_ge p.2 r with h | h
+  · exact h
+  · exfalso
+    have hpeq : p.2 = r := by omega
+    have hpe : p = (p.1, r) := Prod.ext rfl hpeq
+    rw [hpe] at hpnb
+    exact hpnb hmem
+
 /-! ## Energy and material do not control survival — a single cell at the brink -/
 
 /-- **One cell can sit at the loss boundary.** On a nonempty field the one-cell board
