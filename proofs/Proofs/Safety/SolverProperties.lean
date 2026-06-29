@@ -814,4 +814,13 @@ theorem solving_program_pillars (h : SolvesTetrisValid cfg σ) {s : ℕ → Piec
   ⟨solver_trace_mem_safe h hl n, solver_maintains_maxHeight h.2 hl n,
     solver_count_le_capacity h hl n⟩
 
+/-! ## Q46. What fixed-point equation pins down the program's region? -/
+
+/-- **The winning region is a fixed point of the safety operator.** `safeOp (safe) = safe`: applying
+one step of "not lost and every draw has a valid successor inside the set" to `safe` returns `safe`
+unchanged. As the *greatest* such fixed point, it is the largest self-consistent winning region —
+the exact object the program is a witness of membership in. -/
+theorem solver_region_fixed_point : safeOp cfg (safe cfg) = safe cfg :=
+  safe_eq cfg
+
 end Tetris
