@@ -193,4 +193,26 @@ theorem exists_one_cell_at_brink {cfg : GameConfig}
     · have hlt := Board.lt_colHeight (Finset.mem_singleton_self ((0 : ℕ), cfg.rows - 1))
       exact le_trans (by omega) (colHeight_le_maxHeight hcols)
 
+/-! ## Clearing is a coordinated, expensive operation -/
+
+/-- **A clearable row costs a full width of cells.** A full row contains at least `cols` cells
+(one in every column). So the player's only height-reducing primitive requires *coordinating* a
+complete `cols`-wide layer, whereas each piece deposits only 4 cells anywhere it lands — a clear
+needs the contributions of `≥ cols/4` pieces aimed at one row, and the adversary can keep
+scattering those contributions across different rows (and burying holes, crux 6) to prevent any
+single row from completing. The asymmetry "4 local cells in, a coordinated `cols`-wide row out"
+is the engine of the difficulty. -/
+theorem cols_le_card_row_of_isFull {cfg : GameConfig} {b : Board} {r : ℕ}
+    (h : isFull cfg b r) : cfg.cols ≤ (b.filter (fun p => p.2 = r)).card := by
+  have hsub : (Finset.range cfg.cols).image (fun c => (c, r)) ⊆ b.filter (fun p => p.2 = r) := by
+    intro p hp
+    rw [Finset.mem_image] at hp
+    obtain ⟨c, hc, rfl⟩ := hp
+    rw [Finset.mem_filter]
+    exact ⟨h c hc, rfl⟩
+  calc cfg.cols
+      = ((Finset.range cfg.cols).image (fun c => (c, r))).card := by
+        rw [Finset.card_image_of_injective _ (fun a b hab => by simpa using hab), Finset.card_range]
+    _ ≤ (b.filter (fun p => p.2 = r)).card := Finset.card_le_card hsub
+
 end Tetris.Board
