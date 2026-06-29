@@ -638,4 +638,11 @@ theorem solver_trace_const_eq_iterate (p : Piece) (n : ℕ) :
   | succ k ih =>
       rw [solver_trace_eq_solverStep, ih, Function.iterate_succ_apply']
 
+/-- The induced step has no fixed point when the bag changes (the bag is a clock). -/
+theorem solverStep_ne_of_bag_ne {g : GameState} {p : Piece} (h : g.bag.draw p ≠ g.bag) :
+    solverStep cfg σ p g ≠ g := by
+  intro he
+  apply h
+  rw [← solver_next_bag g p, he]
+
 end Tetris
