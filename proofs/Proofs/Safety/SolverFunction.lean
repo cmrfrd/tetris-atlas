@@ -1103,4 +1103,12 @@ theorem solver_outdegree_le (g : GameState) :
     (g.bag.image (fun p => solverStep cfg σ p g)).card ≤ g.bag.card :=
   Finset.card_image_le
 
+/-- From a safe state, every canonical successor is safe — a closed subgraph. -/
+theorem safeSolver_successors_safe {g : GameState} (hg : g ∈ safe cfg) {q : GameState}
+    (hq : q ∈ g.bag.image (fun p => solverStep cfg (safeSolver cfg) p g)) :
+    q ∈ safe cfg := by
+  rw [Finset.mem_image] at hq
+  obtain ⟨p, hp, rfl⟩ := hq
+  exact safeSolver_solverStep_preserves_safe hg hp
+
 end Tetris
