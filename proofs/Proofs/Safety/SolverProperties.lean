@@ -1339,4 +1339,23 @@ theorem solver_decision_procedure {S₀ : Finset GameState} (hcols : 4 ≤ cfg.c
     (solver_exists_iff_init_safe hcols).trans
       (init_safe_iff_init_mem_safeIterFinite hS₀ N hfix)⟩
 
+/-- **From a finite certificate to a fully-verified solver (Q9 ∘ Q45).** To get a program that
+provably survives *with* all its guarantees, it suffices to exhibit a set `S ∋ init` closed under
+one adversarial step: that yields a solver which, against every legal sequence, keeps its state in
+`safe`, its max height `≤ rows`, and its cell count `≤ cols·rows`, forever. The M4 construction
+recipe and the operational survival bounds, fused into one deliverable. -/
+theorem atlas_certificate_yields_bounded_solver (hcols : 4 ≤ cfg.cols) (S : Set GameState)
+    (hinit : GameState.init ∈ S)
+    (hS : ∀ g ∈ S, ¬ g.lost cfg ∧
+      ∀ p, p ∈ g.bag → ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧
+        adversarialStep cfg g p pl ∈ S) :
+    ∃ σ : Solver cfg, SolvesTetrisValid cfg σ ∧
+      ∀ (s : ℕ → Piece), LegalSequence s → ∀ n,
+        adversarialTrace cfg σ s GameState.init n ∈ safe cfg ∧
+        Board.maxHeight cfg (adversarialTrace cfg σ s GameState.init n).board ≤ cfg.rows ∧
+        (adversarialTrace cfg σ s GameState.init n).board.count ≤ cfg.cols * cfg.rows := by
+  obtain ⟨σ, hσ⟩ := solver_exists_of_local_certificate hcols S hinit hS
+  exact ⟨σ, hσ, fun s hl n => ⟨solver_trace_mem_safe hσ hl n,
+    solver_maintains_maxHeight hσ.2 hl n, solver_count_le_capacity hσ hl n⟩⟩
+
 end Tetris
