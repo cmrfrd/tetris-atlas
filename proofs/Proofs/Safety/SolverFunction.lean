@@ -457,4 +457,10 @@ theorem solver_next_board (hv : ValidSolver cfg σ) {g : GameState}
     (solverStep cfg σ p g).board = (σ g p).applyStep cfg g.board := by
   simp [solverStep, adversarialStep, Placement.eta_of_piece_eq (hv g p hp).1]
 
+/-- **The induced step advances the bag by drawing the piece.** `(solverStep p g).bag = g.bag.draw
+p` — the bag component evolves by the renewal draw, independent of the function's choice. -/
+theorem solver_next_bag (g : GameState) (p : Piece) :
+    (solverStep cfg σ p g).bag = g.bag.draw p :=
+  rfl
+
 end Tetris
