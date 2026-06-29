@@ -320,4 +320,15 @@ theorem solver_image_per_piece_card_le (hv : ValidSolver cfg σ) {p : Piece}
   le_trans (Finset.card_le_card (solver_image_per_piece_subset hv T hT))
     (card_allValidFor_le cfg p)
 
+/-- **The output menus partition by piece.** For distinct pieces the action sets are disjoint: no
+placement is valid for two different pieces (the `piece` field discriminates perfectly). So the
+function's output range splits cleanly into seven independent per-piece blocks, and the piece of an
+output recovers which block — the output carries its own routing. -/
+theorem allValidFor_disjoint_of_ne {p p' : Piece} (h : p ≠ p') :
+    Disjoint (Placement.allValidFor cfg p) (Placement.allValidFor cfg p') := by
+  rw [Finset.disjoint_left]
+  intro pl hpl hpl'
+  rw [Placement.mem_allValidFor] at hpl hpl'
+  exact h (hpl.1.symm.trans hpl'.1)
+
 end Tetris
