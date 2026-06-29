@@ -959,4 +959,17 @@ theorem solver_benign_pieces_no_holes :
     HoleyCarrier.holes GameConfig.standard (Placement.place ∅ ⟨Piece.I, 0, 0⟩) = ∅ := by
   decide
 
+/-! ## Q58. Is there a conserved quantity the program can never violate? -/
+
+/-- **The cell count stays even (even-width boards).** On any board with an even number of columns
+(standard has `10`), every state the program reaches has an even cell count: each piece adds `4`
+(even), and each clear removes a multiple of `cols` (even), so parity is conserved from the empty
+board. A hidden invariant the program maintains automatically — and a sanity constraint on the
+Atlas: no odd-count board is ever reachable. -/
+theorem solver_even_count (hcols : Even cfg.cols) (h : SolvesTetrisValid cfg σ)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Even (adversarialTrace cfg σ s GameState.init n).board.count :=
+  reachable_even_count hcols
+    (solver_states_reachable_from_empty h (adversarialTrace_solverReachable σ hl n))
+
 end Tetris
