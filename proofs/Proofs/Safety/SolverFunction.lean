@@ -831,4 +831,14 @@ theorem solver_image_per_piece_standard_le (σ : Solver GameConfig.standard)
   have h := solver_image_per_piece_card_le hv T hT
   rw [GameConfig.standard_cols] at h; omega
 
+/-- Distinct outputs for the same piece differ in rotation or column. -/
+theorem solver_diff_in_rotcol (hv : ValidSolver cfg σ) {g₁ g₂ : GameState} {p : Piece}
+    (hp₁ : p ∈ g₁.bag) (hp₂ : p ∈ g₂.bag) (hne : σ g₁ p ≠ σ g₂ p) :
+    (σ g₁ p).rot ≠ (σ g₂ p).rot ∨ (σ g₁ p).col ≠ (σ g₂ p).col := by
+  by_contra hcon
+  apply hne
+  have hr : (σ g₁ p).rot = (σ g₂ p).rot := by by_contra h; exact hcon (Or.inl h)
+  have hc : (σ g₁ p).col = (σ g₂ p).col := by by_contra h; exact hcon (Or.inr h)
+  exact solver_eq_of_rotcol hv hp₁ hp₂ hr hc
+
 end Tetris
