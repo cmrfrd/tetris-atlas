@@ -38,3 +38,4 @@ import Proofs.Safety.SafeSet
 import Proofs.Safety.SafeIterate
 import Proofs.Safety.SafeIterateFinite
 import Proofs.Safety.Safety
+import Proofs.Safety.SolverProperties
