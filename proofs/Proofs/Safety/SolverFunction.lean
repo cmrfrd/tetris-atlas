@@ -685,4 +685,16 @@ theorem grid_encode_injective {r r' : Rotation} {c c' : ℕ}
   have h2 := r'.isLt
   omega
 
+/-! ## Part 26 — The canonical opening book -/
+
+/-- Each canonical opening response (any first piece) lies in the finite menu. -/
+theorem safeSolver_opening_in_menu (hcols : 4 ≤ cfg.cols) (p : Piece) :
+    safeSolver cfg GameState.init p ∈ Placement.allValidFor cfg p :=
+  safeSolver_mem_allValidFor hcols (GameState.init_bag.symm ▸ Bag.mem_full p)
+
+/-- Each canonical opening response announces its piece. -/
+theorem safeSolver_opening_piece (p : Piece) :
+    (safeSolver cfg GameState.init p).piece = p :=
+  safeSolver_piece cfg GameState.init p
+
 end Tetris
