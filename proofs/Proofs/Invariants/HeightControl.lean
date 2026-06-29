@@ -347,6 +347,21 @@ theorem count_applyStep_eq_of_no_clear {cfg : GameConfig} {b : Board} {pl : Plac
   rw [h0, Nat.mul_zero] at hstep
   omega
 
+/-- **Recovery is bounded: even a Tetris removes only `4·cols` cells.** From a settled board (no
+pending full rows), one move clears at most 4 lines (`linesCleared_place_le_four`, since a piece
+spans ≤4 rows — and only the I-piece reaches 4), so it removes at most `4·cols` cells:
+`count b + 4 ≤ count (applyStep b) + 4·cols`. The player cannot erase an arbitrary accumulated
+deficit in a single move; survival is necessarily *incremental*, chipping at most a Tetris per
+move against a steady `+4` inflow — and a Tetris itself needs four full rows the adversary fights
+to deny. -/
+theorem count_le_count_applyStep_add {cfg : GameConfig} {b : Board} {pl : Placement}
+    (hwf : WF cfg b) (hv : pl.Valid cfg) (hnf : ∀ r, ¬ isFull cfg b r) :
+    b.count + 4 ≤ (pl.applyStep cfg b).count + cfg.cols * 4 := by
+  have hstep := applyStep_count cfg b pl hwf hv
+  have hle : Board.linesCleared cfg (pl.place b) ≤ 4 := linesCleared_place_le_four cfg b pl hnf
+  have hmul : cfg.cols * Board.linesCleared cfg (pl.place b) ≤ cfg.cols * 4 := by gcongr
+  omega
+
 /-! ## The adversary's concrete weapon: S/Z roughness manufactures unclearable holes -/
 
 /-- **S on flat ground buries a hole from nothing.** Dropping the S-piece (rotation 0, column 0)
