@@ -899,4 +899,15 @@ theorem solver_periodic_play (s : ℕ → Piece) (g0 : GameState) {b d : ℕ}
     adversarialTrace cfg σ s g0 (b + k) = adversarialTrace cfg σ s g0 (b + d + k) :=
   adversarialTrace_periodic_of_periodic_suffix cfg σ s g0 htrace hs k
 
+/-! ## Q53. Can the program depend on pieces it has not yet seen? -/
+
+/-- **The program is causal: play depends only on past input.** If two input sequences agree on the
+first `n` pieces, the program's states coincide for the first `n` steps — regardless of how the
+sequences differ later. So the program cannot (and need not) anticipate future pieces: its move at
+each time is a function of the history so far. This is the rigorous form of "no lookahead". -/
+theorem solver_is_causal (s s' : ℕ → Piece) (g0 : GameState) (n : ℕ)
+    (h : ∀ i < n, s i = s' i) (k : ℕ) (hk : k ≤ n) :
+    adversarialTrace cfg σ s g0 k = adversarialTrace cfg σ s' g0 k :=
+  adversarialTrace_eq_of_eq_below σ s s' g0 n h k hk
+
 end Tetris
