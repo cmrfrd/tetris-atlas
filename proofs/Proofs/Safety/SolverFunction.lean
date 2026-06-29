@@ -1130,4 +1130,17 @@ theorem solver_compressibility_grand_portrait (hv : ValidSolver cfg σ) :
   ⟨fun _ _ hp => solver_output_code_lt hv hp, solver_range_finite hv,
    fun g₁ g₂ p hb hbag => solver_reads_board_bag g₁ g₂ p hb hbag, fun _ _ => rfl⟩
 
+/-- Dynamical portrait: the induced self-map, orbit = iteration, bag draw, board apply, no fixed
+point under bag change. -/
+theorem solver_dynamical_grand_portrait (hv : ValidSolver cfg σ) (p : Piece) :
+    (∀ g, solverStep cfg σ p g = adversarialStep cfg g p (σ g p)) ∧
+    (∀ n, adversarialTrace cfg σ (fun _ => p) GameState.init n
+        = (solverStep cfg σ p)^[n] GameState.init) ∧
+    (∀ g, (solverStep cfg σ p g).bag = g.bag.draw p) ∧
+    (∀ g, p ∈ g.bag → (solverStep cfg σ p g).board = (σ g p).applyStep cfg g.board) ∧
+    (∀ g, g.bag.draw p ≠ g.bag → solverStep cfg σ p g ≠ g) :=
+  ⟨fun _ => rfl, fun n => solver_trace_const_eq_iterate p n,
+   fun g => solver_next_bag g p, fun _ hp => solver_next_board hv hp,
+   fun _ hne => solverStep_ne_of_bag_ne hne⟩
+
 end Tetris
