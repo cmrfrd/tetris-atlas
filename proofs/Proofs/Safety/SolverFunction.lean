@@ -1204,4 +1204,13 @@ theorem solver_locality_portrait {σ₁ σ₂ : Solver cfg} (s : ℕ → Piece) 
   ⟨fun g p h => solverStep_congr g p h,
    fun hagree n => solver_trace_eq_of_agree_on_reachable s hl hagree n⟩
 
+/-- Atlas portrait: the function lifts to a total, faithful atlas that round-trips back. -/
+theorem solver_atlas_portrait :
+    (∀ g p, σ.toAtlas g p = some (σ g p)) ∧
+    (∀ g p, (σ.toAtlas g p).isSome = true) ∧
+    (σ.toAtlas.toSolver = σ) ∧
+    (∀ (σ₁ σ₂ : Solver cfg), σ₁.toAtlas = σ₂.toAtlas → σ₁ = σ₂) :=
+  ⟨fun _ _ => rfl, fun _ _ => rfl, Solver.toAtlas_toSolver σ,
+   fun _ _ h => Solver.toAtlas_inj h⟩
+
 end Tetris
