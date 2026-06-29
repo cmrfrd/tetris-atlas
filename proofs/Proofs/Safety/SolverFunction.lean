@@ -1213,4 +1213,14 @@ theorem solver_atlas_portrait :
   ⟨fun _ _ => rfl, fun _ _ => rfl, Solver.toAtlas_toSolver σ,
    fun _ _ h => Solver.toAtlas_inj h⟩
 
+/-- Input/operation portrait: never-stalling input, always an in-bag piece, always an in-menu
+response. -/
+theorem solver_input_portrait (hv : ValidSolver cfg σ) (s : ℕ → Piece) (hl : LegalSequence s) :
+    (∀ n, (adversarialTrace cfg σ s GameState.init n).bag.Nonempty) ∧
+    (∀ n, s n ∈ (adversarialTrace cfg σ s GameState.init n).bag) ∧
+    (∀ n, σ (adversarialTrace cfg σ s GameState.init n) (s n)
+        ∈ Placement.allValidFor cfg (s n)) :=
+  ⟨fun n => adversarialTrace_bag_nonempty σ hl n, fun n => solver_queried_in_bag s hl n,
+   fun n => solver_play_outputs_in_menu hv s hl n⟩
+
 end Tetris
