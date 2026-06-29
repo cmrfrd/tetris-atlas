@@ -80,4 +80,26 @@ theorem solver_count_le_capacity (h : SolvesTetrisValid cfg σ) {s : ℕ → Pie
       (adversarialTrace_solverReachable σ hl n))
   exact Board.count_le_capacity_of_not_isLost hwf (h.2 s hl n)
 
+/-! ## Q6. How much machinery does a solving program need — memory? randomness? -/
+
+/-- **A single fixed, deterministic, memoryless program suffices.** The very type
+`Solver cfg := GameState → Piece → Placement` already grants the program *no* memory of past moves,
+*no* lookahead of future pieces, and *no* randomness — it maps the current `(state, piece)` to a
+placement. This theorem shows that is enough: whenever the game is solvable, the *canonical*
+`safeSolver` (one fixed such function) survives every legal sequence. Solving needs no state
+machine, no history, no coin flips — just a pure lookup keyed on the present. -/
+theorem canonical_memoryless_solver (hcols : 4 ≤ cfg.cols) (h : GameState.init ∈ safe cfg) :
+    SolvesTetrisValid cfg (safeSolver cfg) :=
+  init_safe_implies_solvesTetrisValid hcols h
+
+/-- **If any solver works, the canonical one works.** Existence of *some* clever program is
+equivalent to one specific, explicitly-constructed program (`safeSolver`) winning. So there is no
+gap between "a survivor exists" and "this particular memoryless survivor wins" — no cleverness is
+needed beyond membership in `safe`. -/
+theorem any_solver_implies_canonical (hcols : 4 ≤ cfg.cols)
+    (hex : ∃ σ : Solver cfg, SolvesTetrisValid cfg σ) :
+    SolvesTetrisValid cfg (safeSolver cfg) :=
+  init_safe_implies_solvesTetrisValid hcols
+    ((init_safe_iff_exists_solvesTetrisValid hcols).mpr hex)
+
 end Tetris
