@@ -1372,4 +1372,22 @@ theorem solver_three_faces_of_solvability :
   ⟨standard_solver_exists_iff_init_safe, solver_solvable_iff_init_cycle,
    fun hex => solver_exists_yields_closed_atlas (by decide) hex⟩
 
+/-- **The structural portrait (Q13 ∘ Q14 ∘ Q53).** A solving program is, structurally: a
+*finite-state* machine (its trajectory stays in the finite `inFieldStates`), whose play is
+*eventually periodic* (it must revisit a state), and *causal* (its states depend only on the input
+prefix). Three independent structural theorems above, assembled into the portrait of what kind of
+object a solver is. -/
+theorem solving_program_structural_portrait (h : SolvesTetrisValid cfg σ) :
+    (∀ s, LegalSequence s → ∀ n,
+        adversarialTrace cfg σ s GameState.init n ∈ inFieldStates cfg) ∧
+    (∀ s, LegalSequence s → ∃ i j, i ≠ j ∧
+        adversarialTrace cfg σ s GameState.init i
+          = adversarialTrace cfg σ s GameState.init j) ∧
+    (∀ (s s' : ℕ → Piece) (n : ℕ), (∀ i < n, s i = s' i) → ∀ k ≤ n,
+        adversarialTrace cfg σ s GameState.init k
+          = adversarialTrace cfg σ s' GameState.init k) :=
+  ⟨fun s hl n => solver_trace_mem_inFieldStates h hl n,
+   fun s hl => solver_play_eventually_repeats h hl,
+   fun s s' n heq k hk => solver_is_causal s s' GameState.init n heq k hk⟩
+
 end Tetris
