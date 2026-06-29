@@ -412,4 +412,16 @@ theorem solver_response_table_card_le (g : GameState) :
     (g.bag.image (fun p => σ g p)).card ≤ g.bag.card :=
   Finset.card_image_le
 
+/-- **The output rotation is one of four.** `rot : Fin 4`, so the rotation component is always `< 4`
+— with the column `< cols`, the genuine output is a point in `Fin 4 × range cols`. -/
+theorem solver_rot_lt_four (g : GameState) (p : Piece) : ((σ g p).rot : ℕ) < 4 :=
+  (σ g p).rot.isLt
+
+/-- **The function is only ever queried at `p ∈ g.bag`.** Along any legal play the drawn piece lies
+in the current bag, so the function is consulted only on live `(state, piece)` pairs; its values at
+off-bag pieces are dead data, never reached. -/
+theorem solver_queried_in_bag (s : ℕ → Piece) (hl : LegalSequence s) (n : ℕ) :
+    s n ∈ (adversarialTrace cfg σ s GameState.init n).bag := by
+  rw [adversarialTrace_bag]; exact hl n
+
 end Tetris
