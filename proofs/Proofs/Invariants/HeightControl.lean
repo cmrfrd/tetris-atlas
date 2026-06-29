@@ -335,6 +335,18 @@ theorem count_applyStep_lt_of_clear {cfg : GameConfig} {b : Board} {pl : Placeme
     Nat.le_mul_of_pos_right _ hclear
   omega
 
+/-- **No clear means strict accumulation.** A move that clears no line adds exactly 4 cells:
+`count (applyStep b) = count b + 4`. So between clears the board climbs monotonically by 4 toward
+the `cols·rows` cap (`count_le_capacity_of_not_isLost`) — a deterministic countdown to a forced
+clear (`must_clear_near_capacity`). The player has no way to *stall*; every non-clearing move spends
+irreplaceable headroom. -/
+theorem count_applyStep_eq_of_no_clear {cfg : GameConfig} {b : Board} {pl : Placement}
+    (hwf : WF cfg b) (hv : pl.Valid cfg) (h0 : Board.linesCleared cfg (pl.place b) = 0) :
+    (pl.applyStep cfg b).count = b.count + 4 := by
+  have hstep := applyStep_count cfg b pl hwf hv
+  rw [h0, Nat.mul_zero] at hstep
+  omega
+
 /-! ## The adversary's concrete weapon: S/Z roughness manufactures unclearable holes -/
 
 /-- **S on flat ground buries a hole from nothing.** Dropping the S-piece (rotation 0, column 0)
