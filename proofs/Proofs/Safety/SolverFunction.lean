@@ -932,4 +932,10 @@ theorem safeSolver_opening_injective (hcols : 4 ≤ cfg.cols) :
     Set.InjOn (fun p => safeSolver cfg GameState.init p) GameState.init.bag :=
   solver_slice_injOn_bag (safeSolver_validSolver hcols) GameState.init
 
+/-- The opening book has exactly `|bag|` distinct outputs. -/
+theorem safeSolver_opening_card (hcols : 4 ≤ cfg.cols) :
+    (GameState.init.bag.image (fun p => safeSolver cfg GameState.init p)).card
+      = GameState.init.bag.card :=
+  solver_response_table_card_eq (safeSolver_validSolver hcols) GameState.init
+
 end Tetris
