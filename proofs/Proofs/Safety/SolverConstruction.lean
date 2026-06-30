@@ -2685,4 +2685,13 @@ theorem convergedSolver_atlas_portrait :
     (∀ (σ₁ σ₂ : Solver cfg), σ₁.toAtlas = σ₂.toAtlas → σ₁ = σ₂) :=
   buildSolver_atlas_portrait convergedSet_fixed
 
+/-- If the converged solver's trace and the piece stream both repeat, the orbit is periodic. -/
+theorem convergedSolver_periodic_play (s : ℕ → Piece) (g0 : GameState) {b d : ℕ}
+    (htrace : adversarialTrace cfg convergedSolver s g0 b
+        = adversarialTrace cfg convergedSolver s g0 (b + d))
+    (hs : ∀ k, s (b + k) = s (b + d + k)) (k : ℕ) :
+    adversarialTrace cfg convergedSolver s g0 (b + k)
+      = adversarialTrace cfg convergedSolver s g0 (b + d + k) :=
+  buildSolver_periodic_play convergedSet_fixed s g0 htrace hs k
+
 end Tetris
