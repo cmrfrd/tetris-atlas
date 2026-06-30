@@ -1065,4 +1065,10 @@ theorem buildSolver_queried_in_bag {S : Finset GameState} (hfix : F_finite cfg S
     s n ∈ (adversarialTrace cfg (buildSolver hfix) s GameState.init n).bag :=
   solver_queried_in_bag (σ := buildSolver hfix) s hl n
 
+/-- Every placement the constructed function emits drops exactly four cells. -/
+theorem buildSolver_output_dropped_card {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (b : Board) (g : GameState) (p : Piece) :
+    ((buildSolver hfix g p).dropped b).card = 4 :=
+  solver_output_dropped_card (σ := buildSolver hfix) b g p
+
 end Tetris
