@@ -1993,4 +1993,26 @@ theorem convergedSolver_validSolver (hcols : 4 ≤ cfg.cols) :
     ValidSolver cfg convergedSolver :=
   buildSolver_validSolver hcols convergedSet_fixed
 
+/-- The converged solver solves Tetris whenever init survives into the converged region. -/
+theorem convergedSolver_solves (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    SolvesTetrisValid cfg convergedSolver :=
+  buildSolver_solvesTetrisValid hcols convergedSet_fixed hinit
+
+/-- Under the converged solver no legal play ever tops out (given init survives). -/
+theorem convergedSolver_survives (hinit : GameState.init ∈ convergedSet cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    ¬ (adversarialTrace cfg convergedSolver s GameState.init n).lost cfg :=
+  buildSolver_survives convergedSet_fixed hinit hl n
+
+/-- The converged solver never leaves the converged region: it is region-confined. -/
+theorem convergedSolver_confined (hinit : GameState.init ∈ convergedSet cfg) {g : GameState}
+    (hr : solverReachable (convergedSolver (cfg := cfg)) g) : g ∈ convergedSet cfg :=
+  buildSolver_reachable_mem convergedSet_fixed hinit hr
+
+/-- The converged solver's atlas is closed on the converged region — the M4 proof artifact. -/
+theorem convergedSolver_atlas_closed (cfg : GameConfig) :
+    (convergedSolver (cfg := cfg)).toAtlas.IsClosedOn cfg (convergedSet cfg) :=
+  buildSolver_atlas_closed convergedSet_fixed
+
 end Tetris
