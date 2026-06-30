@@ -1472,4 +1472,11 @@ theorem construct_computed_region_complete {S₀ : Finset GameState} (hS₀ : sa
     g ∈ safe cfg ↔ g ∈ (↑(safeIterFinite cfg S₀ N) : Set GameState) :=
   solver_computed_region_complete hS₀ N hfix g
 
+/-- Existence is decidable: a single init-membership test in a computed iterate settles it. -/
+theorem construct_existence_decidable {S₀ : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hS₀ : safe cfg ⊆ ↑S₀) :
+    ∃ N : ℕ, (∃ σ : Solver cfg, SolvesTetrisValid cfg σ) ↔
+      GameState.init ∈ safeIterFinite cfg S₀ N :=
+  solver_existence_decidable hcols hS₀
+
 end Tetris
