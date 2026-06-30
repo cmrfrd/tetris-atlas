@@ -2222,4 +2222,16 @@ theorem convergedSolver_never_stuck (hcols : 4 ≤ cfg.cols)
     ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg :=
   buildSolver_never_stuck hcols convergedSet_fixed hinit hl n hp
 
+/-- The converged solver's atlas is total: it returns `some` placement everywhere. -/
+theorem convergedSolver_toAtlas_total (g : GameState) (p : Piece) :
+    (convergedSolver (cfg := cfg)).toAtlas g p = some (convergedSolver (cfg := cfg) g p) :=
+  buildSolver_toAtlas_apply convergedSet_fixed g p
+
+/-- The converged solver's reachable set is step-closed. -/
+theorem convergedSolver_reachable_step_closed {g : GameState}
+    (hr : solverReachable (convergedSolver (cfg := cfg)) g) {p : Piece} (hp : p ∈ g.bag) :
+    solverReachable (convergedSolver (cfg := cfg))
+      (adversarialStep cfg g p (convergedSolver (cfg := cfg) g p)) :=
+  buildSolver_reachable_step_closed convergedSet_fixed hr hp
+
 end Tetris
