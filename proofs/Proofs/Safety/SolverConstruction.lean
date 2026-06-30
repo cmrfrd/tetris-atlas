@@ -1141,4 +1141,11 @@ theorem buildSolver_trace_eq_solverStep {S : Finset GameState} (hfix : F_finite 
           (adversarialTrace cfg (buildSolver hfix) s GameState.init n) :=
   solver_trace_eq_solverStep (σ := buildSolver hfix) s n
 
+/-- Every trace state visited by the constructed function under legal play is safe. -/
+theorem buildSolver_trace_mem_safe {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg (buildSolver hfix) s GameState.init n ∈ safe cfg :=
+  solver_trace_mem_safe (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
+
 end Tetris
