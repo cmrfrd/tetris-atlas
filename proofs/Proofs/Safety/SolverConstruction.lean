@@ -1918,4 +1918,18 @@ theorem construct_low_stack_comfort_zone (hcols : 4 ≤ cfg.cols) (hrows : 4 ≤
       ¬ Board.isLost cfg (Placement.applyStep cfg b pl) :=
   solver_low_stack_comfort_zone hcols hrows hWF hlow p
 
+/-- The safe region is not captured by a dominated hole-basis: both monotonicities fail. -/
+theorem construct_region_not_dominated_basis :
+    (¬ ∀ (cfg : GameConfig) (b β : Board) (pl : Placement), HoleyCarrier.safeLE cfg b β →
+        HoleyCarrier.holes cfg (pl.place b) ⊆ HoleyCarrier.holes cfg (pl.place β))
+    ∧ (¬ ∀ (cfg : GameConfig) (b : Board),
+        HoleyCarrier.holes cfg (Board.clearLines cfg b) ⊆ HoleyCarrier.holes cfg b) :=
+  solver_region_not_dominated_basis
+
+/-- The canonical safe solver's move always lies in the finite action menu. -/
+theorem construct_safeSolver_move_in_menu (hcols : 4 ≤ cfg.cols) {g : GameState}
+    {p : Piece} (hp : p ∈ g.bag) :
+    safeSolver cfg g p ∈ Placement.allValidFor cfg p :=
+  solver_move_in_finite_action_set hcols hp
+
 end Tetris
