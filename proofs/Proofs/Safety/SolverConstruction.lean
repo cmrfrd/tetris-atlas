@@ -1154,4 +1154,11 @@ theorem buildSolver_trace_zero {S : Finset GameState} (hfix : F_finite cfg S = S
     adversarialTrace cfg (buildSolver hfix) s GameState.init 0 = GameState.init :=
   solver_trace_zero (σ := buildSolver hfix) s
 
+/-- Every state reachable by the constructed function is both safe and reachable. -/
+theorem buildSolver_operates_in_safe_and_reachable {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) {g : GameState}
+    (hr : solverReachable (buildSolver hfix) g) :
+    g ∈ safe cfg ∧ Reachable cfg g :=
+  solver_operates_in_safe_and_reachable (buildSolver_solvesTetrisValid hcols hfix hinit) hr
+
 end Tetris
