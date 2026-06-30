@@ -1371,4 +1371,15 @@ theorem buildSolver_move_effect_portrait {S : Finset GameState} (hcols : 4 ≤ c
     Board.WF cfg ((buildSolver hfix g p).applyStep cfg b) :=
   solver_move_effect_portrait (buildSolver_validSolver hcols hfix) hp hWF
 
+/-- Move-geometry portrait: the constructed function's drop is a 4-cell 4×4-confined footprint. -/
+theorem buildSolver_move_geometry_portrait {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) (b : Board) :
+    (b ⊆ (buildSolver hfix g p).place b) ∧
+    (((buildSolver hfix g p).dropped b).card = 4) ∧
+    (∀ c ∈ (buildSolver hfix g p).dropped b,
+      (buildSolver hfix g p).col ≤ c.1 ∧ c.1 < (buildSolver hfix g p).col + 4) ∧
+    (∀ c ∈ (buildSolver hfix g p).dropped b,
+      (buildSolver hfix g p).dropOffset b ≤ c.2 ∧ c.2 < (buildSolver hfix g p).dropOffset b + 4) :=
+  solver_move_geometry_portrait (σ := buildSolver hfix) g p b
+
 end Tetris
