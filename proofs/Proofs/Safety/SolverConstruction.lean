@@ -2431,4 +2431,19 @@ theorem convergedSolver_dynamical_portrait (hcols : 4 ≤ cfg.cols) (p : Piece) 
         = (convergedSolver (cfg := cfg) g p).applyStep cfg g.board) :=
   buildSolver_dynamical_portrait hcols convergedSet_fixed p
 
+/-- The converged region is the greatest in-field fixed point: every fixed `S ⊆ inFieldStates`
+sits inside it. So the construction loses no certifiable state. -/
+theorem fixed_inField_subset_convergedSet {S : Finset GameState}
+    (hfix : F_finite cfg S = S) (hsub : S ⊆ inFieldStates cfg) :
+    S ⊆ convergedSet cfg := by
+  have key : ∀ n, S ⊆ safeIterFinite cfg (inFieldStates cfg) n := by
+    intro n
+    induction n with
+    | zero => simpa using hsub
+    | succ k ih =>
+        rw [safeIterFinite_succ]
+        calc S = F_finite cfg S := hfix.symm
+          _ ⊆ F_finite cfg (safeIterFinite cfg (inFieldStates cfg) k) := F_finite_mono cfg ih
+  exact key (inFieldStates cfg).card
+
 end Tetris
