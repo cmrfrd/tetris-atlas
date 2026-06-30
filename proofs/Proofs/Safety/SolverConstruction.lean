@@ -2327,4 +2327,11 @@ theorem convergedSolver_response_table_card_eq (hcols : 4 ≤ cfg.cols) (g : Gam
     (g.bag.image (fun p => convergedSolver (cfg := cfg) g p)).card = g.bag.card :=
   buildSolver_response_table_card_eq hcols convergedSet_fixed g
 
+/-- The converged solver's output lies in the global action set. -/
+theorem convergedSolver_output_in_total_action_set (hcols : 4 ≤ cfg.cols) {g : GameState}
+    {p : Piece} (hp : p ∈ g.bag) :
+    convergedSolver (cfg := cfg) g p
+      ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg) :=
+  buildSolver_output_in_total_action_set hcols convergedSet_fixed hp
+
 end Tetris
