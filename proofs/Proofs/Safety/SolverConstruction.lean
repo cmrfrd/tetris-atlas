@@ -1279,4 +1279,10 @@ theorem construct_master_equivalences :
         GameState.init ∈ C.toAdversarialClosedCycle.states) :=
   solver_master_equivalences
 
+/-- Dynamical substrate: any placement clears at most four lines from a non-full board. -/
+theorem construct_clears_at_most_four {b : Board} (pl : Placement)
+    (hnf : ∀ r, ¬ Board.isFull cfg b r) :
+    Board.linesCleared cfg (pl.place b) ≤ 4 :=
+  solver_clears_at_most_four pl hnf
+
 end Tetris
