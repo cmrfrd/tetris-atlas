@@ -3258,4 +3258,10 @@ theorem convergedSolver_orbit_summary (hcols : 4 ≤ cfg.cols)
    convergedSolver_count_lipschitz hcols hinit hl n,
    convergedSolver_maxHeight_lipschitz hcols hinit hl n⟩
 
+/-- The construction yields the M4 Atlas: a closed atlas over a region containing init. -/
+theorem convergedSolver_yields_atlas (hinit : GameState.init ∈ convergedSet cfg) :
+    ∃ (A : Atlas cfg) (S : Finset GameState), A.IsClosedOn cfg S ∧ GameState.init ∈ S :=
+  ⟨(convergedSolver (cfg := cfg)).toAtlas, convergedSet cfg,
+   convergedSolver_atlas_closed cfg, hinit⟩
+
 end Tetris
