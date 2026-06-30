@@ -1335,4 +1335,13 @@ theorem buildSolver_place_never_removes_holes {S : Finset GameState} (hfix : F_f
       ≤ (HoleyCarrier.holes cfg ((buildSolver hfix g p).place b)).card :=
   solver_place_never_removes_holes (σ := buildSolver hfix) g p b
 
+/-- The constructed function's skyline effect factors through the surface alone. -/
+theorem buildSolver_skyline_factors_through_surface {S : Finset GameState}
+    (hfix : F_finite cfg S = S) {g₁ g₂ : GameState} {p : Piece}
+    (hsurf : ∀ j, g₁.board.colHeight j = g₂.board.colHeight j)
+    (hpl : buildSolver hfix g₁ p = buildSolver hfix g₂ p) (j : ℕ) :
+    ((buildSolver hfix g₁ p).place g₁.board).colHeight j
+      = ((buildSolver hfix g₂ p).place g₂.board).colHeight j :=
+  solver_skyline_effect_factors_through_surface (σ := buildSolver hfix) hsurf hpl j
+
 end Tetris
