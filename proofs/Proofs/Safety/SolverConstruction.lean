@@ -2562,4 +2562,18 @@ theorem convergedSolver_invariant (hinit : GameState.init ∈ convergedSet cfg) 
   exact ⟨hc, convergedSet_subset_safe (Finset.mem_coe.mpr hc),
     convergedSet_subset_inFieldStates cfg hc, convergedSet_not_lost hc⟩
 
+/-- Near capacity, any surviving converged-solver move must clear a line. -/
+theorem convergedSolver_move_must_clear (hcols : 4 ≤ cfg.cols) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b) (hnear : cfg.cols * cfg.rows < b.count + 4)
+    (hsurv : ¬ Board.isLost cfg ((convergedSolver (cfg := cfg) g p).applyStep cfg b)) :
+    0 < Board.linesCleared cfg ((convergedSolver (cfg := cfg) g p).place b) :=
+  buildSolver_move_must_clear hcols convergedSet_fixed hp hWF hnear hsurv
+
+/-- Clearing in a converged-solver move never increases hole-debt. -/
+theorem convergedSolver_clear_reduces_debt (hcols : 4 ≤ cfg.cols) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b) :
+    HoleDebt.debt cfg ((convergedSolver (cfg := cfg) g p).applyStep cfg b)
+      ≤ HoleDebt.debt cfg ((convergedSolver (cfg := cfg) g p).place b) :=
+  buildSolver_clear_reduces_debt hcols convergedSet_fixed hp hWF
+
 end Tetris
