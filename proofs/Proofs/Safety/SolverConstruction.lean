@@ -1250,4 +1250,9 @@ theorem construct_decision_procedure {S₀ : Finset GameState} (hcols : 4 ≤ cf
         ↔ GameState.init ∈ safeIterFinite cfg S₀ N) :=
   solver_decision_procedure hcols hS₀
 
+/-- Existence dichotomy: either the canonical solver solves, or no solver does. -/
+theorem construct_existence_dichotomy (hcols : 4 ≤ cfg.cols) :
+    SolvesTetrisValid cfg (safeSolver cfg) ∨ (∀ σ : Solver cfg, ¬ SolvesTetrisValid cfg σ) :=
+  solver_dichotomy hcols
+
 end Tetris
