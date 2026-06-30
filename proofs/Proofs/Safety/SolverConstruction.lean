@@ -2542,4 +2542,9 @@ theorem construct_halts_in_card_rounds :
     safeIterFinite cfg (inFieldStates cfg) ((inFieldStates cfg).card + 1) = convergedSet cfg :=
   safeIterFinite_inFieldStates_stable_at_card cfg
 
+/-- Impossibility detection: if Tetris is unsolvable, init is pruned from the converged region. -/
+theorem init_notMem_convergedSet_of_not_solvable (hcols : 4 ≤ cfg.cols)
+    (h : ¬ TetrisSolvableValidFor cfg) : GameState.init ∉ convergedSet cfg :=
+  fun hinit => h (init_mem_convergedSet_solvable hcols hinit)
+
 end Tetris
