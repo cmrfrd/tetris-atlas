@@ -2234,4 +2234,16 @@ theorem convergedSolver_reachable_step_closed {g : GameState}
       (adversarialStep cfg g p (convergedSolver (cfg := cfg) g p)) :=
   buildSolver_reachable_step_closed convergedSet_fixed hr hp
 
+/-- Move bundle: a constructed move adds ≤4 cells, raises height ≤4, and never grows debt. -/
+theorem buildSolver_move_bundle {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag)
+    {b : Board} (hWF : Board.WF cfg b) :
+    ((buildSolver hfix g p).applyStep cfg b).count ≤ b.count + 4 ∧
+    Board.maxHeight cfg ((buildSolver hfix g p).applyStep cfg b) ≤ Board.maxHeight cfg b + 4 ∧
+    HoleDebt.debt cfg ((buildSolver hfix g p).applyStep cfg b)
+      ≤ HoleDebt.debt cfg ((buildSolver hfix g p).place b) :=
+  ⟨buildSolver_move_count_le hcols hfix hp hWF,
+   buildSolver_move_maxHeight_le hcols hfix hp b,
+   buildSolver_clear_reduces_debt hcols hfix hp hWF⟩
+
 end Tetris
