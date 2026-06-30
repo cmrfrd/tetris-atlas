@@ -734,4 +734,20 @@ theorem buildSolver_reads_board_bag {S : Finset GameState} (hfix : F_finite cfg 
     buildSolver hfix g₁ p = buildSolver hfix g₂ p :=
   solver_reads_board_bag g₁ g₂ p hb hbag
 
+/-- The constructed function's orbit keeps the max height within the ceiling. -/
+theorem buildSolver_trace_maxHeight {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Board.maxHeight cfg (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board
+      ≤ cfg.rows :=
+  solver_maintains_maxHeight (buildSolver_solvesTetrisValid hcols hfix hinit).2 hl n
+
+/-- The constructed function's orbit keeps the cell count within capacity. -/
+theorem buildSolver_trace_count {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board.count
+      ≤ cfg.cols * cfg.rows :=
+  solver_count_le_capacity (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
+
 end Tetris
