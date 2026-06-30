@@ -2369,4 +2369,14 @@ theorem convergedSolver_no_death_cell (hcols : 4 ≤ cfg.cols)
     c.2 < cfg.rows :=
   buildSolver_no_death_cell hcols convergedSet_fixed hinit hl n hc
 
+/-- Three pillars of the converged solver's play: safe, bounded height, bounded count. -/
+theorem convergedSolver_pillars (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg convergedSolver s GameState.init n ∈ safe cfg ∧
+    Board.maxHeight cfg
+        (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.rows ∧
+    (adversarialTrace cfg convergedSolver s GameState.init n).board.count
+      ≤ cfg.cols * cfg.rows :=
+  buildSolver_pillars hcols convergedSet_fixed hinit hl n
+
 end Tetris
