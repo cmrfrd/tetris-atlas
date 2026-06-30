@@ -2931,4 +2931,11 @@ theorem buildSolver_solverStep_safe {S : Finset GameState} (hfix : F_finite cfg 
     solverStep cfg (buildSolver hfix) p g ∈ safe cfg :=
   fixed_point_subset_safe hfix (Finset.mem_coe.mpr (buildSolver_step_mem hfix hg hp))
 
+/-- A constructed step from any fixed region is non-losing. -/
+theorem buildSolver_step_not_lost {S : Finset GameState} (hfix : F_finite cfg S = S)
+    {g : GameState} (hg : g ∈ S) {p : Piece} (hp : p ∈ g.bag) :
+    ¬ (adversarialStep cfg g p (buildSolver hfix g p)).lost cfg :=
+  safe_not_lost
+    (fixed_point_subset_safe hfix (Finset.mem_coe.mpr (buildSolver_step_mem hfix hg hp)))
+
 end Tetris
