@@ -969,4 +969,12 @@ theorem buildSolver_image_card {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
     (T.image (fun g => buildSolver hfix g p)).card ≤ cfg.cols * 4 :=
   solver_image_per_piece_card_le (buildSolver_validSolver hcols hfix) T hT
 
+/-- The constructed function is never stuck: every reachable bag piece has a valid placement. -/
+theorem buildSolver_never_stuck {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) {p : Piece}
+    (hp : p ∈ (adversarialTrace cfg (buildSolver hfix) s GameState.init n).bag) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg :=
+  solver_never_stuck (buildSolver_solvesTetrisValid hcols hfix hinit) hl n hp
+
 end Tetris
