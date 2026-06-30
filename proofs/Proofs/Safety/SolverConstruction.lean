@@ -1104,4 +1104,12 @@ theorem buildSolver_eq_of_rotcol {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
     buildSolver hfix g₁ p = buildSolver hfix g₂ p :=
   solver_eq_of_rotcol (buildSolver_validSolver hcols hfix) hp₁ hp₂ hr hc
 
+/-- When the constructed function differs for one piece, it differs in rotation or column. -/
+theorem buildSolver_diff_in_rotcol {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g₁ g₂ : GameState} {p : Piece}
+    (hp₁ : p ∈ g₁.bag) (hp₂ : p ∈ g₂.bag) (hne : buildSolver hfix g₁ p ≠ buildSolver hfix g₂ p) :
+    (buildSolver hfix g₁ p).rot ≠ (buildSolver hfix g₂ p).rot ∨
+      (buildSolver hfix g₁ p).col ≠ (buildSolver hfix g₂ p).col :=
+  solver_diff_in_rotcol (buildSolver_validSolver hcols hfix) hp₁ hp₂ hne
+
 end Tetris
