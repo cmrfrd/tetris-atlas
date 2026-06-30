@@ -2654,4 +2654,15 @@ theorem convergedSolver_realized_outputs_finite (hcols : 4 ≤ cfg.cols) (s : �
         (adversarialTrace cfg convergedSolver s GameState.init n) (s n)).Finite :=
   buildSolver_realized_outputs_finite hcols convergedSet_fixed s hl
 
+/-- The converged solver's per-piece image has at most `4·cols` distinct outputs. -/
+theorem convergedSolver_image_card (hcols : 4 ≤ cfg.cols) {p : Piece} (T : Finset GameState)
+    (hT : ∀ g ∈ T, p ∈ g.bag) :
+    (T.image (fun g => convergedSolver (cfg := cfg) g p)).card ≤ cfg.cols * 4 :=
+  buildSolver_image_card hcols convergedSet_fixed T hT
+
+/-- The converged solver's response table at a state has at most `bag.card` entries. -/
+theorem convergedSolver_response_table_card_le (g : GameState) :
+    (g.bag.image (fun p => convergedSolver (cfg := cfg) g p)).card ≤ g.bag.card :=
+  buildSolver_response_table_card_le convergedSet_fixed g
+
 end Tetris
