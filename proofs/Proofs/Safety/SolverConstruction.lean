@@ -3006,4 +3006,10 @@ theorem convergedSet_self_sustaining :
         adversarialStep cfg g p pl ∈ convergedSet cfg :=
   (round_self_sustaining_iff (convergedSet cfg)).mp convergedSet_fixed
 
+/-- Each converged state has, for every bag piece, an in-region valid response. -/
+theorem convergedSet_member_response {g : GameState} (hg : g ∈ convergedSet cfg) {p : Piece}
+    (hp : p ∈ g.bag) :
+    ∃ pl ∈ Placement.allValidFor cfg p, adversarialStep cfg g p pl ∈ convergedSet cfg :=
+  (convergedSet_self_sustaining g hg).2 p hp
+
 end Tetris
