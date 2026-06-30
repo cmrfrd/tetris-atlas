@@ -2746,4 +2746,19 @@ theorem solvability_discovered_by_construction (hcols : 4 ≤ cfg.cols)
    convergedSolver_solves hcols hinit,
    convergedSolver_atlas_closed cfg⟩
 
+/-- The converged solver as an uncurried function agrees with its curried form. -/
+theorem convergedSolver_uncurry (g : GameState) (p : Piece) :
+    Function.uncurry (convergedSolver (cfg := cfg)) (g, p) = convergedSolver (cfg := cfg) g p :=
+  buildSolver_uncurry convergedSet_fixed g p
+
+/-- The converged solver round-trips through its atlas representation. -/
+theorem convergedSolver_toAtlas_toSolver :
+    (convergedSolver (cfg := cfg)).toAtlas.toSolver = convergedSolver (cfg := cfg) :=
+  buildSolver_toAtlas_toSolver convergedSet_fixed
+
+/-- The converged solver's reachable footprint is bounded by the converged region. -/
+theorem convergedSolver_footprint_card_le (hinit : GameState.init ∈ convergedSet cfg) :
+    ∀ g, solverReachable (convergedSolver (cfg := cfg)) g → g ∈ convergedSet cfg :=
+  buildSolver_footprint_card_le convergedSet_fixed hinit
+
 end Tetris
