@@ -2026,4 +2026,18 @@ theorem convergedSolver_trace_mem (hinit : GameState.init ∈ convergedSet cfg)
     adversarialTrace cfg convergedSolver s GameState.init n ∈ convergedSet cfg :=
   buildSolver_trace_mem convergedSet_fixed hinit hl n
 
+/-! ### Synthesis capstones for the constructed function -/
+
+/-- Grand solver portrait: the construction is valid, solves, closes an atlas, and is confined. -/
+theorem buildSolver_grand_solver_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) :
+    ValidSolver cfg (buildSolver hfix) ∧
+    SolvesTetrisValid cfg (buildSolver hfix) ∧
+    (buildSolver hfix).toAtlas.IsClosedOn cfg S ∧
+    (∀ g, solverReachable (buildSolver hfix) g → g ∈ S) :=
+  ⟨buildSolver_validSolver hcols hfix,
+   buildSolver_solvesTetrisValid hcols hfix hinit,
+   buildSolver_atlas_closed hfix,
+   fun _ hr => buildSolver_reachable_mem hfix hinit hr⟩
+
 end Tetris
