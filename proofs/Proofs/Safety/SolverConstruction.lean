@@ -708,4 +708,18 @@ theorem construct_tiny_sound (N : ℕ)
       ⊆ safe GameConfig.tiny :=
   construct_inField_sound N hfix
 
+/-! ## Part 30 — The constructed function inherits the function-properties -/
+
+/-- The constructed function's output lies in the finite per-piece menu. -/
+theorem buildSolver_output_in_menu {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) :
+    buildSolver hfix g p ∈ Placement.allValidFor cfg p :=
+  solver_output_in_action_set (buildSolver_validSolver hcols hfix) hp
+
+/-- The constructed function's output encodes to a single integer `< 4·cols`. -/
+theorem buildSolver_output_code_lt {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) :
+    4 * (buildSolver hfix g p).col + ((buildSolver hfix g p).rot : ℕ) < 4 * cfg.cols :=
+  solver_output_code_lt (buildSolver_validSolver hcols hfix) hp
+
 end Tetris
