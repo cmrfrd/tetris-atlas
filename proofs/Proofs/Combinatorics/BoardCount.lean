@@ -756,6 +756,21 @@ theorem count_clearLines_le (cfg : GameConfig) (b : Board) :
   refine Nat.le_trans Finset.card_image_le ?_
   exact Finset.card_filter_le _ _
 
+/-- **Clearing a board that contains a full row strictly drops the cell count.** The full row's
+cells are filtered out by `clearLines`, so the surviving board is a proper subset. This is the
+foundational height-reduction (I-drain) fact: a realized line clear strictly shrinks the board. -/
+theorem count_clearLines_lt (cfg : GameConfig) {b : Board} {c : Coord}
+    (hc : c ∈ b) (hfull : isFull cfg b c.2) :
+    (clearLines cfg b).count < b.count := by
+  unfold clearLines count
+  refine Nat.lt_of_le_of_lt Finset.card_image_le ?_
+  refine Finset.card_lt_card ?_
+  rw [Finset.ssubset_iff_of_subset (Finset.filter_subset _ _)]
+  refine ⟨c, hc, ?_⟩
+  simp only [Finset.mem_filter, not_and, not_not]
+  intro _
+  exact hfull
+
 /-- A board with no full rows has `clearedBelow = 0` for every row. -/
 theorem clearedBelow_of_no_fullRows (cfg : GameConfig) {b : Board} (r : ℕ)
     (h : fullRows cfg b = ∅) : clearedBelow cfg b r = 0 := by
