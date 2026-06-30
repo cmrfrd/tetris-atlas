@@ -578,4 +578,19 @@ theorem tiny_solver_exists_of_init_survives (S₀ : Finset GameState)
     TetrisSolvableValidFor GameConfig.tiny :=
   tetrisSolvableValidFor_tiny_of_init_mem_safeIterFinite_at_S₀_card h
 
+/-! ## Part 22 — Detecting impossibility and the rank structure -/
+
+/-- **Empty region ⇒ no solver.** If the construction ever collapses to `∅` from a covering
+universe, no solving program exists — the construction certifies impossibility. -/
+theorem no_solver_of_construct_empty {S₀ : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hS₀ : safe cfg ⊆ ↑S₀) {n : ℕ} (hempty : safeIterFinite cfg S₀ n = ∅) :
+    ¬ ∃ σ : Solver cfg, SolvesTetrisValid cfg σ :=
+  no_solver_of_safeIterFinite_empty hcols hS₀ hempty
+
+/-- **Survival is monotone in rounds.** A state surviving round `n+1` survived round `n` — survival
+times are downward closed; each state has a well-defined removal round (its rank). -/
+theorem survives_succ_survives (S₀ : Finset GameState) (n : ℕ) {g : GameState}
+    (h : g ∈ safeIterFinite cfg S₀ (n + 1)) : g ∈ safeIterFinite cfg S₀ n :=
+  safeIterFinite_succ_subset cfg S₀ n h
+
 end Tetris
