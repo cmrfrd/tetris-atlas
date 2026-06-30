@@ -1161,4 +1161,10 @@ theorem buildSolver_operates_in_safe_and_reachable {S : Finset GameState} (hcols
     g ∈ safe cfg ∧ Reachable cfg g :=
   solver_operates_in_safe_and_reachable (buildSolver_solvesTetrisValid hcols hfix hinit) hr
 
+/-- The constructed function's reachable set is step-closed. -/
+theorem buildSolver_reachable_step_closed {S : Finset GameState} (hfix : F_finite cfg S = S)
+    {g : GameState} (hr : solverReachable (buildSolver hfix) g) {p : Piece} (hp : p ∈ g.bag) :
+    solverReachable (buildSolver hfix) (adversarialStep cfg g p (buildSolver hfix g p)) :=
+  solver_reachable_step_closed (σ := buildSolver hfix) hr hp
+
 end Tetris
