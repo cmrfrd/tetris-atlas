@@ -1604,4 +1604,15 @@ theorem buildSolver_applyStep_wf {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
     Board.WF cfg ((buildSolver hfix g p).applyStep cfg b) :=
   solver_applyStep_wf (buildSolver_validSolver hcols hfix) hp hWF
 
+/-- Safe states have a safe response to each bag piece — the construction's per-state guarantee. -/
+theorem construct_safe_response_each_piece {g : GameState} (hg : g ∈ safe cfg)
+    {p : Piece} (hp : p ∈ g.bag) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧ adversarialStep cfg g p pl ∈ safe cfg :=
+  solver_safe_response_each_piece hg hp
+
+/-- Loss is monotone: adding cells to a lost board keeps it lost. -/
+theorem construct_loss_monotone {b b' : Board} (h : b ⊆ b') (hlost : Board.isLost cfg b) :
+    Board.isLost cfg b' :=
+  solver_loss_monotone h hlost
+
 end Tetris
