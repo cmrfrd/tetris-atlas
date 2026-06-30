@@ -456,6 +456,61 @@ theorem onCycle_iff_exists_pos_diag (s : State) :
 
 end MatrixPower
 
+/-! ### Cycles via Mathlib's transitive closure
+
+`OnCycle R s` (`∃ k>0, Bᵏ` has a nonzero `(s,s)` entry) is exactly "`s` is `R`-related to itself in
+the **transitive closure** `⋁_{k≥1} Bᵏ = Relation.TransGen R`". This ties the matrix-diagonal view
+to Mathlib's closure API, and with `RelPow.trans` gives the composition algebra `Bᵃ · Bᵇ = Bᵃ⁺ᵇ`. -/
+
+/-- Peel the first edge of a positive-length walk (`Bⁿ⁺¹ = B · Bⁿ`). -/
+theorem RelPow.inv_succ {R : State → State → Prop} {n : ℕ} {s t : State}
+    (h : RelPow R (n + 1) s t) : ∃ u, R s u ∧ RelPow R n u t := by
+  cases h with
+  | succ hsu htail => exact ⟨_, hsu, htail⟩
+
+/-- **Composition of walks**: `Bᵃ · Bᵇ = Bᵃ⁺ᵇ`. Concatenate a length-`a` walk with a length-`b`
+walk. -/
+theorem RelPow.trans {R : State → State → Prop} :
+    ∀ {a : ℕ} {s u : State}, RelPow R a s u →
+      ∀ {b : ℕ} {t : State}, RelPow R b u t → RelPow R (a + b) s t := by
+  intro a s u h
+  induction h with
+  | zero s => intro b t h2; simpa using h2
+  | @succ n s' x _u' hsx _hxu ih =>
+    intro b t h2
+    rw [show n + 1 + b = (n + b) + 1 from by omega]
+    exact RelPow.succ hsx (ih h2)
+
+/-- The transitive closure is the union of positive relation powers: `TransGen R = ⋁_{n≥1} Bⁿ`. -/
+theorem transGen_iff_exists_relPow_succ {R : State → State → Prop} {s t : State} :
+    Relation.TransGen R s t ↔ ∃ n, RelPow R (n + 1) s t := by
+  constructor
+  · intro h
+    induction h with
+    | single hst => exact ⟨0, RelPow.succ hst (RelPow.zero _)⟩
+    | tail _ hbc ih => obtain ⟨n, hn⟩ := ih; exact ⟨n + 1, hn.snoc hbc⟩
+  · rintro ⟨n, hn⟩
+    induction n generalizing s with
+    | zero =>
+      obtain ⟨u, hsu, htail⟩ := hn.inv_succ
+      cases htail
+      exact Relation.TransGen.single hsu
+    | succ k ih =>
+      obtain ⟨u, hsu, htail⟩ := hn.inv_succ
+      exact Relation.TransGen.head hsu (ih htail)
+
+/-- **A cycle is a self-loop in the transitive closure.** `OnCycle R s ↔ Relation.TransGen R s s` —
+the closure-API counterpart of the matrix-diagonal `onCycle_iff_exists_pos_diag`. -/
+theorem onCycle_iff_transGen {R : State → State → Prop} {s : State} :
+    OnCycle R s ↔ Relation.TransGen R s s := by
+  rw [transGen_iff_exists_relPow_succ]
+  constructor
+  · rintro ⟨k, hk, hcyc⟩
+    obtain ⟨m, rfl⟩ : ∃ m, k = m + 1 := ⟨k - 1, by omega⟩
+    exact ⟨m, hcyc⟩
+  · rintro ⟨n, hn⟩
+    exact ⟨n + 1, Nat.succ_pos n, hn⟩
+
 /-! ## §5 Connecting the abstract layer to the concrete safe-set results
 
 The abstract theorems above are not new survival *content* — they re-present, in matrix-power
