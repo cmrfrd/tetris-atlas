@@ -1,5 +1,6 @@
 import Mathlib
 import Proofs.Survival.Survival
+import Proofs.Safety.SafeSet
 
 /-!
 # MatrixPowerSurvival — survival as a finite Boolean linear dynamical system
@@ -510,5 +511,64 @@ theorem closedCycle_infiniteSafePath {g0 : GameState} (h0 : g0 ∈ C.states) :
     (closedCycle_reachableCycle C h0)
 
 end ConcreteSinglePlayer
+
+/-! ### The faithful adversarial side: `safe` is an abstract recurrent support
+
+The library's `Tetris.safe cfg` is the greatest fixed point of the adversarial "∀ piece ∈ bag,
+∃ valid placement landing back in the set" operator. Under the repo's `(board, bag)` convention the
+piece is revealed *before* placement, so this `∀p ∃pl` order is exactly the abstract **weak**
+`SafeRecurrentSupport` (with `step g pl p := adversarialStep g p pl`, `legalDraws := GameState.bag`,
+`Dead := GameState.lost`). We exhibit `safe cfg` as an instance — the matrix-power presentation of
+the gfp — and derive an abstract `InfiniteSafePath` from `init ∈ safe`, complementing the library's
+own `safe_extract`. (We drop the concrete `pl.piece = p ∧ pl.Valid` data: the abstract layer needs
+only that the witnessed placement lands back in the support.) -/
+
+section ConcreteAdversarial
+
+open Tetris
+
+/-- **The safe set is an abstract (weak) recurrent support.** `Tetris.safe cfg` instantiates
+`SafeRecurrentSupport` for the adversarial transition — the matrix-power reading of the gfp. -/
+theorem safe_isSafeRecurrentSupport (cfg : GameConfig) :
+    SafeRecurrentSupport (fun g => g.lost cfg) (fun g => g.bag)
+      (fun g pl p => adversarialStep cfg g p pl) (safe cfg) := by
+  intro g hg
+  rw [mem_safe_iff] at hg
+  refine ⟨hg.1, fun p hp => ?_⟩
+  obtain ⟨pl, _hpiece, _hv, hmem⟩ := hg.2 p hp
+  exact ⟨pl, hmem⟩
+
+/-- The safe states with a nonempty bag form a recurrent support whose legal-draw sets are all
+nonempty — the successor's bag is `g.bag.draw p`, always nonempty (`Bag.draw_nonempty`). This is the
+sub-support on which `InfiniteSafePath` applies (a safe state with empty bag would be vacuously safe
+but have no successor edge). -/
+theorem safe_nonemptyBag_isSafeRecurrentSupport (cfg : GameConfig) :
+    SafeRecurrentSupport (fun g => g.lost cfg) (fun g => g.bag)
+      (fun g pl p => adversarialStep cfg g p pl)
+      {g | g ∈ safe cfg ∧ g.bag.Nonempty} := by
+  rintro g ⟨hsafe, _hne⟩
+  rw [mem_safe_iff] at hsafe
+  refine ⟨hsafe.1, fun p hp => ?_⟩
+  obtain ⟨pl, _hpiece, _hv, hmem⟩ := hsafe.2 p hp
+  exact ⟨pl, hmem, Bag.draw_nonempty g.bag p⟩
+
+/-- **`init ∈ safe` ⇒ abstract infinite safe play.** An instance of
+`reachable_safe_recurrent_support_implies_infinite_survival` on the nonempty-bag safe support,
+seeded at `init` (whose bag is `Bag.full`). Complements `Tetris.safe_extract`: the same membership
+that the library turns into `TetrisSolvable` is, in matrix-power terms, a reachable recurrent
+support, hence an `InfiniteSafePath`. -/
+theorem safe_init_infiniteSafePath {cfg : GameConfig} (h : GameState.init ∈ safe cfg) :
+    InfiniteSafePath
+      (SafeEdge (fun g => g.lost cfg) (fun g => g.bag)
+        (fun g pl p => adversarialStep cfg g p pl))
+      (fun g => g.lost cfg) GameState.init := by
+  have hinit : GameState.init ∈ {g : GameState | g ∈ safe cfg ∧ g.bag.Nonempty} := by
+    refine ⟨h, ?_⟩
+    rw [GameState.init_bag]; exact Bag.full_nonempty
+  exact reachable_safe_recurrent_support_implies_infinite_survival
+    (fun _ hg => hg.2) (safe_nonemptyBag_isSafeRecurrentSupport cfg)
+    ⟨GameState.init, hinit, Relation.ReflTransGen.refl⟩
+
+end ConcreteAdversarial
 
 end MatrixPowerSurvival
