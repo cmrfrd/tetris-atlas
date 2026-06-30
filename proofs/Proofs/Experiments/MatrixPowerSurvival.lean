@@ -1,4 +1,5 @@
 import Mathlib
+import Proofs.Survival.Survival
 
 /-!
 # MatrixPowerSurvival — survival as a finite Boolean linear dynamical system
@@ -453,5 +454,61 @@ theorem onCycle_iff_exists_pos_diag (s : State) :
   exists_congr fun k => and_congr_right fun _ => (relPow_iff_adj_pow_pos R k s s).symm
 
 end MatrixPower
+
+/-! ## §5 Connecting the abstract layer to the concrete safe-set results
+
+The abstract theorems above are not new survival *content* — they re-present, in matrix-power
+vocabulary, certificates the green library already proves over `GameState`. We make that precise for
+the single-player closed cycle (`Tetris.ClosedCycle`, the M2 artifact): its state set, under the
+deterministic policy-step relation gated to the cycle, is a *reachable cycle* in the abstract sense,
+so the abstract `reachable_cycle_implies_infinite_safe_path` yields an `InfiniteSafePath`. The
+concrete certificate *is* an abstract reachable-cycle certificate; the recurrent state is extracted
+by the library's existing pigeonhole `trace_exists_period`. -/
+
+section ConcreteSinglePlayer
+
+open Tetris
+
+variable {cfg : GameConfig} (C : ClosedCycle cfg)
+
+/-- The deterministic policy-step relation of a closed cycle, **gated** to the cycle's states so its
+edges provably avoid loss. The concrete instance of the abstract relation `R`. -/
+def cycleRel : GameState → GameState → Prop :=
+  fun g g' => g ∈ C.states ∧ g' = g.step cfg (C.policy g)
+
+/-- The cycle trace realizes an `R`-walk: `RelPow (cycleRel C) n g0 (trace … n)`. -/
+theorem relPow_cycleRel_trace {g0 : GameState} (h0 : g0 ∈ C.states) (n : ℕ) :
+    RelPow (cycleRel C) n g0 (trace cfg C.policy g0 n) := by
+  induction n with
+  | zero => exact RelPow.zero g0
+  | succ k ih => exact ih.snoc ⟨C.trace_mem_states h0 k, C.trace_succ_eq g0 k⟩
+
+/-- Edges of `cycleRel C` avoid loss at both ends (cycle membership + closure + `not_lost`). -/
+theorem cycleRel_safe {g g' : GameState} (h : cycleRel C g g') :
+    ¬ g.lost cfg ∧ ¬ g'.lost cfg := by
+  obtain ⟨hmem, heq⟩ := h
+  refine ⟨C.not_lost g hmem, ?_⟩
+  rw [heq]; exact C.not_lost _ (C.closed g hmem)
+
+/-- **A concrete closed cycle is an abstract reachable cycle.** From any entry `g0 ∈ C.states`, some
+trace state is on a `cycleRel`-cycle and is reachable from `g0`. The recurrent state and period come
+from the library's pigeonhole `ClosedCycle.trace_exists_period`. -/
+theorem closedCycle_reachableCycle {g0 : GameState} (h0 : g0 ∈ C.states) :
+    ReachableCycle (cycleRel C) g0 := by
+  obtain ⟨i, d, hd, _hle, hper⟩ := C.trace_exists_period h0
+  refine ⟨trace cfg C.policy g0 i, (relPow_cycleRel_trace C h0 i).reachable, d, hd, ?_⟩
+  have hwalk := relPow_cycleRel_trace C (C.trace_mem_states h0 i) d
+  rw [← C.trace_add g0 i d, ← hper] at hwalk
+  exact hwalk
+
+/-- **The abstract cycle theorem recovers concrete infinite play.** A single-player closed cycle
+yields an abstract `InfiniteSafePath` from any entry state — an instance of
+`reachable_cycle_implies_infinite_safe_path`, with `GameState.lost` as the dead predicate. -/
+theorem closedCycle_infiniteSafePath {g0 : GameState} (h0 : g0 ∈ C.states) :
+    InfiniteSafePath (cycleRel C) (fun g => g.lost cfg) g0 :=
+  reachable_cycle_implies_infinite_safe_path (fun _ _ h => cycleRel_safe C h)
+    (closedCycle_reachableCycle C h0)
+
+end ConcreteSinglePlayer
 
 end MatrixPowerSurvival
