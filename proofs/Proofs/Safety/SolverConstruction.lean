@@ -1167,4 +1167,13 @@ theorem buildSolver_reachable_step_closed {S : Finset GameState} (hfix : F_finit
     solverReachable (buildSolver hfix) (adversarialStep cfg g p (buildSolver hfix g p)) :=
   solver_reachable_step_closed (σ := buildSolver hfix) hr hp
 
+/-- The constructed function's play repeats a state within `|inFieldStates|` steps. -/
+theorem buildSolver_repeats_within_inFieldStates {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) {s : ℕ → Piece}
+    (hl : LegalSequence s) :
+    ∃ i j : ℕ, i < j ∧ j ≤ (inFieldStates cfg).card ∧
+      adversarialTrace cfg (buildSolver hfix) s GameState.init i
+        = adversarialTrace cfg (buildSolver hfix) s GameState.init j :=
+  solver_repeats_within_inFieldStates (buildSolver_solvesTetrisValid hcols hfix hinit) hl
+
 end Tetris
