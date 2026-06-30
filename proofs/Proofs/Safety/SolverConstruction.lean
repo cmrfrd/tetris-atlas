@@ -2953,4 +2953,18 @@ theorem convergedSolver_total (g : GameState) (p : Piece) :
     ∃! pl : Placement, convergedSolver (cfg := cfg) g p = pl :=
   ⟨convergedSolver (cfg := cfg) g p, rfl, fun _ h => h.symm⟩
 
+/-- A converged move recovers at most `cols·4` cells against the +4 added. -/
+theorem convergedSolver_move_recovery_bounded (hcols : 4 ≤ cfg.cols) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b) (hnf : ∀ r, ¬ Board.isFull cfg b r) :
+    b.count + 4 ≤ ((convergedSolver (cfg := cfg) g p).applyStep cfg b).count + cfg.cols * 4 :=
+  buildSolver_move_recovery_bounded hcols convergedSet_fixed hp hWF hnf
+
+/-- Energy split holds after a converged move: debt + count = surface area. -/
+theorem convergedSolver_move_energy_split (hcols : 4 ≤ cfg.cols) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b) :
+    HoleDebt.debt cfg ((convergedSolver (cfg := cfg) g p).applyStep cfg b)
+        + ((convergedSolver (cfg := cfg) g p).applyStep cfg b).count
+      = HoleDebt.surfaceArea cfg ((convergedSolver (cfg := cfg) g p).applyStep cfg b) :=
+  buildSolver_move_energy_split hcols convergedSet_fixed hp hWF
+
 end Tetris
