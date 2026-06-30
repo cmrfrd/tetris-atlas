@@ -61,4 +61,26 @@ theorem round_monotone {S T : Finset GameState} (h : S ⊆ T) :
     F_finite cfg S ⊆ F_finite cfg T :=
   F_finite_mono cfg h
 
+/-! ## Part 2 — Fixed points: self-sustaining candidate regions -/
+
+/-- **A region is a fixed point iff it is self-sustaining.** `F_finite S = S` exactly when every
+state in `S` is alive and has, for each drawable piece, a valid response landing back in `S`. Such a
+region is a complete certificate: the construction can never prune it. -/
+theorem round_self_sustaining_iff (S : Finset GameState) :
+    F_finite cfg S = S ↔ ∀ g ∈ S, ¬ g.lost cfg ∧
+      ∀ p ∈ g.bag, ∃ pl ∈ Placement.allValidFor cfg p,
+        adversarialStep cfg g p pl ∈ S := by
+  rw [F_finite_eq_self_iff]
+  refine ⟨fun h g hg => ((mem_F_finite_iff cfg S g).mp (h g hg)).2, fun h g hg => ?_⟩
+  exact mem_F_finite_of hg (h g hg).1 (h g hg).2
+
+/-- **Self-sustaining ⇒ fixed point (constructor).** A region all of whose states are alive with an
+in-region response to every piece is a fixed point — a region the construction preserves intact. -/
+theorem closed_region_is_fixed {S : Finset GameState}
+    (h : ∀ g ∈ S, ¬ g.lost cfg ∧
+      ∀ p ∈ g.bag, ∃ pl ∈ Placement.allValidFor cfg p,
+        adversarialStep cfg g p pl ∈ S) :
+    F_finite cfg S = S :=
+  F_finite_eq_self_of h
+
 end Tetris
