@@ -3042,4 +3042,16 @@ theorem convergedSolver_collapse_portrait (hcols : 4 ≤ cfg.cols) (p : Piece)
         convergedSolver (cfg := cfg) g₁ p = convergedSolver (cfg := cfg) g₂ p) :=
   buildSolver_collapse_portrait hcols convergedSet_fixed p T hT
 
+/-- The converged construction realizes the milestone hierarchy: M1 (never tops out),
+M3 (init in a closed invariant region), M4 (a closed atlas). -/
+theorem convergedSolver_milestones (hinit : GameState.init ∈ convergedSet cfg) :
+    (∀ (s : ℕ → Piece) (n : ℕ), LegalSequence s →
+      ¬ (adversarialTrace cfg convergedSolver s GameState.init n).lost cfg) ∧
+    (GameState.init ∈ convergedSet cfg ∧
+      ∀ g, solverReachable (convergedSolver (cfg := cfg)) g → g ∈ convergedSet cfg) ∧
+    (convergedSolver (cfg := cfg)).toAtlas.IsClosedOn cfg (convergedSet cfg) :=
+  ⟨fun _ n hl => convergedSolver_survives hinit hl n,
+   ⟨hinit, fun _ hr => convergedSolver_confined hinit hr⟩,
+   convergedSolver_atlas_closed cfg⟩
+
 end Tetris
