@@ -2362,4 +2362,11 @@ theorem convergedSolver_trace_debt (hcols : 4 ≤ cfg.cols)
       (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.cols * cfg.rows :=
   buildSolver_trace_debt hcols convergedSet_fixed hinit hl n
 
+/-- No converged-solver cell ever lands in the death zone (row ≥ rows). -/
+theorem convergedSolver_no_death_cell (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ)
+    {c : Coord} (hc : c ∈ (adversarialTrace cfg convergedSolver s GameState.init n).board) :
+    c.2 < cfg.rows :=
+  buildSolver_no_death_cell hcols convergedSet_fixed hinit hl n hc
+
 end Tetris
