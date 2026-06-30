@@ -2480,4 +2480,11 @@ theorem convergedSolver_lowstack_move_safe (hcols : 4 ≤ cfg.cols) (hrows : 4 �
     ¬ Board.isLost cfg ((convergedSolver (cfg := cfg) g p).applyStep cfg b) :=
   buildSolver_lowstack_move_safe hcols convergedSet_fixed hrows hp hWF hlow
 
+/-- The converged solver's opening move never loses. -/
+theorem convergedSolver_opening_safe (hcols : 4 ≤ cfg.cols) (hrows : 4 ≤ cfg.rows)
+    {p : Piece} (hp : p ∈ GameState.init.bag) :
+    ¬ Board.isLost cfg
+        ((convergedSolver (cfg := cfg) GameState.init p).applyStep cfg GameState.init.board) :=
+  buildSolver_opening_safe hcols convergedSet_fixed hrows hp
+
 end Tetris
