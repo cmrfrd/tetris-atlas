@@ -352,4 +352,24 @@ theorem construct_progress (S₀ : Finset GameState) (n : ℕ)
     (safeIterFinite cfg S₀ (n + 1)).card < (safeIterFinite cfg S₀ n).card :=
   (construct_strict_or_done S₀ n).resolve_right h
 
+/-! ## Part 15 — The construction on real Tetris -/
+
+/-- **The construction halts on canonical Tetris within `2^207` rounds.** Run from the full in-field
+universe (`2^207` states), the retrograde iteration reaches its fixed point in at most `2^207`
+rounds — provably terminating on the real game. -/
+theorem construct_standard_terminates :
+    ∃ N, N ≤ 2 ^ 207 ∧
+      safeIterFinite GameConfig.standard (inFieldStates GameConfig.standard) (N + 1)
+        = safeIterFinite GameConfig.standard (inFieldStates GameConfig.standard) N := by
+  obtain ⟨N, hN, hfix⟩ := construct_terminates (inFieldStates GameConfig.standard)
+  rw [standard_inFieldStates_card_eq_two_pow_207] at hN
+  exact ⟨N, hN, hfix⟩
+
+/-- **The in-field construction is sound.** Its fixed point is contained in `safe`. -/
+theorem construct_inField_sound (N : ℕ)
+    (hfix : safeIterFinite cfg (inFieldStates cfg) (N + 1)
+      = safeIterFinite cfg (inFieldStates cfg) N) :
+    (↑(safeIterFinite cfg (inFieldStates cfg) N) : Set GameState) ⊆ safe cfg :=
+  computed_sound (inFieldStates cfg) N hfix
+
 end Tetris
