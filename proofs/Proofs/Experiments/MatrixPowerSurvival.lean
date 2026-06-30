@@ -135,6 +135,20 @@ theorem RelPow.exists_chain {R : State → State → Prop} :
     | 0 => change R s (w 0); rw [hw0]; exact hsu
     | j + 1 => change R (w j) (w (j + 1)); exact hstep j (Nat.lt_of_succ_lt_succ hi)
 
+/-- **Sub-walk extraction.** Any contiguous stretch of a vertex sequence whose consecutive pairs are
+`R`-edges (up to index `N`) is itself a walk: `RelPow R m (w c) (w (c+m))` for `c + m ≤ N`. The
+converse of `exists_chain`, used to splice out loops. -/
+theorem RelPow.subchain {R : State → State → Prop} {w : ℕ → State} {N : ℕ}
+    (hstep : ∀ i, i < N → R (w i) (w (i + 1))) :
+    ∀ c m, c + m ≤ N → RelPow R m (w c) (w (c + m)) := by
+  intro c m
+  induction m with
+  | zero => intro _; simpa using RelPow.zero (w c)
+  | succ k ih =>
+    intro hcm
+    rw [show c + (k + 1) = (c + k) + 1 from by omega]
+    exact (ih (by omega)).snoc (hstep (c + k) (by omega))
+
 /-! ### The two path-construction engines -/
 
 /-- **Closed-set continuation engine.** If every vertex of `X` has an `R`-successor inside `X`
@@ -510,6 +524,51 @@ theorem onCycle_iff_transGen {R : State → State → Prop} {s : State} :
     exact ⟨m, hcyc⟩
   · rintro ⟨n, hn⟩
     exact ⟨n + 1, Nat.succ_pos n, hn⟩
+
+/-! ### Finite stabilization — the matrix powers saturate at `N = card`
+
+The deepest classical matrix-power fact: on a finite state space the powers `Bⁿ` stabilize. Any
+reachable pair is reachable by a walk of length `< card`, because a longer walk repeats a vertex
+(pigeonhole) and the loop splices out (`subchain` + `RelPow.trans`). Equivalently the transitive
+closure is the *finite* union `⋁_{k < N} Bᵏ` — computing `B, B², …, B^{N-1}` already saturates
+reachability, making it decidable. (This is what makes the abstract `safe` set a *finite* fixpoint;
+it is also the honest ceiling — saturation needs all `N` powers, and for Tetris `N` is astronomical,
+so the matrix view reorganizes the search without shrinking it.) -/
+
+/-- **Reachability saturates below `card`.** If `t` is reachable from `s`, it is reachable by a walk
+of length strictly less than `Fintype.card State` — a shortest such walk visits no vertex twice, so
+spans at most `card` distinct vertices. Proof: take the shortest walk (`Nat.find`); were it
+`≥ card`, pigeonhole forces a repeated vertex and splicing the loop yields a shorter walk. -/
+theorem exists_relPow_lt_card [Fintype State] {R : State → State → Prop} {s t : State}
+    (h : Reachable R s t) : ∃ n, n < Fintype.card State ∧ RelPow R n s t := by
+  classical
+  have hex : ∃ n, RelPow R n s t := reachable_iff_exists_relPow.mp h
+  refine ⟨Nat.find hex, ?_, Nat.find_spec hex⟩
+  by_contra hge
+  rw [not_lt] at hge
+  obtain ⟨w, hw0, hwn, hstep⟩ := (Nat.find_spec hex).exists_chain
+  set n₀ := Nat.find hex with hn₀
+  -- A length-`n₀ ≥ card` walk has `n₀ + 1 > card` vertices, hence a repeat (pigeonhole).
+  obtain ⟨i, j, hij, heq⟩ := Fintype.exists_ne_map_eq_of_card_lt
+    (fun k : Fin (n₀ + 1) => w (k : ℕ)) (by rw [Fintype.card_fin]; omega)
+  -- Splicing out the loop between two equal vertices gives a strictly shorter walk to `t`.
+  have key : ∀ a b : ℕ, a < b → b ≤ n₀ → w a = w b → False := by
+    intro a b hab hbn hwab
+    have hpre : RelPow R a s (w b) := by
+      have hw := RelPow.subchain hstep 0 a (by omega)
+      rw [Nat.zero_add, hw0, hwab] at hw
+      exact hw
+    have hsuf : RelPow R (n₀ - b) (w b) t := by
+      have hw := RelPow.subchain hstep b (n₀ - b) (by omega)
+      rw [show b + (n₀ - b) = n₀ from by omega, hwn] at hw
+      exact hw
+    exact Nat.find_min hex (show a + (n₀ - b) < n₀ from by omega) (hpre.trans hsuf)
+  have hi : (i : ℕ) ≤ n₀ := by have := i.isLt; omega
+  have hj : (j : ℕ) ≤ n₀ := by have := j.isLt; omega
+  have hne : (i : ℕ) ≠ (j : ℕ) := fun e => hij (Fin.ext e)
+  rcases Nat.lt_or_ge (i : ℕ) (j : ℕ) with hlt | hgt
+  · exact key i j hlt hj heq
+  · exact key j i (by omega) hi heq.symm
 
 /-! ## §5 Connecting the abstract layer to the concrete safe-set results
 
