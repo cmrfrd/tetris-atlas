@@ -2246,4 +2246,26 @@ theorem buildSolver_move_bundle {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
    buildSolver_move_maxHeight_le hcols hfix hp b,
    buildSolver_clear_reduces_debt hcols hfix hp hWF⟩
 
+/-- Geometry bundle: the drop is 4 cells, disjoint from the board, within a 4×4 footprint. -/
+theorem buildSolver_geometry_bundle {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) (b : Board) :
+    ((buildSolver hfix g p).dropped b).card = 4 ∧
+    Disjoint b ((buildSolver hfix g p).dropped b) ∧
+    b ⊆ (buildSolver hfix g p).place b :=
+  ⟨buildSolver_output_dropped_card hfix b g p,
+   buildSolver_dropped_disjoint hfix b g p,
+   buildSolver_move_superset hfix b g p⟩
+
+/-- Energy bundle: after a constructed move the split identity and surface brackets hold. -/
+theorem buildSolver_energy_bundle {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag)
+    {b : Board} (hWF : Board.WF cfg b) :
+    HoleDebt.debt cfg ((buildSolver hfix g p).applyStep cfg b)
+        + ((buildSolver hfix g p).applyStep cfg b).count
+      = HoleDebt.surfaceArea cfg ((buildSolver hfix g p).applyStep cfg b) ∧
+    Board.maxHeight cfg ((buildSolver hfix g p).applyStep cfg b)
+        ≤ HoleDebt.surfaceArea cfg ((buildSolver hfix g p).applyStep cfg b) :=
+  ⟨buildSolver_move_energy_split hcols hfix hp hWF,
+   (buildSolver_move_energy_brackets hfix g p b).1⟩
+
 end Tetris
