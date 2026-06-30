@@ -1197,4 +1197,12 @@ theorem buildSolver_atlas_portrait {S : Finset GameState} (hfix : F_finite cfg S
     (∀ (σ₁ σ₂ : Solver cfg), σ₁.toAtlas = σ₂.toAtlas → σ₁ = σ₂) :=
   solver_atlas_portrait (σ := buildSolver hfix)
 
+/-- Near capacity, any surviving constructed-function move must clear a line. -/
+theorem buildSolver_move_must_clear {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag)
+    {b : Board} (hWF : Board.WF cfg b) (hnear : cfg.cols * cfg.rows < b.count + 4)
+    (hsurv : ¬ Board.isLost cfg ((buildSolver hfix g p).applyStep cfg b)) :
+    0 < Board.linesCleared cfg ((buildSolver hfix g p).place b) :=
+  solver_move_must_clear (buildSolver_validSolver hcols hfix) hp hWF hnear hsurv
+
 end Tetris
