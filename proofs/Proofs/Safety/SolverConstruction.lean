@@ -1894,4 +1894,14 @@ theorem construct_table_size_bounded (hcols : 4 ≤ cfg.cols)
       C.toAdversarialClosedCycle.states.card ≤ (inFieldStates cfg).card :=
   solver_table_size_bounded hcols hex
 
+/-- The atlas wrapper is faithful: equal atlases come from equal solvers. -/
+theorem construct_toAtlas_inj {σ₁ σ₂ : Solver cfg} (h : σ₁.toAtlas = σ₂.toAtlas) : σ₁ = σ₂ :=
+  solver_toAtlas_inj h
+
+/-- A non-lost state is unsafe exactly when some bag piece kills every response (killer piece). -/
+theorem construct_unsafe_iff_killer_piece {g : GameState} (hnl : ¬ g.lost cfg) :
+    g ∉ safe cfg ↔ ∃ p ∈ g.bag, ∀ pl : Placement,
+      pl.piece = p → pl.Valid cfg → adversarialStep cfg g p pl ∉ safe cfg :=
+  solver_unsafe_iff_killer_piece hnl
+
 end Tetris
