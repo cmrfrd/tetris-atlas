@@ -2776,4 +2776,17 @@ theorem convergedSolver_trace_board_succ (hcols : 4 ≤ cfg.cols) {s : ℕ → P
           (adversarialTrace cfg convergedSolver s GameState.init n).board :=
   buildSolver_trace_board_succ hcols convergedSet_fixed hl n
 
+/-- Bridge from M2: an in-field closed cycle through init lands init in the converged region. -/
+theorem init_mem_convergedSet_of_inField_cycle (C : AdversarialClosedCycle cfg)
+    (hS : C.states ⊆ inFieldStates cfg) (hinit : GameState.init ∈ C.states) :
+    GameState.init ∈ convergedSet cfg :=
+  C.init_mem_safeIterFinite hS hinit (inFieldStates cfg).card
+
+/-- An in-field init-cycle hands the canonical converged solver a Tetris win. -/
+theorem inField_cycle_yields_convergedSolver (hcols : 4 ≤ cfg.cols)
+    (C : AdversarialClosedCycle cfg) (hS : C.states ⊆ inFieldStates cfg)
+    (hinit : GameState.init ∈ C.states) :
+    SolvesTetrisValid cfg convergedSolver :=
+  convergedSolver_solves hcols (init_mem_convergedSet_of_inField_cycle C hS hinit)
+
 end Tetris
