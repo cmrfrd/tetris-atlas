@@ -1189,4 +1189,12 @@ theorem buildSolver_active_domain_finite {S : Finset GameState} (hcols : 4 ≤ c
     g ∈ inFieldStates cfg :=
   solver_active_domain_finite (buildSolver_solvesTetrisValid hcols hfix hinit) hr
 
+/-- Atlas portrait of the constructed function: total, some-valued, round-trips, injective. -/
+theorem buildSolver_atlas_portrait {S : Finset GameState} (hfix : F_finite cfg S = S) :
+    (∀ g p, (buildSolver hfix).toAtlas g p = some (buildSolver hfix g p)) ∧
+    (∀ g p, ((buildSolver hfix).toAtlas g p).isSome = true) ∧
+    ((buildSolver hfix).toAtlas.toSolver = buildSolver hfix) ∧
+    (∀ (σ₁ σ₂ : Solver cfg), σ₁.toAtlas = σ₂.toAtlas → σ₁ = σ₂) :=
+  solver_atlas_portrait (σ := buildSolver hfix)
+
 end Tetris
