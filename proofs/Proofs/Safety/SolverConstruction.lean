@@ -1684,4 +1684,21 @@ theorem construct_per_bag_resource {l : List Piece} (h : BagBurst.IsBagOrder l) 
     l.countP BagBurst.isI = 1 ∧ l.countP BagBurst.isSZ = 2 :=
   solver_per_bag_resource h
 
+/-- The constructed cycle realizes at most `2^(cols·rows)` distinct boards. -/
+theorem construct_distinct_boards_le (hcols : 4 ≤ cfg.cols)
+    (hex : ∃ σ : Solver cfg, SolvesTetrisValid cfg σ) :
+    ∃ C : AdversarialClosedCycleWF cfg,
+      GameState.init ∈ C.toAdversarialClosedCycle.states ∧
+      (C.toAdversarialClosedCycle.states.image GameState.board).card
+        ≤ 2 ^ (cfg.cols * cfg.rows) :=
+  solver_distinct_boards_le hcols hex
+
+/-- The constructed cycle realizes at most 128 distinct bag states. -/
+theorem construct_distinct_bags_le (hcols : 4 ≤ cfg.cols)
+    (hex : ∃ σ : Solver cfg, SolvesTetrisValid cfg σ) :
+    ∃ C : AdversarialClosedCycleWF cfg,
+      GameState.init ∈ C.toAdversarialClosedCycle.states ∧
+      (C.toAdversarialClosedCycle.states.image GameState.bag).card ≤ 128 :=
+  solver_distinct_bags_le hcols hex
+
 end Tetris
