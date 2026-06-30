@@ -2623,4 +2623,15 @@ theorem convergedSolver_handles_init (hinit : GameState.init ∈ convergedSet cf
       adversarialStep cfg GameState.init p pl ∈ safe cfg :=
   construct_handles_all_seven_at_init (convergedSet_subset_safe (Finset.mem_coe.mpr hinit)) p
 
+/-- Trace-invariant bundle: each visited state is WF, reachable, and inside the region. -/
+theorem buildSolver_trace_invariant_bundle {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    Board.WF cfg (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board ∧
+    Reachable cfg (adversarialTrace cfg (buildSolver hfix) s GameState.init n) ∧
+    adversarialTrace cfg (buildSolver hfix) s GameState.init n ∈ S :=
+  ⟨buildSolver_trace_wf hcols hfix hinit hl n,
+   buildSolver_trace_reachable hcols hfix hinit hl n,
+   buildSolver_trace_mem hfix hinit hl n⟩
+
 end Tetris
