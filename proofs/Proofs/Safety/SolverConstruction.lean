@@ -178,4 +178,31 @@ def construct_decide_safe (S₀ : Finset GameState) (N : ℕ) (hS₀ : safe cfg 
     Decidable (g ∈ safe cfg) :=
   decideSafeFromUniverse cfg S₀ N hS₀ hfix g
 
+/-! ## Part 6 — Extracting the solver from a fixed point -/
+
+/-- **Any fixed point is a verified winning region.** A self-sustaining region (`F_finite S = S`),
+whether reached by the construction or exhibited directly, is contained in `safe`: every one of its
+states is genuinely survivable. This is the coinductive soundness of a certificate. -/
+theorem fixed_point_subset_safe {S : Finset GameState} (hfix : F_finite cfg S = S) :
+    (↑S : Set GameState) ⊆ safe cfg := by
+  apply safe_greatest
+  intro g hg
+  rw [Finset.mem_coe] at hg
+  have hg' : g ∈ F_finite cfg S := by rw [hfix]; exact hg
+  rw [F_finite, Finset.mem_filter] at hg'
+  obtain ⟨_, hnlost, hmoves⟩ := hg'
+  refine ⟨hnlost, fun p hp => ?_⟩
+  obtain ⟨pl, hpl_mem, hstep⟩ := hmoves p hp
+  rw [Placement.mem_allValidFor] at hpl_mem
+  exact ⟨pl, hpl_mem.1, hpl_mem.2, Finset.mem_coe.mpr hstep⟩
+
+/-- **From a fixed point to the function.** Exhibit any self-sustaining region containing `init`;
+then the canonical `safeSolver` is a valid solving program. This is the construction recipe: build a
+closed region from the empty board, and the function is extracted. -/
+theorem solver_from_fixed_point {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) :
+    SolvesTetrisValid cfg (safeSolver cfg) :=
+  init_safe_implies_solvesTetrisValid hcols
+    (fixed_point_subset_safe hfix (Finset.mem_coe.mpr hinit))
+
 end Tetris
