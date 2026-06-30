@@ -1848,4 +1848,22 @@ theorem construct_table_domain_card :
       = (inFieldStates cfg).card * Fintype.card Piece :=
   solver_table_domain_card
 
+/-- Energy split holds after a constructed-function move: debt + count = surface area. -/
+theorem buildSolver_move_energy_split {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag)
+    {b : Board} (hWF : Board.WF cfg b) :
+    HoleDebt.debt cfg ((buildSolver hfix g p).applyStep cfg b)
+        + ((buildSolver hfix g p).applyStep cfg b).count
+      = HoleDebt.surfaceArea cfg ((buildSolver hfix g p).applyStep cfg b) :=
+  solver_move_energy_split (buildSolver_validSolver hcols hfix) hp hWF
+
+/-- Energy brackets max height after a constructed-function move. -/
+theorem buildSolver_move_energy_brackets {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) (b : Board) :
+    Board.maxHeight cfg ((buildSolver hfix g p).applyStep cfg b)
+        ≤ HoleDebt.surfaceArea cfg ((buildSolver hfix g p).applyStep cfg b) ∧
+    HoleDebt.surfaceArea cfg ((buildSolver hfix g p).applyStep cfg b)
+        ≤ cfg.cols * Board.maxHeight cfg ((buildSolver hfix g p).applyStep cfg b) :=
+  solver_move_energy_brackets (σ := buildSolver hfix) g p b
+
 end Tetris
