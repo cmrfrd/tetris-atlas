@@ -494,4 +494,21 @@ theorem buildSolver_validSolver {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
     change 0 + cell.1 < cfg.cols
     omega
 
+/-- **The built solver is a complete valid solving program** (from a fixed point containing
+`init`). -/
+theorem buildSolver_solvesTetrisValid {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) :
+    SolvesTetrisValid cfg (buildSolver hfix) :=
+  ⟨buildSolver_validSolver hcols hfix, fun _ hl n => buildSolver_survives hfix hinit hl n⟩
+
+/-- **Construction yields a region-confined solver.** From a self-sustaining region containing
+`init`, the built solver survives forever *and* its whole play stays in the finite region `S` — the
+function realized as a finite-state controller. -/
+theorem construct_confined_solver {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) :
+    ∃ σ : Solver cfg, SolvesTetrisValid cfg σ ∧
+      ∀ s, LegalSequence s → ∀ n, adversarialTrace cfg σ s GameState.init n ∈ S :=
+  ⟨buildSolver hfix, buildSolver_solvesTetrisValid hcols hfix hinit,
+   fun _ hl n => buildSolver_trace_mem hfix hinit hl n⟩
+
 end Tetris
