@@ -2938,4 +2938,14 @@ theorem buildSolver_step_not_lost {S : Finset GameState} (hfix : F_finite cfg S 
   safe_not_lost
     (fixed_point_subset_safe hfix (Finset.mem_coe.mpr (buildSolver_step_mem hfix hg hp)))
 
+/-- Step bundle: a converged step stays in-region, stays safe, and never loses. -/
+theorem convergedSolver_step_bundle {g : GameState} (hg : g ∈ convergedSet cfg) {p : Piece}
+    (hp : p ∈ g.bag) :
+    solverStep cfg convergedSolver p g ∈ convergedSet cfg ∧
+    solverStep cfg convergedSolver p g ∈ safe cfg ∧
+    ¬ (solverStep cfg convergedSolver p g).lost cfg :=
+  ⟨convergedSolver_solverStep_mem hg hp,
+   convergedSolver_solverStep_safe hg hp,
+   convergedSolver_solverStep_not_lost hg hp⟩
+
 end Tetris
