@@ -2092,6 +2092,18 @@ theorem convergedSolver_columns_le (hcols : 4 ≤ cfg.cols)
     Board.colHeight (adversarialTrace cfg convergedSolver s GameState.init n).board j ≤ cfg.rows :=
   buildSolver_columns_le hcols convergedSet_fixed hinit hl n hj
 
+/-- The retrograde operator is idempotent on the converged region (it has fully halted). -/
+theorem convergedSet_F_finite_idempotent :
+    F_finite cfg (F_finite cfg (convergedSet cfg)) = convergedSet cfg := by
+  rw [convergedSet_fixed, convergedSet_fixed]
+
+/-- Per state the converged solver is an injective section of the menu. -/
+theorem convergedSolver_response_portrait (hcols : 4 ≤ cfg.cols) (g : GameState) :
+    (∀ p ∈ g.bag, convergedSolver (cfg := cfg) g p ∈ Placement.allValidFor cfg p) ∧
+    (g.bag.image (fun p => convergedSolver (cfg := cfg) g p)).card = g.bag.card ∧
+    Set.InjOn (fun p => convergedSolver (cfg := cfg) g p) g.bag :=
+  buildSolver_response_portrait hcols convergedSet_fixed g
+
 /-- Every state on a converged-solver play stays inside the converged region. -/
 theorem convergedSolver_trace_mem (hinit : GameState.init ∈ convergedSet cfg)
     {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
