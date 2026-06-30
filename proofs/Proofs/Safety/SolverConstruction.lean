@@ -2204,4 +2204,22 @@ theorem buildSolver_step_law_portrait {S : Finset GameState} (hfix : F_finite cf
             (adversarialTrace cfg (buildSolver hfix) s GameState.init n) :=
   ⟨buildSolver_markov hfix s n, buildSolver_trace_eq_solverStep hfix s n⟩
 
+/-- Output portrait of the converged solver: piece-faithful, valid, in column range. -/
+theorem convergedSolver_output_portrait (hcols : 4 ≤ cfg.cols) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) :
+    (convergedSolver (cfg := cfg) g p).piece = p ∧
+    (convergedSolver (cfg := cfg) g p).Valid cfg ∧
+    (convergedSolver (cfg := cfg) g p).col < cfg.cols :=
+  ⟨buildSolver_announces_piece hcols convergedSet_fixed hp,
+   buildSolver_output_valid hcols convergedSet_fixed hp,
+   buildSolver_col_lt_cols hcols convergedSet_fixed hp⟩
+
+/-- The converged solver is never stuck: every reachable bag piece has a valid placement. -/
+theorem convergedSolver_never_stuck (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s)
+    (n : ℕ) {p : Piece}
+    (hp : p ∈ (adversarialTrace cfg convergedSolver s GameState.init n).bag) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg :=
+  buildSolver_never_stuck hcols convergedSet_fixed hinit hl n hp
+
 end Tetris
