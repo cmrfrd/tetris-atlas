@@ -2104,6 +2104,18 @@ theorem convergedSolver_response_portrait (hcols : 4 ≤ cfg.cols) (g : GameStat
     Set.InjOn (fun p => convergedSolver (cfg := cfg) g p) g.bag :=
   buildSolver_response_portrait hcols convergedSet_fixed g
 
+/-- Grand portrait of the canonical converged solver: valid, solves, closed atlas, confined. -/
+theorem convergedSolver_grand_portrait (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    ValidSolver cfg convergedSolver ∧
+    SolvesTetrisValid cfg convergedSolver ∧
+    (convergedSolver (cfg := cfg)).toAtlas.IsClosedOn cfg (convergedSet cfg) ∧
+    (∀ g, solverReachable (convergedSolver (cfg := cfg)) g → g ∈ convergedSet cfg) :=
+  ⟨convergedSolver_validSolver hcols,
+   convergedSolver_solves hcols hinit,
+   convergedSolver_atlas_closed cfg,
+   fun _ hr => convergedSolver_confined hinit hr⟩
+
 /-- Every state on a converged-solver play stays inside the converged region. -/
 theorem convergedSolver_trace_mem (hinit : GameState.init ∈ convergedSet cfg)
     {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
