@@ -3058,4 +3058,14 @@ theorem convergedSolver_milestones (hinit : GameState.init ∈ convergedSet cfg)
 noncomputable def convergedSet_decidableMem (g : GameState) : Decidable (g ∈ convergedSet cfg) :=
   inferInstance
 
+/-- Function portrait of the converged solver: per-state menu section, injective, board+bag read. -/
+theorem convergedSolver_function_portrait (hcols : 4 ≤ cfg.cols) (g : GameState) :
+    (∀ p ∈ g.bag, convergedSolver (cfg := cfg) g p ∈ Placement.allValidFor cfg p) ∧
+    Set.InjOn (fun p => convergedSolver (cfg := cfg) g p) g.bag ∧
+    (∀ g₂ p, g.board = g₂.board → g.bag = g₂.bag →
+      convergedSolver (cfg := cfg) g p = convergedSolver (cfg := cfg) g₂ p) :=
+  ⟨(convergedSolver_response_portrait hcols g).1,
+   (convergedSolver_response_portrait hcols g).2.2,
+   fun g₂ p hb hbag => convergedSolver_reads_board_bag g g₂ p hb hbag⟩
+
 end Tetris
