@@ -909,6 +909,69 @@ theorem not_advNilpotent_iff [Finite State] (Dead : State → Prop)
     rw [not_not]
     exact gfp_le_gfpIter (cpreHom Dead legalDraws step) N h
 
+/-! ### The whole problem as one matrix: fix the policy, the adversary becomes reachability
+
+With the player's memoryless policy `π : State → Piece → Action` fixed, the adversary's *only*
+freedom is which bag piece to draw, so the dynamics is a **single Boolean matrix** `M_π` (the policy
+graph). The adversary forcing death = *some* draw-sequence reaching a dead state = **death reachable
+in `M_π`** = a matrix-power statement (`∃ n, (M_πⁿ)_{init,⊥} > 0`). Survival under `π` is its
+negation — `M_π` is *death-unreachable* (death-nilpotent) from `init`. The full problem then reads:
+
+> `init` survives  ⟺  `∃ π`, the matrix `M_π` never reaches death from `init`.
+
+The adversary's `∀`-over-infinite-sequences is fully linearized into reachability on the one matrix
+`M_π`; the only genuinely non-linear ingredient that remains is the existential `∃ π` (the policy
+search). -/
+
+/-- The **policy graph** `M_π`: with memoryless policy `π` fixed, `s → t` iff some drawable piece
+`r` sends `s` to `t` under the policy's placement `π s r`. A single Boolean transition relation. -/
+def policyGraph (legalDraws : State → Finset Piece) (step : State → Action → Piece → State)
+    (π : State → Piece → Action) : State → State → Prop :=
+  fun s t => ∃ r ∈ legalDraws s, step s (π s r) r = t
+
+/-- `π` **survives** from `s₀`: no dead state is reachable from `s₀` in the policy graph `M_π` —
+`M_π` is death-unreachable (death-nilpotent) from `s₀`, a reachability/matrix-power property of one
+Boolean matrix. -/
+def survivesUnder (Dead : State → Prop) (legalDraws : State → Finset Piece)
+    (step : State → Action → Piece → State) (π : State → Piece → Action) (s₀ : State) : Prop :=
+  ∀ t, Reachable (policyGraph legalDraws step π) s₀ t → ¬ Dead t
+
+/-- **The whole adversarial problem as matrix powers.** `s₀ ∈ adversarialSafe` (survives forever
+against the adversary) iff there is a memoryless policy `π` whose policy graph `M_π` never reaches
+death from `s₀`. The adversary's `∀`-over-sequences is reachability in the single matrix `M_π`; the
+sole non-linear ingredient is the `∃ π`. -/
+theorem mem_adversarialSafe_iff_exists_surviving_policy [Nonempty Action] (Dead : State → Prop)
+    (legalDraws : State → Finset Piece) (step : State → Action → Piece → State) (s₀ : State) :
+    s₀ ∈ adversarialSafe Dead legalDraws step ↔
+      ∃ π : State → Piece → Action, survivesUnder Dead legalDraws step π s₀ := by
+  classical
+  have hrs := adversarialSafe_isRecurrentSupport Dead legalDraws step
+  constructor
+  · intro hs₀
+    have hpick : ∀ s r, ∃ a, s ∈ adversarialSafe Dead legalDraws step → r ∈ legalDraws s →
+        step s a r ∈ adversarialSafe Dead legalDraws step := by
+      intro s r
+      by_cases hs : s ∈ adversarialSafe Dead legalDraws step
+      · by_cases hr : r ∈ legalDraws s
+        · obtain ⟨a, ha⟩ := (hrs s hs).2 r hr
+          exact ⟨a, fun _ _ => ha⟩
+        · exact ⟨Classical.arbitrary Action, fun _ hr' => absurd hr' hr⟩
+      · exact ⟨Classical.arbitrary Action, fun hs' _ => absurd hs' hs⟩
+    refine ⟨fun s r => Classical.choose (hpick s r), fun t ht => ?_⟩
+    have hmem : t ∈ adversarialSafe Dead legalDraws step := by
+      induction ht with
+      | refl => exact hs₀
+      | @tail u v _ hstep ih =>
+        obtain ⟨r, hr, hv⟩ := hstep
+        have := Classical.choose_spec (hpick u r) ih hr
+        rwa [hv] at this
+    exact (hrs t hmem).1
+  · rintro ⟨π, hπ⟩
+    refine subset_adversarialSafe_of_recurrentSupport Dead legalDraws step
+      (X := {t | Reachable (policyGraph legalDraws step π) s₀ t}) ?_ Relation.ReflTransGen.refl
+    intro s hs
+    exact ⟨hπ s hs, fun r hr => ⟨π s r, hs.tail ⟨r, hr, rfl⟩⟩⟩
+
 end ControllablePredecessor
 
 section AdversarialMatrix
