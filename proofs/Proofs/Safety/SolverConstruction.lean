@@ -2379,4 +2379,12 @@ theorem convergedSolver_pillars (hcols : 4 ≤ cfg.cols)
       ≤ cfg.cols * cfg.rows :=
   buildSolver_pillars hcols convergedSet_fixed hinit hl n
 
+/-- The converged solver is non-losing exactly when its max height is within the board. -/
+theorem convergedSolver_not_lost_iff (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    ¬ (adversarialTrace cfg convergedSolver s GameState.init n).lost cfg ↔
+      Board.maxHeight cfg
+        (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.rows :=
+  buildSolver_not_lost_iff hcols convergedSet_fixed hinit hl n
+
 end Tetris
