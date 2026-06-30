@@ -1095,4 +1095,13 @@ theorem buildSolver_outputs_differ_by_piece {S : Finset GameState} (hcols : 4 �
     buildSolver hfix g p ≠ buildSolver hfix g p' :=
   solver_outputs_differ_by_piece (buildSolver_validSolver hcols hfix) hp hp' hne
 
+/-- Two constructed-function outputs for the same piece coincide once rot and col agree. -/
+theorem buildSolver_eq_of_rotcol {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g₁ g₂ : GameState} {p : Piece}
+    (hp₁ : p ∈ g₁.bag) (hp₂ : p ∈ g₂.bag)
+    (hr : (buildSolver hfix g₁ p).rot = (buildSolver hfix g₂ p).rot)
+    (hc : (buildSolver hfix g₁ p).col = (buildSolver hfix g₂ p).col) :
+    buildSolver hfix g₁ p = buildSolver hfix g₂ p :=
+  solver_eq_of_rotcol (buildSolver_validSolver hcols hfix) hp₁ hp₂ hr hc
+
 end Tetris
