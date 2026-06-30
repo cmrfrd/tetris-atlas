@@ -1059,4 +1059,10 @@ theorem buildSolver_periodic_play {S : Finset GameState} (hfix : F_finite cfg S 
       = adversarialTrace cfg (buildSolver hfix) s g0 (b + d + k) :=
   solver_periodic_play (σ := buildSolver hfix) s g0 htrace hs k
 
+/-- Each piece presented to the constructed function along legal play is in the current bag. -/
+theorem buildSolver_queried_in_bag {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (s : ℕ → Piece) (hl : LegalSequence s) (n : ℕ) :
+    s n ∈ (adversarialTrace cfg (buildSolver hfix) s GameState.init n).bag :=
+  solver_queried_in_bag (σ := buildSolver hfix) s hl n
+
 end Tetris
