@@ -882,6 +882,33 @@ theorem exists_gfpIter_cpre_eq_adversarialSafe [Finite State] (Dead : State → 
     ∃ N, gfpIter (cpreHom Dead legalDraws step) N = adversarialSafe Dead legalDraws step :=
   exists_gfpIter_eq_gfp (cpreHom Dead legalDraws step)
 
+/-- **Adversarial nilpotence at `s₀`** (the no-survival side, operator form): the downward
+`CPre`-iteration eliminates `s₀` at some finite stage — the adversary forces `s₀` to death within
+finitely many rounds (`s₀ ∉ CPreᴺ ⊤`). -/
+def AdvNilpotent (Dead : State → Prop) (legalDraws : State → Finset Piece)
+    (step : State → Action → Piece → State) (s₀ : State) : Prop :=
+  ∃ N, s₀ ∉ gfpIter (cpreHom Dead legalDraws step) N
+
+/-- **The goal, posed exactly: adversarial non-nilpotence ⟺ survival.** On a finite state space,
+`s₀` is *never* eliminated by any finite stage of the adversarial `CPre`-iteration iff
+`s₀ ∈ adversarialSafe`. So "prove the adversarial operator non-nilpotent at `s₀`" **is** "prove `s₀`
+survives forever." -/
+theorem not_advNilpotent_iff [Finite State] (Dead : State → Prop)
+    (legalDraws : State → Finset Piece) (step : State → Action → Piece → State) (s₀ : State) :
+    ¬ AdvNilpotent Dead legalDraws step s₀ ↔ s₀ ∈ adversarialSafe Dead legalDraws step := by
+  unfold AdvNilpotent
+  rw [not_exists]
+  constructor
+  · intro h
+    obtain ⟨N, hN⟩ := exists_gfpIter_eq_gfp (cpreHom Dead legalDraws step)
+    have hmem := h N
+    rw [not_not] at hmem
+    rw [hN] at hmem
+    exact hmem
+  · intro h N
+    rw [not_not]
+    exact gfp_le_gfpIter (cpreHom Dead legalDraws step) N h
+
 end ControllablePredecessor
 
 section AdversarialMatrix
