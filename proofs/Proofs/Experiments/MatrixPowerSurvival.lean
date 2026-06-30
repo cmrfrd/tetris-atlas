@@ -337,6 +337,26 @@ theorem online_implies_weak {Piece Action : Type*} {Dead : State → Prop}
   obtain ⟨hsne, a, ha⟩ := h s hs
   exact ⟨hsne, fun r hr => ⟨a, ha r hr⟩⟩
 
+/-- **Domination: survival transfers up from a sub-dynamics.** If the full game `step` can realize
+every move of a restricted dynamics `step'` (the player has *at least* as many options under `step`,
+`∀ s a' r, ∃ a, step s a r = step' s a' r`), then any recurrent support under `step'` is a recurrent
+support under `step`. So **a winning sub-strategy proves the full game winnable**, and the
+sub-strategy may be as simple as you like (a deterministic policy, a structured discipline on a few
+classes). In matrix terms `step'` simulating means `adjFor step' r ≤ adjFor step r` entrywise, and
+`mulVec_mono` transfers the common sub-eigenvector upward — the witness-shrinking lever. -/
+theorem safeRecurrentSupport_mono {Piece Action Action' : Type*} {Dead : State → Prop}
+    {legalDraws : State → Finset Piece}
+    {step : State → Action → Piece → State} {step' : State → Action' → Piece → State}
+    (hsim : ∀ s a' r, ∃ a, step s a r = step' s a' r)
+    {X : Set State} (h : SafeRecurrentSupport Dead legalDraws step' X) :
+    SafeRecurrentSupport Dead legalDraws step X := by
+  intro s hs
+  obtain ⟨hsne, hsucc⟩ := h s hs
+  refine ⟨hsne, fun r hr => ?_⟩
+  obtain ⟨a', ha'⟩ := hsucc r hr
+  obtain ⟨a, ha⟩ := hsim s a' r
+  exact ⟨a, by rw [ha]; exact ha'⟩
+
 /-- **Weak recurrent support ⇒ infinite survival.** A reachable, dead-avoiding weak support `X`
 (with nonempty legal-draw sets, as in any real bag) yields an infinite safe `B`-path from `s₀`. The
 support is a closed set for `SafeEdge`, so this is `infinite_safe_path_of_reachable_closed`. -/
