@@ -83,4 +83,14 @@ theorem closed_region_is_fixed {S : Finset GameState}
     F_finite cfg S = S :=
   F_finite_eq_self_of h
 
+/-- **Any closed cycle is a fixed point.** Exhibiting an adversarial closed cycle is exhibiting a
+self-sustaining region — the construction confirms it (prunes nothing). -/
+theorem cycle_is_fixed (C : AdversarialClosedCycle cfg) :
+    F_finite cfg C.states = C.states :=
+  C.F_finite_states_eq_states
+
+/-- **The empty region is the trivial fixed point** — the certificate of "no winning region". -/
+theorem empty_is_fixed : F_finite cfg (∅ : Finset GameState) = ∅ :=
+  F_finite_empty cfg
+
 end Tetris
