@@ -2334,4 +2334,12 @@ theorem convergedSolver_output_in_total_action_set (hcols : 4 ≤ cfg.cols) {g :
       ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg) :=
   buildSolver_output_in_total_action_set hcols convergedSet_fixed hp
 
+/-- The converged solver collides per-piece on a slice larger than the menu (pigeonhole). -/
+theorem convergedSolver_per_piece_noninjective (hcols : 4 ≤ cfg.cols) {p : Piece}
+    (T : Finset GameState) (hT : ∀ g ∈ T, p ∈ g.bag)
+    (hcard : (Placement.allValidFor cfg p).card < T.card) :
+    ∃ g₁ ∈ T, ∃ g₂ ∈ T, g₁ ≠ g₂ ∧
+      convergedSolver (cfg := cfg) g₁ p = convergedSolver (cfg := cfg) g₂ p :=
+  buildSolver_per_piece_noninjective hcols convergedSet_fixed T hT hcard
+
 end Tetris
