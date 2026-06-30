@@ -873,4 +873,17 @@ theorem buildSolver_pillars {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
       ≤ cfg.cols * cfg.rows :=
   solving_program_pillars (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
 
+/-- The constructed function's output reduces to `⟨p, rot, col⟩`. -/
+theorem buildSolver_output_eq_mk {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) :
+    buildSolver hfix g p = ⟨p, (buildSolver hfix g p).rot, (buildSolver hfix g p).col⟩ :=
+  solver_output_eq_mk (buildSolver_validSolver hcols hfix) hp
+
+/-- The constructed function's output is a point in the `Rotation × range cols` grid. -/
+theorem buildSolver_output_in_grid {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) :
+    ((buildSolver hfix g p).rot, (buildSolver hfix g p).col)
+      ∈ (Finset.univ : Finset Rotation) ×ˢ Finset.range cfg.cols :=
+  solver_output_in_grid (buildSolver_validSolver hcols hfix) hp
+
 end Tetris
