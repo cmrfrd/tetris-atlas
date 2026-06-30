@@ -312,4 +312,26 @@ theorem exists_solver_iff_exists_fixed_point_through_init (hcols : 4 ≤ cfg.col
   exact ⟨C.toAdversarialClosedCycle.states,
     cycle_is_fixed C.toAdversarialClosedCycle, hinit⟩
 
+/-! ## Part 13 — Monotonicity and universe-independence -/
+
+/-- **The construction is monotone in its universe.** A larger starting set yields a
+pointwise-larger construction at every round. -/
+theorem construct_mono_universe {S₀ S₀' : Finset GameState} (h : S₀ ⊆ S₀') (n : ℕ) :
+    safeIterFinite cfg S₀ n ⊆ safeIterFinite cfg S₀' n := by
+  induction n with
+  | zero => simpa using h
+  | succ k ih =>
+      rw [safeIterFinite_succ, safeIterFinite_succ]
+      exact F_finite_mono cfg ih
+
+/-- **Universe-independence of the limit.** At their fixed points, two universes both covering
+`safe` compute the same winning region: membership agrees with `safe` for either. -/
+theorem limit_universe_independent {S₀ S₀' : Finset GameState} {N N' : ℕ}
+    (hS₀ : safe cfg ⊆ ↑S₀) (hS₀' : safe cfg ⊆ ↑S₀')
+    (hfix : safeIterFinite cfg S₀ (N + 1) = safeIterFinite cfg S₀ N)
+    (hfix' : safeIterFinite cfg S₀' (N' + 1) = safeIterFinite cfg S₀' N') (g : GameState) :
+    g ∈ safeIterFinite cfg S₀ N ↔ g ∈ safeIterFinite cfg S₀' N' := by
+  rw [← Finset.mem_coe, ← computed_exact S₀ N hS₀ hfix g,
+      computed_exact S₀' N' hS₀' hfix' g, Finset.mem_coe]
+
 end Tetris
