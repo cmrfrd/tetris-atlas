@@ -1176,4 +1176,10 @@ theorem buildSolver_repeats_within_inFieldStates {S : Finset GameState} (hcols :
         = adversarialTrace cfg (buildSolver hfix) s GameState.init j :=
   solver_repeats_within_inFieldStates (buildSolver_solvesTetrisValid hcols hfix hinit) hl
 
+/-- The constructed function's per-state response table has exactly `bag.card` entries. -/
+theorem buildSolver_response_table_card_eq {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (g : GameState) :
+    (g.bag.image (fun p => buildSolver hfix g p)).card = g.bag.card :=
+  solver_response_table_card_eq (buildSolver_validSolver hcols hfix) g
+
 end Tetris
