@@ -114,4 +114,21 @@ theorem construct_antitone (S₀ : Finset GameState) {m n : ℕ} (h : m ≤ n) :
     safeIterFinite cfg S₀ n ⊆ safeIterFinite cfg S₀ m :=
   safeIterFinite_antitone cfg S₀ h
 
+/-- **The construction terminates** within `|S₀|` rounds at a fixed point. -/
+theorem construct_terminates (S₀ : Finset GameState) :
+    ∃ N, N ≤ S₀.card ∧ safeIterFinite cfg S₀ (N + 1) = safeIterFinite cfg S₀ N :=
+  safeIterFinite_converges cfg S₀
+
+/-- **Strict-or-done**: each round either strictly shrinks the region or is the fixed point. -/
+theorem construct_strict_or_done (S₀ : Finset GameState) (n : ℕ) :
+    (safeIterFinite cfg S₀ (n + 1)).card < (safeIterFinite cfg S₀ n).card ∨
+    safeIterFinite cfg S₀ (n + 1) = safeIterFinite cfg S₀ n :=
+  safeIterFinite_strict_or_stable cfg S₀ n
+
+/-- **Stability persists**: once a round is a no-op, every later round is too. -/
+theorem construct_stable (S₀ : Finset GameState) {n : ℕ}
+    (h : safeIterFinite cfg S₀ (n + 1) = safeIterFinite cfg S₀ n) (k : ℕ) :
+    safeIterFinite cfg S₀ (n + k) = safeIterFinite cfg S₀ n :=
+  safeIterFinite_stable cfg S₀ h k
+
 end Tetris
