@@ -1271,4 +1271,12 @@ theorem construct_solvable_iff_init_cycle :
         GameState.init ∈ C.toAdversarialClosedCycle.states :=
   solver_solvable_iff_init_cycle
 
+/-- Master equivalences: solvability ⟺ init safe ⟺ an init-containing closed cycle. -/
+theorem construct_master_equivalences :
+    (TetrisSolvableValid ↔ GameState.init ∈ safe GameConfig.standard) ∧
+    (TetrisSolvableValid ↔
+      ∃ C : AdversarialClosedCycleWF GameConfig.standard,
+        GameState.init ∈ C.toAdversarialClosedCycle.states) :=
+  solver_master_equivalences
+
 end Tetris
