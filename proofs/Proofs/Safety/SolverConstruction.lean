@@ -297,4 +297,19 @@ theorem construction_pipeline (S₀ : Finset GameState) (hcols : 4 ≤ cfg.cols)
     fun hinit => init_safe_implies_solvesTetrisValid hcols
       (computed_sound S₀ N hfix (Finset.mem_coe.mpr hinit))⟩
 
+/-! ## Part 12 — Existence in pure construction terms -/
+
+/-- **Existence ⟺ a finite self-sustaining region through `init`.** The ideal function exists if and
+only if there is a finite set `S`, fixed by the construction (`F_finite S = S`), containing `init`.
+So "discover the function" means "find one finite self-sustaining region from the empty board." -/
+theorem exists_solver_iff_exists_fixed_point_through_init (hcols : 4 ≤ cfg.cols) :
+    (∃ σ : Solver cfg, SolvesTetrisValid cfg σ) ↔
+      ∃ S : Finset GameState, F_finite cfg S = S ∧ GameState.init ∈ S := by
+  refine ⟨fun hex => ?_, fun ⟨_, hfix, hinit⟩ => ⟨safeSolver cfg,
+    solver_from_fixed_point hcols hfix hinit⟩⟩
+  obtain ⟨C, hinit⟩ := (init_safe_iff_exists_init_adversarialClosedCycleWF cfg).mp
+    ((solver_exists_iff_init_safe hcols).mp hex)
+  exact ⟨C.toAdversarialClosedCycle.states,
+    cycle_is_fixed C.toAdversarialClosedCycle, hinit⟩
+
 end Tetris
