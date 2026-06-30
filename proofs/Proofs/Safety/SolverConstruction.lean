@@ -1948,4 +1948,12 @@ theorem construct_trace_determined_by_visited (s : ℕ → Piece) {σ₁ σ₂ :
         = adversarialTrace cfg σ₂ s GameState.init n :=
   solver_trace_determined_by_visited s
 
+/-- Locality portrait: equal choices give equal steps, and reachable-agreement gives equal play. -/
+theorem construct_locality_portrait {σ₁ σ₂ : Solver cfg} (s : ℕ → Piece) (hl : LegalSequence s) :
+    (∀ g p, σ₁ g p = σ₂ g p → solverStep cfg σ₁ p g = solverStep cfg σ₂ p g) ∧
+    ((∀ g, solverReachable σ₁ g → ∀ p ∈ g.bag, σ₁ g p = σ₂ g p) →
+      ∀ n, adversarialTrace cfg σ₁ s GameState.init n
+        = adversarialTrace cfg σ₂ s GameState.init n) :=
+  solver_locality_portrait s hl
+
 end Tetris
