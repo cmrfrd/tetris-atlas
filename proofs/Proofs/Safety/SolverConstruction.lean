@@ -1541,4 +1541,17 @@ theorem buildSolver_move_count_le_capacity {S : Finset GameState} (hcols : 4 ≤
     ((buildSolver hfix g p).applyStep cfg b).count ≤ cfg.cols * cfg.rows :=
   solver_move_count_le_capacity (buildSolver_validSolver hcols hfix) hp hWF hbelow
 
+/-- The constructed function's raw placement is skyline-monotone in the dominance order. -/
+theorem buildSolver_move_skyline_monotone {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) {b β : Board} (h : WqoCarrier.domLE b β) :
+    WqoCarrier.domLE ((buildSolver hfix g p).place b) ((buildSolver hfix g p).place β) :=
+  solver_move_skyline_monotone (σ := buildSolver hfix) g p h
+
+/-- The constructed function's placement skyline is hole-independent. -/
+theorem buildSolver_move_skyline_hole_independent {S : Finset GameState}
+    (hfix : F_finite cfg S = S) (g : GameState) (p : Piece) {b β : Board}
+    (h : ∀ j, b.colHeight j = β.colHeight j) (j : ℕ) :
+    ((buildSolver hfix g p).place b).colHeight j = ((buildSolver hfix g p).place β).colHeight j :=
+  solver_move_skyline_hole_independent (σ := buildSolver hfix) g p h j
+
 end Tetris
