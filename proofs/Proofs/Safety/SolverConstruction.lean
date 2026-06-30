@@ -1233,4 +1233,12 @@ theorem buildSolver_clear_reduces_debt {S : Finset GameState} (hcols : 4 ≤ cfg
       ≤ HoleDebt.debt cfg ((buildSolver hfix g p).place b) :=
   solver_clear_reduces_debt (buildSolver_validSolver hcols hfix) hp hWF
 
+/-- On a low stack the constructed function's move is non-losing. -/
+theorem buildSolver_lowstack_move_safe {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hrows : 4 ≤ cfg.rows) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b)
+    (hlow : ∀ j, Board.colHeight b j ≤ cfg.rows - 4) :
+    ¬ Board.isLost cfg ((buildSolver hfix g p).applyStep cfg b) :=
+  solver_lowstack_move_safe (buildSolver_validSolver hcols hfix) hrows hp hWF hlow
+
 end Tetris
