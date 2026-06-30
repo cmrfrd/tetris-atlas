@@ -1071,4 +1071,13 @@ theorem buildSolver_output_dropped_card {S : Finset GameState} (hfix : F_finite 
     ((buildSolver hfix g p).dropped b).card = 4 :=
   solver_output_dropped_card (σ := buildSolver hfix) b g p
 
+/-- Output portrait: the constructed function's move announces, validates, fits, and is on menu. -/
+theorem buildSolver_output_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) :
+    (buildSolver hfix g p).piece = p ∧
+    (buildSolver hfix g p).Valid cfg ∧
+    (buildSolver hfix g p).col < cfg.cols ∧
+    buildSolver hfix g p ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg) :=
+  solver_output_portrait (buildSolver_validSolver hcols hfix) hp
+
 end Tetris
