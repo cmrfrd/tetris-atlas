@@ -938,4 +938,20 @@ theorem buildSolver_toAtlas_toSolver {S : Finset GameState} (hfix : F_finite cfg
     (buildSolver hfix).toAtlas.toSolver = buildSolver hfix :=
   solver_toAtlas_toSolver
 
+/-- The constructed function's board orbit applies its outputs to the running board. -/
+theorem buildSolver_trace_board_succ {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    (adversarialTrace cfg (buildSolver hfix) s GameState.init (n + 1)).board
+      = (buildSolver hfix (adversarialTrace cfg (buildSolver hfix) s GameState.init n)
+          (s n)).applyStep cfg
+          (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board :=
+  solver_trace_board_succ (buildSolver_validSolver hcols hfix) hl n
+
+/-- The constructed function's play depends only on past input (no lookahead). -/
+theorem buildSolver_no_lookahead {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (s s' : ℕ → Piece) (n : ℕ) (h : ∀ i < n, s i = s' i) :
+    adversarialTrace cfg (buildSolver hfix) s GameState.init n
+      = adversarialTrace cfg (buildSolver hfix) s' GameState.init n :=
+  solver_is_causal s s' GameState.init n h n (le_refl n)
+
 end Tetris
