@@ -523,6 +523,27 @@ theorem exists_cycle_iff_trace_pow_pos :
     obtain ⟨i, _, hi⟩ := Finset.exists_ne_zero_of_sum_ne_zero (Nat.pos_iff_ne_zero.mp htrpos)
     exact ⟨i, n, hn, (relPow_iff_adj_pow_pos R n i i).mp (Nat.pos_of_ne_zero hi)⟩
 
+/-- **Recurrent support = Boolean Perron sub-eigenvector (Collatz–Wielandt).** A finite set `X` is
+closed under `R` (every state of `X` has an in-`X` successor) iff its indicator `1_X` is a Boolean
+*sub-eigenvector* of the adjacency matrix — for each `i ∈ X` the row action `(adj ⬝ᵥ 1_X) i =
+∑ⱼ adjᵢⱼ·(1_X)ⱼ` is `≥ 1 = (1_X) i`, i.e. `adj ⬝ᵥ 1_X ≥ 1_X`. So a `SafeRecurrentSupport` is exactly
+a nonzero `x ≥ 0` with `Bx ≥ x`: the Collatz–Wielandt witness certifying `ρ(B) ≥ 1`. -/
+theorem recurrentSupport_iff_subEigenvector (X : Finset State) :
+    (∀ i ∈ X, ∃ j ∈ X, R i j) ↔
+      ∀ i ∈ X, 1 ≤ ∑ j, adj R i j * (if j ∈ X then (1 : ℕ) else 0) := by
+  constructor
+  · intro hclosed i hi
+    obtain ⟨j, hjX, hij⟩ := hclosed i hi
+    refine Finset.sum_pos' (fun _ _ => Nat.zero_le _) ⟨j, Finset.mem_univ j, ?_⟩
+    rw [if_pos hjX, mul_one]
+    exact (adj_pos_iff R i j).mpr hij
+  · intro hsub i hi
+    obtain ⟨j, _, hj⟩ := Finset.exists_ne_zero_of_sum_ne_zero
+      (Nat.one_le_iff_ne_zero.mp (hsub i hi))
+    rw [mul_ne_zero_iff] at hj
+    exact ⟨j, by by_contra hjX; exact hj.2 (if_neg hjX),
+              by by_contra hRij; exact hj.1 (if_neg hRij)⟩
+
 end MatrixPower
 
 /-! ### Cycles via Mathlib's transitive closure
