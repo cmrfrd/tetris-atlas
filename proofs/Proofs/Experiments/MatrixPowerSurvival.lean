@@ -376,4 +376,77 @@ theorem online_support_survives_all_sequences {Piece Action : Type*} [Nonempty A
   obtain ⟨π, hπ⟩ := online_support_invariant_all_sequences hX hs₀
   exact ⟨π, fun seq hlegal n hc => hX.1 (hc ▸ hπ seq hlegal n)⟩
 
+/-! ## §4 The Boolean matrix-power correspondence
+
+Everything above led with *relations*. Here we make the title literal: a relation `R` on a finite
+state space is the support of its adjacency matrix `adj R : Matrix State State ℕ` (0/1 entries), and
+its relation powers are exactly the *positivity pattern* of the matrix powers `adjⁿ`. This is the
+classical theorem that **adjacency-matrix powers count walks**, in Boolean (positivity) form, built
+on Mathlib's matrix monoid (`pow_succ'`, `Matrix.mul_apply`). It justifies reading every preceding
+statement as a Boolean linear-algebra statement:
+
+* reachability `⋁ₙ Bⁿ`  ↔  `∃ n, 0 < (adjⁿ) i j`  (`reachable_iff_exists_adj_pow_pos`)
+* a safe cycle `(Bᵏ)_{s,s}=1`  ↔  `∃ k>0, 0 < (adjᵏ) s s`  (`onCycle_iff_exists_pos_diag`). -/
+
+section MatrixPower
+
+variable (R : State → State → Prop) [DecidableRel R]
+
+/-- The adjacency matrix of `R` as an ℕ-matrix with 0/1 entries: `adj i j = 1 ⟺ R i j`. (We use ℕ
+rather than a Boolean semiring so that Mathlib's matrix-power monoid and walk-counting are directly
+available; only the *positivity* of entries is ever used, so this is the Boolean matrix `B`.) -/
+def adj : Matrix State State ℕ := fun i j => if R i j then 1 else 0
+
+/-- An adjacency entry is positive exactly on edges. -/
+theorem adj_pos_iff (i j : State) : 0 < adj R i j ↔ R i j := by
+  unfold adj; split <;> simp_all
+
+variable [Fintype State] [DecidableEq State]
+
+/-- **Walk-counting (Boolean form).** `0 < (adjⁿ)_{i,j}` iff there is an `R`-walk of length `n` from
+`i` to `j` — i.e. the matrix power `Bⁿ` has a nonzero `(i,j)` entry iff `RelPow R n i j`. Proved by
+induction on `n` via `adjⁿ⁺¹ = adj · adjⁿ` and "a finite ℕ-sum is positive iff some summand is". -/
+theorem relPow_iff_adj_pow_pos (n : ℕ) (i j : State) :
+    0 < (adj R ^ n) i j ↔ RelPow R n i j := by
+  induction n generalizing i with
+  | zero =>
+    rw [pow_zero]
+    constructor
+    · intro h
+      by_cases hij : i = j
+      · subst hij; exact RelPow.zero i
+      · rw [Matrix.one_apply_ne hij] at h; exact absurd h (lt_irrefl 0)
+    · intro h
+      cases h
+      rw [Matrix.one_apply_eq]; exact Nat.one_pos
+  | succ k ih =>
+    rw [pow_succ', Matrix.mul_apply]
+    constructor
+    · intro h
+      obtain ⟨x, _, hx⟩ := Finset.exists_ne_zero_of_sum_ne_zero (Nat.pos_iff_ne_zero.mp h)
+      rw [mul_ne_zero_iff] at hx
+      exact RelPow.succ ((adj_pos_iff R i x).mp (Nat.pos_of_ne_zero hx.1))
+        ((ih x).mp (Nat.pos_of_ne_zero hx.2))
+    · intro h
+      cases h with
+      | succ hiu huj =>
+        rename_i u
+        refine Finset.sum_pos' (fun y _ => Nat.zero_le _) ⟨u, Finset.mem_univ u, ?_⟩
+        exact mul_pos ((adj_pos_iff R i u).mpr hiu) ((ih u).mpr huj)
+
+/-- **Reachability is the union of matrix powers.** `Reachable R i j ↔ ∃ n, 0 < (adjⁿ)_{i,j}`, the
+literal `⋁ₙ Bⁿ` reading of the transitive-reflexive closure. -/
+theorem reachable_iff_exists_adj_pow_pos (i j : State) :
+    Reachable R i j ↔ ∃ n, 0 < (adj R ^ n) i j := by
+  rw [reachable_iff_exists_relPow]
+  exact exists_congr fun n => (relPow_iff_adj_pow_pos R n i j).symm
+
+/-- **A cycle is a nonzero diagonal entry of a matrix power.** Exactly the matrix-power statement
+`(Bᵏ)_{s,s}=1` for some `k>0`: `OnCycle R s ↔ ∃ k>0, 0 < (adjᵏ)_{s,s}`. -/
+theorem onCycle_iff_exists_pos_diag (s : State) :
+    OnCycle R s ↔ ∃ k, 0 < k ∧ 0 < (adj R ^ k) s s :=
+  exists_congr fun k => and_congr_right fun _ => (relPow_iff_adj_pow_pos R k s s).symm
+
+end MatrixPower
+
 end MatrixPowerSurvival
