@@ -232,4 +232,25 @@ theorem construct_inField_card_le (n : ℕ) :
     (safeIterFinite cfg (inFieldStates cfg) n).card ≤ (inFieldStates cfg).card :=
   safeIterFinite_inFieldStates_card_le cfg n
 
+/-! ## Part 9 — The construction produces the proof artifact -/
+
+/-- **The construction yields a closed Atlas.** From a self-sustaining region containing `init`,
+there is a concrete closed Atlas covering `init` — the M4 proof artifact
+that discharges solvability. -/
+theorem construct_yields_atlas {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) :
+    ∃ (A : Atlas cfg) (S' : Finset GameState),
+      A.IsClosedOn cfg S' ∧ GameState.init ∈ S' :=
+  solver_exists_yields_closed_atlas hcols
+    ⟨safeSolver cfg, solver_from_fixed_point hcols hfix hinit⟩
+
+/-- **The construction yields a finite closed cycle.** Equivalently, a WF closed cycle through
+`init` — the M2/M3 artifact. -/
+theorem construct_yields_cycle {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) :
+    ∃ C : AdversarialClosedCycleWF cfg,
+      GameState.init ∈ C.toAdversarialClosedCycle.states :=
+  (init_safe_iff_exists_init_adversarialClosedCycleWF cfg).mp
+    (fixed_point_subset_safe hfix (Finset.mem_coe.mpr hinit))
+
 end Tetris
