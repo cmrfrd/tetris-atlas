@@ -1088,4 +1088,11 @@ theorem buildSolver_response_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.
     Set.InjOn (fun p => buildSolver hfix g p) g.bag :=
   solver_response_portrait (buildSolver_validSolver hcols hfix) g
 
+/-- The constructed function maps distinct bag pieces to distinct placements. -/
+theorem buildSolver_outputs_differ_by_piece {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p p' : Piece}
+    (hp : p ∈ g.bag) (hp' : p' ∈ g.bag) (hne : p ≠ p') :
+    buildSolver hfix g p ≠ buildSolver hfix g p' :=
+  solver_outputs_differ_by_piece (buildSolver_validSolver hcols hfix) hp hp' hne
+
 end Tetris
