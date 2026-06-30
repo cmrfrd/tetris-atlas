@@ -2015,4 +2015,15 @@ theorem convergedSolver_atlas_closed (cfg : GameConfig) :
     (convergedSolver (cfg := cfg)).toAtlas.IsClosedOn cfg (convergedSet cfg) :=
   buildSolver_atlas_closed convergedSet_fixed
 
+/-- The converged region is no larger than the in-field universe it was carved from. -/
+theorem convergedSet_card_le (cfg : GameConfig) :
+    (convergedSet cfg).card ≤ (inFieldStates cfg).card :=
+  safeIterFinite_inFieldStates_card_le cfg (inFieldStates cfg).card
+
+/-- Every state on a converged-solver play stays inside the converged region. -/
+theorem convergedSolver_trace_mem (hinit : GameState.init ∈ convergedSet cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg convergedSolver s GameState.init n ∈ convergedSet cfg :=
+  buildSolver_trace_mem convergedSet_fixed hinit hl n
+
 end Tetris
