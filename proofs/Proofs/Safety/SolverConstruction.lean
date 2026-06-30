@@ -2871,4 +2871,13 @@ theorem convergedSolver_move_skyline_monotone (g : GameState) (p : Piece) {b β 
       ((convergedSolver (cfg := cfg) g p).place β) :=
   buildSolver_move_skyline_monotone convergedSet_fixed g p h
 
+/-- Two distinct witnesses: when init survives, the explicit converged solver and the
+canonical `safeSolver` both win. -/
+theorem convergedSolver_and_safeSolver_both_solve (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    SolvesTetrisValid cfg convergedSolver ∧ SolvesTetrisValid cfg (safeSolver cfg) :=
+  ⟨convergedSolver_solves hcols hinit,
+   init_safe_implies_solvesTetrisValid hcols
+     (convergedSet_subset_safe (Finset.mem_coe.mpr hinit))⟩
+
 end Tetris
