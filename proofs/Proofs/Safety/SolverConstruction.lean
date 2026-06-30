@@ -2421,4 +2421,14 @@ theorem convergedSolver_no_lookahead (s s' : ℕ → Piece) (n : ℕ) (h : ∀ i
       = adversarialTrace cfg convergedSolver s' GameState.init n :=
   buildSolver_no_lookahead convergedSet_fixed s s' n h
 
+/-- Dynamical portrait of the converged solver: orbit is iterated step; bag/board laws. -/
+theorem convergedSolver_dynamical_portrait (hcols : 4 ≤ cfg.cols) (p : Piece) :
+    (∀ n, adversarialTrace cfg convergedSolver (fun _ => p) GameState.init n
+        = (solverStep cfg convergedSolver p)^[n] GameState.init) ∧
+    (∀ g, (solverStep cfg convergedSolver p g).bag = g.bag.draw p) ∧
+    (∀ g, p ∈ g.bag →
+      (solverStep cfg convergedSolver p g).board
+        = (convergedSolver (cfg := cfg) g p).applyStep cfg g.board) :=
+  buildSolver_dynamical_portrait hcols convergedSet_fixed p
+
 end Tetris
