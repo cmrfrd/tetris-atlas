@@ -606,4 +606,15 @@ theorem mem_round_card_iff_safe {S₀ : Finset GameState} (hS₀ : safe cfg ⊆ 
   ⟨mem_safe_of_mem_safeIterFinite_at_S₀_card,
    fun hg => safe_survives_all_rounds hS₀ S₀.card hg⟩
 
+/-! ## Part 23 — Existence is computably decidable -/
+
+/-- **Existence is decidable.** From a covering universe and a fixed-point witness, whether the
+ideal function exists is a computable yes/no — `init`'s membership in the converged region. -/
+def construct_decide_existence (S₀ : Finset GameState) (hcols : 4 ≤ cfg.cols)
+    (hS₀ : safe cfg ⊆ ↑S₀) (N : ℕ)
+    (hfix : safeIterFinite cfg S₀ (N + 1) = safeIterFinite cfg S₀ N) :
+    Decidable (∃ σ : Solver cfg, SolvesTetrisValid cfg σ) :=
+  decidable_of_iff (GameState.init ∈ safeIterFinite cfg S₀ N)
+    (existence_decided S₀ hcols hS₀ N hfix).symm
+
 end Tetris
