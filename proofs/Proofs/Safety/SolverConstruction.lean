@@ -3078,4 +3078,13 @@ theorem convergedSolver_complete_lookup_table (hinit : GameState.init ∈ conver
   ⟨convergedSolver_atlas_closed cfg,
    fun g _ p _ => buildSolver_toAtlas_isSome convergedSet_fixed g p, hinit⟩
 
+/-- Play forever by lookup: at every step the atlas has a move and the game stays alive. -/
+theorem convergedSolver_play_by_lookup (hinit : GameState.init ∈ convergedSet cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    ((convergedSolver (cfg := cfg)).toAtlas
+       (adversarialTrace cfg convergedSolver s GameState.init n) (s n)).isSome = true ∧
+    ¬ (adversarialTrace cfg convergedSolver s GameState.init n).lost cfg :=
+  ⟨buildSolver_toAtlas_isSome convergedSet_fixed _ _,
+   convergedSolver_survives hinit hl n⟩
+
 end Tetris
