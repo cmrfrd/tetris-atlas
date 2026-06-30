@@ -1723,4 +1723,18 @@ theorem construct_hole_obstruction {b : Board} {p : Coord}
     ¬ Board.isFull cfg b p.2 ∧ ∃ r, p.2 < r ∧ (p.1, r) ∈ b :=
   solver_hole_obstruction hp
 
+/-- Benign pieces leave no holes: O and I placed flat on empty create a clean surface. -/
+theorem construct_benign_pieces_no_holes :
+    HoleyCarrier.holes GameConfig.standard (Placement.place ∅ ⟨Piece.O, 0, 0⟩) = ∅ ∧
+    HoleyCarrier.holes GameConfig.standard (Placement.place ∅ ⟨Piece.I, 0, 0⟩) = ∅ :=
+  solver_benign_pieces_no_holes
+
+/-- Both roughness pieces inject holes: S buries a cell and Z creates a nonempty hole set. -/
+theorem construct_both_roughness_inject_holes :
+    ((2 : ℕ), (0 : ℕ)) ∈ HoleyCarrier.holes GameConfig.standard
+        (Placement.place ∅ ⟨Piece.S, 0, 0⟩)
+    ∧ 0 < (HoleyCarrier.holes GameConfig.standard
+        (Placement.place ∅ ⟨Piece.Z, 0, 0⟩)).card :=
+  solver_both_roughness_inject_holes
+
 end Tetris
