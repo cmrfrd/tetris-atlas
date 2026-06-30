@@ -1436,4 +1436,13 @@ theorem buildSolver_input_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.col
         ∈ Placement.allValidFor cfg (s n)) :=
   solver_input_portrait (buildSolver_validSolver hcols hfix) s hl
 
+/-- The target region of the construction is exactly the safe-operator's fixed point. -/
+theorem construct_region_fixed_point : safeOp cfg (safe cfg) = safe cfg :=
+  solver_region_fixed_point
+
+/-- The region is the greatest fixed point: any safe-closed set is contained in it. -/
+theorem construct_region_greatest_fixed_point (T : Set GameState) (hT : safeOp cfg T = T) :
+    T ⊆ safe cfg :=
+  solver_region_greatest_fixed_point T hT
+
 end Tetris
