@@ -2980,4 +2980,17 @@ theorem convergedSolver_move_clears_le_four (g : GameState) (p : Piece) {b : Boa
     Board.linesCleared cfg ((convergedSolver (cfg := cfg) g p).place b) ≤ 4 :=
   buildSolver_move_clears_le_four convergedSet_fixed g p hnf
 
+/-- The converged solver's placement skyline is hole-independent. -/
+theorem convergedSolver_move_skyline_hole_independent (g : GameState) (p : Piece) {b β : Board}
+    (h : ∀ j, b.colHeight j = β.colHeight j) (j : ℕ) :
+    ((convergedSolver (cfg := cfg) g p).place b).colHeight j
+      = ((convergedSolver (cfg := cfg) g p).place β).colHeight j :=
+  buildSolver_move_skyline_hole_independent convergedSet_fixed g p h j
+
+/-- The converged solver's placement never removes holes. -/
+theorem convergedSolver_place_never_removes_holes (g : GameState) (p : Piece) (b : Board) :
+    (HoleyCarrier.holes cfg b).card
+      ≤ (HoleyCarrier.holes cfg ((convergedSolver (cfg := cfg) g p).place b)).card :=
+  buildSolver_place_never_removes_holes convergedSet_fixed g p b
+
 end Tetris
