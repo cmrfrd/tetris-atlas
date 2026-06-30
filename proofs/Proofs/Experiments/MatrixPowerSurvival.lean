@@ -795,6 +795,36 @@ theorem le_foldr_mulVec (step : State → Action → Piece → State) {x : State
     have hrest := ih fun r' hr' => h r' (List.mem_cons_of_mem r hr')
     exact le_trans (h r (by simp)) (mulVec_mono _ hrest)
 
+/-! #### The reverse direction: a sub-eigenvector's support is recurrent
+
+The product theorem above is the *forward* half (a common sub-eigenvector witnesses JSR `≥ 1`). The
+reverse closes the loop: the **positive support of any common sub-eigenvector is a recurrent
+support**. So "a common sub-eigenvector exists" ⟺ "a recurrent support exists" ⟺ JSR `≥ 1`, the full
+matrix characterization of survival. -/
+
+omit [DecidableEq State] [Fintype Action] in
+/-- A positive coordinate of a sub-eigenvector has a positive matrix-successor: if `0 < x s` and
+`x s ≤ (M ⬝ᵥ x) s`, some `t` has `0 < M s t` and `0 < x t`. -/
+theorem pos_succ_of_subEig (M : Matrix State State ℕ) {x : State → ℕ} {s : State}
+    (h : x s ≤ M.mulVec x s) (hs : 0 < x s) : ∃ t, 0 < M s t ∧ 0 < x t := by
+  have hpos : 0 < ∑ t, M s t * x t := lt_of_lt_of_le hs h
+  obtain ⟨t, _, ht⟩ := Finset.exists_ne_zero_of_sum_ne_zero (Nat.pos_iff_ne_zero.mp hpos)
+  rw [mul_ne_zero_iff] at ht
+  exact ⟨t, Nat.pos_of_ne_zero ht.1, Nat.pos_of_ne_zero ht.2⟩
+
+/-- **The support of a common sub-eigenvector is recurrent (reverse direction).** If `x` sub-fixes
+`A_r` (`x s ≤ (A_r ⬝ᵥ x) s`) at a support state (`0 < x s`), then some placement of `r` lands in the
+support. Family-wise (over `r ∈ bag`) `{s | 0 < x s}` is a recurrent support, so any JSR `≥ 1`
+witness `x` yields a genuine survival set. -/
+theorem exists_placement_of_subEig (step : State → Action → Piece → State) (r : Piece)
+    {x : State → ℕ} {s : State} (h : x s ≤ (adjFor step r).mulVec x s) (hs : 0 < x s) :
+    ∃ a, 0 < x (step s a r) := by
+  obtain ⟨t, hM, hxt⟩ := pos_succ_of_subEig (adjFor step r) h hs
+  rw [adjFor_apply] at hM
+  obtain ⟨a, ha⟩ : ∃ a, step s a r = t := by
+    by_contra hne; rw [if_neg hne] at hM; exact absurd hM (lt_irrefl 0)
+  exact ⟨a, ha ▸ hxt⟩
+
 end AdversarialMatrix
 
 /-! ## §6 Connecting the abstract layer to the concrete safe-set results
