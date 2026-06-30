@@ -846,4 +846,20 @@ theorem buildSolver_no_killing_sequence {S : Finset GameState} (hcols : 4 ≤ cf
         (adversarialTrace cfg (buildSolver hfix) s GameState.init n).lost cfg :=
   solver_no_killing_sequence (buildSolver_solvesTetrisValid hcols hfix hinit).2
 
+/-- The constructed function keeps an even cell count (even-width boards). -/
+theorem buildSolver_even_count {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) (hev : Even cfg.cols)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Even (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board.count :=
+  solver_even_count hev (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
+
+/-- The constructed function's max height is 4-Lipschitz. -/
+theorem buildSolver_maxHeight_lipschitz {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Board.maxHeight cfg (adversarialTrace cfg (buildSolver hfix) s GameState.init (n + 1)).board
+      ≤ Board.maxHeight cfg
+          (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board + 4 :=
+  solver_trace_maxHeight_le_succ (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
+
 end Tetris
