@@ -506,6 +506,23 @@ theorem onCycle_iff_exists_pos_diag (s : State) :
     OnCycle R s ↔ ∃ k, 0 < k ∧ 0 < (adj R ^ k) s s :=
   exists_congr fun k => and_congr_right fun _ => (relPow_iff_adj_pow_pos R k s s).symm
 
+/-- **A cycle exists iff some matrix power has positive trace.** `tr(adjⁿ) = Σᵢ (adjⁿ)ᵢᵢ` counts the
+length-`n` closed walks, so `(∃ s, OnCycle R s) ↔ ∃ n>0, 0 < tr(adjⁿ)` — the trace / dynamical-zeta
+view of cyclicity (`tr(adjⁿ) = Σ λᵢⁿ`, the power-sum of the eigenvalues). -/
+theorem exists_cycle_iff_trace_pow_pos :
+    (∃ s, OnCycle R s) ↔ ∃ n, 0 < n ∧ 0 < (adj R ^ n).trace := by
+  have htr : ∀ n, (adj R ^ n).trace = ∑ i, (adj R ^ n) i i := fun _ => rfl
+  constructor
+  · rintro ⟨s, k, hk, hcyc⟩
+    refine ⟨k, hk, ?_⟩
+    rw [htr]
+    exact Finset.sum_pos' (fun i _ => Nat.zero_le _)
+      ⟨s, Finset.mem_univ s, (relPow_iff_adj_pow_pos R k s s).mpr hcyc⟩
+  · rintro ⟨n, hn, htrpos⟩
+    rw [htr] at htrpos
+    obtain ⟨i, _, hi⟩ := Finset.exists_ne_zero_of_sum_ne_zero (Nat.pos_iff_ne_zero.mp htrpos)
+    exact ⟨i, n, hn, (relPow_iff_adj_pow_pos R n i i).mp (Nat.pos_of_ne_zero hi)⟩
+
 end MatrixPower
 
 /-! ### Cycles via Mathlib's transitive closure
