@@ -1451,4 +1451,12 @@ theorem construct_region_computable :
       safeIterFinite cfg (inFieldStates cfg) (N + 1) = safeIterFinite cfg (inFieldStates cfg) N :=
   solver_region_computable
 
+/-- Local certificate: any self-sustaining region of states is contained in the safe region. -/
+theorem construct_region_local_certificate (S : Set GameState)
+    (hS : ∀ g ∈ S, ¬ g.lost cfg ∧
+      ∀ p, p ∈ g.bag → ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧
+        adversarialStep cfg g p pl ∈ S) :
+    S ⊆ safe cfg :=
+  solver_region_local_certificate S hS
+
 end Tetris
