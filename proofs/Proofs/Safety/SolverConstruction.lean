@@ -1008,4 +1008,14 @@ theorem buildSolver_output_in_total_action_set {S : Finset GameState} (hcols : 4
     buildSolver hfix g p ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg) :=
   solver_output_in_total_action_set (buildSolver_validSolver hcols hfix) hp
 
+/-- Full compressed portrait of one constructed-function output: piece, col, rot, code, menu. -/
+theorem buildSolver_output_compressed {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) :
+    (buildSolver hfix g p).piece = p ∧
+    (buildSolver hfix g p).col < cfg.cols ∧
+    ((buildSolver hfix g p).rot : ℕ) < 4 ∧
+    4 * (buildSolver hfix g p).col + ((buildSolver hfix g p).rot : ℕ) < 4 * cfg.cols ∧
+    buildSolver hfix g p ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg) :=
+  solver_output_compressed (buildSolver_validSolver hcols hfix) hp
+
 end Tetris
