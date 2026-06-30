@@ -3022,4 +3022,14 @@ theorem convergedSolver_move_effect_portrait (hcols : 4 ≤ cfg.cols) {g : GameS
     Board.WF cfg ((convergedSolver (cfg := cfg) g p).applyStep cfg b) :=
   buildSolver_move_effect_portrait hcols convergedSet_fixed hp hWF
 
+/-- Input portrait: along legal play the converged solver is fed nonempty in-bag pieces. -/
+theorem convergedSolver_input_portrait (hcols : 4 ≤ cfg.cols) (s : ℕ → Piece)
+    (hl : LegalSequence s) :
+    (∀ n, (adversarialTrace cfg convergedSolver s GameState.init n).bag.Nonempty) ∧
+    (∀ n, s n ∈ (adversarialTrace cfg convergedSolver s GameState.init n).bag) ∧
+    (∀ n, convergedSolver (cfg := cfg)
+        (adversarialTrace cfg convergedSolver s GameState.init n) (s n)
+      ∈ Placement.allValidFor cfg (s n)) :=
+  buildSolver_input_portrait hcols convergedSet_fixed s hl
+
 end Tetris
