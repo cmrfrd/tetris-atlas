@@ -2708,4 +2708,15 @@ theorem convergedSolver_trace_eq_solverStep (s : ℕ → Piece) (n : ℕ) :
           (adversarialTrace cfg convergedSolver s GameState.init n) :=
   buildSolver_trace_eq_solverStep convergedSet_fixed s n
 
+/-- Under a constant piece stream the converged solver's trace is an iterated step map. -/
+theorem convergedSolver_trace_const_eq_iterate (p : Piece) (n : ℕ) :
+    adversarialTrace cfg convergedSolver (fun _ => p) GameState.init n
+      = (solverStep cfg convergedSolver p)^[n] GameState.init :=
+  buildSolver_trace_const_eq_iterate convergedSet_fixed p n
+
+/-- The converged solver's out-degree at a state is at most the bag size. -/
+theorem convergedSolver_outdegree_le (g : GameState) :
+    (g.bag.image (fun p => solverStep cfg convergedSolver p g)).card ≤ g.bag.card :=
+  buildSolver_outdegree_le convergedSet_fixed g
+
 end Tetris
