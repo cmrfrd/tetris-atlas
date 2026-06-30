@@ -1080,4 +1080,12 @@ theorem buildSolver_output_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.co
     buildSolver hfix g p ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg) :=
   solver_output_portrait (buildSolver_validSolver hcols hfix) hp
 
+/-- Response portrait: per state the constructed function is an injective menu section. -/
+theorem buildSolver_response_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (g : GameState) :
+    (∀ p ∈ g.bag, buildSolver hfix g p ∈ Placement.allValidFor cfg p) ∧
+    (g.bag.image (fun p => buildSolver hfix g p)).card = g.bag.card ∧
+    Set.InjOn (fun p => buildSolver hfix g p) g.bag :=
+  solver_response_portrait (buildSolver_validSolver hcols hfix) g
+
 end Tetris
