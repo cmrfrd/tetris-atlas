@@ -886,4 +886,17 @@ theorem buildSolver_output_in_grid {S : Finset GameState} (hcols : 4 ≤ cfg.col
       ∈ (Finset.univ : Finset Rotation) ×ˢ Finset.range cfg.cols :=
   solver_output_in_grid (buildSolver_validSolver hcols hfix) hp
 
+/-- The constructed function's move places exactly 4 cells. -/
+theorem buildSolver_places_four {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (b : Board) (g : GameState) (p : Piece) :
+    ((buildSolver hfix g p).place b).count = b.count + 4 :=
+  solver_output_places_four b g p
+
+/-- The constructed function's move preserves well-formedness. -/
+theorem buildSolver_move_wf {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag)
+    {b : Board} (hWF : Board.WF cfg b) :
+    Board.WF cfg ((buildSolver hfix g p).place b) :=
+  solver_move_preserves_wf (buildSolver_validSolver hcols hfix) hp hWF
+
 end Tetris
