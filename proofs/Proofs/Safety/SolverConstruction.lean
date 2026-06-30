@@ -2735,4 +2735,15 @@ theorem convergedSolver_M4_artifact (hinit : GameState.init ∈ convergedSet cfg
   ⟨convergedSolver_atlas_closed cfg,
    fun g p => buildSolver_toAtlas_isSome convergedSet_fixed g p, hinit⟩
 
+/-- **Discovery by construction.** A single membership test `init ∈ convergedSet` yields, at once,
+solvability, an explicit winning solver, and a closed atlas — existence found constructively. -/
+theorem solvability_discovered_by_construction (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    TetrisSolvableValidFor cfg ∧
+    SolvesTetrisValid cfg convergedSolver ∧
+    (convergedSolver (cfg := cfg)).toAtlas.IsClosedOn cfg (convergedSet cfg) :=
+  ⟨init_mem_convergedSet_solvable hcols hinit,
+   convergedSolver_solves hcols hinit,
+   convergedSolver_atlas_closed cfg⟩
+
 end Tetris
