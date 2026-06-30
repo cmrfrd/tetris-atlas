@@ -1408,4 +1408,14 @@ theorem buildSolver_two_number_portrait {S : Finset GameState} (hcols : 4 ≤ cf
       ∈ (Finset.univ : Finset Rotation) ×ˢ Finset.range cfg.cols) :=
   solver_two_number_portrait (buildSolver_validSolver hcols hfix) hp
 
+/-- Collapse portrait: a piece-slice lands in the menu, ≤ cols·4, and collides past it. -/
+theorem buildSolver_collapse_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (p : Piece) (T : Finset GameState)
+    (hT : ∀ g ∈ T, p ∈ g.bag) :
+    (T.image (fun g => buildSolver hfix g p) ⊆ Placement.allValidFor cfg p) ∧
+    ((T.image (fun g => buildSolver hfix g p)).card ≤ cfg.cols * 4) ∧
+    ((Placement.allValidFor cfg p).card < T.card →
+      ∃ g₁ ∈ T, ∃ g₂ ∈ T, g₁ ≠ g₂ ∧ buildSolver hfix g₁ p = buildSolver hfix g₂ p) :=
+  solver_collapse_portrait (buildSolver_validSolver hcols hfix) p T hT
+
 end Tetris
