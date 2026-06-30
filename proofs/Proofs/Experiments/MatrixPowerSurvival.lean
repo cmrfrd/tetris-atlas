@@ -646,7 +646,75 @@ theorem exists_relPow_lt_card [Fintype State] {R : State → State → Prop} {s 
   · exact key i j hlt hj heq
   · exact key j i (by omega) hi heq.symm
 
-/-! ## §5 Connecting the abstract layer to the concrete safe-set results
+/-! ## §5 Encoding the ∀-over-the-bag: the per-piece matrix family
+
+The single existential matrix `B = ⋁_{a,r} T_{a,r}` cannot carry the adversary: a walk in `B` lets
+you choose the next *piece* as well as the placement, collapsing the faithful `∀ piece ∈ bag` into
+`∃ piece`. The fix is to **not collapse** — keep the whole **family of per-piece matrices** `{A_r}`
+and combine them by *conjunction over the bag*:
+
+* `adjFor r` (`= A_r`): `(A_r)_{s,t} = 1 ⟺ ∃ placement, step s · r = t` — "if the adversary draws
+  `r`, where can I go". The row action `(A_r ⬝ᵥ 1_X)_s ≥ 1` is exactly the `∃ placement` clause.
+* The adversarial one-step operator is the **controllable predecessor**
+  `s ↦ ¬Dead s ∧ ⋀_{r ∈ bag(s)} (A_r ⬝ᵥ 1_X)_s ≥ 1`: the bag's ∀ is the *conjunction* of the
+  per-piece matrix actions, not a single power. (This is `safeOp` from the green library.)
+* So a **recurrent support is a COMMON sub-eigenvector of the whole family** — `1_X ≤ A_r ⬝ᵥ 1_X`
+  for every `r ∈ bag`, simultaneously. Existential survival needed one matrix (`Bx ≥ x`,
+  Collatz–Wielandt); adversarial survival needs `x` to sub-fix *every* `A_r` at once. The governing
+  quantity is the **joint spectral radius** of `{A_r}` (the worst case over all adversarial piece
+  sequences `A_{rₙ}···A_{r₁}`), not a single `ρ` — the matrix face of the mean-payoff game. -/
+
+section AdversarialMatrix
+
+variable {Piece Action : Type*} [DecidableEq State] [Fintype Action]
+
+/-- Per-piece adjacency matrix `A_r`: `(A_r)_{s,t} = 1` iff some placement of piece `r` carries `s`
+to `t`. The "the adversary drew `r`" transition, kept as its *own* Boolean matrix rather than merged
+into `B`. -/
+def adjFor (step : State → Action → Piece → State) (r : Piece) : Matrix State State ℕ :=
+  fun s t => if ∃ a, step s a r = t then 1 else 0
+
+theorem adjFor_apply (step : State → Action → Piece → State) (r : Piece) (s t : State) :
+    adjFor step r s t = if ∃ a, step s a r = t then 1 else 0 := rfl
+
+variable [Fintype State]
+
+/-- **The per-piece matrix encodes the `∃ placement` clause.** The row action `(A_r ⬝ᵥ 1_X)_s ≥ 1`
+holds iff some placement of `r` from `s` lands in `X`. -/
+theorem adjFor_reaches_iff (step : State → Action → Piece → State) (r : Piece)
+    (X : Finset State) (s : State) :
+    1 ≤ ∑ t, adjFor step r s t * (if t ∈ X then (1 : ℕ) else 0) ↔ ∃ a, step s a r ∈ X := by
+  constructor
+  · intro h
+    obtain ⟨t, _, ht⟩ := Finset.exists_ne_zero_of_sum_ne_zero (Nat.one_le_iff_ne_zero.mp h)
+    rw [mul_ne_zero_iff] at ht
+    obtain ⟨a, ha⟩ : ∃ a, step s a r = t := by
+      by_contra hne; exact ht.1 (by rw [adjFor_apply]; exact if_neg hne)
+    have htX : t ∈ X := by by_contra h'; exact ht.2 (if_neg h')
+    exact ⟨a, by rw [ha]; exact htX⟩
+  · rintro ⟨a, ha⟩
+    refine Finset.sum_pos' (fun _ _ => Nat.zero_le _) ⟨step s a r, Finset.mem_univ _, ?_⟩
+    refine Nat.mul_pos ?_ ?_
+    · rw [adjFor_apply, if_pos ⟨a, rfl⟩]; exact Nat.one_pos
+    · rw [if_pos ha]; exact Nat.one_pos
+
+/-- **Recurrent support = common sub-eigenvector of the per-piece family (the ∀-over-the-bag
+encoding).** A finite set `X` is closed under the adversarial `∀ r ∈ bag, ∃ placement` iff its
+indicator `1_X` is a sub-eigenvector of *every* per-piece matrix `A_r` over the bag at once:
+`1 ≤ (A_r ⬝ᵥ 1_X)_s` for all `s ∈ X`, `r ∈ bag(s)`. A single existential `B` cannot express this;
+the conjunction over `r` is the matrix face of the bag's universal quantifier. -/
+theorem recurrentSupport_iff_common_subEigenvector
+    (legalDraws : State → Finset Piece) (step : State → Action → Piece → State) (X : Finset State) :
+    (∀ s ∈ X, ∀ r ∈ legalDraws s, ∃ a, step s a r ∈ X) ↔
+      ∀ s ∈ X, ∀ r ∈ legalDraws s,
+        1 ≤ ∑ t, adjFor step r s t * (if t ∈ X then (1 : ℕ) else 0) := by
+  constructor
+  · intro h s hs r hr; exact (adjFor_reaches_iff step r X s).mpr (h s hs r hr)
+  · intro h s hs r hr; exact (adjFor_reaches_iff step r X s).mp (h s hs r hr)
+
+end AdversarialMatrix
+
+/-! ## §6 Connecting the abstract layer to the concrete safe-set results
 
 The abstract theorems above are not new survival *content* — they re-present, in matrix-power
 vocabulary, certificates the green library already proves over `GameState`. We make that precise for
