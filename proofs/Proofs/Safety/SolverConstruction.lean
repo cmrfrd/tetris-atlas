@@ -915,4 +915,16 @@ theorem buildSolver_markov {S : Finset GameState} (hfix : F_finite cfg S = S)
           (buildSolver hfix (adversarialTrace cfg (buildSolver hfix) s GameState.init n) (s n)) :=
   solver_markov_step s n
 
+/-- The constructed function is a section of the piece-projection. -/
+theorem buildSolver_section {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (g : GameState) {p : Piece} (hp : p ∈ g.bag) :
+    (Placement.piece ∘ buildSolver hfix g) p = p :=
+  solver_section_of_piece (buildSolver_validSolver hcols hfix) g hp
+
+/-- The constructed function as the uncurried `(GameState × Piece) → Placement` map. -/
+theorem buildSolver_uncurry {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) :
+    Function.uncurry (buildSolver hfix) (g, p) = buildSolver hfix g p :=
+  solver_uncurry_apply g p
+
 end Tetris
