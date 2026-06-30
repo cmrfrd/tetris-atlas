@@ -996,4 +996,10 @@ theorem buildSolver_output_valid {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
     (buildSolver hfix g p).Valid cfg :=
   solver_output_valid (buildSolver_validSolver hcols hfix) hp
 
+/-- The constructed function answers the piece it was asked about. -/
+theorem buildSolver_announces_piece {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) :
+    (buildSolver hfix g p).piece = p :=
+  solver_output_announces_piece (buildSolver_validSolver hcols hfix) hp
+
 end Tetris
