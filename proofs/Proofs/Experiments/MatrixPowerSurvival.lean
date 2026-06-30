@@ -946,4 +946,57 @@ theorem safe_subset_adversarialSafe (cfg : GameConfig) :
 
 end ConcreteAdversarial
 
+/-! ### Materializing the matrices: a finite bounded Tetris state space
+
+Option 1 hit the wall that `GameState` is an infinite ambient type. Here we carve out the genuinely
+finite *live* state space — boards confined to the `cols × rows` grid — so the per-piece matrices
+become honest `Matrix`-objects over a `Fintype`. A board is *in-grid* iff every cell lies in
+`region cfg = [0,cols) × [0,rows)`; that is exactly `WF` (`p.1 < cols`) together with not-lost
+(`p.2 < rows`). The in-grid boards form a `Fintype` (subsets of a fixed finite grid), and the action
+space `Rotation × Fin cols` is finite — so `adjFor (boundedStep cfg) p` is a genuine finite matrix
+and the §5 common-sub-eigenvector encoding lands on a concrete `Fintype`. -/
+
+section FiniteBoundedTetris
+
+open Tetris
+
+/-- The `cols × rows` playable grid as a finite cell set. -/
+def region (cfg : GameConfig) : Finset Coord :=
+  Finset.range cfg.cols ×ˢ Finset.range cfg.rows
+
+/-- In-grid boards: every cell inside `region` — `WF` (`col < cols`) ∧ not-lost (`row < rows`). -/
+abbrev BoundedBoard (cfg : GameConfig) := {b : Board // b ⊆ region cfg}
+
+/-- There are finitely many in-grid boards (subsets of the fixed grid). -/
+instance (cfg : GameConfig) : Fintype (BoundedBoard cfg) :=
+  Fintype.subtype (region cfg).powerset (fun _ => Finset.mem_powerset)
+
+/-- A finite bounded game state: an in-grid board with a 7-bag. -/
+abbrev BoundedState (cfg : GameConfig) := BoundedBoard cfg × Bag
+
+/-- The finite action space: a rotation and an in-bounds target column. -/
+abbrev BoundedAction (cfg : GameConfig) := Rotation × Fin cfg.cols
+
+/-- The bounded transition: run the real `adversarialStep` for the drawn piece at the chosen
+rotation/column, then clamp the board back into the grid (out-of-grid overflow is dropped — a
+placeholder; the faithful version would route overflow to a lost sink). Total on the finite type. -/
+def boundedStep (cfg : GameConfig) (s : BoundedState cfg) (a : BoundedAction cfg) (p : Piece) :
+    BoundedState cfg :=
+  let g' := adversarialStep cfg ⟨s.1.1, s.2⟩ p ⟨p, a.1, a.2.1⟩
+  (⟨g'.board ∩ region cfg, Finset.inter_subset_right⟩, g'.bag)
+
+/-- **The per-piece matrices materialize on the finite bounded state space.** §5's encoding
+instantiated at `State := BoundedState cfg`, `Action := BoundedAction cfg`: a finite set `X` of
+bounded states is closed under the adversarial `∀ piece ∈ bag, ∃ (rotation, column)` iff `1_X` is a
+common sub-eigenvector of the now-genuine per-piece matrices `adjFor (boundedStep cfg) p` — the
+matrix form of the survival condition, on a concrete `Fintype`. -/
+theorem bounded_recurrentSupport_iff_common_subEigenvector (cfg : GameConfig)
+    (X : Finset (BoundedState cfg)) :
+    (∀ s ∈ X, ∀ p ∈ s.2, ∃ a, boundedStep cfg s a p ∈ X) ↔
+      ∀ s ∈ X, ∀ p ∈ s.2,
+        1 ≤ ∑ t, adjFor (boundedStep cfg) p s t * (if t ∈ X then (1 : ℕ) else 0) :=
+  recurrentSupport_iff_common_subEigenvector (fun s => s.2) (boundedStep cfg) X
+
+end FiniteBoundedTetris
+
 end MatrixPowerSurvival
