@@ -593,4 +593,17 @@ theorem survives_succ_survives (S₀ : Finset GameState) (n : ℕ) {g : GameStat
     (h : g ∈ safeIterFinite cfg S₀ (n + 1)) : g ∈ safeIterFinite cfg S₀ n :=
   safeIterFinite_succ_subset cfg S₀ n h
 
+/-- **Safe states are permanent survivors.** Under a covering universe, a survivable state is in
+every round — it is never pruned. -/
+theorem safe_survives_all_rounds {S₀ : Finset GameState} (hS₀ : safe cfg ⊆ ↑S₀) (n : ℕ)
+    {g : GameState} (hg : g ∈ safe cfg) : g ∈ safeIterFinite cfg S₀ n :=
+  Finset.mem_coe.mp (computed_complete S₀ hS₀ n hg)
+
+/-- **Converged by round `|S₀|`.** Under coverage, membership at round `|S₀|` is exactly
+`safe`-membership — the construction has definitely settled by then. -/
+theorem mem_round_card_iff_safe {S₀ : Finset GameState} (hS₀ : safe cfg ⊆ ↑S₀) (g : GameState) :
+    g ∈ safeIterFinite cfg S₀ S₀.card ↔ g ∈ safe cfg :=
+  ⟨mem_safe_of_mem_safeIterFinite_at_S₀_card,
+   fun hg => safe_survives_all_rounds hS₀ S₀.card hg⟩
+
 end Tetris
