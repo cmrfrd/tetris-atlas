@@ -417,4 +417,27 @@ theorem newly_doomed_iff (S₀ : Finset GameState) (n : ℕ) {g : GameState}
         adversarialStep cfg g p pl ∉ safeIterFinite cfg S₀ n := by
   rw [safeIterFinite_succ]; exact round_removes_iff hg
 
+/-! ## Part 19 — The explicit solver builder -/
+
+/-- **The solver built from a fixed point.** At each state in the region `S` it picks a valid
+placement (for the drawn piece) that lands back in `S` — a witness guaranteed by self-sustainment.
+Outside the region it returns the trivial default. This is the explicit construction of the function
+from a self-sustaining region. -/
+noncomputable def buildSolver {S : Finset GameState} (hfix : F_finite cfg S = S) :
+    Solver cfg :=
+  fun g p =>
+    if h : g ∈ S ∧ p ∈ g.bag then
+      Classical.choose (((round_self_sustaining_iff S).mp hfix g h.1).2 p h.2)
+    else ⟨p, 0, 0⟩
+
+/-- **Builder spec.** On a region state with a drawable piece, the built solver's choice is a valid
+placement that keeps the state in the region. -/
+theorem buildSolver_spec {S : Finset GameState} (hfix : F_finite cfg S = S)
+    {g : GameState} (hg : g ∈ S) {p : Piece} (hp : p ∈ g.bag) :
+    buildSolver hfix g p ∈ Placement.allValidFor cfg p ∧
+    adversarialStep cfg g p (buildSolver hfix g p) ∈ S := by
+  unfold buildSolver
+  rw [dif_pos ⟨hg, hp⟩]
+  exact Classical.choose_spec (((round_self_sustaining_iff S).mp hfix g hg).2 p hp)
+
 end Tetris
