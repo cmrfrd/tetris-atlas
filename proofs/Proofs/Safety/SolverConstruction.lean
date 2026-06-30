@@ -990,4 +990,10 @@ theorem buildSolver_play_outputs_in_menu {S : Finset GameState} (hcols : 4 ≤ c
       ∈ Placement.allValidFor cfg (s n) :=
   solver_play_outputs_in_menu (buildSolver_validSolver hcols hfix) s hl n
 
+/-- For any piece the current bag can draw, the constructed function returns a valid placement. -/
+theorem buildSolver_output_valid {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) :
+    (buildSolver hfix g p).Valid cfg :=
+  solver_output_valid (buildSolver_validSolver hcols hfix) hp
+
 end Tetris
