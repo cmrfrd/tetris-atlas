@@ -334,4 +334,22 @@ theorem limit_universe_independent {S₀ S₀' : Finset GameState} {N N' : ℕ}
   rw [← Finset.mem_coe, ← computed_exact S₀ N hS₀ hfix g,
       computed_exact S₀' N' hS₀' hfix' g, Finset.mem_coe]
 
+/-! ## Part 14 — Complexity of the construction -/
+
+/-- **Termination with a stays-put guarantee.** There is a round `N ≤ |S₀|` after which the
+construction is constant: every later round equals round `N`. -/
+theorem construct_rounds_bounded (S₀ : Finset GameState) :
+    ∃ N, N ≤ S₀.card ∧ ∀ k, N ≤ k → safeIterFinite cfg S₀ k = safeIterFinite cfg S₀ N := by
+  obtain ⟨N, hN, hfix⟩ := safeIterFinite_converges cfg S₀
+  refine ⟨N, hN, fun k hk => ?_⟩
+  obtain ⟨j, rfl⟩ := Nat.exists_eq_add_of_le hk
+  exact safeIterFinite_stable cfg S₀ hfix j
+
+/-- **Each non-final round strictly shrinks the region** — so the construction makes monotone
+progress and cannot stall before the fixed point. -/
+theorem construct_progress (S₀ : Finset GameState) (n : ℕ)
+    (h : safeIterFinite cfg S₀ (n + 1) ≠ safeIterFinite cfg S₀ n) :
+    (safeIterFinite cfg S₀ (n + 1)).card < (safeIterFinite cfg S₀ n).card :=
+  (construct_strict_or_done S₀ n).resolve_right h
+
 end Tetris
