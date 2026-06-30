@@ -2554,4 +2554,12 @@ theorem convergedSolver_footprint_portrait (hcols : 4 ≤ cfg.cols)
     {pl : Placement | ∃ g p, p ∈ g.bag ∧ convergedSolver (cfg := cfg) g p = pl}.Finite :=
   buildSolver_footprint_portrait hcols convergedSet_fixed hinit
 
+/-- Reachability invariant: each converged-reachable state is in-region, safe, in-field, alive. -/
+theorem convergedSolver_invariant (hinit : GameState.init ∈ convergedSet cfg) {g : GameState}
+    (hr : solverReachable (convergedSolver (cfg := cfg)) g) :
+    g ∈ convergedSet cfg ∧ g ∈ safe cfg ∧ g ∈ inFieldStates cfg ∧ ¬ g.lost cfg := by
+  have hc := convergedSolver_confined hinit hr
+  exact ⟨hc, convergedSet_subset_safe (Finset.mem_coe.mpr hc),
+    convergedSet_subset_inFieldStates cfg hc, convergedSet_not_lost hc⟩
+
 end Tetris
