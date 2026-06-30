@@ -2805,4 +2805,15 @@ theorem convergedSolver_trace_bounds_bundle (hcols : 4 ≤ cfg.cols)
    convergedSolver_trace_debt hcols hinit hl n,
    convergedSolver_trace_surfaceArea hcols hinit hl n⟩
 
+/-- If init survives, the converged region is nonempty. -/
+theorem convergedSet_nonempty_of_init_mem (hinit : GameState.init ∈ convergedSet cfg) :
+    (convergedSet cfg).Nonempty :=
+  ⟨GameState.init, hinit⟩
+
+/-- The converged solver is an explicit existence witness when init survives. -/
+theorem convergedSolver_witnesses_existence (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    ∃ σ : Solver cfg, SolvesTetrisValid cfg σ :=
+  ⟨convergedSolver, convergedSolver_solves hcols hinit⟩
+
 end Tetris
