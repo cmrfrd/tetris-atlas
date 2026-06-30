@@ -1956,4 +1956,19 @@ theorem construct_locality_portrait {σ₁ σ₂ : Solver cfg} (s : ℕ → Piec
         = adversarialTrace cfg σ₂ s GameState.init n) :=
   solver_locality_portrait s hl
 
+/-! ### The canonical construction from the computed region
+
+The descending iteration `safeIterFinite` over the whole in-field universe stabilizes at
+index `|inFieldStates|`. We name that stabilized set the *converged region* and develop the
+canonical construction over it: it is an `F_finite` fixed point, it equals the abstract safe
+region, and the explicit `buildSolver` over it is a global solver whenever init survives. -/
+
+/-- The canonical computed region: the in-field iterate at index `|inFieldStates|`. -/
+noncomputable def convergedSet (cfg : GameConfig) : Finset GameState :=
+  safeIterFinite cfg (inFieldStates cfg) (inFieldStates cfg).card
+
+/-- The converged region is an `F_finite` fixed point — the construction has halted. -/
+theorem convergedSet_fixed : F_finite cfg (convergedSet cfg) = convergedSet cfg :=
+  safeIterFinite_inFieldStates_F_finite_fixed_at_card cfg
+
 end Tetris
