@@ -1635,4 +1635,15 @@ theorem construct_clearing_idempotent (b : Board) (hcol : 0 < cfg.cols) :
     Board.clearLines cfg (Board.clearLines cfg b) = Board.clearLines cfg b :=
   solver_clearing_idempotent b hcol
 
+/-- The constructed function's raw placement raises max height by at most four. -/
+theorem buildSolver_place_maxHeight_le {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) (b : Board) :
+    Board.maxHeight cfg ((buildSolver hfix g p).place b) ≤ Board.maxHeight cfg b + 4 :=
+  solver_place_maxHeight_le (buildSolver_validSolver hcols hfix) hp b
+
+/-- Any placement only raises per-column heights. -/
+theorem construct_placement_raises_columns (b : Board) (pl : Placement) (j : ℕ) :
+    Board.colHeight b j ≤ Board.colHeight (pl.place b) j :=
+  solver_placement_raises_columns b pl j
+
 end Tetris
