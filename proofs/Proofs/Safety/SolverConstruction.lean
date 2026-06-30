@@ -2460,4 +2460,17 @@ theorem convergedSet_is_greatest_inField_fixed :
   ⟨⟨convergedSet_fixed, convergedSet_subset_inFieldStates cfg⟩,
    fun _ hfix hsub => fixed_inField_subset_convergedSet hfix hsub⟩
 
+/-- A converged-solver move adds at most four cells. -/
+theorem convergedSolver_move_count_le (hcols : 4 ≤ cfg.cols) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b) :
+    ((convergedSolver (cfg := cfg) g p).applyStep cfg b).count ≤ b.count + 4 :=
+  buildSolver_move_count_le hcols convergedSet_fixed hp hWF
+
+/-- A converged-solver move raises max height by at most four. -/
+theorem convergedSolver_move_maxHeight_le (hcols : 4 ≤ cfg.cols) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) (b : Board) :
+    Board.maxHeight cfg ((convergedSolver (cfg := cfg) g p).applyStep cfg b)
+      ≤ Board.maxHeight cfg b + 4 :=
+  buildSolver_move_maxHeight_le hcols convergedSet_fixed hp b
+
 end Tetris
