@@ -1148,4 +1148,10 @@ theorem buildSolver_trace_mem_safe {S : Finset GameState} (hcols : 4 ≤ cfg.col
     adversarialTrace cfg (buildSolver hfix) s GameState.init n ∈ safe cfg :=
   solver_trace_mem_safe (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
 
+/-- The constructed function's trace starts at the initial state. -/
+theorem buildSolver_trace_zero {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (s : ℕ → Piece) :
+    adversarialTrace cfg (buildSolver hfix) s GameState.init 0 = GameState.init :=
+  solver_trace_zero (σ := buildSolver hfix) s
+
 end Tetris
