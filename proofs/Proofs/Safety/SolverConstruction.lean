@@ -1311,4 +1311,10 @@ theorem construct_clearing_lowers_skyline (b : Board) :
     WqoCarrier.domLE (Board.clearLines cfg b) b :=
   solver_clearing_lowers_skyline b
 
+/-- Surface evolution under placement is hole-independent: equal skylines stay equal. -/
+theorem construct_surface_evolution_hole_independent {b β : Board} (pl : Placement)
+    (h : ∀ j, b.colHeight j = β.colHeight j) (j : ℕ) :
+    (pl.place b).colHeight j = (pl.place β).colHeight j :=
+  solver_surface_evolution_hole_independent pl h j
+
 end Tetris
