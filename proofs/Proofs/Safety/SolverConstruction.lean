@@ -3218,4 +3218,17 @@ theorem convergedSet_summary :
   ⟨convergedSet_fixed, convergedSet_subset_safe, convergedSet_subset_inFieldStates cfg,
    fun _ hfix hsub => fixed_inField_subset_convergedSet hfix hsub, convergedSet_card_le cfg⟩
 
+/-- Solver-level summary: when init survives, the converged solver is valid, solves, stays
+confined, closes an atlas, and certifies solvability. -/
+theorem convergedSolver_solver_summary (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    ValidSolver cfg convergedSolver ∧
+    SolvesTetrisValid cfg convergedSolver ∧
+    (∀ g, solverReachable (convergedSolver (cfg := cfg)) g → g ∈ convergedSet cfg) ∧
+    (convergedSolver (cfg := cfg)).toAtlas.IsClosedOn cfg (convergedSet cfg) ∧
+    TetrisSolvableValidFor cfg :=
+  ⟨convergedSolver_validSolver hcols, convergedSolver_solves hcols hinit,
+   fun _ hr => convergedSolver_confined hinit hr, convergedSolver_atlas_closed cfg,
+   init_mem_convergedSet_solvable hcols hinit⟩
+
 end Tetris
