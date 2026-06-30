@@ -3181,4 +3181,17 @@ theorem convergedSolver_reachable_safe_alive (hcols : 4 ≤ cfg.cols)
   ⟨convergedSolver_no_dead_ends hcols hinit hr,
    convergedSet_not_lost (convergedSolver_confined hinit hr)⟩
 
+/-- Every converged-reachable state lies in the in-field universe. -/
+theorem convergedSolver_reachable_in_field (hinit : GameState.init ∈ convergedSet cfg)
+    {g : GameState} (hr : solverReachable (convergedSolver (cfg := cfg)) g) :
+    g ∈ inFieldStates cfg :=
+  convergedSet_subset_inFieldStates cfg (convergedSolver_confined hinit hr)
+
+/-- Every converged-reachable board is well-formed. -/
+theorem convergedSolver_reachable_WF (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {g : GameState}
+    (hr : solverReachable (convergedSolver (cfg := cfg)) g) :
+    Board.WF cfg g.board :=
+  reachable_WF (convergedSolver_operates_in_safe_and_reachable hcols hinit hr).2
+
 end Tetris
