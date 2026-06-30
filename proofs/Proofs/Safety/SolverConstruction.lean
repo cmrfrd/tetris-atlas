@@ -2063,6 +2063,20 @@ theorem convergedSolver_no_killing_sequence (hcols : 4 ≤ cfg.cols)
         (adversarialTrace cfg convergedSolver s GameState.init n).lost cfg :=
   buildSolver_no_killing_sequence hcols convergedSet_fixed hinit
 
+/-- Every state visited by the converged solver is safe. -/
+theorem convergedSolver_trace_mem_safe (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg convergedSolver s GameState.init n ∈ safe cfg :=
+  buildSolver_trace_mem_safe hcols convergedSet_fixed hinit hl n
+
+/-- Every state visited by the converged solver lies in the in-field universe. -/
+theorem convergedSolver_trace_in_field (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg convergedSolver s GameState.init n ∈ inFieldStates cfg :=
+  buildSolver_trace_in_field hcols convergedSet_fixed hinit hl n
+
 /-- Every state on a converged-solver play stays inside the converged region. -/
 theorem convergedSolver_trace_mem (hinit : GameState.init ∈ convergedSet cfg)
     {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
