@@ -2077,6 +2077,21 @@ theorem convergedSolver_trace_in_field (hcols : 4 ≤ cfg.cols)
     adversarialTrace cfg convergedSolver s GameState.init n ∈ inFieldStates cfg :=
   buildSolver_trace_in_field hcols convergedSet_fixed hinit hl n
 
+/-- The converged solver clears a line within any capacity-sized window. -/
+theorem convergedSolver_clears_within (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s)
+    {M : ℕ} (hM : cfg.cols * cfg.rows < 4 * M) :
+    ∃ k < M, (adversarialTrace cfg convergedSolver s GameState.init (k + 1)).board.count
+           ≠ (adversarialTrace cfg convergedSolver s GameState.init k).board.count + 4 :=
+  buildSolver_clears_within hcols convergedSet_fixed hinit hl hM
+
+/-- Every column stays within the field along converged-solver play. -/
+theorem convergedSolver_columns_le (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s)
+    (n : ℕ) {j : ℕ} (hj : j < cfg.cols) :
+    Board.colHeight (adversarialTrace cfg convergedSolver s GameState.init n).board j ≤ cfg.rows :=
+  buildSolver_columns_le hcols convergedSet_fixed hinit hl n hj
+
 /-- Every state on a converged-solver play stays inside the converged region. -/
 theorem convergedSolver_trace_mem (hinit : GameState.init ∈ convergedSet cfg)
     {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
