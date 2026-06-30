@@ -1512,4 +1512,20 @@ theorem construct_handles_all_seven_at_init (h : GameState.init ∈ safe cfg) (p
       adversarialStep cfg GameState.init p pl ∈ safe cfg :=
   solver_handles_all_seven_at_init h p
 
+/-- A clearing move of the constructed function adds strictly fewer than four cells. -/
+theorem buildSolver_move_count_clear {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag)
+    {b : Board} (hWF : Board.WF cfg b) (hpos : 0 < cfg.cols)
+    (hclear : 0 < Board.linesCleared cfg ((buildSolver hfix g p).place b)) :
+    ((buildSolver hfix g p).applyStep cfg b).count < b.count + 4 :=
+  solver_move_count_clear (buildSolver_validSolver hcols hfix) hp hWF hpos hclear
+
+/-- A non-clearing move of the constructed function adds exactly four cells. -/
+theorem buildSolver_move_count_no_clear {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag)
+    {b : Board} (hWF : Board.WF cfg b)
+    (h0 : Board.linesCleared cfg ((buildSolver hfix g p).place b) = 0) :
+    ((buildSolver hfix g p).applyStep cfg b).count = b.count + 4 :=
+  solver_move_count_no_clear (buildSolver_validSolver hcols hfix) hp hWF h0
+
 end Tetris
