@@ -1418,4 +1418,13 @@ theorem buildSolver_collapse_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.
       ∃ g₁ ∈ T, ∃ g₂ ∈ T, g₁ ≠ g₂ ∧ buildSolver hfix g₁ p = buildSolver hfix g₂ p) :=
   solver_collapse_portrait (buildSolver_validSolver hcols hfix) p T hT
 
+/-- Under-determination portrait: closedness on safe + init∈safe suffices for ANY solver. -/
+theorem construct_under_determination_portrait :
+    (∀ (σ' : Solver cfg),
+      (∀ g ∈ safe cfg, ∀ p ∈ g.bag, adversarialStep cfg g p (σ' g p) ∈ safe cfg) →
+        GameState.init ∈ safe cfg → SolvesTetris cfg σ') ∧
+    (∀ g, g ∈ safe cfg → ∀ p ∈ g.bag,
+      ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧ adversarialStep cfg g p pl ∈ safe cfg) :=
+  solver_under_determination_portrait
+
 end Tetris
