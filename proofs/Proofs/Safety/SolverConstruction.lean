@@ -1382,4 +1382,11 @@ theorem buildSolver_move_geometry_portrait {S : Finset GameState} (hfix : F_fini
       (buildSolver hfix g p).dropOffset b ≤ c.2 ∧ c.2 < (buildSolver hfix g p).dropOffset b + 4) :=
   solver_move_geometry_portrait (σ := buildSolver hfix) g p b
 
+/-- Output-finiteness portrait: per-piece menu ≤ cols·4, total menu ≤ |Piece|·cols·4. -/
+theorem construct_output_finiteness_portrait (p : Piece) :
+    (Placement.allValidFor cfg p).card ≤ cfg.cols * 4 ∧
+    ((Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg)).card
+      ≤ Fintype.card Piece * (cfg.cols * 4) :=
+  solver_output_finiteness_portrait p
+
 end Tetris
