@@ -814,4 +814,19 @@ theorem buildSolver_no_death_cell {S : Finset GameState} (hcols : 4 ≤ cfg.cols
     c.2 < cfg.rows :=
   solver_no_cell_in_death_zone (buildSolver_solvesTetrisValid hcols hfix hinit).2 hl n hc
 
+/-- The constructed function's boards are well-formed. -/
+theorem buildSolver_trace_wf {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Board.WF cfg (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board :=
+  solver_board_wf (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
+
+/-- The constructed function's states are reachable from the empty board. -/
+theorem buildSolver_trace_reachable {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Reachable cfg (adversarialTrace cfg (buildSolver hfix) s GameState.init n) :=
+  solver_states_reachable_from_empty (buildSolver_solvesTetrisValid hcols hfix hinit)
+    (adversarialTrace_solverReachable (buildSolver hfix) hl n)
+
 end Tetris
