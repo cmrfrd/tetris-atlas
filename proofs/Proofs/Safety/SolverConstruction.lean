@@ -1488,4 +1488,16 @@ theorem construct_exists_of_local_certificate (hcols : 4 ≤ cfg.cols) (S : Set 
     ∃ σ : Solver cfg, SolvesTetrisValid cfg σ :=
   solver_exists_of_local_certificate hcols S hinit hS
 
+/-- Death propagation is a descending chain: later iterates are subsets of earlier ones. -/
+theorem construct_death_propagation_monotone {n m : ℕ} (hnm : n ≤ m) :
+    safeIterFinite cfg (inFieldStates cfg) m ⊆ safeIterFinite cfg (inFieldStates cfg) n :=
+  solver_death_propagation_monotone hnm
+
+/-- Existence of a solver is equivalent to an init-containing well-founded closed cycle. -/
+theorem construct_exists_iff_init_cycle (hcols : 4 ≤ cfg.cols) :
+    (∃ σ : Solver cfg, SolvesTetrisValid cfg σ) ↔
+      ∃ C : AdversarialClosedCycleWF cfg,
+        GameState.init ∈ C.toAdversarialClosedCycle.states :=
+  solver_exists_iff_init_cycle hcols
+
 end Tetris
