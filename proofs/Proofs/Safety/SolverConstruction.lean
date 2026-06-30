@@ -766,4 +766,20 @@ theorem buildSolver_eventually_repeats {S : Finset GameState} (hcols : 4 ≤ cfg
         = adversarialTrace cfg (buildSolver hfix) s GameState.init j :=
   solver_play_eventually_repeats (buildSolver_solvesTetrisValid hcols hfix hinit) hl
 
+/-- The constructed function is forced to clear inside every capacity-sized window. -/
+theorem buildSolver_clears_within {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) {M : ℕ} (hM : cfg.cols * cfg.rows < 4 * M) :
+    ∃ k < M, (adversarialTrace cfg (buildSolver hfix) s GameState.init (k + 1)).board.count
+           ≠ (adversarialTrace cfg (buildSolver hfix) s GameState.init k).board.count + 4 :=
+  solver_clears_within (buildSolver_solvesTetrisValid hcols hfix hinit) hl hM
+
+/-- The constructed function's cell count is 4-Lipschitz. -/
+theorem buildSolver_count_lipschitz {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    (adversarialTrace cfg (buildSolver hfix) s GameState.init (n + 1)).board.count
+      ≤ (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board.count + 4 :=
+  solver_trace_count_le_succ (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
+
 end Tetris
