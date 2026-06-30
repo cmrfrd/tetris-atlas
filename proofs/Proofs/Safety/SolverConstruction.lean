@@ -2031,6 +2031,22 @@ theorem convergedSet_standard_card_le :
   have h := convergedSet_card_le GameConfig.standard
   rwa [solver_universe_size_standard] at h
 
+/-- The converged solver returns a valid placement for any bag piece. -/
+theorem convergedSolver_output_valid (hcols : 4 ≤ cfg.cols) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) : (convergedSolver (cfg := cfg) g p).Valid cfg :=
+  buildSolver_output_valid hcols convergedSet_fixed hp
+
+/-- The converged solver answers the queried piece. -/
+theorem convergedSolver_announces_piece (hcols : 4 ≤ cfg.cols) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) : (convergedSolver (cfg := cfg) g p).piece = p :=
+  buildSolver_announces_piece hcols convergedSet_fixed hp
+
+/-- Every state reachable by the converged solver is safe. -/
+theorem convergedSolver_no_dead_ends (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {g : GameState}
+    (hr : solverReachable (convergedSolver (cfg := cfg)) g) : g ∈ safe cfg :=
+  buildSolver_no_dead_ends hcols convergedSet_fixed hinit hr
+
 /-- Every state on a converged-solver play stays inside the converged region. -/
 theorem convergedSolver_trace_mem (hinit : GameState.init ∈ convergedSet cfg)
     {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
