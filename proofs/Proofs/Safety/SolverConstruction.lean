@@ -3408,4 +3408,19 @@ theorem convergedSolver_perpetual_play (hcols : 4 ≤ cfg.cols)
    convergedSolver_trace_maxHeight hcols hinit hl n,
    buildSolver_trace_mem convergedSet_fixed hinit hl n⟩
 
+/-- The construction's complete answer: it terminates, decides existence by one membership test
+both ways, and on success delivers an explicit confined winning solver. -/
+theorem construction_complete_answer (hcols : 4 ≤ cfg.cols) :
+    (safeIterFinite cfg (inFieldStates cfg) ((inFieldStates cfg).card + 1) = convergedSet cfg) ∧
+    (GameState.init ∈ convergedSet cfg → TetrisSolvableValidFor cfg) ∧
+    (¬ TetrisSolvableValidFor cfg → GameState.init ∉ convergedSet cfg) ∧
+    (GameState.init ∈ convergedSet cfg →
+      SolvesTetrisValid cfg convergedSolver ∧
+      (∀ g, solverReachable (convergedSolver (cfg := cfg)) g → g ∈ convergedSet cfg)) :=
+  ⟨construct_halts_in_card_rounds,
+   init_mem_convergedSet_solvable hcols,
+   init_notMem_convergedSet_of_not_solvable hcols,
+   fun hinit => ⟨convergedSolver_solves hcols hinit,
+     fun _ hr => convergedSolver_confined hinit hr⟩⟩
+
 end Tetris
