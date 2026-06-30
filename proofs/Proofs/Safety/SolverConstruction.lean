@@ -2948,4 +2948,9 @@ theorem convergedSolver_step_bundle {g : GameState} (hg : g ∈ convergedSet cfg
    convergedSolver_solverStep_safe hg hp,
    convergedSolver_solverStep_not_lost hg hp⟩
 
+/-- The converged solver is deterministic and total: it answers every query with one placement. -/
+theorem convergedSolver_total (g : GameState) (p : Piece) :
+    ∃! pl : Placement, convergedSolver (cfg := cfg) g p = pl :=
+  ⟨convergedSolver (cfg := cfg) g p, rfl, fun _ h => h.symm⟩
+
 end Tetris
