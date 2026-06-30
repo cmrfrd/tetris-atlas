@@ -711,6 +711,43 @@ theorem subset_adversarialSafe_of_recurrentSupport (Dead : State → Prop)
     X ⊆ adversarialSafe Dead legalDraws step :=
   OrderHom.le_gfp _ ((subset_cpre_iff_recurrentSupport Dead legalDraws step X).mpr h)
 
+/-- **The gfp is itself a recurrent support — the maximal cyclic sub-graph.** `adversarialSafe` is a
+fixed point of `CPre` (`OrderHom.map_gfp`), so it is closed, i.e. a `SafeRecurrentSupport`. Together
+with the coinduction above, it is *the largest* one: every recurrent support is contained in it, and
+it is one. This is the object whose nonemptiness *is* the existence of a cyclic sub-graph. -/
+theorem adversarialSafe_isRecurrentSupport (Dead : State → Prop)
+    (legalDraws : State → Finset Piece) (step : State → Action → Piece → State) :
+    SafeRecurrentSupport Dead legalDraws step (adversarialSafe Dead legalDraws step) := by
+  apply (subset_cpre_iff_recurrentSupport Dead legalDraws step _).mp
+  exact le_of_eq (OrderHom.map_gfp (cpreHom Dead legalDraws step)).symm
+
+/-- **Existence reduction.** A *nonempty* recurrent support (a cyclic sub-graph) exists iff the
+canonical gfp `adversarialSafe` is nonempty. The whole existence question concentrates into the
+nonemptiness of one fixpoint-defined object — the matrix-powers target for "a cyclic sub-graph
+exists". -/
+theorem exists_nonempty_recurrentSupport_iff (Dead : State → Prop)
+    (legalDraws : State → Finset Piece) (step : State → Action → Piece → State) :
+    (∃ X : Set State, X.Nonempty ∧ SafeRecurrentSupport Dead legalDraws step X) ↔
+      (adversarialSafe Dead legalDraws step).Nonempty := by
+  constructor
+  · rintro ⟨X, ⟨x, hx⟩, hX⟩
+    exact ⟨x, subset_adversarialSafe_of_recurrentSupport Dead legalDraws step hX hx⟩
+  · intro h
+    exact ⟨_, h, adversarialSafe_isRecurrentSupport Dead legalDraws step⟩
+
+/-- **Entry version.** A state `s₀` lies in a recurrent support (a cyclic sub-graph it can never be
+forced out of) iff `s₀ ∈ adversarialSafe`. Reduces "does the start enter a cyclic sub-graph" to one
+membership in the canonical gfp. -/
+theorem mem_recurrentSupport_iff (Dead : State → Prop)
+    (legalDraws : State → Finset Piece) (step : State → Action → Piece → State) (s₀ : State) :
+    (∃ X : Set State, s₀ ∈ X ∧ SafeRecurrentSupport Dead legalDraws step X) ↔
+      s₀ ∈ adversarialSafe Dead legalDraws step := by
+  constructor
+  · rintro ⟨X, hs₀, hX⟩
+    exact subset_adversarialSafe_of_recurrentSupport Dead legalDraws step hX hs₀
+  · intro h
+    exact ⟨_, h, adversarialSafe_isRecurrentSupport Dead legalDraws step⟩
+
 end ControllablePredecessor
 
 section AdversarialMatrix
