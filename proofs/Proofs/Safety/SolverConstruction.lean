@@ -205,4 +205,19 @@ theorem solver_from_fixed_point {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
   init_safe_implies_solvesTetrisValid hcols
     (fixed_point_subset_safe hfix (Finset.mem_coe.mpr hinit))
 
+/-! ## Part 7 — The construction computes the greatest fixed point -/
+
+/-- **Every fixed point sits inside every round.** Under a covering universe, any self-sustaining
+region `T` is contained in each iterate — the construction never drops a certificate. So the limit
+is the *greatest* fixed point: the union of all winning regions, the maximal survivable set. -/
+theorem fixed_point_subset_iter {T S₀ : Finset GameState} (hS₀ : safe cfg ⊆ ↑S₀) (n : ℕ)
+    (hT : F_finite cfg T = T) :
+    (↑T : Set GameState) ⊆ ↑(safeIterFinite cfg S₀ n) :=
+  fun _ hg => computed_complete S₀ hS₀ n (fixed_point_subset_safe hT hg)
+
+/-- **`safe` is a fixed point of the abstract one-step operator.** The winning region equals its own
+one-step safe-preimage — the semantic counterpart of `F_finite S = S`. -/
+theorem safe_is_fixed_point : safeOp cfg (safe cfg) = safe cfg :=
+  safe_eq cfg
+
 end Tetris
