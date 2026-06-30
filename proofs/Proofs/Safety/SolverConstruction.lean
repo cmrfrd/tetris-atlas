@@ -1350,4 +1350,15 @@ theorem construct_no_repeat_within_bag (bag : Bag) (p : Piece) (hp : p ∈ bag)
     ¬ (bag.draw p).canDraw p :=
   solver_no_repeat_within_bag bag p hp hne
 
+/-- Dynamical portrait of the constructed function: orbit is iterated step; bag/board law. -/
+theorem buildSolver_dynamical_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (p : Piece) :
+    (∀ n, adversarialTrace cfg (buildSolver hfix) (fun _ => p) GameState.init n
+        = (solverStep cfg (buildSolver hfix) p)^[n] GameState.init) ∧
+    (∀ g, (solverStep cfg (buildSolver hfix) p g).bag = g.bag.draw p) ∧
+    (∀ g, p ∈ g.bag →
+      (solverStep cfg (buildSolver hfix) p g).board
+        = (buildSolver hfix g p).applyStep cfg g.board) :=
+  solver_dynamical_portrait (buildSolver_validSolver hcols hfix) p
+
 end Tetris
