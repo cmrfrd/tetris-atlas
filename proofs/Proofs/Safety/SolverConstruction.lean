@@ -2602,4 +2602,19 @@ theorem convergedSolver_queried_in_bag (s : ℕ → Piece) (hl : LegalSequence s
     s n ∈ (adversarialTrace cfg convergedSolver s GameState.init n).bag :=
   buildSolver_queried_in_bag convergedSet_fixed s hl n
 
+/-- Along legal play the converged solver's chosen move is on the menu. -/
+theorem convergedSolver_play_outputs_in_menu (hcols : 4 ≤ cfg.cols) (s : ℕ → Piece)
+    (hl : LegalSequence s) (n : ℕ) :
+    convergedSolver (cfg := cfg)
+        (adversarialTrace cfg convergedSolver s GameState.init n) (s n)
+      ∈ Placement.allValidFor cfg (s n) :=
+  buildSolver_play_outputs_in_menu hcols convergedSet_fixed s hl n
+
+/-- Every cell the converged solver lays sits within the playfield rectangle. -/
+theorem convergedSolver_board_in_field (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ)
+    {c : Coord} (hc : c ∈ (adversarialTrace cfg convergedSolver s GameState.init n).board) :
+    c.1 < cfg.cols ∧ c.2 < cfg.rows :=
+  buildSolver_board_in_field hcols convergedSet_fixed hinit hl n hc
+
 end Tetris
