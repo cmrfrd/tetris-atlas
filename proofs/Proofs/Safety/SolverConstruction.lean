@@ -1445,4 +1445,10 @@ theorem construct_region_greatest_fixed_point (T : Set GameState) (hT : safeOp c
     T ⊆ safe cfg :=
   solver_region_greatest_fixed_point T hT
 
+/-- The region is computable: finite descending iteration stabilizes within `|inFieldStates|`. -/
+theorem construct_region_computable :
+    ∃ N, N ≤ (inFieldStates cfg).card ∧
+      safeIterFinite cfg (inFieldStates cfg) (N + 1) = safeIterFinite cfg (inFieldStates cfg) N :=
+  solver_region_computable
+
 end Tetris
