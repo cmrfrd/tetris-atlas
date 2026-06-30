@@ -2590,4 +2590,16 @@ theorem convergedSet_subset_iterate {n : ℕ} (hn : n ≤ (inFieldStates cfg).ca
     convergedSet cfg ⊆ safeIterFinite cfg (inFieldStates cfg) n :=
   construct_death_propagation_monotone hn
 
+/-- The converged solver's surface area never exceeds capacity. -/
+theorem convergedSolver_trace_surfaceArea (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    HoleDebt.surfaceArea cfg
+      (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.cols * cfg.rows :=
+  buildSolver_trace_surfaceArea hcols convergedSet_fixed hinit hl n
+
+/-- Along converged play, every queried piece is in the current bag. -/
+theorem convergedSolver_queried_in_bag (s : ℕ → Piece) (hl : LegalSequence s) (n : ℕ) :
+    s n ∈ (adversarialTrace cfg convergedSolver s GameState.init n).bag :=
+  buildSolver_queried_in_bag convergedSet_fixed s hl n
+
 end Tetris
