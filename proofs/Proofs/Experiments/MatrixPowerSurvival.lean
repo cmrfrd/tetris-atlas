@@ -105,6 +105,19 @@ theorem RelPow.snoc {R : State → State → Prop} :
   | zero s => exact RelPow.succ htu (RelPow.zero u)
   | succ hab _ ih => exact RelPow.succ hab (ih htu)
 
+/-- **Composition of walks**: `Bᵃ · Bᵇ = Bᵃ⁺ᵇ`. Concatenate a length-`a` walk with a length-`b`
+walk — used to iterate a cycle to arbitrary length. -/
+theorem RelPow.trans {R : State → State → Prop} :
+    ∀ {a : ℕ} {s u : State}, RelPow R a s u →
+      ∀ {b : ℕ} {t : State}, RelPow R b u t → RelPow R (a + b) s t := by
+  intro a s u h
+  induction h with
+  | zero s => intro b t h2; simpa using h2
+  | @succ n s' x _u' hsx _hxu ih =>
+    intro b t h2
+    rw [show n + 1 + b = (n + b) + 1 from by omega]
+    exact RelPow.succ hsx (ih h2)
+
 /-- Reachability is exactly the union of all relation powers: `ReflTransGen R = ⋁ₙ RelPow R n`. -/
 theorem reachable_iff_exists_relPow {R : State → State → Prop} {s t : State} :
     Reachable R s t ↔ ∃ n, RelPow R n s t := by
@@ -543,6 +556,40 @@ theorem exists_cycle_iff_trace_pow_pos :
     obtain ⟨i, _, hi⟩ := Finset.exists_ne_zero_of_sum_ne_zero (Nat.pos_iff_ne_zero.mp htrpos)
     exact ⟨i, n, hn, (relPow_iff_adj_pow_pos R n i i).mp (Nat.pos_of_ne_zero hi)⟩
 
+/-- **Nilpotence ⇒ no survival (the matrix-power no-go criterion).** If some power of the adjacency
+matrix vanishes (`adjᴺ = 0` — no walk of length `N`, i.e. the safe graph is a DAG with all plays
+dying within `N-1` steps), then there is no infinite safe play from any start. An infinite path
+would supply a length-`N` walk `RelPow R N s₀ (path N)`, contradicting `adjᴺ = 0`. The exact dual of
+the cycle/diagonal criterion: nilpotent ⟺ no cycle ⟺ no survival. -/
+theorem not_infiniteSafePath_of_pow_eq_zero {N : ℕ} (hN : adj R ^ N = 0)
+    {Dead : State → Prop} {s₀ : State} : ¬ InfiniteSafePath R Dead s₀ := by
+  rintro ⟨path, hp0, _, hstep⟩
+  have hwalk : RelPow R N s₀ (path N) := by
+    have h := RelPow.subchain (w := path) (N := N) (fun k _ => hstep k) 0 N (by omega)
+    rw [Nat.zero_add, hp0] at h
+    exact h
+  have hpos := (relPow_iff_adj_pow_pos R N s₀ (path N)).mpr hwalk
+  rw [hN] at hpos
+  simp at hpos
+
+/-- **A cycle makes nilpotence impossible (the contradiction).** If any state lies on a cycle then
+*no* power of `adj` vanishes: iterate the cycle to length `k·N ≥ N`, a positive diagonal entry
+`(adj^{k·N})_{s,s} > 0`, whereas `adjᴺ = 0` would force `adj^{k·N} = 0`. So exhibiting **one cycle
+refutes nilpotence** — equivalently refutes "no survival." This is the lever for proving survival by
+contradiction: assume `adjᴺ = 0`, produce a cycle, contradiction. -/
+theorem onCycle_imp_pow_ne_zero {s : State} (h : OnCycle R s) (N : ℕ) : adj R ^ N ≠ 0 := by
+  intro hN
+  obtain ⟨k, hk, hcyc⟩ := h
+  have hiter : ∀ m, RelPow R (k * m) s s := by
+    intro m
+    induction m with
+    | zero => simpa using RelPow.zero s
+    | succ j ih => rw [Nat.mul_succ]; exact ih.trans hcyc
+  have hle : N ≤ k * N := le_mul_of_one_le_left (Nat.zero_le N) hk
+  have hpos := (relPow_iff_adj_pow_pos R (k * N) s s).mpr (hiter N)
+  rw [pow_eq_zero_of_le hle hN] at hpos
+  simp at hpos
+
 /-- **Recurrent support = Boolean Perron sub-eigenvector (Collatz–Wielandt).** A finite set `X` is
 closed under `R` (every state of `X` has an in-`X` successor) iff its indicator `1_X` is a Boolean
 *sub-eigenvector* of the adjacency matrix — for each `i ∈ X` the row action `(adj ⬝ᵥ 1_X) i =
@@ -577,19 +624,6 @@ theorem RelPow.inv_succ {R : State → State → Prop} {n : ℕ} {s t : State}
     (h : RelPow R (n + 1) s t) : ∃ u, R s u ∧ RelPow R n u t := by
   cases h with
   | succ hsu htail => exact ⟨_, hsu, htail⟩
-
-/-- **Composition of walks**: `Bᵃ · Bᵇ = Bᵃ⁺ᵇ`. Concatenate a length-`a` walk with a length-`b`
-walk. -/
-theorem RelPow.trans {R : State → State → Prop} :
-    ∀ {a : ℕ} {s u : State}, RelPow R a s u →
-      ∀ {b : ℕ} {t : State}, RelPow R b u t → RelPow R (a + b) s t := by
-  intro a s u h
-  induction h with
-  | zero s => intro b t h2; simpa using h2
-  | @succ n s' x _u' hsx _hxu ih =>
-    intro b t h2
-    rw [show n + 1 + b = (n + b) + 1 from by omega]
-    exact RelPow.succ hsx (ih h2)
 
 /-- The transitive closure is the union of positive relation powers: `TransGen R = ⋁_{n≥1} Bⁿ`. -/
 theorem transGen_iff_exists_relPow_succ {R : State → State → Prop} {s t : State} :
