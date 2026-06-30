@@ -722,4 +722,16 @@ theorem buildSolver_output_code_lt {S : Finset GameState} (hcols : 4 ≤ cfg.col
     4 * (buildSolver hfix g p).col + ((buildSolver hfix g p).rot : ℕ) < 4 * cfg.cols :=
   solver_output_code_lt (buildSolver_validSolver hcols hfix) hp
 
+/-- The constructed function has finite range. -/
+theorem buildSolver_range_finite {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) :
+    {pl : Placement | ∃ g p, p ∈ g.bag ∧ buildSolver hfix g p = pl}.Finite :=
+  solver_range_finite (buildSolver_validSolver hcols hfix)
+
+/-- The constructed function reads exactly `(board, bag, piece)`. -/
+theorem buildSolver_reads_board_bag {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g₁ g₂ : GameState) (p : Piece) (hb : g₁.board = g₂.board) (hbag : g₁.bag = g₂.bag) :
+    buildSolver hfix g₁ p = buildSolver hfix g₂ p :=
+  solver_reads_board_bag g₁ g₂ p hb hbag
+
 end Tetris
