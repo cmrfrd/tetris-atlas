@@ -815,6 +815,17 @@ theorem subset_cpre_iff_recurrentSupport (Dead : State → Prop) (legalDraws : S
     X ⊆ CPre Dead legalDraws step X ↔ SafeRecurrentSupport Dead legalDraws step X :=
   Iff.rfl
 
+/-- **CPre membership is the meet over the bag of the per-piece existential edges.** `s ∈ CPre X`
+unfolds to `¬Dead s ∧ ⋀_{r ∈ bag s} (∃ a, step s a r ∈ X)` — a *conjunction across pieces* of the
+per-piece "some placement lands in `X`" predicate. The bag's `∀` is this meet (AND); the companion
+`mem_cpre_iff_meet_perPiece` reads it as the Hadamard product of the per-piece matrices `A_r` on
+`1_X`. -/
+theorem mem_cpre_iff_meet (Dead : State → Prop) (legalDraws : State → Finset Piece)
+    (step : State → Action → Piece → State) (X : Set State) (s : State) :
+    s ∈ CPre Dead legalDraws step X ↔
+      ¬ Dead s ∧ ∀ r ∈ legalDraws s, ∃ a, step s a r ∈ X :=
+  Iff.rfl
+
 /-- **Coinduction: every recurrent support lies inside the adversarial safe set.** The abstract
 `safe_greatest` for the conjunctive operator — the gfp is the *maximal* recurrent support / common
 sub-eigenvector of the per-piece matrix family. -/
@@ -1022,6 +1033,19 @@ theorem recurrentSupport_iff_common_subEigenvector
   · intro h s hs r hr; exact (adjFor_reaches_iff step r X s).mpr (h s hs r hr)
   · intro h s hs r hr; exact (adjFor_reaches_iff step r X s).mp (h s hs r hr)
 
+/-- **`CPre` is the Hadamard meet `⋀_r A_r` of the per-piece matrices.** For a finite target `X`,
+`s ∈ CPre X ↔ ¬Dead s ∧ ∀ r ∈ bag s, 1 ≤ (A_r ⬝ᵥ 1_X)_s` — membership is `¬Dead` together with the
+*pointwise AND over the bag* of the per-piece row actions `(A_r ⬝ᵥ 1_X)_s ≥ 1`. This is the exact
+matrix form of the bag's `∀`: a meet of the per-piece Boolean matrix-vector products, never the
+action of one matrix (see §`BarrierNonlinear`). -/
+theorem mem_cpre_iff_meet_perPiece (Dead : State → Prop) (legalDraws : State → Finset Piece)
+    (step : State → Action → Piece → State) (X : Finset State) (s : State) :
+    s ∈ CPre Dead legalDraws step (↑X) ↔
+      ¬ Dead s ∧ ∀ r ∈ legalDraws s,
+        1 ≤ ∑ t, adjFor step r s t * (if t ∈ X then (1 : ℕ) else 0) := by
+  rw [mem_cpre_iff_meet]
+  simp only [Finset.mem_coe, adjFor_reaches_iff]
+
 /-! ### Products of per-piece matrices — the joint-spectral-radius view
 
 The adversary draws a *sequence* of pieces, so the relevant object is **not** a power `Bⁿ` but a
@@ -1087,6 +1111,172 @@ theorem exists_placement_of_subEig (step : State → Action → Piece → State)
   exact ⟨a, ha ▸ hxt⟩
 
 end AdversarialMatrix
+
+/-! ## §5c Barrier — the bag-meet `CPre` is not a single Boolean matrix
+
+These sections recast survival in matrix vocabulary. This section makes the **negative**
+fact precise and final: the bag's `∀ piece` operator `CPre` is a *meet* of the per-piece matrices
+(`mem_cpre_iff_meet_perPiece`), and a meet is **not** the action of any single Boolean matrix. So no
+amount of single-matrix spectral theory (powers, eigenvalues, nilpotence of one `B`) can compute
+adversarial survival — the right object is irreducibly the family `{A_r}` under conjunction, whose
+governing quantity is a *joint* spectral radius, not a single `ρ`. We prove two self-contained
+barriers over tiny explicit instances.
+
+* **Non-linearity (`cpre_not_matrixInduced`).** Every single-Boolean-matrix operator preserves
+  binary unions (`MatrixInduced.union` — Boolean mat-vec distributes over `∨`). `CPre` does not: a
+  3-state, 2-piece routing instance puts a state in `CPre(X ∪ Y)` but in neither `CPre X` nor
+  `CPre Y` (route piece `r₁` into `X` and `r₂` into `Y` — impossible for one piece alone). Hence
+  `CPre` is induced by **no** matrix.
+* **Cooperative ≠ adversarial (`coop_nonNilpotent_but_not_safe`).** The single existential matrix
+  `B = ⋁_r A_r` can be non-nilpotent (a cooperative cycle `0 → 0` under the safe piece, so `Bᴺ ≠ 0`
+  for every `N`) while the start is **not** adversarially safe (the adversary draws the deadly piece
+  and tops out). So `B`'s cyclicity — the one-matrix criterion traditional linear algebra reads off
+  `B` alone — is no survival certificate.
+
+Together: linearise (drop the `∀`) and you get a true-but-irrelevant statement about `B`; keep the
+`∀` and the operator leaves single-matrix linear algebra entirely. This is *why* the matrix-power
+route stalls here, stated as theorems rather than a claim. -/
+
+section BarrierNonlinear
+
+/-- An operator `F : Set State → Set State` is **matrix-induced** (Boolean-linear) when it is the
+Boolean matrix-vector action of some relation `M`: `F X = {s | ∃ t, M s t ∧ t ∈ X}` (equivalently
+`s ∈ F X ⟺ (M ⬝ᵥ 1_X)_s ≥ 1`). This is the most general single-Boolean-matrix operator on sets. -/
+def MatrixInduced (F : Set State → Set State) : Prop :=
+  ∃ M : State → State → Prop, ∀ X : Set State, F X = {s | ∃ t, M s t ∧ t ∈ X}
+
+/-- **Every matrix-induced operator preserves binary unions.** Boolean mat-vec distributes over `∪`
+(`∃ t, M s t ∧ (t ∈ X ∨ t ∈ Y)` splits over the disjunction), so `F (X ∪ Y) = F X ∪ F Y`. This
+additivity is the defining linearity a single Boolean matrix must have. -/
+theorem MatrixInduced.union {F : Set State → Set State} (hF : MatrixInduced F) (X Y : Set State) :
+    F (X ∪ Y) = F X ∪ F Y := by
+  obtain ⟨M, hM⟩ := hF
+  rw [hM (X ∪ Y), hM X, hM Y]
+  ext s
+  simp only [Set.mem_setOf_eq, Set.mem_union]
+  constructor
+  · rintro ⟨t, hMt, ht | ht⟩
+    · exact Or.inl ⟨t, hMt, ht⟩
+    · exact Or.inr ⟨t, hMt, ht⟩
+  · rintro (⟨t, hMt, ht⟩ | ⟨t, hMt, ht⟩)
+    · exact ⟨t, hMt, Or.inl ht⟩
+    · exact ⟨t, hMt, Or.inr ht⟩
+
+end BarrierNonlinear
+
+section BarrierWitnessNonlinear
+
+/-- Routing-instance states: `0` routes, `1` is the `X`-home, `2` the `Y`-home. -/
+abbrev RState := Fin 3
+/-- Two pieces: `r₁ = 0` routes into `X`, `r₂ = 1` routes into `Y`. -/
+abbrev RPiece := Fin 2
+
+/-- One forced placement per `(state, piece)`: from `0`, piece `0 ↦ 1` (the `X`-home) and piece
+`1 ↦ 2` (the `Y`-home); the homes stay put. -/
+def rstep : RState → Unit → RPiece → RState := fun s _ r =>
+  if s = 0 then (if r = 0 then 1 else 2) else s
+
+/-- Both pieces are always drawable. -/
+def rlegal : RState → Finset RPiece := fun _ => Finset.univ
+/-- Nobody dies in the routing instance. -/
+def rdead : RState → Prop := fun _ => False
+
+/-- The router survives the **union**: piece `r₁` lands in `{1}`, piece `r₂` in `{2}`. -/
+theorem router_mem_union :
+    (0 : RState) ∈ CPre rdead rlegal rstep (({1} : Set RState) ∪ {2}) := by
+  refine ⟨not_false, fun r _ => ⟨(), ?_⟩⟩
+  fin_cases r <;> simp only [Set.mem_union, Set.mem_singleton_iff] <;> decide
+
+/-- …but not `CPre {1}`: piece `r₂` has no placement into `{1}`. -/
+theorem router_not_mem_X :
+    (0 : RState) ∉ CPre rdead rlegal rstep ({1} : Set RState) := by
+  rintro ⟨-, h⟩
+  obtain ⟨a, ha⟩ := h 1 (Finset.mem_univ 1)
+  rw [Set.mem_singleton_iff] at ha
+  revert ha; cases a; decide
+
+/-- …and not `CPre {2}`: piece `r₁` has no placement into `{2}`. -/
+theorem router_not_mem_Y :
+    (0 : RState) ∉ CPre rdead rlegal rstep ({2} : Set RState) := by
+  rintro ⟨-, h⟩
+  obtain ⟨a, ha⟩ := h 0 (Finset.mem_univ 0)
+  rw [Set.mem_singleton_iff] at ha
+  revert ha; cases a; decide
+
+/-- **`CPre` fails union-preservation** — the router is in `CPre(X ∪ Y)` but in neither piece's set,
+because routing different pieces to different homes is invisible to any single (additive) matrix. -/
+theorem cpre_not_union_preserving :
+    CPre rdead rlegal rstep (({1} : Set RState) ∪ {2}) ≠
+      CPre rdead rlegal rstep ({1} : Set RState)
+        ∪ CPre rdead rlegal rstep ({2} : Set RState) := by
+  intro heq
+  have h0 := heq ▸ router_mem_union
+  rcases h0 with h | h
+  · exact router_not_mem_X h
+  · exact router_not_mem_Y h
+
+/-- **Barrier 1: `CPre` is induced by no single Boolean matrix.** If it were, it would preserve
+unions (`MatrixInduced.union`), contradicting `cpre_not_union_preserving`. The bag's `∀`-meet is
+genuinely outside single-matrix linear algebra. -/
+theorem cpre_not_matrixInduced : ¬ MatrixInduced (CPre rdead rlegal rstep) :=
+  fun hMI => cpre_not_union_preserving (hMI.union _ _)
+
+end BarrierWitnessNonlinear
+
+section BarrierWitnessCooperative
+
+/-- Cooperative-instance states: `0` is live (and self-loops on the safe piece), `1` is dead. -/
+abbrev DState := Fin 2
+/-- Two pieces: `0` is safe (self-loops), `1` is deadly (forces the dead state). -/
+abbrev DPiece := Fin 2
+
+/-- From the live state `0`: the safe piece `0` self-loops (cooperative cycle), the deadly piece `1`
+forces death `1`; the dead state absorbs. -/
+def dstep : DState → Unit → DPiece → DState := fun s _ r =>
+  if s = 0 then (if r = 0 then 0 else 1) else 1
+
+/-- Both pieces always drawable. -/
+def dlegal : DState → Finset DPiece := fun _ => Finset.univ
+/-- State `1` is the dead / top-out state. -/
+def ddead : DState → Prop := fun s => s = 1
+
+/-- A classical decidability instance so the existential graph `B = EdgeExists` has an honest
+adjacency matrix `adj B` (base-axiom clean: only `Classical.choice`, never `native_decide`). -/
+noncomputable instance : DecidableRel (EdgeExists dlegal dstep) :=
+  fun s t => Classical.propDecidable (EdgeExists dlegal dstep s t)
+
+/-- The existential graph `B = ⋁_r A_r` has a self-loop at `0` (the safe piece returns to `0`). -/
+theorem coop_cycle : OnCycle (EdgeExists dlegal dstep) 0 :=
+  ⟨1, Nat.one_pos, RelPow.succ ⟨0, Finset.mem_univ 0, (), by decide⟩ (RelPow.zero 0)⟩
+
+/-- Hence **`B` is non-nilpotent**: every power is nonzero (`Bᴺ ≠ 0` for all `N`). This is the
+single-matrix cyclicity criterion `ρ(B) ≥ 1` that traditional linear algebra reads off `B` alone. -/
+theorem coop_B_non_nilpotent (N : ℕ) : adj (EdgeExists dlegal dstep) ^ N ≠ 0 :=
+  onCycle_imp_pow_ne_zero (EdgeExists dlegal dstep) coop_cycle N
+
+/-- **Yet `0 ∉ adversarialSafe`**: any recurrent support containing `0` must, for the deadly piece,
+land in itself — but the only successor is the dead state `1`, which no recurrent support contains.
+So the adversary forces death; the cooperative cycle is no survival certificate. -/
+theorem coop_not_adversarialSafe : (0 : DState) ∉ adversarialSafe ddead dlegal dstep := by
+  intro h0
+  have hrs := adversarialSafe_isRecurrentSupport ddead dlegal dstep
+  obtain ⟨-, hsucc⟩ := hrs 0 h0
+  obtain ⟨a, ha⟩ := hsucc 1 (Finset.mem_univ 1)
+  have h1 : (1 : DState) ∈ adversarialSafe ddead dlegal dstep := by
+    have he : dstep 0 a 1 = 1 := by cases a; decide
+    rwa [he] at ha
+  exact (hrs 1 h1).1 rfl
+
+/-- **Barrier 2: `B` non-nilpotent ⇏ adversarial survival.** A cooperative cycle in the single
+existential matrix `B` (so `Bᴺ ≠ 0` for every `N`) coexists with the start being doomed against the
+adversary. Single-matrix non-nilpotence is detectable but *irrelevant* to the `∀`-piece safety the
+meet `CPre` encodes — the precise gap between `∃`-piece reachability and `∀`-piece survival. -/
+theorem coop_nonNilpotent_but_not_safe :
+    (∀ N, adj (EdgeExists dlegal dstep) ^ N ≠ 0) ∧
+      (0 : DState) ∉ adversarialSafe ddead dlegal dstep :=
+  ⟨coop_B_non_nilpotent, coop_not_adversarialSafe⟩
+
+end BarrierWitnessCooperative
 
 /-! ## §6 Connecting the abstract layer to the concrete safe-set results
 
