@@ -1679,4 +1679,9 @@ theorem buildSolver_board_in_field {S : Finset GameState} (hcols : 4 ≤ cfg.col
     c.1 < cfg.cols ∧ c.2 < cfg.rows :=
   solver_board_in_field (buildSolver_solvesTetrisValid hcols hfix hinit) hl n hc
 
+/-- Per-bag resource ledger: each 7-bag order contains exactly one I and two S/Z. -/
+theorem construct_per_bag_resource {l : List Piece} (h : BagBurst.IsBagOrder l) :
+    l.countP BagBurst.isI = 1 ∧ l.countP BagBurst.isSZ = 2 :=
+  solver_per_bag_resource h
+
 end Tetris
