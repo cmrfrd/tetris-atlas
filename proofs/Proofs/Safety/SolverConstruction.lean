@@ -1396,4 +1396,16 @@ theorem buildSolver_footprint_portrait {S : Finset GameState} (hcols : 4 ≤ cfg
     {pl : Placement | ∃ g p, p ∈ g.bag ∧ buildSolver hfix g p = pl}.Finite :=
   solver_footprint_portrait (buildSolver_solvesTetrisValid hcols hfix hinit)
 
+/-- Two-number portrait: each output is pinned by its (rot, col) pair in a finite grid. -/
+theorem buildSolver_two_number_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) :
+    (buildSolver hfix g p = ⟨p, (buildSolver hfix g p).rot, (buildSolver hfix g p).col⟩) ∧
+    (∀ g₂, p ∈ g₂.bag →
+      (buildSolver hfix g p).rot = (buildSolver hfix g₂ p).rot →
+        (buildSolver hfix g p).col = (buildSolver hfix g₂ p).col →
+          buildSolver hfix g p = buildSolver hfix g₂ p) ∧
+    (((buildSolver hfix g p).rot, (buildSolver hfix g p).col)
+      ∈ (Finset.univ : Finset Rotation) ×ˢ Finset.range cfg.cols) :=
+  solver_two_number_portrait (buildSolver_validSolver hcols hfix) hp
+
 end Tetris
