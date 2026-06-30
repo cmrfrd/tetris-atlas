@@ -2322,4 +2322,9 @@ theorem convergedSolver_no_clear_window_bounded (hcols : 4 ≤ cfg.cols)
     4 * n ≤ cfg.cols * cfg.rows :=
   buildSolver_no_clear_window_bounded hcols convergedSet_fixed hinit hl n hno
 
+/-- The converged solver's per-state response table has exactly `bag.card` entries. -/
+theorem convergedSolver_response_table_card_eq (hcols : 4 ≤ cfg.cols) (g : GameState) :
+    (g.bag.image (fun p => convergedSolver (cfg := cfg) g p)).card = g.bag.card :=
+  buildSolver_response_table_card_eq hcols convergedSet_fixed g
+
 end Tetris
