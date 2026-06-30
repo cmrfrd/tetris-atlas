@@ -3173,4 +3173,12 @@ theorem convergedSolver_M3 (hinit : GameState.init ∈ convergedSet cfg) :
      convergedSet_not_lost (convergedSolver_confined hinit hr),
      fun p hp => convergedSolver_reachable_step_closed hr hp⟩⟩
 
+/-- Every converged-reachable state is both safe and non-losing. -/
+theorem convergedSolver_reachable_safe_alive (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {g : GameState}
+    (hr : solverReachable (convergedSolver (cfg := cfg)) g) :
+    g ∈ safe cfg ∧ ¬ g.lost cfg :=
+  ⟨convergedSolver_no_dead_ends hcols hinit hr,
+   convergedSet_not_lost (convergedSolver_confined hinit hr)⟩
+
 end Tetris
