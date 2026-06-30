@@ -3093,4 +3093,16 @@ theorem convergedSet_closed_subgraph {g : GameState} (hg : g ∈ convergedSet cf
     adversarialStep cfg g p (convergedSolver (cfg := cfg) g p) ∈ convergedSet cfg :=
   buildSolver_step_mem convergedSet_fixed hg hp
 
+/-- Dynamical grand portrait of the converged solver: step law, orbit, bag/board, motion. -/
+theorem convergedSolver_dynamical_grand_portrait (hcols : 4 ≤ cfg.cols) (p : Piece) :
+    (∀ g, solverStep cfg convergedSolver p g
+        = adversarialStep cfg g p (convergedSolver (cfg := cfg) g p)) ∧
+    (∀ n, adversarialTrace cfg convergedSolver (fun _ => p) GameState.init n
+        = (solverStep cfg convergedSolver p)^[n] GameState.init) ∧
+    (∀ g, (solverStep cfg convergedSolver p g).bag = g.bag.draw p) ∧
+    (∀ g, p ∈ g.bag → (solverStep cfg convergedSolver p g).board
+        = (convergedSolver (cfg := cfg) g p).applyStep cfg g.board) ∧
+    (∀ g, g.bag.draw p ≠ g.bag → solverStep cfg convergedSolver p g ≠ g) :=
+  buildSolver_dynamical_grand_portrait hcols convergedSet_fixed p
+
 end Tetris
