@@ -440,4 +440,22 @@ theorem buildSolver_spec {S : Finset GameState} (hfix : F_finite cfg S = S)
   rw [dif_pos ⟨hg, hp⟩]
   exact Classical.choose_spec (((round_self_sustaining_iff S).mp hfix g hg).2 p hp)
 
+/-- The built solver announces the input piece (on region states). -/
+theorem buildSolver_piece {S : Finset GameState} (hfix : F_finite cfg S = S)
+    {g : GameState} (hg : g ∈ S) {p : Piece} (hp : p ∈ g.bag) :
+    (buildSolver hfix g p).piece = p :=
+  ((Placement.mem_allValidFor cfg p _).mp (buildSolver_spec hfix hg hp).1).1
+
+/-- The built solver's choice is valid (on region states). -/
+theorem buildSolver_valid_at {S : Finset GameState} (hfix : F_finite cfg S = S)
+    {g : GameState} (hg : g ∈ S) {p : Piece} (hp : p ∈ g.bag) :
+    (buildSolver hfix g p).Valid cfg :=
+  ((Placement.mem_allValidFor cfg p _).mp (buildSolver_spec hfix hg hp).1).2
+
+/-- The built solver's move keeps the state in the region. -/
+theorem buildSolver_step_mem {S : Finset GameState} (hfix : F_finite cfg S = S)
+    {g : GameState} (hg : g ∈ S) {p : Piece} (hp : p ∈ g.bag) :
+    adversarialStep cfg g p (buildSolver hfix g p) ∈ S :=
+  (buildSolver_spec hfix hg hp).2
+
 end Tetris
