@@ -1749,4 +1749,14 @@ theorem construct_drain_budget_suffices {bags : List (List Piece)}
     14 * bags.length ≤ 20 * bags.flatten.countP BagBurst.isI :=
   solver_drain_budget_suffices h
 
+/-- Roughness scales with drains: each bag order has twice as many S/Z as I pieces. -/
+theorem construct_roughness_two_per_drain {l : List Piece} (h : BagBurst.IsBagOrder l) :
+    l.countP BagBurst.isSZ = 2 * l.countP BagBurst.isI :=
+  solver_roughness_two_per_drain h
+
+/-- Any placement never removes holes — the hole count is monotone under placing. -/
+theorem construct_placement_never_removes_holes (b : Board) (pl : Placement) :
+    (HoleyCarrier.holes cfg b).card ≤ (HoleyCarrier.holes cfg (pl.place b)).card :=
+  solver_placement_never_removes_holes b pl
+
 end Tetris
