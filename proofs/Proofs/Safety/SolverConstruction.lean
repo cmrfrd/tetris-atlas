@@ -405,4 +405,16 @@ theorem limit_self_sustaining (S₀ : Finset GameState) (N : ℕ)
       adversarialStep cfg g p pl ∈ safeIterFinite cfg S₀ N :=
   (round_self_sustaining_iff _).mp (limit_is_fixed S₀ N hfix) g hg
 
+/-! ## Part 18 — Value iteration: death propagates one layer per round -/
+
+/-- **Newly-doomed characterization.** A state present at round `n` is removed at round `n+1` iff it
+is lost or *trapped* relative to the round-`n` region (some piece has no in-region response). Each
+round propagates death one layer outward from the lost states — value iteration. -/
+theorem newly_doomed_iff (S₀ : Finset GameState) (n : ℕ) {g : GameState}
+    (hg : g ∈ safeIterFinite cfg S₀ n) :
+    g ∉ safeIterFinite cfg S₀ (n + 1) ↔ g.lost cfg ∨ ∃ p ∈ g.bag,
+      ∀ pl ∈ Placement.allValidFor cfg p,
+        adversarialStep cfg g p pl ∉ safeIterFinite cfg S₀ n := by
+  rw [safeIterFinite_succ]; exact round_removes_iff hg
+
 end Tetris
