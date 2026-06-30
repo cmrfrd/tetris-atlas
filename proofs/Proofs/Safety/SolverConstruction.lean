@@ -1573,4 +1573,16 @@ theorem buildSolver_next_board {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
       = (buildSolver hfix g p).applyStep cfg g.board :=
   solver_next_board (buildSolver_validSolver hcols hfix) hp
 
+/-- The constructed function's output column is in range. -/
+theorem buildSolver_col_lt_cols {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) :
+    (buildSolver hfix g p).col < cfg.cols :=
+  solver_col_lt_cols (buildSolver_validSolver hcols hfix) hp
+
+/-- The constructed function's output rotation is one of four. -/
+theorem buildSolver_rot_lt_four {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) :
+    ((buildSolver hfix g p).rot : ℕ) < 4 :=
+  solver_rot_lt_four (σ := buildSolver hfix) g p
+
 end Tetris
