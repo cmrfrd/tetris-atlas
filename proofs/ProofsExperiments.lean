@@ -12,6 +12,7 @@ import Proofs.Experiments.PieceCharge
 import Proofs.Experiments.WqoCarrier
 import Proofs.Experiments.HoleyCarrier
 import Proofs.Experiments.AbstractSafe
+import Proofs.Experiments.MatrixPowerSurvival
 import Proofs.Experiments.Scratch.RoutePhase.Probe
 import Proofs.Experiments.Scratch.RouteSurface.Probe
 
