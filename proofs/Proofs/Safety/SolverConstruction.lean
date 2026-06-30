@@ -3161,4 +3161,16 @@ theorem convergedSolver_diff_in_rotcol (hcols : 4 ≤ cfg.cols) {g₁ g₂ : Gam
       (convergedSolver (cfg := cfg) g₁ p).col ≠ (convergedSolver (cfg := cfg) g₂ p).col :=
   buildSolver_diff_in_rotcol hcols convergedSet_fixed hp₁ hp₂ hne
 
+/-- M3 realized: from init the converged-reachable set is a closed, safe, alive invariant. -/
+theorem convergedSolver_M3 (hinit : GameState.init ∈ convergedSet cfg) :
+    solverReachable (convergedSolver (cfg := cfg)) GameState.init ∧
+    (∀ g, solverReachable (convergedSolver (cfg := cfg)) g →
+      g ∈ convergedSet cfg ∧ ¬ g.lost cfg ∧
+      ∀ p ∈ g.bag, solverReachable (convergedSolver (cfg := cfg))
+        (adversarialStep cfg g p (convergedSolver (cfg := cfg) g p))) :=
+  ⟨solverReachable.init,
+   fun g hr => ⟨convergedSolver_confined hinit hr,
+     convergedSet_not_lost (convergedSolver_confined hinit hr),
+     fun p hp => convergedSolver_reachable_step_closed hr hp⟩⟩
+
 end Tetris
