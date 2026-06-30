@@ -2761,4 +2761,19 @@ theorem convergedSolver_footprint_card_le (hinit : GameState.init ∈ convergedS
     ∀ g, solverReachable (convergedSolver (cfg := cfg)) g → g ∈ convergedSet cfg :=
   buildSolver_footprint_card_le convergedSet_fixed hinit
 
+/-- The converged solver, as a per-state section, returns the queried piece. -/
+theorem convergedSolver_section (hcols : 4 ≤ cfg.cols) (g : GameState) {p : Piece}
+    (hp : p ∈ g.bag) :
+    (Placement.piece ∘ convergedSolver (cfg := cfg) g) p = p :=
+  buildSolver_section hcols convergedSet_fixed g hp
+
+/-- The converged solver's next board is its move applied to the current board. -/
+theorem convergedSolver_trace_board_succ (hcols : 4 ≤ cfg.cols) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    (adversarialTrace cfg convergedSolver s GameState.init (n + 1)).board
+      = (convergedSolver (cfg := cfg)
+          (adversarialTrace cfg convergedSolver s GameState.init n) (s n)).applyStep cfg
+          (adversarialTrace cfg convergedSolver s GameState.init n).board :=
+  buildSolver_trace_board_succ hcols convergedSet_fixed hl n
+
 end Tetris
