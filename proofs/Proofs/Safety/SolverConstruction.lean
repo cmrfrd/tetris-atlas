@@ -2053,4 +2053,21 @@ theorem buildSolver_grand_safety_portrait {S : Finset GameState} (hcols : 4 ≤ 
    buildSolver_survives hfix hinit hl n,
    buildSolver_trace_in_field hcols hfix hinit hl n⟩
 
+/-- Grand bounds portrait: count and height are 4-Lipschitz and every column stays in field. -/
+theorem buildSolver_grand_bounds_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    (adversarialTrace cfg (buildSolver hfix) s GameState.init (n + 1)).board.count
+        ≤ (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board.count + 4 ∧
+    Board.maxHeight cfg
+          (adversarialTrace cfg (buildSolver hfix) s GameState.init (n + 1)).board
+        ≤ Board.maxHeight cfg
+            (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board + 4 ∧
+    (∀ j, j < cfg.cols →
+      Board.colHeight (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board j
+        ≤ cfg.rows) :=
+  ⟨buildSolver_count_lipschitz hcols hfix hinit hl n,
+   buildSolver_maxHeight_lipschitz hcols hfix hinit hl n,
+   fun _ hj => buildSolver_columns_le hcols hfix hinit hl n hj⟩
+
 end Tetris
