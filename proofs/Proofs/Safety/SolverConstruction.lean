@@ -550,4 +550,19 @@ theorem buildSolver_footprint_card_le {S : Finset GameState} (hfix : F_finite cf
     ∀ g, solverReachable (buildSolver hfix) g → g ∈ S :=
   fun _ hr => buildSolver_reachable_mem hfix hinit hr
 
+/-! ## Part 21 — Unconditional discovery of existence -/
+
+/-- **Unconditional positive test.** Run the construction for `|S₀|` rounds from *any* universe; if
+`init` still survives, a solving program exists — no coverage hypothesis needed. This is the
+discovery test: pick a universe, iterate `|S₀|` times, check `init`. -/
+theorem solver_exists_of_init_survives (hcols : 4 ≤ cfg.cols) (S₀ : Finset GameState)
+    (h : GameState.init ∈ safeIterFinite cfg S₀ S₀.card) :
+    ∃ σ : Solver cfg, SolvesTetrisValid cfg σ :=
+  tetrisSolvableValidFor_of_init_mem_safeIterFinite_at_S₀_card hcols h
+
+/-- **Soundness at the round bound.** Any state surviving to round `|S₀|` is genuinely in `safe`. -/
+theorem survives_card_rounds_safe (S₀ : Finset GameState) {g : GameState}
+    (h : g ∈ safeIterFinite cfg S₀ S₀.card) : g ∈ safe cfg :=
+  mem_safe_of_mem_safeIterFinite_at_S₀_card h
+
 end Tetris
