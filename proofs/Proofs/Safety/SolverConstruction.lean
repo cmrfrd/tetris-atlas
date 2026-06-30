@@ -1241,4 +1241,13 @@ theorem buildSolver_lowstack_move_safe {S : Finset GameState} (hcols : 4 ≤ cfg
     ¬ Board.isLost cfg ((buildSolver hfix g p).applyStep cfg b) :=
   solver_lowstack_move_safe (buildSolver_validSolver hcols hfix) hrows hp hWF hlow
 
+/-- The construction terminates in `≤ |S₀|` rounds and decides solver existence by an init test. -/
+theorem construct_decision_procedure {S₀ : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hS₀ : safe cfg ⊆ ↑S₀) :
+    ∃ N, N ≤ S₀.card ∧
+      (↑(safeIterFinite cfg S₀ N) : Set GameState) ⊆ safe cfg ∧
+      ((∃ σ : Solver cfg, SolvesTetrisValid cfg σ)
+        ↔ GameState.init ∈ safeIterFinite cfg S₀ N) :=
+  solver_decision_procedure hcols hS₀
+
 end Tetris
