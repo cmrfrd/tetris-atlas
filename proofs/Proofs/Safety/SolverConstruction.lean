@@ -2634,4 +2634,16 @@ theorem buildSolver_trace_invariant_bundle {S : Finset GameState} (hcols : 4 ≤
    buildSolver_trace_reachable hcols hfix hinit hl n,
    buildSolver_trace_mem hfix hinit hl n⟩
 
+/-- The converged solver maps distinct bag pieces to distinct placements. -/
+theorem convergedSolver_outputs_differ_by_piece (hcols : 4 ≤ cfg.cols) {g : GameState}
+    {p p' : Piece} (hp : p ∈ g.bag) (hp' : p' ∈ g.bag) (hne : p ≠ p') :
+    convergedSolver (cfg := cfg) g p ≠ convergedSolver (cfg := cfg) g p' :=
+  buildSolver_outputs_differ_by_piece hcols convergedSet_fixed hp hp' hne
+
+/-- The converged solver's piece-slice image is contained in that piece's menu. -/
+theorem convergedSolver_image_per_piece_subset (hcols : 4 ≤ cfg.cols) {p : Piece}
+    (T : Finset GameState) (hT : ∀ g ∈ T, p ∈ g.bag) :
+    T.image (fun g => convergedSolver (cfg := cfg) g p) ⊆ Placement.allValidFor cfg p :=
+  buildSolver_image_per_piece_subset hcols convergedSet_fixed T hT
+
 end Tetris
