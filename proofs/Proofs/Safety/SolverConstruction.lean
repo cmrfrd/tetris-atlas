@@ -2646,4 +2646,12 @@ theorem convergedSolver_image_per_piece_subset (hcols : 4 ≤ cfg.cols) {p : Pie
     T.image (fun g => convergedSolver (cfg := cfg) g p) ⊆ Placement.allValidFor cfg p :=
   buildSolver_image_per_piece_subset hcols convergedSet_fixed T hT
 
+/-- The placements the converged solver realizes along any legal play form a finite set. -/
+theorem convergedSolver_realized_outputs_finite (hcols : 4 ≤ cfg.cols) (s : ℕ → Piece)
+    (hl : LegalSequence s) :
+    (Set.range fun n =>
+      convergedSolver (cfg := cfg)
+        (adversarialTrace cfg convergedSolver s GameState.init n) (s n)).Finite :=
+  buildSolver_realized_outputs_finite hcols convergedSet_fixed s hl
+
 end Tetris
