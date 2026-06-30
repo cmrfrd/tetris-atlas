@@ -829,4 +829,21 @@ theorem buildSolver_trace_reachable {S : Finset GameState} (hcols : 4 ≤ cfg.co
   solver_states_reachable_from_empty (buildSolver_solvesTetrisValid hcols hfix hinit)
     (adversarialTrace_solverReachable (buildSolver hfix) hl n)
 
+/-- For the constructed function, survival is exactly `maxHeight ≤ rows`. -/
+theorem buildSolver_not_lost_iff {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    ¬ (adversarialTrace cfg (buildSolver hfix) s GameState.init n).lost cfg ↔
+      Board.maxHeight cfg
+        (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board ≤ cfg.rows :=
+  solver_not_lost_iff_maxHeight (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
+
+/-- No legal sequence ever beats the constructed function. -/
+theorem buildSolver_no_killing_sequence {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) :
+    ¬ ∃ (s : ℕ → Piece) (n : ℕ),
+        LegalSequence s ∧
+        (adversarialTrace cfg (buildSolver hfix) s GameState.init n).lost cfg :=
+  solver_no_killing_sequence (buildSolver_solvesTetrisValid hcols hfix hinit).2
+
 end Tetris
