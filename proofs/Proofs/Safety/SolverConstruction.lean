@@ -2494,4 +2494,9 @@ theorem safeIterFinite_convergedSet_eq (n : ℕ) :
   | zero => rfl
   | succ k ih => rw [safeIterFinite_succ, ih, convergedSet_fixed]
 
+/-- The converged solver's raw placement lays exactly four cells. -/
+theorem convergedSolver_places_four (b : Board) (g : GameState) (p : Piece) :
+    ((convergedSolver (cfg := cfg) g p).place b).count = b.count + 4 :=
+  buildSolver_places_four convergedSet_fixed b g p
+
 end Tetris
