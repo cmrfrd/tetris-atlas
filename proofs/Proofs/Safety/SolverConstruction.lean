@@ -1554,4 +1554,16 @@ theorem buildSolver_move_skyline_hole_independent {S : Finset GameState}
     ((buildSolver hfix g p).place b).colHeight j = ((buildSolver hfix g p).place β).colHeight j :=
   solver_move_skyline_hole_independent (σ := buildSolver hfix) g p h j
 
+/-- A constructed-function placement only adds cells: the board is a subset of its image. -/
+theorem buildSolver_move_superset {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (b : Board) (g : GameState) (p : Piece) :
+    b ⊆ (buildSolver hfix g p).place b :=
+  solver_move_superset (σ := buildSolver hfix) b g p
+
+/-- The constructed function draws the queried piece from the bag at each step. -/
+theorem buildSolver_next_bag {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) :
+    (solverStep cfg (buildSolver hfix) p g).bag = g.bag.draw p :=
+  solver_next_bag (σ := buildSolver hfix) g p
+
 end Tetris
