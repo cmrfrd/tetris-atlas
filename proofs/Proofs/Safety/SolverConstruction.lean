@@ -1389,4 +1389,11 @@ theorem construct_output_finiteness_portrait (p : Piece) :
       ≤ Fintype.card Piece * (cfg.cols * 4) :=
   solver_output_finiteness_portrait p
 
+/-- Footprint portrait: reachable states stay in-field and realized placements are finite. -/
+theorem buildSolver_footprint_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) :
+    (∀ g, solverReachable (buildSolver hfix) g → g ∈ inFieldStates cfg) ∧
+    {pl : Placement | ∃ g p, p ∈ g.bag ∧ buildSolver hfix g p = pl}.Finite :=
+  solver_footprint_portrait (buildSolver_solvesTetrisValid hcols hfix hinit)
+
 end Tetris
