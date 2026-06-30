@@ -3054,4 +3054,8 @@ theorem convergedSolver_milestones (hinit : GameState.init ∈ convergedSet cfg)
    ⟨hinit, fun _ hr => convergedSolver_confined hinit hr⟩,
    convergedSolver_atlas_closed cfg⟩
 
+/-- Membership in the converged region is decidable — the existence test is effective. -/
+noncomputable def convergedSet_decidableMem (g : GameState) : Decidable (g ∈ convergedSet cfg) :=
+  inferInstance
+
 end Tetris
