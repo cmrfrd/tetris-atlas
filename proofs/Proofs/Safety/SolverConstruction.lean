@@ -1878,4 +1878,20 @@ theorem buildSolver_slice_injOn_bag {S : Finset GameState} (hcols : 4 ≤ cfg.co
     Set.InjOn (fun p => buildSolver hfix g p) g.bag :=
   solver_slice_injOn_bag (buildSolver_validSolver hcols hfix) g
 
+/-- For each piece the constructed function maps in-bag states into that piece's menu. -/
+theorem buildSolver_slice_mapsTo {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (p : Piece) :
+    Set.MapsTo (fun g => buildSolver hfix g p) {g | p ∈ g.bag}
+      ↑(Placement.allValidFor cfg p) :=
+  solver_slice_mapsTo (buildSolver_validSolver hcols hfix) p
+
+/-- Solver tables are bounded: the closed cycle has card in `[28, |inFieldStates|]`. -/
+theorem construct_table_size_bounded (hcols : 4 ≤ cfg.cols)
+    (hex : ∃ σ : Solver cfg, SolvesTetrisValid cfg σ) :
+    ∃ C : AdversarialClosedCycleWF cfg,
+      GameState.init ∈ C.toAdversarialClosedCycle.states ∧
+      28 ≤ C.toAdversarialClosedCycle.states.card ∧
+      C.toAdversarialClosedCycle.states.card ≤ (inFieldStates cfg).card :=
+  solver_table_size_bounded hcols hex
+
 end Tetris
