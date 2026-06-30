@@ -2665,4 +2665,15 @@ theorem convergedSolver_response_table_card_le (g : GameState) :
     (g.bag.image (fun p => convergedSolver (cfg := cfg) g p)).card ≤ g.bag.card :=
   buildSolver_response_table_card_le convergedSet_fixed g
 
+/-- The converged solver reads only board and bag (eta over the state record). -/
+theorem convergedSolver_eta (g : GameState) (p : Piece) :
+    convergedSolver (cfg := cfg) g p = convergedSolver (cfg := cfg) ⟨g.board, g.bag⟩ p :=
+  buildSolver_eta convergedSet_fixed g p
+
+/-- For each piece the converged solver maps in-bag states into that piece's menu. -/
+theorem convergedSolver_slice_mapsTo (hcols : 4 ≤ cfg.cols) (p : Piece) :
+    Set.MapsTo (fun g => convergedSolver (cfg := cfg) g p) {g | p ∈ g.bag}
+      ↑(Placement.allValidFor cfg p) :=
+  buildSolver_slice_mapsTo hcols convergedSet_fixed p
+
 end Tetris
