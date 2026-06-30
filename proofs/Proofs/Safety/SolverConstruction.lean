@@ -2506,4 +2506,16 @@ theorem convergedSolver_output_code_lt (hcols : 4 ≤ cfg.cols) {g : GameState} 
       < 4 * cfg.cols :=
   buildSolver_output_code_lt hcols convergedSet_fixed hp
 
+/-- The converged solver reads only board and bag, not any other state. -/
+theorem convergedSolver_reads_board_bag (g₁ g₂ : GameState) (p : Piece)
+    (hb : g₁.board = g₂.board) (hbag : g₁.bag = g₂.bag) :
+    convergedSolver (cfg := cfg) g₁ p = convergedSolver (cfg := cfg) g₂ p :=
+  buildSolver_reads_board_bag convergedSet_fixed g₁ g₂ p hb hbag
+
+/-- Every state the converged solver visits is reachable from the empty board. -/
+theorem convergedSolver_trace_reachable (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Reachable cfg (adversarialTrace cfg convergedSolver s GameState.init n) :=
+  buildSolver_trace_reachable hcols convergedSet_fixed hinit hl n
+
 end Tetris
