@@ -1500,4 +1500,16 @@ theorem construct_exists_iff_init_cycle (hcols : 4 ≤ cfg.cols) :
         GameState.init ∈ C.toAdversarialClosedCycle.states :=
   solver_exists_iff_init_cycle hcols
 
+/-- On the standard config, solver existence coincides with the headline solvability predicate. -/
+theorem construct_exists_iff_tetrisSolvableValid :
+    (∃ σ : Solver GameConfig.standard, SolvesTetrisValid GameConfig.standard σ)
+      ↔ TetrisSolvableValid :=
+  solver_exists_iff_tetrisSolvableValid
+
+/-- At the empty board the construction handles all seven pieces with a safe successor. -/
+theorem construct_handles_all_seven_at_init (h : GameState.init ∈ safe cfg) (p : Piece) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧
+      adversarialStep cfg GameState.init p pl ∈ safe cfg :=
+  solver_handles_all_seven_at_init h p
+
 end Tetris
