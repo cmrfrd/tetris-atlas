@@ -1459,4 +1459,17 @@ theorem construct_region_local_certificate (S : Set GameState)
     S ⊆ safe cfg :=
   solver_region_local_certificate S hS
 
+/-- Computed-region soundness: at a fixed point the computed finite set lies inside safe. -/
+theorem construct_computed_region_sound (N : ℕ)
+    (hfix : safeIterFinite cfg (inFieldStates cfg) (N + 1)
+      = safeIterFinite cfg (inFieldStates cfg) N) :
+    (↑(safeIterFinite cfg (inFieldStates cfg) N) : Set GameState) ⊆ safe cfg :=
+  solver_computed_region_sound N hfix
+
+/-- Computed-region completeness: from a universe covering safe, the iterate equals safe. -/
+theorem construct_computed_region_complete {S₀ : Finset GameState} (hS₀ : safe cfg ⊆ ↑S₀)
+    (N : ℕ) (hfix : safeIterFinite cfg S₀ (N + 1) = safeIterFinite cfg S₀ N) (g : GameState) :
+    g ∈ safe cfg ↔ g ∈ (↑(safeIterFinite cfg S₀ N) : Set GameState) :=
+  solver_computed_region_complete hS₀ N hfix g
+
 end Tetris
