@@ -3068,4 +3068,14 @@ theorem convergedSolver_function_portrait (hcols : 4 ≤ cfg.cols) (g : GameStat
    (convergedSolver_response_portrait hcols g).2.2,
    fun g₂ p hb hbag => convergedSolver_reads_board_bag g g₂ p hb hbag⟩
 
+/-- The converged atlas is a complete regional lookup table: closed, total on the region, with
+init inside — the M4 proof artifact realized for the converged region. -/
+theorem convergedSolver_complete_lookup_table (hinit : GameState.init ∈ convergedSet cfg) :
+    (convergedSolver (cfg := cfg)).toAtlas.IsClosedOn cfg (convergedSet cfg) ∧
+    (∀ g ∈ convergedSet cfg, ∀ p ∈ g.bag,
+      ((convergedSolver (cfg := cfg)).toAtlas g p).isSome = true) ∧
+    GameState.init ∈ convergedSet cfg :=
+  ⟨convergedSolver_atlas_closed cfg,
+   fun g _ p _ => buildSolver_toAtlas_isSome convergedSet_fixed g p, hinit⟩
+
 end Tetris
