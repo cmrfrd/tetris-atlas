@@ -1737,4 +1737,16 @@ theorem construct_both_roughness_inject_holes :
         (Placement.place ∅ ⟨Piece.Z, 0, 0⟩)).card :=
   solver_both_roughness_inject_holes
 
+/-- On the empty board the constructed function's dropped cells sit in the bottom four rows. -/
+theorem buildSolver_empty_cells_low {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) {c : Coord}
+    (hc : c ∈ (buildSolver hfix g p).dropped Board.empty) : c.2 < 4 :=
+  solver_empty_cells_low (σ := buildSolver hfix) g p hc
+
+/-- Drain budget suffices: the I-piece supply exceeds the clearing requirement over any bags. -/
+theorem construct_drain_budget_suffices {bags : List (List Piece)}
+    (h : ∀ b ∈ bags, BagBurst.IsBagOrder b) :
+    14 * bags.length ≤ 20 * bags.flatten.countP BagBurst.isI :=
+  solver_drain_budget_suffices h
+
 end Tetris
