@@ -876,6 +876,40 @@ theorem safe_init_infiniteSafePath {cfg : GameConfig} (h : GameState.init ∈ sa
     (fun _ hg => hg.2) (safe_nonemptyBag_isSafeRecurrentSupport cfg)
     ⟨GameState.init, hinit, Relation.ReflTransGen.refl⟩
 
+/-! ### The per-piece family on real Tetris, and the `Fintype` boundary
+
+Instantiating §5's controllable predecessor with the actual move `step g pl p := adversarialStep
+cfg g p pl`, the per-piece transition `A_p` is "every placement of piece `p`", and the bag's ∀ is
+the conjunction over `p ∈ g.bag`. The concrete `safe` set is a common sub-invariant of this family
+and sits inside its greatest fixed point.
+
+**Boundary (honest).** The *literal* ℕ-matrix `Matrix GameState GameState ℕ` and its sub-eigenvector
+*sum* need `Fintype GameState`, which is **false** in this model: `Coord = ℕ × ℕ` and a placement's
+`col : ℕ`, so `GameState` is an *infinite ambient type* — finiteness lives in the `WF`/reachability
+predicates, not the type. So on concrete Tetris the per-piece *matrices* stay abstract; their
+faithful concrete shadow is the per-piece *relations*, and "common sub-eigenvector" reads as the
+relational `∀ p ∈ bag, ∃ placement, stays in X` (i.e. `mem_safe_iff`). -/
+
+/-- **`safe` is a common sub-invariant of the per-piece transitions** — the relational
+sub-eigenvector. For every safe state and every drawable piece `p`, the per-piece transition `A_p`
+(some placement of `p`) lands back in `safe`: `1_safe ≤ A_p ⬝ᵥ 1_safe` for each `p ∈ bag`, in
+relational form. This is `mem_safe_iff` read through the per-piece family. -/
+theorem safe_common_subInvariant (cfg : GameConfig) {g : GameState} (hg : g ∈ safe cfg)
+    {p : Piece} (hp : p ∈ g.bag) : ∃ pl, adversarialStep cfg g p pl ∈ safe cfg := by
+  rw [mem_safe_iff] at hg
+  obtain ⟨pl, _, _, hmem⟩ := hg.2 p hp
+  exact ⟨pl, hmem⟩
+
+/-- **`safe` lies in the adversarial gfp of the per-piece family.** Wiring §5's controllable
+predecessor to the Tetris move function, the concrete `safe` set is contained in `adversarialSafe`,
+the greatest common sub-invariant of the per-piece transitions `{A_p}`. (Containment, not equality:
+the abstract `step` does not re-impose `pl.piece = p ∧ pl.Valid`, so `adversarialSafe` is at least
+as big; `safe` is exactly the *valid* part.) -/
+theorem safe_subset_adversarialSafe (cfg : GameConfig) :
+    safe cfg ⊆ adversarialSafe (fun g => g.lost cfg) (fun g => g.bag)
+      (fun g pl p => adversarialStep cfg g p pl) :=
+  subset_adversarialSafe_of_recurrentSupport _ _ _ (safe_isSafeRecurrentSupport cfg)
+
 end ConcreteAdversarial
 
 end MatrixPowerSurvival
