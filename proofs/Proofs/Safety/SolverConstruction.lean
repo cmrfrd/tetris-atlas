@@ -2407,4 +2407,12 @@ theorem convergedSolver_grand_characterization (hcols : 4 ≤ cfg.cols)
    fun _ hr => convergedSolver_confined hinit hr,
    convergedSet_card_le cfg⟩
 
+/-- The converged solver's orbit advances by one Markov step. -/
+theorem convergedSolver_markov (s : ℕ → Piece) (n : ℕ) :
+    adversarialTrace cfg convergedSolver s GameState.init (n + 1)
+      = adversarialStep cfg (adversarialTrace cfg convergedSolver s GameState.init n) (s n)
+          (convergedSolver (cfg := cfg)
+            (adversarialTrace cfg convergedSolver s GameState.init n) (s n)) :=
+  buildSolver_markov convergedSet_fixed s n
+
 end Tetris
