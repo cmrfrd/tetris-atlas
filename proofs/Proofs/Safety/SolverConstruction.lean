@@ -3375,4 +3375,16 @@ theorem convergedSolver_pieces_available_forever {s : ℕ → Piece} (hl : Legal
     ∀ n, (adversarialTrace cfg convergedSolver s GameState.init n).bag.Nonempty :=
   fun n => buildSolver_always_has_a_piece convergedSet_fixed hl n
 
+/-- The converged solver keeps the surface area within capacity, forever. -/
+theorem convergedSolver_surfaceArea_bounded_forever (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    ∀ (s : ℕ → Piece), LegalSequence s → ∀ n, HoleDebt.surfaceArea cfg
+      (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.cols * cfg.rows :=
+  fun _ hl n => convergedSolver_trace_surfaceArea hcols hinit hl n
+
+/-- Every piece presented along legal play is one the current bag can draw, forever. -/
+theorem convergedSolver_queries_in_bag_forever {s : ℕ → Piece} (hl : LegalSequence s) :
+    ∀ n, s n ∈ (adversarialTrace cfg convergedSolver s GameState.init n).bag :=
+  fun n => convergedSolver_queried_in_bag s hl n
+
 end Tetris
