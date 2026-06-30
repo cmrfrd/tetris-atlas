@@ -311,4 +311,69 @@ theorem reachable_online_safe_recurrent_support_implies_infinite_survival
     InfiniteSafePath (SafeEdge death legalDraws step) death s₀ :=
   reachable_safe_recurrent_support_implies_infinite_survival hLegal (online_implies_weak hX) hReach
 
+/-! ## §3 Faithful all-sequences survival (the adversarial headline)
+
+§2 produces *one* infinite safe orbit — existence of *a* surviving trajectory. The faithful 7-bag
+claim is stronger: a single committed policy must survive **every** legal piece sequence the
+adversary can draw. The online support is exactly the certificate for that. We make the adversarial
+play explicit and prove the abstract analogue of `closed_cycle_survives`: a `death`-avoiding online
+support is invariant under the policy that picks its witnessed placement, for all adversaries. -/
+
+/-- The adversarial trace: from `s₀`, at each step place the current piece via policy `π`, then the
+adversary reveals the next piece `seq n`. Abstract mirror of `Tetris.adversarialTrace`. -/
+def absTrace {Piece Action : Type*} (step : State → Action → Piece → State)
+    (π : State → Action) (seq : ℕ → Piece) (s₀ : State) : ℕ → State
+  | 0 => s₀
+  | n + 1 => step (absTrace step π seq s₀ n) (π (absTrace step π seq s₀ n)) (seq n)
+
+@[simp] theorem absTrace_zero {Piece Action : Type*} (step : State → Action → Piece → State)
+    (π : State → Action) (seq : ℕ → Piece) (s₀ : State) :
+    absTrace step π seq s₀ 0 = s₀ := rfl
+
+theorem absTrace_succ {Piece Action : Type*} (step : State → Action → Piece → State)
+    (π : State → Action) (seq : ℕ → Piece) (s₀ : State) (n : ℕ) :
+    absTrace step π seq s₀ (n + 1) =
+      step (absTrace step π seq s₀ n) (π (absTrace step π seq s₀ n)) (seq n) := rfl
+
+/-- **Online support ⇒ a policy invariant under every adversary.** From a `death`-avoiding online
+support `X` and an entry `s₀ ∈ X`, there is a policy `π` whose adversarial trace stays inside `X`
+for *every* legal piece sequence. (Legality is "along the trace": each draw lies in the current
+`legalDraws`.) This is the abstract `closed_cycle_survives` — the all-`∀r` strength of the online
+condition is exactly what makes the invariant hold against an adversary, not just one sequence. -/
+theorem online_support_invariant_all_sequences {Piece Action : Type*} [Nonempty Action]
+    {death : State} {legalDraws : State → Finset Piece} {step : State → Action → Piece → State}
+    {X : Set State} (hX : OnlineSafeRecurrentSupport death legalDraws step X)
+    {s₀ : State} (hs₀ : s₀ ∈ X) :
+    ∃ π : State → Action, ∀ seq : ℕ → Piece,
+      (∀ n, seq n ∈ legalDraws (absTrace step π seq s₀ n)) →
+      ∀ n, absTrace step π seq s₀ n ∈ X := by
+  classical
+  obtain ⟨_hnotin, hmem⟩ := hX
+  -- A placement choice for every state: the online witness on `X`, arbitrary off `X`.
+  have hpick : ∀ s, ∃ a : Action, s ∈ X → ∀ r ∈ legalDraws s, step s a r ∈ X := by
+    intro s
+    by_cases h : s ∈ X
+    · obtain ⟨a, ha⟩ := (hmem s h).2
+      exact ⟨a, fun _ => ha⟩
+    · exact ⟨Classical.arbitrary Action, fun hc => absurd hc h⟩
+  refine ⟨fun s => Classical.choose (hpick s), fun seq hlegal n => ?_⟩
+  induction n with
+  | zero => exact hs₀
+  | succ k ih =>
+    rw [absTrace_succ]
+    exact Classical.choose_spec (hpick _) ih (seq k) (hlegal k)
+
+/-- **Faithful adversarial survival.** Same hypotheses as above: the witnessed policy never tops
+out against any legal adversary — `absTrace … n ≠ death` for all `n`. Corollary of the invariant
+plus `death ∉ X`. The abstract, online (`∃a∀r`) survival statement the Atlas mission targets. -/
+theorem online_support_survives_all_sequences {Piece Action : Type*} [Nonempty Action]
+    {death : State} {legalDraws : State → Finset Piece} {step : State → Action → Piece → State}
+    {X : Set State} (hX : OnlineSafeRecurrentSupport death legalDraws step X)
+    {s₀ : State} (hs₀ : s₀ ∈ X) :
+    ∃ π : State → Action, ∀ seq : ℕ → Piece,
+      (∀ n, seq n ∈ legalDraws (absTrace step π seq s₀ n)) →
+      ∀ n, absTrace step π seq s₀ n ≠ death := by
+  obtain ⟨π, hπ⟩ := online_support_invariant_all_sequences hX hs₀
+  exact ⟨π, fun seq hlegal n hc => hX.1 (hc ▸ hπ seq hlegal n)⟩
+
 end MatrixPowerSurvival
