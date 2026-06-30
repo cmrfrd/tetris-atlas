@@ -1255,4 +1255,13 @@ theorem construct_existence_dichotomy (hcols : 4 ≤ cfg.cols) :
     SolvesTetrisValid cfg (safeSolver cfg) ∨ (∀ σ : Solver cfg, ¬ SolvesTetrisValid cfg σ) :=
   solver_dichotomy hcols
 
+/-- Three faces of solvability: safe membership, an init-cycle, and a closed atlas. -/
+theorem construct_three_faces :
+    (TetrisSolvableValid ↔ GameState.init ∈ safe GameConfig.standard) ∧
+    (TetrisSolvableValid ↔ ∃ C : AdversarialClosedCycleWF GameConfig.standard,
+        GameState.init ∈ C.toAdversarialClosedCycle.states) ∧
+    (TetrisSolvableValid → ∃ (A : Atlas GameConfig.standard) (S : Finset GameState),
+        A.IsClosedOn GameConfig.standard S ∧ GameState.init ∈ S) :=
+  solver_three_faces_of_solvability
+
 end Tetris
