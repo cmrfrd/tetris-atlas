@@ -1615,4 +1615,14 @@ theorem construct_loss_monotone {b b' : Board} (h : b ⊆ b') (hlost : Board.isL
     Board.isLost cfg b' :=
   solver_loss_monotone h hlost
 
+/-- Bag renewal: each draw either drains the bag by one or refills a full bag. -/
+theorem construct_bag_renewal (bag : Bag) (p : Piece) (hp : p ∈ bag) :
+    (bag.draw p).card = bag.card - 1 ∨ bag.draw p = Bag.full :=
+  solver_bag_renewal bag p hp
+
+/-- The bag evolves identically under any two solvers: it is policy-independent. -/
+theorem construct_bag_evolution_independent (σ₁ σ₂ : Solver cfg) (g : GameState) (p : Piece) :
+    (solverStep cfg σ₁ p g).bag = (solverStep cfg σ₂ p g).bag :=
+  solver_bag_evolution_independent σ₁ σ₂ g p
+
 end Tetris
