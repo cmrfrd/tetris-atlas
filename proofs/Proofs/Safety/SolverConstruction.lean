@@ -862,4 +862,15 @@ theorem buildSolver_maxHeight_lipschitz {S : Finset GameState} (hcols : 4 ≤ cf
           (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board + 4 :=
   solver_trace_maxHeight_le_succ (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
 
+/-- The constructed function's three pillars: in `safe`, `maxHeight ≤ rows`, `count ≤ cols·rows`. -/
+theorem buildSolver_pillars {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg (buildSolver hfix) s GameState.init n ∈ safe cfg ∧
+    Board.maxHeight cfg
+      (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board ≤ cfg.rows ∧
+    (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board.count
+      ≤ cfg.cols * cfg.rows :=
+  solving_program_pillars (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
+
 end Tetris
