@@ -1133,4 +1133,12 @@ theorem buildSolver_trace_const_eq_iterate {S : Finset GameState} (hfix : F_fini
       = (solverStep cfg (buildSolver hfix) p)^[n] GameState.init :=
   solver_trace_const_eq_iterate (σ := buildSolver hfix) p n
 
+/-- One-step unfolding of the constructed function's trace. -/
+theorem buildSolver_trace_eq_solverStep {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (s : ℕ → Piece) (n : ℕ) :
+    adversarialTrace cfg (buildSolver hfix) s GameState.init (n + 1)
+      = solverStep cfg (buildSolver hfix) (s n)
+          (adversarialTrace cfg (buildSolver hfix) s GameState.init n) :=
+  solver_trace_eq_solverStep (σ := buildSolver hfix) s n
+
 end Tetris
