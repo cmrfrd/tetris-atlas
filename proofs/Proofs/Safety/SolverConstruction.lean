@@ -472,4 +472,26 @@ theorem buildSolver_trace_mem {S : Finset GameState} (hfix : F_finite cfg S = S)
         rw [adversarialTrace_bag]; exact hl k
       exact buildSolver_step_mem hfix ih hbag
 
+/-- **The built solver never tops out.** Every state of its orbit is in the region, and region
+states are alive — so it survives forever. -/
+theorem buildSolver_survives {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (hinit : GameState.init ∈ S) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    ¬ (adversarialTrace cfg (buildSolver hfix) s GameState.init n).lost cfg :=
+  ((round_self_sustaining_iff S).mp hfix _ (buildSolver_trace_mem hfix hinit hl n)).1
+
+/-- **The built solver is a valid solver.** On region states it plays valid moves; off the region it
+plays the in-bounds default — valid everywhere when `cols ≥ 4`. -/
+theorem buildSolver_validSolver {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) : ValidSolver cfg (buildSolver hfix) := by
+  intro g p hp
+  by_cases h : g ∈ S
+  · exact ⟨buildSolver_piece hfix h hp, buildSolver_valid_at hfix h hp⟩
+  · have hbs : buildSolver hfix g p = ⟨p, 0, 0⟩ := by
+      unfold buildSolver; rw [dif_neg (fun hc => h hc.1)]
+    rw [hbs]
+    refine ⟨rfl, fun cell hcell => ?_⟩
+    have hc4 := Piece.shapeUp_col_lt_four p 0 cell hcell
+    change 0 + cell.1 < cfg.cols
+    omega
+
 end Tetris
