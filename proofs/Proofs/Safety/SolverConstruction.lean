@@ -1344,4 +1344,10 @@ theorem buildSolver_skyline_factors_through_surface {S : Finset GameState}
       = ((buildSolver hfix g₂ p).place g₂.board).colHeight j :=
   solver_skyline_effect_factors_through_surface (σ := buildSolver hfix) hsurf hpl j
 
+/-- Bag discipline: a piece just drawn from a non-emptied bag cannot be drawn again. -/
+theorem construct_no_repeat_within_bag (bag : Bag) (p : Piece) (hp : p ∈ bag)
+    (hne : bag.draw p ≠ Bag.full) :
+    ¬ (bag.draw p).canDraw p :=
+  solver_no_repeat_within_bag bag p hp hne
+
 end Tetris
