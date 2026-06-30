@@ -2886,4 +2886,19 @@ theorem convergedSet_safe_response {g : GameState} (hg : g ∈ convergedSet cfg)
     ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧ adversarialStep cfg g p pl ∈ safe cfg :=
   construct_safe_response_each_piece (convergedSet_subset_safe (Finset.mem_coe.mpr hg)) hp
 
+/-- **The canonical construction, end to end**: it terminates, is sound, yields an explicit
+confined winning solver with a closed atlas exactly when init survives, and otherwise certifies
+impossibility — all decided by the single membership test `init ∈ convergedSet`. -/
+theorem the_canonical_construction (hcols : 4 ≤ cfg.cols) :
+    (safeIterFinite cfg (inFieldStates cfg) ((inFieldStates cfg).card + 1) = convergedSet cfg) ∧
+    (↑(convergedSet cfg) ⊆ safe cfg) ∧
+    (GameState.init ∈ convergedSet cfg →
+      SolvesTetrisValid cfg convergedSolver ∧
+      (convergedSolver (cfg := cfg)).toAtlas.IsClosedOn cfg (convergedSet cfg)) ∧
+    (¬ TetrisSolvableValidFor cfg → GameState.init ∉ convergedSet cfg) :=
+  ⟨construct_halts_in_card_rounds,
+   convergedSet_subset_safe,
+   fun hinit => ⟨convergedSolver_solves hcols hinit, convergedSolver_atlas_closed cfg⟩,
+   init_notMem_convergedSet_of_not_solvable hcols⟩
+
 end Tetris
