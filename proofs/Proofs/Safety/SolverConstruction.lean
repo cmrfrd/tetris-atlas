@@ -519,4 +519,22 @@ theorem buildSolver_reachable_mem {S : Finset GameState} (hfix : F_finite cfg S 
   | init => exact hinit
   | step p _ hp ih => exact buildSolver_step_mem hfix ih hp
 
+/-! ## Part 20 — The construction yields a closed atlas explicitly -/
+
+/-- **The built solver's atlas is closed on the region.** The table `(buildSolver hfix).toAtlas`
+satisfies all four closure obligations on `S` — a concrete M4 artifact, built from the fixed
+point. -/
+theorem buildSolver_atlas_closed {S : Finset GameState} (hfix : F_finite cfg S = S) :
+    (buildSolver hfix).toAtlas.IsClosedOn cfg S :=
+  { not_lost := fun g hg => ((round_self_sustaining_iff S).mp hfix g hg).1
+    total := fun _ _ _ _ => rfl
+    valid := fun g hg p hp pl hpl => by
+      simp only [Solver.toAtlas, Option.some.injEq] at hpl
+      subst hpl
+      exact ⟨buildSolver_piece hfix hg hp, buildSolver_valid_at hfix hg hp⟩
+    closed := fun g hg p hp pl hpl => by
+      simp only [Solver.toAtlas, Option.some.injEq] at hpl
+      subst hpl
+      exact buildSolver_step_mem hfix hg hp }
+
 end Tetris
