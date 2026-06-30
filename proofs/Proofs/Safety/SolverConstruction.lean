@@ -2355,4 +2355,11 @@ theorem convergedSolver_trace_maxHeight (hcols : 4 ≤ cfg.cols)
         (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.rows :=
   buildSolver_trace_maxHeight hcols convergedSet_fixed hinit hl n
 
+/-- The converged solver's hole-debt never exceeds capacity. -/
+theorem convergedSolver_trace_debt (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    HoleDebt.debt cfg
+      (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.cols * cfg.rows :=
+  buildSolver_trace_debt hcols convergedSet_fixed hinit hl n
+
 end Tetris
