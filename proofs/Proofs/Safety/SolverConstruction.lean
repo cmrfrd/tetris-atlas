@@ -1118,4 +1118,12 @@ theorem buildSolver_toAtlas_apply {S : Finset GameState} (hfix : F_finite cfg S 
     (buildSolver hfix).toAtlas g p = some (buildSolver hfix g p) :=
   solver_toAtlas_apply (σ := buildSolver hfix) g p
 
+/-- Trace composition (semigroup law) for the constructed function's orbit. -/
+theorem buildSolver_trace_compose {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (s : ℕ → Piece) (g0 : GameState) (n m : ℕ) :
+    adversarialTrace cfg (buildSolver hfix) s g0 (n + m) =
+      adversarialTrace cfg (buildSolver hfix) (fun k => s (n + k))
+        (adversarialTrace cfg (buildSolver hfix) s g0 n) m :=
+  solver_trace_compose (σ := buildSolver hfix) s g0 n m
+
 end Tetris
