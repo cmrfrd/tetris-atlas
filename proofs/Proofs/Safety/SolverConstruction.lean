@@ -691,4 +691,21 @@ theorem limit_round_fixed (S₀ : Finset GameState) (N : ℕ)
       = F_finite cfg (safeIterFinite cfg S₀ N) :=
   F_idempotent_at_fixed (limit_is_fixed S₀ N hfix)
 
+/-! ## Part 29 — Tiny-board instantiation -/
+
+/-- The construction halts on the 4×4 board within `|inFieldStates|` rounds. -/
+theorem construct_tiny_terminates :
+    ∃ N, N ≤ (inFieldStates GameConfig.tiny).card ∧
+      safeIterFinite GameConfig.tiny (inFieldStates GameConfig.tiny) (N + 1)
+        = safeIterFinite GameConfig.tiny (inFieldStates GameConfig.tiny) N :=
+  construct_terminates (inFieldStates GameConfig.tiny)
+
+/-- The tiny in-field construction is sound. -/
+theorem construct_tiny_sound (N : ℕ)
+    (hfix : safeIterFinite GameConfig.tiny (inFieldStates GameConfig.tiny) (N + 1)
+      = safeIterFinite GameConfig.tiny (inFieldStates GameConfig.tiny) N) :
+    (↑(safeIterFinite GameConfig.tiny (inFieldStates GameConfig.tiny) N) : Set GameState)
+      ⊆ safe GameConfig.tiny :=
+  construct_inField_sound N hfix
+
 end Tetris
