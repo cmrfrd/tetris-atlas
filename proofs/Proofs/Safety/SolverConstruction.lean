@@ -372,4 +372,19 @@ theorem construct_inField_sound (N : ℕ)
     (↑(safeIterFinite cfg (inFieldStates cfg) N) : Set GameState) ⊆ safe cfg :=
   computed_sound (inFieldStates cfg) N hfix
 
+/-! ## Part 16 — Abstract proof method: coinduction -/
+
+/-- **Coinduction principle.** To certify a region as winning it suffices to show it is *one-step
+closed*: contained in its own one-step safe-preimage. This is how a winning region is *proved*
+without unrolling the infinite horizon — the abstract counterpart of exhibiting a fixed point. -/
+theorem coinduction_principle (S : Set GameState) (hS : S ⊆ safeOp cfg S) :
+    S ⊆ safe cfg :=
+  safe_greatest S hS
+
+/-- **A closed cycle is contained in `safe`.** Its finite state set, being a fixed point, certifies
+each of its members as survivable. -/
+theorem cycle_subset_safe (C : AdversarialClosedCycle cfg) :
+    (↑C.states : Set GameState) ⊆ safe cfg :=
+  fixed_point_subset_safe C.F_finite_states_eq_states
+
 end Tetris
