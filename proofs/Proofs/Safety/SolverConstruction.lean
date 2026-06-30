@@ -2824,4 +2824,15 @@ theorem exists_confined_solver_of_init_mem_convergedSet (hcols : 4 ≤ cfg.cols)
   ⟨convergedSolver, convergedSolver_solves hcols hinit,
    fun _ hr => convergedSolver_confined hinit hr⟩
 
+/-- The converged region sits inside both the safe set and the in-field universe. -/
+theorem convergedSet_subset_safe_inter_inField :
+    ↑(convergedSet cfg) ⊆ safe cfg ∧ convergedSet cfg ⊆ inFieldStates cfg :=
+  ⟨convergedSet_subset_safe, convergedSet_subset_inFieldStates cfg⟩
+
+/-- Every converged state is safe, in-field, and non-losing. -/
+theorem convergedSet_mem_props {g : GameState} (hg : g ∈ convergedSet cfg) :
+    g ∈ safe cfg ∧ g ∈ inFieldStates cfg ∧ ¬ g.lost cfg :=
+  ⟨convergedSet_subset_safe (Finset.mem_coe.mpr hg),
+   convergedSet_subset_inFieldStates cfg hg, convergedSet_not_lost hg⟩
+
 end Tetris
