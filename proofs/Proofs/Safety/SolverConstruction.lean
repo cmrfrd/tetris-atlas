@@ -3264,4 +3264,10 @@ theorem convergedSolver_yields_atlas (hinit : GameState.init ∈ convergedSet cf
   ⟨(convergedSolver (cfg := cfg)).toAtlas, convergedSet cfg,
    convergedSolver_atlas_closed cfg, hinit⟩
 
+/-- The construction yields the M2/M3 artifact: an init-containing well-founded closed cycle. -/
+theorem convergedSolver_yields_cycle (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    ∃ C : AdversarialClosedCycleWF cfg, GameState.init ∈ C.toAdversarialClosedCycle.states :=
+  (construct_exists_iff_init_cycle hcols).mp (convergedSolver_witnesses_existence hcols hinit)
+
 end Tetris
