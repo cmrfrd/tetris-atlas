@@ -1112,4 +1112,10 @@ theorem buildSolver_diff_in_rotcol {S : Finset GameState} (hcols : 4 ≤ cfg.col
       (buildSolver hfix g₁ p).col ≠ (buildSolver hfix g₂ p).col :=
   solver_diff_in_rotcol (buildSolver_validSolver hcols hfix) hp₁ hp₂ hne
 
+/-- The constructed function's atlas wrapper returns `some` of its placement everywhere. -/
+theorem buildSolver_toAtlas_apply {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) :
+    (buildSolver hfix).toAtlas g p = some (buildSolver hfix g p) :=
+  solver_toAtlas_apply (σ := buildSolver hfix) g p
+
 end Tetris
