@@ -2859,4 +2859,16 @@ theorem convergedSolver_empty_drop_zero (g : GameState) (p : Piece) :
     (convergedSolver (cfg := cfg) g p).dropOffset Board.empty = 0 :=
   buildSolver_empty_drop_zero convergedSet_fixed g p
 
+/-- A converged-solver placement only raises per-column heights. -/
+theorem convergedSolver_place_raises_columns (g : GameState) (p : Piece) (b : Board) (j : ℕ) :
+    Board.colHeight b j ≤ Board.colHeight ((convergedSolver (cfg := cfg) g p).place b) j :=
+  buildSolver_place_raises_columns convergedSet_fixed g p b j
+
+/-- A converged-solver placement is skyline-monotone in the dominance order. -/
+theorem convergedSolver_move_skyline_monotone (g : GameState) (p : Piece) {b β : Board}
+    (h : WqoCarrier.domLE b β) :
+    WqoCarrier.domLE ((convergedSolver (cfg := cfg) g p).place b)
+      ((convergedSolver (cfg := cfg) g p).place β) :=
+  buildSolver_move_skyline_monotone convergedSet_fixed g p h
+
 end Tetris
