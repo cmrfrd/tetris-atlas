@@ -1932,4 +1932,20 @@ theorem construct_safeSolver_move_in_menu (hcols : 4 ≤ cfg.cols) {g : GameStat
     safeSolver cfg g p ∈ Placement.allValidFor cfg p :=
   solver_move_in_finite_action_set hcols hp
 
+/-- Play depends only on the solver's behaviour on reachable states. -/
+theorem construct_trace_eq_of_agree_on_reachable (s : ℕ → Piece) {σ₁ σ₂ : Solver cfg}
+    (hl : LegalSequence s)
+    (hagree : ∀ g, solverReachable σ₁ g → ∀ p ∈ g.bag, σ₁ g p = σ₂ g p) (n : ℕ) :
+    adversarialTrace cfg σ₁ s GameState.init n
+      = adversarialTrace cfg σ₂ s GameState.init n :=
+  solver_trace_eq_of_agree_on_reachable s hl hagree n
+
+/-- Play is determined by the solver's choices on the states it actually visits. -/
+theorem construct_trace_determined_by_visited (s : ℕ → Piece) {σ₁ σ₂ : Solver cfg} :
+    ∀ n, (∀ k < n, σ₁ (adversarialTrace cfg σ₁ s GameState.init k) (s k)
+                 = σ₂ (adversarialTrace cfg σ₁ s GameState.init k) (s k)) →
+      adversarialTrace cfg σ₁ s GameState.init n
+        = adversarialTrace cfg σ₂ s GameState.init n :=
+  solver_trace_determined_by_visited s
+
 end Tetris
