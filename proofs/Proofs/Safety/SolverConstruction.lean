@@ -657,4 +657,21 @@ theorem inField_survives_card_safe {g : GameState}
     g ∈ safe cfg :=
   survives_card_rounds_safe (inFieldStates cfg) h
 
+/-! ## Part 27 — The construction grand synthesis -/
+
+/-- **Everything from one fixed point.** A self-sustaining region containing `init` yields, all at
+once: a valid solving program, the guarantee that its play stays confined to the region, the closed
+atlas it induces, and the solvability proof. The complete deliverable of the construction. -/
+theorem construction_grand_synthesis {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) :
+    SolvesTetrisValid cfg (buildSolver hfix) ∧
+    (∀ s, LegalSequence s → ∀ n,
+      adversarialTrace cfg (buildSolver hfix) s GameState.init n ∈ S) ∧
+    (buildSolver hfix).toAtlas.IsClosedOn cfg S ∧
+    TetrisSolvableFor cfg :=
+  ⟨buildSolver_solvesTetrisValid hcols hfix hinit,
+   fun _ hl n => buildSolver_trace_mem hfix hinit hl n,
+   buildSolver_atlas_closed hfix,
+   buildSolver_atlas_solves hfix hinit⟩
+
 end Tetris
