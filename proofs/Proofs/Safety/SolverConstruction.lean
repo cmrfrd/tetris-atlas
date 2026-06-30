@@ -2816,4 +2816,12 @@ theorem convergedSolver_witnesses_existence (hcols : 4 ≤ cfg.cols)
     ∃ σ : Solver cfg, SolvesTetrisValid cfg σ :=
   ⟨convergedSolver, convergedSolver_solves hcols hinit⟩
 
+/-- There exists not just a solver but a region-confined one when init survives. -/
+theorem exists_confined_solver_of_init_mem_convergedSet (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    ∃ σ : Solver cfg, SolvesTetrisValid cfg σ ∧
+      (∀ g, solverReachable σ g → g ∈ convergedSet cfg) :=
+  ⟨convergedSolver, convergedSolver_solves hcols hinit,
+   fun _ hr => convergedSolver_confined hinit hr⟩
+
 end Tetris
