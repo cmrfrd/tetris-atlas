@@ -1971,4 +1971,12 @@ noncomputable def convergedSet (cfg : GameConfig) : Finset GameState :=
 theorem convergedSet_fixed : F_finite cfg (convergedSet cfg) = convergedSet cfg :=
   safeIterFinite_inFieldStates_F_finite_fixed_at_card cfg
 
+/-- Soundness of the construction: every converged state is genuinely safe. -/
+theorem convergedSet_subset_safe : ↑(convergedSet cfg) ⊆ safe cfg :=
+  fun _ hg => mem_safe_of_mem_safeIterFinite_at_S₀_card (Finset.mem_coe.mp hg)
+
+/-- Every converged state is non-losing. -/
+theorem convergedSet_not_lost {g : GameState} (hg : g ∈ convergedSet cfg) : ¬ g.lost cfg :=
+  safe_not_lost (convergedSet_subset_safe (Finset.mem_coe.mpr hg))
+
 end Tetris
