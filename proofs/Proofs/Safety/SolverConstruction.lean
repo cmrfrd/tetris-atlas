@@ -3306,4 +3306,19 @@ theorem convergedSolver_height_bounded_forever (hcols : 4 ≤ cfg.cols)
         (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.rows :=
   fun _ hl n => convergedSolver_trace_maxHeight hcols hinit hl n
 
+/-- The converged solver keeps the cell count within capacity, forever. -/
+theorem convergedSolver_count_bounded_forever (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    ∀ (s : ℕ → Piece), LegalSequence s →
+      ∀ n, (adversarialTrace cfg convergedSolver s GameState.init n).board.count
+        ≤ cfg.cols * cfg.rows :=
+  fun _ hl n => convergedSolver_trace_count hcols hinit hl n
+
+/-- Every state the converged solver ever reaches under legal play is safe. -/
+theorem convergedSolver_stays_safe_forever (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    ∀ (s : ℕ → Piece), LegalSequence s →
+      ∀ n, adversarialTrace cfg convergedSolver s GameState.init n ∈ safe cfg :=
+  fun _ hl n => convergedSolver_trace_mem_safe hcols hinit hl n
+
 end Tetris
