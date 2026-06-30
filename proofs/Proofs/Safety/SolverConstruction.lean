@@ -2694,4 +2694,18 @@ theorem convergedSolver_periodic_play (s : ℕ → Piece) (g0 : GameState) {b d 
       = adversarialTrace cfg convergedSolver s g0 (b + d + k) :=
   buildSolver_periodic_play convergedSet_fixed s g0 htrace hs k
 
+/-- Trace composition (semigroup law) for the converged solver's orbit. -/
+theorem convergedSolver_trace_compose (s : ℕ → Piece) (g0 : GameState) (n m : ℕ) :
+    adversarialTrace cfg convergedSolver s g0 (n + m) =
+      adversarialTrace cfg convergedSolver (fun k => s (n + k))
+        (adversarialTrace cfg convergedSolver s g0 n) m :=
+  buildSolver_trace_compose convergedSet_fixed s g0 n m
+
+/-- One-step unfolding of the converged solver's trace. -/
+theorem convergedSolver_trace_eq_solverStep (s : ℕ → Piece) (n : ℕ) :
+    adversarialTrace cfg convergedSolver s GameState.init (n + 1)
+      = solverStep cfg convergedSolver (s n)
+          (adversarialTrace cfg convergedSolver s GameState.init n) :=
+  buildSolver_trace_eq_solverStep convergedSet_fixed s n
+
 end Tetris
