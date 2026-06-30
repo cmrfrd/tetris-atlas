@@ -674,4 +674,21 @@ theorem construction_grand_synthesis {S : Finset GameState} (hcols : 4 ≤ cfg.c
    buildSolver_atlas_closed hfix,
    buildSolver_atlas_solves hfix hinit⟩
 
+/-! ## Part 28 — Algebra of the operator -/
+
+/-- `F_finite` is idempotent at a fixed point. -/
+theorem F_idempotent_at_fixed {S : Finset GameState} (hfix : F_finite cfg S = S) :
+    F_finite cfg (F_finite cfg S) = F_finite cfg S := by conv_lhs => rw [hfix]
+
+/-- One round never grows the candidate set's cardinality. -/
+theorem round_card_le (S : Finset GameState) : (F_finite cfg S).card ≤ S.card :=
+  F_finite_card_le cfg S
+
+/-- The limit is its own `F_finite` image (re-stated as a fixed point of the round). -/
+theorem limit_round_fixed (S₀ : Finset GameState) (N : ℕ)
+    (hfix : safeIterFinite cfg S₀ (N + 1) = safeIterFinite cfg S₀ N) :
+    F_finite cfg (F_finite cfg (safeIterFinite cfg S₀ N))
+      = F_finite cfg (safeIterFinite cfg S₀ N) :=
+  F_idempotent_at_fixed (limit_is_fixed S₀ N hfix)
+
 end Tetris
