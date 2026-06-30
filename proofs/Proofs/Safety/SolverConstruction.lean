@@ -3334,4 +3334,19 @@ theorem convergedSolver_lookup_loop (hinit : GameState.init ∈ convergedSet cfg
       ¬ (adversarialTrace cfg convergedSolver s GameState.init n).lost cfg :=
   fun n => convergedSolver_play_by_lookup hinit hl n
 
+/-- The converged solver keeps hole-debt within capacity, forever. -/
+theorem convergedSolver_debt_bounded_forever (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    ∀ (s : ℕ → Piece), LegalSequence s →
+      ∀ n, HoleDebt.debt cfg
+        (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.cols * cfg.rows :=
+  fun _ hl n => convergedSolver_trace_debt hcols hinit hl n
+
+/-- Every state the converged solver reaches under legal play stays in the in-field universe. -/
+theorem convergedSolver_in_field_forever (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    ∀ (s : ℕ → Piece), LegalSequence s →
+      ∀ n, adversarialTrace cfg convergedSolver s GameState.init n ∈ inFieldStates cfg :=
+  fun _ hl n => convergedSolver_trace_in_field hcols hinit hl n
+
 end Tetris
