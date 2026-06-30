@@ -2342,4 +2342,10 @@ theorem convergedSolver_per_piece_noninjective (hcols : 4 ≤ cfg.cols) {p : Pie
       convergedSolver (cfg := cfg) g₁ p = convergedSolver (cfg := cfg) g₂ p :=
   buildSolver_per_piece_noninjective hcols convergedSet_fixed T hT hcard
 
+/-- The converged solver's cell count never exceeds capacity. -/
+theorem convergedSolver_trace_count (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    (adversarialTrace cfg convergedSolver s GameState.init n).board.count ≤ cfg.cols * cfg.rows :=
+  buildSolver_trace_count hcols convergedSet_fixed hinit hl n
+
 end Tetris
