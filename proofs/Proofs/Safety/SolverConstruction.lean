@@ -1295,4 +1295,9 @@ theorem construct_not_lost_iff_cells_below (b : Board) :
     ¬ Board.isLost cfg b ↔ ∀ p ∈ b, p.2 < cfg.rows :=
   solver_not_lost_iff_cells_below_rows b
 
+/-- Placement never lowers max height: the climb is one-directional. -/
+theorem construct_placement_raises_maxHeight (b : Board) (pl : Placement) :
+    Board.maxHeight cfg b ≤ Board.maxHeight cfg (pl.place b) :=
+  solver_placement_raises_maxHeight b pl
+
 end Tetris
