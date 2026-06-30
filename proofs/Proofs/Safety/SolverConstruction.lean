@@ -2842,4 +2842,11 @@ theorem convergedSolver_memoryless_bundle (g₁ g₂ : GameState) (p : Piece)
     convergedSolver (cfg := cfg) g₁ p = convergedSolver (cfg := cfg) ⟨g₁.board, g₁.bag⟩ p :=
   ⟨convergedSolver_reads_board_bag g₁ g₂ p hb hbag, convergedSolver_eta g₁ p⟩
 
+/-- Compression bundle: a converged piece-slice lands in the menu and is bounded by `4·cols`. -/
+theorem convergedSolver_compression_bundle (hcols : 4 ≤ cfg.cols) {p : Piece}
+    (T : Finset GameState) (hT : ∀ g ∈ T, p ∈ g.bag) :
+    T.image (fun g => convergedSolver (cfg := cfg) g p) ⊆ Placement.allValidFor cfg p ∧
+    (T.image (fun g => convergedSolver (cfg := cfg) g p)).card ≤ cfg.cols * 4 :=
+  ⟨convergedSolver_image_per_piece_subset hcols T hT, convergedSolver_image_card hcols T hT⟩
+
 end Tetris
