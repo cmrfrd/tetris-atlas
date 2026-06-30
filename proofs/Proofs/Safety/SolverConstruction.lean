@@ -983,4 +983,11 @@ theorem buildSolver_no_dead_ends {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
     (hr : solverReachable (buildSolver hfix) g) : g ∈ safe cfg :=
   solver_no_dead_ends (buildSolver_solvesTetrisValid hcols hfix hinit) hr
 
+/-- Along any legal play, the constructed function's chosen move is on the menu. -/
+theorem buildSolver_play_outputs_in_menu {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (s : ℕ → Piece) (hl : LegalSequence s) (n : ℕ) :
+    buildSolver hfix (adversarialTrace cfg (buildSolver hfix) s GameState.init n) (s n)
+      ∈ Placement.allValidFor cfg (s n) :=
+  solver_play_outputs_in_menu (buildSolver_validSolver hcols hfix) s hl n
+
 end Tetris
