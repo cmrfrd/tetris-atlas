@@ -2913,4 +2913,16 @@ theorem convergedSolver_solverStep_mem {g : GameState} (hg : g ∈ convergedSet 
     solverStep cfg convergedSolver p g ∈ convergedSet cfg :=
   buildSolver_step_mem convergedSet_fixed hg hp
 
+/-- One converged step from a converged state lands in the safe set. -/
+theorem convergedSolver_solverStep_safe {g : GameState} (hg : g ∈ convergedSet cfg) {p : Piece}
+    (hp : p ∈ g.bag) :
+    solverStep cfg convergedSolver p g ∈ safe cfg :=
+  convergedSet_subset_safe (Finset.mem_coe.mpr (convergedSolver_solverStep_mem hg hp))
+
+/-- One converged step from a converged state is non-losing. -/
+theorem convergedSolver_solverStep_not_lost {g : GameState} (hg : g ∈ convergedSet cfg)
+    {p : Piece} (hp : p ∈ g.bag) :
+    ¬ (solverStep cfg convergedSolver p g).lost cfg :=
+  convergedSet_not_lost (convergedSolver_solverStep_mem hg hp)
+
 end Tetris
