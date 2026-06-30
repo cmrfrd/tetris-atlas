@@ -276,4 +276,25 @@ theorem round_removes_iff {S : Finset GameState} {g : GameState} (hg : g ∈ S) 
     · obtain ⟨pl, hpl, hstep⟩ := hmoves p hp
       exact htrap pl hpl hstep
 
+/-! ## Part 11 — The complete construction pipeline -/
+
+/-- **The construction pipeline, in one statement.** From any universe covering `safe`, there is a
+round count `N ≤ |S₀|` at which the construction is at a fixed point that is (1) *sound* (`⊆ safe`),
+(2) *exact* (equals `safe` pointwise), (3) *decisive* (a solver exists iff `init` survived), and (4)
+*constructive* (if `init` survived, the canonical `safeSolver` is a valid solving program).
+Terminate, verify, decide, extract — the recipe for building and discovering the ideal function. -/
+theorem construction_pipeline (S₀ : Finset GameState) (hcols : 4 ≤ cfg.cols)
+    (hS₀ : safe cfg ⊆ ↑S₀) :
+    ∃ N, N ≤ S₀.card ∧
+      (↑(safeIterFinite cfg S₀ N) : Set GameState) ⊆ safe cfg ∧
+      (∀ g, g ∈ safe cfg ↔ g ∈ (↑(safeIterFinite cfg S₀ N) : Set GameState)) ∧
+      ((∃ σ : Solver cfg, SolvesTetrisValid cfg σ)
+        ↔ GameState.init ∈ safeIterFinite cfg S₀ N) ∧
+      (GameState.init ∈ safeIterFinite cfg S₀ N → SolvesTetrisValid cfg (safeSolver cfg)) := by
+  obtain ⟨N, hN, hfix⟩ := safeIterFinite_converges cfg S₀
+  exact ⟨N, hN, computed_sound S₀ N hfix, fun g => computed_exact S₀ N hS₀ hfix g,
+    existence_decided S₀ hcols hS₀ N hfix,
+    fun hinit => init_safe_implies_solvesTetrisValid hcols
+      (computed_sound S₀ N hfix (Finset.mem_coe.mpr hinit))⟩
+
 end Tetris
