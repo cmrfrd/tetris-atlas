@@ -1979,4 +1979,9 @@ theorem convergedSet_subset_safe : ↑(convergedSet cfg) ⊆ safe cfg :=
 theorem convergedSet_not_lost {g : GameState} (hg : g ∈ convergedSet cfg) : ¬ g.lost cfg :=
   safe_not_lost (convergedSet_subset_safe (Finset.mem_coe.mpr hg))
 
+/-- Positive test: if init survives into the converged region, Tetris is solvable. -/
+theorem init_mem_convergedSet_solvable (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) : TetrisSolvableValidFor cfg :=
+  tetrisSolvableValidFor_of_init_mem_safeIterFinite_at_S₀_card hcols hinit
+
 end Tetris
