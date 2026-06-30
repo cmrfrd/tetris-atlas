@@ -537,4 +537,17 @@ theorem buildSolver_atlas_closed {S : Finset GameState} (hfix : F_finite cfg S =
       subst hpl
       exact buildSolver_step_mem hfix hg hp }
 
+/-- **The constructed atlas discharges solvability.** A closed atlas containing `init` yields a
+solving program — the construction closes the loop from fixed point to proof. -/
+theorem buildSolver_atlas_solves {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (hinit : GameState.init ∈ S) : TetrisSolvableFor cfg :=
+  (buildSolver_atlas_closed hfix).tetrisSolvableFor_of_init_mem hinit
+
+/-- **The built solver's footprint is bounded by `|S|`.** Its reachable set sits inside `S`, so it
+visits at most `|S|` distinct states. -/
+theorem buildSolver_footprint_card_le {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (hinit : GameState.init ∈ S) :
+    ∀ g, solverReachable (buildSolver hfix) g → g ∈ S :=
+  fun _ hr => buildSolver_reachable_mem hfix hinit hr
+
 end Tetris
