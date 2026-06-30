@@ -3270,4 +3270,14 @@ theorem convergedSolver_yields_cycle (hcols : 4 ≤ cfg.cols)
     ∃ C : AdversarialClosedCycleWF cfg, GameState.init ∈ C.toAdversarialClosedCycle.states :=
   (construct_exists_iff_init_cycle hcols).mp (convergedSolver_witnesses_existence hcols hinit)
 
+/-- One membership test delivers all three artifacts at once: solver, cycle, atlas. -/
+theorem convergedSolver_all_milestones (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    (∃ σ : Solver cfg, SolvesTetrisValid cfg σ) ∧
+    (∃ C : AdversarialClosedCycleWF cfg, GameState.init ∈ C.toAdversarialClosedCycle.states) ∧
+    (∃ (A : Atlas cfg) (S : Finset GameState), A.IsClosedOn cfg S ∧ GameState.init ∈ S) :=
+  ⟨convergedSolver_witnesses_existence hcols hinit,
+   convergedSolver_yields_cycle hcols hinit,
+   convergedSolver_yields_atlas hinit⟩
+
 end Tetris
