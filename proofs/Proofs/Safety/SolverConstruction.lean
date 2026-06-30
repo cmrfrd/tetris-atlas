@@ -3207,4 +3207,15 @@ theorem convergedSolver_reachable_bundle (hcols : 4 ≤ cfg.cols)
    convergedSet_not_lost (convergedSolver_confined hinit hr),
    convergedSolver_reachable_WF hcols hinit hr⟩
 
+/-- Operator-level summary: the converged region is a fixed point, sound, in-field, greatest,
+and bounded. -/
+theorem convergedSet_summary :
+    F_finite cfg (convergedSet cfg) = convergedSet cfg ∧
+    ↑(convergedSet cfg) ⊆ safe cfg ∧
+    convergedSet cfg ⊆ inFieldStates cfg ∧
+    (∀ S, F_finite cfg S = S → S ⊆ inFieldStates cfg → S ⊆ convergedSet cfg) ∧
+    (convergedSet cfg).card ≤ (inFieldStates cfg).card :=
+  ⟨convergedSet_fixed, convergedSet_subset_safe, convergedSet_subset_inFieldStates cfg,
+   fun _ hfix hsub => fixed_inField_subset_convergedSet hfix hsub, convergedSet_card_le cfg⟩
+
 end Tetris
