@@ -664,6 +664,65 @@ and combine them by *conjunction over the bag*:
   quantity is the **joint spectral radius** of `{A_r}` (the worst case over all adversarial piece
   sequences `A_{rₙ}···A_{r₁}`), not a single `ρ` — the matrix face of the mean-payoff game. -/
 
+/-! ### Reaching the gfp by finite iteration (the descending chain stabilizes)
+
+A general fact about any monotone `f` on a complete lattice: iterating downward from `⊤`,
+`gfpIter f n = f (f (… ⊤))`, gives a decreasing chain that lies above the gfp. On a *finite* lattice
+the chain stabilizes, and the stable value **is** the gfp. Applied to `cpreHom`, this turns
+"`adversarialSafe` is nonempty" — the existence of a cyclic sub-graph — into a *finite, detectable*
+computation: iterate until `gfpIter (N+1) = gfpIter N`, and that set is the cyclic sub-graph. -/
+
+section IterateGfp
+
+variable {α : Type*} [CompleteLattice α] (f : α →o α)
+
+/-- The downward iteration of `f` from `⊤`: `gfpIter f n = fⁿ ⊤`. -/
+def gfpIter : ℕ → α
+  | 0 => ⊤
+  | n + 1 => f (gfpIter n)
+
+/-- The gfp lies below every downward iterate. -/
+theorem gfp_le_gfpIter : ∀ n, OrderHom.gfp f ≤ gfpIter f n := by
+  intro n
+  induction n with
+  | zero => exact le_top
+  | succ k ih => exact (OrderHom.map_gfp f).symm.le.trans (f.mono ih)
+
+/-- The downward iteration decreases. -/
+theorem gfpIter_succ_le : ∀ n, gfpIter f (n + 1) ≤ gfpIter f n := by
+  intro n
+  induction n with
+  | zero => exact le_top
+  | succ k ih => exact f.mono ih
+
+/-- **Stabilization ⇒ the gfp.** If the downward iteration stops changing at step `N`
+(`gfpIter (N+1) = gfpIter N`), the stable value is exactly the greatest fixed point. -/
+theorem gfpIter_eq_gfp_of_fixed {N : ℕ} (h : gfpIter f (N + 1) = gfpIter f N) :
+    gfpIter f N = OrderHom.gfp f :=
+  le_antisymm (OrderHom.le_gfp _ (le_of_eq h.symm)) (gfp_le_gfpIter f N)
+
+/-- **On a finite lattice the iteration stabilizes.** The decreasing chain cannot strictly descend
+forever, so some step is a fixed point (pigeonhole: the iterate `ℕ → α` into a finite `α` repeats,
+and the chain between equal values is squeezed constant). -/
+theorem exists_gfpIter_fixed [Finite α] : ∃ N, gfpIter f (N + 1) = gfpIter f N := by
+  have hanti : Antitone (gfpIter f) := antitone_nat_of_succ_le (gfpIter_succ_le f)
+  obtain ⟨i, j, hij, heq⟩ := Finite.exists_ne_map_eq_of_infinite (gfpIter f)
+  rcases Nat.lt_or_ge i j with hlt | hge
+  · refine ⟨i, le_antisymm (gfpIter_succ_le f i) ?_⟩
+    calc gfpIter f i = gfpIter f j := heq
+      _ ≤ gfpIter f (i + 1) := hanti hlt
+  · have hji : j < i := lt_of_le_of_ne hge (Ne.symm hij)
+    refine ⟨j, le_antisymm (gfpIter_succ_le f j) ?_⟩
+    calc gfpIter f j = gfpIter f i := heq.symm
+      _ ≤ gfpIter f (j + 1) := hanti hji
+
+/-- **The gfp is reached by finite iteration** on a finite lattice. -/
+theorem exists_gfpIter_eq_gfp [Finite α] : ∃ N, gfpIter f N = OrderHom.gfp f := by
+  obtain ⟨N, hN⟩ := exists_gfpIter_fixed f
+  exact ⟨N, gfpIter_eq_gfp_of_fixed f hN⟩
+
+end IterateGfp
+
 section ControllablePredecessor
 
 variable {Piece Action : Type*}
@@ -747,6 +806,27 @@ theorem mem_recurrentSupport_iff (Dead : State → Prop)
     exact subset_adversarialSafe_of_recurrentSupport Dead legalDraws step hX hs₀
   · intro h
     exact ⟨_, h, adversarialSafe_isRecurrentSupport Dead legalDraws step⟩
+
+/-- **Search-termination certificate.** If the downward iteration of `CPre` stops changing at step
+`N` (`gfpIter (N+1) = gfpIter N`), that finite set *is* `adversarialSafe` — the maximal cyclic
+sub-graph. This is what a retrograde/death-propagation search detects: iterate until no change. -/
+theorem gfpIter_cpre_eq_adversarialSafe_of_fixed (Dead : State → Prop)
+    (legalDraws : State → Finset Piece) (step : State → Action → Piece → State) {N : ℕ}
+    (h : gfpIter (cpreHom Dead legalDraws step) (N + 1)
+      = gfpIter (cpreHom Dead legalDraws step) N) :
+    gfpIter (cpreHom Dead legalDraws step) N = adversarialSafe Dead legalDraws step :=
+  gfpIter_eq_gfp_of_fixed _ h
+
+/-- **`adversarialSafe` is a finite iterate.** On a finite state space the downward `CPre`-iteration
+reaches the gfp in finitely many steps: `∃ N, gfpIter CPre N = adversarialSafe`. So existence of a
+cyclic sub-graph (`adversarialSafe` nonempty, via `mem_recurrentSupport_iff`) is a **finite,
+computable check**: surviving `N` adversarial rounds from `⊤` settles surviving
+forever. (`N` is bounded by the lattice height, astronomical for real Tetris — this
+makes existence *finite/decidable*, not *cheap*.) -/
+theorem exists_gfpIter_cpre_eq_adversarialSafe [Finite State] (Dead : State → Prop)
+    (legalDraws : State → Finset Piece) (step : State → Action → Piece → State) :
+    ∃ N, gfpIter (cpreHom Dead legalDraws step) N = adversarialSafe Dead legalDraws step :=
+  exists_gfpIter_eq_gfp (cpreHom Dead legalDraws step)
 
 end ControllablePredecessor
 
