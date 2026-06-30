@@ -1625,4 +1625,14 @@ theorem construct_bag_evolution_independent (σ₁ σ₂ : Solver cfg) (g : Game
     (solverStep cfg σ₁ p g).bag = (solverStep cfg σ₂ p g).bag :=
   solver_bag_evolution_independent σ₁ σ₂ g p
 
+/-- Clearing never increases hole-debt on a well-formed board. -/
+theorem construct_clearing_reduces_debt {b : Board} (hwf : Board.WF cfg b) :
+    HoleDebt.debt cfg (Board.clearLines cfg b) ≤ HoleDebt.debt cfg b :=
+  solver_clearing_reduces_debt hwf
+
+/-- Clearing is idempotent: re-clearing a cleared board changes nothing. -/
+theorem construct_clearing_idempotent (b : Board) (hcol : 0 < cfg.cols) :
+    Board.clearLines cfg (Board.clearLines cfg b) = Board.clearLines cfg b :=
+  solver_clearing_idempotent b hcol
+
 end Tetris
