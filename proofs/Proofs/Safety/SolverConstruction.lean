@@ -511,4 +511,12 @@ theorem construct_confined_solver {S : Finset GameState} (hcols : 4 ≤ cfg.cols
   ⟨buildSolver hfix, buildSolver_solvesTetrisValid hcols hfix hinit,
    fun _ hl n => buildSolver_trace_mem hfix hinit hl n⟩
 
+/-- **The built solver's reachable set is contained in the region.** -/
+theorem buildSolver_reachable_mem {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (hinit : GameState.init ∈ S) {g : GameState}
+    (hr : solverReachable (buildSolver hfix) g) : g ∈ S := by
+  induction hr with
+  | init => exact hinit
+  | step p _ hp ih => exact buildSolver_step_mem hfix ih hp
+
 end Tetris
