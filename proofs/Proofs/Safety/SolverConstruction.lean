@@ -962,4 +962,11 @@ theorem buildSolver_opening_safe {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
         ((buildSolver hfix GameState.init p).applyStep cfg GameState.init.board) :=
   solver_opening_move_safe (buildSolver_validSolver hcols hfix) hrows hp
 
+/-- The constructed function's per-piece image has at most `4·cols` distinct outputs. -/
+theorem buildSolver_image_card {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {p : Piece} (T : Finset GameState)
+    (hT : ∀ g ∈ T, p ∈ g.bag) :
+    (T.image (fun g => buildSolver hfix g p)).card ≤ cfg.cols * 4 :=
+  solver_image_per_piece_card_le (buildSolver_validSolver hcols hfix) T hT
+
 end Tetris
