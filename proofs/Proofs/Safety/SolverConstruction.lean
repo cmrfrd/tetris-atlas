@@ -1049,4 +1049,14 @@ theorem buildSolver_response_table_card_le {S : Finset GameState}
     (g.bag.image (fun p => buildSolver hfix g p)).card ≤ g.bag.card :=
   solver_response_table_card_le (σ := buildSolver hfix) g
 
+/-- If the constructed function's trace and the piece stream both repeat, the orbit is periodic. -/
+theorem buildSolver_periodic_play {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (s : ℕ → Piece) (g0 : GameState) {b d : ℕ}
+    (htrace : adversarialTrace cfg (buildSolver hfix) s g0 b
+        = adversarialTrace cfg (buildSolver hfix) s g0 (b + d))
+    (hs : ∀ k, s (b + k) = s (b + d + k)) (k : ℕ) :
+    adversarialTrace cfg (buildSolver hfix) s g0 (b + k)
+      = adversarialTrace cfg (buildSolver hfix) s g0 (b + d + k) :=
+  solver_periodic_play (σ := buildSolver hfix) s g0 htrace hs k
+
 end Tetris
