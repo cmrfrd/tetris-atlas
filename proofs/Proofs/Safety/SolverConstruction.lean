@@ -1479,4 +1479,13 @@ theorem construct_existence_decidable {S₀ : Finset GameState} (hcols : 4 ≤ c
       GameState.init ∈ safeIterFinite cfg S₀ N :=
   solver_existence_decidable hcols hS₀
 
+/-- A local survival certificate containing init already yields a full solver. -/
+theorem construct_exists_of_local_certificate (hcols : 4 ≤ cfg.cols) (S : Set GameState)
+    (hinit : GameState.init ∈ S)
+    (hS : ∀ g ∈ S, ¬ g.lost cfg ∧
+      ∀ p, p ∈ g.bag → ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧
+        adversarialStep cfg g p pl ∈ S) :
+    ∃ σ : Solver cfg, SolvesTetrisValid cfg σ :=
+  solver_exists_of_local_certificate hcols S hinit hS
+
 end Tetris
