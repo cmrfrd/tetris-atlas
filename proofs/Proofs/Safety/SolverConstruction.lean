@@ -2849,4 +2849,14 @@ theorem convergedSolver_compression_bundle (hcols : 4 ≤ cfg.cols) {p : Piece}
     (T.image (fun g => convergedSolver (cfg := cfg) g p)).card ≤ cfg.cols * 4 :=
   ⟨convergedSolver_image_per_piece_subset hcols T hT, convergedSolver_image_card hcols T hT⟩
 
+/-- The converged solver's output rotation is one of four. -/
+theorem convergedSolver_rot_lt_four (g : GameState) (p : Piece) :
+    ((convergedSolver (cfg := cfg) g p).rot : ℕ) < 4 :=
+  buildSolver_rot_lt_four convergedSet_fixed g p
+
+/-- On the empty board the converged solver drops to the floor (offset zero). -/
+theorem convergedSolver_empty_drop_zero (g : GameState) (p : Piece) :
+    (convergedSolver (cfg := cfg) g p).dropOffset Board.empty = 0 :=
+  buildSolver_empty_drop_zero convergedSet_fixed g p
+
 end Tetris
