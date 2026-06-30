@@ -220,4 +220,16 @@ one-step safe-preimage — the semantic counterpart of `F_finite S = S`. -/
 theorem safe_is_fixed_point : safeOp cfg (safe cfg) = safe cfg :=
   safe_eq cfg
 
+/-! ## Part 8 — Running the construction on the canonical universe -/
+
+/-- Run from `inFieldStates`, every round stays inside `inFieldStates`. -/
+theorem construct_inField_subset (n : ℕ) :
+    safeIterFinite cfg (inFieldStates cfg) n ⊆ inFieldStates cfg :=
+  safeIterFinite_inFieldStates_subset cfg n
+
+/-- Run from `inFieldStates`, every round has card at most `|inFieldStates|`. -/
+theorem construct_inField_card_le (n : ℕ) :
+    (safeIterFinite cfg (inFieldStates cfg) n).card ≤ (inFieldStates cfg).card :=
+  safeIterFinite_inFieldStates_card_le cfg n
+
 end Tetris
