@@ -2473,4 +2473,11 @@ theorem convergedSolver_move_maxHeight_le (hcols : 4 ≤ cfg.cols) {g : GameStat
       ≤ Board.maxHeight cfg b + 4 :=
   buildSolver_move_maxHeight_le hcols convergedSet_fixed hp b
 
+/-- On a low stack the converged solver's move is non-losing. -/
+theorem convergedSolver_lowstack_move_safe (hcols : 4 ≤ cfg.cols) (hrows : 4 ≤ cfg.rows)
+    {g : GameState} {p : Piece} (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b)
+    (hlow : ∀ j, Board.colHeight b j ≤ cfg.rows - 4) :
+    ¬ Board.isLost cfg ((convergedSolver (cfg := cfg) g p).applyStep cfg b) :=
+  buildSolver_lowstack_move_safe hcols convergedSet_fixed hrows hp hWF hlow
+
 end Tetris
