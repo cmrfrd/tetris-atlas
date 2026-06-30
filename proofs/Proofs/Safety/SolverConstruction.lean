@@ -1300,4 +1300,10 @@ theorem construct_placement_raises_maxHeight (b : Board) (pl : Placement) :
     Board.maxHeight cfg b ≤ Board.maxHeight cfg (pl.place b) :=
   solver_placement_raises_maxHeight b pl
 
+/-- Placement is skyline-monotone: it preserves the dominance order on boards. -/
+theorem construct_placement_skyline_monotone {b β : Board} (pl : Placement)
+    (h : WqoCarrier.domLE b β) :
+    WqoCarrier.domLE (pl.place b) (pl.place β) :=
+  solver_placement_skyline_monotone pl h
+
 end Tetris
