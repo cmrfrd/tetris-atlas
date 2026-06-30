@@ -3194,4 +3194,17 @@ theorem convergedSolver_reachable_WF (hcols : 4 ≤ cfg.cols)
     Board.WF cfg g.board :=
   reachable_WF (convergedSolver_operates_in_safe_and_reachable hcols hinit hr).2
 
+/-- Complete reachability bundle: a converged-reachable state is in-region, safe, in-field,
+alive, and well-formed. -/
+theorem convergedSolver_reachable_bundle (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {g : GameState}
+    (hr : solverReachable (convergedSolver (cfg := cfg)) g) :
+    g ∈ convergedSet cfg ∧ g ∈ safe cfg ∧ g ∈ inFieldStates cfg ∧
+      ¬ g.lost cfg ∧ Board.WF cfg g.board :=
+  ⟨convergedSolver_confined hinit hr,
+   convergedSolver_no_dead_ends hcols hinit hr,
+   convergedSolver_reachable_in_field hinit hr,
+   convergedSet_not_lost (convergedSolver_confined hinit hr),
+   convergedSolver_reachable_WF hcols hinit hr⟩
+
 end Tetris
