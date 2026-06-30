@@ -2676,4 +2676,13 @@ theorem convergedSolver_slice_mapsTo (hcols : 4 ≤ cfg.cols) (p : Piece) :
       ↑(Placement.allValidFor cfg p) :=
   buildSolver_slice_mapsTo hcols convergedSet_fixed p
 
+/-- Atlas portrait of the converged solver: total, some-valued, round-trips, injective. -/
+theorem convergedSolver_atlas_portrait :
+    (∀ g p, (convergedSolver (cfg := cfg)).toAtlas g p
+        = some (convergedSolver (cfg := cfg) g p)) ∧
+    (∀ g p, ((convergedSolver (cfg := cfg)).toAtlas g p).isSome = true) ∧
+    ((convergedSolver (cfg := cfg)).toAtlas.toSolver = convergedSolver (cfg := cfg)) ∧
+    (∀ (σ₁ σ₂ : Solver cfg), σ₁.toAtlas = σ₂.toAtlas → σ₁ = σ₂) :=
+  buildSolver_atlas_portrait convergedSet_fixed
+
 end Tetris
