@@ -1866,4 +1866,16 @@ theorem buildSolver_move_energy_brackets {S : Finset GameState} (hfix : F_finite
         ≤ cfg.cols * Board.maxHeight cfg ((buildSolver hfix g p).applyStep cfg b) :=
   solver_move_energy_brackets (σ := buildSolver hfix) g p b
 
+/-- A constructed-function placement only raises per-column heights. -/
+theorem buildSolver_place_raises_columns {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) (b : Board) (j : ℕ) :
+    Board.colHeight b j ≤ Board.colHeight ((buildSolver hfix g p).place b) j :=
+  solver_place_raises_columns (σ := buildSolver hfix) g p b j
+
+/-- At each state the constructed function injects pieces into placements. -/
+theorem buildSolver_slice_injOn_bag {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (g : GameState) :
+    Set.InjOn (fun p => buildSolver hfix g p) g.bag :=
+  solver_slice_injOn_bag (buildSolver_validSolver hcols hfix) g
+
 end Tetris
