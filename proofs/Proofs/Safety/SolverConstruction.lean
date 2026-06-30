@@ -2518,4 +2518,18 @@ theorem convergedSolver_trace_reachable (hcols : 4 ≤ cfg.cols)
     Reachable cfg (adversarialTrace cfg convergedSolver s GameState.init n) :=
   buildSolver_trace_reachable hcols convergedSet_fixed hinit hl n
 
+/-- The converged solver's output sits in the rotation×column grid. -/
+theorem convergedSolver_output_in_grid (hcols : 4 ≤ cfg.cols) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) :
+    ((convergedSolver (cfg := cfg) g p).rot, (convergedSolver (cfg := cfg) g p).col)
+      ∈ (Finset.univ : Finset Rotation) ×ˢ Finset.range cfg.cols :=
+  buildSolver_output_in_grid hcols convergedSet_fixed hp
+
+/-- The converged solver's output is the canonical triple `⟨p, rot, col⟩`. -/
+theorem convergedSolver_output_eq_mk (hcols : 4 ≤ cfg.cols) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) :
+    convergedSolver (cfg := cfg) g p
+      = ⟨p, (convergedSolver (cfg := cfg) g p).rot, (convergedSolver (cfg := cfg) g p).col⟩ :=
+  buildSolver_output_eq_mk hcols convergedSet_fixed hp
+
 end Tetris
