@@ -2727,4 +2727,12 @@ theorem buildSolver_M4_artifact {S : Finset GameState} (hfix : F_finite cfg S = 
     GameState.init ∈ S :=
   ⟨buildSolver_atlas_closed hfix, fun g p => buildSolver_toAtlas_isSome hfix g p, hinit⟩
 
+/-- The canonical converged atlas is a complete M4 artifact for the converged region. -/
+theorem convergedSolver_M4_artifact (hinit : GameState.init ∈ convergedSet cfg) :
+    (convergedSolver (cfg := cfg)).toAtlas.IsClosedOn cfg (convergedSet cfg) ∧
+    (∀ g p, ((convergedSolver (cfg := cfg)).toAtlas g p).isSome = true) ∧
+    GameState.init ∈ convergedSet cfg :=
+  ⟨convergedSolver_atlas_closed cfg,
+   fun g p => buildSolver_toAtlas_isSome convergedSet_fixed g p, hinit⟩
+
 end Tetris
