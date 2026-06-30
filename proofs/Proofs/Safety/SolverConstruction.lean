@@ -899,4 +899,20 @@ theorem buildSolver_move_wf {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
     Board.WF cfg ((buildSolver hfix g p).place b) :=
   solver_move_preserves_wf (buildSolver_validSolver hcols hfix) hp hWF
 
+/-- The constructed function is causal: identical past input gives identical play. -/
+theorem buildSolver_causal {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (s s' : ℕ → Piece) (g0 : GameState) (n : ℕ) (h : ∀ i < n, s i = s' i)
+    (k : ℕ) (hk : k ≤ n) :
+    adversarialTrace cfg (buildSolver hfix) s g0 k
+      = adversarialTrace cfg (buildSolver hfix) s' g0 k :=
+  solver_is_causal s s' g0 n h k hk
+
+/-- The constructed function's dynamics are Markov: the next state depends on the current state. -/
+theorem buildSolver_markov {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (s : ℕ → Piece) (n : ℕ) :
+    adversarialTrace cfg (buildSolver hfix) s GameState.init (n + 1)
+      = adversarialStep cfg (adversarialTrace cfg (buildSolver hfix) s GameState.init n) (s n)
+          (buildSolver hfix (adversarialTrace cfg (buildSolver hfix) s GameState.init n) (s n)) :=
+  solver_markov_step s n
+
 end Tetris
