@@ -1808,4 +1808,17 @@ theorem buildSolver_representable {S : Finset GameState} (hcols : 4 ≤ cfg.cols
     (∀ g p, (buildSolver hfix).toAtlas g p = some (buildSolver hfix g p)) :=
   solver_representable (buildSolver_validSolver hcols hfix)
 
+/-- Closed atlases compose: their union is closed on the union of regions. -/
+theorem construct_atlas_composes {A B : Atlas cfg} {S₁ S₂ : Finset GameState}
+    (hA : A.IsClosedOn cfg S₁) (hB : B.IsClosedOn cfg S₂) :
+    (A.unionOn B S₁ S₂).IsClosedOn cfg (S₁ ∪ S₂) :=
+  solver_atlas_composes hA hB
+
+/-- Standard total response table over states×pieces has at most 280 distinct entries. -/
+theorem construct_image_card_le_standard (σ : Solver GameConfig.standard)
+    (hv : ValidSolver GameConfig.standard σ) (T : Finset (GameState × Piece))
+    (hT : ∀ gp ∈ T, gp.2 ∈ gp.1.bag) :
+    (T.image (fun gp => σ gp.1 gp.2)).card ≤ 280 :=
+  solver_image_card_le_standard σ hv T hT
+
 end Tetris
