@@ -1759,4 +1759,16 @@ theorem construct_placement_never_removes_holes (b : Board) (pl : Placement) :
     (HoleyCarrier.holes cfg b).card ≤ (HoleyCarrier.holes cfg (pl.place b)).card :=
   solver_placement_never_removes_holes b pl
 
+/-- The constructed function's output column lands in the column range finset. -/
+theorem buildSolver_col_mem_range {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) :
+    (buildSolver hfix g p).col ∈ Finset.range cfg.cols :=
+  solver_col_mem_range (buildSolver_validSolver hcols hfix) hp
+
+/-- The constructed function's output rotation lands in the rotation universe. -/
+theorem buildSolver_rot_mem_univ {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) :
+    (buildSolver hfix g p).rot ∈ (Finset.univ : Finset Rotation) :=
+  solver_rot_mem_univ (σ := buildSolver hfix) g p
+
 end Tetris
