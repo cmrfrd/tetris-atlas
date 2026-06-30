@@ -565,4 +565,17 @@ theorem survives_card_rounds_safe (S₀ : Finset GameState) {g : GameState}
     (h : g ∈ safeIterFinite cfg S₀ S₀.card) : g ∈ safe cfg :=
   mem_safe_of_mem_safeIterFinite_at_S₀_card h
 
+/-- **Standard discovery test.** On canonical 10×20 Tetris, if `init` survives `|S₀|` rounds from
+any universe, the game is solvable. -/
+theorem standard_solver_exists_of_init_survives (S₀ : Finset GameState)
+    (h : GameState.init ∈ safeIterFinite GameConfig.standard S₀ S₀.card) :
+    TetrisSolvableValid :=
+  tetrisSolvableValid_of_init_mem_safeIterFinite_at_S₀_card_standard h
+
+/-- **Tiny discovery test.** Same, on the 4×4 toy board — finitely checkable. -/
+theorem tiny_solver_exists_of_init_survives (S₀ : Finset GameState)
+    (h : GameState.init ∈ safeIterFinite GameConfig.tiny S₀ S₀.card) :
+    TetrisSolvableValidFor GameConfig.tiny :=
+  tetrisSolvableValidFor_tiny_of_init_mem_safeIterFinite_at_S₀_card h
+
 end Tetris
