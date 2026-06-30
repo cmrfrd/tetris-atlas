@@ -798,4 +798,20 @@ theorem buildSolver_trace_debt {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
       (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board ≤ cfg.cols * cfg.rows :=
   solver_debt_le_capacity (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
 
+/-- The constructed function keeps every playable column within the ceiling. -/
+theorem buildSolver_columns_le {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) {j : ℕ} (hj : j < cfg.cols) :
+    Board.colHeight (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board j
+      ≤ cfg.rows :=
+  solver_columns_le_rows (buildSolver_solvesTetrisValid hcols hfix hinit).2 hl n hj
+
+/-- The constructed function never places a cell in the death zone. -/
+theorem buildSolver_no_death_cell {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) {c : Coord}
+    (hc : c ∈ (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board) :
+    c.2 < cfg.rows :=
+  solver_no_cell_in_death_zone (buildSolver_solvesTetrisValid hcols hfix hinit).2 hl n hc
+
 end Tetris
