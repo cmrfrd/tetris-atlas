@@ -1043,4 +1043,10 @@ theorem buildSolver_no_clear_window_bounded {S : Finset GameState} (hcols : 4 �
     4 * n ≤ cfg.cols * cfg.rows :=
   solver_no_clear_window_bounded (buildSolver_solvesTetrisValid hcols hfix hinit) hl n hno
 
+/-- The constructed function's response table at a state has at most `bag.card` distinct entries. -/
+theorem buildSolver_response_table_card_le {S : Finset GameState}
+    (hfix : F_finite cfg S = S) (g : GameState) :
+    (g.bag.image (fun p => buildSolver hfix g p)).card ≤ g.bag.card :=
+  solver_response_table_card_le (σ := buildSolver hfix) g
+
 end Tetris
