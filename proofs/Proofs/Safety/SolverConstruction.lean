@@ -3145,4 +3145,12 @@ theorem convergedSolver_is_a_function (g : GameState) (p : Piece) :
   ⟨⟨convergedSolver (cfg := cfg) g p, rfl, fun _ h => h.symm⟩,
    fun g₂ hb hbag => convergedSolver_reads_board_bag g g₂ p hb hbag⟩
 
+/-- Two converged outputs for the same piece coincide once rotation and column agree. -/
+theorem convergedSolver_eq_of_rotcol (hcols : 4 ≤ cfg.cols) {g₁ g₂ : GameState} {p : Piece}
+    (hp₁ : p ∈ g₁.bag) (hp₂ : p ∈ g₂.bag)
+    (hr : (convergedSolver (cfg := cfg) g₁ p).rot = (convergedSolver (cfg := cfg) g₂ p).rot)
+    (hc : (convergedSolver (cfg := cfg) g₁ p).col = (convergedSolver (cfg := cfg) g₂ p).col) :
+    convergedSolver (cfg := cfg) g₁ p = convergedSolver (cfg := cfg) g₂ p :=
+  buildSolver_eq_of_rotcol hcols convergedSet_fixed hp₁ hp₂ hr hc
+
 end Tetris
