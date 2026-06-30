@@ -2387,4 +2387,10 @@ theorem convergedSolver_not_lost_iff (hcols : 4 ≤ cfg.cols)
         (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.rows :=
   buildSolver_not_lost_iff hcols convergedSet_fixed hinit hl n
 
+/-- Every board on a converged-solver play is well-formed. -/
+theorem convergedSolver_trace_wf (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Board.WF cfg (adversarialTrace cfg convergedSolver s GameState.init n).board :=
+  buildSolver_trace_wf hcols convergedSet_fixed hinit hl n
+
 end Tetris
