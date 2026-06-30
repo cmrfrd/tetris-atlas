@@ -1361,4 +1361,14 @@ theorem buildSolver_dynamical_portrait {S : Finset GameState} (hcols : 4 ≤ cfg
         = (buildSolver hfix g p).applyStep cfg g.board) :=
   solver_dynamical_portrait (buildSolver_validSolver hcols hfix) p
 
+/-- Move-effect portrait: count +≤4, height +≤4, raw place +4, and WF preserved. -/
+theorem buildSolver_move_effect_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag)
+    {b : Board} (hWF : Board.WF cfg b) :
+    (((buildSolver hfix g p).applyStep cfg b).count ≤ b.count + 4) ∧
+    (Board.maxHeight cfg ((buildSolver hfix g p).applyStep cfg b) ≤ Board.maxHeight cfg b + 4) ∧
+    (((buildSolver hfix g p).place b).count = b.count + 4) ∧
+    Board.WF cfg ((buildSolver hfix g p).applyStep cfg b) :=
+  solver_move_effect_portrait (buildSolver_validSolver hcols hfix) hp hWF
+
 end Tetris
