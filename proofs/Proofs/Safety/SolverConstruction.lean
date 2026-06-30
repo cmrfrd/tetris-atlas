@@ -2415,4 +2415,10 @@ theorem convergedSolver_markov (s : ℕ → Piece) (n : ℕ) :
             (adversarialTrace cfg convergedSolver s GameState.init n) (s n)) :=
   buildSolver_markov convergedSet_fixed s n
 
+/-- The converged solver is causal: its play depends only on past pieces. -/
+theorem convergedSolver_no_lookahead (s s' : ℕ → Piece) (n : ℕ) (h : ∀ i < n, s i = s' i) :
+    adversarialTrace cfg convergedSolver s GameState.init n
+      = adversarialTrace cfg convergedSolver s' GameState.init n :=
+  buildSolver_no_lookahead convergedSet_fixed s s' n h
+
 end Tetris
