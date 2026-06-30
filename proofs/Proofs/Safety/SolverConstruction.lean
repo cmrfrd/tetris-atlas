@@ -3087,4 +3087,10 @@ theorem convergedSolver_play_by_lookup (hinit : GameState.init ∈ convergedSet 
   ⟨buildSolver_toAtlas_isSome convergedSet_fixed _ _,
    convergedSolver_survives hinit hl n⟩
 
+/-- The converged region is a closed subgraph: every chosen edge stays inside it. -/
+theorem convergedSet_closed_subgraph {g : GameState} (hg : g ∈ convergedSet cfg) {p : Piece}
+    (hp : p ∈ g.bag) :
+    adversarialStep cfg g p (convergedSolver (cfg := cfg) g p) ∈ convergedSet cfg :=
+  buildSolver_step_mem convergedSet_fixed hg hp
+
 end Tetris
