@@ -1328,4 +1328,11 @@ theorem construct_energy_brackets_maxHeight (b : Board) :
     HoleDebt.surfaceArea cfg b ≤ cfg.cols * Board.maxHeight cfg b :=
   solver_energy_brackets_maxHeight b
 
+/-- The constructed function's placement never removes holes. -/
+theorem buildSolver_place_never_removes_holes {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) (b : Board) :
+    (HoleyCarrier.holes cfg b).card
+      ≤ (HoleyCarrier.holes cfg ((buildSolver hfix g p).place b)).card :=
+  solver_place_never_removes_holes (σ := buildSolver hfix) g p b
+
 end Tetris
