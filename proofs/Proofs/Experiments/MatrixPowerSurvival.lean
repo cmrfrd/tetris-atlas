@@ -220,6 +220,44 @@ theorem reachable_cycle_implies_infinite_safe_path {R : State → State → Prop
   obtain ⟨h, hh0, hhstep⟩ := infinite_path_of_reachable_of_continuation hreach hg0 hgstep
   exact ⟨h, hh0, fun n => (hSafeEdges _ _ (hhstep n)).1, hhstep⟩
 
+/-! ### Perron–Frobenius / subshift converse: an infinite walk forces a reachable cycle
+
+On a *finite* state space the headline reverses. Any infinite `R`-walk visits `card + 1` states in
+its first `card + 1` steps, so by pigeonhole it repeats one — its prefix reaches that state and the
+segment between the two visits is a positive-length cycle. Hence reachable cycle ⟺ infinite safe
+path: the subshift of safe walks is nonempty iff a cycle is reachable iff `ρ(B) ≥ 1`. -/
+
+/-- **Infinite walk ⇒ reachable cycle** (the finite-state Perron–Frobenius / subshift direction).
+Pigeonhole on the first `card + 1` states of the path. Needs no `Dead` hypothesis — a cycle is
+forced in any infinite walk on a finite graph. -/
+theorem infiniteSafePath_imp_reachableCycle [Finite State] {R : State → State → Prop}
+    {Dead : State → Prop} {s₀ : State} (h : InfiniteSafePath R Dead s₀) :
+    ReachableCycle R s₀ := by
+  letI := Fintype.ofFinite State
+  obtain ⟨path, hp0, _hsafe, hpstep⟩ := h
+  obtain ⟨i, j, hij, heq⟩ := Fintype.exists_ne_map_eq_of_card_lt
+    (fun k : Fin (Fintype.card State + 1) => path (k : ℕ)) (by rw [Fintype.card_fin]; omega)
+  have key : ∀ a b : ℕ, a < b → path a = path b → ReachableCycle R s₀ := by
+    intro a b hab hpab
+    refine ⟨path a, ?_, b - a, by omega, ?_⟩
+    · have hw := RelPow.subchain (N := a) (fun k _ => hpstep k) 0 a (by omega)
+      rw [Nat.zero_add, hp0] at hw
+      exact hw.reachable
+    · have hw := RelPow.subchain (N := b) (fun k _ => hpstep k) a (b - a) (by omega)
+      rw [show a + (b - a) = b from by omega, ← hpab] at hw
+      exact hw
+  have hne : (i : ℕ) ≠ (j : ℕ) := fun e => hij (Fin.ext e)
+  rcases Nat.lt_or_ge (i : ℕ) (j : ℕ) with hlt | hge
+  · exact key i j hlt heq
+  · exact key j i (by omega) heq.symm
+
+/-- **Reachable cycle ⟺ infinite safe play** on a finite state space — the `ρ(B) ≥ 1`
+characterization. Forward is the headline; backward is `infiniteSafePath_imp_reachableCycle`. -/
+theorem reachableCycle_iff_infiniteSafePath [Finite State] {R : State → State → Prop}
+    {Dead : State → Prop} (hSafeEdges : ∀ s t, R s t → ¬ Dead s ∧ ¬ Dead t) {s₀ : State} :
+    ReachableCycle R s₀ ↔ InfiniteSafePath R Dead s₀ :=
+  ⟨reachable_cycle_implies_infinite_safe_path hSafeEdges, infiniteSafePath_imp_reachableCycle⟩
+
 /-- **Combined reachable-closed engine.** A dead-avoiding closed support `X` (every vertex has an
 in-`X` successor) with some vertex reachable from `s₀` yields an infinite safe path from `s₀`. This
 is the general workhorse behind every recurrent-support theorem below: reach `X`, then stay. -/
