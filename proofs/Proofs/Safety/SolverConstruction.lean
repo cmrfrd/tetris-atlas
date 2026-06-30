@@ -1225,4 +1225,12 @@ theorem buildSolver_move_recovery_bounded {S : Finset GameState} (hcols : 4 ≤ 
     b.count + 4 ≤ ((buildSolver hfix g p).applyStep cfg b).count + cfg.cols * 4 :=
   solver_move_recovery_bounded (buildSolver_validSolver hcols hfix) hp hWF hnf
 
+/-- Clearing in a constructed-function move never increases hole-debt. -/
+theorem buildSolver_clear_reduces_debt {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag)
+    {b : Board} (hWF : Board.WF cfg b) :
+    HoleDebt.debt cfg ((buildSolver hfix g p).applyStep cfg b)
+      ≤ HoleDebt.debt cfg ((buildSolver hfix g p).place b) :=
+  solver_clear_reduces_debt (buildSolver_validSolver hcols hfix) hp hWF
+
 end Tetris
