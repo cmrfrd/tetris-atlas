@@ -2835,4 +2835,11 @@ theorem convergedSet_mem_props {g : GameState} (hg : g ∈ convergedSet cfg) :
   ⟨convergedSet_subset_safe (Finset.mem_coe.mpr hg),
    convergedSet_subset_inFieldStates cfg hg, convergedSet_not_lost hg⟩
 
+/-- Memorylessness bundle: the converged solver depends only on the current board and bag. -/
+theorem convergedSolver_memoryless_bundle (g₁ g₂ : GameState) (p : Piece)
+    (hb : g₁.board = g₂.board) (hbag : g₁.bag = g₂.bag) :
+    convergedSolver (cfg := cfg) g₁ p = convergedSolver (cfg := cfg) g₂ p ∧
+    convergedSolver (cfg := cfg) g₁ p = convergedSolver (cfg := cfg) ⟨g₁.board, g₁.bag⟩ p :=
+  ⟨convergedSolver_reads_board_bag g₁ g₂ p hb hbag, convergedSolver_eta g₁ p⟩
+
 end Tetris
