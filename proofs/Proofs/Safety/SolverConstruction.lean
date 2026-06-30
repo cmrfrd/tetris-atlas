@@ -1033,4 +1033,14 @@ theorem buildSolver_realized_outputs_finite {S : Finset GameState} (hcols : 4 �
         (adversarialTrace cfg (buildSolver hfix) s GameState.init n) (s n)).Finite :=
   solver_realized_outputs_finite (buildSolver_validSolver hcols hfix) s hl
 
+/-- A no-clear run of the constructed function is capacity-bounded: `4·n ≤ cols·rows`. -/
+theorem buildSolver_no_clear_window_bounded {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ)
+    (hno : ∀ k < n,
+        (adversarialTrace cfg (buildSolver hfix) s GameState.init (k + 1)).board.count
+          = (adversarialTrace cfg (buildSolver hfix) s GameState.init k).board.count + 4) :
+    4 * n ≤ cfg.cols * cfg.rows :=
+  solver_no_clear_window_bounded (buildSolver_solvesTetrisValid hcols hfix hinit) hl n hno
+
 end Tetris
