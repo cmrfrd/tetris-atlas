@@ -2070,4 +2070,15 @@ theorem buildSolver_grand_bounds_portrait {S : Finset GameState} (hcols : 4 ≤ 
    buildSolver_maxHeight_lipschitz hcols hfix hinit hl n,
    fun _ hj => buildSolver_columns_le hcols hfix hinit hl n hj⟩
 
+/-- Step-law portrait: the orbit advances by one adversarial step, equally one solver step. -/
+theorem buildSolver_step_law_portrait {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (s : ℕ → Piece) (n : ℕ) :
+    adversarialTrace cfg (buildSolver hfix) s GameState.init (n + 1)
+        = adversarialStep cfg (adversarialTrace cfg (buildSolver hfix) s GameState.init n) (s n)
+            (buildSolver hfix (adversarialTrace cfg (buildSolver hfix) s GameState.init n) (s n)) ∧
+    adversarialTrace cfg (buildSolver hfix) s GameState.init (n + 1)
+        = solverStep cfg (buildSolver hfix) (s n)
+            (adversarialTrace cfg (buildSolver hfix) s GameState.init n) :=
+  ⟨buildSolver_markov hfix s n, buildSolver_trace_eq_solverStep hfix s n⟩
+
 end Tetris
