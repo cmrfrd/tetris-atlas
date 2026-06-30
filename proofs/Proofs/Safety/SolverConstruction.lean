@@ -1771,4 +1771,15 @@ theorem buildSolver_rot_mem_univ {S : Finset GameState} (hfix : F_finite cfg S =
     (buildSolver hfix g p).rot ∈ (Finset.univ : Finset Rotation) :=
   solver_rot_mem_univ (σ := buildSolver hfix) g p
 
+/-- Compressibility grand portrait: coded outputs, finite image, board+bag determined, total. -/
+theorem buildSolver_compressibility_grand_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) :
+    (∀ g p, p ∈ g.bag →
+        4 * (buildSolver hfix g p).col + ((buildSolver hfix g p).rot : ℕ) < 4 * cfg.cols) ∧
+    {pl : Placement | ∃ g p, p ∈ g.bag ∧ buildSolver hfix g p = pl}.Finite ∧
+    (∀ g₁ g₂ p, g₁.board = g₂.board → g₁.bag = g₂.bag →
+        buildSolver hfix g₁ p = buildSolver hfix g₂ p) ∧
+    (∀ g p, (buildSolver hfix).toAtlas g p = some (buildSolver hfix g p)) :=
+  solver_compressibility_grand_portrait (buildSolver_validSolver hcols hfix)
+
 end Tetris
