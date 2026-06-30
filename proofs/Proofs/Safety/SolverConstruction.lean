@@ -1218,4 +1218,11 @@ theorem buildSolver_move_maxHeight_le {S : Finset GameState} (hcols : 4 ≤ cfg.
     Board.maxHeight cfg ((buildSolver hfix g p).applyStep cfg b) ≤ Board.maxHeight cfg b + 4 :=
   solver_move_maxHeight_le (buildSolver_validSolver hcols hfix) hp b
 
+/-- A constructed-function move recovers at most `cols·4` cells against the +4 added. -/
+theorem buildSolver_move_recovery_bounded {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag)
+    {b : Board} (hWF : Board.WF cfg b) (hnf : ∀ r, ¬ Board.isFull cfg b r) :
+    b.count + 4 ≤ ((buildSolver hfix g p).applyStep cfg b).count + cfg.cols * 4 :=
+  solver_move_recovery_bounded (buildSolver_validSolver hcols hfix) hp hWF hnf
+
 end Tetris
