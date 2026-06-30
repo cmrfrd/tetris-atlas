@@ -664,6 +664,55 @@ and combine them by *conjunction over the bag*:
   quantity is the **joint spectral radius** of `{A_r}` (the worst case over all adversarial piece
   sequences `A_{rₙ}···A_{r₁}`), not a single `ρ` — the matrix face of the mean-payoff game. -/
 
+section ControllablePredecessor
+
+variable {Piece Action : Type*}
+
+/-- The **controllable predecessor** `CPre(X)`: states that are live and from which, whatever piece
+the adversary draws from the bag, some placement stays in `X`. The `∀ r ∈ bag` is a *conjunction*
+(the bag's universal quantifier); this is the adversarial one-step operator `safeOp`, abstractly. -/
+def CPre (Dead : State → Prop) (legalDraws : State → Finset Piece)
+    (step : State → Action → Piece → State) (X : Set State) : Set State :=
+  {s | ¬ Dead s ∧ ∀ r ∈ legalDraws s, ∃ a, step s a r ∈ X}
+
+/-- `CPre` is monotone: more room downstream ⇒ at least as many states survive the round. -/
+theorem cpre_mono (Dead : State → Prop) (legalDraws : State → Finset Piece)
+    (step : State → Action → Piece → State) {X Y : Set State} (h : X ⊆ Y) :
+    CPre Dead legalDraws step X ⊆ CPre Dead legalDraws step Y :=
+  fun _ hs => ⟨hs.1, fun r hr => (hs.2 r hr).imp fun _ ha => h ha⟩
+
+/-- `CPre` as a monotone self-map of the lattice `Set State`. -/
+def cpreHom (Dead : State → Prop) (legalDraws : State → Finset Piece)
+    (step : State → Action → Piece → State) : Set State →o Set State where
+  toFun := CPre Dead legalDraws step
+  monotone' _ _ h := cpre_mono Dead legalDraws step h
+
+/-- The **adversarial safe set** as the greatest fixed point of `CPre` — the largest set on which
+the player can keep surviving the round against the bag. The abstract analogue of `Tetris.safe`. -/
+def adversarialSafe (Dead : State → Prop) (legalDraws : State → Finset Piece)
+    (step : State → Action → Piece → State) : Set State :=
+  OrderHom.gfp (cpreHom Dead legalDraws step)
+
+/-- **A recurrent support is exactly a sub-fixpoint of `CPre`.** `X ⊆ CPre(X)` is definitionally the
+`SafeRecurrentSupport` closure (every state of `X` is live and handles every drawable piece into
+`X`). Chained with `recurrentSupport_iff_common_subEigenvector` below, this reads: recurrent support
+⟺ `X ⊆ CPre(X)` ⟺ `1_X` is a common sub-eigenvector of the per-piece family `{A_r}`. -/
+theorem subset_cpre_iff_recurrentSupport (Dead : State → Prop) (legalDraws : State → Finset Piece)
+    (step : State → Action → Piece → State) (X : Set State) :
+    X ⊆ CPre Dead legalDraws step X ↔ SafeRecurrentSupport Dead legalDraws step X :=
+  Iff.rfl
+
+/-- **Coinduction: every recurrent support lies inside the adversarial safe set.** The abstract
+`safe_greatest` for the conjunctive operator — the gfp is the *maximal* recurrent support / common
+sub-eigenvector of the per-piece matrix family. -/
+theorem subset_adversarialSafe_of_recurrentSupport (Dead : State → Prop)
+    (legalDraws : State → Finset Piece) (step : State → Action → Piece → State) {X : Set State}
+    (h : SafeRecurrentSupport Dead legalDraws step X) :
+    X ⊆ adversarialSafe Dead legalDraws step :=
+  OrderHom.le_gfp _ ((subset_cpre_iff_recurrentSupport Dead legalDraws step X).mpr h)
+
+end ControllablePredecessor
+
 section AdversarialMatrix
 
 variable {Piece Action : Type*} [DecidableEq State] [Fintype Action]
