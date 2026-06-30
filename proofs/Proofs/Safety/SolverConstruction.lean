@@ -927,4 +927,15 @@ theorem buildSolver_uncurry {S : Finset GameState} (hfix : F_finite cfg S = S)
     Function.uncurry (buildSolver hfix) (g, p) = buildSolver hfix g p :=
   solver_uncurry_apply g p
 
+/-- The constructed function's atlas is total. -/
+theorem buildSolver_toAtlas_isSome {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) :
+    ((buildSolver hfix).toAtlas g p).isSome = true :=
+  solver_toAtlas_isSome g p
+
+/-- The constructed function round-trips through its atlas. -/
+theorem buildSolver_toAtlas_toSolver {S : Finset GameState} (hfix : F_finite cfg S = S) :
+    (buildSolver hfix).toAtlas.toSolver = buildSolver hfix :=
+  solver_toAtlas_toSolver
+
 end Tetris
