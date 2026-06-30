@@ -977,4 +977,10 @@ theorem buildSolver_never_stuck {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
     ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg :=
   solver_never_stuck (buildSolver_solvesTetrisValid hcols hfix hinit) hl n hp
 
+/-- Every state reachable under the constructed function is safe: no dead ends. -/
+theorem buildSolver_no_dead_ends {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) {g : GameState}
+    (hr : solverReachable (buildSolver hfix) g) : g ∈ safe cfg :=
+  solver_no_dead_ends (buildSolver_solvesTetrisValid hcols hfix hinit) hr
+
 end Tetris
