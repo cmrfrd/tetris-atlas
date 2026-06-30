@@ -3423,4 +3423,31 @@ theorem construction_complete_answer (hcols : 4 ≤ cfg.cols) :
    fun hinit => ⟨convergedSolver_solves hcols hinit,
      fun _ hr => convergedSolver_confined hinit hr⟩⟩
 
+/-- **The ideal Tetris solver function, characterized constructively.** The whole arc in one
+statement: the function `(board, bag, piece) → placement` is the explicit `convergedSolver`,
+obtained from a terminating retrograde computation whose region is (1) computable — a fixed
+point of `F_finite` reached within `|inFieldStates|` rounds; (2) sound and greatest — contained
+in `safe` and dominating every in-field certificate, so the construction discards nothing
+certifiable; (3) a decision procedure — one membership test `init ∈ convergedSet` settles
+existence both positively and negatively; and (4) on success a total, region-confined winning
+solver carrying a closed atlas. This is how such a function is constructed, what it guarantees,
+how it is computed, and how its existence is discovered. -/
+theorem the_ideal_tetris_solver_function (hcols : 4 ≤ cfg.cols) :
+    (F_finite cfg (convergedSet cfg) = convergedSet cfg ∧
+      safeIterFinite cfg (inFieldStates cfg) ((inFieldStates cfg).card + 1) = convergedSet cfg) ∧
+    (↑(convergedSet cfg) ⊆ safe cfg ∧
+      ∀ S, F_finite cfg S = S → S ⊆ inFieldStates cfg → S ⊆ convergedSet cfg) ∧
+    ((GameState.init ∈ convergedSet cfg → TetrisSolvableValidFor cfg) ∧
+      (¬ TetrisSolvableValidFor cfg → GameState.init ∉ convergedSet cfg)) ∧
+    (GameState.init ∈ convergedSet cfg →
+      ValidSolver cfg convergedSolver ∧
+      SolvesTetrisValid cfg convergedSolver ∧
+      (convergedSolver (cfg := cfg)).toAtlas.IsClosedOn cfg (convergedSet cfg) ∧
+      (∀ g, solverReachable (convergedSolver (cfg := cfg)) g → g ∈ convergedSet cfg)) :=
+  ⟨⟨convergedSet_fixed, construct_halts_in_card_rounds⟩,
+   ⟨convergedSet_subset_safe, fun _ hf hs => fixed_inField_subset_convergedSet hf hs⟩,
+   ⟨init_mem_convergedSet_solvable hcols, init_notMem_convergedSet_of_not_solvable hcols⟩,
+   fun hinit => ⟨convergedSolver_validSolver hcols, convergedSolver_solves hcols hinit,
+     convergedSolver_atlas_closed cfg, fun _ hr => convergedSolver_confined hinit hr⟩⟩
+
 end Tetris
