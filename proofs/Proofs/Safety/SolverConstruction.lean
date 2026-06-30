@@ -1660,4 +1660,15 @@ theorem buildSolver_move_rows_bounded {S : Finset GameState} (hfix : F_finite cf
     (buildSolver hfix g p).dropOffset b ≤ c.2 ∧ c.2 < (buildSolver hfix g p).dropOffset b + 4 :=
   solver_move_rows_bounded (σ := buildSolver hfix) b g p hc
 
+/-- The action space is never empty: each piece has at least one valid placement. -/
+theorem construct_action_space_nonempty (hcols : 4 ≤ cfg.cols) (p : Piece) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg :=
+  solver_action_space_nonempty hcols p
+
+/-- Along legal play the constructed function always faces a nonempty bag. -/
+theorem buildSolver_always_has_a_piece {S : Finset GameState} (hfix : F_finite cfg S = S)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    (adversarialTrace cfg (buildSolver hfix) s GameState.init n).bag.Nonempty :=
+  solver_always_has_a_piece (buildSolver hfix) hl n
+
 end Tetris
