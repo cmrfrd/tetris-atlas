@@ -1795,4 +1795,17 @@ theorem buildSolver_dynamical_grand_portrait {S : Finset GameState} (hcols : 4 �
     (∀ g, g.bag.draw p ≠ g.bag → solverStep cfg (buildSolver hfix) p g ≠ g) :=
   solver_dynamical_grand_portrait (buildSolver_validSolver hcols hfix) p
 
+/-- The constructed function reads only board and bag (eta over the state record). -/
+theorem buildSolver_eta {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) :
+    buildSolver hfix g p = buildSolver hfix ⟨g.board, g.bag⟩ p :=
+  solver_eta (σ := buildSolver hfix) g p
+
+/-- Representability: the constructed function has finite image and a total atlas. -/
+theorem buildSolver_representable {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) :
+    {pl : Placement | ∃ g p, p ∈ g.bag ∧ buildSolver hfix g p = pl}.Finite ∧
+    (∀ g p, (buildSolver hfix).toAtlas g p = some (buildSolver hfix g p)) :=
+  solver_representable (buildSolver_validSolver hcols hfix)
+
 end Tetris
