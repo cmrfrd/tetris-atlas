@@ -2020,6 +2020,17 @@ theorem convergedSet_card_le (cfg : GameConfig) :
     (convergedSet cfg).card ≤ (inFieldStates cfg).card :=
   safeIterFinite_inFieldStates_card_le cfg (inFieldStates cfg).card
 
+/-- The converged region is contained in the in-field universe. -/
+theorem convergedSet_subset_inFieldStates (cfg : GameConfig) :
+    convergedSet cfg ⊆ inFieldStates cfg :=
+  safeIterFinite_inFieldStates_subset cfg (inFieldStates cfg).card
+
+/-- On the standard board the converged region has at most `2^207` states. -/
+theorem convergedSet_standard_card_le :
+    (convergedSet GameConfig.standard).card ≤ 2 ^ 207 := by
+  have h := convergedSet_card_le GameConfig.standard
+  rwa [solver_universe_size_standard] at h
+
 /-- Every state on a converged-solver play stays inside the converged region. -/
 theorem convergedSolver_trace_mem (hinit : GameState.init ∈ convergedSet cfg)
     {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
