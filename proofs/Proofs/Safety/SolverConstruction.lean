@@ -631,4 +631,13 @@ winning states) and are bounded above by the limit — they form a bounded famil
 theorem empty_fixed_subset (S : Finset GameState) : (∅ : Finset GameState) ⊆ S :=
   Finset.empty_subset S
 
+/-! ## Part 25 — The doomed states -/
+
+/-- **Death propagation computes the complement of `safe`.** Under coverage, a state is pruned by
+the construction iff it is genuinely unsurvivable — the removed states are exactly the doomed. -/
+theorem doomed_iff_not_safe {S₀ : Finset GameState} (hS₀ : safe cfg ⊆ ↑S₀) (N : ℕ)
+    (hfix : safeIterFinite cfg S₀ (N + 1) = safeIterFinite cfg S₀ N) (g : GameState) :
+    g ∉ safeIterFinite cfg S₀ N ↔ g ∉ safe cfg := by
+  rw [← Finset.mem_coe, ← computed_exact S₀ N hS₀ hfix g]
+
 end Tetris
