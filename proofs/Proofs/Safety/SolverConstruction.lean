@@ -2499,4 +2499,11 @@ theorem convergedSolver_places_four (b : Board) (g : GameState) (p : Piece) :
     ((convergedSolver (cfg := cfg) g p).place b).count = b.count + 4 :=
   buildSolver_places_four convergedSet_fixed b g p
 
+/-- The converged solver's output code is bounded by `4·cols`. -/
+theorem convergedSolver_output_code_lt (hcols : 4 ≤ cfg.cols) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) :
+    4 * (convergedSolver (cfg := cfg) g p).col + ((convergedSolver (cfg := cfg) g p).rot : ℕ)
+      < 4 * cfg.cols :=
+  buildSolver_output_code_lt hcols convergedSet_fixed hp
+
 end Tetris
