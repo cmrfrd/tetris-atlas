@@ -1646,4 +1646,18 @@ theorem construct_placement_raises_columns (b : Board) (pl : Placement) (j : ℕ
     Board.colHeight b j ≤ Board.colHeight (pl.place b) j :=
   solver_placement_raises_columns b pl j
 
+/-- The constructed function's dropped cells span at most four columns. -/
+theorem buildSolver_move_cols_bounded {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (b : Board) (g : GameState) (p : Piece) {c : Coord}
+    (hc : c ∈ (buildSolver hfix g p).dropped b) :
+    (buildSolver hfix g p).col ≤ c.1 ∧ c.1 < (buildSolver hfix g p).col + 4 :=
+  solver_move_cols_bounded (σ := buildSolver hfix) b g p hc
+
+/-- The constructed function's dropped cells span at most four rows. -/
+theorem buildSolver_move_rows_bounded {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (b : Board) (g : GameState) (p : Piece) {c : Coord}
+    (hc : c ∈ (buildSolver hfix g p).dropped b) :
+    (buildSolver hfix g p).dropOffset b ≤ c.2 ∧ c.2 < (buildSolver hfix g p).dropOffset b + 4 :=
+  solver_move_rows_bounded (σ := buildSolver hfix) b g p hc
+
 end Tetris
