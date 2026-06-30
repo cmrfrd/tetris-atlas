@@ -2880,4 +2880,10 @@ theorem convergedSolver_and_safeSolver_both_solve (hcols : 4 ≤ cfg.cols)
    init_safe_implies_solvesTetrisValid hcols
      (convergedSet_subset_safe (Finset.mem_coe.mpr hinit))⟩
 
+/-- Every converged state has a placement for each bag piece keeping the game safe. -/
+theorem convergedSet_safe_response {g : GameState} (hg : g ∈ convergedSet cfg) {p : Piece}
+    (hp : p ∈ g.bag) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧ adversarialStep cfg g p pl ∈ safe cfg :=
+  construct_safe_response_each_piece (convergedSet_subset_safe (Finset.mem_coe.mpr hg)) hp
+
 end Tetris
