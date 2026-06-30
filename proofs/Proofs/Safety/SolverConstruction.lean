@@ -3032,4 +3032,14 @@ theorem convergedSolver_input_portrait (hcols : 4 ≤ cfg.cols) (s : ℕ → Pie
       ∈ Placement.allValidFor cfg (s n)) :=
   buildSolver_input_portrait hcols convergedSet_fixed s hl
 
+/-- Collapse portrait: a converged piece-slice fits the menu, ≤ cols·4, and collides past it. -/
+theorem convergedSolver_collapse_portrait (hcols : 4 ≤ cfg.cols) (p : Piece)
+    (T : Finset GameState) (hT : ∀ g ∈ T, p ∈ g.bag) :
+    (T.image (fun g => convergedSolver (cfg := cfg) g p) ⊆ Placement.allValidFor cfg p) ∧
+    ((T.image (fun g => convergedSolver (cfg := cfg) g p)).card ≤ cfg.cols * 4) ∧
+    ((Placement.allValidFor cfg p).card < T.card →
+      ∃ g₁ ∈ T, ∃ g₂ ∈ T, g₁ ≠ g₂ ∧
+        convergedSolver (cfg := cfg) g₁ p = convergedSolver (cfg := cfg) g₂ p) :=
+  buildSolver_collapse_portrait hcols convergedSet_fixed p T hT
+
 end Tetris
