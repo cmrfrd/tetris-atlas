@@ -253,4 +253,27 @@ theorem construct_yields_cycle {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
   (init_safe_iff_exists_init_adversarialClosedCycleWF cfg).mp
     (fixed_point_subset_safe hfix (Finset.mem_coe.mpr hinit))
 
+/-! ## Part 10 — Death propagation: what each round removes -/
+
+/-- **A round removes exactly the lost-or-trapped states.** A candidate `g ∈ S` is pruned iff it is
+already lost, or some drawable piece has no valid placement staying in `S` (the adversary's escape).
+This is the backward death-propagation: death spreads from lost states and from traps. -/
+theorem round_removes_iff {S : Finset GameState} {g : GameState} (hg : g ∈ S) :
+    g ∉ F_finite cfg S ↔ g.lost cfg ∨ ∃ p ∈ g.bag,
+      ∀ pl ∈ Placement.allValidFor cfg p, adversarialStep cfg g p pl ∉ S := by
+  rw [mem_F_finite_iff]
+  constructor
+  · intro h
+    by_cases hlost : g.lost cfg
+    · exact Or.inl hlost
+    · refine Or.inr ?_
+      by_contra hcon
+      refine h ⟨hg, hlost, fun p hp => ?_⟩
+      by_contra hp2
+      exact hcon ⟨p, hp, fun pl hpl hstep => hp2 ⟨pl, hpl, hstep⟩⟩
+  · rintro (hlost | ⟨p, hp, htrap⟩) ⟨_, hnlost, hmoves⟩
+    · exact hnlost hlost
+    · obtain ⟨pl, hpl, hstep⟩ := hmoves p hp
+      exact htrap pl hpl hstep
+
 end Tetris
