@@ -1701,4 +1701,15 @@ theorem construct_distinct_bags_le (hcols : 4 ≤ cfg.cols)
       (C.toAdversarialClosedCycle.states.image GameState.bag).card ≤ 128 :=
   solver_distinct_bags_le hcols hex
 
+/-- The standard universe the construction searches has exactly `2^207` states. -/
+theorem construct_universe_size_standard :
+    (inFieldStates GameConfig.standard).card = 2 ^ 207 :=
+  solver_universe_size_standard
+
+/-- The constructed function's out-degree at a state is at most the bag size. -/
+theorem buildSolver_outdegree_le {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) :
+    (g.bag.image (fun p => solverStep cfg (buildSolver hfix) p g)).card ≤ g.bag.card :=
+  solver_outdegree_le (σ := buildSolver hfix) g
+
 end Tetris
