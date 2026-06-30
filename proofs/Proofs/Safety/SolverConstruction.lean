@@ -387,4 +387,22 @@ theorem cycle_subset_safe (C : AdversarialClosedCycle cfg) :
     (↑C.states : Set GameState) ⊆ safe cfg :=
   fixed_point_subset_safe C.F_finite_states_eq_states
 
+/-! ## Part 17 — Properties of the converged region -/
+
+/-- **The limit is a genuine fixed point.** At convergence the computed region is fixed by one
+round: applying `F_finite` leaves it unchanged. -/
+theorem limit_is_fixed (S₀ : Finset GameState) (N : ℕ)
+    (hfix : safeIterFinite cfg S₀ (N + 1) = safeIterFinite cfg S₀ N) :
+    F_finite cfg (safeIterFinite cfg S₀ N) = safeIterFinite cfg S₀ N := by
+  rw [← safeIterFinite_succ]; exact hfix
+
+/-- **The limit is self-sustaining.** Every survivor is alive and, for each drawable piece, has a
+valid placement landing back in the region — the computed table is complete. -/
+theorem limit_self_sustaining (S₀ : Finset GameState) (N : ℕ)
+    (hfix : safeIterFinite cfg S₀ (N + 1) = safeIterFinite cfg S₀ N)
+    {g : GameState} (hg : g ∈ safeIterFinite cfg S₀ N) :
+    ¬ g.lost cfg ∧ ∀ p ∈ g.bag, ∃ pl ∈ Placement.allValidFor cfg p,
+      adversarialStep cfg g p pl ∈ safeIterFinite cfg S₀ N :=
+  (round_self_sustaining_iff _).mp (limit_is_fixed S₀ N hfix) g hg
+
 end Tetris
