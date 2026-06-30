@@ -1126,4 +1126,11 @@ theorem buildSolver_trace_compose {S : Finset GameState} (hfix : F_finite cfg S 
         (adversarialTrace cfg (buildSolver hfix) s g0 n) m :=
   solver_trace_compose (σ := buildSolver hfix) s g0 n m
 
+/-- Under a constant piece stream the constructed function's trace is an iterated step map. -/
+theorem buildSolver_trace_const_eq_iterate {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (p : Piece) (n : ℕ) :
+    adversarialTrace cfg (buildSolver hfix) (fun _ => p) GameState.init n
+      = (solverStep cfg (buildSolver hfix) p)^[n] GameState.init :=
+  solver_trace_const_eq_iterate (σ := buildSolver hfix) p n
+
 end Tetris
