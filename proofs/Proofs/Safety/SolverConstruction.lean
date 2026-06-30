@@ -1317,4 +1317,15 @@ theorem construct_surface_evolution_hole_independent {b β : Board} (pl : Placem
     (pl.place b).colHeight j = (pl.place β).colHeight j :=
   solver_surface_evolution_hole_independent pl h j
 
+/-- Energy split: hole-debt plus cell count equals surface area on a well-formed board. -/
+theorem construct_energy_split {b : Board} (hwf : Board.WF cfg b) :
+    HoleDebt.debt cfg b + b.count = HoleDebt.surfaceArea cfg b :=
+  solver_energy_split hwf
+
+/-- Energy brackets max height: maxHeight ≤ surfaceArea ≤ cols·maxHeight. -/
+theorem construct_energy_brackets_maxHeight (b : Board) :
+    Board.maxHeight cfg b ≤ HoleDebt.surfaceArea cfg b ∧
+    HoleDebt.surfaceArea cfg b ≤ cfg.cols * Board.maxHeight cfg b :=
+  solver_energy_brackets_maxHeight b
+
 end Tetris
