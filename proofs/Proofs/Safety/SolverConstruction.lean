@@ -750,4 +750,20 @@ theorem buildSolver_trace_count {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
       ≤ cfg.cols * cfg.rows :=
   solver_count_le_capacity (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
 
+/-- The constructed function's play stays in `inFieldStates`. -/
+theorem buildSolver_trace_in_field {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg (buildSolver hfix) s GameState.init n ∈ inFieldStates cfg :=
+  solver_trace_mem_inFieldStates (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
+
+/-- The constructed function's play is eventually periodic. -/
+theorem buildSolver_eventually_repeats {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) :
+    ∃ i j : ℕ, i ≠ j ∧
+      adversarialTrace cfg (buildSolver hfix) s GameState.init i
+        = adversarialTrace cfg (buildSolver hfix) s GameState.init j :=
+  solver_play_eventually_repeats (buildSolver_solvesTetrisValid hcols hfix hinit) hl
+
 end Tetris
