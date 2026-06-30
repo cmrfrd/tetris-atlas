@@ -1597,4 +1597,11 @@ theorem buildSolver_empty_drop_zero {S : Finset GameState} (hfix : F_finite cfg 
     (buildSolver hfix g p).dropOffset Board.empty = 0 :=
   solver_empty_drop_zero (σ := buildSolver hfix) g p
 
+/-- The constructed function's move preserves board well-formedness. -/
+theorem buildSolver_applyStep_wf {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag)
+    {b : Board} (hWF : Board.WF cfg b) :
+    Board.WF cfg ((buildSolver hfix g p).applyStep cfg b) :=
+  solver_applyStep_wf (buildSolver_validSolver hcols hfix) hp hWF
+
 end Tetris
