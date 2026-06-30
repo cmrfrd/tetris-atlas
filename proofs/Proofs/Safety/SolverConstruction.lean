@@ -1018,4 +1018,11 @@ theorem buildSolver_output_compressed {S : Finset GameState} (hcols : 4 ≤ cfg.
     buildSolver hfix g p ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg) :=
   solver_output_compressed (buildSolver_validSolver hcols hfix) hp
 
+/-- On a piece-`p` slice larger than the menu, the constructed function collides (pigeonhole). -/
+theorem buildSolver_per_piece_noninjective {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {p : Piece} (T : Finset GameState)
+    (hT : ∀ g ∈ T, p ∈ g.bag) (hcard : (Placement.allValidFor cfg p).card < T.card) :
+    ∃ g₁ ∈ T, ∃ g₂ ∈ T, g₁ ≠ g₂ ∧ buildSolver hfix g₁ p = buildSolver hfix g₂ p :=
+  solver_per_piece_noninjective (buildSolver_validSolver hcols hfix) T hT hcard
+
 end Tetris
