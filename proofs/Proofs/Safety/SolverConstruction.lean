@@ -3387,4 +3387,25 @@ theorem convergedSolver_queries_in_bag_forever {s : ℕ → Piece} (hl : LegalSe
     ∀ n, s n ∈ (adversarialTrace cfg convergedSolver s GameState.init n).bag :=
   fun n => convergedSolver_queried_in_bag s hl n
 
+/-- Every move the converged solver makes along legal play is on the menu, forever. -/
+theorem convergedSolver_outputs_on_menu_forever (hcols : 4 ≤ cfg.cols) (s : ℕ → Piece)
+    (hl : LegalSequence s) :
+    ∀ n, convergedSolver (cfg := cfg)
+        (adversarialTrace cfg convergedSolver s GameState.init n) (s n)
+      ∈ Placement.allValidFor cfg (s n) :=
+  fun n => convergedSolver_play_outputs_in_menu hcols s hl n
+
+/-- Perpetual play: at every step the converged solver is alive, safe, bounded, and in-region. -/
+theorem convergedSolver_perpetual_play (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    ¬ (adversarialTrace cfg convergedSolver s GameState.init n).lost cfg ∧
+    adversarialTrace cfg convergedSolver s GameState.init n ∈ safe cfg ∧
+    Board.maxHeight cfg
+        (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.rows ∧
+    adversarialTrace cfg convergedSolver s GameState.init n ∈ convergedSet cfg :=
+  ⟨convergedSolver_survives hinit hl n,
+   convergedSolver_trace_mem_safe hcols hinit hl n,
+   convergedSolver_trace_maxHeight hcols hinit hl n,
+   buildSolver_trace_mem convergedSet_fixed hinit hl n⟩
+
 end Tetris
