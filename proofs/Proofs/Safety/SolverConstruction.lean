@@ -1182,4 +1182,11 @@ theorem buildSolver_response_table_card_eq {S : Finset GameState} (hcols : 4 ≤
     (g.bag.image (fun p => buildSolver hfix g p)).card = g.bag.card :=
   solver_response_table_card_eq (buildSolver_validSolver hcols hfix) g
 
+/-- Every state reachable by the constructed function lies in the finite in-field universe. -/
+theorem buildSolver_active_domain_finite {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) {g : GameState}
+    (hr : solverReachable (buildSolver hfix) g) :
+    g ∈ inFieldStates cfg :=
+  solver_active_domain_finite (buildSolver_solvesTetrisValid hcols hfix hinit) hr
+
 end Tetris
