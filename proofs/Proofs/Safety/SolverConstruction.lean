@@ -1835,4 +1835,17 @@ theorem buildSolver_image_per_piece_subset {S : Finset GameState} (hcols : 4 ≤
     T.image (fun g => buildSolver hfix g p) ⊆ Placement.allValidFor cfg p :=
   solver_image_per_piece_subset (buildSolver_validSolver hcols hfix) T hT
 
+/-- The construction's start state: full bag, zero cells, empty board. -/
+theorem construct_initial_state :
+    GameState.init.bag = Bag.full ∧
+    GameState.init.board.count = 0 ∧
+    GameState.init.board = (∅ : Board) :=
+  solver_initial_state
+
+/-- The full state×piece query table over the standard universe has size `2^207 · 7`. -/
+theorem construct_table_domain_card :
+    ((inFieldStates cfg) ×ˢ (Finset.univ : Finset Piece)).card
+      = (inFieldStates cfg).card * Fintype.card Piece :=
+  solver_table_domain_card
+
 end Tetris
