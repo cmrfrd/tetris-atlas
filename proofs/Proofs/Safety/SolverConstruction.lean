@@ -3105,4 +3105,16 @@ theorem convergedSolver_dynamical_grand_portrait (hcols : 4 ≤ cfg.cols) (p : P
     (∀ g, g.bag.draw p ≠ g.bag → solverStep cfg convergedSolver p g ≠ g) :=
   buildSolver_dynamical_grand_portrait hcols convergedSet_fixed p
 
+/-- Compressibility grand portrait of the converged solver: coded, finite, determined, total. -/
+theorem convergedSolver_compressibility_grand_portrait (hcols : 4 ≤ cfg.cols) :
+    (∀ g p, p ∈ g.bag →
+        4 * (convergedSolver (cfg := cfg) g p).col + ((convergedSolver (cfg := cfg) g p).rot : ℕ)
+          < 4 * cfg.cols) ∧
+    {pl : Placement | ∃ g p, p ∈ g.bag ∧ convergedSolver (cfg := cfg) g p = pl}.Finite ∧
+    (∀ g₁ g₂ p, g₁.board = g₂.board → g₁.bag = g₂.bag →
+        convergedSolver (cfg := cfg) g₁ p = convergedSolver (cfg := cfg) g₂ p) ∧
+    (∀ g p, (convergedSolver (cfg := cfg)).toAtlas g p
+        = some (convergedSolver (cfg := cfg) g p)) :=
+  buildSolver_compressibility_grand_portrait hcols convergedSet_fixed
+
 end Tetris
