@@ -131,4 +131,26 @@ theorem construct_stable (S₀ : Finset GameState) {n : ℕ}
     safeIterFinite cfg S₀ (n + k) = safeIterFinite cfg S₀ n :=
   safeIterFinite_stable cfg S₀ h k
 
+/-! ## Part 4 — Correctness of the computed region -/
+
+/-- **Soundness.** The construction's fixed point is contained in the true winning region `safe`:
+every surviving state really is survivable. The construction never over-claims. -/
+theorem computed_sound (S₀ : Finset GameState) (N : ℕ)
+    (h : safeIterFinite cfg S₀ (N + 1) = safeIterFinite cfg S₀ N) :
+    (↑(safeIterFinite cfg S₀ N) : Set GameState) ⊆ safe cfg :=
+  safeIterFinite_subset_safe cfg S₀ N h
+
+/-- **Completeness.** If the starting universe covers `safe`, every round still contains all of
+`safe`: the construction never drops a survivable state. -/
+theorem computed_complete (S₀ : Finset GameState) (hS₀ : safe cfg ⊆ ↑S₀) (n : ℕ) :
+    safe cfg ⊆ ↑(safeIterFinite cfg S₀ n) :=
+  safe_subset_safeIterFinite cfg S₀ hS₀ n
+
+/-- **Exactness.** With a covering universe, the fixed point *equals* `safe` pointwise: membership
+in the computed region is membership in the winning region — sound and complete together. -/
+theorem computed_exact (S₀ : Finset GameState) (N : ℕ) (hS₀ : safe cfg ⊆ ↑S₀)
+    (hfix : safeIterFinite cfg S₀ (N + 1) = safeIterFinite cfg S₀ N) (g : GameState) :
+    g ∈ safe cfg ↔ g ∈ (↑(safeIterFinite cfg S₀ N) : Set GameState) :=
+  safe_iff_mem_fixedPoint cfg S₀ N hS₀ hfix g
+
 end Tetris
