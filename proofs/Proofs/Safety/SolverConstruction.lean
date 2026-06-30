@@ -2547,4 +2547,11 @@ theorem init_notMem_convergedSet_of_not_solvable (hcols : 4 ≤ cfg.cols)
     (h : ¬ TetrisSolvableValidFor cfg) : GameState.init ∉ convergedSet cfg :=
   fun hinit => h (init_mem_convergedSet_solvable hcols hinit)
 
+/-- Footprint portrait of the converged solver: reachable in-field and finitely many placements. -/
+theorem convergedSolver_footprint_portrait (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    (∀ g, solverReachable (convergedSolver (cfg := cfg)) g → g ∈ inFieldStates cfg) ∧
+    {pl : Placement | ∃ g p, p ∈ g.bag ∧ convergedSolver (cfg := cfg) g p = pl}.Finite :=
+  buildSolver_footprint_portrait hcols convergedSet_fixed hinit
+
 end Tetris
