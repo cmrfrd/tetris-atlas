@@ -2116,6 +2116,33 @@ theorem convergedSolver_grand_portrait (hcols : 4 ≤ cfg.cols)
    convergedSolver_atlas_closed cfg,
    fun _ hr => convergedSolver_confined hinit hr⟩
 
+/-- Grand safety portrait of the converged solver: in-region, safe, alive, in-field. -/
+theorem convergedSolver_safety_portrait (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg convergedSolver s GameState.init n ∈ convergedSet cfg ∧
+    adversarialTrace cfg convergedSolver s GameState.init n ∈ safe cfg ∧
+    ¬ (adversarialTrace cfg convergedSolver s GameState.init n).lost cfg ∧
+    adversarialTrace cfg convergedSolver s GameState.init n ∈ inFieldStates cfg :=
+  ⟨buildSolver_trace_mem convergedSet_fixed hinit hl n,
+   convergedSolver_trace_mem_safe hcols hinit hl n,
+   convergedSolver_survives hinit hl n,
+   convergedSolver_trace_in_field hcols hinit hl n⟩
+
+/-- Output grand portrait of the construction: piece-faithful, valid, in range, on menu. -/
+theorem buildSolver_output_grand_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) :
+    (buildSolver hfix g p).piece = p ∧
+    (buildSolver hfix g p).Valid cfg ∧
+    (buildSolver hfix g p).col < cfg.cols ∧
+    ((buildSolver hfix g p).rot : ℕ) < 4 ∧
+    buildSolver hfix g p ∈ Placement.allValidFor cfg p :=
+  ⟨buildSolver_announces_piece hcols hfix hp,
+   buildSolver_output_valid hcols hfix hp,
+   buildSolver_col_lt_cols hcols hfix hp,
+   buildSolver_rot_lt_four hfix g p,
+   (buildSolver_response_portrait hcols hfix g).1 p hp⟩
+
 /-- Every state on a converged-solver play stays inside the converged region. -/
 theorem convergedSolver_trace_mem (hinit : GameState.init ∈ convergedSet cfg)
     {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
