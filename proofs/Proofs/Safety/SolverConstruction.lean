@@ -2999,4 +2999,11 @@ theorem convergedSet_eq_iterate_card_add (k : ℕ) :
   safeIterFinite_stable cfg (inFieldStates cfg)
     (safeIterFinite_inFieldStates_stable_at_card cfg) k
 
+/-- The converged region is self-sustaining: each member is alive with an in-region response. -/
+theorem convergedSet_self_sustaining :
+    ∀ g ∈ convergedSet cfg, ¬ g.lost cfg ∧
+      ∀ p ∈ g.bag, ∃ pl ∈ Placement.allValidFor cfg p,
+        adversarialStep cfg g p pl ∈ convergedSet cfg :=
+  (round_self_sustaining_iff (convergedSet cfg)).mp convergedSet_fixed
+
 end Tetris
