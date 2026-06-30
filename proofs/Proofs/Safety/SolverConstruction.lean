@@ -3292,4 +3292,18 @@ theorem convergedSolver_init_response (hinit : GameState.init ∈ convergedSet c
       ∈ convergedSet cfg :=
   convergedSet_closed_subgraph hinit hp
 
+/-- M1: the converged solver plays forever — no legal sequence ever tops it out. -/
+theorem convergedSolver_plays_forever (hinit : GameState.init ∈ convergedSet cfg) :
+    ∀ (s : ℕ → Piece), LegalSequence s →
+      ∀ n, ¬ (adversarialTrace cfg convergedSolver s GameState.init n).lost cfg :=
+  fun _ hl n => convergedSolver_survives hinit hl n
+
+/-- The converged solver keeps the stack height bounded by the board, forever. -/
+theorem convergedSolver_height_bounded_forever (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    ∀ (s : ℕ → Piece), LegalSequence s →
+      ∀ n, Board.maxHeight cfg
+        (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.rows :=
+  fun _ hl n => convergedSolver_trace_maxHeight hcols hinit hl n
+
 end Tetris
