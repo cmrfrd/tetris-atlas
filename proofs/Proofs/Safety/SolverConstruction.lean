@@ -3349,4 +3349,18 @@ theorem convergedSolver_in_field_forever (hcols : 4 ≤ cfg.cols)
       ∀ n, adversarialTrace cfg convergedSolver s GameState.init n ∈ inFieldStates cfg :=
   fun _ hl n => convergedSolver_trace_in_field hcols hinit hl n
 
+/-- No cell the converged solver lays ever reaches the death zone, forever. -/
+theorem convergedSolver_no_death_cell_forever (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    ∀ (s : ℕ → Piece), LegalSequence s → ∀ n,
+      ∀ c ∈ (adversarialTrace cfg convergedSolver s GameState.init n).board, c.2 < cfg.rows :=
+  fun _ hl n _ hc => convergedSolver_no_death_cell hcols hinit hl n hc
+
+/-- Every board on a converged-solver play is well-formed, forever. -/
+theorem convergedSolver_WF_forever (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    ∀ (s : ℕ → Piece), LegalSequence s →
+      ∀ n, Board.WF cfg (adversarialTrace cfg convergedSolver s GameState.init n).board :=
+  fun _ hl n => convergedSolver_trace_wf hcols hinit hl n
+
 end Tetris
