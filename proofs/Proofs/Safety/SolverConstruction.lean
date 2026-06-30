@@ -3363,4 +3363,16 @@ theorem convergedSolver_WF_forever (hcols : 4 ≤ cfg.cols)
       ∀ n, Board.WF cfg (adversarialTrace cfg convergedSolver s GameState.init n).board :=
   fun _ hl n => convergedSolver_trace_wf hcols hinit hl n
 
+/-- Every state on a converged-solver play is reachable from the empty board, forever. -/
+theorem convergedSolver_reachable_forever (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    ∀ (s : ℕ → Piece), LegalSequence s →
+      ∀ n, Reachable cfg (adversarialTrace cfg convergedSolver s GameState.init n) :=
+  fun _ hl n => convergedSolver_trace_reachable hcols hinit hl n
+
+/-- The converged solver always has a piece to place — it is never stuck. -/
+theorem convergedSolver_pieces_available_forever {s : ℕ → Piece} (hl : LegalSequence s) :
+    ∀ n, (adversarialTrace cfg convergedSolver s GameState.init n).bag.Nonempty :=
+  fun n => buildSolver_always_has_a_piece convergedSet_fixed hl n
+
 end Tetris
