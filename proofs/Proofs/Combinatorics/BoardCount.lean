@@ -771,6 +771,25 @@ theorem count_clearLines_lt (cfg : GameConfig) {b : Board} {c : Coord}
   intro _
   exact hfull
 
+/-- **Clearing never raises a column's height.** Every surviving cell is a kept cell shifted *down*
+by `clearedBelow`, so `colHeight (clearLines cfg b) j ≤ colHeight b j` for every column — the
+height-side companion of `count_clearLines_lt`, and the monotonicity a bounded-height argument
+needs. -/
+theorem colHeight_clearLines_le (cfg : GameConfig) (b : Board) (j : ℕ) :
+    (clearLines cfg b).colHeight j ≤ b.colHeight j := by
+  change ((clearLines cfg b).colRows j).sup (· + 1) ≤ b.colHeight j
+  apply Finset.sup_le
+  intro r hr
+  simp only [colRows, Finset.mem_image, Finset.mem_filter] at hr
+  obtain ⟨q, ⟨hqcl, hqj⟩, hqr⟩ := hr
+  simp only [clearLines, Finset.mem_image, Finset.mem_filter] at hqcl
+  obtain ⟨p, ⟨hpb, _⟩, hpq⟩ := hqcl
+  have hp1 : p.1 = j := by rw [← hpq] at hqj; exact hqj
+  have hrp2 : r = p.2 - clearedBelow cfg b p.2 := by rw [← hqr, ← hpq]
+  have hlt : p.2 < b.colHeight p.1 := lt_colHeight hpb
+  rw [hp1] at hlt
+  omega
+
 /-- A board with no full rows has `clearedBelow = 0` for every row. -/
 theorem clearedBelow_of_no_fullRows (cfg : GameConfig) {b : Board} (r : ℕ)
     (h : fullRows cfg b = ∅) : clearedBelow cfg b r = 0 := by
