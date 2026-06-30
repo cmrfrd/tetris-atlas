@@ -2901,4 +2901,16 @@ theorem the_canonical_construction (hcols : 4 ≤ cfg.cols) :
    fun hinit => ⟨convergedSolver_solves hcols hinit, convergedSolver_atlas_closed cfg⟩,
    init_notMem_convergedSet_of_not_solvable hcols⟩
 
+/-- A fixed region is invariant under the induced self-map of the constructed solver. -/
+theorem buildSolver_solverStep_mem {S : Finset GameState} (hfix : F_finite cfg S = S)
+    {g : GameState} (hg : g ∈ S) {p : Piece} (hp : p ∈ g.bag) :
+    solverStep cfg (buildSolver hfix) p g ∈ S :=
+  buildSolver_step_mem hfix hg hp
+
+/-- The converged region is invariant under the converged solver's induced self-map. -/
+theorem convergedSolver_solverStep_mem {g : GameState} (hg : g ∈ convergedSet cfg) {p : Piece}
+    (hp : p ∈ g.bag) :
+    solverStep cfg convergedSolver p g ∈ convergedSet cfg :=
+  buildSolver_step_mem convergedSet_fixed hg hp
+
 end Tetris
