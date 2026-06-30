@@ -3280,4 +3280,16 @@ theorem convergedSolver_all_milestones (hcols : 4 ≤ cfg.cols)
    convergedSolver_yields_cycle hcols hinit,
    convergedSolver_yields_atlas hinit⟩
 
+/-- The converged region is, by definition, the in-field iterate at index `|inFieldStates|`. -/
+theorem convergedSet_def :
+    convergedSet cfg = safeIterFinite cfg (inFieldStates cfg) (inFieldStates cfg).card :=
+  rfl
+
+/-- From init in the region, the converged response to each opening piece stays in the region. -/
+theorem convergedSolver_init_response (hinit : GameState.init ∈ convergedSet cfg) {p : Piece}
+    (hp : p ∈ GameState.init.bag) :
+    adversarialStep cfg GameState.init p (convergedSolver (cfg := cfg) GameState.init p)
+      ∈ convergedSet cfg :=
+  convergedSet_closed_subgraph hinit hp
+
 end Tetris
