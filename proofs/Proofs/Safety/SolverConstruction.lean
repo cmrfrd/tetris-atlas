@@ -782,4 +782,20 @@ theorem buildSolver_count_lipschitz {S : Finset GameState} (hcols : 4 ≤ cfg.co
       ≤ (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board.count + 4 :=
   solver_trace_count_le_succ (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
 
+/-- The constructed function holds the surface-area energy within capacity. -/
+theorem buildSolver_trace_surfaceArea {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    HoleDebt.surfaceArea cfg
+      (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board ≤ cfg.cols * cfg.rows :=
+  solver_surfaceArea_le_capacity (buildSolver_solvesTetrisValid hcols hfix hinit).2 hl n
+
+/-- The constructed function holds the hole-debt within capacity. -/
+theorem buildSolver_trace_debt {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    HoleDebt.debt cfg
+      (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board ≤ cfg.cols * cfg.rows :=
+  solver_debt_le_capacity (buildSolver_solvesTetrisValid hcols hfix hinit) hl n
+
 end Tetris
