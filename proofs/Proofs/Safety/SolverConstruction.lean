@@ -1712,4 +1712,15 @@ theorem buildSolver_outdegree_le {S : Finset GameState} (hfix : F_finite cfg S =
     (g.bag.image (fun p => solverStep cfg (buildSolver hfix) p g)).card ≤ g.bag.card :=
   solver_outdegree_le (σ := buildSolver hfix) g
 
+/-- The opening can never lose: any valid first placement keeps the empty board alive. -/
+theorem construct_opening_cannot_lose (hrows : 4 ≤ cfg.rows) (pl : Placement) (hv : pl.Valid cfg) :
+    ¬ Board.isLost cfg (Placement.applyStep cfg GameState.init.board pl) :=
+  solver_opening_cannot_lose hrows pl hv
+
+/-- A hole is a double obstruction: an unfilled cell with an occupied cell strictly above it. -/
+theorem construct_hole_obstruction {b : Board} {p : Coord}
+    (hp : p ∈ HoleyCarrier.holes cfg b) :
+    ¬ Board.isFull cfg b p.2 ∧ ∃ r, p.2 < r ∧ (p.1, r) ∈ b :=
+  solver_hole_obstruction hp
+
 end Tetris
