@@ -1285,4 +1285,14 @@ theorem construct_clears_at_most_four {b : Board} (pl : Placement)
     Board.linesCleared cfg (pl.place b) ≤ 4 :=
   solver_clears_at_most_four pl hnf
 
+/-- Loss dichotomy: a board is lost or every column is within the field. -/
+theorem construct_loss_dichotomy (b : Board) :
+    Board.isLost cfg b ∨ ∀ j, Board.colHeight b j ≤ cfg.rows :=
+  solver_loss_dichotomy b
+
+/-- A board is non-losing exactly when all its cells sit below the top row. -/
+theorem construct_not_lost_iff_cells_below (b : Board) :
+    ¬ Board.isLost cfg b ↔ ∀ p ∈ b, p.2 < cfg.rows :=
+  solver_not_lost_iff_cells_below_rows b
+
 end Tetris
