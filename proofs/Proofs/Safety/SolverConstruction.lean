@@ -1671,4 +1671,12 @@ theorem buildSolver_always_has_a_piece {S : Finset GameState} (hfix : F_finite c
     (adversarialTrace cfg (buildSolver hfix) s GameState.init n).bag.Nonempty :=
   solver_always_has_a_piece (buildSolver hfix) hl n
 
+/-- Every cell the constructed function ever lays sits within the playfield rectangle. -/
+theorem buildSolver_board_in_field {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) {c : Coord}
+    (hc : c ∈ (adversarialTrace cfg (buildSolver hfix) s GameState.init n).board) :
+    c.1 < cfg.cols ∧ c.2 < cfg.rows :=
+  solver_board_in_field (buildSolver_solvesTetrisValid hcols hfix hinit) hl n hc
+
 end Tetris
