@@ -2993,4 +2993,10 @@ theorem convergedSolver_place_never_removes_holes (g : GameState) (p : Piece) (b
       ≤ (HoleyCarrier.holes cfg ((convergedSolver (cfg := cfg) g p).place b)).card :=
   buildSolver_place_never_removes_holes convergedSet_fixed g p b
 
+/-- The construction is stable beyond `|inFieldStates|` rounds: any extra round adds nothing. -/
+theorem convergedSet_eq_iterate_card_add (k : ℕ) :
+    safeIterFinite cfg (inFieldStates cfg) ((inFieldStates cfg).card + k) = convergedSet cfg :=
+  safeIterFinite_stable cfg (inFieldStates cfg)
+    (safeIterFinite_inFieldStates_stable_at_card cfg) k
+
 end Tetris
