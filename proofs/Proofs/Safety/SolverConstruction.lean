@@ -2585,4 +2585,9 @@ theorem convergedSolver_drop_geometry (g : GameState) (p : Piece) (b : Board) :
    buildSolver_dropped_disjoint convergedSet_fixed b g p,
    buildSolver_move_superset convergedSet_fixed b g p⟩
 
+/-- The converged region is contained in every earlier iterate (descending chain). -/
+theorem convergedSet_subset_iterate {n : ℕ} (hn : n ≤ (inFieldStates cfg).card) :
+    convergedSet cfg ⊆ safeIterFinite cfg (inFieldStates cfg) n :=
+  construct_death_propagation_monotone hn
+
 end Tetris
