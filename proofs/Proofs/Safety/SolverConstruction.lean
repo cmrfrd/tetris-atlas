@@ -2617,4 +2617,10 @@ theorem convergedSolver_board_in_field (hcols : 4 ≤ cfg.cols)
     c.1 < cfg.cols ∧ c.2 < cfg.rows :=
   buildSolver_board_in_field hcols convergedSet_fixed hinit hl n hc
 
+/-- When init is in the converged region, every opening piece has a safe response. -/
+theorem convergedSolver_handles_init (hinit : GameState.init ∈ convergedSet cfg) (p : Piece) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧
+      adversarialStep cfg GameState.init p pl ∈ safe cfg :=
+  construct_handles_all_seven_at_init (convergedSet_subset_safe (Finset.mem_coe.mpr hinit)) p
+
 end Tetris
