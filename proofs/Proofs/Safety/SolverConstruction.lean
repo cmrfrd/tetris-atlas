@@ -3129,4 +3129,11 @@ theorem convergedSolver_output_compressed (hcols : 4 ≤ cfg.cols) {g : GameStat
       ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg) :=
   buildSolver_output_compressed hcols convergedSet_fixed hp
 
+/-- Init in the converged region certifies both solvability and that init itself is safe. -/
+theorem init_mem_convergedSet_certifies (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    TetrisSolvableValidFor cfg ∧ GameState.init ∈ safe cfg :=
+  ⟨init_mem_convergedSet_solvable hcols hinit,
+   convergedSet_subset_safe (Finset.mem_coe.mpr hinit)⟩
+
 end Tetris
