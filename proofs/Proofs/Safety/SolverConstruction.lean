@@ -153,4 +153,29 @@ theorem computed_exact (S₀ : Finset GameState) (N : ℕ) (hS₀ : safe cfg ⊆
     g ∈ safe cfg ↔ g ∈ (↑(safeIterFinite cfg S₀ N) : Set GameState) :=
   safe_iff_mem_fixedPoint cfg S₀ N hS₀ hfix g
 
+/-! ## Part 5 — Deciding existence of the function -/
+
+/-- **Existence is decided by the construction.** A solving function exists iff, at the
+construction's fixed point, `init` is among the survivors — a finite-set membership check. -/
+theorem existence_decided (S₀ : Finset GameState) (hcols : 4 ≤ cfg.cols)
+    (hS₀ : safe cfg ⊆ ↑S₀) (N : ℕ)
+    (hfix : safeIterFinite cfg S₀ (N + 1) = safeIterFinite cfg S₀ N) :
+    (∃ σ : Solver cfg, SolvesTetrisValid cfg σ)
+      ↔ GameState.init ∈ safeIterFinite cfg S₀ N :=
+  solver_exists_iff_init_in_fixedpoint hcols hS₀ N hfix
+
+/-- **Refutation by pruning.** If `init` is ever pruned at any round, no solving function exists —
+one snapshot of the construction with `init` gone is a complete impossibility proof. -/
+theorem no_solver_of_init_pruned (S₀ : Finset GameState) (hcols : 4 ≤ cfg.cols)
+    (hS₀ : safe cfg ⊆ ↑S₀) (n : ℕ) (h : GameState.init ∉ safeIterFinite cfg S₀ n) :
+    ¬ ∃ σ : Solver cfg, SolvesTetrisValid cfg σ :=
+  no_solver_of_init_not_mem_safeIterFinite hcols hS₀ n h
+
+/-- **The construction makes safety decidable.** From a covering universe and a fixed-point witness,
+membership of any state in `safe` reduces to a finite lookup. -/
+def construct_decide_safe (S₀ : Finset GameState) (N : ℕ) (hS₀ : safe cfg ⊆ ↑S₀)
+    (hfix : safeIterFinite cfg S₀ (N + 1) = safeIterFinite cfg S₀ N) (g : GameState) :
+    Decidable (g ∈ safe cfg) :=
+  decideSafeFromUniverse cfg S₀ N hS₀ hfix g
+
 end Tetris
