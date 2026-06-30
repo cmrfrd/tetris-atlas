@@ -2291,4 +2291,26 @@ theorem convergedSolver_maxHeight_lipschitz (hcols : 4 ≤ cfg.cols)
       ≤ Board.maxHeight cfg (adversarialTrace cfg convergedSolver s GameState.init n).board + 4 :=
   buildSolver_maxHeight_lipschitz hcols convergedSet_fixed hinit hl n
 
+/-- The converged solver keeps the cell count even (on an even-width board). -/
+theorem convergedSolver_even_count (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) (hev : Even cfg.cols)
+    {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Even (adversarialTrace cfg convergedSolver s GameState.init n).board.count :=
+  buildSolver_even_count hcols convergedSet_fixed hinit hev hl n
+
+/-- Every state reachable by the converged solver is both safe and reachable. -/
+theorem convergedSolver_operates_in_safe_and_reachable (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {g : GameState}
+    (hr : solverReachable (convergedSolver (cfg := cfg)) g) :
+    g ∈ safe cfg ∧ Reachable cfg g :=
+  buildSolver_operates_in_safe_and_reachable hcols convergedSet_fixed hinit hr
+
+/-- The converged solver revisits a state within `|inFieldStates|` steps. -/
+theorem convergedSolver_repeats_within_inFieldStates (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) :
+    ∃ i j : ℕ, i < j ∧ j ≤ (inFieldStates cfg).card ∧
+      adversarialTrace cfg convergedSolver s GameState.init i
+        = adversarialTrace cfg convergedSolver s GameState.init j :=
+  buildSolver_repeats_within_inFieldStates hcols convergedSet_fixed hinit hl
+
 end Tetris
