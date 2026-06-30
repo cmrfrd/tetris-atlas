@@ -2532,4 +2532,14 @@ theorem convergedSolver_output_eq_mk (hcols : 4 ≤ cfg.cols) {g : GameState} {p
       = ⟨p, (convergedSolver (cfg := cfg) g p).rot, (convergedSolver (cfg := cfg) g p).col⟩ :=
   buildSolver_output_eq_mk hcols convergedSet_fixed hp
 
+/-- The converged solver is exactly `buildSolver` over the converged-region fixed point. -/
+theorem convergedSolver_eq_buildSolver :
+    (convergedSolver : Solver cfg) = buildSolver convergedSet_fixed :=
+  rfl
+
+/-- The construction halts: one more round past `|inFieldStates|` adds nothing. -/
+theorem construct_halts_in_card_rounds :
+    safeIterFinite cfg (inFieldStates cfg) ((inFieldStates cfg).card + 1) = convergedSet cfg :=
+  safeIterFinite_inFieldStates_stable_at_card cfg
+
 end Tetris
