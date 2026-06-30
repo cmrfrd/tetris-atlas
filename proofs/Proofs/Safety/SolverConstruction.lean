@@ -2789,4 +2789,20 @@ theorem inField_cycle_yields_convergedSolver (hcols : 4 ≤ cfg.cols)
     SolvesTetrisValid cfg convergedSolver :=
   convergedSolver_solves hcols (init_mem_convergedSet_of_inField_cycle C hS hinit)
 
+/-- Bounds bundle: along converged play, height, count, debt, surface all stay in budget. -/
+theorem convergedSolver_trace_bounds_bundle (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Board.maxHeight cfg
+        (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.rows ∧
+    (adversarialTrace cfg convergedSolver s GameState.init n).board.count
+        ≤ cfg.cols * cfg.rows ∧
+    HoleDebt.debt cfg
+        (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.cols * cfg.rows ∧
+    HoleDebt.surfaceArea cfg
+        (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.cols * cfg.rows :=
+  ⟨convergedSolver_trace_maxHeight hcols hinit hl n,
+   convergedSolver_trace_count hcols hinit hl n,
+   convergedSolver_trace_debt hcols hinit hl n,
+   convergedSolver_trace_surfaceArea hcols hinit hl n⟩
+
 end Tetris
