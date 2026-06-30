@@ -2487,4 +2487,11 @@ theorem convergedSolver_opening_safe (hcols : 4 ≤ cfg.cols) (hrows : 4 ≤ cfg
         ((convergedSolver (cfg := cfg) GameState.init p).applyStep cfg GameState.init.board) :=
   buildSolver_opening_safe hcols convergedSet_fixed hrows hp
 
+/-- Re-running the construction from its own output is a fixed point: nothing more is pruned. -/
+theorem safeIterFinite_convergedSet_eq (n : ℕ) :
+    safeIterFinite cfg (convergedSet cfg) n = convergedSet cfg := by
+  induction n with
+  | zero => rfl
+  | succ k ih => rw [safeIterFinite_succ, ih, convergedSet_fixed]
+
 end Tetris
