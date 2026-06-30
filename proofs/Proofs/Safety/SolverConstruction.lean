@@ -1585,4 +1585,16 @@ theorem buildSolver_rot_lt_four {S : Finset GameState} (hfix : F_finite cfg S = 
     ((buildSolver hfix g p).rot : ℕ) < 4 :=
   solver_rot_lt_four (σ := buildSolver hfix) g p
 
+/-- The cells the constructed function drops are disjoint from the existing board. -/
+theorem buildSolver_dropped_disjoint {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (b : Board) (g : GameState) (p : Piece) :
+    Disjoint b ((buildSolver hfix g p).dropped b) :=
+  solver_dropped_disjoint (σ := buildSolver hfix) b g p
+
+/-- On the empty board the constructed function drops to the floor (offset zero). -/
+theorem buildSolver_empty_drop_zero {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) :
+    (buildSolver hfix g p).dropOffset Board.empty = 0 :=
+  solver_empty_drop_zero (σ := buildSolver hfix) g p
+
 end Tetris
