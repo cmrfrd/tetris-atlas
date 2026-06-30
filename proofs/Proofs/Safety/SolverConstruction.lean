@@ -2452,4 +2452,12 @@ theorem fixed_inField_init_solvable (hcols : 4 ≤ cfg.cols) {S : Finset GameSta
     TetrisSolvableValidFor cfg :=
   init_mem_convergedSet_solvable hcols (fixed_inField_subset_convergedSet hfix hsub hinit)
 
+/-- The converged region characterized: an in-field fixed point that dominates all such. -/
+theorem convergedSet_is_greatest_inField_fixed :
+    (F_finite cfg (convergedSet cfg) = convergedSet cfg ∧
+      convergedSet cfg ⊆ inFieldStates cfg) ∧
+    (∀ S, F_finite cfg S = S → S ⊆ inFieldStates cfg → S ⊆ convergedSet cfg) :=
+  ⟨⟨convergedSet_fixed, convergedSet_subset_inFieldStates cfg⟩,
+   fun _ hfix hsub => fixed_inField_subset_convergedSet hfix hsub⟩
+
 end Tetris
