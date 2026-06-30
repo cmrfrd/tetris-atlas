@@ -1002,4 +1002,10 @@ theorem buildSolver_announces_piece {S : Finset GameState} (hcols : 4 ≤ cfg.co
     (buildSolver hfix g p).piece = p :=
   solver_output_announces_piece (buildSolver_validSolver hcols hfix) hp
 
+/-- The constructed function's output lives in the global action set (union over all pieces). -/
+theorem buildSolver_output_in_total_action_set {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) :
+    buildSolver hfix g p ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg) :=
+  solver_output_in_total_action_set (buildSolver_validSolver hcols hfix) hp
+
 end Tetris
