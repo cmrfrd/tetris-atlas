@@ -1427,4 +1427,13 @@ theorem construct_under_determination_portrait :
       ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧ adversarialStep cfg g p pl ∈ safe cfg) :=
   solver_under_determination_portrait
 
+/-- Input portrait: along legal play the constructed function is fed nonempty in-bag pieces. -/
+theorem buildSolver_input_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (s : ℕ → Piece) (hl : LegalSequence s) :
+    (∀ n, (adversarialTrace cfg (buildSolver hfix) s GameState.init n).bag.Nonempty) ∧
+    (∀ n, s n ∈ (adversarialTrace cfg (buildSolver hfix) s GameState.init n).bag) ∧
+    (∀ n, buildSolver hfix (adversarialTrace cfg (buildSolver hfix) s GameState.init n) (s n)
+        ∈ Placement.allValidFor cfg (s n)) :=
+  solver_input_portrait (buildSolver_validSolver hcols hfix) s hl
+
 end Tetris
