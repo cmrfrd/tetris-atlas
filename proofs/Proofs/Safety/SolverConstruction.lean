@@ -3231,4 +3231,17 @@ theorem convergedSolver_solver_summary (hcols : 4 ≤ cfg.cols)
    fun _ hr => convergedSolver_confined hinit hr, convergedSolver_atlas_closed cfg,
    init_mem_convergedSet_solvable hcols hinit⟩
 
+/-- Function-level summary: at each state the converged solver is a bijective, memoryless,
+menu-valued section of the bag. -/
+theorem convergedSolver_function_summary (hcols : 4 ≤ cfg.cols) (g : GameState) :
+    (∀ p ∈ g.bag, convergedSolver (cfg := cfg) g p ∈ Placement.allValidFor cfg p) ∧
+    Set.InjOn (fun p => convergedSolver (cfg := cfg) g p) g.bag ∧
+    (g.bag.image (fun p => convergedSolver (cfg := cfg) g p)).card = g.bag.card ∧
+    (∀ g₂ p, g.board = g₂.board → g.bag = g₂.bag →
+      convergedSolver (cfg := cfg) g p = convergedSolver (cfg := cfg) g₂ p) :=
+  ⟨(convergedSolver_response_portrait hcols g).1,
+   (convergedSolver_response_portrait hcols g).2.2,
+   (convergedSolver_response_portrait hcols g).2.1,
+   fun g₂ p hb hbag => convergedSolver_reads_board_bag g g₂ p hb hbag⟩
+
 end Tetris
