@@ -1821,4 +1821,18 @@ theorem construct_image_card_le_standard (σ : Solver GameConfig.standard)
     (T.image (fun gp => σ gp.1 gp.2)).card ≤ 280 :=
   solver_image_card_le_standard σ hv T hT
 
+/-- Standard per-piece response slice has at most 40 distinct entries. -/
+theorem construct_image_per_piece_standard_le (σ : Solver GameConfig.standard)
+    (hv : ValidSolver GameConfig.standard σ) {p : Piece}
+    (T : Finset GameState) (hT : ∀ g ∈ T, p ∈ g.bag) :
+    (T.image (fun g => σ g p)).card ≤ 40 :=
+  solver_image_per_piece_standard_le σ hv T hT
+
+/-- The constructed function's piece-slice image is contained in that piece's menu. -/
+theorem buildSolver_image_per_piece_subset {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {p : Piece} (T : Finset GameState)
+    (hT : ∀ g ∈ T, p ∈ g.bag) :
+    T.image (fun g => buildSolver hfix g p) ⊆ Placement.allValidFor cfg p :=
+  solver_image_per_piece_subset (buildSolver_validSolver hcols hfix) T hT
+
 end Tetris
