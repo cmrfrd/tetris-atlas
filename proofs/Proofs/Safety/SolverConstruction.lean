@@ -2047,6 +2047,22 @@ theorem convergedSolver_no_dead_ends (hcols : 4 ≤ cfg.cols)
     (hr : solverReachable (convergedSolver (cfg := cfg)) g) : g ∈ safe cfg :=
   buildSolver_no_dead_ends hcols convergedSet_fixed hinit hr
 
+/-- The converged solver's play eventually revisits a state. -/
+theorem convergedSolver_eventually_repeats (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) :
+    ∃ i j : ℕ, i ≠ j ∧
+      adversarialTrace cfg convergedSolver s GameState.init i
+        = adversarialTrace cfg convergedSolver s GameState.init j :=
+  buildSolver_eventually_repeats hcols convergedSet_fixed hinit hl
+
+/-- No legal piece sequence ever kills the converged solver. -/
+theorem convergedSolver_no_killing_sequence (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    ¬ ∃ (s : ℕ → Piece) (n : ℕ),
+        LegalSequence s ∧
+        (adversarialTrace cfg convergedSolver s GameState.init n).lost cfg :=
+  buildSolver_no_killing_sequence hcols convergedSet_fixed hinit
+
 /-- Every state on a converged-solver play stays inside the converged region. -/
 theorem convergedSolver_trace_mem (hinit : GameState.init ∈ convergedSet cfg)
     {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
