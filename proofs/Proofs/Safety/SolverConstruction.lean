@@ -2967,4 +2967,17 @@ theorem convergedSolver_move_energy_split (hcols : 4 ≤ cfg.cols) {g : GameStat
       = HoleDebt.surfaceArea cfg ((convergedSolver (cfg := cfg) g p).applyStep cfg b) :=
   buildSolver_move_energy_split hcols convergedSet_fixed hp hWF
 
+/-- A non-clearing converged move adds exactly four cells. -/
+theorem convergedSolver_move_count_no_clear (hcols : 4 ≤ cfg.cols) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b)
+    (h0 : Board.linesCleared cfg ((convergedSolver (cfg := cfg) g p).place b) = 0) :
+    ((convergedSolver (cfg := cfg) g p).applyStep cfg b).count = b.count + 4 :=
+  buildSolver_move_count_no_clear hcols convergedSet_fixed hp hWF h0
+
+/-- A converged move clears at most four lines from a non-full board. -/
+theorem convergedSolver_move_clears_le_four (g : GameState) (p : Piece) {b : Board}
+    (hnf : ∀ r, ¬ Board.isFull cfg b r) :
+    Board.linesCleared cfg ((convergedSolver (cfg := cfg) g p).place b) ≤ 4 :=
+  buildSolver_move_clears_le_four convergedSet_fixed g p hnf
+
 end Tetris
