@@ -761,6 +761,40 @@ theorem recurrentSupport_iff_common_subEigenvector
   · intro h s hs r hr; exact (adjFor_reaches_iff step r X s).mpr (h s hs r hr)
   · intro h s hs r hr; exact (adjFor_reaches_iff step r X s).mp (h s hs r hr)
 
+/-! ### Products of per-piece matrices — the joint-spectral-radius view
+
+The adversary draws a *sequence* of pieces, so the relevant object is **not** a power `Bⁿ` but a
+*product* `A_{rₙ}···A_{r₁}` — a different product for each adversarial sequence. Applying that
+product to a vector is just applying the per-piece matrices one after another (a `foldr`), which is
+what we formalize (forming the literal product matrix `Matrix.mul` over the huge `State` is
+unnecessary and elaboration-heavy). The worst-case growth rate over all such products is the **joint
+spectral radius** of `{A_r}`; the fact below: a common sub-eigenvector survives *every* one. -/
+
+omit [DecidableEq State] [Fintype Action] in
+/-- `mulVec` by a nonnegative (here ℕ) matrix is monotone in the vector. -/
+theorem mulVec_mono (M : Matrix State State ℕ) {y z : State → ℕ} (h : y ≤ z) :
+    M.mulVec y ≤ M.mulVec z := by
+  intro s
+  change ∑ t, M s t * y t ≤ ∑ t, M s t * z t
+  exact Finset.sum_le_sum fun t _ => Nat.mul_le_mul (le_refl (M s t)) (h t)
+
+/-- **A common sub-eigenvector survives every adversarial product.** If `x ≤ A_r ⬝ᵥ x` for every
+piece `r` in a list `l` (a common sub-eigenvector of that sub-family), then applying the whole
+product to `x` — `foldr (A_r ⬝ᵥ ·)` down the list — never pushes `x` below itself:
+`x ≤ A_{r₁} ⬝ᵥ (A_{r₂} ⬝ᵥ (··· ⬝ᵥ x))`, in any order. This is the witness that the family's **joint
+spectral radius is `≥ 1`** on `x`'s support — survival against *all* piece sequences at once, not a
+single power `Bⁿ`. -/
+theorem le_foldr_mulVec (step : State → Action → Piece → State) {x : State → ℕ} :
+    ∀ l : List Piece, (∀ r ∈ l, x ≤ (adjFor step r).mulVec x) →
+      x ≤ l.foldr (fun r (v : State → ℕ) => (adjFor step r).mulVec v) x := by
+  intro l
+  induction l with
+  | nil => intro _; exact le_refl x
+  | cons r rest ih =>
+    intro h
+    have hrest := ih fun r' hr' => h r' (List.mem_cons_of_mem r hr')
+    exact le_trans (h r (by simp)) (mulVec_mono _ hrest)
+
 end AdversarialMatrix
 
 /-! ## §6 Connecting the abstract layer to the concrete safe-set results
