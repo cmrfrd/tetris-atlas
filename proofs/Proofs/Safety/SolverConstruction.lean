@@ -1025,4 +1025,12 @@ theorem buildSolver_per_piece_noninjective {S : Finset GameState} (hcols : 4 ≤
     ∃ g₁ ∈ T, ∃ g₂ ∈ T, g₁ ≠ g₂ ∧ buildSolver hfix g₁ p = buildSolver hfix g₂ p :=
   solver_per_piece_noninjective (buildSolver_validSolver hcols hfix) T hT hcard
 
+/-- The placements the constructed function realizes along any legal play form a finite set. -/
+theorem buildSolver_realized_outputs_finite {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (s : ℕ → Piece) (hl : LegalSequence s) :
+    (Set.range fun n =>
+      buildSolver hfix
+        (adversarialTrace cfg (buildSolver hfix) s GameState.init n) (s n)).Finite :=
+  solver_realized_outputs_finite (buildSolver_validSolver hcols hfix) s hl
+
 end Tetris
