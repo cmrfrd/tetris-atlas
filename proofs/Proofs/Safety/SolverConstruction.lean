@@ -3321,4 +3321,17 @@ theorem convergedSolver_stays_safe_forever (hcols : 4 ≤ cfg.cols)
       ∀ n, adversarialTrace cfg convergedSolver s GameState.init n ∈ safe cfg :=
   fun _ hl n => convergedSolver_trace_mem_safe hcols hinit hl n
 
+/-- The converged atlas always answers: a lookup never returns `none`. -/
+theorem convergedSolver_lookup_always_some (g : GameState) (p : Piece) :
+    ((convergedSolver (cfg := cfg)).toAtlas g p).isSome = true :=
+  buildSolver_toAtlas_isSome convergedSet_fixed g p
+
+/-- The mission loop — observe, look up, play, repeat — runs forever without topping out. -/
+theorem convergedSolver_lookup_loop (hinit : GameState.init ∈ convergedSet cfg)
+    {s : ℕ → Piece} (hl : LegalSequence s) :
+    ∀ n, ((convergedSolver (cfg := cfg)).toAtlas
+        (adversarialTrace cfg convergedSolver s GameState.init n) (s n)).isSome = true ∧
+      ¬ (adversarialTrace cfg convergedSolver s GameState.init n).lost cfg :=
+  fun n => convergedSolver_play_by_lookup hinit hl n
+
 end Tetris
