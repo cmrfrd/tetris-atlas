@@ -640,4 +640,21 @@ theorem doomed_iff_not_safe {S₀ : Finset GameState} (hS₀ : safe cfg ⊆ ↑S
     g ∉ safeIterFinite cfg S₀ N ↔ g ∉ safe cfg := by
   rw [← Finset.mem_coe, ← computed_exact S₀ N hS₀ hfix g]
 
+/-! ## Part 26 — The canonical universe instantiation -/
+
+/-- **Canonical existence test.** Run the construction on `inFieldStates` for `|inFieldStates|`
+rounds; if `init` survives, the ideal function exists — the actual atlas-builder's verdict. -/
+theorem inField_solver_exists_of_init_survives (hcols : 4 ≤ cfg.cols)
+    (h : GameState.init
+      ∈ safeIterFinite cfg (inFieldStates cfg) (inFieldStates cfg).card) :
+    ∃ σ : Solver cfg, SolvesTetrisValid cfg σ :=
+  solver_exists_of_init_survives hcols (inFieldStates cfg) h
+
+/-- **Canonical soundness at the round bound.** A state surviving `|inFieldStates|` rounds from the
+canonical universe is genuinely survivable. -/
+theorem inField_survives_card_safe {g : GameState}
+    (h : g ∈ safeIterFinite cfg (inFieldStates cfg) (inFieldStates cfg).card) :
+    g ∈ safe cfg :=
+  survives_card_rounds_safe (inFieldStates cfg) h
+
 end Tetris
