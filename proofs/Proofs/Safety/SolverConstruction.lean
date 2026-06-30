@@ -1212,4 +1212,10 @@ theorem buildSolver_move_count_le {S : Finset GameState} (hcols : 4 ≤ cfg.cols
     ((buildSolver hfix g p).applyStep cfg b).count ≤ b.count + 4 :=
   solver_move_count_le (buildSolver_validSolver hcols hfix) hp hWF
 
+/-- A constructed-function move raises max height by at most four. -/
+theorem buildSolver_move_maxHeight_le {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) (b : Board) :
+    Board.maxHeight cfg ((buildSolver hfix g p).applyStep cfg b) ≤ Board.maxHeight cfg b + 4 :=
+  solver_move_maxHeight_le (buildSolver_validSolver hcols hfix) hp b
+
 end Tetris
