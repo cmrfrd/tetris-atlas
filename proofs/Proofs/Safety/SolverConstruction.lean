@@ -2446,4 +2446,10 @@ theorem fixed_inField_subset_convergedSet {S : Finset GameState}
           _ ⊆ F_finite cfg (safeIterFinite cfg (inFieldStates cfg) k) := F_finite_mono cfg ih
   exact key (inFieldStates cfg).card
 
+/-- Any in-field fixed region containing init feeds the canonical construction to a solver. -/
+theorem fixed_inField_init_solvable (hcols : 4 ≤ cfg.cols) {S : Finset GameState}
+    (hfix : F_finite cfg S = S) (hsub : S ⊆ inFieldStates cfg) (hinit : GameState.init ∈ S) :
+    TetrisSolvableValidFor cfg :=
+  init_mem_convergedSet_solvable hcols (fixed_inField_subset_convergedSet hfix hsub hinit)
+
 end Tetris
