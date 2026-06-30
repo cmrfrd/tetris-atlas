@@ -1984,4 +1984,13 @@ theorem init_mem_convergedSet_solvable (hcols : 4 ≤ cfg.cols)
     (hinit : GameState.init ∈ convergedSet cfg) : TetrisSolvableValidFor cfg :=
   tetrisSolvableValidFor_of_init_mem_safeIterFinite_at_S₀_card hcols hinit
 
+/-- The canonical solver, built explicitly over the converged region. -/
+noncomputable def convergedSolver : Solver cfg :=
+  buildSolver convergedSet_fixed
+
+/-- The canonical converged solver is a valid solver. -/
+theorem convergedSolver_validSolver (hcols : 4 ≤ cfg.cols) :
+    ValidSolver cfg convergedSolver :=
+  buildSolver_validSolver hcols convergedSet_fixed
+
 end Tetris
