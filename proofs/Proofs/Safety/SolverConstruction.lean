@@ -1566,4 +1566,11 @@ theorem buildSolver_next_bag {S : Finset GameState} (hfix : F_finite cfg S = S)
     (solverStep cfg (buildSolver hfix) p g).bag = g.bag.draw p :=
   solver_next_bag (σ := buildSolver hfix) g p
 
+/-- The constructed function's next board is its placement applied to the current board. -/
+theorem buildSolver_next_board {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag) :
+    (solverStep cfg (buildSolver hfix) p g).board
+      = (buildSolver hfix g p).applyStep cfg g.board :=
+  solver_next_board (buildSolver_validSolver hcols hfix) hp
+
 end Tetris
