@@ -2393,4 +2393,18 @@ theorem convergedSolver_trace_wf (hcols : 4 ≤ cfg.cols)
     Board.WF cfg (adversarialTrace cfg convergedSolver s GameState.init n).board :=
   buildSolver_trace_wf hcols convergedSet_fixed hinit hl n
 
+/-- **Grand characterization of the canonical construction.** If init survives the terminating
+descending iteration, the explicit converged solver solves Tetris, closes an atlas over the
+converged region, never leaves that region, and that region fits inside the in-field universe. -/
+theorem convergedSolver_grand_characterization (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) :
+    SolvesTetrisValid cfg convergedSolver ∧
+    (convergedSolver (cfg := cfg)).toAtlas.IsClosedOn cfg (convergedSet cfg) ∧
+    (∀ g, solverReachable (convergedSolver (cfg := cfg)) g → g ∈ convergedSet cfg) ∧
+    (convergedSet cfg).card ≤ (inFieldStates cfg).card :=
+  ⟨convergedSolver_solves hcols hinit,
+   convergedSolver_atlas_closed cfg,
+   fun _ hr => convergedSolver_confined hinit hr,
+   convergedSet_card_le cfg⟩
+
 end Tetris
