@@ -1782,4 +1782,17 @@ theorem buildSolver_compressibility_grand_portrait {S : Finset GameState} (hcols
     (∀ g p, (buildSolver hfix).toAtlas g p = some (buildSolver hfix g p)) :=
   solver_compressibility_grand_portrait (buildSolver_validSolver hcols hfix)
 
+/-- Dynamical grand portrait: step law, orbit-as-iterate, bag/board laws, nontrivial motion. -/
+theorem buildSolver_dynamical_grand_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (p : Piece) :
+    (∀ g, solverStep cfg (buildSolver hfix) p g
+        = adversarialStep cfg g p (buildSolver hfix g p)) ∧
+    (∀ n, adversarialTrace cfg (buildSolver hfix) (fun _ => p) GameState.init n
+        = (solverStep cfg (buildSolver hfix) p)^[n] GameState.init) ∧
+    (∀ g, (solverStep cfg (buildSolver hfix) p g).bag = g.bag.draw p) ∧
+    (∀ g, p ∈ g.bag → (solverStep cfg (buildSolver hfix) p g).board
+        = (buildSolver hfix g p).applyStep cfg g.board) ∧
+    (∀ g, g.bag.draw p ≠ g.bag → solverStep cfg (buildSolver hfix) p g ≠ g) :=
+  solver_dynamical_grand_portrait (buildSolver_validSolver hcols hfix) p
+
 end Tetris
