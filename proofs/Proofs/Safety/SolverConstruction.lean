@@ -3136,4 +3136,13 @@ theorem init_mem_convergedSet_certifies (hcols : 4 ≤ cfg.cols)
   ⟨init_mem_convergedSet_solvable hcols hinit,
    convergedSet_subset_safe (Finset.mem_coe.mpr hinit)⟩
 
+/-- The converged solver realizes the ideal `(board, bag, piece) → placement`: total and
+deterministic, depending only on board and bag. -/
+theorem convergedSolver_is_a_function (g : GameState) (p : Piece) :
+    (∃! pl : Placement, convergedSolver (cfg := cfg) g p = pl) ∧
+    (∀ g₂, g.board = g₂.board → g.bag = g₂.bag →
+      convergedSolver (cfg := cfg) g p = convergedSolver (cfg := cfg) g₂ p) :=
+  ⟨⟨convergedSolver (cfg := cfg) g p, rfl, fun _ h => h.symm⟩,
+   fun g₂ hb hbag => convergedSolver_reads_board_bag g g₂ p hb hbag⟩
+
 end Tetris
