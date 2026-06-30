@@ -2925,4 +2925,10 @@ theorem convergedSolver_solverStep_not_lost {g : GameState} (hg : g ∈ converge
     ¬ (solverStep cfg convergedSolver p g).lost cfg :=
   convergedSet_not_lost (convergedSolver_solverStep_mem hg hp)
 
+/-- A constructed step from any fixed region lands in the safe set. -/
+theorem buildSolver_solverStep_safe {S : Finset GameState} (hfix : F_finite cfg S = S)
+    {g : GameState} (hg : g ∈ S) {p : Piece} (hp : p ∈ g.bag) :
+    solverStep cfg (buildSolver hfix) p g ∈ safe cfg :=
+  fixed_point_subset_safe hfix (Finset.mem_coe.mpr (buildSolver_step_mem hfix hg hp))
+
 end Tetris
