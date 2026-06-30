@@ -93,4 +93,25 @@ theorem cycle_is_fixed (C : AdversarialClosedCycle cfg) :
 theorem empty_is_fixed : F_finite cfg (∅ : Finset GameState) = ∅ :=
   F_finite_empty cfg
 
+/-! ## Part 3 — The construction as a descending iteration -/
+
+/-- The construction starts from the full candidate universe. -/
+theorem construct_start (S₀ : Finset GameState) : safeIterFinite cfg S₀ 0 = S₀ :=
+  safeIterFinite_zero cfg S₀
+
+/-- Each construction step applies one retrograde round. -/
+theorem construct_round (S₀ : Finset GameState) (n : ℕ) :
+    safeIterFinite cfg S₀ (n + 1) = F_finite cfg (safeIterFinite cfg S₀ n) :=
+  safeIterFinite_succ cfg S₀ n
+
+/-- Each round prunes: the iterates form a descending chain. -/
+theorem construct_descending (S₀ : Finset GameState) (n : ℕ) :
+    safeIterFinite cfg S₀ (n + 1) ⊆ safeIterFinite cfg S₀ n :=
+  safeIterFinite_succ_subset cfg S₀ n
+
+/-- The construction is antitone: later rounds are contained in earlier ones. -/
+theorem construct_antitone (S₀ : Finset GameState) {m n : ℕ} (h : m ≤ n) :
+    safeIterFinite cfg S₀ n ⊆ safeIterFinite cfg S₀ m :=
+  safeIterFinite_antitone cfg S₀ h
+
 end Tetris
