@@ -1904,4 +1904,18 @@ theorem construct_unsafe_iff_killer_piece {g : GameState} (hnl : ¬ g.lost cfg) 
       pl.piece = p → pl.Valid cfg → adversarialStep cfg g p pl ∉ safe cfg :=
   solver_unsafe_iff_killer_piece hnl
 
+/-- Hole-free energy is fully clearable: zero debt means surface area equals the cell count. -/
+theorem construct_hole_free_energy_all_clearable {b : Board} (hwf : Board.WF cfg b)
+    (h0 : HoleDebt.debt cfg b = 0) :
+    HoleDebt.surfaceArea cfg b = b.count :=
+  solver_hole_free_energy_all_clearable hwf h0
+
+/-- Low-stack comfort zone: from a sufficiently low board any piece has a non-losing placement. -/
+theorem construct_low_stack_comfort_zone (hcols : 4 ≤ cfg.cols) (hrows : 4 ≤ cfg.rows)
+    {b : Board} (hWF : Board.WF cfg b) (hlow : ∀ j, Board.colHeight b j ≤ cfg.rows - 4)
+    (p : Piece) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid cfg ∧
+      ¬ Board.isLost cfg (Placement.applyStep cfg b pl) :=
+  solver_low_stack_comfort_zone hcols hrows hWF hlow p
+
 end Tetris
