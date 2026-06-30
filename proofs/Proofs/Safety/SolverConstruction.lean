@@ -1306,4 +1306,9 @@ theorem construct_placement_skyline_monotone {b β : Board} (pl : Placement)
     WqoCarrier.domLE (pl.place b) (pl.place β) :=
   solver_placement_skyline_monotone pl h
 
+/-- Clearing lowers the skyline: the cleared board is dominated by the original. -/
+theorem construct_clearing_lowers_skyline (b : Board) :
+    WqoCarrier.domLE (Board.clearLines cfg b) b :=
+  solver_clearing_lowers_skyline b
+
 end Tetris
