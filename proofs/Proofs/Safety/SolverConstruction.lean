@@ -1264,4 +1264,11 @@ theorem construct_three_faces :
         A.IsClosedOn GameConfig.standard S ∧ GameState.init ∈ S) :=
   solver_three_faces_of_solvability
 
+/-- Solvability is equivalent to the existence of a well-founded init-containing closed cycle. -/
+theorem construct_solvable_iff_init_cycle :
+    TetrisSolvableValid ↔
+      ∃ C : AdversarialClosedCycleWF GameConfig.standard,
+        GameState.init ∈ C.toAdversarialClosedCycle.states :=
+  solver_solvable_iff_init_cycle
+
 end Tetris
