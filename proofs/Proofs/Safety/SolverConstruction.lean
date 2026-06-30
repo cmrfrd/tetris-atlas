@@ -2268,4 +2268,27 @@ theorem buildSolver_energy_bundle {S : Finset GameState} (hcols : 4 ≤ cfg.cols
   ⟨buildSolver_move_energy_split hcols hfix hp hWF,
    (buildSolver_move_energy_brackets hfix g p b).1⟩
 
+/-- Compression bundle: a piece-slice lands in the menu and is bounded by `4·cols`. -/
+theorem buildSolver_compression_bundle {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {p : Piece} (T : Finset GameState)
+    (hT : ∀ g ∈ T, p ∈ g.bag) :
+    T.image (fun g => buildSolver hfix g p) ⊆ Placement.allValidFor cfg p ∧
+    (T.image (fun g => buildSolver hfix g p)).card ≤ cfg.cols * 4 :=
+  ⟨buildSolver_image_per_piece_subset hcols hfix T hT,
+   buildSolver_image_card hcols hfix T hT⟩
+
+/-- The converged solver's cell count is 4-Lipschitz along play. -/
+theorem convergedSolver_count_lipschitz (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    (adversarialTrace cfg convergedSolver s GameState.init (n + 1)).board.count
+      ≤ (adversarialTrace cfg convergedSolver s GameState.init n).board.count + 4 :=
+  buildSolver_count_lipschitz hcols convergedSet_fixed hinit hl n
+
+/-- The converged solver's max height is 4-Lipschitz along play. -/
+theorem convergedSolver_maxHeight_lipschitz (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Board.maxHeight cfg (adversarialTrace cfg convergedSolver s GameState.init (n + 1)).board
+      ≤ Board.maxHeight cfg (adversarialTrace cfg convergedSolver s GameState.init n).board + 4 :=
+  buildSolver_maxHeight_lipschitz hcols convergedSet_fixed hinit hl n
+
 end Tetris
