@@ -2348,4 +2348,11 @@ theorem convergedSolver_trace_count (hcols : 4 ≤ cfg.cols)
     (adversarialTrace cfg convergedSolver s GameState.init n).board.count ≤ cfg.cols * cfg.rows :=
   buildSolver_trace_count hcols convergedSet_fixed hinit hl n
 
+/-- The converged solver's max height never exceeds the board height. -/
+theorem convergedSolver_trace_maxHeight (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    Board.maxHeight cfg
+        (adversarialTrace cfg convergedSolver s GameState.init n).board ≤ cfg.rows :=
+  buildSolver_trace_maxHeight hcols convergedSet_fixed hinit hl n
+
 end Tetris
