@@ -954,4 +954,12 @@ theorem buildSolver_no_lookahead {S : Finset GameState} (hfix : F_finite cfg S =
       = adversarialTrace cfg (buildSolver hfix) s' GameState.init n :=
   solver_is_causal s s' GameState.init n h n (le_refl n)
 
+/-- The constructed function's opening move is non-losing. -/
+theorem buildSolver_opening_safe {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hrows : 4 ≤ cfg.rows) {p : Piece}
+    (hp : p ∈ GameState.init.bag) :
+    ¬ Board.isLost cfg
+        ((buildSolver hfix GameState.init p).applyStep cfg GameState.init.board) :=
+  solver_opening_move_safe (buildSolver_validSolver hcols hfix) hrows hp
+
 end Tetris
