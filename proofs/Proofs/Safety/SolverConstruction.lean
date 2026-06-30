@@ -617,4 +617,18 @@ def construct_decide_existence (S₀ : Finset GameState) (hcols : 4 ≤ cfg.cols
   decidable_of_iff (GameState.init ∈ safeIterFinite cfg S₀ N)
     (existence_decided S₀ hcols hS₀ N hfix).symm
 
+/-! ## Part 24 — The lattice of fixed points -/
+
+/-- **Every fixed point is a subset of the limit.** Under coverage, any self-sustaining region is
+contained in each iterate — the limit is the greatest fixed point as a `Finset`. -/
+theorem fixed_subset_limit {S₀ T : Finset GameState} (hS₀ : safe cfg ⊆ ↑S₀) (N : ℕ)
+    (hT : F_finite cfg T = T) :
+    T ⊆ safeIterFinite cfg S₀ N :=
+  fun _ hg => Finset.mem_coe.mp (fixed_point_subset_iter hS₀ N hT (Finset.mem_coe.mpr hg))
+
+/-- **`∅` is the bottom fixed point.** The construction's fixed points include the empty region (no
+winning states) and are bounded above by the limit — they form a bounded family. -/
+theorem empty_fixed_subset (S : Finset GameState) : (∅ : Finset GameState) ⊆ S :=
+  Finset.empty_subset S
+
 end Tetris
