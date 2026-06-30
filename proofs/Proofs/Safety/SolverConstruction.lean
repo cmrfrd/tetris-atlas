@@ -2719,4 +2719,12 @@ theorem convergedSolver_outdegree_le (g : GameState) :
     (g.bag.image (fun p => solverStep cfg convergedSolver p g)).card ≤ g.bag.card :=
   buildSolver_outdegree_le convergedSet_fixed g
 
+/-- The constructed atlas is a complete M4 artifact: closed, total, containing init. -/
+theorem buildSolver_M4_artifact {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (hinit : GameState.init ∈ S) :
+    (buildSolver hfix).toAtlas.IsClosedOn cfg S ∧
+    (∀ g p, ((buildSolver hfix).toAtlas g p).isSome = true) ∧
+    GameState.init ∈ S :=
+  ⟨buildSolver_atlas_closed hfix, fun g p => buildSolver_toAtlas_isSome hfix g p, hinit⟩
+
 end Tetris
