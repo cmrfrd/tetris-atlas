@@ -2040,4 +2040,17 @@ theorem buildSolver_grand_solver_portrait {S : Finset GameState} (hcols : 4 ≤ 
    buildSolver_atlas_closed hfix,
    fun _ hr => buildSolver_reachable_mem hfix hinit hr⟩
 
+/-- Grand safety portrait: along legal play the trace stays in-region, safe, alive, and in-field. -/
+theorem buildSolver_grand_safety_portrait {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) (hinit : GameState.init ∈ S) {s : ℕ → Piece}
+    (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg (buildSolver hfix) s GameState.init n ∈ S ∧
+    adversarialTrace cfg (buildSolver hfix) s GameState.init n ∈ safe cfg ∧
+    ¬ (adversarialTrace cfg (buildSolver hfix) s GameState.init n).lost cfg ∧
+    adversarialTrace cfg (buildSolver hfix) s GameState.init n ∈ inFieldStates cfg :=
+  ⟨buildSolver_trace_mem hfix hinit hl n,
+   buildSolver_trace_mem_safe hcols hfix hinit hl n,
+   buildSolver_survives hfix hinit hl n,
+   buildSolver_trace_in_field hcols hfix hinit hl n⟩
+
 end Tetris
