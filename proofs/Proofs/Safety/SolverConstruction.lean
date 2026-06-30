@@ -3012,4 +3012,14 @@ theorem convergedSet_member_response {g : GameState} (hg : g ∈ convergedSet cf
     ∃ pl ∈ Placement.allValidFor cfg p, adversarialStep cfg g p pl ∈ convergedSet cfg :=
   (convergedSet_self_sustaining g hg).2 p hp
 
+/-- Move-effect portrait of the converged solver: count +≤4, height +≤4, place +4, WF kept. -/
+theorem convergedSolver_move_effect_portrait (hcols : 4 ≤ cfg.cols) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) {b : Board} (hWF : Board.WF cfg b) :
+    (((convergedSolver (cfg := cfg) g p).applyStep cfg b).count ≤ b.count + 4) ∧
+    (Board.maxHeight cfg ((convergedSolver (cfg := cfg) g p).applyStep cfg b)
+        ≤ Board.maxHeight cfg b + 4) ∧
+    (((convergedSolver (cfg := cfg) g p).place b).count = b.count + 4) ∧
+    Board.WF cfg ((convergedSolver (cfg := cfg) g p).applyStep cfg b) :=
+  buildSolver_move_effect_portrait hcols convergedSet_fixed hp hWF
+
 end Tetris
