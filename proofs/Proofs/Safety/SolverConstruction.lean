@@ -3153,4 +3153,12 @@ theorem convergedSolver_eq_of_rotcol (hcols : 4 ≤ cfg.cols) {g₁ g₂ : GameS
     convergedSolver (cfg := cfg) g₁ p = convergedSolver (cfg := cfg) g₂ p :=
   buildSolver_eq_of_rotcol hcols convergedSet_fixed hp₁ hp₂ hr hc
 
+/-- When the converged solver differs for one piece, it differs in rotation or column. -/
+theorem convergedSolver_diff_in_rotcol (hcols : 4 ≤ cfg.cols) {g₁ g₂ : GameState} {p : Piece}
+    (hp₁ : p ∈ g₁.bag) (hp₂ : p ∈ g₂.bag)
+    (hne : convergedSolver (cfg := cfg) g₁ p ≠ convergedSolver (cfg := cfg) g₂ p) :
+    (convergedSolver (cfg := cfg) g₁ p).rot ≠ (convergedSolver (cfg := cfg) g₂ p).rot ∨
+      (convergedSolver (cfg := cfg) g₁ p).col ≠ (convergedSolver (cfg := cfg) g₂ p).col :=
+  buildSolver_diff_in_rotcol hcols convergedSet_fixed hp₁ hp₂ hne
+
 end Tetris
