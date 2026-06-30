@@ -2576,4 +2576,13 @@ theorem convergedSolver_clear_reduces_debt (hcols : 4 ≤ cfg.cols) {g : GameSta
       ≤ HoleDebt.debt cfg ((convergedSolver (cfg := cfg) g p).place b) :=
   buildSolver_clear_reduces_debt hcols convergedSet_fixed hp hWF
 
+/-- Drop geometry of the converged solver: 4 cells, disjoint, additive on the board. -/
+theorem convergedSolver_drop_geometry (g : GameState) (p : Piece) (b : Board) :
+    ((convergedSolver (cfg := cfg) g p).dropped b).card = 4 ∧
+    Disjoint b ((convergedSolver (cfg := cfg) g p).dropped b) ∧
+    b ⊆ (convergedSolver (cfg := cfg) g p).place b :=
+  ⟨buildSolver_output_dropped_card convergedSet_fixed b g p,
+   buildSolver_dropped_disjoint convergedSet_fixed b g p,
+   buildSolver_move_superset convergedSet_fixed b g p⟩
+
 end Tetris
