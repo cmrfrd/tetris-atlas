@@ -3117,4 +3117,16 @@ theorem convergedSolver_compressibility_grand_portrait (hcols : 4 ≤ cfg.cols) 
         = some (convergedSolver (cfg := cfg) g p)) :=
   buildSolver_compressibility_grand_portrait hcols convergedSet_fixed
 
+/-- Compressed portrait of a single converged output: piece, col, rot, code, menu. -/
+theorem convergedSolver_output_compressed (hcols : 4 ≤ cfg.cols) {g : GameState} {p : Piece}
+    (hp : p ∈ g.bag) :
+    (convergedSolver (cfg := cfg) g p).piece = p ∧
+    (convergedSolver (cfg := cfg) g p).col < cfg.cols ∧
+    ((convergedSolver (cfg := cfg) g p).rot : ℕ) < 4 ∧
+    4 * (convergedSolver (cfg := cfg) g p).col + ((convergedSolver (cfg := cfg) g p).rot : ℕ)
+        < 4 * cfg.cols ∧
+    convergedSolver (cfg := cfg) g p
+      ∈ (Finset.univ : Finset Piece).biUnion (Placement.allValidFor cfg) :=
+  buildSolver_output_compressed hcols convergedSet_fixed hp
+
 end Tetris
