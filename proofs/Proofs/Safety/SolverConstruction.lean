@@ -2313,4 +2313,13 @@ theorem convergedSolver_repeats_within_inFieldStates (hcols : 4 ≤ cfg.cols)
         = adversarialTrace cfg convergedSolver s GameState.init j :=
   buildSolver_repeats_within_inFieldStates hcols convergedSet_fixed hinit hl
 
+/-- A no-clear run of the converged solver is capacity-bounded. -/
+theorem convergedSolver_no_clear_window_bounded (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ)
+    (hno : ∀ k < n,
+        (adversarialTrace cfg convergedSolver s GameState.init (k + 1)).board.count
+          = (adversarialTrace cfg convergedSolver s GameState.init k).board.count + 4) :
+    4 * n ≤ cfg.cols * cfg.rows :=
+  buildSolver_no_clear_window_bounded hcols convergedSet_fixed hinit hl n hno
+
 end Tetris
