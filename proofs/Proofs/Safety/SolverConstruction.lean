@@ -3244,4 +3244,18 @@ theorem convergedSolver_function_summary (hcols : 4 ≤ cfg.cols) (g : GameState
    (convergedSolver_response_portrait hcols g).2.1,
    fun g₂ p hb hbag => convergedSolver_reads_board_bag g g₂ p hb hbag⟩
 
+/-- Orbit summary: each step is one solver step and is 4-Lipschitz in count and height. -/
+theorem convergedSolver_orbit_summary (hcols : 4 ≤ cfg.cols)
+    (hinit : GameState.init ∈ convergedSet cfg) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg convergedSolver s GameState.init (n + 1)
+        = solverStep cfg convergedSolver (s n)
+            (adversarialTrace cfg convergedSolver s GameState.init n) ∧
+    (adversarialTrace cfg convergedSolver s GameState.init (n + 1)).board.count
+        ≤ (adversarialTrace cfg convergedSolver s GameState.init n).board.count + 4 ∧
+    Board.maxHeight cfg (adversarialTrace cfg convergedSolver s GameState.init (n + 1)).board
+        ≤ Board.maxHeight cfg (adversarialTrace cfg convergedSolver s GameState.init n).board + 4 :=
+  ⟨convergedSolver_trace_eq_solverStep s n,
+   convergedSolver_count_lipschitz hcols hinit hl n,
+   convergedSolver_maxHeight_lipschitz hcols hinit hl n⟩
+
 end Tetris
