@@ -1528,4 +1528,17 @@ theorem buildSolver_move_count_no_clear {S : Finset GameState} (hcols : 4 ≤ cf
     ((buildSolver hfix g p).applyStep cfg b).count = b.count + 4 :=
   solver_move_count_no_clear (buildSolver_validSolver hcols hfix) hp hWF h0
 
+/-- A constructed-function move clears at most four lines from a non-full board. -/
+theorem buildSolver_move_clears_le_four {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (g : GameState) (p : Piece) {b : Board} (hnf : ∀ r, ¬ Board.isFull cfg b r) :
+    Board.linesCleared cfg ((buildSolver hfix g p).place b) ≤ 4 :=
+  solver_move_clears_le_four (σ := buildSolver hfix) g p hnf
+
+/-- A constructed-function move keeps the cell count within capacity when there is room. -/
+theorem buildSolver_move_count_le_capacity {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag)
+    {b : Board} (hWF : Board.WF cfg b) (hbelow : b.count + 4 ≤ cfg.cols * cfg.rows) :
+    ((buildSolver hfix g p).applyStep cfg b).count ≤ cfg.cols * cfg.rows :=
+  solver_move_count_le_capacity (buildSolver_validSolver hcols hfix) hp hWF hbelow
+
 end Tetris
