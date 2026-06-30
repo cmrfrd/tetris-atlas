@@ -1205,4 +1205,11 @@ theorem buildSolver_move_must_clear {S : Finset GameState} (hcols : 4 ≤ cfg.co
     0 < Board.linesCleared cfg ((buildSolver hfix g p).place b) :=
   solver_move_must_clear (buildSolver_validSolver hcols hfix) hp hWF hnear hsurv
 
+/-- A constructed-function move adds at most four to the cell count. -/
+theorem buildSolver_move_count_le {S : Finset GameState} (hcols : 4 ≤ cfg.cols)
+    (hfix : F_finite cfg S = S) {g : GameState} {p : Piece} (hp : p ∈ g.bag)
+    {b : Board} (hWF : Board.WF cfg b) :
+    ((buildSolver hfix g p).applyStep cfg b).count ≤ b.count + 4 :=
+  solver_move_count_le (buildSolver_validSolver hcols hfix) hp hWF
+
 end Tetris
