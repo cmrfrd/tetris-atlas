@@ -77,10 +77,13 @@ def OnCycle (R : State → State → Prop) (s : State) : Prop :=
 def ReachableCycle (R : State → State → Prop) (s₀ : State) : Prop :=
   ∃ c, Reachable R s₀ c ∧ OnCycle R c
 
-/-- An infinite `R`-path out of `s₀` that never visits `death`: the certificate of infinite safe
-play. (Here `R` is meant to be the *safe* traversal relation `B`.) -/
-def InfiniteSafePath (R : State → State → Prop) (death : State) (s₀ : State) : Prop :=
-  ∃ path : ℕ → State, path 0 = s₀ ∧ (∀ n, path n ≠ death) ∧ ∀ n, R (path n) (path (n + 1))
+/-- An infinite `R`-path out of `s₀` that never enters the dead set `Dead`: the certificate of
+infinite safe play. (`R` is meant to be the *safe* traversal relation `B`.) We take death as a
+**predicate** `Dead : State → Prop`, not a single absorbing state — strictly more general (the doc's
+sink `⊥` is the instance `Dead := (· = ⊥)`) and a match for Tetris, where loss is the predicate
+`GameState.lost`, not one state. -/
+def InfiniteSafePath (R : State → State → Prop) (Dead : State → Prop) (s₀ : State) : Prop :=
+  ∃ path : ℕ → State, path 0 = s₀ ∧ (∀ n, ¬ Dead (path n)) ∧ ∀ n, R (path n) (path (n + 1))
 
 /-! ### Relation powers ↔ reachability -/
 
@@ -186,29 +189,30 @@ theorem OnCycle.continuation {R : State → State → Prop} {c : State} (h : OnC
 
 /-! ### Headline: a reachable safe cycle ⇒ infinite safe play -/
 
-/-- **Reachable safe cycle ⇒ infinite safe path.** If every `R`-edge avoids `death` on both ends
-(`R` is the *safe* traversal relation `B`) and a cycle is reachable from `s₀`, then there is an
+/-- **Reachable safe cycle ⇒ infinite safe path.** If every `R`-edge avoids the dead set on both
+ends (`R` is the *safe* traversal relation `B`) and a cycle is reachable from `s₀`, then there is an
 infinite `R`-path from `s₀` that never dies. This is the matrix-power statement
 `(∃ i m k>0, (Bᵐ)_{i,s₀}=1 ∧ (Bᵏ)_{i,i}=1) ⇒ ∃ infinite safe orbit`, and it is pure finite-graph
 math (no `Fintype` needed). -/
-theorem reachable_cycle_implies_infinite_safe_path {R : State → State → Prop} {death : State}
-    (hSafeEdges : ∀ s t, R s t → s ≠ death ∧ t ≠ death)
+theorem reachable_cycle_implies_infinite_safe_path {R : State → State → Prop}
+    {Dead : State → Prop}
+    (hSafeEdges : ∀ s t, R s t → ¬ Dead s ∧ ¬ Dead t)
     {s₀ : State} (hcyc : ReachableCycle R s₀) :
-    InfiniteSafePath R death s₀ := by
+    InfiniteSafePath R Dead s₀ := by
   obtain ⟨c, hreach, hOnCycle⟩ := hcyc
   obtain ⟨g, hg0, hgstep⟩ := hOnCycle.continuation
   obtain ⟨h, hh0, hhstep⟩ := infinite_path_of_reachable_of_continuation hreach hg0 hgstep
   exact ⟨h, hh0, fun n => (hSafeEdges _ _ (hhstep n)).1, hhstep⟩
 
-/-- **Combined reachable-closed engine.** A `death`-avoiding closed support `X` (every vertex has an
+/-- **Combined reachable-closed engine.** A dead-avoiding closed support `X` (every vertex has an
 in-`X` successor) with some vertex reachable from `s₀` yields an infinite safe path from `s₀`. This
 is the general workhorse behind every recurrent-support theorem below: reach `X`, then stay. -/
-theorem infinite_safe_path_of_reachable_closed {R : State → State → Prop} {death : State}
-    (hSafeEdges : ∀ s t, R s t → s ≠ death ∧ t ≠ death)
+theorem infinite_safe_path_of_reachable_closed {R : State → State → Prop} {Dead : State → Prop}
+    (hSafeEdges : ∀ s t, R s t → ¬ Dead s ∧ ¬ Dead t)
     {s₀ : State} {X : Set State}
     (hclosed : ∀ s ∈ X, ∃ t ∈ X, R s t)
     (hReach : ∃ c ∈ X, Reachable R s₀ c) :
-    InfiniteSafePath R death s₀ := by
+    InfiniteSafePath R Dead s₀ := by
   obtain ⟨c, hcX, hreach⟩ := hReach
   obtain ⟨g, hg0, _, hgstep⟩ := exists_infinite_continuation hclosed hcX
   obtain ⟨h, hh0, hhstep⟩ := infinite_path_of_reachable_of_continuation hreach hg0 hgstep
@@ -229,7 +233,7 @@ same condition:
 
 The "matrix form" of either is a fixed-point on the support indicator `x ∈ {0,1}ᴺ`: `x ⊨ x` under
 the piece-labeled transition matrices. Exhibiting such an `x` is the open Tetris crux; here we prove
-that *given* one (reachable, `death`-avoiding), infinite safe play follows. -/
+that *given* one (reachable, dead-avoiding), infinite safe play follows. -/
 
 /-- The "try-all-placements" edge for a fixed next draw is rolled into one existential edge:
 `EdgeExists s t` ⇔ some legal next piece `r` and some placement `a` send `s` to `t`. This is the
@@ -239,76 +243,75 @@ def EdgeExists {Piece Action : Type*} (legalDraws : State → Finset Piece)
   ∃ r ∈ legalDraws s, ∃ a : Action, step s a r = t
 
 /-- The safe traversal relation `B = P_safe · A · P_safe`: an `EdgeExists` edge whose endpoints both
-avoid `death`. -/
-def SafeEdge {Piece Action : Type*} (death : State) (legalDraws : State → Finset Piece)
+avoid the dead set. -/
+def SafeEdge {Piece Action : Type*} (Dead : State → Prop) (legalDraws : State → Finset Piece)
     (step : State → Action → Piece → State) (s t : State) : Prop :=
-  s ≠ death ∧ t ≠ death ∧ EdgeExists legalDraws step s t
+  ¬ Dead s ∧ ¬ Dead t ∧ EdgeExists legalDraws step s t
 
-/-- **Weak (`∀ r, ∃ a`) safe recurrent support.** `X` avoids `death` and from every `s ∈ X`, for
-each legal next piece there is a placement landing back in `X`. -/
-def SafeRecurrentSupport {Piece Action : Type*} (death : State)
+/-- **Weak (`∀ r, ∃ a`) safe recurrent support.** `X` avoids the dead set and from every `s ∈ X`,
+for each legal next piece there is *some* placement landing back in `X` (placement may peek at the
+piece). -/
+def SafeRecurrentSupport {Piece Action : Type*} (Dead : State → Prop)
     (legalDraws : State → Finset Piece) (step : State → Action → Piece → State)
     (X : Set State) : Prop :=
-  death ∉ X ∧ ∀ s ∈ X, s ≠ death ∧ ∀ r ∈ legalDraws s, ∃ a : Action, step s a r ∈ X
+  ∀ s ∈ X, ¬ Dead s ∧ ∀ r ∈ legalDraws s, ∃ a : Action, step s a r ∈ X
 
-/-- **Online (`∃ a, ∀ r`) safe recurrent support — the faithful condition.** `X` avoids `death` and
-from every `s ∈ X` there is *one* placement of the current piece that keeps us in `X` under *every*
-legal next draw. Commit-before-draw: this is what real online survival requires. -/
-def OnlineSafeRecurrentSupport {Piece Action : Type*} (death : State)
+/-- **Online (`∃ a, ∀ r`) safe recurrent support — the faithful condition.** `X` avoids the dead set
+and from every `s ∈ X` there is *one* placement that keeps us in `X` under *every* legal next draw.
+Commit-before-draw: this is what real online survival requires. -/
+def OnlineSafeRecurrentSupport {Piece Action : Type*} (Dead : State → Prop)
     (legalDraws : State → Finset Piece) (step : State → Action → Piece → State)
     (X : Set State) : Prop :=
-  death ∉ X ∧ ∀ s ∈ X, s ≠ death ∧ ∃ a : Action, ∀ r ∈ legalDraws s, step s a r ∈ X
+  ∀ s ∈ X, ¬ Dead s ∧ ∃ a : Action, ∀ r ∈ legalDraws s, step s a r ∈ X
 
 /-- The support is reached from the start: some `x ∈ X` lies in `⋁ₘ Bᵐ e_{s₀}`. -/
 def SupportReachable (R : State → State → Prop) (s₀ : State) (X : Set State) : Prop :=
   ∃ x ∈ X, Reachable R s₀ x
 
-/-- A safe edge avoids death at both endpoints (`P_safe` projection). -/
-theorem safeEdge_endpoints {Piece Action : Type*} {death : State}
+/-- A safe edge avoids the dead set at both endpoints (`P_safe` projection). -/
+theorem safeEdge_endpoints {Piece Action : Type*} {Dead : State → Prop}
     {legalDraws : State → Finset Piece} {step : State → Action → Piece → State}
-    {s t : State} (h : SafeEdge death legalDraws step s t) : s ≠ death ∧ t ≠ death :=
+    {s t : State} (h : SafeEdge Dead legalDraws step s t) : ¬ Dead s ∧ ¬ Dead t :=
   ⟨h.1, h.2.1⟩
 
 /-- **Online support is stronger than weak support** (`∃ a, ∀ r` ⟹ `∀ r, ∃ a`). -/
-theorem online_implies_weak {Piece Action : Type*} {death : State}
+theorem online_implies_weak {Piece Action : Type*} {Dead : State → Prop}
     {legalDraws : State → Finset Piece} {step : State → Action → Piece → State}
-    {X : Set State} (h : OnlineSafeRecurrentSupport death legalDraws step X) :
-    SafeRecurrentSupport death legalDraws step X := by
-  obtain ⟨hnotin, hmem⟩ := h
-  refine ⟨hnotin, fun s hs => ?_⟩
-  obtain ⟨hsne, a, ha⟩ := hmem s hs
+    {X : Set State} (h : OnlineSafeRecurrentSupport Dead legalDraws step X) :
+    SafeRecurrentSupport Dead legalDraws step X := by
+  intro s hs
+  obtain ⟨hsne, a, ha⟩ := h s hs
   exact ⟨hsne, fun r hr => ⟨a, ha r hr⟩⟩
 
-/-- **Weak recurrent support ⇒ infinite survival.** A reachable, `death`-avoiding weak support `X`
+/-- **Weak recurrent support ⇒ infinite survival.** A reachable, dead-avoiding weak support `X`
 (with nonempty legal-draw sets, as in any real bag) yields an infinite safe `B`-path from `s₀`. The
 support is a closed set for `SafeEdge`, so this is `infinite_safe_path_of_reachable_closed`. -/
 theorem reachable_safe_recurrent_support_implies_infinite_survival
-    {Piece Action : Type*} {death : State}
+    {Piece Action : Type*} {Dead : State → Prop}
     {legalDraws : State → Finset Piece} {step : State → Action → Piece → State}
     {s₀ : State} {X : Set State}
     (hLegal : ∀ s ∈ X, (legalDraws s).Nonempty)
-    (hX : SafeRecurrentSupport death legalDraws step X)
-    (hReach : SupportReachable (SafeEdge death legalDraws step) s₀ X) :
-    InfiniteSafePath (SafeEdge death legalDraws step) death s₀ := by
-  obtain ⟨hnotin, hmem⟩ := hX
+    (hX : SafeRecurrentSupport Dead legalDraws step X)
+    (hReach : SupportReachable (SafeEdge Dead legalDraws step) s₀ X) :
+    InfiniteSafePath (SafeEdge Dead legalDraws step) Dead s₀ := by
   refine infinite_safe_path_of_reachable_closed (fun _ _ h => safeEdge_endpoints h) ?_ hReach
   intro s hs
-  obtain ⟨hsne, hsucc⟩ := hmem s hs
+  obtain ⟨hsne, hsucc⟩ := hX s hs
   obtain ⟨r, hr⟩ := hLegal s hs
   obtain ⟨a, hax⟩ := hsucc r hr
-  exact ⟨step s a r, hax, hsne, fun hc => hnotin (hc ▸ hax), ⟨r, hr, a, rfl⟩⟩
+  exact ⟨step s a r, hax, hsne, (hX (step s a r) hax).1, ⟨r, hr, a, rfl⟩⟩
 
-/-- **Online recurrent support ⇒ infinite survival (faithful headline).** A reachable,
-`death`-avoiding online support `X` yields an infinite safe `B`-path from `s₀`. Reduces to the weak
-theorem via `online_implies_weak`. -/
+/-- **Online recurrent support ⇒ infinite survival (faithful headline).** A reachable, dead-avoiding
+online support `X` yields an infinite safe `B`-path from `s₀`. Reduces to the weak theorem via
+`online_implies_weak`. -/
 theorem reachable_online_safe_recurrent_support_implies_infinite_survival
-    {Piece Action : Type*} {death : State}
+    {Piece Action : Type*} {Dead : State → Prop}
     {legalDraws : State → Finset Piece} {step : State → Action → Piece → State}
     {s₀ : State} {X : Set State}
     (hLegal : ∀ s ∈ X, (legalDraws s).Nonempty)
-    (hX : OnlineSafeRecurrentSupport death legalDraws step X)
-    (hReach : SupportReachable (SafeEdge death legalDraws step) s₀ X) :
-    InfiniteSafePath (SafeEdge death legalDraws step) death s₀ :=
+    (hX : OnlineSafeRecurrentSupport Dead legalDraws step X)
+    (hReach : SupportReachable (SafeEdge Dead legalDraws step) s₀ X) :
+    InfiniteSafePath (SafeEdge Dead legalDraws step) Dead s₀ :=
   reachable_safe_recurrent_support_implies_infinite_survival hLegal (online_implies_weak hX) hReach
 
 /-! ## §3 Faithful all-sequences survival (the adversarial headline)
@@ -316,7 +319,7 @@ theorem reachable_online_safe_recurrent_support_implies_infinite_survival
 §2 produces *one* infinite safe orbit — existence of *a* surviving trajectory. The faithful 7-bag
 claim is stronger: a single committed policy must survive **every** legal piece sequence the
 adversary can draw. The online support is exactly the certificate for that. We make the adversarial
-play explicit and prove the abstract analogue of `closed_cycle_survives`: a `death`-avoiding online
+play explicit and prove the abstract analogue of `closed_cycle_survives`: a dead-avoiding online
 support is invariant under the policy that picks its witnessed placement, for all adversaries. -/
 
 /-- The adversarial trace: from `s₀`, at each step place the current piece via policy `π`, then the
@@ -335,25 +338,25 @@ theorem absTrace_succ {Piece Action : Type*} (step : State → Action → Piece 
     absTrace step π seq s₀ (n + 1) =
       step (absTrace step π seq s₀ n) (π (absTrace step π seq s₀ n)) (seq n) := rfl
 
-/-- **Online support ⇒ a policy invariant under every adversary.** From a `death`-avoiding online
+/-- **Online support ⇒ a policy invariant under every adversary.** From a dead-avoiding online
 support `X` and an entry `s₀ ∈ X`, there is a policy `π` whose adversarial trace stays inside `X`
 for *every* legal piece sequence. (Legality is "along the trace": each draw lies in the current
 `legalDraws`.) This is the abstract `closed_cycle_survives` — the all-`∀r` strength of the online
 condition is exactly what makes the invariant hold against an adversary, not just one sequence. -/
 theorem online_support_invariant_all_sequences {Piece Action : Type*} [Nonempty Action]
-    {death : State} {legalDraws : State → Finset Piece} {step : State → Action → Piece → State}
-    {X : Set State} (hX : OnlineSafeRecurrentSupport death legalDraws step X)
+    {Dead : State → Prop} {legalDraws : State → Finset Piece}
+    {step : State → Action → Piece → State}
+    {X : Set State} (hX : OnlineSafeRecurrentSupport Dead legalDraws step X)
     {s₀ : State} (hs₀ : s₀ ∈ X) :
     ∃ π : State → Action, ∀ seq : ℕ → Piece,
       (∀ n, seq n ∈ legalDraws (absTrace step π seq s₀ n)) →
       ∀ n, absTrace step π seq s₀ n ∈ X := by
   classical
-  obtain ⟨_hnotin, hmem⟩ := hX
   -- A placement choice for every state: the online witness on `X`, arbitrary off `X`.
   have hpick : ∀ s, ∃ a : Action, s ∈ X → ∀ r ∈ legalDraws s, step s a r ∈ X := by
     intro s
     by_cases h : s ∈ X
-    · obtain ⟨a, ha⟩ := (hmem s h).2
+    · obtain ⟨a, ha⟩ := (hX s h).2
       exact ⟨a, fun _ => ha⟩
     · exact ⟨Classical.arbitrary Action, fun hc => absurd hc h⟩
   refine ⟨fun s => Classical.choose (hpick s), fun seq hlegal n => ?_⟩
@@ -364,17 +367,19 @@ theorem online_support_invariant_all_sequences {Piece Action : Type*} [Nonempty 
     exact Classical.choose_spec (hpick _) ih (seq k) (hlegal k)
 
 /-- **Faithful adversarial survival.** Same hypotheses as above: the witnessed policy never tops
-out against any legal adversary — `absTrace … n ≠ death` for all `n`. Corollary of the invariant
-plus `death ∉ X`. The abstract, online (`∃a∀r`) survival statement the Atlas mission targets. -/
+out against any legal adversary — `¬ Dead (absTrace … n)` for all `n`. Corollary of the invariant
+plus dead-avoidance of `X`. The abstract, online (`∃a∀r`) survival statement the Atlas mission
+targets. -/
 theorem online_support_survives_all_sequences {Piece Action : Type*} [Nonempty Action]
-    {death : State} {legalDraws : State → Finset Piece} {step : State → Action → Piece → State}
-    {X : Set State} (hX : OnlineSafeRecurrentSupport death legalDraws step X)
+    {Dead : State → Prop} {legalDraws : State → Finset Piece}
+    {step : State → Action → Piece → State}
+    {X : Set State} (hX : OnlineSafeRecurrentSupport Dead legalDraws step X)
     {s₀ : State} (hs₀ : s₀ ∈ X) :
     ∃ π : State → Action, ∀ seq : ℕ → Piece,
       (∀ n, seq n ∈ legalDraws (absTrace step π seq s₀ n)) →
-      ∀ n, absTrace step π seq s₀ n ≠ death := by
+      ∀ n, ¬ Dead (absTrace step π seq s₀ n) := by
   obtain ⟨π, hπ⟩ := online_support_invariant_all_sequences hX hs₀
-  exact ⟨π, fun seq hlegal n hc => hX.1 (hc ▸ hπ seq hlegal n)⟩
+  exact ⟨π, fun seq hlegal n => (hX _ (hπ seq hlegal n)).1⟩
 
 /-! ## §4 The Boolean matrix-power correspondence
 
