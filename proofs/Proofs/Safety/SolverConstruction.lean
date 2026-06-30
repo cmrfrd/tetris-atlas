@@ -458,4 +458,18 @@ theorem buildSolver_step_mem {S : Finset GameState} (hfix : F_finite cfg S = S)
     adversarialStep cfg g p (buildSolver hfix g p) ∈ S :=
   (buildSolver_spec hfix hg hp).2
 
+/-- **The built solver's orbit stays in the region.** From `init ∈ S`, every state of the play under
+the built solver remains in `S` — the constructed function is confined to its finite region, a
+stronger invariant than mere safety. -/
+theorem buildSolver_trace_mem {S : Finset GameState} (hfix : F_finite cfg S = S)
+    (hinit : GameState.init ∈ S) {s : ℕ → Piece} (hl : LegalSequence s) (n : ℕ) :
+    adversarialTrace cfg (buildSolver hfix) s GameState.init n ∈ S := by
+  induction n with
+  | zero => simpa using hinit
+  | succ k ih =>
+      rw [adversarialTrace_succ]
+      have hbag : s k ∈ (adversarialTrace cfg (buildSolver hfix) s GameState.init k).bag := by
+        rw [adversarialTrace_bag]; exact hl k
+      exact buildSolver_step_mem hfix ih hbag
+
 end Tetris
