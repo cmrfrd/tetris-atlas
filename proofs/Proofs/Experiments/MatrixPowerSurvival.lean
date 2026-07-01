@@ -1375,6 +1375,44 @@ theorem koopman_orbit_survives_iff [Finite State] (Dead : State → Prop)
   obtain ⟨N, hN⟩ := koopman_orbit_decides_survival Dead legalDraws step init
   exact ⟨N, by rw [hN, survObs_eq_one_iff]⟩
 
+/-! ### The spectral reframe: solvability as a `1`-eigenvector of the transfer matrix
+
+The transfer matrix `T` on the `2^|State|` subset-coordinates advances each candidate set one
+adversarial round: `T e_X = e_{CPre X}`. So coordinate `X` carries a **`1` on the diagonal**
+(`T e_X = e_X`, an eigenvalue-`1` eigenvector) exactly when `CPre X = X` — `X` is a **closed set**.
+The whole problem becomes one spectral statement: Tetris is solvable iff `T` has an eigenvalue-`1`
+eigenvector whose coordinate contains `init`. -/
+
+/-- **A good `1` on the diagonal ⇒ solvable.** If `CPre X = X` (`e_X` is a `1`-eigenvector of the
+transfer matrix — a `1` on the diagonal at coordinate `X`) and `init ∈ X`, then
+`init ∈ adversarialSafe`: Tetris survives forever from `init`. Exhibit *one* diagonal `1` at an
+`init`-containing coordinate and you are done (coinduction / `OrderHom.le_gfp`). -/
+theorem mem_adversarialSafe_of_cpre_fixed (Dead : State → Prop)
+    (legalDraws : State → Finset Piece) (step : State → Action → Piece → State) {X : Set State}
+    (hfix : CPre Dead legalDraws step X = X) {init : State} (hinit : init ∈ X) :
+    init ∈ adversarialSafe Dead legalDraws step :=
+  subset_adversarialSafe_of_recurrentSupport Dead legalDraws step
+    ((subset_cpre_iff_recurrentSupport Dead legalDraws step X).mp (le_of_eq hfix.symm)) hinit
+
+/-- **The spectral reframe, complete: solvable ⟺ a `1`-eigenvector contains `init`.** `init`
+survives forever iff the transfer matrix has an eigenvalue-`1` eigenvector `e_X` (`CPre X = X`, a
+`1` on the diagonal at `X`) with `init ∈ X`. Forward: `adversarialSafe` is itself such a fixed point
+(`OrderHom.map_gfp`) and contains `init`. So "prove Tetris solvable" is *exactly* "prove the
+transfer matrix has a good `1` on the diagonal" — the whole problem as one spectral existence claim.
+(Honest residual: that eigenvector's coordinate IS the carrier; the reframe is complete, the
+existence is the open crux — spectral theory hands you eigenvalue-`1` eigenvectors for free, e.g.
+`e_∅`, but not a nonempty `init`-containing one.) -/
+theorem mem_adversarialSafe_iff_exists_cpre_fixed (Dead : State → Prop)
+    (legalDraws : State → Finset Piece) (step : State → Action → Piece → State) (init : State) :
+    init ∈ adversarialSafe Dead legalDraws step ↔
+      ∃ X : Set State, CPre Dead legalDraws step X = X ∧ init ∈ X := by
+  constructor
+  · intro h
+    exact ⟨adversarialSafe Dead legalDraws step,
+      OrderHom.map_gfp (cpreHom Dead legalDraws step), h⟩
+  · rintro ⟨X, hfix, hinit⟩
+    exact mem_adversarialSafe_of_cpre_fixed Dead legalDraws step hfix hinit
+
 end KoopmanLift
 
 /-! ## §6 Connecting the abstract layer to the concrete safe-set results
