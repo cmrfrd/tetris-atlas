@@ -1278,6 +1278,105 @@ theorem coop_nonNilpotent_but_not_safe :
 
 end BarrierWitnessCooperative
 
+/-! ## §5d The Koopman lift — make it fully linear by enlarging the space
+
+Barrier 1 says the `∀`-meet `CPre` is not a single matrix *on `Set State`*. But it becomes a genuine
+**linear operator** if we enlarge the space: lift to the (`2^|State|`-dimensional) space of
+observables `Set State → ℚ` — one coordinate per subset, "all candidate safe-sets at once" — with
+the operator being *precomposition by* `CPre`. This is the Koopman / transfer-operator
+linearization, the "trade nonlinearity for dimension" move. It genuinely linearizes everything
+(`koopman`
+is a bona-fide `ℚ`-linear map, Mathlib's `LinearMap.funLeft`), and survival becomes a single
+**coordinate of a linear orbit** (`koopman_orbit_survives_iff`).
+
+HONEST CEILING (why this is a repackaging, not a shortcut): the lifted space is doubly exponential
+(`2^|State|`, and `|State|` already astronomical), and `koopman` is *precomposition* by `CPre`, so
+its powers merely re-run the iteration `CPreⁿ` (`koopmanFun_iterate`) — there is no eigenvalue that
+reads off survival more cheaply than iterating `CPre`. The linearity is a relabeling; the difficulty
+moves into the dimension. -/
+
+section KoopmanLift
+
+variable {Piece Action : Type*}
+
+/-- Raw action of the Koopman lift on the observable space `Set State → ℚ`: precomposition by the
+(nonlinear) controllable predecessor `CPre`. Each subset is a coordinate; this map advances *all* of
+them one adversarial round at once. -/
+def koopmanFun (Dead : State → Prop) (legalDraws : State → Finset Piece)
+    (step : State → Action → Piece → State) (φ : Set State → ℚ) : Set State → ℚ :=
+  fun X => φ (CPre Dead legalDraws step X)
+
+/-- **The lift is genuinely `ℚ`-linear.** `koopman` is Mathlib's `LinearMap.funLeft` (precomposition
+by `CPre`), a bundled linear map — so "everything is linear in the bigger space" is certified by the
+type, not merely asserted. Its underlying function is `koopmanFun` (`koopman_eq_koopmanFun`). -/
+def koopman (Dead : State → Prop) (legalDraws : State → Finset Piece)
+    (step : State → Action → Piece → State) : (Set State → ℚ) →ₗ[ℚ] (Set State → ℚ) :=
+  LinearMap.funLeft ℚ ℚ (CPre Dead legalDraws step)
+
+theorem koopman_eq_koopmanFun (Dead : State → Prop) (legalDraws : State → Finset Piece)
+    (step : State → Action → Piece → State) (φ : Set State → ℚ) :
+    koopman Dead legalDraws step φ = koopmanFun Dead legalDraws step φ := by
+  ext X; exact LinearMap.funLeft_apply ℚ ℚ (CPre Dead legalDraws step) φ X
+
+/-- **Linear powers = the survival iteration.** The `n`-th iterate of the linear lift precomposes by
+the `n`-fold `CPre`: `koopmanFunⁿ φ X = φ (CPreⁿ X)`. So the lifted linear dynamics carries exactly
+`CPreⁿ` — the honest ceiling: matrix powers here *are* the original iteration, relabeled. -/
+theorem koopmanFun_iterate (Dead : State → Prop) (legalDraws : State → Finset Piece)
+    (step : State → Action → Piece → State) (n : ℕ) (φ : Set State → ℚ) (X : Set State) :
+    (koopmanFun Dead legalDraws step)^[n] φ X = φ ((CPre Dead legalDraws step)^[n] X) := by
+  induction n generalizing φ with
+  | zero => rfl
+  | succ k ih =>
+    rw [Function.iterate_succ_apply, ih, Function.iterate_succ_apply']
+    rfl
+
+/-- The `CPre` iteration from the top set is exactly the greatest-fixpoint downward iteration
+`gfpIter cpreHom` — the bridge from the lifted orbit to the existing gfp machinery. -/
+theorem cpre_iterate_univ_eq_gfpIter (Dead : State → Prop) (legalDraws : State → Finset Piece)
+    (step : State → Action → Piece → State) (n : ℕ) :
+    (CPre Dead legalDraws step)^[n] Set.univ = gfpIter (cpreHom Dead legalDraws step) n := by
+  induction n with
+  | zero => simp [gfpIter, Set.top_eq_univ]
+  | succ k ih =>
+    rw [Function.iterate_succ_apply', ih]
+    rfl
+
+/-- The survival observable: `1` on candidate sets containing `init`, `0` otherwise — the coordinate
+functional that reads "is `init` still in the safe set". -/
+noncomputable def survObs (init : State) : Set State → ℚ := fun X => Set.indicator X 1 init
+
+theorem survObs_eq_one_iff (init : State) (S : Set State) : survObs init S = 1 ↔ init ∈ S := by
+  unfold survObs
+  by_cases h : init ∈ S
+  · rw [Set.indicator_of_mem h]; simp [h]
+  · rw [Set.indicator_of_notMem h]; simp [h]
+
+/-- **Survival is a coordinate of the linear orbit.** On a finite state space, iterating the
+*linear* operator `koopman` on the single observable `survObs init` from the top set stabilizes, its
+value at `Set.univ` is `survObs init` on the true safe set `adversarialSafe`. Everything is
+linear, in the enlarged space `Set State → ℚ`; `N` is the gfp stabilization stage. -/
+theorem koopman_orbit_decides_survival [Finite State] (Dead : State → Prop)
+    (legalDraws : State → Finset Piece) (step : State → Action → Piece → State) (init : State) :
+    ∃ N, (koopmanFun Dead legalDraws step)^[N] (survObs init) Set.univ
+        = survObs init (adversarialSafe Dead legalDraws step) := by
+  obtain ⟨N, hN⟩ := exists_gfpIter_eq_gfp (cpreHom Dead legalDraws step)
+  refine ⟨N, ?_⟩
+  rw [koopmanFun_iterate, cpre_iterate_univ_eq_gfpIter, hN]
+  rfl
+
+/-- **Read-off: the stabilized coordinate is `1` iff `init` survives forever.** Combining the orbit
+value with `survObs_eq_one_iff`: at the stabilization stage `N`, the single coordinate
+`koopmanᴺ (survObs init) (univ)` equals `1` exactly when `init ∈ adversarialSafe` — i.e. the linear
+lift *decides* adversarial survival, at the honest cost of a `2^|State|`-dimensional space. -/
+theorem koopman_orbit_survives_iff [Finite State] (Dead : State → Prop)
+    (legalDraws : State → Finset Piece) (step : State → Action → Piece → State) (init : State) :
+    ∃ N, ((koopmanFun Dead legalDraws step)^[N] (survObs init) Set.univ = 1
+            ↔ init ∈ adversarialSafe Dead legalDraws step) := by
+  obtain ⟨N, hN⟩ := koopman_orbit_decides_survival Dead legalDraws step init
+  exact ⟨N, by rw [hN, survObs_eq_one_iff]⟩
+
+end KoopmanLift
+
 /-! ## §6 Connecting the abstract layer to the concrete safe-set results
 
 The abstract theorems above are not new survival *content* — they re-present, in matrix-power
