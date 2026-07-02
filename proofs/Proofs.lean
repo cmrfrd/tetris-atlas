@@ -34,6 +34,7 @@ import Proofs.Survival.Survival
 
 -- Safety — safe-set GFP, Atlas, the solvability reduction, computable iteration, obstructions
 import Proofs.Safety.Adversarial
+import Proofs.Safety.BagBlock
 import Proofs.Safety.SafeSet
 import Proofs.Safety.SafeIterate
 import Proofs.Safety.SafeIterateFinite
