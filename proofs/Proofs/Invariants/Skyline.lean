@@ -75,7 +75,7 @@ theorem colRows_skyline_eq_empty {cfg : GameConfig} {h : ℕ → ℕ} {j : ℕ}
 
 /-- The supremum identity behind a column's height: `range n` summed via `(·+1)`
 recovers `n`. -/
-private theorem sup_range_succ (n : ℕ) : (Finset.range n).sup (· + 1) = n := by
+theorem sup_range_succ (n : ℕ) : (Finset.range n).sup (· + 1) = n := by
   cases n with
   | zero => simp
   | succ m =>
