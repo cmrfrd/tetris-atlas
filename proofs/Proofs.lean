@@ -28,6 +28,7 @@ import Proofs.Invariants.HoleyCarrier
 import Proofs.Invariants.SurfaceFiber
 import Proofs.Invariants.HoleDebt
 import Proofs.Invariants.HeightControl
+import Proofs.Invariants.Skyline
 
 -- Survival — policy / trace / cycle vocabulary
 import Proofs.Survival.Survival
