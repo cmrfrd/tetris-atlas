@@ -149,5 +149,63 @@ theorem place_holedSkyline {cfg : GameConfig} {h : ℕ → ℕ} {x : Coord}
     · exact Or.inl ⟨hpx, hpsky⟩
     · exact Or.inr hpdrop
 
+
+/-! ## Toward the debt-1 clearing law: full rows of a holed skyline
+
+The hole blocks exactly its own row. With `m` the real-column minimum of the
+profile, the full rows of `holedSkyline cfg h x` are `range m` minus `x.2` —
+the contiguous bottom block of the intact skyline with the hole row knocked
+out. The full clearing law (`clearLines` = clear those rows, shift, and expose
+the hole when it reaches its column top) builds on this characterization. -/
+
+/-- A holed skyline's row `r` is full exactly when every real column rises
+above `r` and `r` is not the hole row. -/
+theorem isFull_holedSkyline {cfg : GameConfig} {h : ℕ → ℕ} {x : Coord}
+    (hxcols : x.1 < cfg.cols) {r : ℕ} :
+    Board.isFull cfg (holedSkyline cfg h x) r ↔
+      (∀ j < cfg.cols, r < h j) ∧ r ≠ x.2 := by
+  unfold Board.isFull
+  constructor
+  · intro hf
+    have hx : (x.1, r) ∈ holedSkyline cfg h x :=
+      hf x.1 (Finset.mem_range.mpr hxcols)
+    obtain ⟨hne, -, -⟩ := (mem_holedSkyline (x.1, r)).mp hx
+    refine ⟨fun j hj => ?_, ?_⟩
+    · have := (mem_holedSkyline (j, r)).mp (hf j (Finset.mem_range.mpr hj))
+      exact this.2.2
+    · intro hrx
+      exact hne (by rw [hrx])
+  · rintro ⟨hall, hrx⟩ c hc
+    have hc' := Finset.mem_range.mp hc
+    refine (mem_holedSkyline (c, r)).mpr ⟨?_, hc', hall c hc'⟩
+    intro hcontra
+    exact hrx (congrArg Prod.snd hcontra)
+
+/-- With `m` the real-column minimum profile height, a holed skyline's full
+rows are the bottom block minus the hole row: `range m \ {x.2}`. -/
+theorem fullRows_holedSkyline {cfg : GameConfig} {h : ℕ → ℕ} {x : Coord} {m : ℕ}
+    (hxcols : x.1 < cfg.cols)
+    (hm : ∀ j < cfg.cols, m ≤ h j) (hm0 : ∃ j < cfg.cols, h j = m) :
+    Board.fullRows cfg (holedSkyline cfg h x) = (Finset.range m).erase x.2 := by
+  ext r
+  unfold Board.fullRows
+  rw [Finset.mem_filter, isFull_holedSkyline hxcols, Finset.mem_erase, Finset.mem_range]
+  constructor
+  · rintro ⟨-, hall, hrx⟩
+    obtain ⟨j, hj, hjm⟩ := hm0
+    have := hall j hj
+    exact ⟨hrx, by omega⟩
+  · rintro ⟨hrx, hrm⟩
+    refine ⟨?_, fun j hj => ?_, hrx⟩
+    · refine Finset.mem_image.mpr ⟨(x.1, r), ?_, rfl⟩
+      refine (mem_holedSkyline (x.1, r)).mpr ⟨?_, hxcols, ?_⟩
+      · intro hcontra
+        exact hrx (congrArg Prod.snd hcontra)
+      · show r < h x.1
+        have := hm x.1 hxcols
+        omega
+    · have := hm j hj
+      omega
+
 end Board
 end Tetris
