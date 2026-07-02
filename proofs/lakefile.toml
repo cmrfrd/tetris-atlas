@@ -23,3 +23,9 @@ name = "Proofs"
 # May use native_decide / large scaffolds; never imported by `Proofs`.
 [[lean_lib]]
 name = "ProofsExperiments"
+
+# Design-time carrier search harness (no mathlib imports — compiles native, fast).
+# Manual: `lake exe carriersearch`. Not part of any proof target.
+[[lean_exe]]
+name = "carriersearch"
+root = "Search.CarrierSearch"
