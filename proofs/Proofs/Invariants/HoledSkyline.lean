@@ -207,5 +207,33 @@ theorem fullRows_holedSkyline {cfg : GameConfig} {h : ℕ → ℕ} {x : Coord} {
     · have := hm j hj
       omega
 
+
+/-- **Shift count below a row.** Below row `r`, a holed skyline has cleared
+exactly the full rows `< r`: all of `range (min m r)` except the hole row when
+it lies in that range. This is the per-cell gravity shift the clearing law
+applies. -/
+theorem clearedBelow_holedSkyline {cfg : GameConfig} {h : ℕ → ℕ} {x : Coord} {m : ℕ}
+    (hxcols : x.1 < cfg.cols)
+    (hm : ∀ j < cfg.cols, m ≤ h j) (hm0 : ∃ j < cfg.cols, h j = m) (r : ℕ) :
+    Board.clearedBelow cfg (holedSkyline cfg h x) r
+      = min m r - (if x.2 < min m r then 1 else 0) := by
+  unfold Board.clearedBelow
+  rw [fullRows_holedSkyline hxcols hm hm0]
+  have hset : ((Finset.range m).erase x.2).filter (· < r)
+      = (Finset.range (min m r)).erase x.2 := by
+    ext y
+    simp only [Finset.mem_filter, Finset.mem_erase, Finset.mem_range, lt_min_iff]
+    constructor
+    · rintro ⟨⟨hyx, hym⟩, hyr⟩
+      exact ⟨hyx, hym, hyr⟩
+    · rintro ⟨hyx, hym, hyr⟩
+      exact ⟨⟨hyx, hym⟩, hyr⟩
+  rw [hset]
+  by_cases hx : x.2 < min m r
+  · rw [Finset.card_erase_of_mem (Finset.mem_range.mpr hx), Finset.card_range, if_pos hx]
+  · rw [Finset.erase_eq_of_notMem (fun hc => hx (Finset.mem_range.mp hc)),
+        Finset.card_range, if_neg hx]
+    omega
+
 end Board
 end Tetris
