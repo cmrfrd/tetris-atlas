@@ -216,6 +216,69 @@ theorem safe_greatest {cfg : GameConfig} (S : Set GameState)
     (hS : S ⊆ safeOp cfg S) : S ⊆ safe cfg :=
   OrderHom.le_gfp _ hS
 
+/-- **Iterate coinduction (general order-theoretic lemma).** For a monotone
+self-map `f` on a complete lattice, a post-fixed point of the `n`-fold iterate
+(`0 < n`) lies below the greatest fixed point of `f` itself: if `x ≤ f^[n] x`
+then `x ≤ gfp f`. This upgrades `OrderHom.le_gfp` from a single closure step to
+`n`-step closure, via `R := ⨆ i < n, f^[i] x` being an ordinary post-fixed
+point of `f`. It is the abstract heart of the "one whole bag" (depth-`n`)
+reduction below. -/
+theorem le_gfp_of_le_iterate {α : Type*} [CompleteLattice α] (f : α →o α)
+    {n : ℕ} (hn : 0 < n) {x : α} (hx : x ≤ (⇑f)^[n] x) :
+    x ≤ OrderHom.gfp f := by
+  have key :
+      (⨆ i : Fin n, (⇑f)^[(i : ℕ)] x) ≤ f (⨆ i : Fin n, (⇑f)^[(i : ℕ)] x) := by
+    refine iSup_le (fun i => ?_)
+    have hin : (i : ℕ) < n := i.isLt
+    rcases Nat.eq_zero_or_pos (i : ℕ) with hi0 | hipos
+    · rw [hi0]
+      have hprev : (⇑f)^[n - 1] x ≤ (⨆ j : Fin n, (⇑f)^[(j : ℕ)] x) := by
+        have h := le_iSup (fun j : Fin n => (⇑f)^[(j : ℕ)] x) (⟨n - 1, by omega⟩ : Fin n)
+        simpa using h
+      have hfn : (⇑f)^[n] x = f ((⇑f)^[n - 1] x) := by
+        obtain ⟨k, hk⟩ : ∃ k, n = k + 1 := ⟨n - 1, by omega⟩
+        rw [hk, Function.iterate_succ_apply']
+        simp
+      calc (⇑f)^[0] x = x := by simp
+        _ ≤ (⇑f)^[n] x := hx
+        _ = f ((⇑f)^[n - 1] x) := hfn
+        _ ≤ f (⨆ j : Fin n, (⇑f)^[(j : ℕ)] x) := f.mono hprev
+    · obtain ⟨m, hm⟩ : ∃ m, (i : ℕ) = m + 1 := ⟨(i : ℕ) - 1, by omega⟩
+      have hmn : m < n := by omega
+      have hprev : (⇑f)^[m] x ≤ (⨆ j : Fin n, (⇑f)^[(j : ℕ)] x) := by
+        have h := le_iSup (fun j : Fin n => (⇑f)^[(j : ℕ)] x) (⟨m, hmn⟩ : Fin n)
+        simpa using h
+      calc (⇑f)^[(i : ℕ)] x = (⇑f)^[m + 1] x := by rw [hm]
+        _ = f ((⇑f)^[m] x) := Function.iterate_succ_apply' _ _ _
+        _ ≤ f (⨆ j : Fin n, (⇑f)^[(j : ℕ)] x) := f.mono hprev
+  have hx0 : x ≤ (⨆ i : Fin n, (⇑f)^[(i : ℕ)] x) := by
+    have h := le_iSup (fun j : Fin n => (⇑f)^[(j : ℕ)] x) (⟨0, hn⟩ : Fin n)
+    simpa using h
+  exact le_trans hx0 (OrderHom.le_gfp f key)
+
+/-- **Bag-block (bounded-depth) reduction to `init ∈ safe`.** Instead of a
+single-step closed invariant, it suffices to exhibit a set `Q` that re-closes
+over **one whole bag** — a depth-7 closure `Q ⊆ (safeOp)^[7] Q` — together with
+a *bootstrap*: the empty-board `init` survives its first bag into `Q`
+(`init ∈ (safeOp)^[7] Q`). This reshapes the open obligation from bounded-size
+per-piece closure to bounded-*depth* per-bag closure, and cleanly separates the
+empty-board bootstrap from steady-state closure. Proof: `Q ⊆ safe` by
+`le_gfp_of_le_iterate`, then `(safeOp)^[7] Q ⊆ safe` since `safe` is a fixed
+point, so `init ∈ (safeOp)^[7] Q ⊆ safe`. The number `7` is not special — any
+positive block length works; `bagBlock` fixes it to a 7-bag. -/
+theorem init_mem_safe_of_bag_invariant {cfg : GameConfig} (Q : Set GameState)
+    (hbag : Q ⊆ (⇑(safeOp cfg))^[7] Q)
+    (hboot : GameState.init ∈ (⇑(safeOp cfg))^[7] Q) :
+    GameState.init ∈ safe cfg := by
+  have hQsafe : Q ⊆ safe cfg :=
+    le_gfp_of_le_iterate (safeOp cfg) (by norm_num) hbag
+  have hstep : (⇑(safeOp cfg))^[7] Q ≤ safe cfg := by
+    calc (⇑(safeOp cfg))^[7] Q
+        ≤ (⇑(safeOp cfg))^[7] (safe cfg) :=
+          (Monotone.iterate (OrderHom.mono (safeOp cfg)) 7) hQsafe
+      _ = safe cfg := Function.iterate_fixed (safe_eq cfg) 7
+  exact hstep hboot
+
 /-- **No valid placement for a drawable piece ⇒ not safe**. If some piece
 in the bag cannot be played in-bounds, the state is doomed (no surviving
 strategy responds to that piece). -/
