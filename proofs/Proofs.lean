@@ -37,6 +37,7 @@ import Proofs.Survival.Survival
 import Proofs.Safety.Adversarial
 import Proofs.Safety.BagBlock
 import Proofs.Safety.SafeSet
+import Proofs.Safety.SkylineInvariant
 import Proofs.Safety.SafeIterate
 import Proofs.Safety.SafeIterateFinite
 import Proofs.Safety.Safety

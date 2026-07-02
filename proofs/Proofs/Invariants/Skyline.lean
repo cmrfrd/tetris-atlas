@@ -175,6 +175,19 @@ theorem clearLines_skyline {cfg : GameConfig} {h : ℕ → ℕ} {m : ℕ}
 
 
 
+/-- The zero profile is the empty board. -/
+theorem skyline_zero_eq_empty (cfg : GameConfig) :
+    skyline cfg (fun _ => 0) = (∅ : Board) := by
+  ext ⟨j, r⟩
+  rw [mem_skyline]
+  simp
+
+/-- `init`'s board is the zero skyline, for any config. -/
+theorem init_board_eq_skyline (cfg : GameConfig) :
+    GameState.init.board = skyline cfg (fun _ => 0) := by
+  rw [skyline_zero_eq_empty]
+  rfl
+
 /-- **Flush hard-drop offset.** If every drop-profile column has lower bound
 `bot` (attained in column `0`) and the skyline is flush — column `col + i`
 has height exactly `off + bot i` — then the hard-drop offset is exactly `off`. -/
