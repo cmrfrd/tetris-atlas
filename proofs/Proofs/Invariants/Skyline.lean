@@ -291,6 +291,64 @@ theorem applyStep_flush_skyline {cfg : GameConfig} {h h' : ℕ → ℕ} {pl : Pl
     pl.applyStep cfg (skyline cfg h) = skyline cfg (fun j => h' j - m) := by
   rw [Placement.applyStep_eq_clearLines_place, hplace, clearLines_skyline hm hm0]
 
+
+/-! ## Necessity: hole-free placement forces flushness
+
+The converse of `place_flush_skyline`: if placing on a skyline yields a
+skyline again (no hole created), then every column of the piece landed flush —
+its bottom cell sits exactly on the surface. This is the cornerstone of the
+window-demand theory: a piece admits a hole-free placement **only if** the
+surface presents that piece's exact seating window, so each piece's shape
+table converts directly into a necessary condition on any surviving surface
+family (S/Z demand steps, O demands a flat pair, horizontal I a flat run). -/
+
+/-- **Hole-free placement forces flushness.** If `pl.place (skyline h)` is
+again a skyline and `cell` is a bottom cell of the piece's drop profile in its
+column, then that column landed exactly on the surface:
+`dropOffset + cell.2 = h (pl.col + cell.1)`. Otherwise the cell just below the
+landing spot would be missing from the result — a hole — contradicting
+skyline-ness. -/
+theorem flush_of_place_eq_skyline {cfg : GameConfig} {h h' : ℕ → ℕ}
+    {pl : Placement} (hplace : pl.place (skyline cfg h) = skyline cfg h')
+    {cell : ℕ × ℕ} (hcell : cell ∈ pl.shapeUp)
+    (hbot : ∀ cell' ∈ pl.shapeUp, cell'.1 = cell.1 → cell.2 ≤ cell'.2)
+    (hin : pl.col + cell.1 < cfg.cols) :
+    pl.dropOffset (skyline cfg h) + cell.2 = h (pl.col + cell.1) := by
+  set off := pl.dropOffset (skyline cfg h) with hoffdef
+  -- ≥ : the offset dominates every column's constraint
+  have hge : h (pl.col + cell.1) ≤ off + cell.2 := by
+    have := Finset.le_sup (f := fun c : ℕ × ℕ =>
+      (skyline cfg h).colHeight (pl.col + c.1) - c.2) hcell
+    dsimp only at this
+    rw [colHeight_skyline hin, ← Placement.dropOffset_eq_sup] at this
+    omega
+  -- ≤ : otherwise the cell below the landing is a hole
+  by_contra hne
+  have hgt : h (pl.col + cell.1) < off + cell.2 := by omega
+  -- the landing cell is in the placed board
+  have hland : (pl.col + cell.1, off + cell.2) ∈ pl.place (skyline cfg h) := by
+    rw [Placement.place_eq_union_dropped, Finset.mem_union, Placement.dropped_eq_image]
+    exact Or.inr (Finset.mem_image.mpr ⟨cell, hcell, rfl⟩)
+  -- so the result profile rises above the landing row
+  have hh' : off + cell.2 < h' (pl.col + cell.1) := by
+    rw [hplace] at hland
+    exact ((mem_skyline _ _ _ _).mp hland).2
+  -- the cell just below the landing is in the result skyline
+  have hbelow : (pl.col + cell.1, off + cell.2 - 1) ∈ skyline cfg h' :=
+    (mem_skyline _ _ _ _).mpr ⟨hin, by omega⟩
+  -- but it is in neither the original skyline nor the dropped piece
+  rw [← hplace, Placement.place_eq_union_dropped, Finset.mem_union,
+      Placement.dropped_eq_image] at hbelow
+  rcases hbelow with hsky | hdrop
+  · have := ((mem_skyline _ _ _ _).mp hsky).2
+    omega
+  · obtain ⟨⟨i', ρ'⟩, hcell', heq⟩ := Finset.mem_image.mp hdrop
+    have h1 : pl.col + i' = pl.col + cell.1 := congrArg Prod.fst heq
+    have h2 : off + ρ' = off + cell.2 - 1 := congrArg Prod.snd heq
+    have hii : i' = cell.1 := by omega
+    have := hbot (i', ρ') hcell' (by omega)
+    omega
+
 /-! ## Validation instances: the vertical S and Z bricks
 
 Vertical S (rot 1) seats flush on a left-high step `h c = h (c+1) + 1` and
