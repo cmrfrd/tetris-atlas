@@ -640,5 +640,76 @@ theorem no_holefree_S_on_flat {cfg : GameConfig} {k : ℕ} {pl : Placement}
   obtain ⟨c, hwin⟩ := window_of_place_S_eq_skyline hpiece hvalid hplace
   rcases hwin with ⟨-, hstep⟩ | ⟨-, -, hstep⟩ <;> omega
 
+
+/-- The O drop profile is the 2×2 block, at every rotation value. -/
+theorem shapeUp_O (c : ℕ) (r : Tetris.Rotation) :
+    ({ piece := Piece.O, rot := r, col := c } : Placement).shapeUp
+      = {((0 : ℕ), (0 : ℕ)), (0, 1), (1, 0), (1, 1)} := by
+  show Piece.shapeUp Piece.O r = _
+  obtain ⟨rv, hrv⟩ := r
+  interval_cases rv <;> decide +revert
+
+/-- **The O window demand.** A hole-free O placement forces a flat pair
+`h c = h (c+1)` at the placement column. With the S/Z step demands this is
+the three-way tension every surviving family must resolve: S wants a
+left-high step, Z a right-high step, O a flat pair — all within one bag. -/
+theorem window_of_place_O_eq_skyline {cfg : GameConfig} {h h' : ℕ → ℕ}
+    {pl : Placement} (hpiece : pl.piece = Piece.O) (hvalid : pl.Valid cfg)
+    (hplace : pl.place (skyline cfg h) = skyline cfg h') :
+    ∃ c, c + 1 < cfg.cols ∧ h c = h (c + 1) := by
+  obtain ⟨piece, rot, col⟩ := pl
+  simp only at hpiece
+  subst hpiece
+  have hsh := shapeUp_O col rot
+  have hin1 : col + 1 < cfg.cols := hvalid (1, 0) (by rw [hsh]; decide)
+  have hin0 : col + 0 < cfg.cols := by omega
+  have h0 : ({ piece := Piece.O, rot := rot, col := col } : Placement).dropOffset
+      (skyline cfg h) + 0 = h col :=
+    flush_of_place_eq_skyline hplace (cell := (0, 0)) (by rw [hsh]; decide)
+      (by rw [hsh]; decide) hin0
+  have h1 : ({ piece := Piece.O, rot := rot, col := col } : Placement).dropOffset
+      (skyline cfg h) + 0 = h (col + 1) :=
+    flush_of_place_eq_skyline hplace (cell := (1, 0)) (by rw [hsh]; decide)
+      (by rw [hsh]; decide) hin1
+  exact ⟨col, hin1, by omega⟩
+
+/-- The vertical I drop profile (rotations 1 and 3): one column, rows 0–3. -/
+theorem shapeUp_vertI' (c : ℕ) (r : Tetris.Rotation) (hr : r.val = 1 ∨ r.val = 3) :
+    ({ piece := Piece.I, rot := r, col := c } : Placement).shapeUp
+      = {((0 : ℕ), (0 : ℕ)), (0, 1), (0, 2), (0, 3)} := by
+  show Piece.shapeUp Piece.I r = _
+  obtain ⟨rv, hrv⟩ := r
+  rcases hr with h1 | h3
+  · simp only at h1; subst h1; decide +revert
+  · simp only at h3; subst h3; decide +revert
+
+/-- **I never starves.** The vertical I occupies a single column, so it seats
+flush on ANY surface: every skyline admits a hole-free I placement (raising
+one column by 4). I is the demand-free piece — the necessity squeeze binds
+only through O, S, Z (and the height ceiling). -/
+theorem exists_holefree_I {cfg : GameConfig} (h : ℕ → ℕ) (hcols : 0 < cfg.cols) :
+    ∃ (pl : Placement) (h' : ℕ → ℕ), pl.piece = Piece.I ∧ pl.Valid cfg ∧
+      pl.place (skyline cfg h) = skyline cfg h' := by
+  refine ⟨{ piece := Piece.I, rot := ⟨1, by omega⟩, col := 0 },
+    Function.update h 0 (h 0 + 4), rfl, ?_, ?_⟩
+  · intro cell hcell
+    rw [shapeUp_vertI' 0 _ (Or.inl rfl)] at hcell
+    fin_cases hcell <;> simpa
+  · refine place_flush_skyline (w := 1) (off := h 0)
+      (bot := fun _ => 0) (top := fun _ => 3)
+      (fun i ρ => ?_) (by omega) (fun i _ => by dsimp only; omega)
+      (fun i hi => ?_) (fun i hi => ?_) (fun i hi => ?_) (fun j hj => ?_)
+    · rw [shapeUp_vertI' 0 _ (Or.inl rfl)]
+      simp only [Finset.mem_insert, Finset.mem_singleton, Prod.mk.injEq]
+      omega
+    · interval_cases i
+      simpa using hcols
+    · interval_cases i
+      simp
+    · interval_cases i
+      rw [Function.update_self]
+    · have hj0 : j ≠ 0 := by simpa using hj 0 (by omega)
+      rw [Function.update_of_ne hj0]
+
 end Board
 end Tetris
