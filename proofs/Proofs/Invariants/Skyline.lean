@@ -292,6 +292,68 @@ theorem applyStep_flush_skyline {cfg : GameConfig} {h h' : ℕ → ℕ} {pl : Pl
   rw [Placement.applyStep_eq_clearLines_place, hplace, clearLines_skyline hm hm0]
 
 
+/-- **A skyline's filled-cell count is the sum of its column heights.** A
+piece adds four cells and a line clear removes `cfg.cols`, so this is the
+bridge from the geometric surface to the conserved cell count. -/
+theorem card_skyline {cfg : GameConfig} {h : ℕ → ℕ} :
+    (skyline cfg h).card = ∑ j ∈ Finset.range cfg.cols, h j := by
+  have hdisj : ∀ x ∈ Finset.range cfg.cols, ∀ y ∈ Finset.range cfg.cols, x ≠ y →
+      Disjoint ((Finset.range (h x)).image (fun r => (x, r)))
+        ((Finset.range (h y)).image (fun r => (y, r))) := by
+    intro x _ y _ hxy
+    rw [Finset.disjoint_left]
+    rintro a ha hay
+    rw [Finset.mem_image] at ha hay
+    obtain ⟨r1, _, hr1⟩ := ha
+    obtain ⟨r2, _, hr2⟩ := hay
+    have hx1 : a.1 = x := by rw [← hr1]
+    have hy1 : a.1 = y := by rw [← hr2]
+    exact hxy (hx1.symm.trans hy1)
+  unfold skyline
+  rw [Finset.card_biUnion hdisj]
+  refine Finset.sum_congr rfl ?_
+  intro j _
+  rw [Finset.card_image_of_injective _ (by intro a b hab; simpa using hab),
+    Finset.card_range]
+
+/-! ## Conservation: the drift identity and the clearing duty
+
+Cells are conserved: a placement injects exactly four, a cleared row removes
+exactly `cfg.cols`. On skylines this becomes an exact identity on surface
+areas: `∑ h_post + cols·m = ∑ h_pre + 4` for a flush move clearing `m` rows.
+Iterated over a trace it forces the **clearing duty**: with the ceiling
+`h ≤ rows`, surface area is bounded by `cols·rows`, so any family closed
+under full moves must clear rows at asymptotic rate `4 / cols` per piece
+(`2.8` rows per 7-bag on the standard board) — an exact quantitative
+constraint on every certificate. -/
+
+/-- A flush placement raises total surface area by exactly `4`. -/
+theorem sum_profile_place_flush {cfg : GameConfig} {h h' : ℕ → ℕ} {pl : Placement}
+    (hplace : pl.place (skyline cfg h) = skyline cfg h') :
+    ∑ j ∈ Finset.range cfg.cols, h' j = (∑ j ∈ Finset.range cfg.cols, h j) + 4 := by
+  have hcard : (skyline cfg h').card = (skyline cfg h).card + 4 := by
+    rw [← hplace]
+    exact Placement.count_place (skyline cfg h) pl
+  rwa [card_skyline, card_skyline] at hcard
+
+/-- **The drift identity.** A full flush move (place then clear `m` rows)
+changes total surface area by exactly `4 − cols·m`. -/
+theorem sum_profile_applyStep_flush {cfg : GameConfig} {h h' : ℕ → ℕ}
+    {pl : Placement} {m : ℕ}
+    (hplace : pl.place (skyline cfg h) = skyline cfg h')
+    (hm : ∀ j < cfg.cols, m ≤ h' j) :
+    (∑ j ∈ Finset.range cfg.cols, (h' j - m)) + cfg.cols * m
+      = (∑ j ∈ Finset.range cfg.cols, h j) + 4 := by
+  have hsum := sum_profile_place_flush hplace
+  have hsplit : (∑ j ∈ Finset.range cfg.cols, (h' j - m)) + cfg.cols * m
+      = ∑ j ∈ Finset.range cfg.cols, h' j := by
+    have hconst : cfg.cols * m = ∑ _j ∈ Finset.range cfg.cols, m := by
+      rw [Finset.sum_const, Finset.card_range, smul_eq_mul]
+    rw [hconst, ← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl (fun j hj => ?_)
+    exact Nat.sub_add_cancel (hm j (Finset.mem_range.mp hj))
+  omega
+
 /-! ## Necessity: hole-free placement forces flushness
 
 The converse of `place_flush_skyline`: if placing on a skyline yields a
