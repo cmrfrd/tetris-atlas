@@ -626,5 +626,19 @@ theorem window_of_place_Z_eq_skyline {cfg : GameConfig} {h h' : ℕ → ℕ}
   · exact ⟨col, Or.inr (horizZ_window (Or.inr hv) hvalid hplace)⟩
   · exact ⟨col, Or.inl (vertZ_window (Or.inr hv) hvalid hplace)⟩
 
+
+/-- **Flat surfaces starve S.** On a constant profile there is no S-window,
+so no S placement keeps the board hole-free. In particular no hole-free
+carrier family may contain any flat surface — including the empty board:
+every strategy must pass through a holed board when S is drawn on flat
+ground. This upgrades the empty-board bootstrap obstruction to a
+family-exclusion theorem for the whole flat stratum. -/
+theorem no_holefree_S_on_flat {cfg : GameConfig} {k : ℕ} {pl : Placement}
+    (hpiece : pl.piece = Piece.S) (hvalid : pl.Valid cfg) :
+    ¬ ∃ h' : ℕ → ℕ, pl.place (skyline cfg (fun _ => k)) = skyline cfg h' := by
+  rintro ⟨h', hplace⟩
+  obtain ⟨c, hwin⟩ := window_of_place_S_eq_skyline hpiece hvalid hplace
+  rcases hwin with ⟨-, hstep⟩ | ⟨-, -, hstep⟩ <;> (dsimp only at hstep; omega)
+
 end Board
 end Tetris
