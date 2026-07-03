@@ -109,4 +109,43 @@ theorem tetrisSolvableValid_of_debt_invariant
       simp_all
     rw [hpl, hb, happly]
 
+/-! ## The certificate schema: what remains, written down
+
+The squeeze converges here. Necessity says any certificate is a bag-indexed
+family of debt-≤1 boards excluding the flat stratum and presenting, whenever
+the corresponding piece is pending, an S-window, a Z-window, and an O-window
+(I never starves). Sufficiency says such a family that is CLOSED under one
+full move per pending piece proves `TetrisSolvableValid`. `DebtCertificate`
+packages exactly that closure data — the single object left to construct.
+Solving Tetris is now literally: inhabit this structure. -/
+
+/-- **The certificate.** A bag-indexed debt-1 family, containing the initial
+state, height-bounded, and closed under one full move per pending piece.
+Inhabiting this structure — the one remaining open obligation of the whole
+development — proves Tetris solvable (`tetrisSolvableValid_of_debtCertificate`). -/
+structure DebtCertificate where
+  /-- The invariant: pending bag, surface profile, optional buried cell. -/
+  P : Bag → (ℕ → ℕ) → Option Coord → Prop
+  /-- The empty board at a fresh bag is in the family. -/
+  init : P Bag.full (fun _ => 0) none
+  /-- Holes are in-field and strictly covered. -/
+  cover : ∀ T h x, P T h (some x) → x.1 < GameConfig.standard.cols ∧
+    x.2 + 1 < h x.1
+  /-- The family respects the ceiling. -/
+  height : ∀ T h ho, P T h ho → ∀ j < GameConfig.standard.cols,
+    h j ≤ GameConfig.standard.rows
+  /-- Closure: every pending piece has a full-move response inside the family. -/
+  step : ∀ T h ho p, P T h ho → p ∈ T →
+    ∃ (pl : Placement) (h' : ℕ → ℕ) (ho' : Option Coord), pl.piece = p ∧
+      pl.Valid GameConfig.standard ∧
+      Placement.applyStep GameConfig.standard
+        (Board.debtBoard GameConfig.standard h ho) pl
+        = Board.debtBoard GameConfig.standard h' ho' ∧
+      P (T.draw p) h' ho'
+
+/-- Inhabiting the certificate schema proves Tetris solvable. -/
+theorem tetrisSolvableValid_of_debtCertificate (C : DebtCertificate) :
+    TetrisSolvableValid :=
+  tetrisSolvableValid_of_debt_invariant C.P C.init C.cover C.height C.step
+
 end Tetris
