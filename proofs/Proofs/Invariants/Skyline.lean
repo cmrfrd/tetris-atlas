@@ -540,5 +540,91 @@ theorem window_of_place_S_eq_skyline {cfg : GameConfig} {h h' : ℕ → ℕ}
   · exact ⟨col, Or.inr (horizS_window (Or.inr hv) hvalid hplace)⟩
   · exact ⟨col, Or.inl (vertS_window (Or.inr hv) hvalid hplace)⟩
 
+
+/-- The horizontal Z drop profile (rotations 0 and 2). -/
+theorem shapeUp_horizZ (c : ℕ) (r : Tetris.Rotation) (hr : r.val = 0 ∨ r.val = 2) :
+    ({ piece := Piece.Z, rot := r, col := c } : Placement).shapeUp
+      = {((0 : ℕ), (1 : ℕ)), (1, 0), (1, 1), (2, 0)} := by
+  show Piece.shapeUp Piece.Z r = _
+  obtain ⟨rv, hrv⟩ := r
+  rcases hr with h0 | h2
+  · simp only at h0; subst h0; decide +revert
+  · simp only at h2; subst h2; decide +revert
+
+/-- The vertical Z drop profile (rotations 1 and 3). -/
+theorem shapeUp_vertZ' (c : ℕ) (r : Tetris.Rotation) (hr : r.val = 1 ∨ r.val = 3) :
+    ({ piece := Piece.Z, rot := r, col := c } : Placement).shapeUp
+      = {((0 : ℕ), (0 : ℕ)), (0, 1), (1, 1), (1, 2)} := by
+  show Piece.shapeUp Piece.Z r = _
+  obtain ⟨rv, hrv⟩ := r
+  rcases hr with h1 | h3
+  · simp only at h1; subst h1; decide +revert
+  · simp only at h3; subst h3; decide +revert
+
+/-- Vertical-Z case: a hole-free vertical Z forces the right-high step
+`h (col+1) = h col + 1`. -/
+private theorem vertZ_window {cfg : GameConfig} {h h' : ℕ → ℕ}
+    {r : Tetris.Rotation} {col : ℕ} (hr : r.val = 1 ∨ r.val = 3)
+    (hvalid : ({ piece := Piece.Z, rot := r, col := col } : Placement).Valid cfg)
+    (hplace : ({ piece := Piece.Z, rot := r, col := col } : Placement).place
+      (skyline cfg h) = skyline cfg h') :
+    col + 1 < cfg.cols ∧ h (col + 1) = h col + 1 := by
+  have hsh := shapeUp_vertZ' col r hr
+  have hin1 : col + 1 < cfg.cols := hvalid (1, 1) (by rw [hsh]; decide)
+  have hin0 : col + 0 < cfg.cols := by omega
+  have h0 : ({ piece := Piece.Z, rot := r, col := col } : Placement).dropOffset
+      (skyline cfg h) + 0 = h col :=
+    flush_of_place_eq_skyline hplace (cell := (0, 0)) (by rw [hsh]; decide)
+      (by rw [hsh]; decide) hin0
+  have h1 : ({ piece := Piece.Z, rot := r, col := col } : Placement).dropOffset
+      (skyline cfg h) + 1 = h (col + 1) :=
+    flush_of_place_eq_skyline hplace (cell := (1, 1)) (by rw [hsh]; decide)
+      (by rw [hsh]; decide) hin1
+  exact ⟨hin1, by omega⟩
+
+/-- Horizontal-Z case: a hole-free horizontal Z forces the step-down-to-flat
+window `h col = h (col+1) + 1 ∧ h (col+1) = h (col+2)`. -/
+private theorem horizZ_window {cfg : GameConfig} {h h' : ℕ → ℕ}
+    {r : Tetris.Rotation} {col : ℕ} (hr : r.val = 0 ∨ r.val = 2)
+    (hvalid : ({ piece := Piece.Z, rot := r, col := col } : Placement).Valid cfg)
+    (hplace : ({ piece := Piece.Z, rot := r, col := col } : Placement).place
+      (skyline cfg h) = skyline cfg h') :
+    col + 2 < cfg.cols ∧ h col = h (col + 1) + 1 ∧ h (col + 1) = h (col + 2) := by
+  have hsh := shapeUp_horizZ col r hr
+  have hin2 : col + 2 < cfg.cols := hvalid (2, 0) (by rw [hsh]; decide)
+  have hin0 : col + 0 < cfg.cols := by omega
+  have hin1 : col + 1 < cfg.cols := by omega
+  have h0 : ({ piece := Piece.Z, rot := r, col := col } : Placement).dropOffset
+      (skyline cfg h) + 1 = h col :=
+    flush_of_place_eq_skyline hplace (cell := (0, 1)) (by rw [hsh]; decide)
+      (by rw [hsh]; decide) hin0
+  have h1 : ({ piece := Piece.Z, rot := r, col := col } : Placement).dropOffset
+      (skyline cfg h) + 0 = h (col + 1) :=
+    flush_of_place_eq_skyline hplace (cell := (1, 0)) (by rw [hsh]; decide)
+      (by rw [hsh]; decide) hin1
+  have h2 : ({ piece := Piece.Z, rot := r, col := col } : Placement).dropOffset
+      (skyline cfg h) + 0 = h (col + 2) :=
+    flush_of_place_eq_skyline hplace (cell := (2, 0)) (by rw [hsh]; decide)
+      (by rw [hsh]; decide) hin2
+  exact ⟨hin2, by omega, by omega⟩
+
+/-- **The Z window demand** (mirror of `window_of_place_S_eq_skyline`): a
+hole-free Z placement forces a right-high step or a step-down-to-flat window. -/
+theorem window_of_place_Z_eq_skyline {cfg : GameConfig} {h h' : ℕ → ℕ}
+    {pl : Placement} (hpiece : pl.piece = Piece.Z) (hvalid : pl.Valid cfg)
+    (hplace : pl.place (skyline cfg h) = skyline cfg h') :
+    ∃ c, (c + 1 < cfg.cols ∧ h (c + 1) = h c + 1) ∨
+      (c + 2 < cfg.cols ∧ h c = h (c + 1) + 1 ∧ h (c + 1) = h (c + 2)) := by
+  obtain ⟨piece, rot, col⟩ := pl
+  simp only at hpiece
+  subst hpiece
+  have h4 := rot.isLt
+  rcases (by omega : rot.val = 0 ∨ rot.val = 1 ∨ rot.val = 2 ∨ rot.val = 3) with
+    hv | hv | hv | hv
+  · exact ⟨col, Or.inr (horizZ_window (Or.inl hv) hvalid hplace)⟩
+  · exact ⟨col, Or.inl (vertZ_window (Or.inl hv) hvalid hplace)⟩
+  · exact ⟨col, Or.inr (horizZ_window (Or.inr hv) hvalid hplace)⟩
+  · exact ⟨col, Or.inl (vertZ_window (Or.inr hv) hvalid hplace)⟩
+
 end Board
 end Tetris
