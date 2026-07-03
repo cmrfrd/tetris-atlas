@@ -541,5 +541,42 @@ theorem clearLines_holedSkyline_exposed {cfg : GameConfig} {h : ℕ → ℕ} {x 
         show ((j : ℕ), r + (m - 1) - (m - 1)) = (j, r)
         simp
 
+
+/-! ## The debt-1 board realization
+
+A debt-1 state is a profile plus an optional (strictly covered) hole;
+`debtBoard` realizes it as a board. This is the state space of the debt-1
+invariant bridge: hole-free states are skylines, debt states are holed
+skylines, and the placement/clearing laws above compute every transition. -/
+
+/-- The board realized by a debt-1 state: the skyline of `h`, minus the hole
+if one is present. -/
+def debtBoard (cfg : GameConfig) (h : ℕ → ℕ) : Option Coord → Board
+  | none => skyline cfg h
+  | some x => holedSkyline cfg h x
+
+@[simp] theorem debtBoard_none (cfg : GameConfig) (h : ℕ → ℕ) :
+    debtBoard cfg h none = skyline cfg h := rfl
+
+@[simp] theorem debtBoard_some (cfg : GameConfig) (h : ℕ → ℕ) (x : Coord) :
+    debtBoard cfg h (some x) = holedSkyline cfg h x := rfl
+
+/-- The surface of a debt-1 board is its profile on real columns (the hole,
+being strictly covered, is invisible) and `0` outside. -/
+theorem colHeight_debtBoard {cfg : GameConfig} {h : ℕ → ℕ} {ho : Option Coord}
+    (hcov : ∀ x, ho = some x → x.2 + 1 < h x.1) (j : ℕ) :
+    (debtBoard cfg h ho).colHeight j = if j < cfg.cols then h j else 0 := by
+  cases ho with
+  | none =>
+    rw [debtBoard_none]
+    by_cases hj : j < cfg.cols
+    · rw [colHeight_skyline hj, if_pos hj]
+    · rw [colHeight_skyline_eq_zero (by omega), if_neg hj]
+  | some x =>
+    rw [debtBoard_some, colHeight_holedSkyline (hcov x rfl)]
+    by_cases hj : j < cfg.cols
+    · rw [colHeight_skyline hj, if_pos hj]
+    · rw [colHeight_skyline_eq_zero (by omega), if_neg hj]
+
 end Board
 end Tetris

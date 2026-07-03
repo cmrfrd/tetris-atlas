@@ -1,5 +1,6 @@
 import Proofs.Safety.SafeSet
 import Proofs.Invariants.Skyline
+import Proofs.Invariants.HoledSkyline
 
 /-!
 # Solvability from a skyline (surface-profile) invariant
@@ -56,6 +57,53 @@ theorem tetrisSolvableValid_of_skyline_invariant
     refine ⟨pl, hpiece, hvalid, h', ?_, hP'⟩
     show Placement.applyStep GameConfig.standard g.board { pl with piece := p }
         = skyline GameConfig.standard h'
+    have hpl : ({ pl with piece := p } : Placement) = pl := by
+      cases pl
+      simp_all
+    rw [hpl, hb, happly]
+
+/-- **Solvability from a closed debt-1 invariant.** The debt-carrying
+generalisation of `tetrisSolvableValid_of_skyline_invariant`: states are
+profiles with an optional strictly covered hole (`Board.debtBoard`), and the
+invariant `P` is closed under one full move per pending piece. The flat-
+stratum exclusion (`no_holefree_S_on_flat`) shows hole-free invariants cannot
+contain `init`, so THIS is the reduction any certificate from the empty board
+must feed. Each `hstep` obligation is discharged by `place_holedSkyline` /
+`place_flush_skyline` plus exactly one of the three clearing laws
+(`clearLines_holedSkyline_of_le` / `_of_lt` / `_exposed` or
+`clearLines_skyline`). -/
+theorem tetrisSolvableValid_of_debt_invariant
+    (P : Bag → (ℕ → ℕ) → Option Coord → Prop)
+    (hinit : P Bag.full (fun _ => 0) none)
+    (hcover : ∀ T h x, P T h (some x) → x.1 < GameConfig.standard.cols ∧
+      x.2 + 1 < h x.1)
+    (hheight : ∀ T h ho, P T h ho → ∀ j < GameConfig.standard.cols,
+      h j ≤ GameConfig.standard.rows)
+    (hstep : ∀ T h ho p, P T h ho → p ∈ T →
+      ∃ (pl : Placement) (h' : ℕ → ℕ) (ho' : Option Coord), pl.piece = p ∧
+        pl.Valid GameConfig.standard ∧
+        Placement.applyStep GameConfig.standard
+          (Board.debtBoard GameConfig.standard h ho) pl
+          = Board.debtBoard GameConfig.standard h' ho' ∧
+        P (T.draw p) h' ho') :
+    TetrisSolvableValid := by
+  refine tetrisSolvableValid_of_height_bounded_invariant
+    { g | ∃ (h : ℕ → ℕ) (ho : Option Coord),
+        g.board = Board.debtBoard GameConfig.standard h ho ∧ P g.bag h ho }
+    ⟨(fun _ => 0), none, init_board_eq_skyline GameConfig.standard, by
+      simpa using hinit⟩ ?_ ?_
+  · rintro g ⟨h, ho, hb, hP⟩ j
+    rw [hb, colHeight_debtBoard (fun x hx => (hcover g.bag h x (hx ▸ hP)).2)]
+    by_cases hj : j < GameConfig.standard.cols
+    · rw [if_pos hj]
+      exact hheight g.bag h ho hP j hj
+    · rw [if_neg hj]
+      omega
+  · rintro g ⟨h, ho, hb, hP⟩ p hp
+    obtain ⟨pl, h', ho', hpiece, hvalid, happly, hP'⟩ := hstep g.bag h ho p hP hp
+    refine ⟨pl, hpiece, hvalid, h', ho', ?_, hP'⟩
+    show Placement.applyStep GameConfig.standard g.board { pl with piece := p }
+        = Board.debtBoard GameConfig.standard h' ho'
     have hpl : ({ pl with piece := p } : Placement) = pl := by
       cases pl
       simp_all
