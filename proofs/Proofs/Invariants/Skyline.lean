@@ -441,5 +441,104 @@ theorem place_vertZ_skyline {cfg : GameConfig} {h : ℕ → ℕ} {c : ℕ}
     show Function.update (Function.update h c (h c + 2)) (c + 1) (h (c + 1) + 2) j = h j
     rw [Function.update_of_ne hj1, Function.update_of_ne hj0]
 
+
+/-! ## Window demands: the per-piece necessity corollaries
+
+Instantiating `flush_of_place_eq_skyline` at each piece's shape table turns
+hole-free placeability into a *necessary* surface condition. The S piece is
+the archetype (Z is its mirror): S seats hole-free **only** on a left-high
+step (vertical) or a flat pair with an up-step to its right (horizontal). Any
+surface family closed under hole-free play must therefore present one of
+these windows whenever S is pending — the search-era observation "S/Z starve
+on flat or wrongly-stepped surfaces", now as a theorem. -/
+
+/-- The horizontal S drop profile (rotations 0 and 2). -/
+theorem shapeUp_horizS (c : ℕ) (r : Tetris.Rotation) (hr : r.val = 0 ∨ r.val = 2) :
+    ({ piece := Piece.S, rot := r, col := c } : Placement).shapeUp
+      = {((0 : ℕ), (0 : ℕ)), (1, 0), (1, 1), (2, 1)} := by
+  show Piece.shapeUp Piece.S r = _
+  obtain ⟨rv, hrv⟩ := r
+  rcases hr with h0 | h2
+  · simp only at h0; subst h0; decide +revert
+  · simp only at h2; subst h2; decide +revert
+
+/-- The vertical S drop profile (rotations 1 and 3). -/
+theorem shapeUp_vertS' (c : ℕ) (r : Tetris.Rotation) (hr : r.val = 1 ∨ r.val = 3) :
+    ({ piece := Piece.S, rot := r, col := c } : Placement).shapeUp
+      = {((0 : ℕ), (1 : ℕ)), (0, 2), (1, 0), (1, 1)} := by
+  show Piece.shapeUp Piece.S r = _
+  obtain ⟨rv, hrv⟩ := r
+  rcases hr with h1 | h3
+  · simp only at h1; subst h1; decide +revert
+  · simp only at h3; subst h3; decide +revert
+
+/-- Vertical-S case of the window demand: a hole-free vertical S forces the
+left-high step `h col = h (col+1) + 1`. -/
+private theorem vertS_window {cfg : GameConfig} {h h' : ℕ → ℕ}
+    {r : Tetris.Rotation} {col : ℕ} (hr : r.val = 1 ∨ r.val = 3)
+    (hvalid : ({ piece := Piece.S, rot := r, col := col } : Placement).Valid cfg)
+    (hplace : ({ piece := Piece.S, rot := r, col := col } : Placement).place
+      (skyline cfg h) = skyline cfg h') :
+    col + 1 < cfg.cols ∧ h col = h (col + 1) + 1 := by
+  have hsh := shapeUp_vertS' col r hr
+  have hin1 : col + 1 < cfg.cols := hvalid (1, 0) (by rw [hsh]; decide)
+  have hin0 : col + 0 < cfg.cols := by omega
+  have h0 : ({ piece := Piece.S, rot := r, col := col } : Placement).dropOffset
+      (skyline cfg h) + 1 = h col :=
+    flush_of_place_eq_skyline hplace (cell := (0, 1)) (by rw [hsh]; decide)
+      (by rw [hsh]; decide) hin0
+  have h1 : ({ piece := Piece.S, rot := r, col := col } : Placement).dropOffset
+      (skyline cfg h) + 0 = h (col + 1) :=
+    flush_of_place_eq_skyline hplace (cell := (1, 0)) (by rw [hsh]; decide)
+      (by rw [hsh]; decide) hin1
+  exact ⟨hin1, by omega⟩
+
+/-- Horizontal-S case of the window demand: a hole-free horizontal S forces
+the flat-pair-plus-step window `h col = h (col+1) ∧ h (col+2) = h col + 1`. -/
+private theorem horizS_window {cfg : GameConfig} {h h' : ℕ → ℕ}
+    {r : Tetris.Rotation} {col : ℕ} (hr : r.val = 0 ∨ r.val = 2)
+    (hvalid : ({ piece := Piece.S, rot := r, col := col } : Placement).Valid cfg)
+    (hplace : ({ piece := Piece.S, rot := r, col := col } : Placement).place
+      (skyline cfg h) = skyline cfg h') :
+    col + 2 < cfg.cols ∧ h col = h (col + 1) ∧ h (col + 2) = h col + 1 := by
+  have hsh := shapeUp_horizS col r hr
+  have hin2 : col + 2 < cfg.cols := hvalid (2, 1) (by rw [hsh]; decide)
+  have hin0 : col + 0 < cfg.cols := by omega
+  have hin1 : col + 1 < cfg.cols := by omega
+  have h0 : ({ piece := Piece.S, rot := r, col := col } : Placement).dropOffset
+      (skyline cfg h) + 0 = h col :=
+    flush_of_place_eq_skyline hplace (cell := (0, 0)) (by rw [hsh]; decide)
+      (by rw [hsh]; decide) hin0
+  have h1 : ({ piece := Piece.S, rot := r, col := col } : Placement).dropOffset
+      (skyline cfg h) + 0 = h (col + 1) :=
+    flush_of_place_eq_skyline hplace (cell := (1, 0)) (by rw [hsh]; decide)
+      (by rw [hsh]; decide) hin1
+  have h2 : ({ piece := Piece.S, rot := r, col := col } : Placement).dropOffset
+      (skyline cfg h) + 1 = h (col + 2) :=
+    flush_of_place_eq_skyline hplace (cell := (2, 1)) (by rw [hsh]; decide)
+      (by rw [hsh]; decide) hin2
+  exact ⟨hin2, by omega, by omega⟩
+
+/-- **The S window demand.** If an S placement maps a skyline to a skyline
+(no hole created), the surface presents an S-window at the placement column:
+a left-high step (vertical S) or a flat pair with an up-step (horizontal S).
+Contrapositive: a surface with no S-window admits NO hole-free S placement —
+the formal S-starvation obstruction. -/
+theorem window_of_place_S_eq_skyline {cfg : GameConfig} {h h' : ℕ → ℕ}
+    {pl : Placement} (hpiece : pl.piece = Piece.S) (hvalid : pl.Valid cfg)
+    (hplace : pl.place (skyline cfg h) = skyline cfg h') :
+    ∃ c, (c + 1 < cfg.cols ∧ h c = h (c + 1) + 1) ∨
+      (c + 2 < cfg.cols ∧ h c = h (c + 1) ∧ h (c + 2) = h c + 1) := by
+  obtain ⟨piece, rot, col⟩ := pl
+  simp only at hpiece
+  subst hpiece
+  have h4 := rot.isLt
+  rcases (by omega : rot.val = 0 ∨ rot.val = 1 ∨ rot.val = 2 ∨ rot.val = 3) with
+    hv | hv | hv | hv
+  · exact ⟨col, Or.inr (horizS_window (Or.inl hv) hvalid hplace)⟩
+  · exact ⟨col, Or.inl (vertS_window (Or.inl hv) hvalid hplace)⟩
+  · exact ⟨col, Or.inr (horizS_window (Or.inr hv) hvalid hplace)⟩
+  · exact ⟨col, Or.inl (vertS_window (Or.inr hv) hvalid hplace)⟩
+
 end Board
 end Tetris
