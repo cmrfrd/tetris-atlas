@@ -542,6 +542,18 @@ theorem clearLines_holedSkyline_exposed {cfg : GameConfig} {h : ℕ → ℕ} {x 
         simp
 
 
+
+/-- **Debt in the cell count.** A holed skyline carries exactly one cell less
+than its surface area: `card = ∑ h − 1`. Combined with the drift identity
+(`sum_profile_applyStep_flush`) this extends the conservation ledger to
+debt-1 states — the buried cell is one unit of surface area the clearing
+duty cannot cash until exposure repays it. -/
+theorem card_holedSkyline {cfg : GameConfig} {h : ℕ → ℕ} {x : Coord}
+    (hxcols : x.1 < cfg.cols) (hcov : x.2 < h x.1) :
+    (holedSkyline cfg h x).card = (∑ j ∈ Finset.range cfg.cols, h j) - 1 := by
+  unfold holedSkyline
+  rw [Finset.card_erase_of_mem ((mem_skyline' cfg h x).mpr ⟨hxcols, hcov⟩), card_skyline]
+
 /-! ## The debt-1 board realization
 
 A debt-1 state is a profile plus an optional (strictly covered) hole;
