@@ -638,7 +638,7 @@ theorem no_holefree_S_on_flat {cfg : GameConfig} {k : ℕ} {pl : Placement}
     ¬ ∃ h' : ℕ → ℕ, pl.place (skyline cfg (fun _ => k)) = skyline cfg h' := by
   rintro ⟨h', hplace⟩
   obtain ⟨c, hwin⟩ := window_of_place_S_eq_skyline hpiece hvalid hplace
-  rcases hwin with ⟨-, hstep⟩ | ⟨-, -, hstep⟩ <;> (dsimp only at hstep; omega)
+  rcases hwin with ⟨-, hstep⟩ | ⟨-, -, hstep⟩ <;> omega
 
 end Board
 end Tetris
