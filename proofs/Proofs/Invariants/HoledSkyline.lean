@@ -310,5 +310,122 @@ theorem clearLines_holedSkyline_of_le {cfg : GameConfig} {h : ℕ → ℕ} {x : 
       show ((j : ℕ), r + m - m) = (j, r)
       simp
 
+
+/-- **Clearing law, case B: the hole sits strictly inside the clear zone and
+its column rises strictly above the minimum.** Rows `0 … m−1` except the hole
+row clear (`m − 1` rows). In every other column the cell at the hole row
+survives and rides to row `0`; in the hole's column row `0` becomes the new
+hole position. The result is again a holed skyline with profile
+`h − (m − 1)` and hole `(x.1, 0)`. -/
+theorem clearLines_holedSkyline_of_lt {cfg : GameConfig} {h : ℕ → ℕ} {x : Coord} {m : ℕ}
+    (hxcols : x.1 < cfg.cols) (hcov : x.2 + 1 < h x.1)
+    (hm : ∀ j < cfg.cols, m ≤ h j) (hm0 : ∃ j < cfg.cols, h j = m)
+    (hxm : x.2 < m) (hgt : m < h x.1) :
+    Board.clearLines cfg (holedSkyline cfg h x)
+      = holedSkyline cfg (fun j => h j - (m - 1)) (x.1, 0) := by
+  have hfull : ∀ y : ℕ, Board.isFull cfg (holedSkyline cfg h x) y ↔ y < m ∧ y ≠ x.2 := by
+    intro y
+    rw [isFull_holedSkyline hxcols]
+    constructor
+    · rintro ⟨hall, hyx⟩
+      obtain ⟨j, hj, hjm⟩ := hm0
+      have := hall j hj
+      exact ⟨by omega, hyx⟩
+    · rintro ⟨hy, hyx⟩
+      exact ⟨fun j hj => by have := hm j hj; omega, hyx⟩
+  unfold Board.clearLines
+  ext ⟨j, r⟩
+  rw [Finset.mem_image, mem_holedSkyline]
+  constructor
+  · rintro ⟨⟨a, b⟩, hmem, heq⟩
+    rw [Finset.mem_filter] at hmem
+    obtain ⟨hab, hnf⟩ := hmem
+    obtain ⟨habx, hacols, habh⟩ := (mem_holedSkyline (a, b)).mp hab
+    dsimp only at hnf heq hacols habh
+    rw [hfull b] at hnf
+    rw [clearedBelow_holedSkyline hxcols hm hm0] at heq
+    have hcase : b = x.2 ∨ m ≤ b := by
+      by_cases hbm : b < m
+      · left
+        by_contra hbx
+        exact hnf ⟨hbm, hbx⟩
+      · right; omega
+    rcases hcase with rfl | hbm
+    · -- the survivor at the hole row rides to row 0
+      have hax : a ≠ x.1 := by
+        intro hc
+        exact habx (by rw [hc])
+      have hshift : min m x.2 - (if x.2 < min m x.2 then 1 else 0) = x.2 := by
+        have : min m x.2 = x.2 := by omega
+        rw [this, if_neg (by omega)]
+        omega
+      rw [hshift] at heq
+      have ha : a = j := congrArg Prod.fst heq
+      have hb : x.2 - x.2 = r := congrArg Prod.snd heq
+      subst ha
+      refine ⟨?_, hacols, ?_⟩
+      · intro hcontra
+        exact hax (congrArg Prod.fst hcontra)
+      · show r < h a - (m - 1)
+        have := hm a hacols
+        omega
+    · -- cells at or above the zone shift down by m − 1
+      have hshift : min m b - (if x.2 < min m b then 1 else 0) = m - 1 := by
+        have : min m b = m := by omega
+        rw [this, if_pos (by omega)]
+      rw [hshift] at heq
+      have ha : a = j := congrArg Prod.fst heq
+      have hb : b - (m - 1) = r := congrArg Prod.snd heq
+      subst ha
+      refine ⟨?_, hacols, ?_⟩
+      · intro hcontra
+        have h2 : r = 0 := congrArg Prod.snd hcontra
+        omega
+      · show r < h a - (m - 1)
+        omega
+  · rintro ⟨hne, hj, hr⟩
+    dsimp only at hj hr
+    have hmj := hm j hj
+    by_cases hr0 : r = 0
+    · -- row 0 of a non-hole column comes from the hole-row survivor
+      subst hr0
+      have hjx : j ≠ x.1 := by
+        intro hc
+        exact hne (by rw [hc])
+      refine ⟨(j, x.2), ?_, ?_⟩
+      · rw [Finset.mem_filter]
+        refine ⟨(mem_holedSkyline (j, x.2)).mpr ⟨?_, hj, ?_⟩, ?_⟩
+        · intro hcontra
+          exact hjx (congrArg Prod.fst hcontra)
+        · show x.2 < h j
+          omega
+        · show ¬ Board.isFull cfg (holedSkyline cfg h x) (j, x.2).2
+          rw [hfull]
+          simp
+      · show ((j : ℕ), x.2 - Board.clearedBelow cfg (holedSkyline cfg h x) (j, x.2).2) = (j, 0)
+        rw [clearedBelow_holedSkyline hxcols hm hm0]
+        have : min m x.2 = x.2 := by omega
+        rw [this, if_neg (by omega)]
+        simp
+    · -- rows ≥ 1 come from cells at or above the zone
+      refine ⟨(j, r + (m - 1)), ?_, ?_⟩
+      · rw [Finset.mem_filter]
+        refine ⟨(mem_holedSkyline (j, r + (m - 1))).mpr ⟨?_, hj, ?_⟩, ?_⟩
+        · intro hcontra
+          have h2 : r + (m - 1) = x.2 := congrArg Prod.snd hcontra
+          omega
+        · show r + (m - 1) < h j
+          omega
+        · show ¬ Board.isFull cfg (holedSkyline cfg h x) (j, r + (m - 1)).2
+          rw [hfull]
+          omega
+      · show ((j : ℕ), r + (m - 1)
+            - Board.clearedBelow cfg (holedSkyline cfg h x) (j, r + (m - 1)).2) = (j, r)
+        rw [clearedBelow_holedSkyline hxcols hm hm0]
+        have hmin : min m (r + (m - 1)) = m := by omega
+        rw [hmin, if_pos (by omega)]
+        show ((j : ℕ), r + (m - 1) - (m - 1)) = (j, r)
+        simp
+
 end Board
 end Tetris
