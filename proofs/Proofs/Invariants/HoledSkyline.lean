@@ -633,5 +633,42 @@ theorem place_horizS_flat_eq_holedSkyline (cfg : GameConfig) (base col : ℕ)
     Finset.mem_singleton, ne_eq, Prod.mk.injEq]
   split_ifs <;> omega
 
+/-- **Hole creation, the Z mirror.** Placing a horizontal Z on a flat surface is
+non-flush and buries the *left* column's cell `(col, base)` (the mirror of
+`place_horizS_flat_eq_holedSkyline`, which buries `(col+2, base)`). Together the
+two cover the only pieces that force a hole on a flat surface: on a flat skyline
+`O, I, T, L, J` all seat flush, while `S` and `Z` cannot. -/
+theorem place_horizZ_flat_eq_holedSkyline (cfg : GameConfig) (base col : ℕ)
+    (hcol : col + 2 < cfg.cols) :
+    ({ piece := Piece.Z, rot := 0, col := col } : Placement).place
+        (skyline cfg (fun _ => base))
+      = holedSkyline cfg
+          (fun j => if j = col then base + 2
+                    else if j = col + 1 then base + 2
+                    else if j = col + 2 then base + 1 else base)
+          (col, base) := by
+  have hsh : ({ piece := Piece.Z, rot := 0, col := col } : Placement).shapeUp
+      = {((0 : ℕ), (1 : ℕ)), (1, 0), (1, 1), (2, 0)} :=
+    shapeUp_horizZ col 0 (by decide)
+  have hc0 : col + 0 < cfg.cols := by omega
+  have hc1 : col + 1 < cfg.cols := by omega
+  have hd : ({ piece := Piece.Z, rot := 0, col := col } : Placement).dropOffset
+      (skyline cfg (fun _ => base)) = base := by
+    rw [Placement.dropOffset_eq_sup, hsh]
+    simp only [Finset.sup_insert, Finset.sup_singleton,
+      colHeight_skyline hc0, colHeight_skyline hc1, colHeight_skyline hcol]
+    omega
+  have hdr : ({ piece := Piece.Z, rot := 0, col := col } : Placement).dropped
+      (skyline cfg (fun _ => base))
+      = {(col, base + 1), (col + 1, base), (col + 1, base + 1), (col + 2, base)} := by
+    rw [Placement.dropped_eq_image, hsh, hd]
+    simp only [Finset.image_insert, Finset.image_singleton]
+    norm_num
+  rw [Placement.place_eq_union_dropped, hdr]
+  ext ⟨a, b⟩
+  simp only [Finset.mem_union, mem_skyline', mem_holedSkyline, Finset.mem_insert,
+    Finset.mem_singleton, ne_eq, Prod.mk.injEq]
+  split_ifs <;> omega
+
 end Board
 end Tetris
