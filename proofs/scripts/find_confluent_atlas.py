@@ -536,14 +536,19 @@ class _Deadline(Exception):
     pass
 
 
-def solve_bag(B, accept, args, strict_set=None, deadline=None):
+def solve_bag(B, accept, args, strict_set=None, deadline=None, memo=None,
+              choice=None):
     """AND-OR solve one bag from boundary B. accept(board) -> bool at bag
     end. `strict_set` (if given) reorders last-piece candidates to prefer
-    finals inside it. Returns (ok, table, finals, memo_size): table maps
-    (board, remaining) -> {piece: (rot, col)}; finals = end-of-bag boards
-    actually reached under the extracted policy (all orders)."""
-    memo = {}
-    choice = {}
+    finals inside it. `memo`/`choice` may be shared across solves AGAINST
+    THE SAME accept SET (bag DAGs from nearby boundaries overlap heavily).
+    Returns (ok, table, finals, memo_size): table maps (board, remaining)
+    -> {piece: (rot, col)}; finals = end-of-bag boards actually reached
+    under the extracted policy (all orders)."""
+    if memo is None:
+        memo = {}
+    if choice is None:
+        choice = {}
 
     def rec(board, remaining):
         key = (board, remaining)
@@ -862,6 +867,99 @@ def cycle_probe(args):
 
 
 # ---------------------------------------------------------------------------
+# Family v2: residue-stratified contiguous-run family (data-driven — the
+# minfinals winners are exactly these shapes). Member = flat base of height
+# base_h with a contiguous run of k cells on top (start s). Cells =
+# 10*base_h + k covers every residue; runs give S/Z their seating steps at
+# the run edges. GFP with a SHARED memo per iteration (bag DAGs from nearby
+# boundaries overlap heavily; memo entries depend on the accept set, so the
+# share is per-iteration only).
+# ---------------------------------------------------------------------------
+
+def run_boards(bases=(0, 1), extra_flats=(2,)):
+    fam = set()
+    for base_h in bases:
+        base = (1 << base_h) - 1
+        for k in range(0, COLS + 1):
+            for s in range(0, COLS - k + 1):
+                cols = tuple(
+                    (base | (1 << base_h)) if s <= j < s + k else base
+                    for j in range(COLS))
+                fam.add(cols)
+    for h in extra_flats:
+        fam.add(((1 << h) - 1,) * COLS)
+    return fam
+
+
+def family_gfp2(args):
+    t0 = time.time()
+    fam = run_boards()
+    print(f"run-family: {len(fam)} boards (contiguous-run strata)",
+          flush=True)
+    it = 0
+    while True:
+        it += 1
+        memo = {}
+        choice = {}
+        dead = []
+        for B in sorted(fam, key=score_board):
+            if time.time() > t0 + args.budget:
+                print("budget exhausted mid-GFP", flush=True)
+                return 1
+            ok, _t, _f, _m = solve_bag(
+                B, (lambda b: b in fam), args, strict_set=fam,
+                deadline=time.time() + args.solve_budget,
+                memo=memo, choice=choice)
+            if not ok:
+                dead.append(B)
+        print(f"[{time.time() - t0:5.0f}s] GFP iter {it}: pruned "
+              f"{len(dead)}/{len(fam)} (shared memo={len(memo)})", flush=True)
+        if not dead:
+            break
+        for B in dead:
+            fam.discard(B)
+        if not fam:
+            print("family EMPTY — run-family does not close at these caps",
+                  flush=True)
+            return 1
+    print(f"[{time.time() - t0:5.0f}s] GFP STABLE: {len(fam)} members "
+          f"after {it} iterations:", flush=True)
+    for B in sorted(fam, key=score_board):
+        print(f"  h={heights(B)} cells={cellcount(B)}")
+    # lead-in from EMPTY (EMPTY may be in fam already)
+    if EMPTY in fam:
+        print("EMPTY IS IN THE STABLE FAMILY — CLOSED ATLAS FROM INIT. "
+              "Emit and certify!", flush=True)
+        return 0
+    def acc(b):
+        return (b in fam
+                or (holecount(b) <= 1 and max(heights(b)) <= args.final_h
+                    and bump(b) <= args.final_bump
+                    and cellcount(b) <= args.final_cells))
+    lead = {EMPTY}
+    for level in range(1, args.leadin + 1):
+        nxt = set()
+        for B in sorted(lead, key=score_board):
+            ok, _t, finals, _m = solve_bag(
+                B, acc, args, strict_set=fam,
+                deadline=time.time() + 6 * args.solve_budget)
+            if not ok:
+                print(f"lead-in level {level}: unsolvable boundary "
+                      f"h={heights(B)}", flush=True)
+                return 1
+            nxt |= {f for f in finals if f not in fam}
+        if not nxt:
+            print(f"LEAD-IN CLOSED at level {level}: EMPTY -> family. "
+                  f"CLOSED ATLAS EXISTS.", flush=True)
+            return 0
+        print(f"lead-in level {level}: {len(nxt)} outside family",
+              flush=True)
+        lead = nxt
+    print("lead-in did not close", flush=True)
+    return 1
+
+
+# ---------------------------------------------------------------------------
 # Minimal-finals probe: THE decisive statistic for boundary concentration.
 # From a boundary B, solve loosely, then greedily shrink the accept set
 # (drop the worst final; re-solve; keep the shrunken extracted finals) until
@@ -927,7 +1025,8 @@ def minfinals_probe(args):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", choices=("graph", "closure", "adaptive",
-                                       "family", "cycle", "minfinals"),
+                                       "family", "family2", "cycle",
+                                       "minfinals"),
                     default="closure")
     ap.add_argument("--budget", type=float, default=300.0)
     ap.add_argument("--phase-budget", type=float, default=30.0)
@@ -968,6 +1067,8 @@ def main():
         return adaptive_closure(args)
     if args.mode == "family":
         return family_gfp(args)
+    if args.mode == "family2":
+        return family_gfp2(args)
     if args.mode == "cycle":
         return cycle_probe(args)
     if args.mode == "minfinals":
