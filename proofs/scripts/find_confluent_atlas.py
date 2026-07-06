@@ -1,0 +1,731 @@
+#!/usr/bin/env python3
+"""Witness search for the confluence route to TetrisSolvable.
+
+Searches for a CLOSED BOUNDARY GRAPH of order-robust bag phases: for each
+reachable start-of-bag board ("boundary"), a fixed response map
+piece -> (rot, col) such that EVERY one of the 7! within-bag arrival orders
+survives, mid-bag forking stays within FORK_CAP distinct boards per placed
+subset, and the end-of-bag boards (<= FINAL_CAP of them) are themselves
+solved boundaries. When the frontier empties, the union of all subset
+lattices is a CLOSED ADVERSARIAL TABLE: a finite atlas whose per-state
+response keeps every legal 7-bag game inside the table forever. That table
+is the object Lean re-certifies (checkTable-style native_decide + the atlas
+bridge); this script carries no trust.
+
+Design background (see Proofs/Invariants/Confluence.lean):
+  - Placements with disjoint column footprints commute exactly
+    (place_comm_of_colsDisjoint / foldl_place_perm), so a zone-local
+    response map keeps the subset lattice THIN (few forks).
+  - Full per-bag disjointness is impossible (min piece widths sum to
+    13 > 10 columns), so some zones are shared and orders there fork; the
+    caps bound the damage and end-of-bag clears help reconverge forks
+    (divergence confined to rows that die at the boundary).
+  - The policy is subset-oblivious per boundary: the same (rot, col) answers
+    a piece no matter when it arrives in the bag. Hard-drop semantics adapt
+    the landing to the current board.
+
+Semantics mirror proofs/Proofs/Model exactly (same tables as
+find_cooperative_lasso.py): dropOffset = sup(colHeight - up), place = union,
+clearLines removes full rows and compacts, bag refills at 7.
+"""
+import argparse
+import random
+import sys
+import time
+from itertools import combinations
+
+COLS = 10
+ROWS = 20
+ALL_PIECES = ("O", "I", "S", "Z", "T", "L", "J")
+FULL = frozenset(ALL_PIECES)
+
+# shapeUp per (piece, rotation): {piece_col: sorted list of ups}
+# Transcribed from Piece.shape / Piece.shapeUp in Proofs/Model/Piece.lean.
+SHAPE_UP = {
+    ("O", 0): {0: [0, 1], 1: [0, 1]},
+    ("I", 0): {0: [0], 1: [0], 2: [0], 3: [0]},
+    ("I", 1): {0: [0, 1, 2, 3]},
+    ("S", 0): {0: [0], 1: [0, 1], 2: [1]},
+    ("S", 1): {0: [1, 2], 1: [0, 1]},
+    ("Z", 0): {0: [1], 1: [0, 1], 2: [0]},
+    ("Z", 1): {0: [0, 1], 1: [1, 2]},
+    ("T", 0): {0: [1], 1: [0, 1], 2: [1]},
+    ("T", 1): {0: [1], 1: [0, 1, 2]},
+    ("T", 2): {0: [0], 1: [0, 1], 2: [0]},
+    ("T", 3): {0: [0, 1, 2], 1: [1]},
+    ("L", 0): {0: [0], 1: [0], 2: [0, 1]},
+    ("L", 1): {0: [0, 1, 2], 1: [0]},
+    ("L", 2): {0: [0, 1], 1: [1], 2: [1]},
+    ("L", 3): {0: [2], 1: [0, 1, 2]},
+    ("J", 0): {0: [0, 1], 1: [0], 2: [0]},
+    ("J", 1): {0: [0, 1, 2], 1: [2]},
+    ("J", 2): {0: [1], 1: [1], 2: [0, 1]},
+    ("J", 3): {0: [0], 1: [0, 1, 2]},
+}
+
+
+def candidate_rotations(piece):
+    return {
+        "O": (0,), "I": (0, 1), "S": (0, 1), "Z": (0, 1),
+        "T": (0, 1, 2, 3), "L": (0, 1, 2, 3), "J": (0, 1, 2, 3),
+    }[piece]
+
+
+# (piece) -> list of (rot, col, info); info = tuple of (abs_col, u0, ups)
+PLACEMENTS = {p: [] for p in ALL_PIECES}
+for _p in ALL_PIECES:
+    for _rot in candidate_rotations(_p):
+        _prof = SHAPE_UP[(_p, _rot)]
+        _cs = sorted(_prof)
+        _width = max(_cs) + 1
+        _info0 = [(c, _prof[c][0], tuple(_prof[c])) for c in _cs]
+        for _col in range(COLS - _width + 1):
+            PLACEMENTS[_p].append(
+                (_rot, _col, tuple((_col + c, u0, ups) for (c, u0, ups) in _info0)))
+
+EMPTY = (0,) * COLS
+
+
+def _pext(x, mask):
+    """Remove bits of x where mask=1; compact the rest downward (line clear)."""
+    res = 0
+    outpos = 0
+    hi = max(x.bit_length(), mask.bit_length())
+    for r in range(hi):
+        if not (mask >> r) & 1:
+            if (x >> r) & 1:
+                res |= (1 << outpos)
+            outpos += 1
+    return res
+
+
+_STEP_CACHE = {}
+
+
+def step(cols, info):
+    """One hard-drop placement + line clears; None if lost (matches Lean).
+    Memoized: lattice extensions revisit the same (board, placement) pairs
+    heavily. info tuples are interned in PLACEMENTS, so id() is a valid key.
+    """
+    key = (cols, id(info))
+    if key in _STEP_CACHE:
+        return _STEP_CACHE[key]
+    d = 0
+    for (ac, u0, _ups) in info:
+        t = cols[ac].bit_length() - u0
+        if t > d:
+            d = t
+    newcols = list(cols)
+    maxrow = 0
+    for (ac, u0, ups) in info:
+        cm = newcols[ac]
+        for u in ups:
+            cm |= (1 << (d + u))
+            if d + u > maxrow:
+                maxrow = d + u
+        newcols[ac] = cm
+    if maxrow >= ROWS:
+        _STEP_CACHE[key] = None
+        return None
+    full = newcols[0]
+    for c in newcols[1:]:
+        full &= c
+    if full:
+        newcols = [_pext(c, full) for c in newcols]
+    res = tuple(newcols)
+    _STEP_CACHE[key] = res
+    return res
+
+
+def heights(cols):
+    return [c.bit_length() for c in cols]
+
+
+def cellcount(cols):
+    return sum(bin(c).count("1") for c in cols)
+
+
+def holecount(cols):
+    return sum(c.bit_length() - bin(c).count("1") for c in cols)
+
+
+# ---------------------------------------------------------------------------
+# Subset lattice. nodes maps frozenset(placed pieces) -> set of boards
+# reachable by placing exactly that subset in SOME order.
+# ---------------------------------------------------------------------------
+
+def extend_lattice(nodes, p, assign, fork_cap, hcap, final_cap=1):
+    """Extend a lattice over placed set P (not containing p) to P + {p}.
+
+    boards(F + {p}) needs ALL orders: the new piece may arrive at any
+    position, so each new subset NF pulls from every predecessor NF - {q}
+    (q ranging over NF), not just from placing p last. Iterating old
+    subsets in increasing size makes every needed predecessor available.
+    Returns the extended lattice, or None if pruned (loss, height cap,
+    fork cap, final cap).
+    """
+    new = dict(nodes)
+    for F in sorted(nodes, key=len):
+        NF = F | {p}
+        acc = set()
+        for q in NF:
+            prev = new[NF - {q}]
+            qinfo = assign[q]
+            for b in prev:
+                nb = step(b, qinfo)
+                if nb is None:
+                    return None
+                if max(heights(nb)) > hcap:
+                    return None
+                acc.add(nb)
+        cap = final_cap if len(NF) == 7 else fork_cap
+        if len(acc) > cap:
+            return None
+        new[NF] = acc
+    return new
+
+
+def full_lattice(start, assign, fork_cap, hcap, final_cap=1):
+    """Lattice over all 7 pieces from scratch; None if pruned."""
+    nodes = {frozenset(): {start}}
+    for p in ALL_PIECES:
+        nodes = extend_lattice(nodes, p, assign, fork_cap, hcap,
+                               final_cap=final_cap)
+        if nodes is None:
+            return None
+    return nodes
+
+
+# ---------------------------------------------------------------------------
+# Per-phase DFS: assign placements piece-by-piece, extending the lattice
+# incrementally so partial assignments prune early. Troublemakers first.
+# ---------------------------------------------------------------------------
+
+PIECE_ORDER = ("S", "Z", "T", "L", "J", "O", "I")
+
+
+class _Stop(Exception):
+    pass
+
+
+def phase_dfs(start, fork_cap, final_cap, hcap, deadline, max_sols=64,
+              rng=None, prefer=None):
+    """DFS for response maps at boundary `start`. `final_cap` bounds the
+    number of distinct end-of-bag boards (1 = exact reconvergence; >1 lets
+    the boundary graph branch). If `prefer` is given, a solution whose
+    finals all lie in it short-circuits the search."""
+    sols = []
+    assign = {}
+    meta = {}
+
+    def dfs(idx, nodes):
+        if time.time() > deadline or len(sols) >= max_sols:
+            return
+        if idx == 7:
+            finals = frozenset(nodes[FULL])
+            sols.append((dict(meta), finals, nodes))
+            if prefer is not None and all(f in prefer for f in finals):
+                sols[:] = [sols[-1]]
+                raise _Stop
+            return
+        p = PIECE_ORDER[idx]
+        cands = PLACEMENTS[p]
+        if rng is not None:
+            cands = list(cands)
+            rng.shuffle(cands)
+        for (rot, col, info) in cands:
+            assign[p] = info
+            meta[p] = (rot, col)
+            nn = extend_lattice(nodes, p, assign, fork_cap, hcap,
+                                final_cap=final_cap)
+            if nn is not None:
+                dfs(idx + 1, nn)
+            if time.time() > deadline or len(sols) >= max_sols:
+                break
+        assign.pop(p, None)
+        meta.pop(p, None)
+
+    try:
+        dfs(0, {frozenset(): {start}})
+    except _Stop:
+        pass
+    return sols
+
+
+# ---------------------------------------------------------------------------
+# Boundary-graph closure. Solve each reachable boundary; new finals join the
+# frontier; CLOSED when the frontier empties. Greedy with retry: prefer
+# solutions whose finals are already solved or queued; a boundary with no
+# solution is marked BAD and its predecessors re-solve avoiding it.
+# ---------------------------------------------------------------------------
+
+def score_board(cols):
+    hs = heights(cols)
+    return (cellcount(cols) * 100 + holecount(cols) * 500 + max(hs) * 50
+            + sum(abs(hs[i] - hs[i + 1]) for i in range(COLS - 1)))
+
+
+def graph_closure(args):
+    t0 = time.time()
+    rng = random.Random(args.seed) if args.shuffle else None
+    solved = {}      # boundary -> (meta, finals, states_count)
+    bad = set()
+    frontier = [EMPTY]
+    solves = 0
+
+    while frontier:
+        if time.time() > t0 + args.budget:
+            print(f"budget exhausted: {len(solved)} solved, "
+                  f"{len(frontier)} open, {len(bad)} bad", flush=True)
+            return 1
+        frontier.sort(key=score_board)
+        b = frontier.pop(0)
+        if b in solved or b in bad:
+            continue
+        deadline = min(time.time() + args.phase_budget, t0 + args.budget)
+        prefer = set(solved) | set(frontier) | {b}
+        sols = phase_dfs(b, args.fork_cap, args.final_cap, args.hcap,
+                         deadline, max_sols=args.phase_sols, rng=rng,
+                         prefer=prefer)
+        sols = [s for s in sols if not (s[1] & bad)]
+        solves += 1
+        if not sols:
+            bad.add(b)
+            if b == EMPTY:
+                print(f"EMPTY board unsolvable within caps "
+                      f"({time.time() - t0:.0f}s) — relax caps", flush=True)
+                return 1
+            requeue = [s for s, (_m, fs, _st) in solved.items() if b in fs]
+            for s in requeue:
+                del solved[s]
+                frontier.append(s)
+            print(f"[{time.time() - t0:5.0f}s] dead-end boundary "
+                  f"(cells={cellcount(b)}); requeued {len(requeue)} "
+                  f"predecessors", flush=True)
+            continue
+
+        def sol_score(s):
+            _meta, finals, nodes = s
+            new = [f for f in finals if f not in solved and f != b]
+            states = sum(len(v) for v in nodes.values())
+            return (len(new), len(finals), states,
+                    sum(score_board(f) for f in finals))
+
+        sols.sort(key=sol_score)
+        meta, finals, nodes = sols[0]
+        states = sum(len(v) for v in nodes.values())
+        solved[b] = (meta, finals, states)
+        newf = 0
+        for f in finals:
+            if f not in solved and f not in bad and f != b:
+                frontier.append(f)
+                newf += 1
+        print(f"[{time.time() - t0:5.0f}s] solved #{len(solved)} "
+              f"(cells={cellcount(b)} hmax={max(heights(b)) if b != EMPTY else 0})"
+              f" -> {len(finals)} finals ({newf} new), lattice={states}, "
+              f"frontier={len(frontier)}", flush=True)
+
+    total = sum(st for (_m, _f, st) in solved.values())
+    print(f"CLOSED: {len(solved)} boundaries, total lattice states={total}, "
+          f"{time.time() - t0:.0f}s, {solves} solves", flush=True)
+    emit_closed(solved, args)
+    return 0
+
+
+def emit_closed(solved, args):
+    """Re-verify closure from scratch and print the atlas description."""
+    for b, (meta, finals, _st) in sorted(
+            solved.items(), key=lambda kv: score_board(kv[0])):
+        assign = {}
+        for p in ALL_PIECES:
+            rot, col = meta[p]
+            info = next(i for (r, c, i) in PLACEMENTS[p]
+                        if r == rot and c == col)
+            assign[p] = info
+        nodes = full_lattice(b, assign, args.fork_cap, args.hcap,
+                             final_cap=args.final_cap)
+        assert nodes is not None, "re-check failed"
+        assert frozenset(nodes[FULL]) == finals, "finals mismatch"
+        assert all(f in solved for f in finals), "not closed"
+        hs = heights(b)
+        print(f"boundary cells={cellcount(b)} h={hs}: " + ", ".join(
+            f"{p}:r{meta[p][0]}c{meta[p][1]}" for p in ALL_PIECES)
+            + f" -> {len(finals)} finals")
+    print("closure re-verified", flush=True)
+
+
+# ---------------------------------------------------------------------------
+# State-dependent closure with a lasso attractor. The Lean atlas format is a
+# per-STATE response table, so the policy may depend on the whole (board,
+# bag) — subset-obliviousness was a search simplification, and cross-piece
+# box pairs provably don't exist (2x4 boxes tile only as L+L/J+J/O+O/I+I),
+# so fixed responses can't tame the forks. Here: BFS the reachable set under
+# a policy that (1) steers into states already tabled, (2) pulls toward the
+# 35-board orbit of the cooperative lasso, (3) otherwise minimizes a
+# holes/height/bumpiness potential. Closes iff the frontier empties.
+# ---------------------------------------------------------------------------
+
+LASSO_SEQ = [
+    ("T", 2, 3), ("L", 0, 7), ("S", 1, 5), ("Z", 0, 6), ("I", 0, 0),
+    ("O", 0, 8), ("J", 0, 0),
+    ("J", 0, 2), ("S", 1, 0), ("I", 0, 4), ("T", 3, 3), ("O", 0, 1),
+    ("L", 0, 7), ("Z", 0, 4),
+    ("T", 2, 6), ("L", 2, 0), ("Z", 0, 7), ("O", 0, 5), ("J", 3, 3),
+    ("I", 0, 0), ("S", 0, 2),
+    ("J", 2, 7), ("O", 0, 5), ("S", 0, 0), ("L", 0, 7), ("T", 3, 0),
+    ("I", 0, 4), ("Z", 0, 1),
+    ("Z", 1, 8), ("S", 0, 6), ("J", 0, 3), ("T", 2, 4), ("L", 2, 2),
+    ("O", 0, 0), ("I", 0, 6),
+]
+
+
+def lasso_orbit():
+    """The 35 states of the cooperative lasso (board before each placement)."""
+    boards = set()
+    states = set()
+    b, bag = EMPTY, FULL
+    for (p, rot, col) in LASSO_SEQ:
+        boards.add(b)
+        states.add((b, bag))
+        info = next(i for (r, c, i) in PLACEMENTS[p]
+                    if r == rot and c == col)
+        b = step(b, info)
+        assert b is not None
+        bag = bag - {p} or FULL
+    assert b == EMPTY and bag == FULL
+    return boards, states
+
+
+def potential(cols):
+    hs = heights(cols)
+    bump = sum(abs(hs[i] - hs[i + 1]) for i in range(COLS - 1))
+    return holecount(cols) * 800 + max(hs) * 60 + bump * 8 + cellcount(cols)
+
+
+def closure_search(args):
+    from collections import deque
+    t0 = time.time()
+    orbit_boards, orbit_states = lasso_orbit()
+    table = {}
+    known_boards = {EMPTY}
+    queue = deque()
+    root = (EMPTY, FULL)
+    queue.append(root)
+    queued = {root}
+    deaths = 0
+    while queue:
+        if len(table) >= args.state_cap or time.time() > t0 + args.budget:
+            print(f"DIVERGED/timeout: table={len(table)} "
+                  f"frontier={len(queue)} deaths={deaths} "
+                  f"{time.time() - t0:.0f}s", flush=True)
+            report_table(table, orbit_states)
+            return 1
+        (b, bag) = queue.popleft()
+        if (b, bag) in table:
+            continue
+        resp = {}
+        dead = False
+        succs = []
+        for p in sorted(bag):
+            best = None
+            for (rot, col, info) in PLACEMENTS[p]:
+                nb = step(b, info)
+                if nb is None:
+                    continue
+                if max(heights(nb)) > args.hcap:
+                    continue
+                nbag = bag - {p}
+                if not nbag:
+                    nbag = FULL
+                key = (nb, nbag)
+                pri = ((0 if (key in table or key in queued) else 1),
+                       (0 if nb in known_boards else 1),
+                       (0 if nb in orbit_boards else 1),
+                       potential(nb), rot, col)
+                if best is None or pri < best[0]:
+                    best = (pri, (rot, col), key)
+            if best is None:
+                deaths += 1
+                dead = True
+                break
+            resp[p] = best[1]
+            succs.append(best[2])
+        if dead:
+            print(f"[{time.time() - t0:5.0f}s] DEATH at state "
+                  f"cells={cellcount(b)} h={heights(b)} bag={sorted(bag)}",
+                  flush=True)
+            continue
+        table[(b, bag)] = resp
+        for key in succs:
+            known_boards.add(key[0])
+            if key not in table and key not in queued:
+                queue.append(key)
+                queued.add(key)
+        if len(table) % args.log_every == 0:
+            onorbit = sum(1 for s in table if s in orbit_states)
+            nb_ratio = len(table) / max(1, len(known_boards))
+            print(f"[{time.time() - t0:5.0f}s] table={len(table)} "
+                  f"frontier={len(queue)} boards={len(known_boards)} "
+                  f"(reuse x{nb_ratio:.2f}) on-orbit={onorbit} "
+                  f"deaths={deaths}", flush=True)
+    print(f"CLOSED: table={len(table)} states, deaths={deaths}, "
+          f"{time.time() - t0:.0f}s", flush=True)
+    report_table(table, orbit_states)
+    if deaths == 0:
+        verify_closure(table)
+        return 0
+    print("closed but with DEATH states pruned — NOT a valid atlas",
+          flush=True)
+    return 1
+
+
+def report_table(table, orbit_states):
+    if not table:
+        return
+    hol = [holecount(b) for (b, _) in table]
+    hts = [max(heights(b)) for (b, _) in table]
+    cells = [cellcount(b) for (b, _) in table]
+    boards = len({b for (b, _) in table})
+    print(f"  boards={boards} | holes max={max(hol)} avg={sum(hol)/len(hol):.2f}"
+          f" | hmax max={max(hts)} | cells max={max(cells)} "
+          f"avg={sum(cells)/len(cells):.1f}", flush=True)
+
+
+def verify_closure(table):
+    """Independent pass: every (state, piece) response stays in the table."""
+    for (b, bag), resp in table.items():
+        for p in bag:
+            rot, col = resp[p]
+            info = next(i for (r, c, i) in PLACEMENTS[p]
+                        if r == rot and c == col)
+            nb = step(b, info)
+            assert nb is not None, "death in verify"
+            nbag = bag - {p}
+            if not nbag:
+                nbag = FULL
+            assert (nb, nbag) in table, "escape in verify"
+    print(f"closure INDEPENDENTLY VERIFIED: {len(table)} states, "
+          f"every in-bag piece response stays inside", flush=True)
+
+
+# ---------------------------------------------------------------------------
+# Adaptive per-bag reconvergence (the decisive experiment). Within one bag,
+# the policy may answer each (board, remaining-bag, piece) individually — so
+# forks opened by the adversary's order can be REFOLDED by compensating
+# placements on each branch. solve_bag decides, by memoized AND-OR search,
+# whether from a boundary board every arrival order can be answered so that
+# every end-of-bag board lands in an acceptable set (existing boundaries or
+# `qualify`-good new ones), and extracts the per-state response table.
+# ---------------------------------------------------------------------------
+
+def bag_candidates(board, p, k, hcap):
+    """Top-k placements of p on board by potential (holes first)."""
+    out = []
+    for (rot, col, info) in PLACEMENTS[p]:
+        nb = step(board, info)
+        if nb is None:
+            continue
+        if max(heights(nb)) > hcap:
+            continue
+        out.append((potential(nb), rot, col, info, nb))
+    out.sort(key=lambda x: x[0])
+    return out[:k]
+
+
+def solve_bag(B, accept, args, strict_set=None):
+    """AND-OR solve one bag from boundary B. accept(board) -> bool at bag
+    end. `strict_set` (if given) reorders last-piece candidates to prefer
+    finals inside it. Returns (ok, table, finals, memo_size): table maps
+    (board, remaining) -> {piece: (rot, col)}; finals = end-of-bag boards
+    actually reached under the extracted policy (all orders)."""
+    memo = {}
+    choice = {}
+
+    def rec(board, remaining):
+        key = (board, remaining)
+        if key in memo:
+            return memo[key]
+        if not remaining:
+            ok = accept(board)
+            memo[key] = ok
+            return ok
+        ok = True
+        picks = {}
+        for p in remaining:
+            found = False
+            cands = bag_candidates(board, p, args.branch, args.hcap)
+            if strict_set is not None and len(remaining) == 1:
+                cands = sorted(
+                    cands, key=lambda x: (0 if x[4] in strict_set else 1,
+                                          x[0]))
+            for (_pot, rot, col, info, nb) in cands:
+                if rec(nb, remaining - {p}):
+                    picks[p] = (rot, col)
+                    found = True
+                    break
+            if not found:
+                ok = False
+                break
+        memo[key] = ok
+        if ok:
+            choice[key] = picks
+        return ok
+
+    ok = rec(B, FULL)
+    if not ok:
+        return False, None, None, len(memo)
+    # extract reachable sub-DAG under the chosen policy
+    table = {}
+    finals = set()
+    stack = [(B, FULL)]
+    seen = {(B, FULL)}
+    while stack:
+        (board, remaining) = stack.pop()
+        if not remaining:
+            finals.add(board)
+            continue
+        picks = choice[(board, remaining)]
+        table[(board, remaining)] = picks
+        for p in remaining:
+            rot, col = picks[p]
+            info = next(i for (r, c, i) in PLACEMENTS[p]
+                        if r == rot and c == col)
+            nb = step(board, info)
+            nk = (nb, remaining - {p})
+            if nk not in seen:
+                seen.add(nk)
+                stack.append(nk)
+    return True, table, finals, len(memo)
+
+
+def bump(cols):
+    hs = heights(cols)
+    return sum(abs(hs[i] - hs[i + 1]) for i in range(COLS - 1))
+
+
+def adaptive_closure(args):
+    t0 = time.time()
+    solved = {}       # boundary -> (table, finals)
+    frontier = [EMPTY]
+    queued = {EMPTY}
+    total_states = 0
+    tier2 = 0
+    while frontier:
+        if time.time() > t0 + args.budget:
+            print(f"budget exhausted: {len(solved)} boundaries solved, "
+                  f"{len(frontier)} open, states={total_states}, "
+                  f"tier2-solves={tier2}", flush=True)
+            return 1
+        frontier.sort(key=score_board)
+        B = frontier.pop(0)
+        if B in solved:
+            continue
+        known = set(solved) | queued | {B}
+
+        def accept1(board, _k=known):
+            return board in _k
+
+        def accept2(board, _k=known):
+            return (board in _k
+                    or (holecount(board) <= args.final_holes
+                        and max(heights(board)) <= args.final_h
+                        and cellcount(board) <= args.final_cells
+                        and bump(board) <= args.final_bump))
+
+        ok, table, finals, memo_n = solve_bag(B, accept1, args,
+                                              strict_set=known)
+        used2 = False
+        if not ok:
+            ok, table, finals, memo_n = solve_bag(B, accept2, args,
+                                                  strict_set=known)
+            used2 = True
+            tier2 += 1
+        el = time.time() - t0
+        if not ok:
+            if B == EMPTY:
+                print(f"[{el:5.0f}s] EMPTY unsolvable (branch={args.branch}, "
+                      f"memo={memo_n}) — raise --branch or relax finals",
+                      flush=True)
+                return 1
+            print(f"[{el:5.0f}s] boundary unsolvable (cells={cellcount(B)}, "
+                  f"memo={memo_n}); NOT retried (greedy)", flush=True)
+            return 1
+        total_states += len(table)
+        solved[B] = (table, finals)
+        newf = 0
+        for f in finals:
+            if f not in solved and f not in queued:
+                frontier.append(f)
+                queued.add(f)
+                newf += 1
+        print(f"[{el:5.0f}s] solved #{len(solved)} (cells={cellcount(B)}"
+              f"{' T2' if used2 else ' T1'}) memo={memo_n} "
+              f"bag-states={len(table)} finals={len(finals)} (+{newf}) "
+              f"frontier={len(frontier)} states={total_states}", flush=True)
+    print(f"CLOSED: {len(solved)} boundaries, total mid-bag states="
+          f"{total_states}, tier2={tier2}, {time.time() - t0:.0f}s",
+          flush=True)
+    verify_adaptive(solved)
+    return 0
+
+
+def verify_adaptive(solved):
+    """Independent closure pass over the union of all bag tables."""
+    boundaries = set(solved)
+    checked = 0
+    for B, (table, finals) in solved.items():
+        assert all(f in boundaries for f in finals), "finals escape"
+        for (board, remaining), picks in table.items():
+            for p in remaining:
+                rot, col = picks[p]
+                info = next(i for (r, c, i) in PLACEMENTS[p]
+                            if r == rot and c == col)
+                nb = step(board, info)
+                assert nb is not None, "death in verify"
+                nrem = remaining - {p}
+                if nrem:
+                    assert (nb, nrem) in table, "mid-bag escape"
+                else:
+                    assert nb in boundaries, "boundary escape"
+                checked += 1
+    print(f"adaptive closure INDEPENDENTLY VERIFIED: "
+          f"{sum(len(t) for (t, _f) in solved.values())} mid-bag states, "
+          f"{checked} transitions, {len(boundaries)} boundaries", flush=True)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--mode", choices=("graph", "closure", "adaptive"),
+                    default="closure")
+    ap.add_argument("--budget", type=float, default=300.0)
+    ap.add_argument("--phase-budget", type=float, default=30.0)
+    ap.add_argument("--phase-sols", type=int, default=48)
+    ap.add_argument("--fork-cap", type=int, default=4,
+                    help="max distinct boards per proper subset")
+    ap.add_argument("--final-cap", type=int, default=3,
+                    help="max distinct end-of-bag boards")
+    ap.add_argument("--hcap", type=int, default=16)
+    ap.add_argument("--state-cap", type=int, default=300000)
+    ap.add_argument("--log-every", type=int, default=1000)
+    ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--shuffle", action="store_true")
+    ap.add_argument("--branch", type=int, default=4,
+                    help="adaptive: OR-branching per (board, piece)")
+    ap.add_argument("--final-holes", type=int, default=1,
+                    help="adaptive: max holes for a new boundary")
+    ap.add_argument("--final-h", type=int, default=8,
+                    help="adaptive: max height for a new boundary")
+    ap.add_argument("--final-cells", type=int, default=36,
+                    help="adaptive: max cells for a new boundary")
+    ap.add_argument("--final-bump", type=int, default=6,
+                    help="adaptive: max bumpiness for a new boundary")
+    args = ap.parse_args()
+    if args.mode == "graph":
+        return graph_closure(args)
+    if args.mode == "adaptive":
+        return adaptive_closure(args)
+    return closure_search(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
