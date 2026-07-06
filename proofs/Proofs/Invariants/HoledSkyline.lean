@@ -1304,5 +1304,50 @@ theorem well_preserved {b : Board} (pl : Placement) {w : ℕ} (hw0 : b.colHeight
     (pl.place b).colHeight w = 0 := by
   rw [colHeight_place_of_notMem_cols b pl w hj, hw0]
 
+/-- **Flush O on a local flat pair.** On two equal-height columns `h c = h (c+1)`
+the 2×2 O seats flush and raises both by 2 (the local generalisation of
+`place_O_flat`). -/
+theorem place_O_pair {cfg : GameConfig} {h : ℕ → ℕ} {c : ℕ}
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hpair : h c = h (c + 1)) :
+    Placement.place (skyline cfg h) { piece := Piece.O, rot := 0, col := c }
+      = skyline cfg
+          (Function.update (Function.update h c (h c + 2)) (c + 1) (h c + 2)) := by
+  refine place_flush_skyline (w := 2) (off := h c) (bot := fun _ => 0) (top := fun _ => 1)
+    (fun i ρ => ?_) (by omega) (fun i _ => by dsimp only; omega)
+    (fun i hi => ?_) (fun i hi => ?_) (fun i hi => ?_) (fun j hj => ?_)
+  · rw [show ({ piece := Piece.O, rot := 0, col := c } : Placement).shapeUp
+          = {((0 : ℕ), (0 : ℕ)), (0, 1), (1, 0), (1, 1)} from shapeUp_O c 0]
+    simp only [Finset.mem_insert, Finset.mem_singleton, Prod.mk.injEq]
+    omega
+  · show ({ piece := Piece.O, rot := 0, col := c } : Placement).col + i < cfg.cols
+    interval_cases i <;> simpa
+  · show h (({ piece := Piece.O, rot := 0, col := c } : Placement).col + i) = h c + 0
+    interval_cases i
+    · simp
+    · show h (c + 1) = h c + 0; omega
+  · show Function.update (Function.update h c (h c + 2)) (c + 1) (h c + 2)
+        (({ piece := Piece.O, rot := 0, col := c } : Placement).col + i) = h c + 1 + 1
+    interval_cases i
+    · show Function.update (Function.update h c (h c + 2)) (c + 1) (h c + 2) c = h c + 1 + 1
+      rw [Function.update_of_ne (by omega : c ≠ c + 1), Function.update_self]
+    · show Function.update (Function.update h c (h c + 2)) (c + 1) (h c + 2) (c + 1) = h c + 1 + 1
+      rw [Function.update_self]
+  · have hj0 : j ≠ c := by simpa using hj 0 (by omega)
+    have hj1 : j ≠ c + 1 := hj 1 (by omega)
+    show Function.update (Function.update h c (h c + 2)) (c + 1) (h c + 2) j = h j
+    rw [Function.update_of_ne hj1, Function.update_of_ne hj0]
+
+/-- **The O-filler is self-reproducing.** O on a flat pair `h c = h (c+1)` lands
+on a skyline with the *same* flat pair (both columns +2) — so a filler region
+persists under O, just as the roughness windows persist under S/Z. -/
+theorem place_O_pair_reproduces {cfg : GameConfig} {h : ℕ → ℕ} {c : ℕ}
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hpair : h c = h (c + 1)) :
+    ∃ h', Placement.place (skyline cfg h) { piece := Piece.O, rot := 0, col := c }
+            = skyline cfg h' ∧ h' c = h' (c + 1) := by
+  refine ⟨Function.update (Function.update h c (h c + 2)) (c + 1) (h c + 2),
+    place_O_pair hc hc1 hpair, ?_⟩
+  rw [Function.update_of_ne (show c ≠ c + 1 by omega), Function.update_self,
+      Function.update_self]
+
 end Board
 end Tetris
