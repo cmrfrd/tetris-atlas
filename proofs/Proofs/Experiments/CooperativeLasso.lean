@@ -4,29 +4,36 @@ import Proofs.Survival.Lasso
 /-!
 # The cooperative lasso witness (T1)
 
-**The first concrete infinite-play certificate in this repository.** An
-explicit 35-placement loop — 5 bags, each drawing all 7 pieces in a chosen
-order — that takes `GameState.init` (empty board, full bag) back to
-`GameState.init` exactly, hole-free, never lost. Certified from scratch by
-`checkTable` (`Proofs/Survival/Lasso.lean`) via `native_decide`, then
-converted into a `ClosedCycle` and the headline theorem
+**The first concrete infinite-play certificate in this repository — for the
+COOPERATIVE game only.** An explicit 35-placement loop (5 bags, each drawing
+all 7 pieces in a chosen order) that takes `GameState.init` (empty board, full
+bag) back to `GameState.init` exactly, never lost. Certified from scratch by
+`checkTable` (`Proofs/Survival/Lasso.lean`) via `native_decide`, then converted
+into a `ClosedCycle` and the headline theorem
 
-  `cooperative_tetris_survivable :
+  `cooperative_selfDealt_survives_forever :
      ∃ π, SurvivesForever GameConfig.standard π GameState.init`
 
-This is the *cooperative* game: the policy chooses both the draw order within
-each bag and the placement (`Policy`/`trace` semantics — the piece played is
-`(π g).piece`, constrained to the bag by `legal_draw`). It is **not**
-`TetrisSolvable` (which quantifies over all announcement orders); it is the
-M2-shape witness that de-vacuizes `ClosedCycle`, `closed_cycle_survives`, and
-`SurvivesForever` on the canonical 10×20 config.
+⚠ **This is NOT "Tetris is survivable".** In this *cooperative* / self-dealing
+game the policy `Policy = GameState → Placement` chooses BOTH which piece to
+draw next AND where to place it: the piece played is `(π g).piece`, and `step`
+draws exactly that piece. So the "player" also deals itself the pieces — there
+is one self-directed play, and `SurvivesForever` says only that this one play
+never tops out. Real Tetris is `TetrisSolvable` (`Proofs/Safety/Adversarial`):
+`∃ σ : Solver, SolvesTetris σ`, where `Solver = GameState → Piece → Placement`
+is *handed* each announced piece and must survive **every** legal 7-bag
+sequence (∀-announcement). That is the project's open central conjecture, and
+nothing here bears on it. This theorem's only job is to *de-vacuize*
+`ClosedCycle`, `closed_cycle_survives`, and `SurvivesForever` on the canonical
+10×20 config — one concrete inhabitant of the M2/M3 cooperative artifact.
 
 Loop arithmetic: 35 pieces = 5 bags place 140 cells and clear exactly 14
 lines (`4·35 = 10·14`), the minimum possible loop length (cell conservation
 forces `L ≡ 0 mod 5`, bag renewal forces `L ≡ 0 mod 7`).
 
-The placement list was found by `scripts/find_cooperative_lasso.py` (a
-one-off hole-free skyline DFS mirroring this model); the script carries no
+The placement list was found by `scripts/find_cooperative_lasso.py` (a one-off
+with-holes bitboard beam mirroring this model — transient holes are essential:
+a hole-free/flush 5-bag perfect clear does not exist). The script carries no
 trust — everything is re-checked here by the kernel-validated `native_decide`
 evaluation of `checkTable`.
 -/
@@ -75,16 +82,25 @@ theorem init_mem_cooperativeLasso :
     GameState.init ∈ cooperativeLasso.states :=
   List.mem_toFinset.mpr init_mem_lassoWitnessTable
 
-/-- **T1 — cooperative Tetris is survivable.** There is a policy (choosing
-both draw order and placement) that never tops out from the initial state of
-the canonical 10×20 game. Proof by construction: the explicit 35-piece loop. -/
-theorem cooperative_tetris_survivable :
+/-- **T1 — cooperative (self-dealing) infinite play from `init`.** There is a
+policy that never tops out from `init` on the canonical 10×20 board **when the
+policy also chooses the piece order** (`Policy = GameState → Placement`; the
+piece played is `(π g).piece`, which `step` draws). Proof by construction: the
+explicit 35-piece `init → init` loop.
+
+⚠ This is the *cooperative* claim, NOT `TetrisSolvable`. It does **not** say a
+player can survive an adversary that announces the pieces — that is the open
+`∃ σ : Solver, SolvesTetris σ` (surviving *every* legal 7-bag sequence). The
+name is deliberately not `..._tetris_survivable`; see the file header. -/
+theorem cooperative_selfDealt_survives_forever :
     ∃ π : Policy GameConfig.standard,
       SurvivesForever GameConfig.standard π GameState.init :=
   cooperativeLasso.exists_survivesForever_of_init_mem init_mem_cooperativeLasso
 
-/-- Closed cycles through `init` exist on the canonical config (M2-shape
-existence, cooperative branching). -/
+/-- Closed cycles through `init` exist on the canonical config — the M2-shape
+*cooperative* existence (the cycle's `policy` self-deals its pieces). This is
+the ∃-form behind `cooperative_selfDealt_survives_forever`; it is **not** the
+adversarial closed *atlas* (`Atlas.IsClosedOn`) that `TetrisSolvable` needs. -/
 theorem exists_init_closed_cycle :
     ∃ C : ClosedCycle GameConfig.standard, GameState.init ∈ C.states :=
   ⟨cooperativeLasso, init_mem_cooperativeLasso⟩
