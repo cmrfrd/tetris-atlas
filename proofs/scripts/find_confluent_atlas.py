@@ -532,7 +532,11 @@ def bag_candidates(board, p, k, hcap):
     return out[:k]
 
 
-def solve_bag(B, accept, args, strict_set=None):
+class _Deadline(Exception):
+    pass
+
+
+def solve_bag(B, accept, args, strict_set=None, deadline=None):
     """AND-OR solve one bag from boundary B. accept(board) -> bool at bag
     end. `strict_set` (if given) reorders last-piece candidates to prefer
     finals inside it. Returns (ok, table, finals, memo_size): table maps
@@ -545,6 +549,8 @@ def solve_bag(B, accept, args, strict_set=None):
         key = (board, remaining)
         if key in memo:
             return memo[key]
+        if deadline is not None and time.time() > deadline:
+            raise _Deadline
         if not remaining:
             ok = accept(board)
             memo[key] = ok
@@ -571,7 +577,10 @@ def solve_bag(B, accept, args, strict_set=None):
             choice[key] = picks
         return ok
 
-    ok = rec(B, FULL)
+    try:
+        ok = rec(B, FULL)
+    except _Deadline:
+        return False, None, None, len(memo)
     if not ok:
         return False, None, None, len(memo)
     # extract reachable sub-DAG under the chosen policy
@@ -693,9 +702,169 @@ def verify_adaptive(solved):
           f"{checked} transitions, {len(boundaries)} boundaries", flush=True)
 
 
+# ---------------------------------------------------------------------------
+# Designed-family GFP. Cell arithmetic (28 cells/bag, clears in multiples of
+# 10) forces boundary cell-counts through residues 0->8->6->4->2->0 mod 10,
+# so flat boundaries cannot recur; the canonical family is the LEDGE: a flat
+# base at height h with the top row partially filled by k cells (left-
+# justified), optionally with one debt hole. GFP: prune every family member
+# whose adaptive bag cannot land wholly inside the family; iterate to the
+# greatest fixed point; then check EMPTY leads into the surviving family
+# within a few bags.
+# ---------------------------------------------------------------------------
+
+def ledge_boards(hmax, with_debt):
+    """ledge(h, k): cols 0..k-1 at height h+1, cols k..9 at height h.
+    with_debt: also one-hole variants (hole at row h-1 under a filled cell
+    at row h, in column j >= k)."""
+    fam = set()
+    for h in range(hmax + 1):
+        base = (1 << h) - 1
+        for k in range(COLS):
+            cols = tuple((base | (1 << h)) if j < k else base
+                         for j in range(COLS))
+            fam.add(cols)
+            if with_debt and h >= 1:
+                for j in range(k, COLS):
+                    dcols = list(cols)
+                    # bury a hole at row h-1 of column j: cell at h, empty h-1
+                    dcols[j] = (base & ~(1 << (h - 1))) | (1 << h)
+                    fam.add(tuple(dcols))
+    return fam
+
+
+def family_gfp(args):
+    t0 = time.time()
+    fam = ledge_boards(args.family_h, args.family_debt)
+    print(f"designed family: {len(fam)} ledge boards "
+          f"(hmax={args.family_h}, debt={args.family_debt})", flush=True)
+    it = 0
+    while True:
+        it += 1
+        dead = []
+        for B in sorted(fam, key=score_board):
+            if time.time() > t0 + args.budget:
+                print("budget exhausted mid-GFP", flush=True)
+                return 1
+            ok, _t, _f, memo_n = solve_bag(
+                B, (lambda b: b in fam), args, strict_set=fam)
+            if not ok:
+                dead.append(B)
+        if not dead:
+            break
+        for B in dead:
+            fam.discard(B)
+        print(f"[{time.time() - t0:5.0f}s] GFP iter {it}: pruned "
+              f"{len(dead)}, family={len(fam)}", flush=True)
+        if not fam:
+            print("family EMPTY — no ledge GFP at these caps", flush=True)
+            return 1
+    print(f"[{time.time() - t0:5.0f}s] GFP STABLE: family={len(fam)} "
+          f"after {it} iterations", flush=True)
+    for B in sorted(fam, key=score_board)[:20]:
+        print(f"  member h={heights(B)} cells={cellcount(B)} "
+              f"holes={holecount(B)}")
+    # lead-in from EMPTY: bags may pass through non-family boundaries
+    if EMPTY in fam:
+        print("EMPTY is IN the family — closed atlas from init!", flush=True)
+        return 0
+    lead = {EMPTY}
+    for level in range(1, args.leadin + 1):
+        nxt = set()
+        okall = True
+        for B in sorted(lead, key=score_board):
+            def acc(b):
+                return (b in fam
+                        or (holecount(b) <= 1
+                            and max(heights(b)) <= args.final_h
+                            and bump(b) <= args.final_bump))
+            ok, _t, finals, _m = solve_bag(B, acc, args, strict_set=fam)
+            if not ok:
+                okall = False
+                break
+            nxt |= {f for f in finals if f not in fam}
+        if not okall:
+            print(f"lead-in level {level}: some boundary unsolvable",
+                  flush=True)
+            return 1
+        if not nxt:
+            print(f"LEAD-IN CLOSED at level {level}: EMPTY -> family. "
+                  f"CLOSED ATLAS EXISTS.", flush=True)
+            return 0
+        print(f"lead-in level {level}: {len(nxt)} boundaries still outside "
+              f"family", flush=True)
+        lead = nxt
+    print("lead-in did not close within levels", flush=True)
+    return 1
+
+
+# ---------------------------------------------------------------------------
+# Single-target cycle probe: the sharpest reconvergence question. An edge
+# B -> f exists when the adaptive policy can steer EVERY arrival order from
+# boundary B onto the single final board f. If such edges exist among the
+# ledge/debt shapes, a 5-bag cycle (cells mod 10: 0->8->6->4->2->0) plus an
+# EMPTY lead-in is the smallest possible closed atlas.
+# ---------------------------------------------------------------------------
+
+def cycle_probe(args):
+    t0 = time.time()
+    U = sorted(ledge_boards(args.family_h, True), key=score_board)
+    print(f"universe: {len(U)} ledge+debt boards (hmax={args.family_h})",
+          flush=True)
+    edges = {}
+    tried = 0
+    found = 0
+    for B in U:
+        if time.time() > t0 + args.budget:
+            break
+        cb = cellcount(B)
+        targets = [f for f in U
+                   if (cb + 28 - cellcount(f)) in (0, 10, 20, 30)]
+        targets.sort(key=lambda f: (abs(cellcount(f) - cb - 8),
+                                    score_board(f)))
+        for f in targets[:args.cycle_targets]:
+            if time.time() > t0 + args.budget:
+                break
+            tried += 1
+            ok, _t, finals, memo_n = solve_bag(
+                B, (lambda b, _f=f: b == _f), args, strict_set={f},
+                deadline=time.time() + args.solve_budget)
+            if ok:
+                found += 1
+                edges.setdefault(B, []).append(f)
+                print(f"[{time.time() - t0:5.0f}s] EDGE: cells={cb} "
+                      f"h={heights(B)} -> cells={cellcount(f)} "
+                      f"h={heights(f)} (memo={memo_n})", flush=True)
+    print(f"[{time.time() - t0:5.0f}s] probe done: {found} edges / {tried} "
+          f"pairs tried, {len(edges)} boundaries with an edge", flush=True)
+    if not edges:
+        print("NO single-target edges — single-final reconvergence too "
+              "rigid at these caps", flush=True)
+        return 1
+    # cycle search in the edge graph
+    import functools
+    reach = {B: set(fs) for B, fs in edges.items()}
+    for B in edges:
+        stack, seen = [B], set()
+        while stack:
+            x = stack.pop()
+            for y in reach.get(x, ()):
+                if y == B:
+                    print(f"CYCLE through cells={cellcount(B)} "
+                          f"h={heights(B)}!", flush=True)
+                    return 0
+                if y not in seen:
+                    seen.add(y)
+                    stack.append(y)
+    print("edges exist but no cycle yet — enlarge universe/targets",
+          flush=True)
+    return 1
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", choices=("graph", "closure", "adaptive"),
+    ap.add_argument("--mode", choices=("graph", "closure", "adaptive",
+                                       "family", "cycle"),
                     default="closure")
     ap.add_argument("--budget", type=float, default=300.0)
     ap.add_argument("--phase-budget", type=float, default=30.0)
@@ -719,11 +888,25 @@ def main():
                     help="adaptive: max cells for a new boundary")
     ap.add_argument("--final-bump", type=int, default=6,
                     help="adaptive: max bumpiness for a new boundary")
+    ap.add_argument("--family-h", type=int, default=4,
+                    help="family: max ledge base height")
+    ap.add_argument("--family-debt", action="store_true",
+                    help="family: include one-hole debt variants")
+    ap.add_argument("--leadin", type=int, default=4,
+                    help="family: max lead-in bags from EMPTY")
+    ap.add_argument("--cycle-targets", type=int, default=12,
+                    help="cycle: candidate targets per boundary")
+    ap.add_argument("--solve-budget", type=float, default=8.0,
+                    help="cycle: seconds per (B, f) solve")
     args = ap.parse_args()
     if args.mode == "graph":
         return graph_closure(args)
     if args.mode == "adaptive":
         return adaptive_closure(args)
+    if args.mode == "family":
+        return family_gfp(args)
+    if args.mode == "cycle":
+        return cycle_probe(args)
     return closure_search(args)
 
 
