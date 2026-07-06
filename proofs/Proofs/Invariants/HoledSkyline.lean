@@ -1276,5 +1276,24 @@ theorem place_vertS_preserves_disjoint_Zwindow {cfg : GameConfig} {h : ℕ → �
         = h (d + 1) := by rw [Function.update_of_ne hd1c1, Function.update_of_ne hd1c]
     rw [ed, ed1]; exact hstepZ
 
+/-- **The drain is benign to windows.** The I-drain subtracts 4 from every column
+uniformly, so a window (a unit step `h c = h (c+1) + 1`) that sits above the
+drain zone — both columns ≥ 4, guaranteed here by the well board's `hfull` — is
+preserved by the drain. So the height-reclaiming move does NOT break the
+roughness windows: only the fillers and well-upkeep can, which narrows crux
+#66/#72 to those. -/
+theorem vertI_drain_preserves_step {cfg : GameConfig} {h : ℕ → ℕ} {w c : ℕ}
+    (hw : w < cfg.cols) (hwell : h w = 0) (hfull : ∀ j < cfg.cols, j ≠ w → 4 ≤ h j)
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hcw : c ≠ w) (hc1w : c + 1 ≠ w)
+    (hstep : h c = h (c + 1) + 1) :
+    Placement.applyStep cfg (skyline cfg h) { piece := Piece.I, rot := 1, col := w }
+        = skyline cfg (fun j => if j = w then 0 else h j - 4)
+    ∧ (fun j => if j = w then 0 else h j - 4) c
+        = (fun j => if j = w then 0 else h j - 4) (c + 1) + 1 := by
+  refine ⟨vertI_drain cfg h w hw hwell hfull, ?_⟩
+  have h4 := hfull (c + 1) hc1 hc1w
+  simp only [if_neg hcw, if_neg hc1w]
+  omega
+
 end Board
 end Tetris
