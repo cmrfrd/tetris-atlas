@@ -1247,5 +1247,34 @@ theorem colHeight_place_of_notMem_cols (b : Board) (pl : Placement) (j : ℕ)
   rw [Placement.place_eq_union_dropped, Finset.filter_union,
       Finset.filter_false_of_mem he, Finset.union_empty]
 
+/-- **Two windows coexist.** A surface carrying an S-window at `c` and a Z-window
+at a disjoint `d` keeps BOTH after playing the vertical S at its window: the
+S-window self-reproduces, and the Z-window survives because S touches only its
+own two columns (locality). Symmetrically for Z. So an adversary interleaving S
+and Z on a two-window surface never breaks either window — composing
+`place_vertS_step_reproduces` with `colHeight_place_of_notMem_cols`. (This is why
+disjoint roughness windows persist *between* drains; the open crux is the
+height growth and the well upkeep across the coupling drain — #66/#72.) -/
+theorem place_vertS_preserves_disjoint_Zwindow {cfg : GameConfig} {h : ℕ → ℕ} {c d : ℕ}
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hstepS : h c = h (c + 1) + 1)
+    (hdc : d ≠ c) (hdc1 : d ≠ c + 1) (hd1c : d + 1 ≠ c) (hd1c1 : d + 1 ≠ c + 1)
+    (hstepZ : h (d + 1) = h d + 1) :
+    ∃ h', Placement.place (skyline cfg h) { piece := Piece.S, rot := 1, col := c }
+            = skyline cfg h'
+        ∧ h' c = h' (c + 1) + 1 ∧ h' (d + 1) = h' d + 1 := by
+  refine ⟨Function.update (Function.update h c (h c + 2)) (c + 1) (h (c + 1) + 2),
+    place_vertS_skyline hc hc1 hstepS, ?_, ?_⟩
+  · have ec : Function.update (Function.update h c (h c + 2)) (c + 1) (h (c + 1) + 2) c
+        = h c + 2 := by
+      rw [Function.update_of_ne (show c ≠ c + 1 by omega), Function.update_self]
+    have ec1 : Function.update (Function.update h c (h c + 2)) (c + 1) (h (c + 1) + 2) (c + 1)
+        = h (c + 1) + 2 := by rw [Function.update_self]
+    rw [ec, ec1]; omega
+  · have ed : Function.update (Function.update h c (h c + 2)) (c + 1) (h (c + 1) + 2) d
+        = h d := by rw [Function.update_of_ne hdc1, Function.update_of_ne hdc]
+    have ed1 : Function.update (Function.update h c (h c + 2)) (c + 1) (h (c + 1) + 2) (d + 1)
+        = h (d + 1) := by rw [Function.update_of_ne hd1c1, Function.update_of_ne hd1c]
+    rw [ed, ed1]; exact hstepZ
+
 end Board
 end Tetris
