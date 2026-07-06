@@ -129,5 +129,47 @@ theorem applyStep_comm_of_colsDisjoint (cfg : GameConfig) (b : Board)
       applyStep_eq_clearLines_place, applyStep_eq_clearLines_place,
       place_comm_of_colsDisjoint b hd]
 
+/-- **The n-ary collapse: arrival order is irrelevant for pairwise
+column-disjoint placements.** Folding `place` over any two permutations of the
+same placement list produces the same board, provided the placements are
+pairwise column-disjoint. Induction on the permutation; the `swap` case is the
+pairwise engine `place_comm_of_colsDisjoint` (identical heads commute by
+`rfl`). This deletes the adversary's `7!` order choices over a zone-local bag
+response: every order lands on the canonical-order board. -/
+theorem foldl_place_perm {l1 l2 : List Placement} (hp : l1.Perm l2) :
+    (∀ x ∈ l1, ∀ y ∈ l1, x ≠ y → ColsDisjoint x y) → ∀ b : Board,
+      l1.foldl Placement.place b = l2.foldl Placement.place b := by
+  induction hp with
+  | nil => intro _ b; rfl
+  | cons x p ih =>
+    intro hd b
+    simp only [List.foldl_cons]
+    exact ih
+      (fun a ha c hc hac =>
+        hd a (List.mem_cons_of_mem x ha) c (List.mem_cons_of_mem x hc) hac)
+      (Placement.place b x)
+  | swap x y l =>
+    intro hd b
+    simp only [List.foldl_cons]
+    by_cases hxy : x = y
+    · subst hxy; rfl
+    · have hcd : ColsDisjoint y x :=
+        hd y (List.mem_cons_self ..)
+          x (List.mem_cons_of_mem _ (List.mem_cons_self ..)) (Ne.symm hxy)
+      rw [place_comm_of_colsDisjoint b hcd]
+  | trans p1 p2 ih1 ih2 =>
+    intro hd b
+    exact (ih1 hd b).trans
+      (ih2 (fun a ha c hc hac =>
+        hd a (p1.symm.subset ha) c (p1.symm.subset hc) hac) b)
+
+/-- `foldl_place_perm`, packaged with a `List.Pairwise` hypothesis (the natural
+shape for a bag response list): pairwise disjointness in list order extends to
+all unordered pairs by symmetry. -/
+theorem foldl_place_perm_of_pairwise {l1 l2 : List Placement} (hp : l1.Perm l2)
+    (hd : l1.Pairwise ColsDisjoint) (b : Board) :
+    l1.foldl Placement.place b = l2.foldl Placement.place b :=
+  foldl_place_perm hp (hd.forall (fun _ _ h => h.symm)) b
+
 end Placement
 end Tetris
