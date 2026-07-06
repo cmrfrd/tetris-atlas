@@ -473,6 +473,72 @@ theorem LegalSequence.bagAt_card_interval {s : ℕ → Piece} (h : LegalSequence
     1 ≤ (bagAt Bag.full s n).card ∧ (bagAt Bag.full s n).card ≤ 7 :=
   ⟨h.bagAt_card_pos n, Bag.card_le_seven _⟩
 
+section Fairness
+-- `bagAt Bag.full s <literal>` unfolds (recursive `bagAt` over the reducible
+-- `Bag.full = Finset.univ`) into nested `draw`s and blows up `whnf`. Scope both
+-- irreducible for these three lemmas only (reverts at `end Fairness`); the proofs
+-- touch them only through already-proven lemmas (`bagAt_succ`, `bagAt_zero`, …),
+-- never their computation.
+attribute [local irreducible] Bag.full bagAt
+
+/-- **7-bag card countdown.** Under legality each of the first draws erases a
+distinct piece, so the bag card falls `7 → 6 → … → 1` over steps `0..6`. -/
+theorem LegalSequence.bagAt_full_card_eq {s : ℕ → Piece} (h : LegalSequence s) :
+    ∀ k, k ≤ 6 → (bagAt Bag.full s k).card = 7 - k := by
+  intro k
+  induction k with
+  | zero => intro _; simp [bagAt_zero, Bag.full_card]
+  | succ n ih =>
+    intro hk
+    have hcn := ih (by omega)
+    have hmem : s n ∈ bagAt Bag.full s n := h n
+    have hge2 : 2 ≤ (bagAt Bag.full s n).card := by rw [hcn]; omega
+    rw [bagAt_succ, Bag.card_draw_of_ge_two hmem hge2, hcn]
+    omega
+
+/-- **7-bag renewal (sequence form): the bag is full again after 7 legal draws.**
+The size-1 bag at step 6 empties on the 7th draw and refills to `Bag.full` — so
+`bagAt` has period 7 and each block `[7k, 7k+7)` draws all seven pieces. -/
+theorem LegalSequence.bagAt_full_seven {s : ℕ → Piece} (h : LegalSequence s) :
+    bagAt Bag.full s 7 = Bag.full := by
+  have hc6 : (bagAt Bag.full s 6).card = 1 :=
+    (h.bagAt_full_card_eq 6 (by omega)).trans (by norm_num)
+  have hmem : s 6 ∈ bagAt Bag.full s 6 := h 6
+  obtain ⟨a, ha⟩ := Finset.card_eq_one.mp hc6
+  rw [ha, Finset.mem_singleton] at hmem
+  rw [show (7 : ℕ) = 6 + 1 from rfl, bagAt_succ, ha, hmem, Bag.draw_singleton_eq_full]
+
+/-- **7-bag fairness: `I` is drawn within the first 7 legal draws** (hence every
+bag block, so consecutive `I`s are ≤ 13 apart) — the liveness/scheduling fact the
+I-drain relies on. Were `I` absent from the first 7 draws it would survive
+un-erased into the size-1 bag at step 6, forcing `s 6 = I`. (List form:
+`BagBurst.countP_isI_two`.) -/
+theorem LegalSequence.exists_I_lt_seven {s : ℕ → Piece} (h : LegalSequence s) :
+    ∃ n, n < 7 ∧ s n = Piece.I := by
+  by_contra hcon
+  push_neg at hcon
+  have hI : ∀ n, n ≤ 6 → Piece.I ∈ bagAt Bag.full s n := by
+    intro n
+    induction n with
+    | zero => intro _; rw [bagAt_zero]; exact Bag.mem_full _
+    | succ m ih =>
+      intro hm
+      have hIm := ih (by omega)
+      rcases bagAt_succ_eq_erase_or_full Bag.full s m with he | hf
+      · rw [he, Finset.mem_erase]
+        exact ⟨fun hc => hcon m (by omega) hc.symm, hIm⟩
+      · rw [hf]; exact Bag.mem_full _
+  have hI6 := hI 6 (by omega)
+  have hc6 : (bagAt Bag.full s 6).card = 1 :=
+    (h.bagAt_full_card_eq 6 (by omega)).trans (by norm_num)
+  obtain ⟨a, ha⟩ := Finset.card_eq_one.mp hc6
+  rw [ha, Finset.mem_singleton] at hI6
+  have hmem6 : s 6 ∈ bagAt Bag.full s 6 := h 6
+  rw [ha, Finset.mem_singleton] at hmem6
+  exact hcon 6 (by omega) (hmem6.trans hI6.symm)
+
+end Fairness
+
 /-- Every bag at any step is a subset of `Bag.full`. -/
 theorem LegalSequenceFrom.bagAt_subset_full (initBag : Bag) (s : ℕ → Piece)
     (n : ℕ) : bagAt initBag s n ⊆ Bag.full :=
