@@ -1,4 +1,5 @@
 import Mathlib
+import Proofs.Combinatorics.BoardCount
 import Proofs.Invariants.HoledSkyline
 
 /-!
@@ -100,6 +101,33 @@ theorem place_comm_of_colsDisjoint (b : Board) {pl1 pl2 : Placement}
   rw [h1, h2]
   show (b ∪ pl1.dropped b) ∪ pl2.dropped b = (b ∪ pl2.dropped b) ∪ pl1.dropped b
   exact Finset.union_right_comm b (pl1.dropped b) (pl2.dropped b)
+
+/-- **A full move without completed rows is a bare placement.** When the merge
+completes no row, `clearLines` is the identity (`clearLines_eq_self_of_no_fullRows`)
+and `applyStep` collapses to `place`. Mid-bag moves of a confluent design are of
+this shape: rows are completed only at designated drain points, so between
+drains the game evolves by pure (commuting) placements. -/
+theorem applyStep_eq_place_of_no_fullRows (cfg : GameConfig) (b : Board)
+    (pl : Placement) (h : Board.fullRows cfg (pl.place b) = ∅) :
+    pl.applyStep cfg b = pl.place b := by
+  rw [applyStep_eq_clearLines_place, Board.clearLines_eq_self_of_no_fullRows cfg h]
+
+/-- **Column-disjoint full moves commute when neither completes a row on its
+own.** The intermediate clears are no-ops (`applyStep = place`), the two bare
+placements commute, and the final `clearLines` — which MAY fire — is applied to
+the *same* merged board on both sides. So the adversary's choice of order
+between two zone-local responses is irrelevant even when the second move
+triggers a clear: order-confluence survives row completion at the joint
+board, only *intermediate* completions are excluded. -/
+theorem applyStep_comm_of_colsDisjoint (cfg : GameConfig) (b : Board)
+    {pl1 pl2 : Placement} (hd : ColsDisjoint pl1 pl2)
+    (h1 : Board.fullRows cfg (pl1.place b) = ∅)
+    (h2 : Board.fullRows cfg (pl2.place b) = ∅) :
+    pl2.applyStep cfg (pl1.applyStep cfg b) = pl1.applyStep cfg (pl2.applyStep cfg b) := by
+  rw [applyStep_eq_place_of_no_fullRows cfg b pl1 h1,
+      applyStep_eq_place_of_no_fullRows cfg b pl2 h2,
+      applyStep_eq_clearLines_place, applyStep_eq_clearLines_place,
+      place_comm_of_colsDisjoint b hd]
 
 end Placement
 end Tetris
