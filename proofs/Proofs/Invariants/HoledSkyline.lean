@@ -1180,5 +1180,55 @@ theorem place_vertZ_step_reproduces {cfg : GameConfig} {h : ℕ → ℕ} {c : �
       = h (c + 1) + 2 := by rw [Function.update_self]
   rw [e1, e2]; omega
 
+/-- **General vertical-I placement.** The vertical I is one column wide, so on
+any skyline it just raises its column by 4 (independent of the rest of the
+surface). Generalises `place_vertI_flat`. -/
+theorem place_vertI_col (cfg : GameConfig) (h : ℕ → ℕ) (w : ℕ) (hw : w < cfg.cols) :
+    ({ piece := Piece.I, rot := 1, col := w } : Placement).place (skyline cfg h)
+      = skyline cfg (Function.update h w (h w + 4)) := by
+  have hsh : ({ piece := Piece.I, rot := 1, col := w } : Placement).shapeUp
+      = {((0 : ℕ), (0 : ℕ)), (0, 1), (0, 2), (0, 3)} := shapeUp_vertI' w 1 (by decide)
+  have hd : ({ piece := Piece.I, rot := 1, col := w } : Placement).dropOffset
+      (skyline cfg h) = h w := by
+    rw [Placement.dropOffset_eq_sup, hsh]
+    simp only [Finset.sup_insert, Finset.sup_singleton, Nat.add_zero, colHeight_skyline hw]
+    omega
+  have hdr : ({ piece := Piece.I, rot := 1, col := w } : Placement).dropped (skyline cfg h)
+      = {(w, h w), (w, h w + 1), (w, h w + 2), (w, h w + 3)} := by
+    rw [Placement.dropped_eq_image, hsh, hd]
+    simp only [Finset.image_insert, Finset.image_singleton]
+    norm_num
+  rw [Placement.place_eq_union_dropped, hdr]
+  ext ⟨a, b⟩
+  simp only [Finset.mem_union, mem_skyline', Finset.mem_insert, Finset.mem_singleton,
+    Prod.mk.injEq]
+  by_cases haw : a = w
+  · subst haw; rw [Function.update_self]; omega
+  · rw [Function.update_of_ne haw]; omega
+
+/-- **The I-drain (the height-reclaiming move).** On a "well" board — one empty
+column `w`, every other column at height ≥ 4 — dropping a vertical I into `w`
+fills rows 0–3 across the board, clearing exactly 4 lines and lowering every
+column by 4 (the well returns to 0). This is the Tetris move that reclaims the
++2-per-piece growth of the roughness windows; the open closure is scheduling it
+often enough (7-bag I-gap ≤ 12) against the fillers. -/
+theorem vertI_drain (cfg : GameConfig) (h : ℕ → ℕ) (w : ℕ) (hw : w < cfg.cols)
+    (hwell : h w = 0) (hfull : ∀ j < cfg.cols, j ≠ w → 4 ≤ h j) :
+    Placement.applyStep cfg (skyline cfg h) { piece := Piece.I, rot := 1, col := w }
+      = skyline cfg (fun j => if j = w then 0 else h j - 4) := by
+  rw [Placement.applyStep_eq_clearLines_place, place_vertI_col cfg h w hw]
+  have hu : Function.update h w (h w + 4) = Function.update h w 4 := by rw [hwell]
+  rw [hu, clearLines_skyline (m := 4)
+        (fun j hj => by
+          by_cases hjw : j = w
+          · subst hjw; rw [Function.update_self]
+          · rw [Function.update_of_ne hjw]; exact hfull j hj hjw)
+        ⟨w, hw, by rw [Function.update_self]⟩]
+  congr 1
+  ext j
+  by_cases hjw : j = w
+  · subst hjw; rw [Function.update_self, if_pos rfl]
+  · rw [Function.update_of_ne hjw, if_neg hjw]
+
 end Board
 end Tetris
