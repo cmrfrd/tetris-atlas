@@ -1134,5 +1134,51 @@ theorem init_responds_to_all_pieces (p : Piece) :
   | L => exact exists_debtBoard_step_flat_L 0 (by decide)
   | J => exact exists_debtBoard_step_flat_J 0 (by decide)
 
+/-! ## Toward the inductive step: self-reproducing roughness windows
+
+The base case (`init_responds_to_all_pieces`) handles the flat board. The
+inductive step must respond from arbitrary debt-1 boards. The hard pieces are S
+and Z (roughness): they need a "window" (a unit step in the surface) to seat
+hole-free. The lemmas below show those windows are **self-reproducing** — placing
+the roughness piece on its window lands on a surface with the *same* window — so
+an adversary cannot starve S/Z by throwing them repeatedly. The surface grows by
+2 per placement, to be reclaimed by an I-drain; managing that growth against the
+fillers (O/T/L/J) is the open closure (crux #66/#72). -/
+
+/-- **The S-window is self-reproducing.** On an S-step `h c = h (c+1) + 1`, the
+vertical S seats flush and lands on a skyline whose profile still has the S-step
+at `c` (both columns rose by 2). Hence S is placeable hole-free again — S bursts
+never starve. -/
+theorem place_vertS_step_reproduces {cfg : GameConfig} {h : ℕ → ℕ} {c : ℕ}
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hstep : h c = h (c + 1) + 1) :
+    ∃ h', Placement.place (skyline cfg h)
+            { piece := Piece.S, rot := 1, col := c } = skyline cfg h'
+        ∧ h' c = h' (c + 1) + 1 := by
+  refine ⟨Function.update (Function.update h c (h c + 2)) (c + 1) (h (c + 1) + 2),
+    place_vertS_skyline hc hc1 hstep, ?_⟩
+  have e1 : Function.update (Function.update h c (h c + 2)) (c + 1) (h (c + 1) + 2) c
+      = h c + 2 := by
+    rw [Function.update_of_ne (show c ≠ c + 1 by omega), Function.update_self]
+  have e2 : Function.update (Function.update h c (h c + 2)) (c + 1) (h (c + 1) + 2) (c + 1)
+      = h (c + 1) + 2 := by rw [Function.update_self]
+  rw [e1, e2]; omega
+
+/-- **The Z-window is self-reproducing** (mirror of the S case). On a Z-step
+`h (c+1) = h c + 1`, the vertical Z reproduces the step — Z bursts never
+starve. -/
+theorem place_vertZ_step_reproduces {cfg : GameConfig} {h : ℕ → ℕ} {c : ℕ}
+    (hc : c < cfg.cols) (hc1 : c + 1 < cfg.cols) (hstep : h (c + 1) = h c + 1) :
+    ∃ h', Placement.place (skyline cfg h)
+            { piece := Piece.Z, rot := 1, col := c } = skyline cfg h'
+        ∧ h' (c + 1) = h' c + 1 := by
+  refine ⟨Function.update (Function.update h c (h c + 2)) (c + 1) (h (c + 1) + 2),
+    place_vertZ_skyline hc hc1 hstep, ?_⟩
+  have e1 : Function.update (Function.update h c (h c + 2)) (c + 1) (h (c + 1) + 2) c
+      = h c + 2 := by
+    rw [Function.update_of_ne (show c ≠ c + 1 by omega), Function.update_self]
+  have e2 : Function.update (Function.update h c (h c + 2)) (c + 1) (h (c + 1) + 2) (c + 1)
+      = h (c + 1) + 2 := by rw [Function.update_self]
+  rw [e1, e2]; omega
+
 end Board
 end Tetris
