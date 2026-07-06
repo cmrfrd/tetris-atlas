@@ -861,10 +861,73 @@ def cycle_probe(args):
     return 1
 
 
+# ---------------------------------------------------------------------------
+# Minimal-finals probe: THE decisive statistic for boundary concentration.
+# From a boundary B, solve loosely, then greedily shrink the accept set
+# (drop the worst final; re-solve; keep the shrunken extracted finals) until
+# no single removal is solvable. Reports the (locally) minimal finals set —
+# if it lands near 5-10, a small closed family F is plausible; if it floors
+# at hundreds, subset-oblivious-free adaptive concentration is dead too.
+# ---------------------------------------------------------------------------
+
+def min_finals(B, args, t0):
+    def qual(b):
+        return (holecount(b) <= args.final_holes
+                and max(heights(b)) <= args.final_h
+                and cellcount(b) <= args.final_cells
+                and bump(b) <= args.final_bump)
+
+    ok, _t, finals, memo_n = solve_bag(
+        B, qual, args, deadline=time.time() + 4 * args.solve_budget)
+    if not ok:
+        print(f"  loose solve failed (memo={memo_n})", flush=True)
+        return None
+    S = set(finals)
+    print(f"[{time.time() - t0:5.0f}s] loose finals: {len(S)}", flush=True)
+    rounds = 0
+    while time.time() < t0 + args.budget:
+        rounds += 1
+        improved = False
+        for f in sorted(S, key=score_board, reverse=True):
+            T = frozenset(S - {f})
+            ok2, _t2, fin2, _m2 = solve_bag(
+                B, (lambda b, _T=T: b in _T), args, strict_set=T,
+                deadline=time.time() + args.solve_budget)
+            if ok2:
+                S = set(fin2)
+                improved = True
+                print(f"[{time.time() - t0:5.0f}s] shrink round {rounds}: "
+                      f"finals={len(S)}", flush=True)
+                break
+        if not improved:
+            break
+    return S
+
+
+def minfinals_probe(args):
+    t0 = time.time()
+    print("boundary: EMPTY", flush=True)
+    S = min_finals(EMPTY, args, t0)
+    if S is None:
+        return 1
+    print(f"MINIMAL(ish) finals from EMPTY: {len(S)}", flush=True)
+    for f in sorted(S, key=score_board)[:12]:
+        print(f"  h={heights(f)} cells={cellcount(f)} holes={holecount(f)}")
+    # probe one second-generation boundary too
+    nxt = sorted(S, key=score_board)[0]
+    print(f"boundary: best final h={heights(nxt)}", flush=True)
+    S2 = min_finals(nxt, args, t0)
+    if S2 is not None:
+        print(f"MINIMAL(ish) finals from it: {len(S2)}", flush=True)
+        both = S & S2
+        print(f"overlap with first set: {len(both)}", flush=True)
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", choices=("graph", "closure", "adaptive",
-                                       "family", "cycle"),
+                                       "family", "cycle", "minfinals"),
                     default="closure")
     ap.add_argument("--budget", type=float, default=300.0)
     ap.add_argument("--phase-budget", type=float, default=30.0)
@@ -907,6 +970,8 @@ def main():
         return family_gfp(args)
     if args.mode == "cycle":
         return cycle_probe(args)
+    if args.mode == "minfinals":
+        return minfinals_probe(args)
     return closure_search(args)
 
 
