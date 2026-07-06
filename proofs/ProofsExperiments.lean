@@ -13,6 +13,9 @@ import Proofs.Experiments.WqoCarrier
 import Proofs.Experiments.HoleyCarrier
 import Proofs.Experiments.AbstractSafe
 import Proofs.Experiments.MatrixPowerSurvival
+-- T1: the cooperative lasso — first concrete ∃π SurvivesForever init witness
+-- (35-placement init→init loop, checkTable + native_decide).
+import Proofs.Experiments.CooperativeLasso
 import Proofs.Experiments.Scratch.RoutePhase.Probe
 import Proofs.Experiments.Scratch.RouteSurface.Probe
 
