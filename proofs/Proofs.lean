@@ -33,6 +33,7 @@ import Proofs.Invariants.HoledSkyline
 
 -- Survival — policy / trace / cycle vocabulary
 import Proofs.Survival.Survival
+import Proofs.Survival.Lasso
 
 -- Safety — safe-set GFP, Atlas, the solvability reduction, computable iteration, obstructions
 import Proofs.Safety.Adversarial
