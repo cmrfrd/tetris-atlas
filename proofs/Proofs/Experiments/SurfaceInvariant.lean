@@ -362,38 +362,11 @@ theorem card_clearLines_skyline {cfg : GameConfig} {h : ℕ → ℕ} {m : ℕ}
     exact Nat.sub_add_cancel (hm j (Finset.mem_range.mp hj))
   omega
 
-/-- **Line clears never raise a column.** Every surviving cell is either filtered
-out (its row was full) or shifted strictly *down* by the count of full rows below
-it, so the post-clear height of any column is at most its pre-clear height. This
-is the structural height-monotonicity fact underlying every per-bag height
-bound — placements push heights up, clears only pull them back down — and unlike
-the skyline-specialised `clearLines_skyline` it holds for *arbitrary* boards,
-holes included. Proved cell-wise (no `decide`). -/
-theorem colHeight_clearLines_le {cfg : GameConfig} (b : Board) (j : ℕ) :
-    Board.colHeight (Board.clearLines cfg b) j ≤ Board.colHeight b j := by
-  unfold Board.colHeight
-  apply Finset.sup_le
-  intro r hr
-  unfold Board.colRows at hr
-  rw [Finset.mem_image] at hr
-  obtain ⟨c, hc, hcr⟩ := hr
-  rw [Finset.mem_filter] at hc
-  obtain ⟨hcmem, hcj⟩ := hc
-  unfold Board.clearLines at hcmem
-  rw [Finset.mem_image] at hcmem
-  obtain ⟨p, hp, hpeq⟩ := hcmem
-  rw [Finset.mem_filter] at hp
-  obtain ⟨hpb, -⟩ := hp
-  rw [← hpeq] at hcj hcr
-  have hpj : p.1 = j := by simpa using hcj
-  have hs_mem : p.2 ∈ Board.colRows b j := by
-    unfold Board.colRows
-    rw [Finset.mem_image]
-    exact ⟨p, Finset.mem_filter.mpr ⟨hpb, hpj⟩, rfl⟩
-  have hle : p.2 + 1 ≤ (Board.colRows b j).sup (· + 1) :=
-    Finset.le_sup (f := (· + 1)) hs_mem
-  have hrle : r = p.2 - Board.clearedBelow cfg b p.2 := by simpa using hcr.symm
-  omega
+-- `Tetris.Board.colHeight_clearLines_le` (line clears never raise a column, for
+-- arbitrary boards) is imported from `Proofs.Invariants.GameplayExtra`. A local
+-- duplicate declared here (implicit `cfg`) collided with the import ("already
+-- declared") and reddened the file; it was removed and the two usages below now
+-- call the imported version with `cfg` explicit.
 
 /-- **Per-step height bound.** After hard-dropping a piece and clearing lines,
 every column's height is at most the max of its pre-placement height and the
@@ -406,7 +379,7 @@ theorem colHeight_applyStep_le_max {cfg : GameConfig} (b : Board) (pl : Placemen
     (j : ℕ) :
     colHeight (pl.applyStep cfg b) j ≤ max (colHeight b j) (colHeight (pl.dropped b) j) := by
   rw [Placement.applyStep_eq_clearLines_place]
-  refine le_trans (Board.colHeight_clearLines_le (pl.place b) j) ?_
+  refine le_trans (Board.colHeight_clearLines_le cfg (pl.place b) j) ?_
   rw [Placement.place_eq_union_dropped]
   exact le_of_eq (colHeight_union b (pl.dropped b) j)
 
@@ -3072,7 +3045,7 @@ theorem maxColHeight_clearLines_le {cfg : GameConfig} (b : Board) :
   unfold maxColHeight
   apply Finset.sup_le
   intro j hj
-  exact le_trans (colHeight_clearLines_le b j) (Finset.le_sup (f := colHeight b) hj)
+  exact le_trans (colHeight_clearLines_le cfg b j) (Finset.le_sup (f := colHeight b) hj)
 
 /-- **Line clears never increase the cell count.** `clearLines` keeps only the
 non-full cells (a `filter`, hence a subset of the board) and maps them down under
