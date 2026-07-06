@@ -184,5 +184,66 @@ theorem foldl_place_perm_of_pairwise {l1 l2 : List Placement} (hp : l1.Perm l2)
     l1.foldl Placement.place b = l2.foldl Placement.place b :=
   foldl_place_perm hp (hd.forall (fun _ _ h => h.symm)) b
 
+/-- **Every piece shape has a bottom cell**: some cell of `shapeUp` sits at
+relative height `0`. This is what makes hard drops rest on the stack — and
+what anchors the shift-equivariance below (the drop offset is attained at a
+bottom cell's column, so a uniform surface shift never truncates away). -/
+theorem shapeUp_exists_bottom : ∀ (p : Piece) (r : Rotation),
+    ∃ c ∈ p.shapeUp r, c.2 = 0 := by
+  decide
+
+/-- **Shift-equivariance of the hard-drop offset.** On a skyline uniformly
+lowered by `m` (with every footprint column at least `m` high and in range),
+a placement's drop offset drops by exactly `m`. With landing cells
+`(col + c.1, dropOffset + c.2)`, this says the piece lands exactly `m`
+lower — the algebraic content of "a drain-style uniform clear commutes with
+subsequent local placements". -/
+theorem dropOffset_skyline_sub (cfg : GameConfig) (h : ℕ → ℕ) (m : ℕ)
+    (pl : Placement)
+    (hcols : ∀ c ∈ pl.shapeUp, pl.col + c.1 < cfg.cols)
+    (hm : ∀ c ∈ pl.shapeUp, m ≤ h (pl.col + c.1)) :
+    pl.dropOffset (Board.skyline cfg (fun j => h j - m)) + m
+      = pl.dropOffset (Board.skyline cfg h) := by
+  have hsup : ∀ (H : ℕ → ℕ), pl.dropOffset (Board.skyline cfg H)
+      = pl.shapeUp.sup (fun c => H (pl.col + c.1) - c.2) := by
+    intro H
+    rw [dropOffset_eq_sup]
+    refine Finset.sup_congr rfl fun c hc => ?_
+    simp only [Board.colHeight_skyline (hcols c hc)]
+  rw [hsup, hsup]
+  obtain ⟨c₀, hc₀, hc₀0⟩ := shapeUp_exists_bottom pl.piece pl.rot
+  have hc₀' : c₀ ∈ pl.shapeUp := hc₀
+  -- the original sup is at least m (bottom-cell column is ≥ m high)
+  have hbig : m ≤ pl.shapeUp.sup (fun c => h (pl.col + c.1) - c.2) := by
+    refine le_trans ?_ (Finset.le_sup (f := fun c => h (pl.col + c.1) - c.2) hc₀')
+    rw [hc₀0]
+    exact le_trans (hm c₀ hc₀') (le_of_eq (Nat.sub_zero _).symm)
+  -- pointwise: (h j - m) - u = (h j - u) - m
+  have hpt : ∀ c ∈ pl.shapeUp,
+      (fun c => (h (pl.col + c.1) - m) - c.2) c
+        = (fun c => h (pl.col + c.1) - c.2) c - m := by
+    intro c _
+    simp only [Nat.sub_sub]
+    omega
+  rw [Finset.sup_congr rfl hpt]
+  -- sup of (f - m) = (sup f) - m, then + m cancels since sup f ≥ m
+  have hsub : pl.shapeUp.sup (fun c => (fun c => h (pl.col + c.1) - c.2) c - m)
+      = pl.shapeUp.sup (fun c => h (pl.col + c.1) - c.2) - m := by
+    refine le_antisymm ?_ ?_
+    · refine Finset.sup_le fun c hc => ?_
+      exact Nat.sub_le_sub_right
+        (Finset.le_sup (f := fun c => h (pl.col + c.1) - c.2) hc) m
+    · rw [Nat.sub_le_iff_le_add]
+      refine Finset.sup_le fun c hc => ?_
+      by_cases hcm : m ≤ h (pl.col + c.1) - c.2
+      · calc h (pl.col + c.1) - c.2
+            = (h (pl.col + c.1) - c.2 - m) + m := (Nat.sub_add_cancel hcm).symm
+          _ ≤ _ + m := by
+              exact Nat.add_le_add_right
+                (Finset.le_sup
+                  (f := fun c => (fun c => h (pl.col + c.1) - c.2) c - m) hc) m
+      · exact le_trans (le_of_lt (Nat.lt_of_not_le hcm)) (Nat.le_add_left m _)
+  rw [hsub, Nat.sub_add_cancel hbig]
+
 end Placement
 end Tetris
