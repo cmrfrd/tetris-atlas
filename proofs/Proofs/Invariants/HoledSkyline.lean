@@ -590,5 +590,48 @@ theorem colHeight_debtBoard {cfg : GameConfig} {h : ℕ → ℕ} {ho : Option Co
     · rw [colHeight_skyline hj, if_pos hj]
     · rw [colHeight_skyline_eq_zero (by omega), if_neg hj]
 
+/-- **Hole creation: the S-on-flat bootstrap edge (skyline → holedSkyline).**
+Placing a horizontal S on a flat surface `skyline (fun _ => base)` is *non-flush*:
+it seats flush in columns `col, col+1` but its top-right cell overhangs column
+`col+2`, burying exactly the cell `(col+2, base)` and producing a debt-1
+`holedSkyline`. This is the missing skyline→holedSkyline transition — the
+empty-board `S`-first bootstrap is the `base = 0` instance — completing the
+debt-1 placement algebra beside `place_flush_skyline` (skyline→skyline),
+`place_holedSkyline` (holedSkyline→holedSkyline), and the clearing laws
+(holedSkyline→skyline). It is a transition-algebra brick only: it does not close
+any invariant; the `DebtCertificate.step` all-orders closure (crux #66/#72)
+remains the open obligation. -/
+theorem place_horizS_flat_eq_holedSkyline (cfg : GameConfig) (base col : ℕ)
+    (hcol : col + 2 < cfg.cols) :
+    ({ piece := Piece.S, rot := 0, col := col } : Placement).place
+        (skyline cfg (fun _ => base))
+      = holedSkyline cfg
+          (fun j => if j = col then base + 1
+                    else if j = col + 1 then base + 2
+                    else if j = col + 2 then base + 2 else base)
+          (col + 2, base) := by
+  have hsh : ({ piece := Piece.S, rot := 0, col := col } : Placement).shapeUp
+      = {((0 : ℕ), (0 : ℕ)), (1, 0), (1, 1), (2, 1)} :=
+    shapeUp_horizS col 0 (by decide)
+  have hc0 : col + 0 < cfg.cols := by omega
+  have hc1 : col + 1 < cfg.cols := by omega
+  have hd : ({ piece := Piece.S, rot := 0, col := col } : Placement).dropOffset
+      (skyline cfg (fun _ => base)) = base := by
+    rw [Placement.dropOffset_eq_sup, hsh]
+    simp only [Finset.sup_insert, Finset.sup_singleton,
+      colHeight_skyline hc0, colHeight_skyline hc1, colHeight_skyline hcol]
+    omega
+  have hdr : ({ piece := Piece.S, rot := 0, col := col } : Placement).dropped
+      (skyline cfg (fun _ => base))
+      = {(col, base), (col + 1, base), (col + 1, base + 1), (col + 2, base + 1)} := by
+    rw [Placement.dropped_eq_image, hsh, hd]
+    simp only [Finset.image_insert, Finset.image_singleton]
+    norm_num
+  rw [Placement.place_eq_union_dropped, hdr]
+  ext ⟨a, b⟩
+  simp only [Finset.mem_union, mem_skyline', mem_holedSkyline, Finset.mem_insert,
+    Finset.mem_singleton, ne_eq, Prod.mk.injEq]
+  split_ifs <;> omega
+
 end Board
 end Tetris
