@@ -27,6 +27,19 @@ Downstream (later files in the route): all `7!` within-bag arrival orders of a
 zone-local response collapse to one canonical trajectory, so a cooperative
 witness loop certifies the adversarial bag — the reduction that turns the
 cooperative lasso into an ingredient of the adversarial proof.
+
+**Measured status of the route (2026-07, `scripts/find_confluent_atlas.py`):**
+the theorems here are sound and general, but a FULLY zone-local bag response
+does not exist on 10 columns — minimum piece footprints sum to 13 > 10, and
+cross-piece two-column box pairs are geometrically impossible (a `2×4` box
+tiles only as `L+L`/`J+J`/`O+O`/`I+I`), so every bag forces order-forks
+somewhere. Adaptive per-state play reconverges any single bag easily (branch
+4 suffices empirically, everywhere), but concentrating every order's
+end-of-bag board into a small recurring family fails at every tested design
+scale (`≤ 10³` families all die; the loosest workable boundary predicate has
+a `5.33M`-board universe). So these lemmas certify zone-local SEGMENTS of
+play, not a small closed adversarial table; `TetrisSolvable` is NOT proven
+here, and no `sorry` is used.
 -/
 
 namespace Tetris
