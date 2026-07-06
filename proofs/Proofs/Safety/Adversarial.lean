@@ -537,6 +537,37 @@ theorem LegalSequence.exists_I_lt_seven {s : ℕ → Piece} (h : LegalSequence s
   rw [ha, Finset.mem_singleton] at hmem6
   exact hcon 6 (by omega) (hmem6.trans hI6.symm)
 
+/-- The tail of a legal sequence is legal from the reached bag. -/
+theorem LegalSequenceFrom.tail {initBag : Bag} {s : ℕ → Piece}
+    (h : LegalSequenceFrom initBag s) (m : ℕ) :
+    LegalSequenceFrom (bagAt initBag s m) (fun i => s (m + i)) := by
+  intro n
+  have hb : bagAt (bagAt initBag s m) (fun i => s (m + i)) n = bagAt initBag s (m + n) :=
+    (bagAt_add initBag s m n).symm
+  rw [hb]
+  exact h (m + n)
+
+/-- **7-bag renewal periodicity:** the bag is full at every block boundary. -/
+theorem LegalSequence.bagAt_full_period {s : ℕ → Piece} (h : LegalSequence s) :
+    ∀ k, bagAt Bag.full s (7 * k) = Bag.full := by
+  intro k
+  induction k with
+  | zero => rw [Nat.mul_zero, bagAt_zero]
+  | succ n ih =>
+    have htail : LegalSequence (fun i => s (7 * n + i)) := by
+      have ht := h.tail (7 * n); rw [ih] at ht; exact ht
+    have h7 := htail.bagAt_full_seven
+    rw [show 7 * (n + 1) = 7 * n + 7 from by ring, bagAt_add, ih, h7]
+
+/-- **`I` appears in every bag block** `[7k, 7k+7)` (periodicity + first-block
+fairness); consecutive `I`s are therefore ≤ 13 apart along the whole sequence. -/
+theorem LegalSequence.exists_I_in_block {s : ℕ → Piece} (h : LegalSequence s) (k : ℕ) :
+    ∃ n, 7 * k ≤ n ∧ n < 7 * k + 7 ∧ s n = Piece.I := by
+  have htail : LegalSequence (fun i => s (7 * k + i)) := by
+    have ht := h.tail (7 * k); rw [h.bagAt_full_period k] at ht; exact ht
+  obtain ⟨m, hm, hsm⟩ := htail.exists_I_lt_seven
+  exact ⟨7 * k + m, by omega, by omega, hsm⟩
+
 end Fairness
 
 /-- Every bag at any step is a subset of `Bag.full`. -/
