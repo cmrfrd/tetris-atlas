@@ -859,6 +859,216 @@ theorem exists_debtBoard_step_flat_I (col : ℕ)
           = debtBoard GameConfig.standard h' ho' :=
   ⟨_, _, _, rfl, valid_vertI col hcol, applyStep_flat_vertI col hcol⟩
 
+/-- The flat-bottom T (rotation 2) drop profile. -/
+theorem shapeUp_flatT (c : ℕ) :
+    ({ piece := Piece.T, rot := 2, col := c } : Placement).shapeUp
+      = {((0 : ℕ), (0 : ℕ)), (1, 0), (1, 1), (2, 0)} := by
+  show Piece.shapeUp Piece.T 2 = _
+  decide
+
+/-- **Flush placement of the flat-bottom T on a flat surface.** -/
+theorem place_flatT (cfg : GameConfig) (base col : ℕ) (hcol : col + 2 < cfg.cols) :
+    ({ piece := Piece.T, rot := 2, col := col } : Placement).place
+        (skyline cfg (fun _ => base))
+      = skyline cfg (fun j => if j = col then base + 1 else if j = col + 1 then base + 2
+                              else if j = col + 2 then base + 1 else base) := by
+  have hsh := shapeUp_flatT col
+  have hc0 : col + 0 < cfg.cols := by omega
+  have hc1 : col + 1 < cfg.cols := by omega
+  have hd : ({ piece := Piece.T, rot := 2, col := col } : Placement).dropOffset
+      (skyline cfg (fun _ => base)) = base := by
+    rw [Placement.dropOffset_eq_sup, hsh]
+    simp only [Finset.sup_insert, Finset.sup_singleton,
+      colHeight_skyline hc0, colHeight_skyline hc1, colHeight_skyline hcol]
+    omega
+  have hdr : ({ piece := Piece.T, rot := 2, col := col } : Placement).dropped
+      (skyline cfg (fun _ => base))
+      = {(col, base), (col + 1, base), (col + 1, base + 1), (col + 2, base)} := by
+    rw [Placement.dropped_eq_image, hsh, hd]
+    simp only [Finset.image_insert, Finset.image_singleton]
+    norm_num
+  rw [Placement.place_eq_union_dropped, hdr]
+  ext ⟨a, b⟩
+  simp only [Finset.mem_union, mem_skyline', Finset.mem_insert, Finset.mem_singleton,
+    Prod.mk.injEq]
+  split_ifs <;> omega
+
+/-- **The init-T step, in `DebtCertificate.step` shape** (hole-free). -/
+theorem applyStep_flat_T (col : ℕ) (hcol : col + 2 < GameConfig.standard.cols) :
+    Placement.applyStep GameConfig.standard
+        (debtBoard GameConfig.standard (fun _ => 0) none)
+        { piece := Piece.T, rot := 2, col := col }
+      = debtBoard GameConfig.standard
+          (fun j => if j = col then 0 + 1 else if j = col + 1 then 0 + 2
+                    else if j = col + 2 then 0 + 1 else 0) none := by
+  rw [debtBoard_none, Placement.applyStep_eq_clearLines_place,
+      place_flatT GameConfig.standard 0 col hcol, debtBoard_none]
+  have hfree : ∃ j < GameConfig.standard.cols,
+      (fun j => if j = col then (0 : ℕ) + 1 else if j = col + 1 then 0 + 2
+                else if j = col + 2 then 0 + 1 else 0) j = 0 := by
+    rcases Nat.lt_or_ge col 3 with h | h
+    · exact ⟨9, by decide, by simp only []; split_ifs <;> omega⟩
+    · exact ⟨0, by decide, by simp only []; split_ifs <;> omega⟩
+  rw [clearLines_skyline (m := 0) (fun j _ => Nat.zero_le _) hfree]
+  simp only [Nat.sub_zero]
+
+/-- The flat-bottom T placement is in-bounds when `col + 2 < cols`. -/
+theorem valid_flatT (col : ℕ) (hcol : col + 2 < GameConfig.standard.cols) :
+    ({ piece := Piece.T, rot := 2, col := col } : Placement).Valid GameConfig.standard := by
+  intro cell hcell
+  rw [shapeUp_flatT col] at hcell
+  fin_cases hcell <;> simp_all <;> omega
+
+/-- **`init` has a valid hole-free response to a first `T`.** -/
+theorem exists_debtBoard_step_flat_T (col : ℕ)
+    (hcol : col + 2 < GameConfig.standard.cols) :
+    ∃ (pl : Placement) (h' : ℕ → ℕ) (ho' : Option Coord),
+      pl.piece = Piece.T ∧ pl.Valid GameConfig.standard ∧
+        Placement.applyStep GameConfig.standard
+          (debtBoard GameConfig.standard (fun _ => 0) none) pl
+          = debtBoard GameConfig.standard h' ho' :=
+  ⟨_, _, _, rfl, valid_flatT col hcol, applyStep_flat_T col hcol⟩
+
+/-- The flat-bottom L (rotation 0) drop profile. -/
+theorem shapeUp_flatL (c : ℕ) :
+    ({ piece := Piece.L, rot := 0, col := c } : Placement).shapeUp
+      = {((0 : ℕ), (0 : ℕ)), (1, 0), (2, 0), (2, 1)} := by
+  show Piece.shapeUp Piece.L 0 = _
+  decide
+
+/-- **Flush placement of the flat-bottom L on a flat surface.** -/
+theorem place_flatL (cfg : GameConfig) (base col : ℕ) (hcol : col + 2 < cfg.cols) :
+    ({ piece := Piece.L, rot := 0, col := col } : Placement).place
+        (skyline cfg (fun _ => base))
+      = skyline cfg (fun j => if j = col then base + 1 else if j = col + 1 then base + 1
+                              else if j = col + 2 then base + 2 else base) := by
+  have hsh := shapeUp_flatL col
+  have hc0 : col + 0 < cfg.cols := by omega
+  have hc1 : col + 1 < cfg.cols := by omega
+  have hd : ({ piece := Piece.L, rot := 0, col := col } : Placement).dropOffset
+      (skyline cfg (fun _ => base)) = base := by
+    rw [Placement.dropOffset_eq_sup, hsh]
+    simp only [Finset.sup_insert, Finset.sup_singleton,
+      colHeight_skyline hc0, colHeight_skyline hc1, colHeight_skyline hcol]
+    omega
+  have hdr : ({ piece := Piece.L, rot := 0, col := col } : Placement).dropped
+      (skyline cfg (fun _ => base))
+      = {(col, base), (col + 1, base), (col + 2, base), (col + 2, base + 1)} := by
+    rw [Placement.dropped_eq_image, hsh, hd]
+    simp only [Finset.image_insert, Finset.image_singleton]
+    norm_num
+  rw [Placement.place_eq_union_dropped, hdr]
+  ext ⟨a, b⟩
+  simp only [Finset.mem_union, mem_skyline', Finset.mem_insert, Finset.mem_singleton,
+    Prod.mk.injEq]
+  split_ifs <;> omega
+
+/-- **The init-L step, in `DebtCertificate.step` shape** (hole-free). -/
+theorem applyStep_flat_L (col : ℕ) (hcol : col + 2 < GameConfig.standard.cols) :
+    Placement.applyStep GameConfig.standard
+        (debtBoard GameConfig.standard (fun _ => 0) none)
+        { piece := Piece.L, rot := 0, col := col }
+      = debtBoard GameConfig.standard
+          (fun j => if j = col then 0 + 1 else if j = col + 1 then 0 + 1
+                    else if j = col + 2 then 0 + 2 else 0) none := by
+  rw [debtBoard_none, Placement.applyStep_eq_clearLines_place,
+      place_flatL GameConfig.standard 0 col hcol, debtBoard_none]
+  have hfree : ∃ j < GameConfig.standard.cols,
+      (fun j => if j = col then (0 : ℕ) + 1 else if j = col + 1 then 0 + 1
+                else if j = col + 2 then 0 + 2 else 0) j = 0 := by
+    rcases Nat.lt_or_ge col 3 with h | h
+    · exact ⟨9, by decide, by simp only []; split_ifs <;> omega⟩
+    · exact ⟨0, by decide, by simp only []; split_ifs <;> omega⟩
+  rw [clearLines_skyline (m := 0) (fun j _ => Nat.zero_le _) hfree]
+  simp only [Nat.sub_zero]
+
+/-- The flat-bottom L placement is in-bounds when `col + 2 < cols`. -/
+theorem valid_flatL (col : ℕ) (hcol : col + 2 < GameConfig.standard.cols) :
+    ({ piece := Piece.L, rot := 0, col := col } : Placement).Valid GameConfig.standard := by
+  intro cell hcell
+  rw [shapeUp_flatL col] at hcell
+  fin_cases hcell <;> simp_all <;> omega
+
+/-- **`init` has a valid hole-free response to a first `L`.** -/
+theorem exists_debtBoard_step_flat_L (col : ℕ)
+    (hcol : col + 2 < GameConfig.standard.cols) :
+    ∃ (pl : Placement) (h' : ℕ → ℕ) (ho' : Option Coord),
+      pl.piece = Piece.L ∧ pl.Valid GameConfig.standard ∧
+        Placement.applyStep GameConfig.standard
+          (debtBoard GameConfig.standard (fun _ => 0) none) pl
+          = debtBoard GameConfig.standard h' ho' :=
+  ⟨_, _, _, rfl, valid_flatL col hcol, applyStep_flat_L col hcol⟩
+
+/-- The flat-bottom J (rotation 0) drop profile. -/
+theorem shapeUp_flatJ (c : ℕ) :
+    ({ piece := Piece.J, rot := 0, col := c } : Placement).shapeUp
+      = {((0 : ℕ), (0 : ℕ)), (0, 1), (1, 0), (2, 0)} := by
+  show Piece.shapeUp Piece.J 0 = _
+  decide
+
+/-- **Flush placement of the flat-bottom J on a flat surface.** -/
+theorem place_flatJ (cfg : GameConfig) (base col : ℕ) (hcol : col + 2 < cfg.cols) :
+    ({ piece := Piece.J, rot := 0, col := col } : Placement).place
+        (skyline cfg (fun _ => base))
+      = skyline cfg (fun j => if j = col then base + 2 else if j = col + 1 then base + 1
+                              else if j = col + 2 then base + 1 else base) := by
+  have hsh := shapeUp_flatJ col
+  have hc0 : col + 0 < cfg.cols := by omega
+  have hc1 : col + 1 < cfg.cols := by omega
+  have hd : ({ piece := Piece.J, rot := 0, col := col } : Placement).dropOffset
+      (skyline cfg (fun _ => base)) = base := by
+    rw [Placement.dropOffset_eq_sup, hsh]
+    simp only [Finset.sup_insert, Finset.sup_singleton,
+      colHeight_skyline hc0, colHeight_skyline hc1, colHeight_skyline hcol]
+    omega
+  have hdr : ({ piece := Piece.J, rot := 0, col := col } : Placement).dropped
+      (skyline cfg (fun _ => base))
+      = {(col, base), (col, base + 1), (col + 1, base), (col + 2, base)} := by
+    rw [Placement.dropped_eq_image, hsh, hd]
+    simp only [Finset.image_insert, Finset.image_singleton]
+    norm_num
+  rw [Placement.place_eq_union_dropped, hdr]
+  ext ⟨a, b⟩
+  simp only [Finset.mem_union, mem_skyline', Finset.mem_insert, Finset.mem_singleton,
+    Prod.mk.injEq]
+  split_ifs <;> omega
+
+/-- **The init-J step, in `DebtCertificate.step` shape** (hole-free). -/
+theorem applyStep_flat_J (col : ℕ) (hcol : col + 2 < GameConfig.standard.cols) :
+    Placement.applyStep GameConfig.standard
+        (debtBoard GameConfig.standard (fun _ => 0) none)
+        { piece := Piece.J, rot := 0, col := col }
+      = debtBoard GameConfig.standard
+          (fun j => if j = col then 0 + 2 else if j = col + 1 then 0 + 1
+                    else if j = col + 2 then 0 + 1 else 0) none := by
+  rw [debtBoard_none, Placement.applyStep_eq_clearLines_place,
+      place_flatJ GameConfig.standard 0 col hcol, debtBoard_none]
+  have hfree : ∃ j < GameConfig.standard.cols,
+      (fun j => if j = col then (0 : ℕ) + 2 else if j = col + 1 then 0 + 1
+                else if j = col + 2 then 0 + 1 else 0) j = 0 := by
+    rcases Nat.lt_or_ge col 3 with h | h
+    · exact ⟨9, by decide, by simp only []; split_ifs <;> omega⟩
+    · exact ⟨0, by decide, by simp only []; split_ifs <;> omega⟩
+  rw [clearLines_skyline (m := 0) (fun j _ => Nat.zero_le _) hfree]
+  simp only [Nat.sub_zero]
+
+/-- The flat-bottom J placement is in-bounds when `col + 2 < cols`. -/
+theorem valid_flatJ (col : ℕ) (hcol : col + 2 < GameConfig.standard.cols) :
+    ({ piece := Piece.J, rot := 0, col := col } : Placement).Valid GameConfig.standard := by
+  intro cell hcell
+  rw [shapeUp_flatJ col] at hcell
+  fin_cases hcell <;> simp_all <;> omega
+
+/-- **`init` has a valid hole-free response to a first `J`.** -/
+theorem exists_debtBoard_step_flat_J (col : ℕ)
+    (hcol : col + 2 < GameConfig.standard.cols) :
+    ∃ (pl : Placement) (h' : ℕ → ℕ) (ho' : Option Coord),
+      pl.piece = Piece.J ∧ pl.Valid GameConfig.standard ∧
+        Placement.applyStep GameConfig.standard
+          (debtBoard GameConfig.standard (fun _ => 0) none) pl
+          = debtBoard GameConfig.standard h' ho' :=
+  ⟨_, _, _, rfl, valid_flatJ col hcol, applyStep_flat_J col hcol⟩
+
 /-- The horizontal-S placement is in-bounds when `col + 2 < cols`. -/
 theorem valid_horizS (col : ℕ) (hcol : col + 2 < GameConfig.standard.cols) :
     ({ piece := Piece.S, rot := 0, col := col } : Placement).Valid GameConfig.standard := by
@@ -897,6 +1107,32 @@ theorem exists_debtBoard_step_flat_Z (col : ℕ)
           (debtBoard GameConfig.standard (fun _ => 0) none) pl
           = debtBoard GameConfig.standard h' ho' :=
   ⟨_, _, _, rfl, valid_horizZ col hcol, applyStep_flat_horizZ col hcol⟩
+
+/-- **`init` is a fully live debt-1 state: it has a valid debt-≤1 response to
+EVERY piece.** For each of the 7 pieces `p`, there is a valid placement of `p`
+whose full move from the empty board lands in a `debtBoard` (debt ≤ 1). This is
+the COMPLETE base case of `DebtCertificate.step` conjuncts (1)–(3) at `init`:
+S/Z answered at debt 1 (a buried cell), O/I/T/L/J answered hole-free at debt 0.
+
+The one obligation NOT established is conjunct (4): that these successors lie in
+a *closed* family `P` (`P (Bag.full.draw p) h' ho'`). Constructing such a `P` —
+the all-orders adversarial closure, crux #66/#72 — is the open keystone, and no
+such `P` is known. So this does not prove `TetrisSolvable`; it exhausts exactly
+the part of `step` that is discharge-able without the closed-family design. -/
+theorem init_responds_to_all_pieces (p : Piece) :
+    ∃ (pl : Placement) (h' : ℕ → ℕ) (ho' : Option Coord),
+      pl.piece = p ∧ pl.Valid GameConfig.standard ∧
+        Placement.applyStep GameConfig.standard
+          (debtBoard GameConfig.standard (fun _ => 0) none) pl
+          = debtBoard GameConfig.standard h' ho' := by
+  cases p with
+  | O => exact exists_debtBoard_step_flat_O 0 (by decide)
+  | I => exact exists_debtBoard_step_flat_I 0 (by decide)
+  | S => exact exists_debtBoard_step_flat_S 0 (by decide)
+  | Z => exact exists_debtBoard_step_flat_Z 0 (by decide)
+  | T => exact exists_debtBoard_step_flat_T 0 (by decide)
+  | L => exact exists_debtBoard_step_flat_L 0 (by decide)
+  | J => exact exists_debtBoard_step_flat_J 0 (by decide)
 
 end Board
 end Tetris
