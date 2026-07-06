@@ -670,5 +670,59 @@ theorem place_horizZ_flat_eq_holedSkyline (cfg : GameConfig) (base col : ℕ)
     Finset.mem_singleton, ne_eq, Prod.mk.injEq]
   split_ifs <;> omega
 
+/-- **The init-S bootstrap step, in `DebtCertificate.step` shape.** From the
+empty board (`debtBoard (fun _ => 0) none`), announcing S, the full move
+`applyStep` (drop + clear) lands in the debt-1 board that buries `(col+2, 0)` —
+no rows clear (the empty board has none full), so `applyStep = place`. This is
+the concrete first move of the empty-board bootstrap in the exact
+`applyStep (debtBoard …) = debtBoard …` form the certificate's `step` demands.
+Still a bootstrap brick: it is one `(state, piece)` pair, and the family `P` it
+must land inside (the closure of crux #66/#72) is not constructed. -/
+theorem applyStep_flat_horizS (col : ℕ)
+    (hcol : col + 2 < GameConfig.standard.cols) :
+    Placement.applyStep GameConfig.standard
+        (debtBoard GameConfig.standard (fun _ => 0) none)
+        { piece := Piece.S, rot := 0, col := col }
+      = debtBoard GameConfig.standard
+          (fun j => if j = col then 0 + 1 else if j = col + 1 then 0 + 2
+                    else if j = col + 2 then 0 + 2 else 0)
+          (some (col + 2, 0)) := by
+  rw [debtBoard_none, Placement.applyStep_eq_clearLines_place,
+      place_horizS_flat_eq_holedSkyline GameConfig.standard 0 col hcol, debtBoard_some]
+  have hfree : ∃ j < GameConfig.standard.cols,
+      (fun j => if j = col then (0 : ℕ) + 1 else if j = col + 1 then 0 + 2
+                else if j = col + 2 then 0 + 2 else 0) j = 0 := by
+    rcases Nat.lt_or_ge col 3 with h | h
+    · exact ⟨9, by decide, by simp only []; split_ifs <;> omega⟩
+    · exact ⟨0, by decide, by simp only []; split_ifs <;> omega⟩
+  rw [clearLines_holedSkyline_of_le (m := 0) hcol (fun j _ => Nat.zero_le _) hfree
+        (Nat.zero_le _)]
+  simp only [Nat.sub_zero]
+
+/-- **The init-Z bootstrap step**, the mirror of `applyStep_flat_horizS`: from
+the empty board, announcing Z, the full move buries `(col, 0)`. Together the two
+give the empty board's response, in `DebtCertificate.step` shape, to each of the
+two pieces that force a hole from flat. -/
+theorem applyStep_flat_horizZ (col : ℕ)
+    (hcol : col + 2 < GameConfig.standard.cols) :
+    Placement.applyStep GameConfig.standard
+        (debtBoard GameConfig.standard (fun _ => 0) none)
+        { piece := Piece.Z, rot := 0, col := col }
+      = debtBoard GameConfig.standard
+          (fun j => if j = col then 0 + 2 else if j = col + 1 then 0 + 2
+                    else if j = col + 2 then 0 + 1 else 0)
+          (some (col, 0)) := by
+  rw [debtBoard_none, Placement.applyStep_eq_clearLines_place,
+      place_horizZ_flat_eq_holedSkyline GameConfig.standard 0 col hcol, debtBoard_some]
+  have hfree : ∃ j < GameConfig.standard.cols,
+      (fun j => if j = col then (0 : ℕ) + 2 else if j = col + 1 then 0 + 2
+                else if j = col + 2 then 0 + 1 else 0) j = 0 := by
+    rcases Nat.lt_or_ge col 3 with h | h
+    · exact ⟨9, by decide, by simp only []; split_ifs <;> omega⟩
+    · exact ⟨0, by decide, by simp only []; split_ifs <;> omega⟩
+  rw [clearLines_holedSkyline_of_le (m := 0) (show col < GameConfig.standard.cols by omega)
+        (fun j _ => Nat.zero_le _) hfree (Nat.zero_le _)]
+  simp only [Nat.sub_zero]
+
 end Board
 end Tetris
