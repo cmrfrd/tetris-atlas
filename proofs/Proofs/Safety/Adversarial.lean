@@ -568,6 +568,18 @@ theorem LegalSequence.exists_I_in_block {s : ℕ → Piece} (h : LegalSequence s
   obtain ⟨m, hm, hsm⟩ := htail.exists_I_lt_seven
   exact ⟨7 * k + m, by omega, by omega, hsm⟩
 
+/-- **Windowed fairness:** in any legal sequence an `I` is drawn within every
+window of 14 consecutive indices — `∃ m ∈ [n, n+14), s m = I`. Equivalently
+consecutive `I`s are ≤ 13 apart. This is the exact liveness bound a height-drain
+ranking argument consumes: the drain piece never lags more than 14 steps. -/
+theorem LegalSequence.exists_I_within {s : ℕ → Piece} (h : LegalSequence s) (n : ℕ) :
+    ∃ m, n ≤ m ∧ m < n + 14 ∧ s m = Piece.I := by
+  obtain ⟨p, hp1, hp2, hpI⟩ := h.exists_I_in_block (n / 7)
+  by_cases hpn : n ≤ p
+  · exact ⟨p, hpn, by omega, hpI⟩
+  · obtain ⟨q, hq1, hq2, hqI⟩ := h.exists_I_in_block (n / 7 + 1)
+    exact ⟨q, by omega, by omega, hqI⟩
+
 end Fairness
 
 /-- Every bag at any step is a subset of `Bag.full`. -/
