@@ -793,6 +793,72 @@ theorem exists_debtBoard_step_flat_O (col : ℕ)
           = debtBoard GameConfig.standard h' ho' :=
   ⟨_, _, _, rfl, valid_O col hcol, applyStep_flat_O col hcol⟩
 
+/-- **Flush placement of a vertical I (the drain piece) on a flat surface.** The
+1×4 vertical I seats flush, raising column `col` by 4 with no hole. -/
+theorem place_vertI_flat (cfg : GameConfig) (base col : ℕ) (hcol : col < cfg.cols) :
+    ({ piece := Piece.I, rot := 1, col := col } : Placement).place
+        (skyline cfg (fun _ => base))
+      = skyline cfg (fun j => if j = col then base + 4 else base) := by
+  have hsh : ({ piece := Piece.I, rot := 1, col := col } : Placement).shapeUp
+      = {((0 : ℕ), (0 : ℕ)), (0, 1), (0, 2), (0, 3)} := shapeUp_vertI' col 1 (by decide)
+  have hc0 : col + 0 < cfg.cols := by omega
+  have hd : ({ piece := Piece.I, rot := 1, col := col } : Placement).dropOffset
+      (skyline cfg (fun _ => base)) = base := by
+    rw [Placement.dropOffset_eq_sup, hsh]
+    simp only [Finset.sup_insert, Finset.sup_singleton, colHeight_skyline hc0]
+    omega
+  have hdr : ({ piece := Piece.I, rot := 1, col := col } : Placement).dropped
+      (skyline cfg (fun _ => base))
+      = {(col, base), (col, base + 1), (col, base + 2), (col, base + 3)} := by
+    rw [Placement.dropped_eq_image, hsh, hd]
+    simp only [Finset.image_insert, Finset.image_singleton]
+    norm_num
+  rw [Placement.place_eq_union_dropped, hdr]
+  ext ⟨a, b⟩
+  simp only [Finset.mem_union, mem_skyline', Finset.mem_insert, Finset.mem_singleton,
+    Prod.mk.injEq]
+  split_ifs <;> omega
+
+/-- **The init-I drain step, in `DebtCertificate.step` shape**: from the empty
+board, announcing I, the vertical drop lands in a hole-free `debtBoard … none`
+(column `col` at height 4). -/
+theorem applyStep_flat_vertI (col : ℕ) (hcol : col < GameConfig.standard.cols) :
+    Placement.applyStep GameConfig.standard
+        (debtBoard GameConfig.standard (fun _ => 0) none)
+        { piece := Piece.I, rot := 1, col := col }
+      = debtBoard GameConfig.standard
+          (fun j => if j = col then 0 + 4 else 0) none := by
+  rw [debtBoard_none, Placement.applyStep_eq_clearLines_place,
+      place_vertI_flat GameConfig.standard 0 col hcol, debtBoard_none]
+  have hfree : ∃ j < GameConfig.standard.cols,
+      (fun j => if j = col then (0 : ℕ) + 4 else 0) j = 0 := by
+    rcases Nat.eq_zero_or_pos col with h | h
+    · exact ⟨1, by decide, by simp only []; split_ifs <;> omega⟩
+    · exact ⟨0, by decide, by simp only []; split_ifs <;> omega⟩
+  rw [clearLines_skyline (m := 0) (fun j _ => Nat.zero_le _) hfree]
+  simp only [Nat.sub_zero]
+
+/-- The vertical-I placement is in-bounds when `col < cols`. -/
+theorem valid_vertI (col : ℕ) (hcol : col < GameConfig.standard.cols) :
+    ({ piece := Piece.I, rot := 1, col := col } : Placement).Valid GameConfig.standard := by
+  intro cell hcell
+  rw [show ({ piece := Piece.I, rot := 1, col := col } : Placement).shapeUp
+        = {((0 : ℕ), (0 : ℕ)), (0, 1), (0, 2), (0, 3)} from shapeUp_vertI' col 1 (by decide)]
+    at hcell
+  fin_cases hcell <;> simp_all <;> omega
+
+/-- **`init` has a valid response to a first `I`** (the drain piece) —
+`DebtCertificate.step` conjuncts (1)–(3), landing hole-free. Same open residual
+(conjunct 4) as S/Z/O. -/
+theorem exists_debtBoard_step_flat_I (col : ℕ)
+    (hcol : col < GameConfig.standard.cols) :
+    ∃ (pl : Placement) (h' : ℕ → ℕ) (ho' : Option Coord),
+      pl.piece = Piece.I ∧ pl.Valid GameConfig.standard ∧
+        Placement.applyStep GameConfig.standard
+          (debtBoard GameConfig.standard (fun _ => 0) none) pl
+          = debtBoard GameConfig.standard h' ho' :=
+  ⟨_, _, _, rfl, valid_vertI col hcol, applyStep_flat_vertI col hcol⟩
+
 /-- The horizontal-S placement is in-bounds when `col + 2 < cols`. -/
 theorem valid_horizS (col : ℕ) (hcol : col + 2 < GameConfig.standard.cols) :
     ({ piece := Piece.S, rot := 0, col := col } : Placement).Valid GameConfig.standard := by
