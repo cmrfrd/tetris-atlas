@@ -724,5 +724,44 @@ theorem applyStep_flat_horizZ (col : ℕ)
         (fun j _ => Nat.zero_le _) hfree (Nat.zero_le _)]
   simp only [Nat.sub_zero]
 
+/-- The horizontal-S placement is in-bounds when `col + 2 < cols`. -/
+theorem valid_horizS (col : ℕ) (hcol : col + 2 < GameConfig.standard.cols) :
+    ({ piece := Piece.S, rot := 0, col := col } : Placement).Valid GameConfig.standard := by
+  intro cell hcell
+  rw [shapeUp_horizS col 0 (by decide)] at hcell
+  fin_cases hcell <;> simp_all <;> omega
+
+/-- The horizontal-Z placement is in-bounds when `col + 2 < cols`. -/
+theorem valid_horizZ (col : ℕ) (hcol : col + 2 < GameConfig.standard.cols) :
+    ({ piece := Piece.Z, rot := 0, col := col } : Placement).Valid GameConfig.standard := by
+  intro cell hcell
+  rw [shapeUp_horizZ col 0 (by decide)] at hcell
+  fin_cases hcell <;> simp_all <;> omega
+
+/-- **`init` has a valid debt-1 response to a first `S`** — the first three
+conjuncts of `DebtCertificate.step` for the pair `(init, S)`: a valid S placement
+whose full move lands in a `debtBoard`. The missing fourth conjunct is
+`P (bag.draw S) h' ho'`, membership in the *closed* family `P` — exactly what
+crux #66/#72 leaves open (no such `P` is known). -/
+theorem exists_debtBoard_step_flat_S (col : ℕ)
+    (hcol : col + 2 < GameConfig.standard.cols) :
+    ∃ (pl : Placement) (h' : ℕ → ℕ) (ho' : Option Coord),
+      pl.piece = Piece.S ∧ pl.Valid GameConfig.standard ∧
+        Placement.applyStep GameConfig.standard
+          (debtBoard GameConfig.standard (fun _ => 0) none) pl
+          = debtBoard GameConfig.standard h' ho' :=
+  ⟨_, _, _, rfl, valid_horizS col hcol, applyStep_flat_horizS col hcol⟩
+
+/-- **`init` has a valid debt-1 response to a first `Z`** (the `Z` mirror of
+`exists_debtBoard_step_flat_S`). -/
+theorem exists_debtBoard_step_flat_Z (col : ℕ)
+    (hcol : col + 2 < GameConfig.standard.cols) :
+    ∃ (pl : Placement) (h' : ℕ → ℕ) (ho' : Option Coord),
+      pl.piece = Piece.Z ∧ pl.Valid GameConfig.standard ∧
+        Placement.applyStep GameConfig.standard
+          (debtBoard GameConfig.standard (fun _ => 0) none) pl
+          = debtBoard GameConfig.standard h' ho' :=
+  ⟨_, _, _, rfl, valid_horizZ col hcol, applyStep_flat_horizZ col hcol⟩
+
 end Board
 end Tetris
