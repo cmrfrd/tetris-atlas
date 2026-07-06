@@ -1230,5 +1230,22 @@ theorem vertI_drain (cfg : GameConfig) (h : ℕ → ℕ) (w : ℕ) (hw : w < cfg
   · subst hjw; rw [Function.update_self, if_pos rfl]
   · rw [Function.update_of_ne hjw, if_neg hjw]
 
+/-- **Locality of `colHeight` under a placement.** A placement only touches its
+own columns `pl.col + cell.1`; a column `j` disjoint from all of them keeps its
+height. This is the basis of "a piece placed away from a window does not disturb
+it" — the ingredient (with self-reproduction) for keeping several windows alive
+simultaneously between drains. -/
+theorem colHeight_place_of_notMem_cols (b : Board) (pl : Placement) (j : ℕ)
+    (hj : ∀ cell ∈ pl.shapeUp, j ≠ pl.col + cell.1) :
+    (pl.place b).colHeight j = b.colHeight j := by
+  have he : ∀ x ∈ pl.dropped b, ¬ (x.1 = j) := by
+    intro x hx
+    rw [Placement.dropped_eq_image, Finset.mem_image] at hx
+    obtain ⟨cell, hcell, rfl⟩ := hx
+    exact fun hc => hj cell hcell hc.symm
+  unfold Board.colHeight Board.colRows
+  rw [Placement.place_eq_union_dropped, Finset.filter_union,
+      Finset.filter_false_of_mem he, Finset.union_empty]
+
 end Board
 end Tetris
