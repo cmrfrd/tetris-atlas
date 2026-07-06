@@ -1295,5 +1295,14 @@ theorem vertI_drain_preserves_step {cfg : GameConfig} {h : ℕ → ℕ} {w c : �
   simp only [if_neg hcw, if_neg hc1w]
   omega
 
+/-- **Well upkeep.** The reservoir reserves an empty column `w` (the well) for
+the I-drain. Any piece placed away from `w` keeps it empty (locality), and the
+drain refills it to 0 (`vertI_drain`) — so between and across drains the well is
+maintained, provided the fillers are seated off it. -/
+theorem well_preserved {b : Board} (pl : Placement) {w : ℕ} (hw0 : b.colHeight w = 0)
+    (hj : ∀ cell ∈ pl.shapeUp, w ≠ pl.col + cell.1) :
+    (pl.place b).colHeight w = 0 := by
+  rw [colHeight_place_of_notMem_cols b pl w hj, hw0]
+
 end Board
 end Tetris
