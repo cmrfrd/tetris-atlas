@@ -1349,5 +1349,21 @@ theorem place_O_pair_reproduces {cfg : GameConfig} {h : ℕ → ℕ} {c : ℕ}
   rw [Function.update_of_ne (show c ≠ c + 1 by omega), Function.update_self,
       Function.update_self]
 
+/-- **Any piece placed off a window preserves it** (general locality corollary).
+A unit step `colHeight b c = colHeight b (c+1) + 1` — a roughness window — is
+preserved by ANY placement whose columns avoid both `c` and `c+1`. Generalises
+`place_vertS_preserves_disjoint_Zwindow` from the specific S to every piece: the
+fillers, drains, and the other roughness piece all leave a distant window
+untouched. So on a multi-window surface, a window breaks ONLY if a piece is
+seated directly on it — which is what the packing must avoid (crux #66/#72). -/
+theorem colHeight_step_preserved_of_disjoint {b : Board} (pl : Placement) {c : ℕ}
+    (hjc : ∀ cell ∈ pl.shapeUp, c ≠ pl.col + cell.1)
+    (hjc1 : ∀ cell ∈ pl.shapeUp, c + 1 ≠ pl.col + cell.1)
+    (hstep : b.colHeight c = b.colHeight (c + 1) + 1) :
+    (pl.place b).colHeight c = (pl.place b).colHeight (c + 1) + 1 := by
+  rw [colHeight_place_of_notMem_cols b pl c hjc,
+      colHeight_place_of_notMem_cols b pl (c + 1) hjc1]
+  exact hstep
+
 end Board
 end Tetris
