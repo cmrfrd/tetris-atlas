@@ -203,5 +203,41 @@ theorem L5_dead_h6 :
       [3, 3, 3, 3, 2, 3, 3, 3, 3, 2] 6 = true := by
   native_decide
 
+open Piece in
+/-- The `{5,5}` left zone with the `I` as its filler instead of the `O`
+(10S+10Z+10T+5I) is dead within 6 bags too — so EVERY `{5,5}` split that
+keeps the S/Z/T roughness core together dies, whichever piece completes
+its 35. -/
+theorem L5I_dead_h6 :
+    zoneDead 5 12 3
+      [[S, Z, T, I], [S, Z, T], [S, Z, T, I], [S, Z, T], [S, Z, T, I],
+       [S, Z, T], [S, Z, T, I], [S, Z, T], [S, Z, T, I], [S, Z, T]]
+      [3, 3, 3, 3, 2, 3, 3, 3, 3, 2] 6 = true := by
+  native_decide
+
+open Piece in
+/-- The `{3,7}` family's 3-zone roughness core (10S+10Z+1T per 10 bags,
+width 3) is dead within 4 bags: S/Z cannot cohabit three columns at the
+mandated rate. Kills every `{3,7}` split routing both S and Z through the
+3-zone. -/
+theorem SZ3_dead_h4 :
+    zoneDead 3 12 3
+      [[S, Z], [S, Z], [S, Z], [S, Z], [S, Z, T],
+       [S, Z], [S, Z], [S, Z], [S, Z], [S, Z]]
+      [3, 3, 3, 3, 2, 3, 3, 3, 3, 2] 4 = true := by
+  native_decide
+
+open Piece in
+/-- An S/Z-SEPARATED representative: a width-5 zone taking S (with L, O,
+and half the T supply) but not Z — 10S+10L+10O+5T — is dead within 6 bags.
+Separating the roughness pair does not save the design: a lone staircase
+piece still out-roughens a five-column window at rate `7w/10`. -/
+theorem S_sep_dead_h6 :
+    zoneDead 5 12 3
+      [[S, L, O, T], [S, L, O], [S, L, O, T], [S, L, O], [S, L, O, T],
+       [S, L, O], [S, L, O, T], [S, L, O], [S, L, O, T], [S, L, O]]
+      [3, 3, 3, 3, 2, 3, 3, 3, 3, 2] 6 = true := by
+  native_decide
+
 end ZoneGame
 end Tetris
