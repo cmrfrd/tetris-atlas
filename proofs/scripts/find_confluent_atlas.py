@@ -402,6 +402,84 @@ def potential(cols):
     return holecount(cols) * 800 + max(hs) * 60 + bump * 8 + cellcount(cols)
 
 
+# ---------------------------------------------------------------------------
+# Zone discipline (Route 1: the wiki "playing forever" design, adaptivity
+# replacing hold). S/T/Z play only in columns 0-3, L/J/O only in columns
+# 6-9, I only vertically in columns 4-5 (the alternating drain). Forks from
+# awkward orders then stay confined to one 4-column zone, and the I-drain's
+# clears are uniform shifts that preserve zone shapes
+# (dropOffset_skyline_sub). ZONE_PLACEMENTS[p] is the restricted candidate
+# list; zone_potential scores per-zone flatness instead of global bumpiness
+# (the three stacks are SUPPOSED to differ in height).
+# ---------------------------------------------------------------------------
+
+ZONES = {"S": (0, 3), "T": (0, 3), "Z": (0, 3),
+         "L": (6, 9), "J": (6, 9), "O": (6, 9)}
+
+
+def _zone_ok(p, info):
+    if p == "I":
+        return len(info) == 1 and info[0][0] in (4, 5)  # vertical, col 4/5
+    lo, hi = ZONES[p]
+    return all(lo <= ac <= hi for (ac, _u0, _ups) in info)
+
+
+ZONE_PLACEMENTS = {
+    p: [(rot, col, info) for (rot, col, info) in PLACEMENTS[p]
+        if _zone_ok(p, info)]
+    for p in ALL_PIECES
+}
+
+
+def zone_bump(cols):
+    """Bumpiness WITHIN each zone only (the three stacks may differ)."""
+    hs = heights(cols)
+    return (sum(abs(hs[i] - hs[i + 1]) for i in range(0, 3))
+            + sum(abs(hs[i] - hs[i + 1]) for i in range(6, 9))
+            + abs(hs[4] - hs[5]))
+
+
+def stz_service(hs):
+    """S/Z-serviceability of the STZ zone (cols 0-3): 0 when the zone offers
+    both a unit down-step (S seats flush, self-reproducing) and a unit
+    up-step (Z). A FLAT STZ zone is the failure mode — S/Z must hole on flat
+    (no_holefree_S_on_flat) and the debt spiral kills the walk."""
+    downs = any(hs[i] == hs[i + 1] + 1 for i in range(3))
+    ups = any(hs[i + 1] == hs[i] + 1 for i in range(3))
+    return (0 if downs else 1) + (0 if ups else 1)
+
+
+def zone_shape_ok(cols, mid_diff_cap=4):
+    """Per-zone boundary shape discipline (the band the wiki shapes live
+    in): side-zone adjacent steps of magnitude <= 1 (flat kills S/Z,
+    cliffs kill everything), STZ zone S/Z-servable, middle stagger
+    bounded. Post-clear debris (deep cliffs) fails this and is rejected as
+    a boundary."""
+    hs = heights(cols)
+    for i in range(0, 3):
+        if abs(hs[i] - hs[i + 1]) > 2:
+            return False
+    for i in range(6, 9):
+        if abs(hs[i] - hs[i + 1]) > 2:
+            return False
+    if abs(hs[4] - hs[5]) > mid_diff_cap:
+        return False
+    # clear-starvation guard: side pieces can only complete rows BELOW the
+    # middle pair's minimum, and the I-tetrises alone (2 rows/bag) cannot
+    # match the 2.8 rows/bag the zones add — so past the two bootstrap bags
+    # the mid stagger must cycle high (min >= 4), never touching 0.
+    if cellcount(cols) > 28 and min(hs[4], hs[5]) < 4:
+        return False
+    return True
+
+
+def zone_potential(cols):
+    hs = heights(cols)
+    ljo_bump = sum(abs(hs[i] - hs[i + 1]) for i in range(6, 9))
+    return (holecount(cols) * 800 + max(hs) * 60 + stz_service(hs) * 120
+            + ljo_bump * 8 + abs(hs[4] - hs[5]) * 4 + cellcount(cols))
+
+
 def closure_search(args):
     from collections import deque
     t0 = time.time()
@@ -518,16 +596,23 @@ def verify_closure(table):
 # `qualify`-good new ones), and extracts the per-state response table.
 # ---------------------------------------------------------------------------
 
+_USE_ZONES = False
+
+
 def bag_candidates(board, p, k, hcap):
-    """Top-k placements of p on board by potential (holes first)."""
+    """Top-k placements of p on board by potential (holes first). With
+    zone discipline on, candidates are restricted to the piece's zone and
+    scored by per-zone flatness."""
     out = []
-    for (rot, col, info) in PLACEMENTS[p]:
+    plist = ZONE_PLACEMENTS[p] if _USE_ZONES else PLACEMENTS[p]
+    pot = zone_potential if _USE_ZONES else potential
+    for (rot, col, info) in plist:
         nb = step(board, info)
         if nb is None:
             continue
         if max(heights(nb)) > hcap:
             continue
-        out.append((potential(nb), rot, col, info, nb))
+        out.append((pot(nb), rot, col, info, nb))
     out.sort(key=lambda x: x[0])
     return out[:k]
 
@@ -620,31 +705,42 @@ def bump(cols):
 def adaptive_closure(args):
     t0 = time.time()
     solved = {}       # boundary -> (table, finals)
+    bad = set()
     frontier = [EMPTY]
     queued = {EMPTY}
-    total_states = 0
     tier2 = 0
+    deadends = 0
     while frontier:
         if time.time() > t0 + args.budget:
+            total_states = sum(len(t) for (t, _f) in solved.values())
             print(f"budget exhausted: {len(solved)} boundaries solved, "
-                  f"{len(frontier)} open, states={total_states}, "
-                  f"tier2-solves={tier2}", flush=True)
+                  f"{len(frontier)} open, {len(bad)} bad, "
+                  f"states={total_states}, tier2-solves={tier2}", flush=True)
             return 1
         frontier.sort(key=score_board)
         B = frontier.pop(0)
-        if B in solved:
+        queued.discard(B)
+        if B in solved or B in bad:
             continue
-        known = set(solved) | queued | {B}
+        known = (set(solved) | queued | {B}) - bad
 
         def accept1(board, _k=known):
             return board in _k
 
-        def accept2(board, _k=known):
-            return (board in _k
-                    or (holecount(board) <= args.final_holes
-                        and max(heights(board)) <= args.final_h
-                        and cellcount(board) <= args.final_cells
-                        and bump(board) <= args.final_bump))
+        def accept2(board, _k=known, _bad=bad):
+            if board in _k:
+                return True
+            if board in _bad:
+                return False
+            if holecount(board) > args.final_holes:
+                return False
+            if max(heights(board)) > args.final_h:
+                return False
+            if cellcount(board) > args.final_cells:
+                return False
+            if _USE_ZONES:
+                return True
+            return bump(board) <= args.final_bump
 
         ok, table, finals, memo_n = solve_bag(B, accept1, args,
                                               strict_set=known)
@@ -661,24 +757,43 @@ def adaptive_closure(args):
                       f"memo={memo_n}) — raise --branch or relax finals",
                       flush=True)
                 return 1
-            print(f"[{el:5.0f}s] boundary unsolvable (cells={cellcount(B)}, "
-                  f"memo={memo_n}); NOT retried (greedy)", flush=True)
-            return 1
-        total_states += len(table)
+            bad.add(B)
+            deadends += 1
+            requeue = [s for s, (_t, fs) in solved.items() if B in fs]
+            for s in requeue:
+                del solved[s]
+                if s not in queued:
+                    frontier.append(s)
+                    queued.add(s)
+            print(f"[{el:5.0f}s] dead-end (cells={cellcount(B)} "
+                  f"h={heights(B)} holes={holecount(B)}); bad={len(bad)}, "
+                  f"requeued {len(requeue)} producers", flush=True)
+            continue
         solved[B] = (table, finals)
         newf = 0
         for f in finals:
-            if f not in solved and f not in queued:
+            if f not in solved and f not in queued and f not in bad and f != B:
                 frontier.append(f)
                 queued.add(f)
                 newf += 1
-        print(f"[{el:5.0f}s] solved #{len(solved)} (cells={cellcount(B)}"
-              f"{' T2' if used2 else ' T1'}) memo={memo_n} "
-              f"bag-states={len(table)} finals={len(finals)} (+{newf}) "
-              f"frontier={len(frontier)} states={total_states}", flush=True)
+        if len(solved) % args.log_every == 0 or newf > 20:
+            total_states = sum(len(t) for (t, _f) in solved.values())
+            print(f"[{el:5.0f}s] solved #{len(solved)} (cells={cellcount(B)}"
+                  f"{' T2' if used2 else ' T1'}) memo={memo_n} "
+                  f"bag-states={len(table)} finals={len(finals)} (+{newf}) "
+                  f"frontier={len(frontier)} states={total_states}",
+                  flush=True)
+    # closure only counts if every solved boundary's finals are solved
+    open_refs = {f for (_t, fs) in solved.values() for f in fs
+                 if f not in solved}
+    total_states = sum(len(t) for (t, _f) in solved.values())
+    if open_refs:
+        print(f"frontier empty but {len(open_refs)} finals unsolved "
+              f"(bad-referencing) — NOT closed", flush=True)
+        return 1
     print(f"CLOSED: {len(solved)} boundaries, total mid-bag states="
-          f"{total_states}, tier2={tier2}, {time.time() - t0:.0f}s",
-          flush=True)
+          f"{total_states}, tier2={tier2}, deadends={deadends}, "
+          f"{time.time() - t0:.0f}s", flush=True)
     verify_adaptive(solved)
     return 0
 
@@ -1060,7 +1175,15 @@ def main():
                     help="cycle: candidate targets per boundary")
     ap.add_argument("--solve-budget", type=float, default=8.0,
                     help="cycle: seconds per (B, f) solve")
+    ap.add_argument("--zones", action="store_true",
+                    help="zone discipline: S/T/Z cols 0-3, L/J/O cols 6-9, "
+                         "I vertical cols 4-5 (Route 1)")
     args = ap.parse_args()
+    if args.zones:
+        global _USE_ZONES
+        _USE_ZONES = True
+        for p in ALL_PIECES:
+            assert ZONE_PLACEMENTS[p], f"no zone placements for {p}"
     if args.mode == "graph":
         return graph_closure(args)
     if args.mode == "adaptive":
