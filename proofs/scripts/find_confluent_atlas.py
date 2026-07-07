@@ -473,11 +473,28 @@ def zone_shape_ok(cols, mid_diff_cap=4):
     return True
 
 
+def trap_penalty(hs):
+    """Deep narrow wells in the SIDE zones (a column >= 3 below both
+    neighbors) deadlock: every bridging piece hangs on the towers and the
+    well bottom fills only with holes. The mid pair (4,5) is excluded —
+    its stagger is the drain design."""
+    pen = 0
+    for j in list(range(0, 4)) + list(range(6, 10)):
+        left = hs[j - 1] if j - 1 >= 0 and j - 1 != 5 else None
+        right = hs[j + 1] if j + 1 <= 9 and j + 1 != 4 else None
+        depth = min(x for x in (left, right) if x is not None) - hs[j] \
+            if (left is not None or right is not None) else 0
+        if depth >= 3:
+            pen += depth
+    return pen
+
+
 def zone_potential(cols):
     hs = heights(cols)
     ljo_bump = sum(abs(hs[i] - hs[i + 1]) for i in range(6, 9))
-    return (holecount(cols) * 800 + max(hs) * 60 + stz_service(hs) * 120
-            + ljo_bump * 8 + abs(hs[4] - hs[5]) * 4 + cellcount(cols))
+    return (holecount(cols) * 800 + trap_penalty(hs) * 300 + max(hs) * 60
+            + stz_service(hs) * 120 + ljo_bump * 8
+            + abs(hs[4] - hs[5]) * 4 + cellcount(cols))
 
 
 def closure_search(args):
@@ -602,10 +619,15 @@ _USE_ZONES = False
 def bag_candidates(board, p, k, hcap):
     """Top-k placements of p on board by potential (holes first). With
     zone discipline on, candidates are restricted to the piece's zone and
-    scored by per-zone flatness."""
+    scored by per-zone flatness; the I is forced to the LOWER middle
+    column (the alternating-drain choreography)."""
     out = []
     plist = ZONE_PLACEMENTS[p] if _USE_ZONES else PLACEMENTS[p]
     pot = zone_potential if _USE_ZONES else potential
+    if _USE_ZONES and p == "I":
+        hs = heights(board)
+        low = 4 if hs[4] <= hs[5] else 5
+        plist = [(r, c, i) for (r, c, i) in plist if c == low]
     for (rot, col, info) in plist:
         nb = step(board, info)
         if nb is None:
@@ -746,10 +768,23 @@ def adaptive_closure(args):
                                               strict_set=known)
         used2 = False
         if not ok:
-            ok, table, finals, memo_n = solve_bag(B, accept2, args,
-                                                  strict_set=known)
             used2 = True
             tier2 += 1
+            # staged tier-2: only good-shaped leaves first; relax the
+            # potential threshold only when the bag is otherwise unsolvable
+            for thresh in (2600, 4000, 6500, None):
+                def acc(board, _t=thresh):
+                    if not accept2(board):
+                        return False
+                    if _t is None or board in known:
+                        return True
+                    return zone_potential(board) <= _t \
+                        if _USE_ZONES else potential(board) <= _t
+                ok, table, finals, memo_n = solve_bag(
+                    B, acc, args, strict_set=known,
+                    deadline=time.time() + 20)
+                if ok:
+                    break
         el = time.time() - t0
         if not ok:
             if B == EMPTY:
