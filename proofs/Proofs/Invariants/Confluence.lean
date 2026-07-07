@@ -245,5 +245,84 @@ theorem dropOffset_skyline_sub (cfg : GameConfig) (h : ℕ → ℕ) (m : ℕ)
       · exact le_trans (le_of_lt (Nat.lt_of_not_le hcm)) (Nat.le_add_left m _)
   rw [hsub, Nat.sub_add_cancel hbig]
 
+/-- Minimum column footprint of each piece across all rotations: the vertical
+`I` occupies a single column; every other piece needs at least two columns in
+every rotation. -/
+def pieceMinWidth : Piece → ℕ
+  | Piece.I => 1
+  | _ => 2
+
+/-- Every rotation of every piece occupies at least `pieceMinWidth` distinct
+piece-columns (checked over all 28 piece/rotation shapes). -/
+theorem pieceMinWidth_le_card_image : ∀ (p : Piece) (r : Rotation),
+    pieceMinWidth p ≤ ((p.shapeUp r).image Prod.fst).card := by
+  decide
+
+/-- A placement's absolute column footprint has exactly as many columns as
+the shape's relative footprint (translation by `pl.col` is injective). -/
+theorem footCols_card_eq (pl : Placement) :
+    pl.footCols.card = (pl.shapeUp.image Prod.fst).card := by
+  unfold footCols
+  rw [show (fun cell : Coord => pl.col + cell.1)
+        = (fun x => pl.col + x) ∘ Prod.fst from rfl,
+      ← Finset.image_image]
+  exact Finset.card_image_of_injective _ (fun a b hab => by omega)
+
+/-- Any placement of piece `p` occupies at least `pieceMinWidth p` columns. -/
+theorem pieceMinWidth_le_footCols_card (pl : Placement) :
+    pieceMinWidth pl.piece ≤ pl.footCols.card := by
+  rw [footCols_card_eq]
+  exact pieceMinWidth_le_card_image pl.piece pl.rot
+
+/-- **The zone-budget obstruction: fully zone-local bag responses do not
+exist.** On any board up to 12 columns wide — in particular the canonical 10 —
+seven valid placements, one per piece, can never be pairwise column-disjoint:
+the minimum footprints (1 column for the vertical `I`, 2 for each of the other
+six pieces) already demand `13` columns. Consequently the order-confluence
+theorems above can cover zone-local SEGMENTS of a bag but never a whole bag —
+every bag response overlaps somewhere, the adversary's order choice forks the
+play there, and any closed-table design must manage reconvergence rather than
+avoid forks. This is the structural root, verified here once and for all, of
+the fork phenomena measured by `scripts/find_confluent_atlas.py`. -/
+theorem no_pairwise_colsDisjoint_bag (cfg : GameConfig) (hcols : cfg.cols ≤ 12)
+    (f : Piece → Placement)
+    (hpiece : ∀ p, (f p).piece = p)
+    (hvalid : ∀ p, (f p).Valid cfg) :
+    ¬ (∀ p q, p ≠ q → ColsDisjoint (f p) (f q)) := by
+  intro hdisj
+  have hd : ∀ p ∈ Finset.univ, ∀ q ∈ Finset.univ, p ≠ q →
+      Disjoint (f p).footCols (f q).footCols := fun p _ q _ hpq =>
+    (colsDisjoint_iff_disjoint_footCols _ _).1 (hdisj p q hpq)
+  have hsub : Finset.univ.biUnion (fun p => (f p).footCols)
+      ⊆ Finset.range cfg.cols := by
+    intro j hj
+    rw [Finset.mem_biUnion] at hj
+    obtain ⟨p, _, hjp⟩ := hj
+    unfold footCols at hjp
+    rw [Finset.mem_image] at hjp
+    obtain ⟨c, hc, rfl⟩ := hjp
+    exact Finset.mem_range.mpr (hvalid p c hc)
+  have hcard : (Finset.univ.biUnion (fun p => (f p).footCols)).card
+      = ∑ p, (f p).footCols.card := Finset.card_biUnion hd
+  have hsum : (13 : ℕ) ≤ ∑ p : Piece, (f p).footCols.card := by
+    have hmono : ∑ p : Piece, pieceMinWidth p
+        ≤ ∑ p : Piece, (f p).footCols.card := by
+      refine Finset.sum_le_sum fun p _ => ?_
+      have h := pieceMinWidth_le_footCols_card (f p)
+      rwa [hpiece p] at h
+    have h13 : ∑ p : Piece, pieceMinWidth p = 13 := by decide
+    omega
+  have hle : (Finset.univ.biUnion (fun p => (f p).footCols)).card ≤ cfg.cols :=
+    le_trans (Finset.card_le_card hsub) (le_of_eq (Finset.card_range _))
+  omega
+
+/-- The zone-budget obstruction at the canonical configuration. -/
+theorem no_pairwise_colsDisjoint_bag_standard
+    (f : Piece → Placement)
+    (hpiece : ∀ p, (f p).piece = p)
+    (hvalid : ∀ p, (f p).Valid GameConfig.standard) :
+    ¬ (∀ p q, p ≠ q → ColsDisjoint (f p) (f q)) :=
+  no_pairwise_colsDisjoint_bag GameConfig.standard (by decide) f hpiece hvalid
+
 end Placement
 end Tetris
