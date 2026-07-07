@@ -324,5 +324,70 @@ theorem no_pairwise_colsDisjoint_bag_standard
     ¬ (∀ p q, p ≠ q → ColsDisjoint (f p) (f q)) :=
   no_pairwise_colsDisjoint_bag GameConfig.standard (by decide) f hpiece hvalid
 
+/-- **Single-order collapse: a clear-free run of moves is a placement fold.**
+If no strict prefix of the move list completes a row, then every intermediate
+clear is a no-op and the full-move fold (`applyStep`) is the bare placement
+fold followed by ONE final `clearLines` — the last move may clear. No
+disjointness is needed for a single order; disjointness enters only when
+comparing different orders. -/
+theorem foldl_applyStep_collapse (cfg : GameConfig) (b : Board)
+    {l : List Placement} (hne : l ≠ [])
+    (hnf : ∀ k, 0 < k → k < l.length →
+      Board.fullRows cfg ((l.take k).foldl Placement.place b) = ∅) :
+    l.foldl (Placement.applyStep cfg) b
+      = Board.clearLines cfg (l.foldl Placement.place b) := by
+  revert hne hnf
+  induction l generalizing b with
+  | nil => intro hne _; exact absurd rfl hne
+  | cons pl t ih =>
+    intro _ hnf
+    cases t with
+    | nil =>
+      simp only [List.foldl_cons, List.foldl_nil]
+      rfl
+    | cons pl2 t2 =>
+      have h1 : Board.fullRows cfg (pl.place b) = ∅ := by
+        have := hnf 1 (by omega) (by simp)
+        simpa using this
+      have hstep : Placement.applyStep cfg b pl = Placement.place b pl :=
+        applyStep_eq_place_of_no_fullRows cfg b pl h1
+      simp only [List.foldl_cons]
+      rw [hstep]
+      refine ih (Placement.place b pl) (by simp) ?_
+      intro k hk hklen
+      have := hnf (k + 1) (by omega)
+        (by simpa using Nat.succ_lt_succ hklen)
+      simpa [List.take_succ_cons, List.foldl_cons] using this
+
+/-- **The bag-confluence assembly.** For pairwise column-disjoint moves whose
+sub-multisets never complete a row early (every proper sub-arrangement's
+placement board has no full rows), EVERY arrival order produces the SAME
+final board: the bare placements of the canonical order, cleared once at the
+end. The adversary's order power over such a segment is void — the
+adversarial fold equals the canonical cooperative fold. By the zone-budget
+obstruction (`no_pairwise_colsDisjoint_bag`) a full 7-piece bag can never
+satisfy the disjointness hypothesis, so this covers zone-local SEGMENTS of a
+bag (up to 6 pieces, or any partial-bag window) — the largest scope at which
+order-confluence is geometrically possible. -/
+theorem bag_confluence (cfg : GameConfig) (b : Board) {l l' : List Placement}
+    (hne : l ≠ []) (hp : l.Perm l')
+    (hd : ∀ x ∈ l, ∀ y ∈ l, x ≠ y → ColsDisjoint x y)
+    (hnf : ∀ s : List Placement, s.Subperm l → s.length < l.length →
+      Board.fullRows cfg (s.foldl Placement.place b) = ∅) :
+    l'.foldl (Placement.applyStep cfg) b
+      = Board.clearLines cfg (l.foldl Placement.place b) := by
+  have hlen : l'.length = l.length := hp.symm.length_eq
+  have hne' : l' ≠ [] := fun h => hne (List.Perm.eq_nil (h ▸ hp))
+  have hpre : ∀ k, 0 < k → k < l'.length →
+      Board.fullRows cfg ((l'.take k).foldl Placement.place b) = ∅ := by
+    intro k hk hklen
+    refine hnf _ ((l'.take_sublist k).subperm.trans hp.symm.subperm) ?_
+    rw [List.length_take]
+    omega
+  rw [foldl_applyStep_collapse cfg b hne' hpre]
+  congr 1
+  exact foldl_place_perm hp.symm
+    (fun x hx y hy hxy => hd x (hp.mem_iff.mpr hx) y (hp.mem_iff.mpr hy) hxy) b
+
 end Placement
 end Tetris
