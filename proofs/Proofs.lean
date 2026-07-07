@@ -32,6 +32,7 @@ import Proofs.Invariants.Skyline
 import Proofs.Invariants.HoledSkyline
 import Proofs.Invariants.Confluence
 import Proofs.Invariants.ZoneView
+import Proofs.Invariants.BagGrowth
 
 -- Survival — policy / trace / cycle vocabulary
 import Proofs.Survival.Survival
