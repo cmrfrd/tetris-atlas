@@ -26,6 +26,7 @@ import Proofs.Invariants.StateSpace
 import Proofs.Invariants.Wqo
 import Proofs.Invariants.HoleyCarrier
 import Proofs.Invariants.SurfaceFiber
+import Proofs.Invariants.SurfaceCalculus
 import Proofs.Invariants.HoleDebt
 import Proofs.Invariants.HeightControl
 import Proofs.Invariants.Skyline
