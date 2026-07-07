@@ -103,5 +103,105 @@ def bagOk (hcap s : ℕ) (cands : Piece → List ZProfile)
     (accept : ZBoard → Bool) (b : ZBoard) (pieces : List Piece) : Bool :=
   pieces.permutations.all (ordOk hcap s cands accept b)
 
+/-- Zone-local candidate profiles of a piece for width `w`: every rotation
+whose shape fits, at every column offset, as `(col, u0, ups)` triples —
+derived from the model's own `Piece.shapeUp` (no transcription trust). -/
+def zoneCands (w : ℕ) (p : Piece) : List ZProfile :=
+  (List.range 4).flatMap fun r =>
+    if r < p.numRotations then
+      let cells := ((p.shapeUp ⟨r % 4, by omega⟩).image
+          (fun c => c.1 * 16 + c.2)).sort (· ≤ ·) |>.map
+          (fun n => (n / 16, n % 16))
+      let pcols := (cells.map (·.1)).dedup
+      let pw := (pcols.foldl max 0) + 1
+      if pw ≤ w then
+        (List.range (w - pw + 1)).map fun c =>
+          pcols.map fun pc =>
+            (c + pc, (cells.filterMap
+                (fun cell => if cell.1 = pc then some cell.2 else none)).foldl
+                  min 99,
+             cells.filterMap
+                (fun cell => if cell.1 = pc then some cell.2 else none))
+      else []
+    else []
+
+/-- **Adversary forces death within `k` bags** — the auditable AND-OR dual
+of the zone contract. Dead when SOME arrival order of the bag leaves the
+zone with NO placement response avoiding a cap breach, a hole-budget breach
+at the boundary, or a position dead within `k - 1` further bags. A
+`zoneDead … = true` fact (via `native_decide`) is an unconditional
+in-kernel refutation of the zone contract. Memo keyed on
+`(board, phase, horizon)`; total by lexicographic `(horizon, pieces)`. -/
+theorem deadAt_doc : True := trivial
+
+mutual
+
+def deadBags (w hcap dcap : ℕ) (sched : List (List Piece)) (srv : List ℕ)
+    (memo : Std.HashMap (ZBoard × ℕ × ℕ) Bool) (b : ZBoard) (ph : ℕ) :
+    (k : ℕ) → Bool × Std.HashMap (ZBoard × ℕ × ℕ) Bool
+  | 0 => (false, memo)
+  | k + 1 =>
+    match memo.get? (b, ph, k + 1) with
+    | some v => (v, memo)
+    | none =>
+      let pieces := sched.getD (ph % sched.length) []
+      let (v, m2) :=
+        pieces.permutations.foldl
+          (fun (st : Bool × Std.HashMap (ZBoard × ℕ × ℕ) Bool) ord =>
+            if st.1 then st
+            else
+              let (d, m') := deadOrd w hcap dcap sched srv st.2 b ph k ord
+              (st.1 || d, m'))
+          (false, memo)
+      (v, m2.insert (b, ph, k + 1) v)
+termination_by k => (k, 0)
+
+def deadOrd (w hcap dcap : ℕ) (sched : List (List Piece)) (srv : List ℕ)
+    (memo : Std.HashMap (ZBoard × ℕ × ℕ) Bool) (b : ZBoard) (ph k : ℕ) :
+    (rest : List Piece) → Bool × Std.HashMap (ZBoard × ℕ × ℕ) Bool
+  | [] =>
+    let nb := zservice (srv.getD (ph % srv.length) 0) b
+    if zholes nb > dcap then (true, memo)
+    else deadBags w hcap dcap sched srv memo nb ((ph + 1) % sched.length) k
+  | p :: rest' =>
+    (zoneCands w p).foldl
+      (fun (st : Bool × Std.HashMap (ZBoard × ℕ × ℕ) Bool) info =>
+        if !st.1 then st
+        else
+          match stepPlace hcap b info with
+          | none => st
+          | some nb =>
+            let (d, m') := deadOrd w hcap dcap sched srv st.2 nb ph k rest'
+            (st.1 && d, m'))
+      (true, memo)
+termination_by rest => (k, rest.length + 1)
+
+end
+
+/-- The zone-death verdict from the empty zone at horizon `k`. -/
+def zoneDead (w hcap dcap : ℕ) (sched : List (List Piece)) (srv : List ℕ)
+    (k : ℕ) : Bool :=
+  (deadBags w hcap dcap sched srv {} (List.replicate w 0) 0 k).1
+
+open Piece in
+/-- **Sanity instance (in-kernel re-derivation of a decided point):** the
+5-bag `5I+2O` two-column mid-zone — the {4,2,4} choke — is dead within 8
+bags. Matches the external probe's verdict; the kernel now owns it. -/
+theorem midzone_5I2O_dead :
+    zoneDead 2 10 2 [[I], [I], [I], [I, O], [I, O]] [3, 3, 3, 3, 2] 8
+      = true := by
+  native_decide
+
+open Piece in
+/-- **The 10-bag `{5,5}` left zone (10S+10Z+10T+5O, width 5) is dead within
+6 bags** — the first point of the previously-open odd-width family, decided
+in-kernel. -/
+theorem L5_dead_h6 :
+    zoneDead 5 12 3
+      [[S, Z, T, O], [S, Z, T], [S, Z, T, O], [S, Z, T], [S, Z, T, O],
+       [S, Z, T], [S, Z, T, O], [S, Z, T], [S, Z, T, O], [S, Z, T]]
+      [3, 3, 3, 3, 2, 3, 3, 3, 3, 2] 6 = true := by
+  native_decide
+
 end ZoneGame
 end Tetris
