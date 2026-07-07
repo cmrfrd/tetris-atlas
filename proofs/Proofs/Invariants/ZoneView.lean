@@ -182,5 +182,29 @@ theorem colHeight_eq_zoneView_of_owner {Z : ℕ → Prop} [DecidablePred Z]
     b.colHeight j = (zoneView Z b).colHeight j :=
   (colHeight_zoneView b hj).symm
 
+/-- **The periodic rate-balance law.** Over a supercycle of `n` bags a zone of
+width `w` receiving `k` pieces balances only if `10 * k = 7 * n * w`: the
+zone gains `4 * k` cells while the `(28 * n) / 10` global clears (each one
+row from every zone) remove `((28 * n) / 10) * w` of its cells — and global
+clears are integral only when `5 ∣ n`. Consequences, all decidable here:
+for `n = 5` balance forces `2 * k = 7 * w` — so `w` must be EVEN (the
+even-width law behind the {4,2,4}/{4,6} lattice); for `n = 10` it forces
+`k = 7 * w`, integral for every width — 10-bag supercycles admit odd zones.
+Together with `static_zone_balance_impossible` (the `n`-free static case)
+this pins the complete design lattice the method may range over. -/
+theorem periodic_zone_balance_five {k w : ℕ} (hw : 1 ≤ w) (hw9 : w ≤ 9) :
+    10 * k = 7 * 5 * w → 2 * k = 7 * w ∧ w % 2 = 0 := by
+  intro h
+  constructor
+  · omega
+  · omega
+
+/-- Ten-bag supercycles balance at `k = 7 * w` for EVERY width — the
+arithmetic escape hatch that keeps odd-width zones (hence partitions like
+`{5,5}` and `{3,7}`) on the table for the method. -/
+theorem periodic_zone_balance_ten {k w : ℕ} :
+    10 * k = 7 * 10 * w ↔ k = 7 * w := by
+  omega
+
 end Board
 end Tetris
