@@ -24,6 +24,24 @@ Together with the Confluence toolkit (commutation, the 7! collapse,
 shift-equivariance) this reduces the composed game to zone-local games plus
 one scheduling interface — the object the per-zone contract computations
 (`scripts/zone_contract_probe.py`) decide exactly.
+
+**Verdict of the zone-composition method (2026-07-07).** The balance laws
+below (`static_zone_balance_impossible`, `periodic_zone_balance_five/ten`)
+pin the method's design lattice, and the per-zone contract games decided so
+far are ALL dead: every static design (theorem); every 5-bag periodic
+2-wide zone (24/24 exhaustive machine disproofs across all natural piece
+multisets); the {4,2,4} partition (mid-zone choke); and the {4,6} partition
+at three structurally diverse piece splits (S/Z/T-, L/J/O- and O/T/I-heavy
+4-zones, each an exhaustive 16M–57M-node refutation). No zone-contract
+instance has ever closed at a JOINTLY REALIZABLE service rate — closures
+exist only at per-zone rates the composition cannot deliver (`SZ` band 3,
+`LJO` band 296). Column-partition rely-guarantee zoning with 5-bag periodic
+contracts is therefore refuted at every decided lattice point; the sole
+undecided remainder is the 10-bag supercycle family (odd widths, e.g.
+`{5,5}`), left open deliberately (proof-world-only constraint) as a finite,
+per-point decidable question. `TetrisSolvable` is NOT proven here and none
+of this refutes it — what is refuted is this particular decomposition
+METHOD; no `sorry` is used anywhere.
 -/
 
 namespace Tetris
