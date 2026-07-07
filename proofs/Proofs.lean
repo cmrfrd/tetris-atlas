@@ -43,6 +43,7 @@ import Proofs.Safety.Adversarial
 import Proofs.Safety.BagBlock
 import Proofs.Safety.SafeSet
 import Proofs.Safety.SurfaceLanguage
+import Proofs.Safety.SeamBridge
 import Proofs.Safety.SkylineInvariant
 import Proofs.Safety.SafeIterate
 import Proofs.Safety.SafeIterateFinite
