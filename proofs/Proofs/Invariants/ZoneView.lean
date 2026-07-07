@@ -172,5 +172,15 @@ theorem static_zone_balance_impossible :
   intro k w hk1 hk6 hw1 hw9
   omega
 
+/-- **Heights compose from zone views.** A column's height equals its height
+in the view of any zone owning it (`colHeight_zoneView` restated for the
+composition): global height bounds — hence the not-lost condition — follow
+from per-zone bounds. The survival side of the composition is free; the
+whole content lives in the contracts and the clear-service realization. -/
+theorem colHeight_eq_zoneView_of_owner {Z : ℕ → Prop} [DecidablePred Z]
+    (b : Board) {j : ℕ} (hj : Z j) :
+    b.colHeight j = (zoneView Z b).colHeight j :=
+  (colHeight_zoneView b hj).symm
+
 end Board
 end Tetris
