@@ -31,6 +31,7 @@ import Proofs.Invariants.HeightControl
 import Proofs.Invariants.Skyline
 import Proofs.Invariants.HoledSkyline
 import Proofs.Invariants.Confluence
+import Proofs.Invariants.ZoneView
 
 -- Survival — policy / trace / cycle vocabulary
 import Proofs.Survival.Survival
