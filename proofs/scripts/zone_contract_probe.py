@@ -293,3 +293,140 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# ---------------------------------------------------------------------------
+# Periodic contracts. The rate-balance obstruction (global clears remove one
+# row from EVERY zone, so bounded heights force equal fill rates; static
+# supplies can't equalize: 2.8*w is never a multiple of 4 below w=10) kills
+# all static designs. The surviving form: piece-assignment ROTATION over a
+# 5-bag supercycle — zone Z receives schedule[k] pieces in bag k (sum of
+# cells = 14*width per supercycle), and the service removes s_k rows at bag
+# k's end with sum(s_k) = 14 (the one global clear rate).
+# ---------------------------------------------------------------------------
+
+def solve_zone_periodic(schedule, width, hcap, dcap, srv, branch, budget):
+    """schedule: list of 5 piece-tuples (the zone's arrivals per bag);
+    srv: list of 5 ints, rows removed at each bag end (sum 14).
+    State = (zone board, phase). Exact adaptive closure with repair."""
+    pieces_all = sorted({p for bag in schedule for p in bag})
+    PL = zone_placements(pieces_all, width)
+    t0 = time.time()
+
+    def bag_solve(B, phase, accept):
+        pieces = schedule[phase]
+        s = srv[phase]
+        memo = {}
+
+        def rec(board, remaining):
+            key = (board, remaining)
+            if key in memo:
+                return memo[key]
+            if not remaining:
+                nb, _c = service(board, s)
+                ok = accept(nb)
+                memo[key] = ok
+                return ok
+            ok = True
+            seenp = set()
+            for i, p in enumerate(pieces):
+                if not (remaining >> i) & 1 or p in seenp:
+                    continue
+                seenp.add(p)
+                found = False
+                cands = []
+                for (rot, col, info) in PL[p]:
+                    nb = step_place(board, info, hcap)
+                    if nb is None:
+                        continue
+                    cands.append((holes(nb) * 100
+                                  + max(c.bit_length() for c in nb), nb))
+                cands.sort(key=lambda x: x[0])
+                for (_sc, nb) in cands[:branch]:
+                    if rec(nb, remaining & ~(1 << i)):
+                        found = True
+                        break
+                if not found:
+                    ok = False
+                    break
+            memo[key] = ok
+            return ok
+
+        full = (1 << len(pieces)) - 1
+        if not rec(B, full):
+            return None
+        finals = set()
+        stack = [(B, full)]
+        seen = {(B, full)}
+        while stack:
+            (board, remaining) = stack.pop()
+            if not remaining:
+                nb, _c = service(board, srv[phase])
+                finals.add(nb)
+                continue
+            for i, p in enumerate(pieces):
+                if not (remaining >> i) & 1:
+                    continue
+                cands = []
+                for (rot, col, info) in PL[p]:
+                    nb = step_place(board, info, hcap)
+                    if nb is None:
+                        continue
+                    cands.append((holes(nb) * 100
+                                  + max(c.bit_length() for c in nb), nb))
+                cands.sort(key=lambda x: x[0])
+                for (_sc, nb) in cands[:branch]:
+                    if memo.get((nb, remaining & ~(1 << i))):
+                        k = (nb, remaining & ~(1 << i))
+                        if k not in seen:
+                            seen.add(k)
+                            stack.append(k)
+                        break
+        return finals, len(memo)
+
+    EMPTYZ = (0,) * width
+    solved = {}
+    bad = set()
+    frontier = [(EMPTYZ, 0)]
+    queued = {(EMPTYZ, 0)}
+    mid_total = 0
+    while frontier:
+        if time.time() - t0 > budget:
+            return ("timeout", len(solved), mid_total, len(bad))
+        (B, ph) = frontier.pop(0)
+        queued.discard((B, ph))
+        if (B, ph) in solved or (B, ph) in bad:
+            continue
+        nph = (ph + 1) % 5
+        known = {b for (b, q) in (set(solved) | queued) if q == nph} | {B}
+
+        def acc(nb, _k=known, _nph=nph):
+            if (nb, _nph) in bad:
+                return False
+            if nb in _k:
+                return True
+            return (holes(nb) <= dcap
+                    and max(c.bit_length() for c in nb) <= hcap)
+
+        res = bag_solve(B, ph, acc)
+        if res is None:
+            bad.add((B, ph))
+            requeue = [x for x, fs in solved.items() if (B, ph) in fs]
+            for x in requeue:
+                del solved[x]
+                if x not in queued:
+                    frontier.append(x)
+                    queued.add(x)
+            if (B, ph) == (EMPTYZ, 0):
+                return ("empty-dead", len(solved), mid_total, len(bad))
+            continue
+        finals, memo_n = res
+        mid_total += memo_n
+        solved[(B, ph)] = {(f, nph) for f in finals}
+        for fk in solved[(B, ph)]:
+            if fk not in solved and fk not in queued and fk not in bad:
+                frontier.append(fk)
+                queued.add(fk)
+    for k, fs in solved.items():
+        assert all(f in solved for f in fs), "escape"
+    return ("CLOSED", len(solved), mid_total, len(bad))

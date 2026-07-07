@@ -155,5 +155,22 @@ theorem isFull_iff_of_cover (cfg : GameConfig) (Z₁ Z₂ Z₃ : ℕ → Prop)
     · exact (h2 c hc hz).1
     · exact (h3 c hc hz).1
 
+
+/-- **The static rate-balance obstruction (arithmetic core).** A global line
+clear removes one row from EVERY zone simultaneously, so over a long run a
+static piece→zone assignment keeps every zone's height bounded only if each
+zone's fill rate equals the one global clear rate: per supercycle of 5 bags,
+`20 * k` cells arrive in a zone owning `k` pieces per bag while `r` global
+clears remove `r * w` of its cells — balance forces `10 * k = 7 * w` (with
+`r = 14` from the total). No zone with `1 ≤ k ≤ 6` pieces and `1 ≤ w ≤ 9`
+columns satisfies it (`7 ∤ 10k` below `k = 7`): ONLY the whole board balances
+statically. Every proper static zoning provably drifts — the reason the
+per-zone closures (SZ band 3, LJO band 296) cannot compose statically, and
+piece-assignment ROTATION (periodic contracts) is forced. -/
+theorem static_zone_balance_impossible :
+    ∀ k w : ℕ, 1 ≤ k → k ≤ 6 → 1 ≤ w → w ≤ 9 → 10 * k ≠ 7 * w := by
+  intro k w hk1 hk6 hw1 hw9
+  omega
+
 end Board
 end Tetris
