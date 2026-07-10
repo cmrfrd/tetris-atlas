@@ -122,5 +122,122 @@ theorem dropOffset_debtBoard_bandLift {cfg : GameConfig} {w c : ℕ}
   exact sup_sub_add_shift pl.shapeUp (fun cell => ρ (pl.col + cell.1)) c
     (Placement.shapeUp_exists_bottom pl.piece pl.rot)
 
+/-- Landing-cell membership, unfolded to the shape/column data. -/
+theorem mem_cellsAt {pl : Placement} {d a r : ℕ} :
+    ((a, r) : Coord) ∈ pl.cellsAt d
+      ↔ ∃ cell ∈ pl.shapeUp, pl.col + cell.1 = a ∧ d + cell.2 = r := by
+  unfold Placement.cellsAt
+  simp only [Finset.mem_image, Prod.mk.injEq]
+
+/-- Landing cells at a raised drop offset are the base landing cells,
+shifted up: the piece never reaches below the shift. -/
+theorem mem_cellsAt_add {pl : Placement} {d c a r : ℕ} :
+    ((a, r) : Coord) ∈ pl.cellsAt (d + c)
+      ↔ c ≤ r ∧ ((a, r - c) : Coord) ∈ pl.cellsAt d := by
+  rw [mem_cellsAt, mem_cellsAt]
+  constructor
+  · rintro ⟨cell, hcell, h1, h2⟩
+    exact ⟨by omega, cell, hcell, h1, by omega⟩
+  · rintro ⟨hcr, cell, hcell, h1, h2⟩
+    exact ⟨cell, hcell, h1, by omega⟩
+
+/-- **T1 — clear-free transport.** A witnessed placement transition between
+debt-1 boards at the base-0 representative transports verbatim to every
+band base `c`: the landing cells shift up by `c`, the band bottom slab
+(rows `< c`) is filled on both sides, and the hole rides at `+c`. -/
+theorem place_debtBoard_bandLift {cfg : GameConfig} {w c : ℕ}
+    {ρ ρ' : ℕ → ℕ} {ho ho' : Option Coord} {pl : Placement}
+    (hcols : ∀ cell ∈ pl.shapeUp, pl.col + cell.1 < cfg.cols)
+    (havoid : ∀ cell ∈ pl.shapeUp, pl.col + cell.1 ≠ w)
+    (hho : ∀ x, ho = some x →
+      x.1 ≠ w ∧ x.1 < cfg.cols ∧ x.2 + 1 < ρ x.1)
+    (hrep : pl.place (debtBoard cfg ρ ho) = debtBoard cfg ρ' ho') :
+    pl.place (debtBoard cfg (bandLift w c ρ) (holeLift c ho))
+      = debtBoard cfg (bandLift w c ρ') (holeLift c ho') := by
+  have hD := dropOffset_debtBoard_bandLift (cfg := cfg) (w := w) (c := c)
+    (ρ := ρ) (ho := ho) (pl := pl) hcols havoid hho
+  ext ⟨a, r⟩
+  simp only [Placement.place_eq_union_dropped, Finset.mem_union,
+    Placement.dropped_eq_cellsAt, hD, mem_cellsAt_add, mem_debtBoard]
+  have hpt := Finset.ext_iff.mp hrep (a, r - c)
+  simp only [Placement.place_eq_union_dropped, Finset.mem_union,
+    Placement.dropped_eq_cellsAt, mem_debtBoard] at hpt
+  by_cases haw : a = w
+  · -- Column w: erased on both lifted sides.
+    subst haw
+    constructor
+    · rintro (⟨-, -, hlt⟩ | ⟨-, hmem⟩)
+      · rw [bandLift_well] at hlt; omega
+      · rcases mem_cellsAt.mp hmem with ⟨cell, hcell, h1, -⟩
+        exact absurd h1 (havoid cell hcell)
+    · rintro ⟨-, -, hlt⟩
+      rw [bandLift_well] at hlt; omega
+  · by_cases hrc : r < c
+    · -- Bottom slab: filled on both sides for in-range band columns; the
+      -- dropped cells and both lifted holes live at rows ≥ c.
+      constructor
+      · rintro (⟨-, hac, -⟩ | ⟨hcr, -⟩)
+        · refine ⟨?_, hac, ?_⟩
+          · rintro x hx
+            cases ho' with
+            | none => simp at hx
+            | some x₀ =>
+                rw [holeLift_some, Option.some.injEq] at hx
+                subst hx
+                intro hcontra
+                have h2 := congrArg Prod.snd hcontra
+                simp only at h2
+                omega
+          · rw [bandLift_ne w c ρ' haw]; omega
+        · omega
+      · rintro ⟨-, hac, -⟩
+        refine Or.inl ⟨?_, hac, ?_⟩
+        · rintro x hx
+          cases ho with
+          | none => simp at hx
+          | some x₀ =>
+              rw [holeLift_some, Option.some.injEq] at hx
+              subst hx
+              intro hcontra
+              have h2 := congrArg Prod.snd hcontra
+              simp only at h2
+              omega
+        · rw [bandLift_ne w c ρ haw]; omega
+    · -- Band, above the slab: transfer through the representative at r − c.
+      push_neg at hrc
+      have hhole : (∀ x, holeLift c ho = some x → ((a, r) : Coord) ≠ x)
+          ↔ (∀ x, ho = some x → ((a, r - c) : Coord) ≠ x) := by
+        cases ho with
+        | none => simp
+        | some x₀ =>
+            obtain ⟨x1, x2⟩ := x₀
+            simp only [holeLift_some, Option.some.injEq, forall_eq', ne_eq,
+              Prod.mk.injEq, not_and]
+            constructor
+            · intro h h1 h2; exact h h1 (by omega)
+            · intro h h1 h2; exact h h1 (by omega)
+      have hhole' : (∀ x, holeLift c ho' = some x → ((a, r) : Coord) ≠ x)
+          ↔ (∀ x, ho' = some x → ((a, r - c) : Coord) ≠ x) := by
+        cases ho' with
+        | none => simp
+        | some x₀ =>
+            obtain ⟨x1, x2⟩ := x₀
+            simp only [holeLift_some, Option.some.injEq, forall_eq', ne_eq,
+              Prod.mk.injEq, not_and]
+            constructor
+            · intro h h1 h2; exact h h1 (by omega)
+            · intro h h1 h2; exact h h1 (by omega)
+      rw [bandLift_ne w c ρ haw, bandLift_ne w c ρ' haw, hhole, hhole']
+      constructor
+      · rintro (⟨h1, h2, h3⟩ | ⟨-, hmem⟩)
+        · have hout := hpt.mp (Or.inl ⟨h1, h2, by omega⟩)
+          exact ⟨hout.1, hout.2.1, by omega⟩
+        · have hout := hpt.mp (Or.inr hmem)
+          exact ⟨hout.1, hout.2.1, by omega⟩
+      · rintro ⟨h1, h2, h3⟩
+        rcases hpt.mpr ⟨h1, h2, by omega⟩ with ⟨g1, g2, g3⟩ | hmem
+        · exact Or.inl ⟨g1, g2, by omega⟩
+        · exact Or.inr ⟨hrc, hmem⟩
+
 end Board
 end Tetris
