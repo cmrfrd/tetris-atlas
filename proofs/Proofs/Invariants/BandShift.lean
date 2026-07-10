@@ -355,5 +355,151 @@ theorem drain_debtBoard_bandLift {cfg : GameConfig} {w c : ℕ} {ρ : ℕ → �
           omega
       · exact Prod.ext rfl (by omega)
 
+/-! ## The seven flat responses, at every band base
+
+Validation that the transport layer bites on real content: the base-0 flat
+witnesses of `Proofs/Invariants/HoledSkyline.lean` lift to the well-anchored
+flat at arbitrary band base `c`. `S`/`Z` exercise the hole-creating case;
+the drain instance exercises T2. These lifted responses are directly
+reusable by any future certificate inhabitant. -/
+
+theorem place_bandFlat_O_lift (cfg : GameConfig) (w c col : ℕ)
+    (hcol : col + 1 < cfg.cols) (h0 : col ≠ w) (h1 : col + 1 ≠ w) :
+    ({ piece := Piece.O, rot := 0, col := col } : Placement).place
+        (debtBoard cfg (bandLift w c (fun _ => 0)) (holeLift c none))
+      = debtBoard cfg
+          (bandLift w c (fun j => if j = col ∨ j = col + 1 then 2 else 0))
+          (holeLift c none) := by
+  refine place_debtBoard_bandLift ?_ ?_ ?_ ?_
+  · intro cell hcell
+    rw [shapeUp_O col 0] at hcell
+    fin_cases hcell <;> simp <;> omega
+  · intro cell hcell
+    rw [shapeUp_O col 0] at hcell
+    fin_cases hcell <;> simp <;> omega
+  · exact fun x hx => nomatch hx
+  · simpa using place_O_flat cfg 0 col hcol
+
+theorem place_bandFlat_I_lift (cfg : GameConfig) (w c col : ℕ)
+    (hcol : col < cfg.cols) (h0 : col ≠ w) :
+    ({ piece := Piece.I, rot := 1, col := col } : Placement).place
+        (debtBoard cfg (bandLift w c (fun _ => 0)) (holeLift c none))
+      = debtBoard cfg
+          (bandLift w c (fun j => if j = col then 4 else 0))
+          (holeLift c none) := by
+  refine place_debtBoard_bandLift ?_ ?_ ?_ ?_
+  · intro cell hcell
+    rw [shapeUp_vertI' col 1 (by decide)] at hcell
+    fin_cases hcell <;> simp <;> omega
+  · intro cell hcell
+    rw [shapeUp_vertI' col 1 (by decide)] at hcell
+    fin_cases hcell <;> simp <;> omega
+  · exact fun x hx => nomatch hx
+  · simpa using place_vertI_flat cfg 0 col hcol
+
+theorem place_bandFlat_T_lift (cfg : GameConfig) (w c col : ℕ)
+    (hcol : col + 2 < cfg.cols) (h0 : col ≠ w) (h1 : col + 1 ≠ w)
+    (h2 : col + 2 ≠ w) :
+    ({ piece := Piece.T, rot := 2, col := col } : Placement).place
+        (debtBoard cfg (bandLift w c (fun _ => 0)) (holeLift c none))
+      = debtBoard cfg
+          (bandLift w c (fun j => if j = col then 1 else if j = col + 1 then 2
+            else if j = col + 2 then 1 else 0))
+          (holeLift c none) := by
+  refine place_debtBoard_bandLift ?_ ?_ ?_ ?_
+  · intro cell hcell
+    rw [shapeUp_flatT col] at hcell
+    fin_cases hcell <;> simp <;> omega
+  · intro cell hcell
+    rw [shapeUp_flatT col] at hcell
+    fin_cases hcell <;> simp <;> omega
+  · exact fun x hx => nomatch hx
+  · simpa using place_flatT cfg 0 col hcol
+
+theorem place_bandFlat_L_lift (cfg : GameConfig) (w c col : ℕ)
+    (hcol : col + 2 < cfg.cols) (h0 : col ≠ w) (h1 : col + 1 ≠ w)
+    (h2 : col + 2 ≠ w) :
+    ({ piece := Piece.L, rot := 0, col := col } : Placement).place
+        (debtBoard cfg (bandLift w c (fun _ => 0)) (holeLift c none))
+      = debtBoard cfg
+          (bandLift w c (fun j => if j = col then 1 else if j = col + 1 then 1
+            else if j = col + 2 then 2 else 0))
+          (holeLift c none) := by
+  refine place_debtBoard_bandLift ?_ ?_ ?_ ?_
+  · intro cell hcell
+    rw [shapeUp_flatL col] at hcell
+    fin_cases hcell <;> simp <;> omega
+  · intro cell hcell
+    rw [shapeUp_flatL col] at hcell
+    fin_cases hcell <;> simp <;> omega
+  · exact fun x hx => nomatch hx
+  · simpa using place_flatL cfg 0 col hcol
+
+theorem place_bandFlat_J_lift (cfg : GameConfig) (w c col : ℕ)
+    (hcol : col + 2 < cfg.cols) (h0 : col ≠ w) (h1 : col + 1 ≠ w)
+    (h2 : col + 2 ≠ w) :
+    ({ piece := Piece.J, rot := 0, col := col } : Placement).place
+        (debtBoard cfg (bandLift w c (fun _ => 0)) (holeLift c none))
+      = debtBoard cfg
+          (bandLift w c (fun j => if j = col then 2 else if j = col + 1 then 1
+            else if j = col + 2 then 1 else 0))
+          (holeLift c none) := by
+  refine place_debtBoard_bandLift ?_ ?_ ?_ ?_
+  · intro cell hcell
+    rw [shapeUp_flatJ col] at hcell
+    fin_cases hcell <;> simp <;> omega
+  · intro cell hcell
+    rw [shapeUp_flatJ col] at hcell
+    fin_cases hcell <;> simp <;> omega
+  · exact fun x hx => nomatch hx
+  · simpa using place_flatJ cfg 0 col hcol
+
+theorem place_bandFlat_S_lift (cfg : GameConfig) (w c col : ℕ)
+    (hcol : col + 2 < cfg.cols) (h0 : col ≠ w) (h1 : col + 1 ≠ w)
+    (h2 : col + 2 ≠ w) :
+    ({ piece := Piece.S, rot := 0, col := col } : Placement).place
+        (debtBoard cfg (bandLift w c (fun _ => 0)) (holeLift c none))
+      = debtBoard cfg
+          (bandLift w c (fun j => if j = col then 1 else if j = col + 1 then 2
+            else if j = col + 2 then 2 else 0))
+          (holeLift c (some (col + 2, 0))) := by
+  refine place_debtBoard_bandLift ?_ ?_ ?_ ?_
+  · intro cell hcell
+    rw [shapeUp_horizS col 0 (by decide)] at hcell
+    fin_cases hcell <;> simp <;> omega
+  · intro cell hcell
+    rw [shapeUp_horizS col 0 (by decide)] at hcell
+    fin_cases hcell <;> simp <;> omega
+  · exact fun x hx => nomatch hx
+  · simpa using place_horizS_flat_eq_holedSkyline cfg 0 col hcol
+
+theorem place_bandFlat_Z_lift (cfg : GameConfig) (w c col : ℕ)
+    (hcol : col + 2 < cfg.cols) (h0 : col ≠ w) (h1 : col + 1 ≠ w)
+    (h2 : col + 2 ≠ w) :
+    ({ piece := Piece.Z, rot := 0, col := col } : Placement).place
+        (debtBoard cfg (bandLift w c (fun _ => 0)) (holeLift c none))
+      = debtBoard cfg
+          (bandLift w c (fun j => if j = col then 2 else if j = col + 1 then 2
+            else if j = col + 2 then 1 else 0))
+          (holeLift c (some (col, 0))) := by
+  refine place_debtBoard_bandLift ?_ ?_ ?_ ?_
+  · intro cell hcell
+    rw [shapeUp_horizZ col 0 (by decide)] at hcell
+    fin_cases hcell <;> simp <;> omega
+  · intro cell hcell
+    rw [shapeUp_horizZ col 0 (by decide)] at hcell
+    fin_cases hcell <;> simp <;> omega
+  · exact fun x hx => nomatch hx
+  · simpa using place_horizZ_flat_eq_holedSkyline cfg 0 col hcol
+
+/-- The drain fires on the band-flat at any base `c ≥ 4` (T2 instance). -/
+theorem drain_bandFlat_lift (cfg : GameConfig) (w c : ℕ)
+    (hw : w < cfg.cols) (hc : 4 ≤ c) :
+    (bandDrain w).applyStep cfg
+        (debtBoard cfg (bandLift w c (fun _ => 0)) (holeLift c none))
+      = debtBoard cfg (bandLift w (c - 4) (fun _ => 0))
+          (holeLift (c - 4) none) :=
+  drain_debtBoard_bandLift hw hc (fun x hx => nomatch hx)
+
 end Board
 end Tetris
