@@ -239,5 +239,121 @@ theorem place_debtBoard_bandLift {cfg : GameConfig} {w c : ℕ}
         · exact Or.inl ⟨g1, g2, by omega⟩
         · exact Or.inr ⟨hrc, hmem⟩
 
+/-- The drain placement: vertical I in column `w`. Mirrors
+`Safety/SeamBridge.drainPl`, which lives above this layer; the definitional
+bridge is stated beside `ShiftCertificate`. -/
+def bandDrain (w : ℕ) : Placement := ⟨Piece.I, 1, w⟩
+
+theorem bandDrain_shapeUp (w : ℕ) :
+    (bandDrain w).shapeUp = {((0 : ℕ), (0 : ℕ)), (0, 1), (0, 2), (0, 3)} :=
+  shapeUp_vertI' w 1 (by decide)
+
+@[simp] theorem bandDrain_col (w : ℕ) : (bandDrain w).col = w := rfl
+
+/-- The drain drops to the floor of the (empty) well and fills rows 0–3. -/
+theorem bandDrain_place {cfg : GameConfig} {w c : ℕ} {ρ : ℕ → ℕ}
+    {ho : Option Coord} (hw : w < cfg.cols)
+    (hho : ∀ x, ho = some x →
+      x.1 ≠ w ∧ x.1 < cfg.cols ∧ x.2 + 1 < ρ x.1) :
+    (bandDrain w).place (debtBoard cfg (bandLift w c ρ) (holeLift c ho))
+      = debtBoard cfg (fun j => if j = w then 4 else ρ j + c)
+          (holeLift c ho) := by
+  have hcovL : ∀ x, holeLift c ho = some x → x.2 + 1 < bandLift w c ρ x.1 := by
+    rintro x hx
+    cases ho with
+    | none => simp at hx
+    | some x₀ =>
+        rw [holeLift_some, Option.some.injEq] at hx
+        subst hx
+        rw [bandLift_ne w c ρ (hho x₀ rfl).1]
+        have := (hho x₀ rfl).2.2
+        omega
+  have hcolw : (debtBoard cfg (bandLift w c ρ) (holeLift c ho)).colHeight w = 0 := by
+    rw [colHeight_debtBoard hcovL, if_pos hw, bandLift_well]
+  have hD : (bandDrain w).dropOffset
+      (debtBoard cfg (bandLift w c ρ) (holeLift c ho)) = 0 := by
+    rw [Placement.dropOffset_eq_sup, bandDrain_shapeUp]
+    simp only [Finset.sup_insert, Finset.sup_singleton, Nat.add_zero,
+      bandDrain_col, hcolw, Nat.zero_sub, Nat.sub_zero, max_self]
+  have hdr : (bandDrain w).dropped
+      (debtBoard cfg (bandLift w c ρ) (holeLift c ho))
+      = {(w, 0), (w, 1), (w, 2), (w, 3)} := by
+    rw [Placement.dropped_eq_image, bandDrain_shapeUp, hD]
+    simp only [Finset.image_insert, Finset.image_singleton, bandDrain_col,
+      Nat.add_zero, Nat.zero_add]
+  rw [Placement.place_eq_union_dropped, hdr]
+  ext ⟨a, r⟩
+  simp only [Finset.mem_union, mem_debtBoard, Finset.mem_insert,
+    Finset.mem_singleton, Prod.mk.injEq]
+  constructor
+  · rintro (⟨hh, hac, hlt⟩ | hdrop)
+    · refine ⟨hh, hac, ?_⟩
+      by_cases haw : a = w
+      · subst haw; rw [bandLift_well] at hlt; omega
+      · rw [bandLift_ne w c ρ haw] at hlt
+        rw [if_neg haw]
+        omega
+    · obtain ⟨rfl, hr4⟩ : a = w ∧ r < 4 := by omega
+      refine ⟨?_, hw, by rw [if_pos rfl]; omega⟩
+      rintro x hx hcontra
+      cases ho with
+      | none => simp at hx
+      | some x₀ =>
+          rw [holeLift_some, Option.some.injEq] at hx
+          subst hx
+          have h1 := congrArg Prod.fst hcontra
+          simp only at h1
+          exact (hho x₀ rfl).1 h1.symm
+  · rintro ⟨hh, hac, hlt⟩
+    by_cases haw : a = w
+    · subst haw
+      rw [if_pos rfl] at hlt
+      right
+      omega
+    · rw [if_neg haw] at hlt
+      exact Or.inl ⟨hh, hac, by rw [bandLift_ne w c ρ haw]; omega⟩
+
+/-- **T2 — the generic drain.** At any band base `c ≥ 4`, dropping the
+vertical I into the well clears exactly rows 0–3: the pattern and the
+rep-hole are unchanged and the base drops by 4. -/
+theorem drain_debtBoard_bandLift {cfg : GameConfig} {w c : ℕ} {ρ : ℕ → ℕ}
+    {ho : Option Coord} (hw : w < cfg.cols) (hc : 4 ≤ c)
+    (hho : ∀ x, ho = some x →
+      x.1 ≠ w ∧ x.1 < cfg.cols ∧ x.2 + 1 < ρ x.1) :
+    (bandDrain w).applyStep cfg
+        (debtBoard cfg (bandLift w c ρ) (holeLift c ho))
+      = debtBoard cfg (bandLift w (c - 4) ρ) (holeLift (c - 4) ho) := by
+  rw [Placement.applyStep_eq_clearLines_place, bandDrain_place hw hho]
+  have hm : ∀ j < cfg.cols, 4 ≤ (fun j => if j = w then 4 else ρ j + c) j := by
+    intro j hj
+    by_cases hjw : j = w
+    · simp [hjw]
+    · simp only [if_neg hjw]
+      omega
+  have hm0 : ∃ j < cfg.cols, (fun j => if j = w then 4 else ρ j + c) j = 4 :=
+    ⟨w, hw, by simp⟩
+  cases ho with
+  | none =>
+      simp only [holeLift_none, debtBoard_none]
+      rw [clearLines_skyline hm hm0]
+      congr 1
+      funext j
+      by_cases hjw : j = w
+      · subst hjw; simp [bandLift]
+      · simp only [bandLift, if_neg hjw]
+        omega
+  | some x =>
+      obtain ⟨hxw, hxc, hxcov⟩ := hho x rfl
+      simp only [holeLift_some, debtBoard_some]
+      rw [clearLines_holedSkyline_of_le (x := (x.1, x.2 + c)) hxc hm hm0
+        (hc.trans (Nat.le_add_left c x.2))]
+      congr 1
+      · funext j
+        by_cases hjw : j = w
+        · subst hjw; simp [bandLift]
+        · simp only [bandLift, if_neg hjw]
+          omega
+      · exact Prod.ext rfl (by omega)
+
 end Board
 end Tetris
