@@ -22,7 +22,10 @@ green_files=$(find Proofs -name '*.lean' \
   -not -path 'Proofs/Experiments/*' \
   -not -path 'Proofs/Archive/*')
 
-violations=$(printf '%s\n' "$green_files" | xargs grep -nE 'sorry|native_decide' 2>/dev/null || true)
+# Match `sorry` / `native_decide` as standalone tokens, excluding
+# backtick-quoted prose mentions in docstrings (e.g. "no `sorry` is used").
+violations=$(printf '%s\n' "$green_files" \
+  | xargs grep -nE '(^|[^`[:alnum:]_])(sorry|native_decide)([^`[:alnum:]_]|$)' 2>/dev/null || true)
 
 if [ -n "$violations" ]; then
   echo "GREEN HYGIENE FAILURE — 'sorry' / 'native_decide' found in the green library:" >&2

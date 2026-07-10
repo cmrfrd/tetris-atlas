@@ -121,6 +121,7 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | `AdversarialClosedCycle` + `.subset_safe` + `.init_solves`; `solvable_of_isInitCycle` | the working M2 tool + machine-checkable cycle endpoint |
 | `F_finite`, `safeIterFinite`, `safeIterFinite_converges`; `safeIterFinite_subset_safe` (sound) + `safe_subset_safeIterFinite` (complete); `decideSafeFromUniverse` | computable GFP iteration, two-sided-correct |
 | **`tetrisSolvableValidFor_iff_init_mem_safeIterFinite`**; the M2/M3/M4 iffs; `IsSolvabilityCertificate` + `solvable_of_certificate` | master decidable characterization — "building the Atlas = solving Tetris" |
+| `ShiftCertificate` + **`tetrisSolvableValid_of_shiftCertificate`** (`Safety/ShiftCertificate`); T1/T2 transport (`Invariants/BandShift`) | the translation quotient: `DebtCertificate` closure at base-0 band representatives — witnessed transitions (`place_debtBoard_bandLift`) and the generic drain (`drain_debtBoard_bandLift`) transport to every admissible base; base is a designer scalar predicate |
 | `LegalSequenceFrom.splice`, `adversarialTrace_*`, the pigeonhole cycle-existence lemmas | the survival + cycle-existence engine under the bridge |
 
 ### Layer 4 — Survival vocabulary (`Survival`)
@@ -177,9 +178,10 @@ Proofs/
   Model/         Config Piece Board Placement Bag Game                         ✓
   Combinatorics/ PieceGeometry BoardCount ColumnCount  BagBurst                ✓
   Invariants/    StepInvariants Gameplay GameplayExtra Holes StateSpace
-                 Wqo HoleyCarrier SurfaceFiber HoleDebt                        ✓
+                 Wqo HoleyCarrier SurfaceFiber HoleDebt BandShift              ✓
   Survival/      Survival                                                      ✓
-  Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite      ✓
+  Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite
+                 SkylineInvariant ShiftCertificate                             ✓
 ProofsExperiments.lean       -- separate lib (route reductions, native_decide, Scratch/*)
 Proofs/Experiments/          -- WqoCarrier/HoleyCarrier reductions, EnergyGame, PieceCharge,
                                 carrier zoo (SurfaceInvariant, FiveBagReset), Scratch/*

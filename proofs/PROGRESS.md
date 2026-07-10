@@ -13,20 +13,33 @@ new tick — it tells you where the prior tick left off.
 
 ## Current build status
 
-- `lake build` (green `Proofs`) — **PASSING** (8274 jobs); base-axiom-clean
+- `lake build` (green `Proofs`) — **PASSING** (8292 jobs); base-axiom-clean
   (`propext`, `Classical.choice`, `Quot.sound`), **no `sorry`, no `native_decide`**.
-- `lake build ProofsExperiments` (research routes) — **PASSING** (8284 jobs); may use
+- `lake build ProofsExperiments` (research routes) — **PASSING** (8288 jobs); may use
   `native_decide`.
 
 ## Sorry count
 
-Green standard library: **0**. The only `sorry`s in the tree are 3 in
-`Proofs/Experiments/AbstractSafe.lean` — an unbuilt scaffold (imported by neither lake
-target; statements are the deliverable, proofs are the open realization crux #66/#72).
+**0 everywhere** (green library and Experiments; `AbstractSafe.lean` was rewritten
+as a sorry-free conditional reduction). `scripts/check-green-clean.sh` gates the
+green tree (token-aware: backtick-quoted docstring mentions are ignored).
 
 When sorries are added as scaffolding, list them here with `file:line — why`.
 
 ## Last tick
+
+Tick (manual, 2026-07-09) — **the translation quotient**: `Invariants/BandShift.lean`
+(well-anchored band lift `bandLift`/`holeLift`; T1 `place_debtBoard_bandLift`
+transports witnessed debt-1 place transitions to every band base; T2
+`drain_debtBoard_bandLift` — the generic well drain at base ≥ 4, pattern and hole
+unchanged, base −4; the seven flat witnesses lifted as validation,
+`place_bandFlat_{O,I,T,L,J,S,Z}_lift` + `drain_bandFlat_lift`) +
+`Safety/ShiftCertificate.lean` (`ShiftCertificate` = `DebtCertificate` quotiented by
+band translation with a designer `okBase` predicate;
+`tetrisSolvableValid_of_shiftCertificate` via `toDebtCertificate`). Board-level
+closure obligations are now stated once at base-0 representatives; base handling is
+scalar arithmetic. Axiom gate on all new spine theorems:
+`[propext, Classical.choice, Quot.sound]`. Both lake targets green.
 
 Tick 1986 (cron, 2026-06-05) — **`(M.union
 M').canon = M.union M'` when both canonical**:
