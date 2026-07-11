@@ -42,5 +42,44 @@ theorem place_debtBoard_of_flush {cfg : GameConfig} {ρ ρ' : ℕ → ℕ}
         place_holedSkyline pl hxc hxcov, hflush]
       rfl
 
+theorem shapeUp_horizI (c : ℕ) :
+    ({ piece := Piece.I, rot := 0, col := c } : Placement).shapeUp
+      = {((0 : ℕ), (0 : ℕ)), (1, 0), (2, 0), (3, 0)} := by
+  show Piece.shapeUp Piece.I 0 = _
+  decide
+
+/-- **Flush placement of the horizontal I on a flat surface** — four columns,
++1 each. This is the bag-1 I response at base 0, where the well drain
+(`4 ≤ c`) is unavailable. -/
+theorem place_horizI_flat (cfg : GameConfig) (base col : ℕ)
+    (hcol : col + 3 < cfg.cols) :
+    ({ piece := Piece.I, rot := 0, col := col } : Placement).place
+        (skyline cfg (fun _ => base))
+      = skyline cfg (fun j =>
+          if j = col ∨ j = col + 1 ∨ j = col + 2 ∨ j = col + 3
+          then base + 1 else base) := by
+  have hsh := shapeUp_horizI col
+  have hc0 : col + 0 < cfg.cols := by omega
+  have hc1 : col + 1 < cfg.cols := by omega
+  have hc2 : col + 2 < cfg.cols := by omega
+  have hd : ({ piece := Piece.I, rot := 0, col := col } : Placement).dropOffset
+      (skyline cfg (fun _ => base)) = base := by
+    rw [Placement.dropOffset_eq_sup, hsh]
+    simp only [Finset.sup_insert, Finset.sup_singleton,
+      colHeight_skyline hc0, colHeight_skyline hc1, colHeight_skyline hc2,
+      colHeight_skyline hcol]
+    omega
+  have hdr : ({ piece := Piece.I, rot := 0, col := col } : Placement).dropped
+      (skyline cfg (fun _ => base))
+      = {(col, base), (col + 1, base), (col + 2, base), (col + 3, base)} := by
+    rw [Placement.dropped_eq_image, hsh, hd]
+    simp only [Finset.image_insert, Finset.image_singleton]
+    norm_num
+  rw [Placement.place_eq_union_dropped, hdr]
+  ext ⟨a, b⟩
+  simp only [Finset.mem_union, mem_skyline', Finset.mem_insert,
+    Finset.mem_singleton, Prod.mk.injEq]
+  split_ifs <;> omega
+
 end Board
 end Tetris
