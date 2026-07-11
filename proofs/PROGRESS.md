@@ -28,6 +28,22 @@ When sorries are added as scaffolding, list them here with `file:line — why`.
 
 ## Last tick
 
+Tick (manual, 2026-07-11) — **the band-schedule reduction**:
+`Invariants/BandMechanisms.lean` (debt-carry wrapper `place_debtBoard_of_flush` —
+every flush skyline transition holds verbatim on debt-1 boards; `place_horizI_flat`
+— the bag-1 I response; the bootstrap pack `sBoot`/`zBoot` + mutual-enabling
+windows + `place_vertZ_afterS`/`place_vertS_afterZ` — the flat-S residue carries a
+Z-window and vice versa, so exactly one hole is ever forced) +
+`Safety/BandSchedule.lean` (`BandState` with Option window anchors, forced `bump2`
+successors, `BandScheduleCert`; `toShiftCertificate` discharges the anchored S/Z/O
+closure unconditionally; `tetrisSolvableValid_of_bandSchedule`). KEY STRUCTURAL
+FACT established en route: under the well discipline debt can NEVER be repaid
+(`clearLines_holedSkyline_exposed` needs the hole column at the positive global
+minimum; the well pins the minimum at 0) — the steady state carries the one
+bootstrap hole forever. The open content of the whole development is now: T/L/J
+responses, the I disjunction, the bag-1 wiring, and okB rate bookkeeping — a
+4-piece schedule. Both targets green, axiom gate clean.
+
 Tick (manual, 2026-07-09) — **the translation quotient**: `Invariants/BandShift.lean`
 (well-anchored band lift `bandLift`/`holeLift`; T1 `place_debtBoard_bandLift`
 transports witnessed debt-1 place transitions to every band base; T2

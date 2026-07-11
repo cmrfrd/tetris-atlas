@@ -122,6 +122,7 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | `F_finite`, `safeIterFinite`, `safeIterFinite_converges`; `safeIterFinite_subset_safe` (sound) + `safe_subset_safeIterFinite` (complete); `decideSafeFromUniverse` | computable GFP iteration, two-sided-correct |
 | **`tetrisSolvableValidFor_iff_init_mem_safeIterFinite`**; the M2/M3/M4 iffs; `IsSolvabilityCertificate` + `solvable_of_certificate` | master decidable characterization — "building the Atlas = solving Tetris" |
 | `ShiftCertificate` + **`tetrisSolvableValid_of_shiftCertificate`** (`Safety/ShiftCertificate`); T1/T2 transport (`Invariants/BandShift`) | the translation quotient: `DebtCertificate` closure at base-0 band representatives — witnessed transitions (`place_debtBoard_bandLift`) and the generic drain (`drain_debtBoard_bandLift`) transport to every admissible base; base is a designer scalar predicate |
+| `BandScheduleCert` + **`tetrisSolvableValid_of_bandSchedule`** (`Safety/BandSchedule`); debt-carry wrapper + bag-1 pack (`Invariants/BandMechanisms`) | the steady-state reduction: anchored S/Z/O closure discharged from the reproduction mechanisms + `place_debtBoard_of_flush`; open remainder = T/L/J/I schedule + bootstrap wiring + `okB` rate bookkeeping |
 | `LegalSequenceFrom.splice`, `adversarialTrace_*`, the pigeonhole cycle-existence lemmas | the survival + cycle-existence engine under the bridge |
 
 ### Layer 4 — Survival vocabulary (`Survival`)
@@ -178,10 +179,11 @@ Proofs/
   Model/         Config Piece Board Placement Bag Game                         ✓
   Combinatorics/ PieceGeometry BoardCount ColumnCount  BagBurst                ✓
   Invariants/    StepInvariants Gameplay GameplayExtra Holes StateSpace
-                 Wqo HoleyCarrier SurfaceFiber HoleDebt BandShift              ✓
+                 Wqo HoleyCarrier SurfaceFiber HoleDebt BandShift
+                 BandMechanisms                                                 ✓
   Survival/      Survival                                                      ✓
   Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite
-                 SkylineInvariant ShiftCertificate                             ✓
+                 SkylineInvariant ShiftCertificate BandSchedule                ✓
 ProofsExperiments.lean       -- separate lib (route reductions, native_decide, Scratch/*)
 Proofs/Experiments/          -- WqoCarrier/HoleyCarrier reductions, EnergyGame, PieceCharge,
                                 carrier zoo (SurfaceInvariant, FiveBagReset), Scratch/*
