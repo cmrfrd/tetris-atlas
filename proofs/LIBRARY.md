@@ -123,6 +123,7 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | **`tetrisSolvableValidFor_iff_init_mem_safeIterFinite`**; the M2/M3/M4 iffs; `IsSolvabilityCertificate` + `solvable_of_certificate` | master decidable characterization — "building the Atlas = solving Tetris" |
 | `ShiftCertificate` + **`tetrisSolvableValid_of_shiftCertificate`** (`Safety/ShiftCertificate`); T1/T2 transport (`Invariants/BandShift`) | the translation quotient: `DebtCertificate` closure at base-0 band representatives — witnessed transitions (`place_debtBoard_bandLift`) and the generic drain (`drain_debtBoard_bandLift`) transport to every admissible base; base is a designer scalar predicate |
 | `BandScheduleCert` + **`tetrisSolvableValid_of_bandSchedule`** (`Safety/BandSchedule`); debt-carry wrapper + bag-1 pack (`Invariants/BandMechanisms`) | the steady-state reduction: anchored S/Z/O closure discharged from the reproduction mechanisms + `place_debtBoard_of_flush`; open remainder = T/L/J/I schedule + bootstrap wiring + `okB` rate bookkeeping |
+| `PlinthCert` + **`tetrisSolvableValid_of_plinthCert`** (`Safety/PlinthCert`); plinth transport T1′/T2′ + well plug (`Invariants/PlinthShift`) | the CORRECTED inhabitation target (findings D1/D2: v1 certs sound but uninhabitable — base never rises; row-0 hole blocks re-anchoring): immortal floor, mid-row drain, `ReanchorsTo` membership; open remainder = T/L/J/I schedule + boot tree + rate bookkeeping |
 | `LegalSequenceFrom.splice`, `adversarialTrace_*`, the pigeonhole cycle-existence lemmas | the survival + cycle-existence engine under the bridge |
 
 ### Layer 4 — Survival vocabulary (`Survival`)
@@ -180,10 +181,10 @@ Proofs/
   Combinatorics/ PieceGeometry BoardCount ColumnCount  BagBurst                ✓
   Invariants/    StepInvariants Gameplay GameplayExtra Holes StateSpace
                  Wqo HoleyCarrier SurfaceFiber HoleDebt BandShift
-                 BandMechanisms                                                 ✓
+                 BandMechanisms PlinthShift                                     ✓
   Survival/      Survival                                                      ✓
   Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite
-                 SkylineInvariant ShiftCertificate BandSchedule                ✓
+                 SkylineInvariant ShiftCertificate BandSchedule PlinthCert     ✓
 ProofsExperiments.lean       -- separate lib (route reductions, native_decide, Scratch/*)
 Proofs/Experiments/          -- WqoCarrier/HoleyCarrier reductions, EnergyGame, PieceCharge,
                                 carrier zoo (SurfaceInvariant, FiveBagReset), Scratch/*

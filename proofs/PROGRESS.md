@@ -28,6 +28,29 @@ When sorries are added as scaffolding, list them here with `file:line — why`.
 
 ## Last tick
 
+Tick (manual, 2026-07-12) — **FINDINGS D1/D2 + the plinth foundation**.
+D1: `ShiftCertificate`/`BandScheduleCert` (2026-07-09/10) are SOUND but
+UNINHABITABLE — every placement obligation propagates the base unchanged, the
+drain lowers it, `initBase` starts at 0: the drain guard `4 ≤ b` is unreachable,
+no clears fire, and `height_floor` forces the `height` obligation to fail.
+Missing operation: re-anchoring `(ρ, b) ↦ (ρ − d, b + d)`. D2: even with
+re-anchoring, the forced row-0 bootstrap hole (any first S/Z on flat) blocks all
+re-anchors (`holeLift` row arithmetic) — physically, a row-0 hole means rows 0–3
+are never simultaneously full. FIX (the plinth): one bag-1 J-rot-3 placement
+plugs the well's row 0 (`place_wellPlug_flat`); row 0 becomes a permanent floor
+whose hole keeps it from ever clearing (`fullRows_plinth_eq_empty` — the floor
+is immortal); drains fill and clear rows 1–4 (`drain_debtBoard_plinthLift`,
+a MID-ROW clear proven from the raw `clearLines`); the band rides `c + 1` above
+in coordinates the hole never touches, so re-anchoring (`ReanchorsTo`) is free.
+New: `Invariants/PlinthShift.lean` (lift, T1′ `place_debtBoard_plinthLift` from
+BARE skyline reps — all mechanisms reuse, T2′, the plug) +
+`Safety/PlinthCert.lean` (`PlinthMem` re-anchored membership, two-regime
+`PlinthCert`, direct `toDebtCertificate`, `tetrisSolvableValid_of_plinthCert`).
+The v1 certificates stay green as sound theorems; PlinthCert is the
+inhabitation target. Schedule roadmap (10-bag/7-drain/3-band-I forced; zone
+layout well+S+Z+T+OLJ = 10; the redirect flush-compatibility puzzle) in
+`docs/superpowers/specs/2026-07-12-plinth-cert-design.md`.
+
 Tick (manual, 2026-07-11) — **the band-schedule reduction**:
 `Invariants/BandMechanisms.lean` (debt-carry wrapper `place_debtBoard_of_flush` —
 every flush skyline transition holds verbatim on debt-1 boards; `place_horizI_flat`
