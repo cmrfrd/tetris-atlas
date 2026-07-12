@@ -105,5 +105,122 @@ theorem place_wellPlug_flat (cfg : GameConfig) (base w : ℕ)
     Finset.mem_singleton, Prod.mk.injEq]
   split_ifs <;> omega
 
+/-- Hard-drop shift onto the plinth: the offset is the bare-skyline offset
+plus `c + 1` (the entombed hole is strictly covered, hence invisible). -/
+theorem dropOffset_plinthLift {cfg : GameConfig} {w hx c : ℕ}
+    {ρ : ℕ → ℕ} {pl : Placement}
+    (hcols : ∀ cell ∈ pl.shapeUp, pl.col + cell.1 < cfg.cols)
+    (havoid : ∀ cell ∈ pl.shapeUp, pl.col + cell.1 ≠ w)
+    (hhx : hx ≠ w ∧ hx < cfg.cols ∧ 1 ≤ ρ hx) :
+    pl.dropOffset (debtBoard cfg (plinthLift w c ρ) (some (hx, 0)))
+      = pl.dropOffset (skyline cfg ρ) + (c + 1) := by
+  have hcovL : ∀ x, (some ((hx : ℕ), (0 : ℕ)) : Option Coord) = some x →
+      x.2 + 1 < plinthLift w c ρ x.1 := by
+    rintro x hx'
+    rw [Option.some.injEq] at hx'
+    subst hx'
+    rw [plinthLift_ne w c ρ hhx.1]
+    have := hhx.2.2
+    omega
+  have hL : pl.dropOffset (debtBoard cfg (plinthLift w c ρ) (some (hx, 0)))
+      = pl.shapeUp.sup (fun cell => ρ (pl.col + cell.1) + (c + 1) - cell.2) := by
+    rw [Placement.dropOffset_eq_sup]
+    refine Finset.sup_congr rfl fun cell hcell => ?_
+    rw [colHeight_debtBoard hcovL, if_pos (hcols cell hcell),
+      plinthLift_ne w c ρ (havoid cell hcell),
+      show ρ (pl.col + cell.1) + c + 1 = ρ (pl.col + cell.1) + (c + 1) from
+        by omega]
+  have hR : pl.dropOffset (skyline cfg ρ)
+      = pl.shapeUp.sup (fun cell => ρ (pl.col + cell.1) - cell.2) := by
+    rw [Placement.dropOffset_eq_sup]
+    refine Finset.sup_congr rfl fun cell hcell => ?_
+    rw [colHeight_skyline (hcols cell hcell)]
+  rw [hL, hR]
+  exact sup_sub_add_shift pl.shapeUp (fun cell => ρ (pl.col + cell.1)) (c + 1)
+    (Placement.shapeUp_exists_bottom pl.piece pl.rot)
+
+/-- **T1′ — plinth transport.** A bare flush skyline transition holds on the
+plinth board at every base: landing cells ride `c + 1` above the floor, the
+well column is `{(w, 0)}` on both sides, and the entombed hole never moves.
+Rep obligations are bare-skyline, so every existing mechanism applies. -/
+theorem place_debtBoard_plinthLift {cfg : GameConfig} {w hx c : ℕ}
+    {ρ ρ' : ℕ → ℕ} {pl : Placement}
+    (hcols : ∀ cell ∈ pl.shapeUp, pl.col + cell.1 < cfg.cols)
+    (havoid : ∀ cell ∈ pl.shapeUp, pl.col + cell.1 ≠ w)
+    (hhx : hx ≠ w ∧ hx < cfg.cols ∧ 1 ≤ ρ hx)
+    (hrep : pl.place (skyline cfg ρ) = skyline cfg ρ') :
+    pl.place (debtBoard cfg (plinthLift w c ρ) (some (hx, 0)))
+      = debtBoard cfg (plinthLift w c ρ') (some (hx, 0)) := by
+  have hD := dropOffset_plinthLift (cfg := cfg) (w := w) (hx := hx) (c := c)
+    (ρ := ρ) (pl := pl) hcols havoid hhx
+  have hpt := fun p => Finset.ext_iff.mp hrep p
+  ext ⟨a, r⟩
+  simp only [Placement.place_eq_union_dropped, Finset.mem_union,
+    Placement.dropped_eq_cellsAt, hD, mem_cellsAt_add, mem_debtBoard]
+  have hrep_ar := hpt (a, r - (c + 1))
+  simp only [Placement.place_eq_union_dropped, Finset.mem_union,
+    Placement.dropped_eq_cellsAt, mem_skyline'] at hrep_ar
+  by_cases haw : a = w
+  · -- Column w: exactly {(w, 0)} on both sides.
+    subst haw
+    constructor
+    · rintro (⟨hne, hac, hlt⟩ | ⟨-, hmem⟩)
+      · rw [plinthLift_well] at hlt
+        exact ⟨hne, hac, by rw [plinthLift_well]; omega⟩
+      · rcases mem_cellsAt.mp hmem with ⟨cell, hcell, h1, -⟩
+        exact absurd h1 (havoid cell hcell)
+    · rintro ⟨hne, hac, hlt⟩
+      rw [plinthLift_well] at hlt
+      exact Or.inl ⟨hne, hac, by rw [plinthLift_well]; omega⟩
+  · by_cases hrc : r < c + 1
+    · -- The slab (rows ≤ c): filled on both sides except the hole point.
+      by_cases hhole : a = hx ∧ r = 0
+      · obtain ⟨rfl, rfl⟩ := hhole
+        constructor
+        · rintro (⟨hne, -, -⟩ | ⟨hcr, -⟩)
+          · exact absurd rfl (hne (a, 0) rfl)
+          · omega
+        · rintro ⟨hne, -, -⟩
+          exact absurd rfl (hne (a, 0) rfl)
+      · constructor
+        · rintro (⟨-, hac, -⟩ | ⟨hcr, -⟩)
+          · refine ⟨?_, hac, ?_⟩
+            · rintro x hx' hcontra
+              rw [Option.some.injEq] at hx'
+              subst hx'
+              rw [Prod.mk.injEq] at hcontra
+              exact hhole hcontra
+            · rw [plinthLift_ne w c ρ' haw]; omega
+          · omega
+        · rintro ⟨-, hac, -⟩
+          refine Or.inl ⟨?_, hac, ?_⟩
+          · rintro x hx' hcontra
+            rw [Option.some.injEq] at hx'
+            subst hx'
+            rw [Prod.mk.injEq] at hcontra
+            exact hhole hcontra
+          · rw [plinthLift_ne w c ρ haw]; omega
+    · -- Above the slab: transfer through the bare representative.
+      push_neg at hrc
+      have hne_auto : ∀ x, (some ((hx : ℕ), (0 : ℕ)) : Option Coord) = some x →
+          ((a : ℕ), (r : ℕ)) ≠ x := by
+        rintro x hx' hcontra
+        rw [Option.some.injEq] at hx'
+        subst hx'
+        have h2 := congrArg Prod.snd hcontra
+        simp only at h2
+        omega
+      rw [plinthLift_ne w c ρ haw, plinthLift_ne w c ρ' haw]
+      constructor
+      · rintro (⟨-, h2, h3⟩ | ⟨-, hmem⟩)
+        · have hout := hrep_ar.mp (Or.inl ⟨h2, by omega⟩)
+          exact ⟨hne_auto, hout.1, by omega⟩
+        · have hout := hrep_ar.mp (Or.inr hmem)
+          exact ⟨hne_auto, hout.1, by omega⟩
+      · rintro ⟨-, h2, h3⟩
+        rcases hrep_ar.mpr ⟨h2, by omega⟩ with ⟨g2, g3⟩ | hmem
+        · exact Or.inl ⟨hne_auto, g2, by omega⟩
+        · exact Or.inr ⟨hrc, hmem⟩
+
 end Board
 end Tetris
