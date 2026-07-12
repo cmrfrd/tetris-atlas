@@ -52,6 +52,7 @@ import Proofs.Safety.SeamBridge
 import Proofs.Safety.SkylineInvariant
 import Proofs.Safety.ShiftCertificate
 import Proofs.Safety.BandSchedule
+import Proofs.Safety.PlinthCert
 import Proofs.Safety.SafeIterate
 import Proofs.Safety.SafeIterateFinite
 import Proofs.Safety.Safety
