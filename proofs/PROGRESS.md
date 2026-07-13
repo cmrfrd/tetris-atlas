@@ -28,6 +28,35 @@ When sorries are added as scaffolding, list them here with `file:line — why`.
 
 ## Last tick
 
+Tick (manual, 2026-07-13) — **drain invisibility + the I-pool verdicts: the
+zone paradigm is exhausted at the decidable scale**. PROVEN (`normZ_shift`,
+FlushZoneGame): the global drain (exact uniform −4 at base ≥ 4) is a NO-OP in
+the min-normalized zone game — all 2026-07-12b dead verdicts are therefore
+DRAIN-ROBUST (hold under every drain schedule). The scheduled game
+(`survP`/`flushDeadP`, per-bag piece lists cycling) added; existing engine and
+verdicts untouched. Batch-3 verdicts (all ~5–25s native_decide):
+| instance | params | verdict |
+|---|---|---|
+| olji4 | {O,L,J,I} w4 K6 B6 | DEAD |
+| olji5 | {O,L,J,I} w5 K6 B6 | DEAD |
+| olji5 | {O,L,J,I} w5 K10 B6 | DEAD |
+| szti4 | {S,Z,T,I} w4 K6 B6 | DEAD |
+| szti6 | {S,Z,T,I} w6 K6 B4 | DEAD |
+| szti6 | {S,Z,T,I} w6 K10 B4 | DEAD |
+| all7 | all seven w6 K8 B3 | DEAD |
+| mixed10 | all-six + I in 3/10 bags, w6 K10 B10 | DEAD |
+IMPLICATION: the band-I does not rescue any ≤ 6-column window, at honest
+ceiling budgets, nor under the rate-faithful schedule. Every natural
+piece-subset zone at every decidable width is now dead and drain-robust. The
+zone paradigm is EXHAUSTED at the sanctioned in-kernel scale: remaining
+zone-split space is only trivial-pair + 7-wide-rest shapes (beyond the 6-col
+line ≈ the whole-band game ≈ the crux). The inhabitant, if it exists, is a
+fully coupled 9-column cycle. Next lever (per repo methodology): hand-DESIGN a
+9-col cycle symbolically from the slot algebra + mechanisms, then CERTIFY the
+designed candidate (checking a given family is not a search) — the
+certify-a-candidate mode is the missing engine feature, and the PlinthCert
+obligations are exactly the shape such a certificate must fill.
+
 Tick (manual, 2026-07-12b) — **the slot algebra + flush-zone verdicts**.
 F1 as GREEN THEOREMS (`Invariants/SlotAlgebra.lean`, all by `decide` over the
 shape table): a standing ±1 step admits ONLY vertical S/Z/T

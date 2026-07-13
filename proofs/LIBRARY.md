@@ -239,7 +239,7 @@ fixed-move-ordering lemmas that floor at all-orders accounting). **Keep** the
 concrete reachable-cycle results `safeSolver_sevenBagCycle_reachable_closed_cycle`,
 `sevenBagCycle_legal` (genuine M3) and all refutations.
 
-**Keep-active (live research):** `FlushZoneGame` (in-kernel flush-zone verdicts, ZoneGame pattern — the schedule design-space cartography); `OnlineReservoir` phase graph (open field
+**Keep-active (live research):** `FlushZoneGame` (in-kernel flush-zone verdicts, ZoneGame pattern — the schedule design-space cartography; + scheduled game `flushDeadP`, drain-invisibility `normZ_shift`, I-pool verdicts: the ≤6-col zone paradigm is exhausted, all dead and drain-robust); `OnlineReservoir` phase graph (open field
 `PhaseGraphCompletion.frontier_step`); `SurfaceStrategy` (`ReachableUnder` +
 `tetrisSolvableValid_of_strategy` — the structurally-correct positive route);
 `EnergyGame`; the `Wqo/HoleDebt/RoughnessBudget/Topical` characterization routes.
