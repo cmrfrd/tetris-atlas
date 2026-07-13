@@ -213,5 +213,135 @@ theorem all6_verdict :
       = true := by
   native_decide
 
+/-! ## Drain invisibility
+
+The global drain subtracts 4 from every band column exactly (it fires at
+base ≥ 4), and states here are min-normalized — so any drain schedule is a
+NO-OP for this game (`normZ_shift`). The batch-1/2 dead verdicts are
+therefore DRAIN-ROBUST: they hold under every drain schedule. What the
+drain changes in the real band is modeled instead by the band-I pools and
+the honest spread caps below. -/
+
+theorem foldl_min_map_sub (k : ℕ) : ∀ (t : List ℕ) (acc : ℕ),
+    (∀ x ∈ t, k ≤ x) → k ≤ acc →
+    (t.map (· - k)).foldl Nat.min (acc - k) = t.foldl Nat.min acc - k := by
+  intro t
+  induction t with
+  | nil => intro acc _ _; rfl
+  | cons a t ih =>
+      intro acc hall hacc
+      simp only [List.map_cons, List.foldl_cons]
+      have ha : k ≤ a := hall a (List.mem_cons_self ..)
+      rw [show Nat.min (acc - k) (a - k) = Nat.min acc a - k by
+        simp only [Nat.min_def]; split_ifs <;> omega]
+      exact ih (Nat.min acc a)
+        (fun x hx => hall x (List.mem_cons_of_mem _ hx))
+        (by simp only [Nat.min_def]; split_ifs <;> omega)
+
+theorem minZ_map_sub (h : ZS) (k : ℕ) (hall : ∀ x ∈ h, k ≤ x) :
+    minZ (h.map (· - k)) = minZ h - k := by
+  cases h with
+  | nil => simp [minZ]
+  | cons a t =>
+      have ha : k ≤ a := hall a (List.mem_cons_self ..)
+      simp only [minZ, List.map_cons, List.headD_cons, List.foldl_cons]
+      rw [show Nat.min (a - k) (a - k) = Nat.min a a - k by
+        simp [Nat.min_self]]
+      exact foldl_min_map_sub k t (Nat.min a a)
+        (fun x hx => hall x (List.mem_cons_of_mem _ hx))
+        (by simp only [Nat.min_self]; omega)
+
+theorem le_minZ (h : ZS) (k : ℕ) (hall : ∀ x ∈ h, k ≤ x) : k ≤ minZ h ∨ h = [] := by
+  cases h with
+  | nil => exact Or.inr rfl
+  | cons a t =>
+      left
+      have : ∀ (t : List ℕ) (acc : ℕ), (∀ x ∈ t, k ≤ x) → k ≤ acc →
+          k ≤ t.foldl Nat.min acc := by
+        intro t
+        induction t with
+        | nil => intro acc _ hacc; exact hacc
+        | cons b t ih =>
+            intro acc hall' hacc
+            simp only [List.foldl_cons]
+            have hb : k ≤ b := hall' b (List.mem_cons_self ..)
+            exact ih (Nat.min acc b)
+              (fun x hx => hall' x (List.mem_cons_of_mem _ hx))
+              (by simp only [Nat.min_def]; split_ifs <;> omega)
+      have ha : k ≤ a := hall a (List.mem_cons_self ..)
+      simp only [minZ, List.headD_cons]
+      exact this (a :: t) a hall ha
+
+/-- **Drain invisibility**: an exact uniform drop is a no-op after
+normalization. -/
+theorem normZ_shift (h : ZS) (k : ℕ) (hall : ∀ x ∈ h, k ≤ x) :
+    normZ (h.map (· - k)) = normZ h := by
+  cases hle : h with
+  | nil => rfl
+  | cons a t =>
+      rw [← hle]
+      have hmin : k ≤ minZ h := by
+        rcases le_minZ h k hall with h' | h'
+        · exact h'
+        · rw [hle] at h'; cases h'
+      unfold normZ
+      rw [minZ_map_sub h k hall, List.map_map]
+      apply List.map_congr_left
+      intro x hx
+      have : k ≤ x := hall x hx
+      simp only [Function.comp_apply]
+      omega
+
+/-! ## The scheduled game: per-bag piece lists (cycling)
+
+Models schedules like "the band receives the I in 3 bags of 10". The
+un-scheduled `surv`/`flushDead` above are kept byte-identical (the
+committed verdicts depend on them). -/
+
+abbrev MemoP := Std.HashMap (ℕ × ZS × ℕ × List ℕ) Bool
+
+mutual
+
+def survP (spread : ℕ) (sched : List (List Piece)) (memo : MemoP) (h : ZS) :
+    (fuel : ℕ) → ℕ → List Piece → Bool × MemoP
+  | 0, _, _ => (true, memo)
+  | fuel + 1, ph, [] =>
+      let ph' := (ph + 1) % sched.length
+      survP spread sched memo h fuel ph' (sched.getD ph' [])
+  | fuel + 1, ph, ps =>
+      match memo.get? (fuel + 1, h, ph, remKey ps) with
+      | some v => (v, memo)
+      | none =>
+          let (v, m2) :=
+            survAndP spread sched memo h fuel ph ps (List.range ps.length)
+          (v, m2.insert (fuel + 1, h, ph, remKey ps) v)
+termination_by fuel ph ps => (fuel, 2, 0)
+
+def survAndP (spread : ℕ) (sched : List (List Piece)) (memo : MemoP) (h : ZS)
+    (fuel : ℕ) (ph : ℕ) (ps : List Piece) : List ℕ → Bool × MemoP
+  | [] => (true, memo)
+  | i :: is =>
+      let (b1, m1) := survOrP spread sched memo h fuel ph (ps.eraseIdx i)
+        (movesZ spread h (ps.getD i Piece.O))
+      if b1 then survAndP spread sched m1 h fuel ph ps is else (false, m1)
+termination_by is => (fuel + 1, 1, is.length)
+
+def survOrP (spread : ℕ) (sched : List (List Piece)) (memo : MemoP) (h : ZS)
+    (fuel : ℕ) (ph : ℕ) (rem : List Piece) : List ZS → Bool × MemoP
+  | [] => (false, memo)
+  | h' :: hs =>
+      let (b1, m1) := survP spread sched memo h' fuel ph rem
+      if b1 then (true, m1) else survOrP spread sched m1 h fuel ph rem hs
+termination_by hs => (fuel + 1, 0, hs.length + 1)
+
+end
+
+/-- Scheduled verdict: TRUE = no strategy survives `bags` bags of the
+cycling schedule under all adaptive orders within the spread cap. -/
+def flushDeadP (w spread : ℕ) (sched : List (List Piece)) (bags : ℕ) : Bool :=
+  let maxLen := sched.foldl (fun a b => Nat.max a b.length) 0
+  !(survP spread sched (∅ : MemoP) (List.replicate w 0)
+    (bags * (maxLen + 1)) 0 (sched.getD 0 [])).1
+
 end FlushZone
 end Tetris
