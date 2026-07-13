@@ -343,5 +343,67 @@ def flushDeadP (w spread : ℕ) (sched : List (List Piece)) (bags : ℕ) : Bool 
   !(survP spread sched (∅ : MemoP) (List.replicate w 0)
     (bags * (maxLen + 1)) 0 (sched.getD 0 [])).1
 
+/-! ## Verdicts, batch 3 — the I-pools are dead too
+
+The band-I (the piece the earlier pools excluded) does not rescue any
+≤ 6-column window, at spread caps up to the honest ceiling budget, nor
+under the rate-faithful 3-of-10 schedule. Together with `normZ_shift`
+(drain invisibility), the ≤ 6-column zone design space is comprehensively
+dead under drain-faithful modeling. -/
+
+/-- **{O,L,J,I} is DEAD at width 4** (spread ≤ 6, horizon 6 bags). -/
+theorem olji4_verdict :
+    flushDead 4 6 [Piece.O, Piece.L, Piece.J, Piece.I] 6 = true := by
+  native_decide
+
+/-- **{O,L,J,I} is DEAD at width 5** (spread ≤ 6, horizon 6 bags). -/
+theorem olji5_verdict :
+    flushDead 5 6 [Piece.O, Piece.L, Piece.J, Piece.I] 6 = true := by
+  native_decide
+
+/-- **{O,L,J,I} is DEAD at width 5 even at spread ≤ 10** — the honest
+ceiling budget does not save it. -/
+theorem olji5_k10_verdict :
+    flushDead 5 10 [Piece.O, Piece.L, Piece.J, Piece.I] 6 = true := by
+  native_decide
+
+/-- **{S,Z,T,I} is DEAD at width 4** (spread ≤ 6, horizon 6 bags). -/
+theorem szti4_verdict :
+    flushDead 4 6 [Piece.S, Piece.Z, Piece.T, Piece.I] 6 = true := by
+  native_decide
+
+/-- **{S,Z,T,I} is DEAD at width 6** (spread ≤ 6, horizon 4 bags). -/
+theorem szti6_verdict :
+    flushDead 6 6 [Piece.S, Piece.Z, Piece.T, Piece.I] 4 = true := by
+  native_decide
+
+/-- **{S,Z,T,I} is DEAD at width 6 even at spread ≤ 10.** -/
+theorem szti6_k10_verdict :
+    flushDead 6 10 [Piece.S, Piece.Z, Piece.T, Piece.I] 4 = true := by
+  native_decide
+
+/-- **All seven pieces are DEAD at width 6** (spread ≤ 8, horizon 3 bags). -/
+theorem all7_verdict :
+    flushDead 6 8 [Piece.O, Piece.I, Piece.S, Piece.Z, Piece.T, Piece.L,
+      Piece.J] 3 = true := by
+  native_decide
+
+/-- **The rate-faithful slice is DEAD**: all six pieces every bag with the
+band-I in 3 bags of 10 (the rate law's split), width 6, spread ≤ 10,
+horizon 10 bags. -/
+theorem mixed10_verdict :
+    flushDeadP 6 10
+      [[Piece.O, Piece.L, Piece.J, Piece.S, Piece.Z, Piece.T, Piece.I],
+       [Piece.O, Piece.L, Piece.J, Piece.S, Piece.Z, Piece.T],
+       [Piece.O, Piece.L, Piece.J, Piece.S, Piece.Z, Piece.T],
+       [Piece.O, Piece.L, Piece.J, Piece.S, Piece.Z, Piece.T, Piece.I],
+       [Piece.O, Piece.L, Piece.J, Piece.S, Piece.Z, Piece.T],
+       [Piece.O, Piece.L, Piece.J, Piece.S, Piece.Z, Piece.T],
+       [Piece.O, Piece.L, Piece.J, Piece.S, Piece.Z, Piece.T, Piece.I],
+       [Piece.O, Piece.L, Piece.J, Piece.S, Piece.Z, Piece.T],
+       [Piece.O, Piece.L, Piece.J, Piece.S, Piece.Z, Piece.T],
+       [Piece.O, Piece.L, Piece.J, Piece.S, Piece.Z, Piece.T]] 10 = true := by
+  native_decide
+
 end FlushZone
 end Tetris
