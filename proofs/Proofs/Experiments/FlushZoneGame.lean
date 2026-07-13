@@ -173,5 +173,45 @@ theorem szt4_verdict :
     flushDead 4 6 [Piece.S, Piece.Z, Piece.T] 4 = true := by
   native_decide
 
+/-! ## Verdicts, batch 2 — the ≤ 6-column design space is dead -/
+
+/-- The 5-column {O,L,J} zone survives 3 bags (spread ≤ 6) — transient. -/
+theorem olj5_alive3 :
+    flushDead 5 6 [Piece.O, Piece.L, Piece.J] 3 = false := by
+  native_decide
+
+/-- **…but is DEAD at 6 bags** (same caps): the 3-bag survival is a horizon
+artifact; the O/L/J economy does not close at width 5 either. -/
+theorem olj5_dead6 :
+    flushDead 5 6 [Piece.O, Piece.L, Piece.J] 6 = true := by
+  native_decide
+
+/-- **Three step-windows (6 columns) cannot absorb the {S,Z,T} pool.** -/
+theorem szt6_verdict :
+    flushDead 6 6 [Piece.S, Piece.Z, Piece.T] 3 = true := by
+  native_decide
+
+/-- **The entangled {O,L,J,T} candidate is DEAD at width 5.** -/
+theorem oljt5_verdict :
+    flushDead 5 6 [Piece.O, Piece.L, Piece.J, Piece.T] 3 = true := by
+  native_decide
+
+/-- **{O,L,J,T} is DEAD at width 6 too.** -/
+theorem oljt6_verdict :
+    flushDead 6 6 [Piece.O, Piece.L, Piece.J, Piece.T] 2 = true := by
+  native_decide
+
+/-- **The entangled {O,L,J,S,Z} candidate is DEAD at width 6.** -/
+theorem oljsz6_verdict :
+    flushDead 6 6 [Piece.O, Piece.L, Piece.J, Piece.S, Piece.Z] 2 = true := by
+  native_decide
+
+/-- **The full non-I pool is DEAD at the 6-column zone-scale line, even at
+spread ≤ 8** — no ≤ 6-column window hosts the six-piece flush economy. -/
+theorem all6_verdict :
+    flushDead 6 8 [Piece.O, Piece.L, Piece.J, Piece.S, Piece.Z, Piece.T] 2
+      = true := by
+  native_decide
+
 end FlushZone
 end Tetris
