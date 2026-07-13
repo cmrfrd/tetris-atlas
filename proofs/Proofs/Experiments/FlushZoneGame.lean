@@ -151,5 +151,27 @@ def shapesConsistentB : Bool :=
 /-- The transcribed shape table is faithful to the model. -/
 theorem shapesOf_consistent : shapesConsistentB = true := by decide
 
+/-! ## Verdicts, batch 1 -/
+
+/-- **The isolated 3-column {O,L,J} zone is DEAD** (spread ≤ 6, horizon 4
+bags): finding F2 as an unconditional in-kernel fact — gravity refuses the
+tiling T-parity permits. -/
+theorem olj3_verdict :
+    flushDead 3 6 [Piece.O, Piece.L, Piece.J] 4 = true := by
+  native_decide
+
+/-- **The 4-column {O,L,J} zone is DEAD** (spread ≤ 6, horizon 4 bags):
+widening by one column does not rescue the O/L/J economy. -/
+theorem olj4_verdict :
+    flushDead 4 6 [Piece.O, Piece.L, Piece.J] 4 = true := by
+  native_decide
+
+/-- **The 4-column {S,Z,T} pool is DEAD** (spread ≤ 6, horizon 4 bags):
+two step-windows cannot absorb the roughness pool — T's step-flip strands
+S or Z, as the slot algebra predicts. -/
+theorem szt4_verdict :
+    flushDead 4 6 [Piece.S, Piece.Z, Piece.T] 4 = true := by
+  native_decide
+
 end FlushZone
 end Tetris
