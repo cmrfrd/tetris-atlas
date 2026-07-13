@@ -28,6 +28,39 @@ When sorries are added as scaffolding, list them here with `file:line — why`.
 
 ## Last tick
 
+Tick (manual, 2026-07-12b) — **the slot algebra + flush-zone verdicts**.
+F1 as GREEN THEOREMS (`Invariants/SlotAlgebra.lean`, all by `decide` over the
+shape table): a standing ±1 step admits ONLY vertical S/Z/T
+(`sStep_exclusive`/`zStep_exclusive`) — redirecting O/L/J onto step zones is
+IMPOSSIBLE, killing the plinth spec's D4 rate fix; flat pairs admit exactly
+{O, L rot 1, J rot 3} (`flatPair_receivers`); ±2 steps are exclusively L (rot 3)
+/ J (rot 1) and both landings FLATTEN (`tops_L3`/`tops_J1`) — the O/L/J
+flat/±2-step economy is the only cross-piece currency.
+`Experiments/FlushZoneGame.lean` (ZoneGame-pattern memoized ADAPTIVE AND-OR,
+flush-only, base-shift normalized, shape table `decide`-checked against the
+green calculus): verdicts, all ~5–20s native_decide —
+| instance | params | verdict |
+|---|---|---|
+| olj3 | w3 K6 B4 | DEAD (F2 unconditional) |
+| olj4 | w4 K6 B4 | DEAD |
+| szt4 | w4 K6 B4 | DEAD |
+| olj5 | w5 K6 B3 | alive (horizon artifact) |
+| olj5 | w5 K6 B6 | DEAD |
+| szt6 | w6 K6 B3 | DEAD |
+| oljt5 | w5 K6 B3 | DEAD |
+| oljt6 | w6 K6 B2 | DEAD |
+| oljsz6 | w6 K6 B2 | DEAD |
+| all-six | w6 K8 B2 | DEAD |
+SCHEDULE IMPLICATION: every multi-piece pool decided so far is dead at every
+width ≤ 6 (singletons and {S,Z}-style disjoint-window unions are trivially
+alive; the deadness is in the COMBINATIONS). With 6 piece types needing ≥ 2
+columns each in any zone split of the 9-column band, some zone must host a
+multi-piece pool at width ≤ 3 (4-zone splits) or the split uses ≥ 4-width
+multi-pools — the decided slice kills the natural candidates. Next: finish the
+pair/triple cartography at widths 2–4 to close the composite impossibility
+("no zone decomposition of the band works"), which would force genuinely
+global (well-coupled, drain-synchronized) cycles — OR find the alive pocket.
+
 Tick (manual, 2026-07-12) — **FINDINGS D1/D2 + the plinth foundation**.
 D1: `ShiftCertificate`/`BandScheduleCert` (2026-07-09/10) are SOUND but
 UNINHABITABLE — every placement obligation propagates the base unchanged, the

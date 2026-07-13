@@ -94,6 +94,7 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | Theorem | Statement |
 |---|---|
 | `Piece.shape_card`/`shapeUp_card`; `shapeUp_S_row_card_le_two`, `shapeUp_T_row_card_le_three` | every piece = 4 cells; per-row footprint (only I makes a 4-bar) |
+| `Piece.colBot/colTop` + **`sStep_exclusive`/`zStep_exclusive`**, `flatPair_receivers`, `twoStep_left_only_L/right_only_J`, `tops_*` (`Invariants/SlotAlgebra`) | the flush-landing calculus: ±1 steps admit ONLY vertical S/Z/T; flat pairs exactly {O, L r1, J r3}; ±2 steps exclusively L/J and both FLATTEN — the cross-piece currency, all by `decide` |
 | `Board.applyStep_colCount` | per-column conservation of a full move, **no WF hypothesis** |
 | `Board.colCount_clearLines_add`, `clearLines_card`, `clearLines_count_add` | each clear removes 1 cell/col; gravity relocates-not-merges; `cleared = cols·k` |
 | `Board.not_isLost_iff_forall_colHeight_le`; `isLost_union`, `not_isLost_of_subset`, `not_isLost_clearLines` | column-form safety equivalence + the safety lattice |
@@ -181,7 +182,7 @@ Proofs/
   Combinatorics/ PieceGeometry BoardCount ColumnCount  BagBurst                ✓
   Invariants/    StepInvariants Gameplay GameplayExtra Holes StateSpace
                  Wqo HoleyCarrier SurfaceFiber HoleDebt BandShift
-                 BandMechanisms PlinthShift                                     ✓
+                 BandMechanisms PlinthShift SlotAlgebra                         ✓
   Survival/      Survival                                                      ✓
   Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite
                  SkylineInvariant ShiftCertificate BandSchedule PlinthCert     ✓
@@ -238,7 +239,7 @@ fixed-move-ordering lemmas that floor at all-orders accounting). **Keep** the
 concrete reachable-cycle results `safeSolver_sevenBagCycle_reachable_closed_cycle`,
 `sevenBagCycle_legal` (genuine M3) and all refutations.
 
-**Keep-active (live research):** `OnlineReservoir` phase graph (open field
+**Keep-active (live research):** `FlushZoneGame` (in-kernel flush-zone verdicts, ZoneGame pattern — the schedule design-space cartography); `OnlineReservoir` phase graph (open field
 `PhaseGraphCompletion.frontier_step`); `SurfaceStrategy` (`ReachableUnder` +
 `tetrisSolvableValid_of_strategy` — the structurally-correct positive route);
 `EnergyGame`; the `Wqo/HoleDebt/RoughnessBudget/Topical` characterization routes.
