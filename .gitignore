@@ -30,3 +30,4 @@ data/
 
 # local scripts
 scripts/*.py
+!scripts/tetris_piecewise_linear.py

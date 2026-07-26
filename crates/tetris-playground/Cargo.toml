@@ -113,6 +113,42 @@ path = "src/bin/visualizations/state_trajectory/main.rs"
 name = "tetris_phase_atlas"
 path = "src/bin/research/tetris_phase_atlas/main.rs"
 
+[[bin]]
+name = "tetris_carrier_probe"
+path = "src/bin/research/tetris_carrier_probe/main.rs"
+
+[[bin]]
+name = "tetris_eigen"
+path = "src/bin/research/tetris_eigen/main.rs"
+
+[[bin]]
+name = "tetris_energy"
+path = "src/bin/research/tetris_energy/main.rs"
+
+[[bin]]
+name = "tetris_lean_funnel"
+path = "src/bin/research/tetris_lean_funnel/main.rs"
+
+[[bin]]
+name = "tetris_maxplus_cert"
+path = "src/bin/research/tetris_maxplus_cert/main.rs"
+
+[[bin]]
+name = "tetris_policy"
+path = "src/bin/research/tetris_policy/main.rs"
+
+[[bin]]
+name = "tetris_preview"
+path = "src/bin/research/tetris_preview/main.rs"
+
+[[bin]]
+name = "tetris_szt3"
+path = "src/bin/research/tetris_szt3/main.rs"
+
+[[bin]]
+name = "tetris_tropical"
+path = "src/bin/research/tetris_tropical/main.rs"
+
 [features]
 default = []
 candle-cuda = ["candle-core/cuda", "candle-nn/cuda"]
@@ -193,6 +229,7 @@ backoff = "0.4.0"
 # SMT solving
 z3 = "0.20"
 z3-sys = "0.11"
+good_lp = { version = "1.15.2", default-features = false, features = ["clarabel"] }
 
 [lints]
 workspace = true
