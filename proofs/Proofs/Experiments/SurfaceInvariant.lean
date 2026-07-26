@@ -23955,6 +23955,59 @@ theorem reservoirRichSurface_Z_notch_carrier {T : Bag} {base : ℕ}
     split_ifs <;> omega
   · omega
 
+/-- **A pocket filler followed by the owed `S` re-enters the spread carrier** (iter650). The first
+genuine *two-piece* regeneration brick on the rich reset surface: where iter639
+(`reservoirRichSurface_S_notch_carrier`) seats the owed `S` on the pristine reset surface and
+iter620 (`reservoirRichSurface_O_pocket_carrier_both_notches`) shows one pocket `O` keeps both
+notches, this composes them — an `O` parks in the pocket (`col 1`, raising columns `1, 2` to
+`base + 2`) and the owed `S` then seats into its STILL-INTACT notch (`col 6`, columns `6, 7, 8`
+reading `base, base, base + 1`, untouched by the pocket fill). The post-`O`-then-`S` board is the
+explicit skyline `(0, base+2, base+2, base, base, base+1, base+1, base+2, base+2, base)`, a
+reserved-well spread-`2` band at floor `base`, which re-enters
+`reservoirSpreadCarrier ((T.draw O).draw S)`. This is the concrete witness that the rich surface's
+reserved staircase landing site *survives an intervening filler*: the property the bag-phase
+scheduler needs to chain iter608's all-7 step across a whole bag when the adversary interleaves a
+flat before the owed `S`.
+
+Honest caveat: this regenerates ONE owed staircase across ONE filler and lands at spread `2`; it
+does not handle the Z (the overlapping-notch obstruction of iter639/640 still blocks both
+staircases in one bag), the pocket filling across many fillers, nor the all-orders per-bag drain
+accounting (crux `#66`/`#72`). `TetrisSolvableValid` is NOT proven; no sorry. -/
+theorem reservoirRichSurface_O_then_S_carrier {T : Bag} {base : ℕ}
+    (hledger : base + 2 + ((T.draw Piece.O).draw Piece.S).card + 1 ≤ GameConfig.standard.rows) :
+    reservoirSpreadCarrier ((T.draw Piece.O).draw Piece.S)
+      (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Board.skyline GameConfig.standard (reservoirRichSurface base))
+          { piece := Piece.O, rot := 0, col := 1 })
+        { piece := Piece.S, rot := 0, col := 6 }) := by
+  rw [Board.applyStep_O_skyline_noclear (c := 1) (w := 0) (by decide) (by decide)
+      (by simp [reservoirRichSurface]) (by decide) (by decide) (by decide)
+      (by simp [reservoirRichSurface])]
+  rw [Board.applyStep_S_skyline_noclear (c := 6) (w := 0) (by decide) (by decide) (by decide)
+      (by simp [Function.update_apply, reservoirRichSurface])
+      (by simp [Function.update_apply, reservoirRichSurface])
+      (by decide) (by decide) (by decide) (by decide)
+      (by simp [Function.update_apply, reservoirRichSurface])]
+  refine ⟨base, 2, ?_, hledger⟩
+  apply Board.isSpreadBoundedRWSkylineAt_skyline (w := 0)
+  · decide
+  · simp [Function.update_apply, reservoirRichSurface]
+  · intro j hj hjw
+    rcases eq_or_ne j 1 with rfl | h1
+    · simp [Function.update_apply, reservoirRichSurface]
+    rcases eq_or_ne j 2 with rfl | h2
+    · simp [Function.update_apply, reservoirRichSurface]
+    rcases eq_or_ne j 6 with rfl | h6
+    · simp [Function.update_apply, reservoirRichSurface]
+    rcases eq_or_ne j 7 with rfl | h7
+    · simp [Function.update_apply, reservoirRichSurface]
+    rcases eq_or_ne j 8 with rfl | h8
+    · simp [Function.update_apply, reservoirRichSurface]
+    simp only [Function.update_apply, reservoirRichSurface]
+    split_ifs <;> omega
+  · omega
+
 /-- **The owed-`S` notch landing exits safely into the carrier** (iter641). The survival face of
 `reservoirRichSurface_S_notch_carrier` (iter639), and the rich-surface analogue of
 `reservoirDoubleSZSurface_S_carrier_safe` (iter391): when the universal phase opens the bag with the
