@@ -819,6 +819,16 @@ struct Scheduler {
     queue: SegQueue<TetrisBoard>,
     board_states: DashMap<TetrisBoard, BoardState>,
     in_flight_count: AtomicUsize,
+    /// Boards that exist but are not yet fully resolved (pending or in-flight).
+    ///
+    /// Incremented at enqueue time and decremented only when a board reaches a
+    /// terminal state (solved/failed/abandoned). Termination keys off this
+    /// counter instead of `in_flight_count` so that the seed board — enqueued
+    /// before any worker spawns — is counted immediately. Otherwise workers can
+    /// race into `claim_next_board`, observe an empty queue with `in_flight == 0`
+    /// during the window before the seed is claimed, and permanently exit via
+    /// `ClaimDecision::Exhausted`.
+    outstanding_boards: AtomicUsize,
     solved_board_count: AtomicUsize,
     failed_board_count: AtomicUsize,
     abandoned_board_count: AtomicUsize,
@@ -853,6 +863,7 @@ impl Scheduler {
             queue,
             board_states,
             in_flight_count: AtomicUsize::new(0),
+            outstanding_boards: AtomicUsize::new(1),
             solved_board_count: AtomicUsize::new(0),
             failed_board_count: AtomicUsize::new(0),
             abandoned_board_count: AtomicUsize::new(0),
@@ -872,6 +883,11 @@ impl Scheduler {
             }
             Entry::Vacant(entry) => {
                 entry.insert(BoardState::Pending);
+                // Count the board as outstanding before it becomes claimable so a
+                // worker can never observe it missing from both the queue and the
+                // outstanding tally.
+                self.outstanding_boards
+                    .fetch_add(1, AtomicOrdering::Relaxed);
                 self.queue.push(board);
                 self.queue_pushes.fetch_add(1, AtomicOrdering::Relaxed);
                 true
@@ -897,7 +913,12 @@ impl Scheduler {
                     return ClaimDecision::Claimed(board);
                 }
                 None => {
-                    if self.in_flight_count.load(AtomicOrdering::Acquire) == 0 {
+                    // Exhausted only when no board is outstanding anywhere. Using
+                    // `outstanding_boards` (incremented at enqueue) instead of
+                    // `in_flight_count` (incremented at claim) closes the startup
+                    // race where losing workers would exit before the seed board
+                    // was claimed.
+                    if self.outstanding_boards.load(AtomicOrdering::Acquire) == 0 {
                         return ClaimDecision::Exhausted;
                     }
                     return ClaimDecision::WaitForInFlight;
@@ -916,6 +937,8 @@ impl Scheduler {
         *state = BoardState::Solved;
         drop(state);
         self.in_flight_count.fetch_sub(1, AtomicOrdering::Relaxed);
+        self.outstanding_boards
+            .fetch_sub(1, AtomicOrdering::Release);
         self.solved_board_count
             .fetch_add(1, AtomicOrdering::Relaxed);
     }
@@ -930,6 +953,8 @@ impl Scheduler {
         *state = BoardState::Failed;
         drop(state);
         self.in_flight_count.fetch_sub(1, AtomicOrdering::Relaxed);
+        self.outstanding_boards
+            .fetch_sub(1, AtomicOrdering::Release);
         self.failed_board_count
             .fetch_add(1, AtomicOrdering::Relaxed);
     }
@@ -944,6 +969,8 @@ impl Scheduler {
         *state = BoardState::Abandoned;
         drop(state);
         self.in_flight_count.fetch_sub(1, AtomicOrdering::Relaxed);
+        self.outstanding_boards
+            .fetch_sub(1, AtomicOrdering::Release);
         self.abandoned_board_count
             .fetch_add(1, AtomicOrdering::Relaxed);
     }
@@ -3022,6 +3049,75 @@ mod tests {
         assert_eq!(scheduler.pending_board_count(), 0);
         assert_eq!(scheduler.in_flight_board_count(), 0);
         assert_eq!(scheduler.solved_board_count(), 1);
+    }
+
+    #[test]
+    /// Losing workers must not exit before the seed board is claimed.
+    ///
+    /// Reproduces the startup race: one worker pops the seed off the queue but has
+    /// not yet marked it in-flight. A second worker polling in that window sees an
+    /// empty queue with `in_flight == 0`. Keying termination off `in_flight_count`
+    /// made it return `Exhausted` and exit permanently; keying off
+    /// `outstanding_boards` (the seed is outstanding until resolved) it must wait.
+    fn claim_does_not_exhaust_before_seed_is_claimed() {
+        let scheduler = Scheduler::new(TetrisBoard::EMPTY_BOARD);
+
+        // Winner pops the seed but has not incremented in_flight yet.
+        let seed = scheduler.queue.pop().expect("seed board should be queued");
+        assert_eq!(seed, TetrisBoard::EMPTY_BOARD);
+        assert_eq!(scheduler.in_flight_count.load(AtomicOrdering::Relaxed), 0);
+
+        // The seed is still outstanding, so a losing worker must wait, not exit.
+        assert_eq!(scheduler.claim_next_board(), ClaimDecision::WaitForInFlight);
+    }
+
+    #[test]
+    /// The full worker crew drains a growing frontier and every thread terminates.
+    ///
+    /// Guards the flip side of the fix: workers that park on `WaitForInFlight`
+    /// must still reach `Exhausted` once the frontier is fully resolved, with no
+    /// board stranded and no thread hung.
+    fn concurrent_workers_drain_growing_frontier() {
+        const TOTAL: usize = 200;
+        const WORKERS: usize = 4;
+
+        let index_board = |idx: usize| board_with_bit(idx % 10, idx / 10);
+        let scheduler = Arc::new(Scheduler::new(index_board(0)));
+        // Assigns the next frontier index to enqueue, decoupled from which board
+        // was claimed, so processing any board grows the frontier deterministically.
+        let next = Arc::new(AtomicUsize::new(1));
+
+        let handles: Vec<_> = (0..WORKERS)
+            .map(|_| {
+                let scheduler = Arc::clone(&scheduler);
+                let next = Arc::clone(&next);
+                thread::spawn(move || {
+                    loop {
+                        match scheduler.claim_next_board() {
+                            ClaimDecision::Claimed(board) => {
+                                let child = next.fetch_add(1, AtomicOrdering::Relaxed);
+                                if child < TOTAL {
+                                    scheduler.enqueue_discovered_board(index_board(child));
+                                }
+                                scheduler.record_board_solved(board);
+                            }
+                            ClaimDecision::WaitForInFlight => thread::yield_now(),
+                            ClaimDecision::Exhausted => break,
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            handle.join().expect("worker thread should not panic");
+        }
+
+        // Nothing stranded: every enqueued board was claimed and solved.
+        assert_eq!(scheduler.tracked_board_count(), TOTAL);
+        assert_eq!(scheduler.solved_board_count(), TOTAL);
+        assert_eq!(scheduler.pending_board_count(), 0);
+        assert_eq!(scheduler.in_flight_board_count(), 0);
     }
 
     #[test]
