@@ -147,7 +147,7 @@ fn play_bag(board: TetrisBoard, depth: u8) -> Option<(TetrisBoard, u32)> {
                     best_play = v;
                 }
             }
-            if adv.as_ref().map_or(true, |(_, _, av)| best_play > *av) {
+            if adv.as_ref().is_none_or(|(_, _, av)| best_play > *av) {
                 adv = Some((pi, *p, best_play));
             }
         }

@@ -178,7 +178,7 @@ fn choose(
     let mut best: Option<(i64, TetrisBoard)> = None;
     for nb in cands {
         let v = homing_minimax(nb, rem_mask, depth - 1, band, &mut memo);
-        if best.as_ref().map_or(true, |(bv, _)| v < *bv) {
+        if best.as_ref().is_none_or(|(bv, _)| v < *bv) {
             best = Some((v, nb));
         }
     }

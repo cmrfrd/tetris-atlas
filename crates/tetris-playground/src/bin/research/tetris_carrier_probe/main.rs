@@ -164,7 +164,7 @@ fn choose_flatten(board: &TetrisBoard, piece: TetrisPiece) -> Option<TetrisBoard
             nb.roughness(),
             nb.heights().iter().sum::<u32>(),
         );
-        if best.map_or(true, |(_, bs)| score < bs) {
+        if best.is_none_or(|(_, bs)| score < bs) {
             best = Some((nb, score));
         }
     }
@@ -189,6 +189,7 @@ fn max_height_nonwell(b: &TetrisBoard) -> u32 {
 ///      (holes, max-height-of-non-well-cols, roughness, summed heights). Keeps the
 ///      well open and the rest of the surface flat.
 ///   3. FORCED: if every legal placement touches the well, fall back to the flattest.
+///
 /// `None` iff no legal placement at all (top-out).
 fn choose_well(board: &TetrisBoard, piece: TetrisPiece) -> Option<TetrisBoard> {
     let before = board.as_limbs();
@@ -206,7 +207,7 @@ fn choose_well(board: &TetrisBoard, piece: TetrisPiece) -> Option<TetrisBoard> {
 
         if piece == TetrisPiece::I_PIECE && res.lines_cleared > 0 {
             let key = (res.lines_cleared, u32::MAX - nb.height());
-            if best_drain.map_or(true, |(l, h, _)| (key.0, key.1) > (l, h)) {
+            if best_drain.is_none_or(|(l, h, _)| (key.0, key.1) > (l, h)) {
                 best_drain = Some((key.0, key.1, nb));
             }
         }
@@ -217,12 +218,12 @@ fn choose_well(board: &TetrisBoard, piece: TetrisPiece) -> Option<TetrisBoard> {
                 nb.roughness(),
                 nb.heights().iter().sum::<u32>(),
             );
-            if best_keep.map_or(true, |(s, _)| score < s) {
+            if best_keep.is_none_or(|(s, _)| score < s) {
                 best_keep = Some((score, nb));
             }
         }
         let fscore = (nb.total_holes(), nb.height(), nb.roughness());
-        if best_forced.map_or(true, |(s, _)| fscore < s) {
+        if best_forced.is_none_or(|(s, _)| fscore < s) {
             best_forced = Some((fscore, nb));
         }
     }
@@ -968,7 +969,7 @@ fn greedy_place(board: &TetrisBoard, p: TetrisPiece) -> Option<(TetrisBoard, u32
         } else {
             (phi(&nb), nb.height() as i32, nb.total_holes() as i32)
         };
-        if best.as_ref().map_or(true, |(_, _, s)| score < *s) {
+        if best.as_ref().is_none_or(|(_, _, s)| score < *s) {
             best = Some((nb, res.lines_cleared, score));
         }
     }
@@ -1123,7 +1124,7 @@ fn smart_place(board: &TetrisBoard, p: TetrisPiece) -> Option<(TetrisBoard, u32)
         let bump = nb.roughness() as f64;
         let lines = res.lines_cleared as f64;
         let score = -0.51 * agg + 0.76 * lines - 0.36 * holes - 0.18 * bump;
-        if best.as_ref().map_or(true, |(_, _, s)| score > *s) {
+        if best.as_ref().is_none_or(|(_, _, s)| score > *s) {
             best = Some((nb, res.lines_cleared, score));
         }
     }
@@ -1221,7 +1222,7 @@ fn run_longrun(nbags: usize) {
                     }
                     Some((nb, lc)) => {
                         let m = phi(&nb);
-                        if worst.as_ref().map_or(true, |(wm, _, _)| m > *wm) {
+                        if worst.as_ref().is_none_or(|(wm, _, _)| m > *wm) {
                             worst = Some((m, nb, lc));
                         }
                     }
@@ -1493,7 +1494,7 @@ fn play_bag_minimax(board: TetrisBoard, depth: u8) -> Option<TetrisBoard> {
                     best_play = v;
                 }
             }
-            if adv.as_ref().map_or(true, |(_, _, av)| best_play > *av) {
+            if adv.as_ref().is_none_or(|(_, _, av)| best_play > *av) {
                 adv = Some((pi, *p, best_play));
             }
         }
@@ -2619,9 +2620,7 @@ fn compress_sig(scheme: u8, b: &TetrisBoard) -> [u32; 11] {
         // 1: exact per-column HEIGHT vector (collapses different hole patterns below a
         //    common surface profile).
         1 => {
-            for j in 0..10 {
-                k[j] = h[j];
-            }
+            k[..10].copy_from_slice(&h);
         }
         // 2: RELATIVE heights (subtract min) — vertical-translation invariant surface.
         2 => {
@@ -2721,13 +2720,13 @@ fn run_compress(depth: u8, budget: usize) {
         let (_loss, leaves) = expand_bag_deep(boards[sid as usize], depth);
         for leaf in leaves {
             max_h = max_h.max(leaf.height());
-            if index.get(&leaf).is_none() {
+            if let std::collections::hash_map::Entry::Vacant(entry) = index.entry(leaf) {
                 if boards.len() >= budget {
                     exploded = true;
                     break;
                 }
                 let id = boards.len() as u32;
-                index.insert(leaf, id);
+                entry.insert(id);
                 boards.push(leaf);
                 queue.push_back(id);
                 record(&boards, id as usize, &mut sigsets);

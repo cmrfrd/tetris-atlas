@@ -114,7 +114,7 @@ fn policy(board: &TetrisBoard, piece: TetrisPiece, rem: u8, depth: u8) -> Option
     let mut best: Option<(i64, TetrisBoard)> = None;
     for nb in cands {
         let v = bag_minimax(nb, rem, depth - 1, &mut memo);
-        if best.as_ref().map_or(true, |(bv, _)| v < *bv) {
+        if best.as_ref().is_none_or(|(bv, _)| v < *bv) {
             best = Some((v, nb));
         }
     }
