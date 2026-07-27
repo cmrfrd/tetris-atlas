@@ -28,6 +28,32 @@ When sorries are added as scaffolding, list them here with `file:line — why`.
 
 ## Last tick
 
+Tick (manual, 2026-07-27) — **the lane calculus: the complete local flush
+transition pack** (`Invariants/LaneCalculus.lean`, 15 place theorems + 9 drop
+profiles, all via `place_flush_skyline`, base-axiom-clean, lint-clean). Every
+flush landing shape in the slot algebra now has its skyline transition law at
+ARBITRARY surrounding profiles: horizontal S on `(k,k,k+1)` / horizontal Z on
+`(k+1,k,k)` (the 3-wide step lanes), the three notch fills (T0/L2/J2 → local
+flat), the T alternator T1/T3 at general profiles, local flat-3 (T2/L0/J0) and
+flat-4 (I) landings, and the L/J pair economy (L1/J3 flat→±2, L3/J1 ±2→flat).
+KEY DESIGN FINDINGS toward the coupled 9-column cycle (hand analysis, exact in
+the new lemmas): (1) the S/Z/T trio is order-robust on three standing ±1 pairs
+and PROVABLY NOT on two — but three standing pairs are rate-dead (2/bag/col vs
+2.8 required, and ±1 pairs cannot receive O/L/J mass by `sStep_exclusive`) ⇒
+roving receptors are FORCED, the design-level rediscovery of rate coupling.
+(2) THE ROVING STEP: `place_horizZ_step` on a standing S-window plus a runway
+column at the low height FLATTENS the window and re-emits it one column right
+(mirror: `place_horizS_step`) — the flattening move the redirect puzzle was
+missing; ±1 receptors can now migrate and their columns can then take O/L/J
+mass. (3) Verified flat-to-flat lane cycles (+4 rows on a 3-lane, exact lemma
+chains): A_S = L0·Sh·L2 ({S,2L}), A_Z = J0·Zh·J2 ({Z,2J}), C_T = T2·T3·L3
+({2T,L}), F = {O,L,J} in both landing orders (L0·O·J2 and J0·O·L2), E_I =
+vI·O·O ({I,2O}). REMAINING OPEN (next tick): the cross-bag phase machine —
+compose the cycle primitives into a family closed under adversarial within-bag
+order at matched rates (supply {S,Z,T,O,L,J} + 0.3 band-I per bag vs the
+cycles' piece demands; the O-first flat-availability invariant is the sharpest
+constraint), then discharge PlinthCert's schedule obligations from it.
+
 Tick (manual, 2026-07-13) — **drain invisibility + the I-pool verdicts: the
 zone paradigm is exhausted at the decidable scale**. PROVEN (`normZ_shift`,
 FlushZoneGame): the global drain (exact uniform −4 at base ≥ 4) is a NO-OP in

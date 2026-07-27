@@ -95,6 +95,7 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 |---|---|
 | `Piece.shape_card`/`shapeUp_card`; `shapeUp_S_row_card_le_two`, `shapeUp_T_row_card_le_three` | every piece = 4 cells; per-row footprint (only I makes a 4-bar) |
 | `Piece.colBot/colTop` + **`sStep_exclusive`/`zStep_exclusive`**, `flatPair_receivers`, `twoStep_left_only_L/right_only_J`, `tops_*` (`Invariants/SlotAlgebra`) | the flush-landing calculus: ±1 steps admit ONLY vertical S/Z/T; flat pairs exactly {O, L r1, J r3}; ±2 steps exclusively L/J and both FLATTEN — the cross-piece currency, all by `decide` |
+| `place_horizS_step`/`place_horizZ_step`, `place_notchT/L/J`, `place_stepT_toZ/toS`, `place_flatT/L/J_lane`, `place_horizI_lane`, `place_pairL/J`, `place_fillL/J` (`Invariants/LaneCalculus`) | the **lane calculus**: every remaining local flush transition at arbitrary profiles (3-wide step lanes for horizontal S/Z incl. the roving-step flattening move, the three notch fills, the T alternator, local flat-3/flat-4 landings, the L/J pair economy) — with the window mechanisms, every slot-algebra landing shape now has its skyline transition law |
 | `Board.applyStep_colCount` | per-column conservation of a full move, **no WF hypothesis** |
 | `Board.colCount_clearLines_add`, `clearLines_card`, `clearLines_count_add` | each clear removes 1 cell/col; gravity relocates-not-merges; `cleared = cols·k` |
 | `Board.not_isLost_iff_forall_colHeight_le`; `isLost_union`, `not_isLost_of_subset`, `not_isLost_clearLines` | column-form safety equivalence + the safety lattice |
@@ -182,7 +183,7 @@ Proofs/
   Combinatorics/ PieceGeometry BoardCount ColumnCount  BagBurst                ✓
   Invariants/    StepInvariants Gameplay GameplayExtra Holes StateSpace
                  Wqo HoleyCarrier SurfaceFiber HoleDebt BandShift
-                 BandMechanisms PlinthShift SlotAlgebra                         ✓
+                 BandMechanisms PlinthShift SlotAlgebra LaneCalculus           ✓
   Survival/      Survival                                                      ✓
   Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite
                  SkylineInvariant ShiftCertificate BandSchedule PlinthCert     ✓
