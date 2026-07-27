@@ -28,6 +28,39 @@ When sorries are added as scaffolding, list them here with `file:line — why`.
 
 ## Last tick
 
+Tick (manual, 2026-07-27b) — **the traveling-wave design: the coupled 9-column
+schedule as bouncing staircases** (design tick; arithmetic hand-verified
+against the LaneCalculus update laws, no Lean this tick). The coupled cycle's
+architecture: the surface is flats (plateaus/plains) separated by 3-level
+RIGID STAIRCASES `[plateau k+2 | stair k+1 | plain k]` = the waves. VERIFIED
+exactly: (1) TRANSLATION — one `place_horizZ_step` at the stair advances a
+descending (S-)staircase 2 columns right, raising the 2 passed columns +2
+(mirror: `place_horizS_step` moves ascending staircases left); a 9-col sweep
+is 4 pushes. (2) REFLECTION — at the right wall `place_stepT_toZ` (T1) turns
+an arriving S-staircase into a departing Z-staircase in one move (T3 mirror at
+the left wall); the wall column gains +3 and the ladder climbs +2 per bounce.
+(3) ABSORPTION — two converging fronts at plain-width 1 form the exact notch
+and `place_notchT` (T0) merges the plateaus into a full flat (a completed
++2 layer); plain width changes by 2 per push, so width parity is invariant:
+collisions can be SCHEDULED to always land at width 1. (4) EMISSION is the
+delicate step: a bare `place_flatT_lane` (T2) bump sits one level above the
+plain and cannot propagate until flanked — fronts only translate at matched
+elevations; emissions must be built where plateau levels already agree.
+Piece roles: S/Z fuel opposite-direction fronts; T alternates reflect/absorb/
+emit (T-parity ✓); O/L/J run the pair economy on the wide flats between wave
+passes (keeping plateau/plain levels aligned is a scheduling constraint, ≤2-bag
+pair cycles vs 2-col/bag wave speed); band-I = `place_horizI_lane` on a flat-4
+plain. THE REMAINING OPEN DESIGN QUESTION, now sharp: PHASING — every bag
+delivers one S and one Z, so at every bag boundary the family must present
+both an S-eater (descending front with right runway, or reflectable) and a
+Z-eater (ascending front with left runway); a single bouncing wave fails
+(during a rightward leg the arriving S has no receptor: vS on the front breaks
+rigidity). Candidate: two anti-phase waves with staggered reflections, with
+the T budget (1 per bag) shared between reflections and absorb/emit events.
+Next tick: solve the phasing/order table (state = front positions+directions ×
+bag remainder), then discharge PlinthCert's schedule obligations from the
+LaneCalculus laws.
+
 Tick (manual, 2026-07-27) — **the lane calculus: the complete local flush
 transition pack** (`Invariants/LaneCalculus.lean`, 15 place theorems + 9 drop
 profiles, all via `place_flush_skyline`, base-axiom-clean, lint-clean). Every
