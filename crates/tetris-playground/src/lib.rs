@@ -30,6 +30,7 @@ pub use tetris_game::{
     IsLost, PlacementResult, TetrisBoard, TetrisGame, TetrisPiece, TetrisPieceBagState,
     TetrisPieceOrientation, TetrisPiecePlacement,
 };
+#[cfg(feature = "ml")]
 pub use tetris_ml::{
     BeamSearch, BeamSearchState, BeamTetrisState, MultiBeamSearch, ScoredState, device,
     set_global_threadpool,

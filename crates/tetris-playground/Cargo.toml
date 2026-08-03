@@ -36,26 +36,41 @@ path = "src/bin/examples/tetris_five_bag_bench.rs"
 [[bin]]
 name = "tetris_atlas_inmemory"
 path = "src/bin/atlas/tetris_atlas_inmemory.rs"
+required-features = ["tui"]
 
 [[bin]]
 name = "tetris_atlas_rocksdb"
 path = "src/bin/atlas/tetris_atlas_rocksdb.rs"
+required-features = ["rocksdb-backend", "tui"]
+
+[[bin]]
+name = "tetris_atlas_partitioned"
+path = "src/bin/atlas/tetris_atlas_partitioned.rs"
+required-features = ["rocksdb-backend"]
 
 [[bin]]
 name = "tetris_atlas_bagstate"
 path = "src/bin/atlas/tetris_atlas_bagstate.rs"
+required-features = ["rocksdb-backend"]
+
+[[bin]]
+name = "tetris_atlas_puct"
+path = "src/bin/atlas/tetris_atlas_puct.rs"
 
 [[bin]]
 name = "tetris_cli"
 path = "src/bin/tools/tetris_cli.rs"
+required-features = ["ml"]
 
 [[bin]]
 name = "tetris_train_beam_supervised"
 path = "src/bin/training/tetris_train_beam_supervised.rs"
+required-features = ["ml"]
 
 [[bin]]
 name = "tetris_train_genetic"
 path = "src/bin/training/tetris_train_genetic.rs"
+required-features = ["ml"]
 
 [[bin]]
 name = "tetris_invariant_synthesis"
@@ -68,6 +83,7 @@ path = "src/bin/research/tetris_safe_set/main.rs"
 [[bin]]
 name = "tetris_mcgs"
 path = "src/bin/research/tetris_mcgs/main.rs"
+required-features = ["sqlite-backend"]
 
 [[bin]]
 name = "tetris_success_set_solver"
@@ -88,6 +104,7 @@ path = "src/bin/research/tetris_bag_cycle_solver/main.rs"
 [[bin]]
 name = "tetris_invariant_smt"
 path = "src/bin/research/tetris_invariant_smt/main.rs"
+required-features = ["smt"]
 
 [[bin]]
 name = "tetris_nbag_solver"
@@ -96,10 +113,17 @@ path = "src/bin/research/tetris_nbag_solver/main.rs"
 [[bin]]
 name = "tetris_bag_checkpoint"
 path = "src/bin/research/tetris_bag_checkpoint/main.rs"
+required-features = ["sqlite-backend"]
+
+[[bin]]
+name = "tetris_atlas_narrow"
+path = "src/bin/research/tetris_atlas_narrow/main.rs"
+required-features = ["tui"]
 
 [[bin]]
 name = "tetris_five_bag_chain"
 path = "src/bin/research/tetris_five_bag_chain/main.rs"
+required-features = ["tui"]
 
 [[bin]]
 name = "tetris_cycle_atlas"
@@ -108,6 +132,10 @@ path = "src/bin/research/tetris_cycle_atlas/main.rs"
 [[bin]]
 name = "tetris_state_trajectory"
 path = "src/bin/visualizations/state_trajectory/main.rs"
+
+[[bin]]
+name = "tetris_decision_forest"
+path = "src/bin/research/tetris_decision_forest/main.rs"
 
 [features]
 default = []
@@ -121,21 +149,29 @@ dtype-bf16 = []
 dtype-f32 = []
 dtype-f64 = []
 
+# Heavy optional backends — only compiled when needed
+rocksdb-backend = ["dep:mimalloc", "dep:rocksdb"]
+sqlite-backend = ["dep:rusqlite"]
+smt = ["dep:z3", "dep:z3-sys"]
+ml = ["dep:tetris-ml", "dep:candle-core", "dep:candle-nn", "dep:ulid", "dep:tensorboard"]
+tui = ["dep:ratatui", "dep:crossterm"]
+
 [dependencies]
 # Internal crates
 tetris-game.workspace = true
 tetris-utils.workspace = true
 tetris-search.workspace = true
-tetris-ml.workspace = true
+tetris-ml = { workspace = true, optional = true }
 proc-macros.workspace = true
-tensorboard.workspace = true
+tensorboard = { workspace = true, optional = true }
 
 # CLI
 clap = { version = "4.5.28", features = ["derive"] }
-ctrlc = "3.4"
+ctrlc = { version = "3.4", features = ["termination"] }
 
 # Core
 anyhow.workspace = true
+mimalloc = { version = "0.1.52", optional = true }
 rand.workspace = true
 
 # Logging
@@ -155,40 +191,32 @@ crossbeam-skiplist = "0.1.3"
 dashmap = "6.1.0"
 num_cpus.workspace = true
 
-# Storage backends
-rocksdb = { version = "0.22.0", features = ["multi-threaded-cf"] }
-heed = "0.22.0"
-feoxdb = "0.5.0"
-rusqlite = { version = "0.35", features = ["bundled"] }
+# Storage backends (optional, heavy C/C++ deps)
+rocksdb = { version = "0.22.0", features = ["multi-threaded-cf"], optional = true }
+rusqlite = { version = "0.35", features = ["bundled"], optional = true }
 
 # Serialization
 bincode = "1.3.3"
 serde.workspace = true
 serde_json = "1.0.145"
-serde_yaml = "0.9.34"
-prost.workspace = true
-prost-types.workspace = true
 
-# ML
-candle-core.workspace = true
-candle-nn.workspace = true
+# ML (optional)
+candle-core = { workspace = true, optional = true }
+candle-nn = { workspace = true, optional = true }
 
-# TUI
-ratatui.workspace = true
-crossterm.workspace = true
+# TUI (optional)
+ratatui = { workspace = true, optional = true }
+crossterm = { workspace = true, optional = true }
 
 # Utilities
 itertools = "0.14.0"
-ruint = "1.15.0"
 gethostname.workspace = true
-image.workspace = true
-ulid = "1.2.1"
-tokio = { version = "1.42.0", features = ["full"] }
-backoff = "0.4.0"
+libc = "0.2"
+ulid = { version = "1.2.1", optional = true }
 
-# SMT solving
-z3 = "0.20"
-z3-sys = "0.11"
+# SMT solving (optional)
+z3 = { version = "0.20", optional = true }
+z3-sys = { version = "0.11", optional = true }
 
 [lints]
 workspace = true

@@ -246,6 +246,28 @@ where
         });
         out
     }
+
+    /// Zero-extend the low `N` bits into a wider `BitMask<M>` (`M >= N`).
+    #[inline_conditioned(always)]
+    pub const fn widen<const M: usize>(&self) -> BitMask<M>
+    where
+        [(); M - N]:,
+        [(); M - 1]:,
+        [(); 64 - M]:,
+    {
+        BitMask(self.0 & (u64::MAX >> (64 - N)))
+    }
+
+    /// Truncate to the low `M` bits, producing a `BitMask<M>` (`M <= N`).
+    #[inline_conditioned(always)]
+    pub const fn narrow<const M: usize>(&self) -> BitMask<M>
+    where
+        [(); N - M]:,
+        [(); M - 1]:,
+        [(); 64 - M]:,
+    {
+        BitMask(self.0 & (u64::MAX >> (64 - M)))
+    }
 }
 
 /// A spin lock for shared-mutual exclusion.
@@ -1052,6 +1074,11 @@ impl<T: Copy, const N: usize> HeaplessVec<T, N> {
     /// A slice view of the vector's elements
     pub fn to_slice(&self) -> &[T] {
         unsafe { std::slice::from_raw_parts(self.data.as_ptr() as *const T, self.len) }
+    }
+
+    /// Returns a mutable slice containing all initialized elements.
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        unsafe { std::slice::from_raw_parts_mut(self.data.as_mut_ptr() as *mut T, self.len) }
     }
 
     /// Returns an iterator over the elements of the vector.
@@ -2134,6 +2161,35 @@ mod tests {
             assert_bits!(40);
             assert_bits!(64);
         }
+    }
+
+    #[test]
+    fn test_bitmask_widen_narrow() {
+        let m = BitMask::<10>::new_from_u64(0b11_0110_1001);
+
+        // widen preserves the low N bits.
+        let w: BitMask<16> = m.widen();
+        assert_eq!(w.inner(), 0b11_0110_1001);
+
+        // widen discards garbage bits above the source width.
+        let dirty = BitMask::<4>::new_from_u64(0xFF);
+        let w2: BitMask<8> = dirty.widen();
+        assert_eq!(w2.inner(), 0x0F);
+
+        // narrow truncates to the low M bits.
+        let n: BitMask<4> = m.narrow();
+        assert_eq!(n.inner(), 0b1001);
+
+        // widen then narrow back round-trips.
+        let rt: BitMask<10> = m.widen::<16>().narrow();
+        assert_eq!(rt.inner(), m.inner());
+
+        // Degenerate widths: M == N both directions, full 64-bit width.
+        assert_eq!(m.widen::<10>().inner(), m.inner());
+        assert_eq!(m.narrow::<10>().inner(), m.inner());
+        let full = BitMask::<64>::new_from_u64(u64::MAX);
+        assert_eq!(full.widen::<64>().inner(), u64::MAX);
+        assert_eq!(full.narrow::<1>().inner(), 1);
     }
 
     #[test]

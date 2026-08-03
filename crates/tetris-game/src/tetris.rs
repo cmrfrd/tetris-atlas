@@ -214,7 +214,7 @@ mod tetris_piece_data {
     ];
 }
 
-/// A rotation state for a Tetris piece.
+/// Rotation state for a Tetris piece.
 ///
 /// Represents the clockwise rotation of a piece from its spawn orientation.
 /// All standard Tetris pieces have at most 4 distinct rotations. 0°, 90°, 180°, 270°.
@@ -435,7 +435,7 @@ impl TetrisPiece {
     /// Returns `(cols, width)` where `cols[0..width]` contains the shape data.
     /// Each `u32` column has bits set at the rows the piece occupies
     /// (bit 0 = bottom of the piece's bounding box after gravity).
-    pub fn shape_cols(&self, rotation: Rotation) -> ([u32; 4], u8) {
+    fn shape_cols(&self, rotation: Rotation) -> ([u32; 4], u8) {
         let mut cols = [0u32; 4];
         let w = self.width(rotation) as usize;
         match (*self, rotation) {
@@ -617,7 +617,7 @@ impl TetrisPieceOrientation {
     /// Returns true if this orientation is the sentinel "null" orientation.
     #[inline_conditioned(always)]
     pub const fn is_null(self) -> bool {
-        self.rotation.0 == 0 && self.column.0 == (Column::MAX - 1)
+        self.rotation.0 == Self::NULL.rotation.0 && self.column.0 == Self::NULL.column.0
     }
 
     // One mask per piece (O, I, S, Z, T, L, J) in piece-index order.
