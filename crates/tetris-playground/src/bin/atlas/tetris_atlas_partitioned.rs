@@ -1,7 +1,5 @@
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
-#![feature(const_convert)]
-#![feature(const_trait_impl)]
 //! Partition-owned, disk-backed greedy closed-carrier atlas builder.
 
 use anyhow::{Context, Result, bail, ensure};
@@ -383,8 +381,8 @@ impl ClosureGauges {
         Ok(gauges)
     }
 
-    fn delta_from(self, before: Self) -> ClosureGaugeDelta {
-        ClosureGaugeDelta {
+    fn delta_from(self, before: Self) -> Self {
+        Self {
             live_states: self.live_states - before.live_states,
             states_with_unexpanded: self.states_with_unexpanded - before.states_with_unexpanded,
             states_with_pending: self.states_with_pending - before.states_with_pending,
@@ -433,19 +431,7 @@ impl ClosureGauges {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct ClosureGaugeDelta {
-    live_states: i64,
-    states_with_unexpanded: i64,
-    states_with_pending: i64,
-    locally_resolved_states: i64,
-    forced_slots_total: i64,
-    forced_slots_unexpanded: i64,
-    forced_slots_pending: i64,
-    forced_slots_active: i64,
-}
-
-impl ClosureGaugeDelta {
+impl ClosureGauges {
     fn add(&mut self, other: Self) {
         self.live_states += other.live_states;
         self.states_with_unexpanded += other.states_with_unexpanded;
@@ -498,6 +484,11 @@ fn validate_orientation(piece: TetrisPiece, index: u8) -> Result<TetrisPieceOrie
         "orientation {index} does not belong to piece {piece:?}"
     );
     Ok(TetrisPieceOrientation::from_index(index))
+}
+
+fn cf<'db>(db: &'db DB, name: &str) -> Result<Arc<BoundColumnFamily<'db>>> {
+    db.cf_handle(name)
+        .with_context(|| format!("missing {name} column family"))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -569,18 +560,8 @@ impl WorkKey {
             "work key length is {}, expected {WORK_KEY_LEN}",
             bytes.len()
         );
-        let mut out = [0u8; WORK_KEY_LEN];
-        out.copy_from_slice(bytes);
-        ensure!(
-            out[1] <= PRIORITY_EXPAND,
-            "invalid work priority {}",
-            out[1]
-        );
-        ensure!(
-            u64::from_be_bytes(out[3..].try_into().context("work sequence")?) != u64::MAX,
-            "work sequence u64::MAX is reserved"
-        );
-        Ok(Self(out))
+        let sequence = u64::from_be_bytes(bytes[3..].try_into().context("work sequence")?);
+        Self::new(bytes[0], bytes[1], bytes[2], sequence)
     }
 
     const fn owner(self) -> u8 {
@@ -787,9 +768,9 @@ impl Command {
             out.bytes[out.len..end].copy_from_slice(bytes);
             out.len = end;
         };
+        append(&[self.kind_index() as u8]);
         match self {
-            Self::Expand { state } => {
-                append(&[COMMAND_EXPAND]);
+            Self::Expand { state } | Self::DrainDead { succ: state } => {
                 append(state.as_bytes());
             }
             Self::AttachEdge {
@@ -811,13 +792,6 @@ impl Command {
                 orientation,
             } => {
                 validate_orientation(piece, orientation.index())?;
-                let tag = match self {
-                    Self::AttachEdge { .. } => COMMAND_ATTACH_EDGE,
-                    Self::ChildDead { .. } => COMMAND_CHILD_DEAD,
-                    Self::DetachEdge { .. } => COMMAND_DETACH_EDGE,
-                    _ => return Err(anyhow::anyhow!("command tag dispatch failed")),
-                };
-                append(&[tag]);
                 append(succ.as_bytes());
                 append(pred.as_bytes());
                 append(&[piece.index(), orientation.index()]);
@@ -830,14 +804,10 @@ impl Command {
                 orientation,
             } => {
                 validate_orientation(piece, orientation.index())?;
-                append(&[COMMAND_ATTACH_RESULT, u8::from(accepted)]);
+                append(&[u8::from(accepted)]);
                 append(succ.as_bytes());
                 append(pred.as_bytes());
                 append(&[piece.index(), orientation.index()]);
-            }
-            Self::DrainDead { succ } => {
-                append(&[COMMAND_DRAIN_DEAD]);
-                append(succ.as_bytes());
             }
         }
         Ok(out)
@@ -863,26 +833,27 @@ impl Command {
                 let pred = StateKey::from_slice(&payload[STATE_KEY_LEN..STATE_KEY_LEN * 2])?;
                 let piece = validate_piece_index(payload[STATE_KEY_LEN * 2])?;
                 let orientation = validate_orientation(piece, payload[STATE_KEY_LEN * 2 + 1])?;
-                Ok(match tag {
-                    COMMAND_ATTACH_EDGE => Self::AttachEdge {
+                Ok(if tag == COMMAND_ATTACH_EDGE {
+                    Self::AttachEdge {
                         succ,
                         pred,
                         piece,
                         orientation,
-                    },
-                    COMMAND_CHILD_DEAD => Self::ChildDead {
+                    }
+                } else if tag == COMMAND_CHILD_DEAD {
+                    Self::ChildDead {
                         succ,
                         pred,
                         piece,
                         orientation,
-                    },
-                    COMMAND_DETACH_EDGE => Self::DetachEdge {
+                    }
+                } else {
+                    Self::DetachEdge {
                         succ,
                         pred,
                         piece,
                         orientation,
-                    },
-                    _ => return Err(anyhow::anyhow!("edge command tag dispatch failed")),
+                    }
                 })
             }
             COMMAND_ATTACH_RESULT => {
@@ -1171,6 +1142,17 @@ impl CommandCounts {
         }
     }
 
+    const fn to_array(self) -> [u64; COMMAND_KIND_COUNT] {
+        let mut values = [0; COMMAND_KIND_COUNT];
+        values[COMMAND_EXPAND as usize] = self.expand;
+        values[COMMAND_ATTACH_EDGE as usize] = self.attach_edge;
+        values[COMMAND_ATTACH_RESULT as usize] = self.attach_result;
+        values[COMMAND_CHILD_DEAD as usize] = self.child_dead;
+        values[COMMAND_DETACH_EDGE as usize] = self.detach_edge;
+        values[COMMAND_DRAIN_DEAD as usize] = self.drain_dead;
+        values
+    }
+
     const fn total(self) -> u64 {
         self.expand
             + self.attach_edge
@@ -1181,6 +1163,82 @@ impl CommandCounts {
     }
 }
 
+/// Declares an atomic counter block and its plain serializable twin with
+/// field-wise `add` and `snapshot`.
+macro_rules! stat_pair {
+    (struct $atomic:ident / $snapshot:ident { $($field:ident),* $(,)? }) => {
+        #[derive(Default)]
+        struct $atomic {
+            $($field: AtomicU64,)*
+        }
+
+        #[derive(Clone, Copy, Debug, Default, Serialize)]
+        struct $snapshot {
+            $($field: u64,)*
+        }
+
+        impl $atomic {
+            fn add(&self, delta: &$snapshot) {
+                $(atomic_add_relaxed(&self.$field, delta.$field);)*
+            }
+
+            fn snapshot(&self) -> $snapshot {
+                $snapshot {
+                    $($field: self.$field.load(AtomicOrdering::Relaxed),)*
+                }
+            }
+        }
+    };
+}
+
+/// Declares an atomic gauge block and its plain serializable twin with
+/// field-wise `store` and `snapshot`; `max` fields keep their high-water mark.
+macro_rules! gauge_pair {
+    (
+        struct $atomic:ident / $snapshot:ident {
+            max: { $($max_field:ident),* $(,)? },
+            latest: { $($latest_field:ident),* $(,)? } $(,)?
+        }
+    ) => {
+        #[derive(Default)]
+        struct $atomic {
+            $($max_field: AtomicU64,)*
+            $($latest_field: AtomicU64,)*
+        }
+
+        #[derive(Clone, Copy, Debug, Default, Serialize)]
+        struct $snapshot {
+            $($max_field: u64,)*
+            $($latest_field: u64,)*
+        }
+
+        impl $atomic {
+            fn store(&self, value: &$snapshot) {
+                $(self.$max_field.fetch_max(value.$max_field, AtomicOrdering::Relaxed);)*
+                $(self.$latest_field.store(value.$latest_field, AtomicOrdering::Relaxed);)*
+            }
+
+            fn snapshot(&self) -> $snapshot {
+                $snapshot {
+                    $($max_field: self.$max_field.load(AtomicOrdering::Relaxed),)*
+                    $($latest_field: self.$latest_field.load(AtomicOrdering::Relaxed),)*
+                }
+            }
+        }
+    };
+}
+
+/// Builds a snapshot struct by relaxed-loading the named fields from an atomic
+/// source with matching field names.
+macro_rules! snapshot_fields {
+    ($source:expr, $snapshot:ident { $($field:ident),* $(,)? }) => {
+        $snapshot {
+            $($field: ($source).$field.load(AtomicOrdering::Relaxed),)*
+        }
+    };
+}
+
+#[derive(Default)]
 struct AtomicCommandCounts {
     values: [AtomicU64; COMMAND_KIND_COUNT],
 }
@@ -1205,6 +1263,7 @@ impl AtomicCommandCounts {
     }
 }
 
+#[derive(Default)]
 struct AtomicCommandStats {
     carried_in: AtomicCommandCounts,
     produced: AtomicCommandCounts,
@@ -1221,39 +1280,15 @@ struct CommandStatsSnapshot {
 }
 
 impl CommandStatsSnapshot {
-    const fn backlog(&self) -> CommandCounts {
-        CommandCounts {
-            expand: self
-                .carried_in
-                .expand
-                .saturating_add(self.produced.expand)
-                .saturating_sub(self.processed.expand),
-            attach_edge: self
-                .carried_in
-                .attach_edge
-                .saturating_add(self.produced.attach_edge)
-                .saturating_sub(self.processed.attach_edge),
-            attach_result: self
-                .carried_in
-                .attach_result
-                .saturating_add(self.produced.attach_result)
-                .saturating_sub(self.processed.attach_result),
-            child_dead: self
-                .carried_in
-                .child_dead
-                .saturating_add(self.produced.child_dead)
-                .saturating_sub(self.processed.child_dead),
-            detach_edge: self
-                .carried_in
-                .detach_edge
-                .saturating_add(self.produced.detach_edge)
-                .saturating_sub(self.processed.detach_edge),
-            drain_dead: self
-                .carried_in
-                .drain_dead
-                .saturating_add(self.produced.drain_dead)
-                .saturating_sub(self.processed.drain_dead),
-        }
+    fn backlog(&self) -> CommandCounts {
+        let carried_in = self.carried_in.to_array();
+        let produced = self.produced.to_array();
+        let processed = self.processed.to_array();
+        CommandCounts::from_array(std::array::from_fn(|kind| {
+            carried_in[kind]
+                .saturating_add(produced[kind])
+                .saturating_sub(processed[kind])
+        }))
     }
 }
 
@@ -1272,86 +1307,46 @@ struct BatchMetrics {
     commands_stale: [u64; COMMAND_KIND_COUNT],
     nodes_created: u64,
     nodes_dead: u64,
-    candidates_examined: u64,
-    candidate_lost: u64,
-    candidate_height: u64,
-    candidate_holes: u64,
-    candidate_known_dead: u64,
-    candidate_viable: u64,
-    candidate_reuse_probes: u64,
-    candidate_existing_overlay: u64,
-    candidate_existing_database: u64,
-    candidate_may_exist: u64,
-    candidate_definitely_new: u64,
-    chosen_likely_existing: u64,
-    chosen_definitely_new: u64,
     attach_accepted: u64,
     attach_rejected: u64,
-    reverse_edges_inserted: u64,
-    reverse_edges_detached: u64,
-    reverse_edges_drained: u64,
-    drain_continuations: u64,
-    closure_delta: ClosureGaugeDelta,
+    candidates: CandidateStatsSnapshot,
+    node_reads: NodeReadStatsSnapshot,
+    dead_filter: DeadFilterCounters,
+    reverse_edges: ReverseEdgeStatsSnapshot,
+    closure_delta: ClosureGauges,
     reroutes: u64,
     reroutes_from_active: u64,
     reroutes_from_pending: u64,
-    node_lookups: u64,
-    node_overlay_hits: u64,
-    node_db_gets: u64,
-    node_db_found: u64,
-    node_db_missing: u64,
-    node_prefetch_calls: u64,
-    node_prefetch_keys: u64,
-    candidate_node_lookups: u64,
-    candidate_node_overlay_hits: u64,
-    candidate_node_db_gets: u64,
-    dead_filter_checks: u64,
-    dead_filter_definite_negatives: u64,
-    dead_filter_maybe_positives: u64,
-    dead_filter_verified_dead: u64,
-    dead_filter_false_positives: u64,
-    dead_filter_inserts: u64,
-    dead_filter_bits_set: u64,
     work_heads_advanced: u64,
     work_reclaim_ranges: u64,
     stop_reason: Option<BatchStopReason>,
 }
 
-struct AtomicNodeReadStats {
-    lookups: AtomicU64,
-    overlay_hits: AtomicU64,
-    db_gets: AtomicU64,
-    db_found: AtomicU64,
-    db_missing: AtomicU64,
-    prefetch_calls: AtomicU64,
-    prefetch_keys: AtomicU64,
-    candidate_lookups: AtomicU64,
-    candidate_overlay_hits: AtomicU64,
-    candidate_db_gets: AtomicU64,
+stat_pair! {
+    struct AtomicNodeReadStats / NodeReadStatsSnapshot {
+        lookups,
+        overlay_hits,
+        db_gets,
+        db_found,
+        db_missing,
+        prefetch_calls,
+        prefetch_keys,
+        candidate_lookups,
+        candidate_overlay_hits,
+        candidate_db_gets,
+    }
 }
 
-#[derive(Clone, Copy, Debug, Default, Serialize)]
-struct NodeReadStatsSnapshot {
-    lookups: u64,
-    overlay_hits: u64,
-    db_gets: u64,
-    db_found: u64,
-    db_missing: u64,
-    prefetch_calls: u64,
-    prefetch_keys: u64,
-    candidate_lookups: u64,
-    candidate_overlay_hits: u64,
-    candidate_db_gets: u64,
-}
-
-struct AtomicDeadFilterStats {
-    checks: AtomicU64,
-    definite_negatives: AtomicU64,
-    maybe_positives: AtomicU64,
-    verified_dead: AtomicU64,
-    false_positives: AtomicU64,
-    inserts: AtomicU64,
-    bits_set: AtomicU64,
+stat_pair! {
+    struct AtomicDeadFilterStats / DeadFilterCounters {
+        checks,
+        definite_negatives,
+        maybe_positives,
+        verified_dead,
+        false_positives,
+        inserts,
+        bits_set,
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize)]
@@ -1369,54 +1364,34 @@ struct DeadFilterStatsSnapshot {
     inserts: u64,
 }
 
-struct AtomicCandidateStats {
-    examined: AtomicU64,
-    lost: AtomicU64,
-    height: AtomicU64,
-    holes: AtomicU64,
-    known_dead: AtomicU64,
-    viable: AtomicU64,
-    reuse_probes: AtomicU64,
-    existing_overlay: AtomicU64,
-    existing_database: AtomicU64,
-    may_exist: AtomicU64,
-    definitely_new: AtomicU64,
-    chosen_likely_existing: AtomicU64,
-    chosen_definitely_new: AtomicU64,
+stat_pair! {
+    struct AtomicCandidateStats / CandidateStatsSnapshot {
+        examined,
+        rejected_lost,
+        rejected_height,
+        rejected_holes,
+        rejected_known_dead,
+        viable,
+        reuse_probes,
+        existing_overlay,
+        existing_database,
+        may_exist,
+        definitely_new,
+        chosen_likely_existing,
+        chosen_definitely_new,
+    }
 }
 
-#[derive(Clone, Copy, Debug, Default, Serialize)]
-struct CandidateStatsSnapshot {
-    examined: u64,
-    rejected_lost: u64,
-    rejected_height: u64,
-    rejected_holes: u64,
-    rejected_known_dead: u64,
-    viable: u64,
-    reuse_probes: u64,
-    existing_overlay: u64,
-    existing_database: u64,
-    may_exist: u64,
-    definitely_new: u64,
-    chosen_likely_existing: u64,
-    chosen_definitely_new: u64,
+stat_pair! {
+    struct AtomicReverseEdgeStats / ReverseEdgeStatsSnapshot {
+        inserted,
+        detached,
+        drained,
+        drain_continuations,
+    }
 }
 
-struct AtomicReverseEdgeStats {
-    inserted: AtomicU64,
-    detached: AtomicU64,
-    drained: AtomicU64,
-    drain_continuations: AtomicU64,
-}
-
-#[derive(Clone, Copy, Debug, Default, Serialize)]
-struct ReverseEdgeStatsSnapshot {
-    inserted: u64,
-    detached: u64,
-    drained: u64,
-    drain_continuations: u64,
-}
-
+#[derive(Default)]
 struct AtomicBatchStats {
     claim_calls: AtomicU64,
     empty_claims: AtomicU64,
@@ -1466,6 +1441,7 @@ struct BatchStatsSnapshot {
     stopped_by_outputs: u64,
 }
 
+#[derive(Default)]
 struct AtomicClosureStats {
     live_states: AtomicI64,
     states_with_unexpanded: AtomicI64,
@@ -1491,9 +1467,7 @@ impl AtomicClosureStats {
             forced_slots_unexpanded: AtomicI64::new(initial.forced_slots_unexpanded),
             forced_slots_pending: AtomicI64::new(initial.forced_slots_pending),
             forced_slots_active: AtomicI64::new(initial.forced_slots_active),
-            reroutes: AtomicU64::new(0),
-            reroutes_from_active: AtomicU64::new(0),
-            reroutes_from_pending: AtomicU64::new(0),
+            ..Self::default()
         }
     }
 
@@ -1580,6 +1554,7 @@ impl ClosureOwnerSnapshot {
     }
 }
 
+#[derive(Default)]
 struct AtomicOwnerStats {
     outstanding: AtomicU64,
     commands_processed: AtomicU64,
@@ -1601,19 +1576,8 @@ impl AtomicOwnerStats {
     fn new(outstanding: u64, initial_closure: ClosureGauges) -> Self {
         Self {
             outstanding: AtomicU64::new(outstanding),
-            commands_processed: AtomicU64::new(0),
-            commands_produced: AtomicU64::new(0),
-            batches: AtomicU64::new(0),
-            candidates_examined: AtomicU64::new(0),
-            batch_bytes_total: AtomicU64::new(0),
-            batch_commands_max: AtomicU64::new(0),
-            batch_bytes_max: AtomicU64::new(0),
-            commit_micros_total: AtomicU64::new(0),
-            commit_micros_max: AtomicU64::new(0),
-            busy_micros: AtomicU64::new(0),
-            idle_micros: AtomicU64::new(0),
-            idle_polls: AtomicU64::new(0),
             closure: AtomicClosureStats::new(initial_closure),
+            ..Self::default()
         }
     }
 
@@ -1688,8 +1652,6 @@ struct ProofDeficitSnapshot {
     states_with_pending: u64,
     child_dead_backlog: u64,
     drain_dead_backlog: u64,
-    active_moves_to_dead_or_missing_successors: Option<u64>,
-    missing_reverse_edges: Option<u64>,
 }
 
 impl ClosureStatsSnapshot {
@@ -1741,315 +1703,64 @@ impl ClosureStatsSnapshot {
                 states_with_pending: gauges.states_with_pending,
                 child_dead_backlog: backlog.child_dead,
                 drain_dead_backlog: backlog.drain_dead,
-                active_moves_to_dead_or_missing_successors: None,
-                missing_reverse_edges: None,
             },
         }
     }
 }
 
-struct AtomicStorageStats {
-    peak_rss_bytes: AtomicU64,
-    block_cache_usage_bytes: AtomicU64,
-    block_cache_pinned_bytes: AtomicU64,
-    memtable_usage_bytes: AtomicU64,
-    pending_compaction_bytes: AtomicU64,
-    live_data_bytes: AtomicU64,
-    live_sst_bytes: AtomicU64,
-    node_keys_estimate: AtomicU64,
-    reverse_edge_keys_estimate: AtomicU64,
-    work_keys_estimate: AtomicU64,
-    node_table_reader_bytes: AtomicU64,
-    reverse_edge_table_reader_bytes: AtomicU64,
-    work_table_reader_bytes: AtomicU64,
-    level_zero_files: AtomicU64,
-    running_compactions: AtomicU64,
-    running_flushes: AtomicU64,
-    background_errors: AtomicU64,
-    delayed_write_rate: AtomicU64,
-    write_stopped: AtomicU64,
-    block_cache_hits: AtomicU64,
-    block_cache_misses: AtomicU64,
-    block_cache_data_hits: AtomicU64,
-    block_cache_data_misses: AtomicU64,
-    block_cache_index_hits: AtomicU64,
-    block_cache_index_misses: AtomicU64,
-    block_cache_filter_hits: AtomicU64,
-    block_cache_filter_misses: AtomicU64,
-    bloom_filter_useful: AtomicU64,
-    bloom_filter_full_positive: AtomicU64,
-    bloom_filter_full_true_positive: AtomicU64,
-    memtable_hits: AtomicU64,
-    memtable_misses: AtomicU64,
-    get_hits_l0: AtomicU64,
-    get_hits_l1: AtomicU64,
-    get_hits_l2_and_up: AtomicU64,
-    db_seeks: AtomicU64,
-    db_nexts: AtomicU64,
-    iterator_bytes_read: AtomicU64,
-    keys_read: AtomicU64,
-    bytes_read: AtomicU64,
-    stall_micros: AtomicU64,
-    bytes_written: AtomicU64,
-    compaction_read_bytes: AtomicU64,
-    compaction_write_bytes: AtomicU64,
-    flush_write_bytes: AtomicU64,
-}
-
-#[derive(Clone, Copy, Debug, Default, Serialize)]
-struct StorageStatsSnapshot {
-    peak_rss_bytes: u64,
-    block_cache_usage_bytes: u64,
-    block_cache_pinned_bytes: u64,
-    memtable_usage_bytes: u64,
-    pending_compaction_bytes: u64,
-    live_data_bytes: u64,
-    live_sst_bytes: u64,
-    node_keys_estimate: u64,
-    reverse_edge_keys_estimate: u64,
-    work_keys_estimate: u64,
-    node_table_reader_bytes: u64,
-    reverse_edge_table_reader_bytes: u64,
-    work_table_reader_bytes: u64,
-    level_zero_files: u64,
-    running_compactions: u64,
-    running_flushes: u64,
-    background_errors: u64,
-    delayed_write_rate: u64,
-    write_stopped: u64,
-    block_cache_hits: u64,
-    block_cache_misses: u64,
-    block_cache_data_hits: u64,
-    block_cache_data_misses: u64,
-    block_cache_index_hits: u64,
-    block_cache_index_misses: u64,
-    block_cache_filter_hits: u64,
-    block_cache_filter_misses: u64,
-    bloom_filter_useful: u64,
-    bloom_filter_full_positive: u64,
-    bloom_filter_full_true_positive: u64,
-    memtable_hits: u64,
-    memtable_misses: u64,
-    get_hits_l0: u64,
-    get_hits_l1: u64,
-    get_hits_l2_and_up: u64,
-    db_seeks: u64,
-    db_nexts: u64,
-    iterator_bytes_read: u64,
-    keys_read: u64,
-    bytes_read: u64,
-    stall_micros: u64,
-    bytes_written: u64,
-    compaction_read_bytes: u64,
-    compaction_write_bytes: u64,
-    flush_write_bytes: u64,
-}
-
-impl AtomicStorageStats {
-    fn new() -> Self {
-        Self {
-            peak_rss_bytes: AtomicU64::new(0),
-            block_cache_usage_bytes: AtomicU64::new(0),
-            block_cache_pinned_bytes: AtomicU64::new(0),
-            memtable_usage_bytes: AtomicU64::new(0),
-            pending_compaction_bytes: AtomicU64::new(0),
-            live_data_bytes: AtomicU64::new(0),
-            live_sst_bytes: AtomicU64::new(0),
-            node_keys_estimate: AtomicU64::new(0),
-            reverse_edge_keys_estimate: AtomicU64::new(0),
-            work_keys_estimate: AtomicU64::new(0),
-            node_table_reader_bytes: AtomicU64::new(0),
-            reverse_edge_table_reader_bytes: AtomicU64::new(0),
-            work_table_reader_bytes: AtomicU64::new(0),
-            level_zero_files: AtomicU64::new(0),
-            running_compactions: AtomicU64::new(0),
-            running_flushes: AtomicU64::new(0),
-            background_errors: AtomicU64::new(0),
-            delayed_write_rate: AtomicU64::new(0),
-            write_stopped: AtomicU64::new(0),
-            block_cache_hits: AtomicU64::new(0),
-            block_cache_misses: AtomicU64::new(0),
-            block_cache_data_hits: AtomicU64::new(0),
-            block_cache_data_misses: AtomicU64::new(0),
-            block_cache_index_hits: AtomicU64::new(0),
-            block_cache_index_misses: AtomicU64::new(0),
-            block_cache_filter_hits: AtomicU64::new(0),
-            block_cache_filter_misses: AtomicU64::new(0),
-            bloom_filter_useful: AtomicU64::new(0),
-            bloom_filter_full_positive: AtomicU64::new(0),
-            bloom_filter_full_true_positive: AtomicU64::new(0),
-            memtable_hits: AtomicU64::new(0),
-            memtable_misses: AtomicU64::new(0),
-            get_hits_l0: AtomicU64::new(0),
-            get_hits_l1: AtomicU64::new(0),
-            get_hits_l2_and_up: AtomicU64::new(0),
-            db_seeks: AtomicU64::new(0),
-            db_nexts: AtomicU64::new(0),
-            iterator_bytes_read: AtomicU64::new(0),
-            keys_read: AtomicU64::new(0),
-            bytes_read: AtomicU64::new(0),
-            stall_micros: AtomicU64::new(0),
-            bytes_written: AtomicU64::new(0),
-            compaction_read_bytes: AtomicU64::new(0),
-            compaction_write_bytes: AtomicU64::new(0),
-            flush_write_bytes: AtomicU64::new(0),
-        }
-    }
-
-    fn store(&self, value: &StorageStatsSnapshot) {
-        self.peak_rss_bytes
-            .fetch_max(value.peak_rss_bytes, AtomicOrdering::Relaxed);
-        self.block_cache_usage_bytes
-            .store(value.block_cache_usage_bytes, AtomicOrdering::Relaxed);
-        self.block_cache_pinned_bytes
-            .store(value.block_cache_pinned_bytes, AtomicOrdering::Relaxed);
-        self.memtable_usage_bytes
-            .store(value.memtable_usage_bytes, AtomicOrdering::Relaxed);
-        self.pending_compaction_bytes
-            .store(value.pending_compaction_bytes, AtomicOrdering::Relaxed);
-        self.live_data_bytes
-            .store(value.live_data_bytes, AtomicOrdering::Relaxed);
-        self.live_sst_bytes
-            .store(value.live_sst_bytes, AtomicOrdering::Relaxed);
-        self.node_keys_estimate
-            .store(value.node_keys_estimate, AtomicOrdering::Relaxed);
-        self.reverse_edge_keys_estimate
-            .store(value.reverse_edge_keys_estimate, AtomicOrdering::Relaxed);
-        self.work_keys_estimate
-            .store(value.work_keys_estimate, AtomicOrdering::Relaxed);
-        self.node_table_reader_bytes
-            .store(value.node_table_reader_bytes, AtomicOrdering::Relaxed);
-        self.reverse_edge_table_reader_bytes.store(
-            value.reverse_edge_table_reader_bytes,
-            AtomicOrdering::Relaxed,
-        );
-        self.work_table_reader_bytes
-            .store(value.work_table_reader_bytes, AtomicOrdering::Relaxed);
-        self.level_zero_files
-            .store(value.level_zero_files, AtomicOrdering::Relaxed);
-        self.running_compactions
-            .store(value.running_compactions, AtomicOrdering::Relaxed);
-        self.running_flushes
-            .store(value.running_flushes, AtomicOrdering::Relaxed);
-        self.background_errors
-            .store(value.background_errors, AtomicOrdering::Relaxed);
-        self.delayed_write_rate
-            .store(value.delayed_write_rate, AtomicOrdering::Relaxed);
-        self.write_stopped
-            .store(value.write_stopped, AtomicOrdering::Relaxed);
-        self.block_cache_hits
-            .store(value.block_cache_hits, AtomicOrdering::Relaxed);
-        self.block_cache_misses
-            .store(value.block_cache_misses, AtomicOrdering::Relaxed);
-        self.block_cache_data_hits
-            .store(value.block_cache_data_hits, AtomicOrdering::Relaxed);
-        self.block_cache_data_misses
-            .store(value.block_cache_data_misses, AtomicOrdering::Relaxed);
-        self.block_cache_index_hits
-            .store(value.block_cache_index_hits, AtomicOrdering::Relaxed);
-        self.block_cache_index_misses
-            .store(value.block_cache_index_misses, AtomicOrdering::Relaxed);
-        self.block_cache_filter_hits
-            .store(value.block_cache_filter_hits, AtomicOrdering::Relaxed);
-        self.block_cache_filter_misses
-            .store(value.block_cache_filter_misses, AtomicOrdering::Relaxed);
-        self.bloom_filter_useful
-            .store(value.bloom_filter_useful, AtomicOrdering::Relaxed);
-        self.bloom_filter_full_positive
-            .store(value.bloom_filter_full_positive, AtomicOrdering::Relaxed);
-        self.bloom_filter_full_true_positive.store(
-            value.bloom_filter_full_true_positive,
-            AtomicOrdering::Relaxed,
-        );
-        self.memtable_hits
-            .store(value.memtable_hits, AtomicOrdering::Relaxed);
-        self.memtable_misses
-            .store(value.memtable_misses, AtomicOrdering::Relaxed);
-        self.get_hits_l0
-            .store(value.get_hits_l0, AtomicOrdering::Relaxed);
-        self.get_hits_l1
-            .store(value.get_hits_l1, AtomicOrdering::Relaxed);
-        self.get_hits_l2_and_up
-            .store(value.get_hits_l2_and_up, AtomicOrdering::Relaxed);
-        self.db_seeks.store(value.db_seeks, AtomicOrdering::Relaxed);
-        self.db_nexts.store(value.db_nexts, AtomicOrdering::Relaxed);
-        self.iterator_bytes_read
-            .store(value.iterator_bytes_read, AtomicOrdering::Relaxed);
-        self.keys_read
-            .store(value.keys_read, AtomicOrdering::Relaxed);
-        self.bytes_read
-            .store(value.bytes_read, AtomicOrdering::Relaxed);
-        self.stall_micros
-            .store(value.stall_micros, AtomicOrdering::Relaxed);
-        self.bytes_written
-            .store(value.bytes_written, AtomicOrdering::Relaxed);
-        self.compaction_read_bytes
-            .store(value.compaction_read_bytes, AtomicOrdering::Relaxed);
-        self.compaction_write_bytes
-            .store(value.compaction_write_bytes, AtomicOrdering::Relaxed);
-        self.flush_write_bytes
-            .store(value.flush_write_bytes, AtomicOrdering::Relaxed);
-    }
-
-    fn snapshot(&self) -> StorageStatsSnapshot {
-        StorageStatsSnapshot {
-            peak_rss_bytes: self.peak_rss_bytes.load(AtomicOrdering::Relaxed),
-            block_cache_usage_bytes: self.block_cache_usage_bytes.load(AtomicOrdering::Relaxed),
-            block_cache_pinned_bytes: self.block_cache_pinned_bytes.load(AtomicOrdering::Relaxed),
-            memtable_usage_bytes: self.memtable_usage_bytes.load(AtomicOrdering::Relaxed),
-            pending_compaction_bytes: self.pending_compaction_bytes.load(AtomicOrdering::Relaxed),
-            live_data_bytes: self.live_data_bytes.load(AtomicOrdering::Relaxed),
-            live_sst_bytes: self.live_sst_bytes.load(AtomicOrdering::Relaxed),
-            node_keys_estimate: self.node_keys_estimate.load(AtomicOrdering::Relaxed),
-            reverse_edge_keys_estimate: self
-                .reverse_edge_keys_estimate
-                .load(AtomicOrdering::Relaxed),
-            work_keys_estimate: self.work_keys_estimate.load(AtomicOrdering::Relaxed),
-            node_table_reader_bytes: self.node_table_reader_bytes.load(AtomicOrdering::Relaxed),
-            reverse_edge_table_reader_bytes: self
-                .reverse_edge_table_reader_bytes
-                .load(AtomicOrdering::Relaxed),
-            work_table_reader_bytes: self.work_table_reader_bytes.load(AtomicOrdering::Relaxed),
-            level_zero_files: self.level_zero_files.load(AtomicOrdering::Relaxed),
-            running_compactions: self.running_compactions.load(AtomicOrdering::Relaxed),
-            running_flushes: self.running_flushes.load(AtomicOrdering::Relaxed),
-            background_errors: self.background_errors.load(AtomicOrdering::Relaxed),
-            delayed_write_rate: self.delayed_write_rate.load(AtomicOrdering::Relaxed),
-            write_stopped: self.write_stopped.load(AtomicOrdering::Relaxed),
-            block_cache_hits: self.block_cache_hits.load(AtomicOrdering::Relaxed),
-            block_cache_misses: self.block_cache_misses.load(AtomicOrdering::Relaxed),
-            block_cache_data_hits: self.block_cache_data_hits.load(AtomicOrdering::Relaxed),
-            block_cache_data_misses: self.block_cache_data_misses.load(AtomicOrdering::Relaxed),
-            block_cache_index_hits: self.block_cache_index_hits.load(AtomicOrdering::Relaxed),
-            block_cache_index_misses: self.block_cache_index_misses.load(AtomicOrdering::Relaxed),
-            block_cache_filter_hits: self.block_cache_filter_hits.load(AtomicOrdering::Relaxed),
-            block_cache_filter_misses: self.block_cache_filter_misses.load(AtomicOrdering::Relaxed),
-            bloom_filter_useful: self.bloom_filter_useful.load(AtomicOrdering::Relaxed),
-            bloom_filter_full_positive: self
-                .bloom_filter_full_positive
-                .load(AtomicOrdering::Relaxed),
-            bloom_filter_full_true_positive: self
-                .bloom_filter_full_true_positive
-                .load(AtomicOrdering::Relaxed),
-            memtable_hits: self.memtable_hits.load(AtomicOrdering::Relaxed),
-            memtable_misses: self.memtable_misses.load(AtomicOrdering::Relaxed),
-            get_hits_l0: self.get_hits_l0.load(AtomicOrdering::Relaxed),
-            get_hits_l1: self.get_hits_l1.load(AtomicOrdering::Relaxed),
-            get_hits_l2_and_up: self.get_hits_l2_and_up.load(AtomicOrdering::Relaxed),
-            db_seeks: self.db_seeks.load(AtomicOrdering::Relaxed),
-            db_nexts: self.db_nexts.load(AtomicOrdering::Relaxed),
-            iterator_bytes_read: self.iterator_bytes_read.load(AtomicOrdering::Relaxed),
-            keys_read: self.keys_read.load(AtomicOrdering::Relaxed),
-            bytes_read: self.bytes_read.load(AtomicOrdering::Relaxed),
-            stall_micros: self.stall_micros.load(AtomicOrdering::Relaxed),
-            bytes_written: self.bytes_written.load(AtomicOrdering::Relaxed),
-            compaction_read_bytes: self.compaction_read_bytes.load(AtomicOrdering::Relaxed),
-            compaction_write_bytes: self.compaction_write_bytes.load(AtomicOrdering::Relaxed),
-            flush_write_bytes: self.flush_write_bytes.load(AtomicOrdering::Relaxed),
-        }
+gauge_pair! {
+    struct AtomicStorageStats / StorageStatsSnapshot {
+        max: { peak_rss_bytes },
+        latest: {
+            block_cache_usage_bytes,
+            block_cache_pinned_bytes,
+            memtable_usage_bytes,
+            pending_compaction_bytes,
+            live_data_bytes,
+            live_sst_bytes,
+            node_keys_estimate,
+            reverse_edge_keys_estimate,
+            work_keys_estimate,
+            node_table_reader_bytes,
+            reverse_edge_table_reader_bytes,
+            work_table_reader_bytes,
+            level_zero_files,
+            running_compactions,
+            running_flushes,
+            background_errors,
+            delayed_write_rate,
+            write_stopped,
+            block_cache_hits,
+            block_cache_misses,
+            block_cache_data_hits,
+            block_cache_data_misses,
+            block_cache_index_hits,
+            block_cache_index_misses,
+            block_cache_filter_hits,
+            block_cache_filter_misses,
+            bloom_filter_useful,
+            bloom_filter_full_positive,
+            bloom_filter_full_true_positive,
+            memtable_hits,
+            memtable_misses,
+            get_hits_l0,
+            get_hits_l1,
+            get_hits_l2_and_up,
+            db_seeks,
+            db_nexts,
+            iterator_bytes_read,
+            keys_read,
+            bytes_read,
+            stall_micros,
+            bytes_written,
+            compaction_read_bytes,
+            compaction_write_bytes,
+            flush_write_bytes,
+        },
     }
 }
 
+#[derive(Default)]
 struct RuntimeStats {
     outstanding_work: AtomicU64,
     nodes_created: AtomicU64,
@@ -2121,85 +1832,12 @@ impl RuntimeStats {
         Self {
             outstanding_work: AtomicU64::new(1),
             nodes_created: AtomicU64::new(1),
-            nodes_dead: AtomicU64::new(0),
-            nodes_created_this_run: AtomicU64::new(0),
-            nodes_dead_this_run: AtomicU64::new(0),
-            attach_accepted: AtomicU64::new(0),
-            attach_rejected: AtomicU64::new(0),
             commands: AtomicCommandStats {
-                carried_in: AtomicCommandCounts::new([0; COMMAND_KIND_COUNT]),
                 produced: AtomicCommandCounts::new(produced),
-                processed: AtomicCommandCounts::new([0; COMMAND_KIND_COUNT]),
-                stale: AtomicCommandCounts::new([0; COMMAND_KIND_COUNT]),
-            },
-            candidates: AtomicCandidateStats {
-                examined: AtomicU64::new(0),
-                lost: AtomicU64::new(0),
-                height: AtomicU64::new(0),
-                holes: AtomicU64::new(0),
-                known_dead: AtomicU64::new(0),
-                viable: AtomicU64::new(0),
-                reuse_probes: AtomicU64::new(0),
-                existing_overlay: AtomicU64::new(0),
-                existing_database: AtomicU64::new(0),
-                may_exist: AtomicU64::new(0),
-                definitely_new: AtomicU64::new(0),
-                chosen_likely_existing: AtomicU64::new(0),
-                chosen_definitely_new: AtomicU64::new(0),
-            },
-            node_reads: AtomicNodeReadStats {
-                lookups: AtomicU64::new(0),
-                overlay_hits: AtomicU64::new(0),
-                db_gets: AtomicU64::new(0),
-                db_found: AtomicU64::new(0),
-                db_missing: AtomicU64::new(0),
-                prefetch_calls: AtomicU64::new(0),
-                prefetch_keys: AtomicU64::new(0),
-                candidate_lookups: AtomicU64::new(0),
-                candidate_overlay_hits: AtomicU64::new(0),
-                candidate_db_gets: AtomicU64::new(0),
-            },
-            dead_filter: AtomicDeadFilterStats {
-                checks: AtomicU64::new(0),
-                definite_negatives: AtomicU64::new(0),
-                maybe_positives: AtomicU64::new(0),
-                verified_dead: AtomicU64::new(0),
-                false_positives: AtomicU64::new(0),
-                inserts: AtomicU64::new(0),
-                bits_set: AtomicU64::new(0),
-            },
-            reverse_edges: AtomicReverseEdgeStats {
-                inserted: AtomicU64::new(0),
-                detached: AtomicU64::new(0),
-                drained: AtomicU64::new(0),
-                drain_continuations: AtomicU64::new(0),
-            },
-            batches: AtomicBatchStats {
-                claim_calls: AtomicU64::new(0),
-                empty_claims: AtomicU64::new(0),
-                claimed_commands_total: AtomicU64::new(0),
-                claimed_commands_max: AtomicU64::new(0),
-                claim_micros_total: AtomicU64::new(0),
-                claim_micros_max: AtomicU64::new(0),
-                process_micros_total: AtomicU64::new(0),
-                process_micros_max: AtomicU64::new(0),
-                committed: AtomicU64::new(0),
-                commands_total: AtomicU64::new(0),
-                commands_max: AtomicU64::new(0),
-                bytes_total: AtomicU64::new(0),
-                bytes_max: AtomicU64::new(0),
-                commit_micros_total: AtomicU64::new(0),
-                commit_micros_max: AtomicU64::new(0),
-                work_heads_advanced: AtomicU64::new(0),
-                work_reclaim_ranges: AtomicU64::new(0),
-                stopped_by_write_bytes: AtomicU64::new(0),
-                stopped_by_candidates: AtomicU64::new(0),
-                stopped_by_reverse_edges: AtomicU64::new(0),
-                stopped_by_outputs: AtomicU64::new(0),
+                ..AtomicCommandStats::default()
             },
             owners,
-            max_queue_skew: AtomicU64::new(0),
-            storage: AtomicStorageStats::new(),
+            ..Self::default()
         }
     }
 
@@ -2215,84 +1853,17 @@ impl RuntimeStats {
             outstanding_work: AtomicU64::new(recovery.outstanding_work),
             nodes_created: AtomicU64::new(recovery.nodes_created),
             nodes_dead: AtomicU64::new(recovery.nodes_dead),
-            nodes_created_this_run: AtomicU64::new(0),
-            nodes_dead_this_run: AtomicU64::new(0),
-            attach_accepted: AtomicU64::new(0),
-            attach_rejected: AtomicU64::new(0),
             commands: AtomicCommandStats {
                 carried_in: AtomicCommandCounts::new(recovery.commands_carried_in),
-                produced: AtomicCommandCounts::new([0; COMMAND_KIND_COUNT]),
-                processed: AtomicCommandCounts::new([0; COMMAND_KIND_COUNT]),
-                stale: AtomicCommandCounts::new([0; COMMAND_KIND_COUNT]),
-            },
-            candidates: AtomicCandidateStats {
-                examined: AtomicU64::new(0),
-                lost: AtomicU64::new(0),
-                height: AtomicU64::new(0),
-                holes: AtomicU64::new(0),
-                known_dead: AtomicU64::new(0),
-                viable: AtomicU64::new(0),
-                reuse_probes: AtomicU64::new(0),
-                existing_overlay: AtomicU64::new(0),
-                existing_database: AtomicU64::new(0),
-                may_exist: AtomicU64::new(0),
-                definitely_new: AtomicU64::new(0),
-                chosen_likely_existing: AtomicU64::new(0),
-                chosen_definitely_new: AtomicU64::new(0),
-            },
-            node_reads: AtomicNodeReadStats {
-                lookups: AtomicU64::new(0),
-                overlay_hits: AtomicU64::new(0),
-                db_gets: AtomicU64::new(0),
-                db_found: AtomicU64::new(0),
-                db_missing: AtomicU64::new(0),
-                prefetch_calls: AtomicU64::new(0),
-                prefetch_keys: AtomicU64::new(0),
-                candidate_lookups: AtomicU64::new(0),
-                candidate_overlay_hits: AtomicU64::new(0),
-                candidate_db_gets: AtomicU64::new(0),
+                ..AtomicCommandStats::default()
             },
             dead_filter: AtomicDeadFilterStats {
-                checks: AtomicU64::new(0),
-                definite_negatives: AtomicU64::new(0),
-                maybe_positives: AtomicU64::new(0),
-                verified_dead: AtomicU64::new(0),
-                false_positives: AtomicU64::new(0),
                 inserts: AtomicU64::new(recovery.nodes_dead),
                 bits_set: AtomicU64::new(recovery.dead_filter_bits_set),
-            },
-            reverse_edges: AtomicReverseEdgeStats {
-                inserted: AtomicU64::new(0),
-                detached: AtomicU64::new(0),
-                drained: AtomicU64::new(0),
-                drain_continuations: AtomicU64::new(0),
-            },
-            batches: AtomicBatchStats {
-                claim_calls: AtomicU64::new(0),
-                empty_claims: AtomicU64::new(0),
-                claimed_commands_total: AtomicU64::new(0),
-                claimed_commands_max: AtomicU64::new(0),
-                claim_micros_total: AtomicU64::new(0),
-                claim_micros_max: AtomicU64::new(0),
-                process_micros_total: AtomicU64::new(0),
-                process_micros_max: AtomicU64::new(0),
-                committed: AtomicU64::new(0),
-                commands_total: AtomicU64::new(0),
-                commands_max: AtomicU64::new(0),
-                bytes_total: AtomicU64::new(0),
-                bytes_max: AtomicU64::new(0),
-                commit_micros_total: AtomicU64::new(0),
-                commit_micros_max: AtomicU64::new(0),
-                work_heads_advanced: AtomicU64::new(0),
-                work_reclaim_ranges: AtomicU64::new(0),
-                stopped_by_write_bytes: AtomicU64::new(0),
-                stopped_by_candidates: AtomicU64::new(0),
-                stopped_by_reverse_edges: AtomicU64::new(0),
-                stopped_by_outputs: AtomicU64::new(0),
+                ..AtomicDeadFilterStats::default()
             },
             owners,
-            max_queue_skew: AtomicU64::new(0),
-            storage: AtomicStorageStats::new(),
+            ..Self::default()
         }
     }
 
@@ -2364,82 +1935,10 @@ impl RuntimeStats {
         atomic_add_relaxed(&self.nodes_dead_this_run, metrics.nodes_dead);
         atomic_add_relaxed(&self.attach_accepted, metrics.attach_accepted);
         atomic_add_relaxed(&self.attach_rejected, metrics.attach_rejected);
-        atomic_add_relaxed(&self.candidates.examined, metrics.candidates_examined);
-        atomic_add_relaxed(&self.candidates.lost, metrics.candidate_lost);
-        atomic_add_relaxed(&self.candidates.height, metrics.candidate_height);
-        atomic_add_relaxed(&self.candidates.holes, metrics.candidate_holes);
-        atomic_add_relaxed(&self.candidates.known_dead, metrics.candidate_known_dead);
-        atomic_add_relaxed(&self.candidates.viable, metrics.candidate_viable);
-        atomic_add_relaxed(
-            &self.candidates.reuse_probes,
-            metrics.candidate_reuse_probes,
-        );
-        atomic_add_relaxed(
-            &self.candidates.existing_overlay,
-            metrics.candidate_existing_overlay,
-        );
-        atomic_add_relaxed(
-            &self.candidates.existing_database,
-            metrics.candidate_existing_database,
-        );
-        atomic_add_relaxed(&self.candidates.may_exist, metrics.candidate_may_exist);
-        atomic_add_relaxed(
-            &self.candidates.definitely_new,
-            metrics.candidate_definitely_new,
-        );
-        atomic_add_relaxed(
-            &self.candidates.chosen_likely_existing,
-            metrics.chosen_likely_existing,
-        );
-        atomic_add_relaxed(
-            &self.candidates.chosen_definitely_new,
-            metrics.chosen_definitely_new,
-        );
-        atomic_add_relaxed(&self.node_reads.lookups, metrics.node_lookups);
-        atomic_add_relaxed(&self.node_reads.overlay_hits, metrics.node_overlay_hits);
-        atomic_add_relaxed(&self.node_reads.db_gets, metrics.node_db_gets);
-        atomic_add_relaxed(&self.node_reads.db_found, metrics.node_db_found);
-        atomic_add_relaxed(&self.node_reads.db_missing, metrics.node_db_missing);
-        atomic_add_relaxed(&self.node_reads.prefetch_calls, metrics.node_prefetch_calls);
-        atomic_add_relaxed(&self.node_reads.prefetch_keys, metrics.node_prefetch_keys);
-        atomic_add_relaxed(
-            &self.node_reads.candidate_lookups,
-            metrics.candidate_node_lookups,
-        );
-        atomic_add_relaxed(
-            &self.node_reads.candidate_overlay_hits,
-            metrics.candidate_node_overlay_hits,
-        );
-        atomic_add_relaxed(
-            &self.node_reads.candidate_db_gets,
-            metrics.candidate_node_db_gets,
-        );
-        atomic_add_relaxed(&self.dead_filter.checks, metrics.dead_filter_checks);
-        atomic_add_relaxed(
-            &self.dead_filter.definite_negatives,
-            metrics.dead_filter_definite_negatives,
-        );
-        atomic_add_relaxed(
-            &self.dead_filter.maybe_positives,
-            metrics.dead_filter_maybe_positives,
-        );
-        atomic_add_relaxed(
-            &self.dead_filter.verified_dead,
-            metrics.dead_filter_verified_dead,
-        );
-        atomic_add_relaxed(
-            &self.dead_filter.false_positives,
-            metrics.dead_filter_false_positives,
-        );
-        atomic_add_relaxed(&self.dead_filter.inserts, metrics.dead_filter_inserts);
-        atomic_add_relaxed(&self.dead_filter.bits_set, metrics.dead_filter_bits_set);
-        atomic_add_relaxed(&self.reverse_edges.inserted, metrics.reverse_edges_inserted);
-        atomic_add_relaxed(&self.reverse_edges.detached, metrics.reverse_edges_detached);
-        atomic_add_relaxed(&self.reverse_edges.drained, metrics.reverse_edges_drained);
-        atomic_add_relaxed(
-            &self.reverse_edges.drain_continuations,
-            metrics.drain_continuations,
-        );
+        self.candidates.add(&metrics.candidates);
+        self.node_reads.add(&metrics.node_reads);
+        self.dead_filter.add(&metrics.dead_filter);
+        self.reverse_edges.add(&metrics.reverse_edges);
         self.batches.committed.fetch_add(1, AtomicOrdering::Relaxed);
         self.batches
             .commands_total
@@ -2467,28 +1966,15 @@ impl RuntimeStats {
             &self.batches.work_reclaim_ranges,
             metrics.work_reclaim_ranges,
         );
-        match metrics.stop_reason {
-            Some(BatchStopReason::WriteBytes) => {
-                self.batches
-                    .stopped_by_write_bytes
-                    .fetch_add(1, AtomicOrdering::Relaxed);
-            }
-            Some(BatchStopReason::Candidates) => {
-                self.batches
-                    .stopped_by_candidates
-                    .fetch_add(1, AtomicOrdering::Relaxed);
-            }
-            Some(BatchStopReason::ReverseEdges) => {
-                self.batches
-                    .stopped_by_reverse_edges
-                    .fetch_add(1, AtomicOrdering::Relaxed);
-            }
-            Some(BatchStopReason::Outputs) => {
-                self.batches
-                    .stopped_by_outputs
-                    .fetch_add(1, AtomicOrdering::Relaxed);
-            }
-            None => {}
+        let stopped_by = match metrics.stop_reason {
+            Some(BatchStopReason::WriteBytes) => Some(&self.batches.stopped_by_write_bytes),
+            Some(BatchStopReason::Candidates) => Some(&self.batches.stopped_by_candidates),
+            Some(BatchStopReason::ReverseEdges) => Some(&self.batches.stopped_by_reverse_edges),
+            Some(BatchStopReason::Outputs) => Some(&self.batches.stopped_by_outputs),
+            None => None,
+        };
+        if let Some(counter) = stopped_by {
+            counter.fetch_add(1, AtomicOrdering::Relaxed);
         }
 
         let owner_stats = &self.owners[owner];
@@ -2502,7 +1988,7 @@ impl RuntimeStats {
         owner_stats.batches.fetch_add(1, AtomicOrdering::Relaxed);
         atomic_add_relaxed(
             &owner_stats.candidates_examined,
-            metrics.candidates_examined,
+            metrics.candidates.examined,
         );
         owner_stats
             .batch_bytes_total
@@ -2568,15 +2054,7 @@ impl RuntimeStats {
             processed: self.commands.processed.snapshot(),
             stale: self.commands.stale.snapshot(),
         };
-        let reverse_edges = ReverseEdgeStatsSnapshot {
-            inserted: self.reverse_edges.inserted.load(AtomicOrdering::Relaxed),
-            detached: self.reverse_edges.detached.load(AtomicOrdering::Relaxed),
-            drained: self.reverse_edges.drained.load(AtomicOrdering::Relaxed),
-            drain_continuations: self
-                .reverse_edges
-                .drain_continuations
-                .load(AtomicOrdering::Relaxed),
-        };
+        let reverse_edges = self.reverse_edges.snapshot();
         let mut closure_gauges = ClosureOwnerSnapshot::default();
         for owner in &self.owners {
             closure_gauges.add(owner.closure.snapshot());
@@ -2591,6 +2069,23 @@ impl RuntimeStats {
             outstanding_work,
             reverse_edges.drained,
         );
+        let dead_filter = {
+            let counters = self.dead_filter.snapshot();
+            let capacity_bits = (DEAD_STATE_BLOOM_BYTES as u64) * 8;
+            DeadFilterStatsSnapshot {
+                bytes: DEAD_STATE_BLOOM_BYTES as u64,
+                hashes: DEAD_STATE_BLOOM_HASHES,
+                capacity_bits,
+                set_bits: counters.bits_set,
+                occupancy: ratio(counters.bits_set, capacity_bits),
+                checks: counters.checks,
+                definite_negatives: counters.definite_negatives,
+                maybe_positives: counters.maybe_positives,
+                verified_dead: counters.verified_dead,
+                false_positives: counters.false_positives,
+                inserts: counters.inserts,
+            }
+        };
         RuntimeStatsSnapshot {
             outstanding_work,
             nodes_created,
@@ -2601,141 +2096,37 @@ impl RuntimeStats {
             attach_accepted: self.attach_accepted.load(AtomicOrdering::Relaxed),
             attach_rejected: self.attach_rejected.load(AtomicOrdering::Relaxed),
             commands,
-            candidates: CandidateStatsSnapshot {
-                examined: self.candidates.examined.load(AtomicOrdering::Relaxed),
-                rejected_lost: self.candidates.lost.load(AtomicOrdering::Relaxed),
-                rejected_height: self.candidates.height.load(AtomicOrdering::Relaxed),
-                rejected_holes: self.candidates.holes.load(AtomicOrdering::Relaxed),
-                rejected_known_dead: self.candidates.known_dead.load(AtomicOrdering::Relaxed),
-                viable: self.candidates.viable.load(AtomicOrdering::Relaxed),
-                reuse_probes: self.candidates.reuse_probes.load(AtomicOrdering::Relaxed),
-                existing_overlay: self
-                    .candidates
-                    .existing_overlay
-                    .load(AtomicOrdering::Relaxed),
-                existing_database: self
-                    .candidates
-                    .existing_database
-                    .load(AtomicOrdering::Relaxed),
-                may_exist: self.candidates.may_exist.load(AtomicOrdering::Relaxed),
-                definitely_new: self.candidates.definitely_new.load(AtomicOrdering::Relaxed),
-                chosen_likely_existing: self
-                    .candidates
-                    .chosen_likely_existing
-                    .load(AtomicOrdering::Relaxed),
-                chosen_definitely_new: self
-                    .candidates
-                    .chosen_definitely_new
-                    .load(AtomicOrdering::Relaxed),
-            },
-            node_reads: NodeReadStatsSnapshot {
-                lookups: self.node_reads.lookups.load(AtomicOrdering::Relaxed),
-                overlay_hits: self.node_reads.overlay_hits.load(AtomicOrdering::Relaxed),
-                db_gets: self.node_reads.db_gets.load(AtomicOrdering::Relaxed),
-                db_found: self.node_reads.db_found.load(AtomicOrdering::Relaxed),
-                db_missing: self.node_reads.db_missing.load(AtomicOrdering::Relaxed),
-                prefetch_calls: self.node_reads.prefetch_calls.load(AtomicOrdering::Relaxed),
-                prefetch_keys: self.node_reads.prefetch_keys.load(AtomicOrdering::Relaxed),
-                candidate_lookups: self
-                    .node_reads
-                    .candidate_lookups
-                    .load(AtomicOrdering::Relaxed),
-                candidate_overlay_hits: self
-                    .node_reads
-                    .candidate_overlay_hits
-                    .load(AtomicOrdering::Relaxed),
-                candidate_db_gets: self
-                    .node_reads
-                    .candidate_db_gets
-                    .load(AtomicOrdering::Relaxed),
-            },
-            dead_filter: {
-                let capacity_bits = (DEAD_STATE_BLOOM_BYTES as u64) * 8;
-                let set_bits = self.dead_filter.bits_set.load(AtomicOrdering::Relaxed);
-                DeadFilterStatsSnapshot {
-                    bytes: DEAD_STATE_BLOOM_BYTES as u64,
-                    hashes: DEAD_STATE_BLOOM_HASHES,
-                    capacity_bits,
-                    set_bits,
-                    occupancy: ratio(set_bits, capacity_bits),
-                    checks: self.dead_filter.checks.load(AtomicOrdering::Relaxed),
-                    definite_negatives: self
-                        .dead_filter
-                        .definite_negatives
-                        .load(AtomicOrdering::Relaxed),
-                    maybe_positives: self
-                        .dead_filter
-                        .maybe_positives
-                        .load(AtomicOrdering::Relaxed),
-                    verified_dead: self.dead_filter.verified_dead.load(AtomicOrdering::Relaxed),
-                    false_positives: self
-                        .dead_filter
-                        .false_positives
-                        .load(AtomicOrdering::Relaxed),
-                    inserts: self.dead_filter.inserts.load(AtomicOrdering::Relaxed),
-                }
-            },
+            candidates: self.candidates.snapshot(),
+            node_reads: self.node_reads.snapshot(),
+            dead_filter,
             reverse_edges,
             closure,
-            batches: BatchStatsSnapshot {
-                claim_calls: self.batches.claim_calls.load(AtomicOrdering::Relaxed),
-                empty_claims: self.batches.empty_claims.load(AtomicOrdering::Relaxed),
-                claimed_commands_total: self
-                    .batches
-                    .claimed_commands_total
-                    .load(AtomicOrdering::Relaxed),
-                claimed_commands_max: self
-                    .batches
-                    .claimed_commands_max
-                    .load(AtomicOrdering::Relaxed),
-                claim_micros_total: self
-                    .batches
-                    .claim_micros_total
-                    .load(AtomicOrdering::Relaxed),
-                claim_micros_max: self.batches.claim_micros_max.load(AtomicOrdering::Relaxed),
-                process_micros_total: self
-                    .batches
-                    .process_micros_total
-                    .load(AtomicOrdering::Relaxed),
-                process_micros_max: self
-                    .batches
-                    .process_micros_max
-                    .load(AtomicOrdering::Relaxed),
-                committed: self.batches.committed.load(AtomicOrdering::Relaxed),
-                commands_total: self.batches.commands_total.load(AtomicOrdering::Relaxed),
-                commands_max: self.batches.commands_max.load(AtomicOrdering::Relaxed),
-                bytes_total: self.batches.bytes_total.load(AtomicOrdering::Relaxed),
-                bytes_max: self.batches.bytes_max.load(AtomicOrdering::Relaxed),
-                commit_micros_total: self
-                    .batches
-                    .commit_micros_total
-                    .load(AtomicOrdering::Relaxed),
-                commit_micros_max: self.batches.commit_micros_max.load(AtomicOrdering::Relaxed),
-                work_heads_advanced: self
-                    .batches
-                    .work_heads_advanced
-                    .load(AtomicOrdering::Relaxed),
-                work_reclaim_ranges: self
-                    .batches
-                    .work_reclaim_ranges
-                    .load(AtomicOrdering::Relaxed),
-                stopped_by_write_bytes: self
-                    .batches
-                    .stopped_by_write_bytes
-                    .load(AtomicOrdering::Relaxed),
-                stopped_by_candidates: self
-                    .batches
-                    .stopped_by_candidates
-                    .load(AtomicOrdering::Relaxed),
-                stopped_by_reverse_edges: self
-                    .batches
-                    .stopped_by_reverse_edges
-                    .load(AtomicOrdering::Relaxed),
-                stopped_by_outputs: self
-                    .batches
-                    .stopped_by_outputs
-                    .load(AtomicOrdering::Relaxed),
-            },
+            batches: snapshot_fields!(
+                self.batches,
+                BatchStatsSnapshot {
+                    claim_calls,
+                    empty_claims,
+                    claimed_commands_total,
+                    claimed_commands_max,
+                    claim_micros_total,
+                    claim_micros_max,
+                    process_micros_total,
+                    process_micros_max,
+                    committed,
+                    commands_total,
+                    commands_max,
+                    bytes_total,
+                    bytes_max,
+                    commit_micros_total,
+                    commit_micros_max,
+                    work_heads_advanced,
+                    work_reclaim_ranges,
+                    stopped_by_write_bytes,
+                    stopped_by_candidates,
+                    stopped_by_reverse_edges,
+                    stopped_by_outputs,
+                }
+            ),
             queue_min,
             queue_max,
             queue_skew,
@@ -2785,7 +2176,7 @@ fn candidate_order(left: &Candidate, right: &Candidate) -> Ordering {
 }
 
 #[inline]
-const fn is_admissible(board: TetrisBoard, _bag: TetrisPieceBagState) -> bool {
+const fn is_admissible(board: TetrisBoard) -> bool {
     board.height() <= MAX_CARRIER_HEIGHT && board.total_holes() <= MAX_CARRIER_HOLES
 }
 
@@ -2809,7 +2200,7 @@ fn successor(
     if next_bag.is_empty() {
         next_bag.fill();
     }
-    if !is_admissible(board, next_bag) {
+    if !is_admissible(board) {
         return Ok(None);
     }
     Ok(Some(StateKey::from_board_bag(board, next_bag)?))
@@ -2929,9 +2320,7 @@ impl<'a> BatchProcessor<'a> {
         scratch: &'a mut WorkerScratch,
     ) -> Result<Self> {
         scratch.clear();
-        let node_cf = db
-            .cf_handle(CF_NODE)
-            .context("missing node column family")?;
+        let node_cf = cf(&db, CF_NODE)?;
         Ok(Self {
             db,
             node_cf,
@@ -2955,7 +2344,7 @@ impl<'a> BatchProcessor<'a> {
                 let stop_reason =
                     if self.estimated_bytes + MAX_COMMAND_WRITE_BYTES > MAX_WRITE_BATCH_BYTES {
                         Some(BatchStopReason::WriteBytes)
-                    } else if self.metrics.candidates_examined + MAX_CANDIDATES_PER_COMMAND as u64
+                    } else if self.metrics.candidates.examined + MAX_CANDIDATES_PER_COMMAND as u64
                         > MAX_CANDIDATES_PER_BATCH as u64
                     {
                         Some(BatchStopReason::Candidates)
@@ -2995,7 +2384,7 @@ impl<'a> BatchProcessor<'a> {
             "projected write batch exceeds {MAX_WRITE_BATCH_BYTES} bytes"
         );
         ensure!(
-            self.metrics.candidates_examined <= MAX_CANDIDATES_PER_BATCH as u64,
+            self.metrics.candidates.examined <= MAX_CANDIDATES_PER_BATCH as u64,
             "candidate scratch limit exceeded"
         );
         Ok(())
@@ -3045,19 +2434,19 @@ impl<'a> BatchProcessor<'a> {
             results.len() == self.scratch.node_prefetch_plan.len(),
             "RocksDB returned the wrong batched node-read count"
         );
-        self.metrics.node_prefetch_calls += 1;
-        self.metrics.node_prefetch_keys += results.len() as u64;
+        self.metrics.node_reads.prefetch_calls += 1;
+        self.metrics.node_reads.prefetch_keys += results.len() as u64;
         let scratch = &mut *self.scratch;
         for (&state, result) in scratch.node_prefetch_plan.to_slice().iter().zip(results) {
             let record = result
                 .context("batched read node record")?
                 .map(|bytes| NodeRecord::from_slice(bytes.as_ref(), state.bag()?))
                 .transpose()?;
-            self.metrics.node_db_gets += 1;
+            self.metrics.node_reads.db_gets += 1;
             if record.is_some() {
-                self.metrics.node_db_found += 1;
+                self.metrics.node_reads.db_found += 1;
             } else {
-                self.metrics.node_db_missing += 1;
+                self.metrics.node_reads.db_missing += 1;
             }
             scratch.nodes.insert(
                 state,
@@ -3104,9 +2493,9 @@ impl<'a> BatchProcessor<'a> {
     }
 
     fn load_node(&mut self, state: StateKey) -> Result<Option<NodeRecord>> {
-        self.metrics.node_lookups += 1;
+        self.metrics.node_reads.lookups += 1;
         if let Some(entry) = self.scratch.nodes.get(&state) {
-            self.metrics.node_overlay_hits += 1;
+            self.metrics.node_reads.overlay_hits += 1;
             return Ok(entry.record);
         }
         self.load_node_from_db(state)
@@ -3123,11 +2512,11 @@ impl<'a> BatchProcessor<'a> {
             .context("read node record")?
             .map(|bytes| NodeRecord::from_slice(bytes.as_ref(), state.bag()?))
             .transpose()?;
-        self.metrics.node_db_gets += 1;
+        self.metrics.node_reads.db_gets += 1;
         if record.is_some() {
-            self.metrics.node_db_found += 1;
+            self.metrics.node_reads.db_found += 1;
         } else {
-            self.metrics.node_db_missing += 1;
+            self.metrics.node_reads.db_missing += 1;
         }
         self.scratch.nodes.insert(
             state,
@@ -3218,18 +2607,18 @@ impl<'a> BatchProcessor<'a> {
 
     fn record_candidate_reuse(&mut self, reuse: CandidateReuse) {
         match reuse {
-            CandidateReuse::DefinitelyNew => self.metrics.candidate_definitely_new += 1,
-            CandidateReuse::MayExist => self.metrics.candidate_may_exist += 1,
+            CandidateReuse::DefinitelyNew => self.metrics.candidates.definitely_new += 1,
+            CandidateReuse::MayExist => self.metrics.candidates.may_exist += 1,
             CandidateReuse::Existing => {}
         }
     }
 
     fn classify_candidate(&mut self, state: StateKey) -> Result<CandidateState> {
-        self.metrics.node_lookups += 1;
-        self.metrics.candidate_node_lookups += 1;
+        self.metrics.node_reads.lookups += 1;
+        self.metrics.node_reads.candidate_lookups += 1;
         if let Some(entry) = self.scratch.nodes.get(&state) {
-            self.metrics.node_overlay_hits += 1;
-            self.metrics.candidate_node_overlay_hits += 1;
+            self.metrics.node_reads.overlay_hits += 1;
+            self.metrics.node_reads.candidate_overlay_hits += 1;
             let Some(record) = entry.record else {
                 self.record_candidate_reuse(CandidateReuse::DefinitelyNew);
                 return Ok(CandidateState::Viable(CandidateReuse::DefinitelyNew));
@@ -3237,30 +2626,30 @@ impl<'a> BatchProcessor<'a> {
             if record.is_dead(state.bag()?)? {
                 return Ok(CandidateState::Dead);
             }
-            self.metrics.candidate_existing_overlay += 1;
+            self.metrics.candidates.existing_overlay += 1;
             return Ok(CandidateState::Viable(CandidateReuse::Existing));
         }
 
-        self.metrics.dead_filter_checks += 1;
+        self.metrics.dead_filter.checks += 1;
         if self.dead_filter.might_contain(state) {
-            self.metrics.dead_filter_maybe_positives += 1;
-            self.metrics.candidate_node_db_gets += 1;
+            self.metrics.dead_filter.maybe_positives += 1;
+            self.metrics.node_reads.candidate_db_gets += 1;
             let Some(record) = self.load_node_from_db(state)? else {
-                self.metrics.dead_filter_false_positives += 1;
+                self.metrics.dead_filter.false_positives += 1;
                 self.record_candidate_reuse(CandidateReuse::DefinitelyNew);
                 return Ok(CandidateState::Viable(CandidateReuse::DefinitelyNew));
             };
             if record.is_dead(state.bag()?)? {
-                self.metrics.dead_filter_verified_dead += 1;
+                self.metrics.dead_filter.verified_dead += 1;
                 return Ok(CandidateState::Dead);
             }
-            self.metrics.dead_filter_false_positives += 1;
-            self.metrics.candidate_existing_database += 1;
+            self.metrics.dead_filter.false_positives += 1;
+            self.metrics.candidates.existing_database += 1;
             return Ok(CandidateState::Viable(CandidateReuse::Existing));
         }
 
-        self.metrics.dead_filter_definite_negatives += 1;
-        self.metrics.candidate_reuse_probes += 1;
+        self.metrics.dead_filter.definite_negatives += 1;
+        self.metrics.candidates.reuse_probes += 1;
         let reuse =
             if self
                 .db
@@ -3290,31 +2679,31 @@ impl<'a> BatchProcessor<'a> {
 
         let mut best = None;
         for &placement in TetrisPiecePlacement::all_from_piece(piece) {
-            self.metrics.candidates_examined += 1;
+            self.metrics.candidates.examined += 1;
             ensure!(
-                self.metrics.candidates_examined <= MAX_CANDIDATES_PER_BATCH as u64,
+                self.metrics.candidates.examined <= MAX_CANDIDATES_PER_BATCH as u64,
                 "candidate scratch limit exceeded"
             );
             let mut next_board = board;
             let result = next_board.apply_piece_placement(placement);
             if result.is_lost == IsLost::LOST {
-                self.metrics.candidate_lost += 1;
+                self.metrics.candidates.rejected_lost += 1;
                 continue;
             }
             if next_board.height() > MAX_CARRIER_HEIGHT {
-                self.metrics.candidate_height += 1;
+                self.metrics.candidates.rejected_height += 1;
                 continue;
             }
             if next_board.total_holes() > MAX_CARRIER_HOLES {
-                self.metrics.candidate_holes += 1;
+                self.metrics.candidates.rejected_holes += 1;
                 continue;
             }
             let succ = StateKey::from_board_bag(next_board, next_bag)?;
             let CandidateState::Viable(reuse) = self.classify_candidate(succ)? else {
-                self.metrics.candidate_known_dead += 1;
+                self.metrics.candidates.rejected_known_dead += 1;
                 continue;
             };
-            self.metrics.candidate_viable += 1;
+            self.metrics.candidates.viable += 1;
             let candidate = Candidate {
                 reuse,
                 score: score_board(next_board, result.lines_cleared)?,
@@ -3330,9 +2719,9 @@ impl<'a> BatchProcessor<'a> {
         }
         if let Some(candidate) = best {
             if candidate.reuse.is_likely_existing() {
-                self.metrics.chosen_likely_existing += 1;
+                self.metrics.candidates.chosen_likely_existing += 1;
             } else {
-                self.metrics.chosen_definitely_new += 1;
+                self.metrics.candidates.chosen_definitely_new += 1;
             }
         }
         Ok(best)
@@ -3393,7 +2782,7 @@ impl<'a> BatchProcessor<'a> {
             self.metrics.attach_accepted += 1;
             let edge = ReverseEdgeKey::new(succ, pred, piece, orientation)?;
             self.set_redge(edge, true)?;
-            self.metrics.reverse_edges_inserted += 1;
+            self.metrics.reverse_edges.inserted += 1;
             self.estimated_bytes += REDGE_KEY_LEN;
         } else {
             self.metrics.attach_rejected += 1;
@@ -3495,8 +2884,8 @@ impl<'a> BatchProcessor<'a> {
             "state-death transition lacks an exhausted forced piece"
         );
         self.put_node(state, record)?;
-        self.metrics.dead_filter_bits_set += self.dead_filter.insert(state);
-        self.metrics.dead_filter_inserts += 1;
+        self.metrics.dead_filter.bits_set += self.dead_filter.insert(state);
+        self.metrics.dead_filter.inserts += 1;
         self.metrics.nodes_dead += 1;
         self.output(Command::DrainDead { succ: state })?;
 
@@ -3530,7 +2919,7 @@ impl<'a> BatchProcessor<'a> {
     ) -> Result<()> {
         let edge = ReverseEdgeKey::new(succ, pred, piece, orientation)?;
         self.set_redge(edge, false)?;
-        self.metrics.reverse_edges_detached += 1;
+        self.metrics.reverse_edges.detached += 1;
         self.estimated_bytes += REDGE_KEY_LEN;
         Ok(())
     }
@@ -3558,7 +2947,7 @@ impl<'a> BatchProcessor<'a> {
             let edge = self.scratch.drain_edges[index];
             let (_, pred, piece, orientation) = edge.decode()?;
             self.set_redge(edge, false)?;
-            self.metrics.reverse_edges_drained += 1;
+            self.metrics.reverse_edges.drained += 1;
             self.estimated_bytes += REDGE_KEY_LEN;
             self.output(Command::ChildDead {
                 succ,
@@ -3568,7 +2957,7 @@ impl<'a> BatchProcessor<'a> {
             })?;
         }
         if has_more {
-            self.metrics.drain_continuations += 1;
+            self.metrics.reverse_edges.drain_continuations += 1;
             self.output(Command::DrainDead { succ })?;
         }
         Ok(())
@@ -3589,10 +2978,7 @@ impl<'a> BatchProcessor<'a> {
         self.scratch.ordered_redges.dedup();
         self.scratch.drain_edges.clear();
 
-        let cf = self
-            .db
-            .cf_handle(CF_REDGE)
-            .context("missing reverse-edge column family")?;
+        let cf = cf(&self.db, CF_REDGE)?;
         let mut options = ReadOptions::default();
         options.fill_cache(false);
         options.set_prefix_same_as_start(true);
@@ -3644,21 +3030,14 @@ impl<'a> BatchProcessor<'a> {
                 }
                 (None, None) => break,
             };
-            ensure!(
-                self.scratch.drain_edges.len() < MAX_REDGES_PER_DRAIN + 1,
-                "reverse-edge drain scratch exceeds fixed capacity"
-            );
             self.scratch.drain_edges.push(next);
-            if self.scratch.drain_edges.len() == MAX_REDGES_PER_DRAIN + 1 {
-                break;
-            }
         }
 
         Ok(self.scratch.drain_edges.len() > MAX_REDGES_PER_DRAIN)
     }
 
-    fn closure_delta(&self) -> Result<ClosureGaugeDelta> {
-        let mut delta = ClosureGaugeDelta::default();
+    fn closure_delta(&self) -> Result<ClosureGauges> {
+        let mut delta = ClosureGauges::default();
         for state in self.scratch.dirty_nodes.to_slice() {
             let entry = self
                 .scratch
@@ -3698,18 +3077,9 @@ impl<'a> BatchProcessor<'a> {
             .stats
             .reserve_outputs(output_count, &outputs_by_owner)?;
 
-        let node_cf = self
-            .db
-            .cf_handle(CF_NODE)
-            .context("missing node column family")?;
-        let redge_cf = self
-            .db
-            .cf_handle(CF_REDGE)
-            .context("missing reverse-edge column family")?;
-        let work_cf = self
-            .db
-            .cf_handle(CF_WORK)
-            .context("missing work column family")?;
+        let node_cf = cf(&self.db, CF_NODE)?;
+        let redge_cf = cf(&self.db, CF_REDGE)?;
+        let work_cf = cf(&self.db, CF_WORK)?;
         let mut batch = WriteBatch::default();
         for state in self.scratch.dirty_nodes.to_slice() {
             let entry = self
@@ -3861,9 +3231,7 @@ fn claim_batch(
         producer_start < owners.writer_count,
         "producer start is outside the owner map"
     );
-    let cf = db
-        .cf_handle(CF_WORK)
-        .context("missing work column family")?;
+    let cf = cf(&db, CF_WORK)?;
     let mut options = ReadOptions::default();
     options.fill_cache(false);
     let mut iterator = db.raw_iterator_cf_opt(&cf, options);
@@ -4168,11 +3536,8 @@ const fn peak_rss_bytes() -> u64 {
 }
 
 fn cf_property(db: &DB, cf_name: &str, property: &str) -> Result<u64> {
-    let cf = db
-        .cf_handle(cf_name)
-        .with_context(|| format!("missing {cf_name} column family"))?;
     Ok(db
-        .property_int_value_cf(&cf, property)
+        .property_int_value_cf(&cf(db, cf_name)?, property)
         .with_context(|| format!("read RocksDB property {property} for {cf_name}"))?
         .unwrap_or(0))
 }
@@ -4335,12 +3700,8 @@ fn initialize_database(db: &DB, owners: &OwnerMap, source_commit: &str) -> Resul
     let command = Command::Expand { state: seed };
     let work_key = WorkKey::new(seed_owner, command.priority(), seed_owner, 0)?;
     owners.validate_work(work_key, command)?;
-    let node_cf = db
-        .cf_handle(CF_NODE)
-        .context("missing node column family")?;
-    let work_cf = db
-        .cf_handle(CF_WORK)
-        .context("missing work column family")?;
+    let node_cf = cf(&db, CF_NODE)?;
+    let work_cf = cf(&db, CF_WORK)?;
     let mut batch = WriteBatch::default();
     batch.put(META_SCHEMA_VERSION, SCHEMA_VERSION);
     batch.put(META_STATUS, STATUS_BUILDING);
@@ -4431,9 +3792,7 @@ fn recover_runtime(
         work_heads,
     };
 
-    let work_cf = db
-        .cf_handle(CF_WORK)
-        .context("missing work column family")?;
+    let work_cf = cf(&db, CF_WORK)?;
     let mut read_options = ReadOptions::default();
     read_options.fill_cache(false);
     for item in db.iterator_cf_opt(&work_cf, read_options, IteratorMode::Start) {
@@ -4494,9 +3853,7 @@ fn recover_runtime(
         }
     }
 
-    let node_cf = db
-        .cf_handle(CF_NODE)
-        .context("missing node column family")?;
+    let node_cf = cf(&db, CF_NODE)?;
     let mut read_options = ReadOptions::default();
     read_options.fill_cache(false);
     for item in db.iterator_cf_opt(&node_cf, read_options, IteratorMode::Start) {
@@ -4786,12 +4143,8 @@ fn status_text(status: &[u8]) -> &str {
 }
 
 fn validate_closure(db: &DB, owners: &OwnerMap) -> Result<ValidationSummary> {
-    let node_cf = db
-        .cf_handle(CF_NODE)
-        .context("missing node column family")?;
-    let redge_cf = db
-        .cf_handle(CF_REDGE)
-        .context("missing reverse-edge column family")?;
+    let node_cf = cf(&db, CF_NODE)?;
+    let redge_cf = cf(&db, CF_REDGE)?;
     let work_heads = read_work_heads(db, owners)?.context("missing work-head metadata")?;
     for (owner, cursor) in work_heads.iter().enumerate() {
         let mut claimed = ClaimedBatch::new();
@@ -4864,10 +4217,7 @@ fn validate_closure(db: &DB, owners: &OwnerMap) -> Result<ValidationSummary> {
 
 fn flush_all(db: &DB) -> Result<()> {
     for name in [CF_NODE, CF_REDGE, CF_WORK] {
-        let cf = db
-            .cf_handle(name)
-            .with_context(|| format!("missing {name} column family"))?;
-        db.flush_cf(&cf)
+        db.flush_cf(&cf(db, name)?)
             .with_context(|| format!("flush {name} column family"))?;
     }
     db.flush().context("flush metadata")
@@ -5266,10 +4616,7 @@ fn resume_create(
     let recovery = recover_runtime(&opened_db.db, &metadata.owners, &dead_filter)?;
     let seed = seed_key()?;
     let (_, seed_bag) = seed.decode()?;
-    let node_cf = opened_db
-        .db
-        .cf_handle(CF_NODE)
-        .context("missing node column family")?;
+    let node_cf = cf(&opened_db.db, CF_NODE)?;
     let seed_value = opened_db
         .db
         .get_pinned_cf(&node_cf, seed.as_bytes())
@@ -5340,9 +4687,7 @@ fn piece_from_char(value: char) -> Result<TetrisPiece> {
 }
 
 fn print_state_moves(db: &DB, state: StateKey) -> Result<()> {
-    let node_cf = db
-        .cf_handle(CF_NODE)
-        .context("missing node column family")?;
+    let node_cf = cf(&db, CF_NODE)?;
     let (board, bag) = state.decode()?;
     let value = db
         .get_pinned_cf(&node_cf, state.as_bytes())
@@ -5379,9 +4724,7 @@ fn inspect_complete_atlas(path: PathBuf, ram_mib: usize, pieces: String) -> Resu
     let owners = OwnerMap::from_bytes(&read_required_meta(&db, META_OWNER_MAP)?)?;
     ensure!(owners.writer_count > 0, "atlas owner map is empty");
 
-    let node_cf = db
-        .cf_handle(CF_NODE)
-        .context("missing node column family")?;
+    let node_cf = cf(&db, CF_NODE)?;
     let mut state = seed_key()?;
     if pieces.is_empty() {
         return print_state_moves(&db, state);
@@ -5572,7 +4915,7 @@ mod tests {
 
     #[test]
     fn storage_stats_keep_peak_rss_and_latest_gauges() {
-        let stats = AtomicStorageStats::new();
+        let stats = AtomicStorageStats::default();
         stats.store(&StorageStatsSnapshot {
             peak_rss_bytes: 10,
             block_cache_usage_bytes: 20,
@@ -5949,8 +5292,8 @@ mod tests {
                 .known_dead(live_state)
                 .expect("filter negative must be accepted")
         );
-        assert_eq!(processor.metrics.dead_filter_definite_negatives, 1);
-        assert_eq!(processor.metrics.candidate_node_db_gets, 0);
+        assert_eq!(processor.metrics.dead_filter.definite_negatives, 1);
+        assert_eq!(processor.metrics.node_reads.candidate_db_gets, 0);
         assert!(processor.scratch.nodes.is_empty());
         drop(processor);
 
@@ -5963,9 +5306,9 @@ mod tests {
                 .known_dead(live_state)
                 .expect("possible match must be verified")
         );
-        assert_eq!(processor.metrics.dead_filter_maybe_positives, 1);
-        assert_eq!(processor.metrics.dead_filter_false_positives, 1);
-        assert_eq!(processor.metrics.candidate_node_db_gets, 1);
+        assert_eq!(processor.metrics.dead_filter.maybe_positives, 1);
+        assert_eq!(processor.metrics.dead_filter.false_positives, 1);
+        assert_eq!(processor.metrics.node_reads.candidate_db_gets, 1);
         drop(processor);
 
         let mut limbs = [0u32; StandardTetris::COLS];
@@ -5990,9 +5333,9 @@ mod tests {
                 .known_dead(dead_state)
                 .expect("possible dead state must be verified")
         );
-        assert_eq!(processor.metrics.dead_filter_maybe_positives, 1);
-        assert_eq!(processor.metrics.dead_filter_verified_dead, 1);
-        assert_eq!(processor.metrics.dead_filter_false_positives, 0);
+        assert_eq!(processor.metrics.dead_filter.maybe_positives, 1);
+        assert_eq!(processor.metrics.dead_filter.verified_dead, 1);
+        assert_eq!(processor.metrics.dead_filter.false_positives, 0);
 
         drop(processor);
         drop(db);
@@ -6019,15 +5362,15 @@ mod tests {
             .transition_to_dead(state, dead)
             .expect("death transition must succeed");
         assert!(dead_filter.might_contain(state));
-        assert_eq!(processor.metrics.dead_filter_inserts, 1);
-        assert!(processor.metrics.dead_filter_bits_set > 0);
+        assert_eq!(processor.metrics.dead_filter.inserts, 1);
+        assert!(processor.metrics.dead_filter.bits_set > 0);
         assert!(
             processor
                 .known_dead(state)
                 .expect("batch overlay must expose the death transition")
         );
-        assert_eq!(processor.metrics.candidate_node_overlay_hits, 1);
-        assert_eq!(processor.metrics.dead_filter_checks, 0);
+        assert_eq!(processor.metrics.node_reads.candidate_overlay_hits, 1);
+        assert_eq!(processor.metrics.dead_filter.checks, 0);
 
         drop(processor);
         drop(db);
@@ -6416,13 +5759,13 @@ mod tests {
             assert_eq!(succ_entry.original, None);
             assert_eq!(succ_entry.record, None);
             assert!(!succ_entry.dirty);
-            assert_eq!(processor.metrics.node_prefetch_calls, 1);
-            assert_eq!(processor.metrics.node_prefetch_keys, 2);
-            assert_eq!(processor.metrics.node_db_gets, 2);
-            assert_eq!(processor.metrics.node_db_found, 1);
-            assert_eq!(processor.metrics.node_db_missing, 1);
-            assert_eq!(processor.metrics.node_lookups, 0);
-            assert_eq!(processor.metrics.node_overlay_hits, 0);
+            assert_eq!(processor.metrics.node_reads.prefetch_calls, 1);
+            assert_eq!(processor.metrics.node_reads.prefetch_keys, 2);
+            assert_eq!(processor.metrics.node_reads.db_gets, 2);
+            assert_eq!(processor.metrics.node_reads.db_found, 1);
+            assert_eq!(processor.metrics.node_reads.db_missing, 1);
+            assert_eq!(processor.metrics.node_reads.lookups, 0);
+            assert_eq!(processor.metrics.node_reads.overlay_hits, 0);
 
             processor
                 .attach_edge(succ, pred, piece, orientation)
@@ -6436,8 +5779,8 @@ mod tests {
             assert_eq!(succ_entry.record, Some(NodeRecord::INIT));
             assert!(succ_entry.dirty);
             assert_eq!(processor.metrics.nodes_created, 1);
-            assert_eq!(processor.metrics.node_lookups, 1);
-            assert_eq!(processor.metrics.node_overlay_hits, 1);
+            assert_eq!(processor.metrics.node_reads.lookups, 1);
+            assert_eq!(processor.metrics.node_reads.overlay_hits, 1);
         }
         drop(db);
         fs::remove_dir_all(path).expect("test database must be removable");
@@ -6480,9 +5823,9 @@ mod tests {
                 .expect("empty node prefetch must succeed");
             assert!(processor.scratch.node_prefetch_plan.is_empty());
             assert!(processor.scratch.nodes.is_empty());
-            assert_eq!(processor.metrics.node_prefetch_calls, 0);
-            assert_eq!(processor.metrics.node_prefetch_keys, 0);
-            assert_eq!(processor.metrics.node_db_gets, 0);
+            assert_eq!(processor.metrics.node_reads.prefetch_calls, 0);
+            assert_eq!(processor.metrics.node_reads.prefetch_keys, 0);
+            assert_eq!(processor.metrics.node_reads.db_gets, 0);
         }
         drop(db);
         fs::remove_dir_all(path).expect("test database must be removable");
@@ -6554,13 +5897,13 @@ mod tests {
                 &claimed.map(|item| item.key)
             );
             assert!(processor.scratch.outputs.is_empty());
-            assert_eq!(processor.metrics.node_prefetch_calls, 1);
-            assert_eq!(processor.metrics.node_prefetch_keys, 1);
-            assert_eq!(processor.metrics.node_db_gets, 1);
-            assert_eq!(processor.metrics.node_db_found, 1);
-            assert_eq!(processor.metrics.node_db_missing, 0);
-            assert_eq!(processor.metrics.node_lookups, 2);
-            assert_eq!(processor.metrics.node_overlay_hits, 2);
+            assert_eq!(processor.metrics.node_reads.prefetch_calls, 1);
+            assert_eq!(processor.metrics.node_reads.prefetch_keys, 1);
+            assert_eq!(processor.metrics.node_reads.db_gets, 1);
+            assert_eq!(processor.metrics.node_reads.db_found, 1);
+            assert_eq!(processor.metrics.node_reads.db_missing, 0);
+            assert_eq!(processor.metrics.node_reads.lookups, 2);
+            assert_eq!(processor.metrics.node_reads.overlay_hits, 2);
             assert_eq!(
                 processor.metrics.commands_stale[COMMAND_ATTACH_RESULT as usize],
                 1
@@ -6579,52 +5922,52 @@ mod tests {
         metrics.commands_stale[COMMAND_EXPAND as usize] = 1;
         metrics.nodes_created = 2;
         metrics.nodes_dead = 1;
-        metrics.candidates_examined = 5;
-        metrics.candidate_lost = 1;
-        metrics.candidate_height = 1;
-        metrics.candidate_holes = 1;
-        metrics.candidate_known_dead = 1;
-        metrics.candidate_viable = 1;
-        metrics.candidate_reuse_probes = 4;
-        metrics.candidate_existing_overlay = 1;
-        metrics.candidate_existing_database = 1;
-        metrics.candidate_may_exist = 2;
-        metrics.candidate_definitely_new = 2;
-        metrics.chosen_likely_existing = 1;
-        metrics.chosen_definitely_new = 1;
+        metrics.candidates.examined = 5;
+        metrics.candidates.rejected_lost = 1;
+        metrics.candidates.rejected_height = 1;
+        metrics.candidates.rejected_holes = 1;
+        metrics.candidates.rejected_known_dead = 1;
+        metrics.candidates.viable = 1;
+        metrics.candidates.reuse_probes = 4;
+        metrics.candidates.existing_overlay = 1;
+        metrics.candidates.existing_database = 1;
+        metrics.candidates.may_exist = 2;
+        metrics.candidates.definitely_new = 2;
+        metrics.candidates.chosen_likely_existing = 1;
+        metrics.candidates.chosen_definitely_new = 1;
         metrics.attach_accepted = 3;
         metrics.attach_rejected = 2;
-        metrics.reverse_edges_inserted = 3;
-        metrics.reverse_edges_detached = 1;
-        metrics.reverse_edges_drained = 2;
-        metrics.drain_continuations = 1;
-        metrics.closure_delta = ClosureGaugeDelta {
+        metrics.reverse_edges.inserted = 3;
+        metrics.reverse_edges.detached = 1;
+        metrics.reverse_edges.drained = 2;
+        metrics.reverse_edges.drain_continuations = 1;
+        metrics.closure_delta = ClosureGauges {
             states_with_unexpanded: -1,
             states_with_pending: 1,
             forced_slots_unexpanded: -(TetrisPiece::NUM_PIECES as i64),
             forced_slots_pending: TetrisPiece::NUM_PIECES as i64,
-            ..ClosureGaugeDelta::default()
+            ..ClosureGauges::default()
         };
         metrics.reroutes = 2;
         metrics.reroutes_from_active = 1;
         metrics.reroutes_from_pending = 1;
-        metrics.node_lookups = 8;
-        metrics.node_overlay_hits = 3;
-        metrics.node_db_gets = 5;
-        metrics.node_db_found = 4;
-        metrics.node_db_missing = 1;
-        metrics.node_prefetch_calls = 2;
-        metrics.node_prefetch_keys = 4;
-        metrics.candidate_node_lookups = 6;
-        metrics.candidate_node_overlay_hits = 2;
-        metrics.candidate_node_db_gets = 4;
-        metrics.dead_filter_checks = 5;
-        metrics.dead_filter_definite_negatives = 3;
-        metrics.dead_filter_maybe_positives = 2;
-        metrics.dead_filter_verified_dead = 1;
-        metrics.dead_filter_false_positives = 1;
-        metrics.dead_filter_inserts = 1;
-        metrics.dead_filter_bits_set = 4;
+        metrics.node_reads.lookups = 8;
+        metrics.node_reads.overlay_hits = 3;
+        metrics.node_reads.db_gets = 5;
+        metrics.node_reads.db_found = 4;
+        metrics.node_reads.db_missing = 1;
+        metrics.node_reads.prefetch_calls = 2;
+        metrics.node_reads.prefetch_keys = 4;
+        metrics.node_reads.candidate_lookups = 6;
+        metrics.node_reads.candidate_overlay_hits = 2;
+        metrics.node_reads.candidate_db_gets = 4;
+        metrics.dead_filter.checks = 5;
+        metrics.dead_filter.definite_negatives = 3;
+        metrics.dead_filter.maybe_positives = 2;
+        metrics.dead_filter.verified_dead = 1;
+        metrics.dead_filter.false_positives = 1;
+        metrics.dead_filter.inserts = 1;
+        metrics.dead_filter.bits_set = 4;
         metrics.stop_reason = Some(BatchStopReason::Outputs);
         let mut outputs_by_owner = [0; VIRTUAL_SHARDS];
         outputs_by_owner[0] = 1;
@@ -7608,8 +6951,8 @@ rocksdb.stall.micros COUNT : 17\n";
 
         assert_eq!(chosen.succ, existing);
         assert!(chosen.reuse.is_likely_existing());
-        assert_eq!(processor.metrics.chosen_likely_existing, 1);
-        assert_eq!(processor.metrics.chosen_definitely_new, 0);
+        assert_eq!(processor.metrics.candidates.chosen_likely_existing, 1);
+        assert_eq!(processor.metrics.candidates.chosen_definitely_new, 0);
 
         drop(processor);
         drop(db);
@@ -7619,8 +6962,8 @@ rocksdb.stall.micros COUNT : 17\n";
     #[test]
     fn empty_seed_and_first_o_successor_are_admissible() {
         let seed = empty_key();
-        let (board, bag) = seed.decode().expect("seed must decode");
-        assert!(is_admissible(board, bag));
+        let (board, _) = seed.decode().expect("seed must decode");
+        assert!(is_admissible(board));
         let orientation = first_orientation(TetrisPiece::O_PIECE);
         let succ =
             successor(seed, TetrisPiece::O_PIECE, orientation).expect("successor calculation");
