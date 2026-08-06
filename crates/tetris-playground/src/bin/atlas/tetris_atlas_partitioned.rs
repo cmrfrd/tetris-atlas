@@ -2202,6 +2202,10 @@ enum PreparedPlacement {
         succ: StateKey,
         score: f32,
         orientation: TetrisPieceOrientation,
+        /// Reuse verdict screened at prepare time through the dead-Bloom and
+        /// key_may_exist ladder. None means the Bloom was positive, so the
+        /// record was prefetched and the batch overlay decides dead/existing.
+        reuse_hint: Option<CandidateReuse>,
     },
 }
 
@@ -2303,6 +2307,7 @@ fn prepare_placement(
         succ: StateKey::from_board_bag(next_board, next_bag)?,
         score: score_board(next_board, result.lines_cleared)?,
         orientation: placement.orientation,
+        reuse_hint: None,
     })
 }
 
@@ -2582,9 +2587,34 @@ impl<'a> BatchProcessor<'a> {
                 self.scratch.prepared_placements.len() < MAX_CANDIDATES_PER_BATCH,
                 "prepared placements exceed fixed batch capacity"
             );
-            let prepared = prepare_placement(board, next_bag, placement)?;
-            if let PreparedPlacement::Admissible { succ, .. } = prepared {
-                self.push_prefetch_key(succ)?;
+            let mut prepared = prepare_placement(board, next_bag, placement)?;
+            if let PreparedPlacement::Admissible {
+                succ, reuse_hint, ..
+            } = &mut prepared
+            {
+                self.metrics.dead_filter.checks += 1;
+                if self.dead_filter.might_contain(*succ) {
+                    // Might be dead: only this case needs the record itself.
+                    self.metrics.dead_filter.maybe_positives += 1;
+                    self.push_prefetch_key(*succ)?;
+                } else {
+                    // Bloom-negative successors cannot be dead, and reuse is
+                    // only an ordering hint, so key_may_exist settles them
+                    // without reading the node column family.
+                    self.metrics.dead_filter.definite_negatives += 1;
+                    self.metrics.candidates.reuse_probes += 1;
+                    *reuse_hint = Some(
+                        if self.db.key_may_exist_cf_opt(
+                            &self.node_cf,
+                            succ.as_bytes(),
+                            &self.read_options,
+                        ) {
+                            CandidateReuse::MayExist
+                        } else {
+                            CandidateReuse::DefinitelyNew
+                        },
+                    );
+                }
             }
             self.scratch.prepared_placements.push(prepared);
         }
@@ -2869,6 +2899,55 @@ impl<'a> BatchProcessor<'a> {
         Ok(self.classify_candidate(state)? == CandidateState::Dead)
     }
 
+    /// Resolves a prepared placement's candidate state. The batch overlay has
+    /// the final word so same-batch creations and deaths are honored; absent
+    /// an overlay entry, a prepare-time reuse hint stands without any read.
+    fn classify_prepared(
+        &mut self,
+        state: StateKey,
+        hint: Option<CandidateReuse>,
+    ) -> Result<CandidateState> {
+        let Some(record) = self.scratch.nodes.get(&state).map(|entry| entry.record) else {
+            return match hint {
+                Some(reuse) => {
+                    self.record_candidate_reuse(reuse);
+                    Ok(CandidateState::Viable(reuse))
+                }
+                // A Bloom-positive successor is always prefetched into the
+                // overlay; reaching here means this placement is consumed by
+                // a fallback path outside its prepared batch, so read now.
+                None => self.classify_candidate(state),
+            };
+        };
+        self.metrics.node_reads.lookups += 1;
+        self.metrics.node_reads.candidate_lookups += 1;
+        self.metrics.node_reads.overlay_hits += 1;
+        self.metrics.node_reads.candidate_overlay_hits += 1;
+        let bloom_positive = hint.is_none();
+        match record {
+            None => {
+                if bloom_positive {
+                    self.metrics.dead_filter.false_positives += 1;
+                }
+                self.record_candidate_reuse(CandidateReuse::DefinitelyNew);
+                Ok(CandidateState::Viable(CandidateReuse::DefinitelyNew))
+            }
+            Some(record) if record.is_dead(state.bag()?)? => {
+                if bloom_positive {
+                    self.metrics.dead_filter.verified_dead += 1;
+                }
+                Ok(CandidateState::Dead)
+            }
+            Some(_) => {
+                if bloom_positive {
+                    self.metrics.dead_filter.false_positives += 1;
+                }
+                self.metrics.candidates.existing_overlay += 1;
+                Ok(CandidateState::Viable(CandidateReuse::Existing))
+            }
+        }
+    }
+
     fn consider_prepared_placement(
         &mut self,
         prepared: PreparedPlacement,
@@ -2879,7 +2958,7 @@ impl<'a> BatchProcessor<'a> {
             self.metrics.candidates.examined <= MAX_CANDIDATES_PER_BATCH as u64,
             "candidate scratch limit exceeded"
         );
-        let (succ, score, orientation) = match prepared {
+        let (succ, score, orientation, reuse_hint) = match prepared {
             PreparedPlacement::Lost => {
                 self.metrics.candidates.rejected_lost += 1;
                 return Ok(());
@@ -2896,9 +2975,10 @@ impl<'a> BatchProcessor<'a> {
                 succ,
                 score,
                 orientation,
-            } => (succ, score, orientation),
+                reuse_hint,
+            } => (succ, score, orientation, reuse_hint),
         };
-        let CandidateState::Viable(reuse) = self.classify_candidate(succ)? else {
+        let CandidateState::Viable(reuse) = self.classify_prepared(succ, reuse_hint)? else {
             self.metrics.candidates.rejected_known_dead += 1;
             return Ok(());
         };
@@ -7341,7 +7421,11 @@ rocksdb.stall.micros COUNT : 17\n";
         assert_eq!(processor.metrics.candidates.prepared_choice_unique, 3);
         assert_eq!(processor.metrics.candidates.unplanned_fallbacks, 0);
         assert_eq!(processor.metrics.node_reads.candidate_db_gets, 0);
-        assert_eq!(processor.metrics.candidates.reuse_probes, 0);
+        // The empty dead-Bloom screens every successor to a reuse hint, so
+        // only the expanded state itself is prefetched.
+        assert!(processor.metrics.candidates.reuse_probes > 0);
+        assert_eq!(processor.metrics.dead_filter.maybe_positives, 0);
+        assert_eq!(processor.scratch.node_prefetch_plan.as_slice(), &[state]);
         assert_eq!(
             processor.metrics.candidates.chosen_likely_existing
                 + processor.metrics.candidates.chosen_definitely_new,
@@ -7358,6 +7442,66 @@ rocksdb.stall.micros COUNT : 17\n";
             processor.metrics.expansion.planned_attachments_published,
             published_before_duplicate
         );
+
+        drop(processor);
+        drop(db);
+        fs::remove_dir_all(path).expect("test database must be removable");
+    }
+
+    #[test]
+    fn prepare_screens_successor_prefetch_with_the_dead_filter() {
+        let (path, db, owners) = test_db();
+        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::O_PIECE]);
+        let state = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+            .expect("test state must encode");
+        put_node_for_test(&db, state, NodeRecord::INIT);
+        let piece = TetrisPiece::O_PIECE;
+        let placements = TetrisPiecePlacement::all_from_piece(piece).len() as u64;
+        let flagged = successor(state, piece, first_orientation(piece))
+            .expect("test successor must evaluate")
+            .expect("first O placement must stay in the carrier");
+
+        let dead_filter = test_dead_filter();
+        dead_filter.insert(flagged);
+        let mut sequence = 0;
+        let mut scratch = WorkerScratch::new().expect("worker scratch must allocate");
+        let mut processor =
+            BatchProcessor::new(&db, &owners, &dead_filter, 0, &mut sequence, &mut scratch)
+                .expect("batch processor must initialize");
+        let command = Command::Expand { state };
+        let claimed = [ClaimedCommand {
+            key: WorkKey::new(0, command.priority(), 0, 0).expect("work key must encode"),
+            command,
+        }];
+        processor
+            .prepare_and_prefetch_batch(&claimed)
+            .expect("screened prefetch must succeed");
+
+        // Every O placement on the empty board is admissible; only the
+        // Bloom-flagged successor joins the command's own node in the
+        // prefetch plan, and the rest resolve to read-free reuse hints.
+        assert_eq!(processor.metrics.dead_filter.checks, placements);
+        assert_eq!(processor.metrics.dead_filter.maybe_positives, 1);
+        assert_eq!(processor.metrics.candidates.reuse_probes, placements - 1);
+        let mut expected_plan = vec![state, flagged];
+        expected_plan.sort_unstable();
+        assert_eq!(
+            processor.scratch.node_prefetch_plan.as_slice(),
+            expected_plan
+        );
+
+        processor.expand(state).expect("expansion must succeed");
+        // The flagged successor was prefetched, found absent, and unmasked as
+        // a Bloom false positive; the screened rest never touched the DB.
+        assert_eq!(processor.metrics.dead_filter.false_positives, 1);
+        assert_eq!(processor.metrics.dead_filter.verified_dead, 0);
+        assert_eq!(processor.metrics.node_reads.candidate_db_gets, 0);
+        assert_eq!(processor.metrics.candidates.viable, placements);
+        assert_eq!(processor.scratch.outputs.len(), 1);
+        assert!(matches!(
+            processor.scratch.outputs[0].command,
+            Command::AttachEdge { pred, .. } if pred == state
+        ));
 
         drop(processor);
         drop(db);
@@ -7416,7 +7560,11 @@ rocksdb.stall.micros COUNT : 17\n";
         assert_eq!(processor.metrics.expansion.planned_attachments_avoided, 1);
         assert_eq!(processor.metrics.candidates.unplanned_fallbacks, 0);
         assert_eq!(processor.metrics.node_reads.candidate_db_gets, 0);
-        assert_eq!(processor.metrics.dead_filter.checks, 0);
+        // The persisted-dead successors are Bloom-positive, so they are
+        // prefetched and verified dead from the overlay at consume time.
+        assert!(processor.metrics.dead_filter.checks > 0);
+        assert!(processor.metrics.dead_filter.maybe_positives > 0);
+        assert!(processor.metrics.dead_filter.verified_dead > 0);
         assert_eq!(processor.metrics.candidates.chosen_likely_existing, 0);
         assert_eq!(processor.metrics.candidates.chosen_definitely_new, 0);
 
@@ -7565,7 +7713,7 @@ rocksdb.stall.micros COUNT : 17\n";
     }
 
     #[test]
-    fn prepared_choice_uses_exact_prefetched_existence_without_scalar_reads() {
+    fn prepared_choice_screens_existing_successors_to_reuse_hints() {
         let (path, db, owners) = test_db();
         let piece = TetrisPiece::O_PIECE;
         let bag = TetrisPieceBagState::from_pieces([piece]);
@@ -7600,8 +7748,11 @@ rocksdb.stall.micros COUNT : 17\n";
             .expect("prepared candidate selection must succeed")
             .expect("O piece must have a viable placement");
 
+        // The persisted successor is Bloom-negative, so the screen resolves
+        // it to a MayExist hint via key_may_exist without reading its record;
+        // the hint still outranks every DefinitelyNew alternative.
         assert_eq!(chosen.succ, existing);
-        assert_eq!(chosen.reuse, CandidateReuse::Existing);
+        assert_eq!(chosen.reuse, CandidateReuse::MayExist);
         assert_eq!(processor.metrics.candidates.prepared_choice_requests, 1);
         assert_eq!(processor.metrics.candidates.prepared_choice_unique, 1);
         assert_eq!(
@@ -7610,8 +7761,15 @@ rocksdb.stall.micros COUNT : 17\n";
         );
         assert_eq!(processor.metrics.candidates.unplanned_fallbacks, 0);
         assert_eq!(processor.metrics.node_reads.candidate_db_gets, 0);
-        assert_eq!(processor.metrics.candidates.reuse_probes, 0);
-        assert_eq!(processor.metrics.dead_filter.checks, 0);
+        assert_eq!(
+            processor.metrics.candidates.reuse_probes,
+            TetrisPiecePlacement::all_from_piece(piece).len() as u64
+        );
+        assert_eq!(
+            processor.metrics.dead_filter.checks,
+            TetrisPiecePlacement::all_from_piece(piece).len() as u64
+        );
+        assert_eq!(processor.metrics.dead_filter.maybe_positives, 0);
 
         drop(processor);
         drop(db);
@@ -7698,13 +7856,10 @@ rocksdb.stall.micros COUNT : 17\n";
         processor
             .prepare_and_prefetch_batch(&claimed)
             .expect("candidate-aware prefetch must succeed");
-        let prefetched = processor
-            .scratch
-            .nodes
-            .get(&candidate)
-            .expect("candidate must have an exact prefetched entry");
-        assert_eq!(prefetched.original, None);
-        assert_eq!(prefetched.record, None);
+        // The empty dead-Bloom screens the candidate to a reuse hint, so it
+        // has no overlay entry until this batch itself creates it below.
+        assert!(!processor.scratch.nodes.contains_key(&candidate));
+        assert!(!processor.scratch.node_prefetch_plan.contains(&candidate));
 
         processor
             .put_node(candidate, NodeRecord::INIT)
@@ -7905,7 +8060,13 @@ rocksdb.stall.micros COUNT : 17\n";
         assert_eq!(snapshot.candidates.prepared_choices_unused, 0);
         assert_eq!(snapshot.candidates.unplanned_fallbacks, 0);
         assert_eq!(snapshot.node_reads.candidate_db_gets, 0);
-        assert_eq!(snapshot.candidates.reuse_probes, 0);
+        // Every admissible successor of the seed is Bloom-negative, so each
+        // is screened with one read-free reuse probe instead of a prefetch.
+        assert_eq!(
+            snapshot.candidates.reuse_probes,
+            TetrisPiecePlacement::NUM_PLACEMENTS as u64
+        );
+        assert_eq!(snapshot.dead_filter.maybe_positives, 0);
         assert_eq!(snapshot.closure.nodes_not_dead, 1);
         assert_eq!(snapshot.closure.states_with_unexpanded, 0);
         assert_eq!(snapshot.closure.states_with_pending, 1);
