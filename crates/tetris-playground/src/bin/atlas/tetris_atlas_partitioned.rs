@@ -72,6 +72,7 @@ const STATUS_ABORTED: &[u8] = b"aborted";
 const WORK_BATCH_COMMANDS: usize = 1024;
 const MAX_CANDIDATES_PER_COMMAND: usize = TetrisPiecePlacement::NUM_PLACEMENTS;
 const MAX_CANDIDATES_PER_BATCH: usize = WORK_BATCH_COMMANDS * MAX_CANDIDATES_PER_COMMAND;
+const MAX_CHOICE_REQUESTS_PER_BATCH: usize = WORK_BATCH_COMMANDS * TetrisPiece::NUM_PIECES;
 const MAX_REDGES_PER_DRAIN: usize = 4_096;
 const MAX_WRITE_BATCH_BYTES: usize = 8 * 1024 * 1024;
 const MAX_COMMAND_WRITE_BYTES: usize = 700_000;
@@ -85,7 +86,7 @@ const _: () = assert!(
 );
 const MIB_BYTES: usize = 1024 * 1024;
 const DEFAULT_RAM_MIB: usize = 2048;
-const PER_WRITER_MEMORY_RESERVE_BYTES: usize = 32 * MIB_BYTES;
+const PER_WRITER_MEMORY_RESERVE_BYTES: usize = 48 * MIB_BYTES;
 const WRITER_STACK_BYTES: usize = 2 * MIB_BYTES;
 const _: () = assert!(
     PER_WRITER_MEMORY_RESERVE_BYTES >= WRITER_STACK_BYTES + MAX_WRITE_BATCH_BYTES,
@@ -1309,6 +1310,7 @@ struct BatchMetrics {
     nodes_dead: u64,
     attach_accepted: u64,
     attach_rejected: u64,
+    expansion: ExpansionStatsSnapshot,
     candidates: CandidateStatsSnapshot,
     node_reads: NodeReadStatsSnapshot,
     dead_filter: DeadFilterCounters,
@@ -1365,7 +1367,20 @@ struct DeadFilterStatsSnapshot {
 }
 
 stat_pair! {
+    struct AtomicExpansionStats / ExpansionStatsSnapshot {
+        doomed,
+        planned_attachments_published,
+        planned_attachments_avoided,
+    }
+}
+
+stat_pair! {
     struct AtomicCandidateStats / CandidateStatsSnapshot {
+        prepared_choice_requests,
+        prepared_choice_unique,
+        prepared_placements,
+        prepared_choices_unused,
+        unplanned_fallbacks,
         examined,
         rejected_lost,
         rejected_height,
@@ -1770,6 +1785,7 @@ struct RuntimeStats {
     attach_accepted: AtomicU64,
     attach_rejected: AtomicU64,
     commands: AtomicCommandStats,
+    expansion: AtomicExpansionStats,
     candidates: AtomicCandidateStats,
     node_reads: AtomicNodeReadStats,
     dead_filter: AtomicDeadFilterStats,
@@ -1791,6 +1807,7 @@ struct RuntimeStatsSnapshot {
     attach_accepted: u64,
     attach_rejected: u64,
     commands: CommandStatsSnapshot,
+    expansion: ExpansionStatsSnapshot,
     candidates: CandidateStatsSnapshot,
     node_reads: NodeReadStatsSnapshot,
     dead_filter: DeadFilterStatsSnapshot,
@@ -1935,6 +1952,7 @@ impl RuntimeStats {
         atomic_add_relaxed(&self.nodes_dead_this_run, metrics.nodes_dead);
         atomic_add_relaxed(&self.attach_accepted, metrics.attach_accepted);
         atomic_add_relaxed(&self.attach_rejected, metrics.attach_rejected);
+        self.expansion.add(&metrics.expansion);
         self.candidates.add(&metrics.candidates);
         self.node_reads.add(&metrics.node_reads);
         self.dead_filter.add(&metrics.dead_filter);
@@ -2096,6 +2114,7 @@ impl RuntimeStats {
             attach_accepted: self.attach_accepted.load(AtomicOrdering::Relaxed),
             attach_rejected: self.attach_rejected.load(AtomicOrdering::Relaxed),
             commands,
+            expansion: self.expansion.snapshot(),
             candidates: self.candidates.snapshot(),
             node_reads: self.node_reads.snapshot(),
             dead_filter,
@@ -2168,6 +2187,41 @@ struct Candidate {
     succ: StateKey,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+struct ChoiceKey {
+    pred: StateKey,
+    piece: TetrisPiece,
+}
+
+#[derive(Clone, Copy)]
+enum PreparedPlacement {
+    Lost,
+    RejectedHeight,
+    RejectedHoles,
+    Admissible {
+        succ: StateKey,
+        score: f32,
+        orientation: TetrisPieceOrientation,
+    },
+}
+
+struct PreparedChoice {
+    key: ChoiceKey,
+    placement_start: usize,
+    placement_end: usize,
+    used: bool,
+}
+
+const MAX_EXPANSION_MOVES: usize = TetrisPiece::NUM_PIECES;
+
+#[derive(Clone, Copy)]
+struct PlannedMove {
+    piece: TetrisPiece,
+    candidate: Candidate,
+}
+
+type ExpansionPlan = HeaplessVec<PlannedMove, MAX_EXPANSION_MOVES>;
+
 fn candidate_order(left: &Candidate, right: &Candidate) -> Ordering {
     left.reuse
         .cmp(&right.reuse)
@@ -2215,6 +2269,43 @@ fn score_board(board: TetrisBoard, recent_lines_cleared: u32) -> Result<f32> {
     Ok(score)
 }
 
+fn choice_context(
+    pred: StateKey,
+    piece: TetrisPiece,
+) -> Result<(TetrisBoard, TetrisPieceBagState)> {
+    let (board, bag) = pred.decode()?;
+    ensure!(bag.contains(piece), "piece is not forced by predecessor");
+    let mut next_bag = bag;
+    next_bag.remove(piece);
+    if next_bag.is_empty() {
+        next_bag.fill();
+    }
+    Ok((board, next_bag))
+}
+
+fn prepare_placement(
+    board: TetrisBoard,
+    next_bag: TetrisPieceBagState,
+    placement: TetrisPiecePlacement,
+) -> Result<PreparedPlacement> {
+    let mut next_board = board;
+    let result = next_board.apply_piece_placement(placement);
+    if result.is_lost == IsLost::LOST {
+        return Ok(PreparedPlacement::Lost);
+    }
+    if next_board.height() > MAX_CARRIER_HEIGHT {
+        return Ok(PreparedPlacement::RejectedHeight);
+    }
+    if next_board.total_holes() > MAX_CARRIER_HOLES {
+        return Ok(PreparedPlacement::RejectedHoles);
+    }
+    Ok(PreparedPlacement::Admissible {
+        succ: StateKey::from_board_bag(next_board, next_bag)?,
+        score: score_board(next_board, result.lines_cleared)?,
+        orientation: placement.orientation,
+    })
+}
+
 #[derive(Clone, Copy)]
 struct ClaimedCommand {
     key: WorkKey,
@@ -2224,7 +2315,6 @@ struct ClaimedCommand {
 type ClaimedBatch = HeaplessVec<ClaimedCommand, WORK_BATCH_COMMANDS>;
 type ProcessedBatch = HeaplessVec<WorkKey, WORK_BATCH_COMMANDS>;
 type DirtyNodeBatch = HeaplessVec<StateKey, WORK_BATCH_COMMANDS>;
-type NodePrefetchPlan = HeaplessVec<StateKey, WORK_BATCH_COMMANDS>;
 
 #[derive(Clone, Copy)]
 struct NodeOverlayEntry {
@@ -2242,7 +2332,10 @@ struct OutputCommand {
 struct WorkerScratch {
     nodes: FxHashMap<StateKey, NodeOverlayEntry>,
     dirty_nodes: DirtyNodeBatch,
-    node_prefetch_plan: NodePrefetchPlan,
+    node_prefetch_plan: Vec<StateKey>,
+    choice_requests: Vec<ChoiceKey>,
+    prepared_choices: Vec<PreparedChoice>,
+    prepared_placements: Vec<PreparedPlacement>,
     redges: FxHashMap<ReverseEdgeKey, bool>,
     outputs: Vec<OutputCommand>,
     processed: ProcessedBatch,
@@ -2264,6 +2357,22 @@ impl WorkerScratch {
         outputs
             .try_reserve_exact(MAX_OUTPUT_COMMANDS_PER_BATCH)
             .context("allocate output command scratch")?;
+        let mut node_prefetch_plan = Vec::new();
+        node_prefetch_plan
+            .try_reserve_exact(MAX_NODE_OVERLAY_ENTRIES)
+            .context("allocate node prefetch scratch")?;
+        let mut choice_requests = Vec::new();
+        choice_requests
+            .try_reserve_exact(MAX_CHOICE_REQUESTS_PER_BATCH)
+            .context("allocate choice request scratch")?;
+        let mut prepared_choices = Vec::new();
+        prepared_choices
+            .try_reserve_exact(MAX_CHOICE_REQUESTS_PER_BATCH)
+            .context("allocate prepared choice scratch")?;
+        let mut prepared_placements = Vec::new();
+        prepared_placements
+            .try_reserve_exact(MAX_CANDIDATES_PER_BATCH)
+            .context("allocate prepared placement scratch")?;
         let mut ordered_redges = Vec::new();
         ordered_redges
             .try_reserve_exact(MAX_REDGE_MUTATIONS_PER_BATCH)
@@ -2275,7 +2384,10 @@ impl WorkerScratch {
         Ok(Self {
             nodes,
             dirty_nodes: DirtyNodeBatch::new(),
-            node_prefetch_plan: NodePrefetchPlan::new(),
+            node_prefetch_plan,
+            choice_requests,
+            prepared_choices,
+            prepared_placements,
             redges,
             outputs,
             processed: ProcessedBatch::new(),
@@ -2288,6 +2400,9 @@ impl WorkerScratch {
         self.nodes.clear();
         self.dirty_nodes.clear();
         self.node_prefetch_plan.clear();
+        self.choice_requests.clear();
+        self.prepared_choices.clear();
+        self.prepared_placements.clear();
         self.redges.clear();
         self.outputs.clear();
         self.processed.clear();
@@ -2337,7 +2452,7 @@ impl<'a> BatchProcessor<'a> {
     }
 
     fn process_claimed(&mut self, claimed: &[ClaimedCommand]) -> Result<()> {
-        self.prefetch_command_nodes(claimed)?;
+        self.prepare_and_prefetch_batch(claimed)?;
         for item in claimed {
             if !self.scratch.processed.is_empty() {
                 let (redges, outputs) = command_scratch_requirements(item.command);
@@ -2375,6 +2490,12 @@ impl<'a> BatchProcessor<'a> {
                 "processed work exceeds fixed batch capacity"
             );
         }
+        self.metrics.candidates.prepared_choices_unused = self
+            .scratch
+            .prepared_choices
+            .iter()
+            .filter(|choice| !choice.used)
+            .count() as u64;
         ensure!(
             !self.scratch.processed.is_empty(),
             "claimed batch made no progress"
@@ -2390,28 +2511,101 @@ impl<'a> BatchProcessor<'a> {
         Ok(())
     }
 
-    fn prefetch_command_nodes(&mut self, claimed: &[ClaimedCommand]) -> Result<()> {
+    fn push_prefetch_key(&mut self, state: StateKey) -> Result<()> {
+        ensure!(
+            self.scratch.node_prefetch_plan.len() < MAX_NODE_OVERLAY_ENTRIES,
+            "node prefetch plan exceeds fixed batch capacity"
+        );
+        self.scratch.node_prefetch_plan.push(state);
+        Ok(())
+    }
+
+    fn push_choice_request(&mut self, key: ChoiceKey) -> Result<()> {
+        ensure!(
+            self.scratch.choice_requests.len() < MAX_CHOICE_REQUESTS_PER_BATCH,
+            "choice request plan exceeds fixed batch capacity"
+        );
+        self.scratch.choice_requests.push(key);
+        Ok(())
+    }
+
+    fn request_choice_if_forced(&mut self, pred: StateKey, piece: TetrisPiece) -> Result<()> {
+        if pred.bag()?.contains(piece) {
+            self.push_choice_request(ChoiceKey { pred, piece })?;
+        }
+        Ok(())
+    }
+
+    fn collect_batch_read_requests(&mut self, claimed: &[ClaimedCommand]) -> Result<()> {
         for item in claimed {
             if let Some(&state) = item.command.node_read_key() {
-                ensure!(
-                    self.scratch.node_prefetch_plan.try_push(state),
-                    "node prefetch plan exceeds fixed batch capacity"
-                );
+                self.push_prefetch_key(state)?;
+            }
+            match item.command {
+                Command::Expand { state } => {
+                    for piece in state.bag()?.iter_pieces() {
+                        self.push_choice_request(ChoiceKey { pred: state, piece })?;
+                    }
+                }
+                Command::AttachResult {
+                    accepted: false,
+                    pred,
+                    piece,
+                    ..
+                }
+                | Command::ChildDead { pred, piece, .. } => {
+                    self.request_choice_if_forced(pred, piece)?;
+                }
+                Command::AttachEdge { .. }
+                | Command::AttachResult { accepted: true, .. }
+                | Command::DetachEdge { .. }
+                | Command::DrainDead { .. } => {}
             }
         }
-        self.scratch
-            .node_prefetch_plan
-            .as_mut_slice()
-            .sort_unstable();
-        let mut previous = None;
-        self.scratch.node_prefetch_plan.retain(|&state| {
-            if previous == Some(state) {
-                false
-            } else {
-                previous = Some(state);
-                true
+        self.metrics.candidates.prepared_choice_requests =
+            self.scratch.choice_requests.len() as u64;
+        self.scratch.choice_requests.sort_unstable();
+        self.scratch.choice_requests.dedup();
+        self.metrics.candidates.prepared_choice_unique = self.scratch.choice_requests.len() as u64;
+        Ok(())
+    }
+
+    fn prepare_choice(&mut self, key: ChoiceKey) -> Result<()> {
+        ensure!(
+            self.scratch.prepared_choices.len() < MAX_CHOICE_REQUESTS_PER_BATCH,
+            "prepared choices exceed fixed batch capacity"
+        );
+        let placement_start = self.scratch.prepared_placements.len();
+        let (board, next_bag) = choice_context(key.pred, key.piece)?;
+        for &placement in TetrisPiecePlacement::all_from_piece(key.piece) {
+            ensure!(
+                self.scratch.prepared_placements.len() < MAX_CANDIDATES_PER_BATCH,
+                "prepared placements exceed fixed batch capacity"
+            );
+            let prepared = prepare_placement(board, next_bag, placement)?;
+            if let PreparedPlacement::Admissible { succ, .. } = prepared {
+                self.push_prefetch_key(succ)?;
             }
+            self.scratch.prepared_placements.push(prepared);
+        }
+        self.scratch.prepared_choices.push(PreparedChoice {
+            key,
+            placement_start,
+            placement_end: self.scratch.prepared_placements.len(),
+            used: false,
         });
+        Ok(())
+    }
+
+    fn prepare_and_prefetch_batch(&mut self, claimed: &[ClaimedCommand]) -> Result<()> {
+        self.collect_batch_read_requests(claimed)?;
+        for index in 0..self.scratch.choice_requests.len() {
+            self.prepare_choice(self.scratch.choice_requests[index])?;
+        }
+        self.metrics.candidates.prepared_placements = self.scratch.prepared_placements.len() as u64;
+
+        self.scratch.node_prefetch_plan.sort_unstable();
+        self.scratch.node_prefetch_plan.dedup();
         if self.scratch.node_prefetch_plan.is_empty() {
             return Ok(());
         }
@@ -2424,7 +2618,6 @@ impl<'a> BatchProcessor<'a> {
             &self.node_cf,
             self.scratch
                 .node_prefetch_plan
-                .to_slice()
                 .iter()
                 .map(StateKey::as_bytes),
             true,
@@ -2437,7 +2630,7 @@ impl<'a> BatchProcessor<'a> {
         self.metrics.node_reads.prefetch_calls += 1;
         self.metrics.node_reads.prefetch_keys += results.len() as u64;
         let scratch = &mut *self.scratch;
-        for (&state, result) in scratch.node_prefetch_plan.to_slice().iter().zip(results) {
+        for (&state, result) in scratch.node_prefetch_plan.iter().zip(results) {
             let record = result
                 .context("batched read node record")?
                 .map(|bytes| NodeRecord::from_slice(bytes.as_ref(), state.bag()?))
@@ -2613,6 +2806,14 @@ impl<'a> BatchProcessor<'a> {
         }
     }
 
+    fn record_published_candidate(&mut self, reuse: CandidateReuse) {
+        if reuse.is_likely_existing() {
+            self.metrics.candidates.chosen_likely_existing += 1;
+        } else {
+            self.metrics.candidates.chosen_definitely_new += 1;
+        }
+    }
+
     fn classify_candidate(&mut self, state: StateKey) -> Result<CandidateState> {
         self.metrics.node_reads.lookups += 1;
         self.metrics.node_reads.candidate_lookups += 1;
@@ -2668,61 +2869,88 @@ impl<'a> BatchProcessor<'a> {
         Ok(self.classify_candidate(state)? == CandidateState::Dead)
     }
 
-    fn choose_next(&mut self, pred: StateKey, piece: TetrisPiece) -> Result<Option<Candidate>> {
-        let (board, bag) = pred.decode()?;
-        ensure!(bag.contains(piece), "piece is not forced by predecessor");
-        let mut next_bag = bag;
-        next_bag.remove(piece);
-        if next_bag.is_empty() {
-            next_bag.fill();
+    fn consider_prepared_placement(
+        &mut self,
+        prepared: PreparedPlacement,
+        best: &mut Option<Candidate>,
+    ) -> Result<()> {
+        self.metrics.candidates.examined += 1;
+        ensure!(
+            self.metrics.candidates.examined <= MAX_CANDIDATES_PER_BATCH as u64,
+            "candidate scratch limit exceeded"
+        );
+        let (succ, score, orientation) = match prepared {
+            PreparedPlacement::Lost => {
+                self.metrics.candidates.rejected_lost += 1;
+                return Ok(());
+            }
+            PreparedPlacement::RejectedHeight => {
+                self.metrics.candidates.rejected_height += 1;
+                return Ok(());
+            }
+            PreparedPlacement::RejectedHoles => {
+                self.metrics.candidates.rejected_holes += 1;
+                return Ok(());
+            }
+            PreparedPlacement::Admissible {
+                succ,
+                score,
+                orientation,
+            } => (succ, score, orientation),
+        };
+        let CandidateState::Viable(reuse) = self.classify_candidate(succ)? else {
+            self.metrics.candidates.rejected_known_dead += 1;
+            return Ok(());
+        };
+        self.metrics.candidates.viable += 1;
+        let candidate = Candidate {
+            reuse,
+            score,
+            orientation,
+            succ,
+        };
+        if best
+            .as_ref()
+            .is_none_or(|current| candidate_order(&candidate, current).is_gt())
+        {
+            *best = Some(candidate);
         }
+        Ok(())
+    }
 
+    fn choose_next_scalar(
+        &mut self,
+        pred: StateKey,
+        piece: TetrisPiece,
+    ) -> Result<Option<Candidate>> {
+        let (board, next_bag) = choice_context(pred, piece)?;
         let mut best = None;
         for &placement in TetrisPiecePlacement::all_from_piece(piece) {
-            self.metrics.candidates.examined += 1;
-            ensure!(
-                self.metrics.candidates.examined <= MAX_CANDIDATES_PER_BATCH as u64,
-                "candidate scratch limit exceeded"
-            );
-            let mut next_board = board;
-            let result = next_board.apply_piece_placement(placement);
-            if result.is_lost == IsLost::LOST {
-                self.metrics.candidates.rejected_lost += 1;
-                continue;
-            }
-            if next_board.height() > MAX_CARRIER_HEIGHT {
-                self.metrics.candidates.rejected_height += 1;
-                continue;
-            }
-            if next_board.total_holes() > MAX_CARRIER_HOLES {
-                self.metrics.candidates.rejected_holes += 1;
-                continue;
-            }
-            let succ = StateKey::from_board_bag(next_board, next_bag)?;
-            let CandidateState::Viable(reuse) = self.classify_candidate(succ)? else {
-                self.metrics.candidates.rejected_known_dead += 1;
-                continue;
-            };
-            self.metrics.candidates.viable += 1;
-            let candidate = Candidate {
-                reuse,
-                score: score_board(next_board, result.lines_cleared)?,
-                orientation: placement.orientation,
-                succ,
-            };
-            if best
-                .as_ref()
-                .is_none_or(|current| candidate_order(&candidate, current).is_gt())
-            {
-                best = Some(candidate);
-            }
+            let prepared = prepare_placement(board, next_bag, placement)?;
+            self.consider_prepared_placement(prepared, &mut best)?;
         }
-        if let Some(candidate) = best {
-            if candidate.reuse.is_likely_existing() {
-                self.metrics.candidates.chosen_likely_existing += 1;
-            } else {
-                self.metrics.candidates.chosen_definitely_new += 1;
-            }
+        Ok(best)
+    }
+
+    fn choose_next(&mut self, pred: StateKey, piece: TetrisPiece) -> Result<Option<Candidate>> {
+        let key = ChoiceKey { pred, piece };
+        let Ok(index) = self
+            .scratch
+            .prepared_choices
+            .binary_search_by_key(&key, |choice| choice.key)
+        else {
+            self.metrics.candidates.unplanned_fallbacks += 1;
+            return self.choose_next_scalar(pred, piece);
+        };
+        let (placement_start, placement_end) = {
+            let choice = &mut self.scratch.prepared_choices[index];
+            choice.used = true;
+            (choice.placement_start, choice.placement_end)
+        };
+        let mut best = None;
+        for placement_index in placement_start..placement_end {
+            let prepared = self.scratch.prepared_placements[placement_index];
+            self.consider_prepared_placement(prepared, &mut best)?;
         }
         Ok(best)
     }
@@ -2737,24 +2965,56 @@ impl<'a> BatchProcessor<'a> {
             return Ok(());
         }
 
+        let mut plan = ExpansionPlan::new();
+
+        // Phase 1: verify that every unexpanded forced piece has a candidate
+        // before publishing any new edge for this state.
         for piece in bag.iter_pieces() {
             if record.slot(piece)? != MoveSlot::Unexpanded {
                 continue;
             }
-            if let Some(candidate) = self.choose_next(state, piece)? {
-                record.set_slot(piece, MoveSlot::Pending(candidate.orientation.index()))?;
-                self.put_node(state, record)?;
-                self.output(Command::AttachEdge {
-                    succ: candidate.succ,
-                    pred: state,
-                    piece,
-                    orientation: candidate.orientation,
-                })?;
-            } else {
+
+            let Some(candidate) = self.choose_next(state, piece)? else {
+                // One exhausted forced piece makes the whole AND-state dead.
+                // The local plan has emitted no work, so dropping it avoids
+                // attachments and their matching cleanup commands.
                 record.set_slot(piece, MoveSlot::Exhausted)?;
-                self.transition_to_dead(state, record)?;
-                break;
-            }
+                self.metrics.expansion.doomed += 1;
+                self.metrics.expansion.planned_attachments_avoided += plan.len() as u64;
+                return self.transition_to_dead(state, record);
+            };
+
+            ensure!(
+                plan.try_push(PlannedMove { piece, candidate }),
+                "expansion plan exceeds the canonical bag size"
+            );
+        }
+
+        if plan.is_empty() {
+            return Ok(());
+        }
+
+        // Phase 2a: make the local record complete before exposing commands.
+        // Every newly pending slot receives exactly one AttachEdge below.
+        for planned in plan.to_slice() {
+            record.set_slot(
+                planned.piece,
+                MoveSlot::Pending(planned.candidate.orientation.index()),
+            )?;
+        }
+        self.put_node(state, record)?;
+
+        // Phase 2b: publish in deterministic bag order. commit() persists
+        // these commands atomically with the pending slots above.
+        for planned in plan.to_slice() {
+            self.record_published_candidate(planned.candidate.reuse);
+            self.output(Command::AttachEdge {
+                succ: planned.candidate.succ,
+                pred: state,
+                piece: planned.piece,
+                orientation: planned.candidate.orientation,
+            })?;
+            self.metrics.expansion.planned_attachments_published += 1;
         }
         Ok(())
     }
@@ -2865,6 +3125,7 @@ impl<'a> BatchProcessor<'a> {
         if let Some(candidate) = self.choose_next(pred, piece)? {
             record.set_slot(piece, MoveSlot::Pending(candidate.orientation.index()))?;
             self.put_node(pred, record)?;
+            self.record_published_candidate(candidate.reuse);
             self.output(Command::AttachEdge {
                 succ: candidate.succ,
                 pred,
@@ -4812,7 +5073,7 @@ mod tests {
             reserved,
             DEAD_STATE_BLOOM_BYTES + NATIVE_OVERHEAD_BYTES + 8 * PER_WRITER_MEMORY_RESERVE_BYTES
         );
-        assert_eq!(reserved, 1344 * MIB_BYTES);
+        assert_eq!(reserved, 1472 * MIB_BYTES);
     }
 
     #[test]
@@ -4828,12 +5089,17 @@ mod tests {
         ) + hash_table_bytes(
             scratch.redges.capacity(),
             std::mem::size_of::<(ReverseEdgeKey, bool)>(),
-        ) + scratch.outputs.capacity()
-            * std::mem::size_of::<OutputCommand>()
+        ) + scratch.node_prefetch_plan.capacity()
+            * std::mem::size_of::<StateKey>()
+            + scratch.choice_requests.capacity() * std::mem::size_of::<ChoiceKey>()
+            + scratch.prepared_choices.capacity() * std::mem::size_of::<PreparedChoice>()
+            + scratch.prepared_placements.capacity() * std::mem::size_of::<PreparedPlacement>()
+            + scratch.outputs.capacity() * std::mem::size_of::<OutputCommand>()
             + scratch.ordered_redges.capacity() * std::mem::size_of::<ReverseEdgeKey>()
             + scratch.drain_edges.capacity() * std::mem::size_of::<ReverseEdgeKey>();
-        let fixed_stack_bytes =
-            std::mem::size_of::<ClaimedBatch>() + std::mem::size_of::<WorkerScratch>();
+        let fixed_stack_bytes = std::mem::size_of::<ClaimedBatch>()
+            + std::mem::size_of::<WorkerScratch>()
+            + std::mem::size_of::<ExpansionPlan>();
         let transient_headroom_bytes = MIB_BYTES;
         let covered_bytes = reusable_heap_bytes
             + fixed_stack_bytes
@@ -4855,6 +5121,7 @@ mod tests {
             .stack_size(WRITER_STACK_BYTES)
             .spawn(|| {
                 let claimed = ClaimedBatch::new();
+                let expansion_plan = ExpansionPlan::new();
                 let scratch = WorkerScratch::new().expect("worker scratch must allocate");
                 let seed = empty_key();
                 let next = successor(
@@ -4867,6 +5134,7 @@ mod tests {
                 let (board, _) = next.decode().expect("successor must decode");
                 let score = score_board(board, 0).expect("successor must score");
                 std::hint::black_box(claimed);
+                std::hint::black_box(expansion_plan);
                 (scratch.nodes.capacity(), score)
             })
             .expect("configured writer stack must spawn")
@@ -4878,22 +5146,28 @@ mod tests {
     }
 
     #[test]
+    fn expansion_plan_is_small_and_covers_a_full_bag() {
+        assert_eq!(ExpansionPlan::capacity(), TetrisPiece::NUM_PIECES);
+        assert!(std::mem::size_of::<ExpansionPlan>() <= 512);
+    }
+
+    #[test]
     fn memory_budget_enforces_the_complete_application_reserve() {
-        let error = memory_budget(1375, 8)
+        let error = memory_budget(1503, 8)
             .err()
             .expect("one MiB below the minimum must be rejected");
         assert!(
-            error.to_string().contains("need at least 1376 MiB"),
+            error.to_string().contains("need at least 1504 MiB"),
             "unexpected error: {error:#}"
         );
-        memory_budget(1376, 8).expect("the documented minimum must be accepted");
+        memory_budget(1504, 8).expect("the documented minimum must be accepted");
     }
 
     #[test]
     fn memory_budget_records_every_managed_capacity() {
         let memory = memory_budget(8192, 8).expect("production memory budget must be valid");
         let total = 8192 * MIB_BYTES;
-        let reserve = 1344 * MIB_BYTES;
+        let reserve = 1472 * MIB_BYTES;
         let rocks = total - reserve;
         let (expected_cache, expected_memtable) = split_rocks_memory(rocks);
 
@@ -5204,6 +5478,45 @@ mod tests {
         let cf = db.cf_handle(CF_NODE).expect("node CF must exist");
         db.put_cf(&cf, state.as_bytes(), record.as_bytes())
             .expect("test node must be written");
+    }
+
+    fn first_admissible_orientation(state: StateKey, piece: TetrisPiece) -> TetrisPieceOrientation {
+        TetrisPiecePlacement::all_from_piece(piece)
+            .iter()
+            .find_map(|placement| {
+                successor(state, piece, placement.orientation)
+                    .expect("test successor must evaluate")
+                    .map(|_| placement.orientation)
+            })
+            .expect("test piece must have an admissible placement")
+    }
+
+    fn persist_piece_successors_dead(
+        db: &DB,
+        dead_filter: &DeadStateBloom,
+        state: StateKey,
+        piece: TetrisPiece,
+    ) -> usize {
+        let mut persisted = 0;
+        for placement in TetrisPiecePlacement::all_from_piece(piece) {
+            let Some(succ) = successor(state, piece, placement.orientation)
+                .expect("test successor must evaluate")
+            else {
+                continue;
+            };
+            let succ_bag = succ.bag().expect("successor bag must decode");
+            let witness = succ_bag
+                .iter_pieces()
+                .next()
+                .expect("successor bag must be nonempty");
+            let mut dead = NodeRecord::INIT;
+            dead.set_slot(witness, MoveSlot::Exhausted)
+                .expect("death witness must be valid");
+            put_node_for_test(db, succ, dead);
+            dead_filter.insert(succ);
+            persisted += 1;
+        }
+        persisted
     }
 
     fn state_owned_by(owners: &OwnerMap, wanted: u8) -> StateKey {
@@ -5697,14 +6010,26 @@ mod tests {
         db.flush().expect("test node must flush");
 
         let commands = [
-            Command::Expand { state: pred },
+            Command::AttachResult {
+                accepted: true,
+                succ,
+                pred,
+                piece,
+                orientation,
+            },
             Command::AttachEdge {
                 succ,
                 pred,
                 piece,
                 orientation,
             },
-            Command::Expand { state: pred },
+            Command::AttachResult {
+                accepted: true,
+                succ,
+                pred,
+                piece,
+                orientation,
+            },
             Command::DetachEdge {
                 succ,
                 pred,
@@ -5733,13 +6058,13 @@ mod tests {
             )
             .expect("batch processor must initialize");
             processor
-                .prefetch_command_nodes(claimed.to_slice())
+                .prepare_and_prefetch_batch(claimed.to_slice())
                 .expect("node prefetch must succeed");
 
             let mut expected_keys = vec![pred, succ];
             expected_keys.sort_unstable();
             assert_eq!(
-                processor.scratch.node_prefetch_plan.to_slice(),
+                processor.scratch.node_prefetch_plan.as_slice(),
                 expected_keys
             );
             assert_eq!(processor.scratch.nodes.len(), 2);
@@ -5819,7 +6144,7 @@ mod tests {
             )
             .expect("batch processor must initialize");
             processor
-                .prefetch_command_nodes(&claimed)
+                .prepare_and_prefetch_batch(&claimed)
                 .expect("empty node prefetch must succeed");
             assert!(processor.scratch.node_prefetch_plan.is_empty());
             assert!(processor.scratch.nodes.is_empty());
@@ -5922,6 +6247,14 @@ mod tests {
         metrics.commands_stale[COMMAND_EXPAND as usize] = 1;
         metrics.nodes_created = 2;
         metrics.nodes_dead = 1;
+        metrics.expansion.doomed = 2;
+        metrics.expansion.planned_attachments_published = 3;
+        metrics.expansion.planned_attachments_avoided = 4;
+        metrics.candidates.prepared_choice_requests = 8;
+        metrics.candidates.prepared_choice_unique = 7;
+        metrics.candidates.prepared_placements = 117;
+        metrics.candidates.prepared_choices_unused = 2;
+        metrics.candidates.unplanned_fallbacks = 1;
         metrics.candidates.examined = 5;
         metrics.candidates.rejected_lost = 1;
         metrics.candidates.rejected_height = 1;
@@ -5991,6 +6324,14 @@ mod tests {
         assert_eq!(snapshot.commands.produced.expand, 1);
         assert_eq!(snapshot.commands.produced.child_dead, 2);
         assert_eq!(snapshot.commands.stale.expand, 1);
+        assert_eq!(snapshot.expansion.doomed, 2);
+        assert_eq!(snapshot.expansion.planned_attachments_published, 3);
+        assert_eq!(snapshot.expansion.planned_attachments_avoided, 4);
+        assert_eq!(snapshot.candidates.prepared_choice_requests, 8);
+        assert_eq!(snapshot.candidates.prepared_choice_unique, 7);
+        assert_eq!(snapshot.candidates.prepared_placements, 117);
+        assert_eq!(snapshot.candidates.prepared_choices_unused, 2);
+        assert_eq!(snapshot.candidates.unplanned_fallbacks, 1);
         assert_eq!(snapshot.candidates.examined, 5);
         assert_eq!(snapshot.candidates.viable, 1);
         assert_eq!(snapshot.candidates.reuse_probes, 4);
@@ -6036,6 +6377,15 @@ mod tests {
         assert_eq!(snapshot.batches.process_micros_total, 9);
         assert_eq!(snapshot.batches.process_micros_max, 9);
         assert_eq!(snapshot.batches.stopped_by_outputs, 1);
+        let json = serde_json::to_value(&snapshot).expect("runtime stats must serialize");
+        assert_eq!(json["expansion"]["doomed"], 2);
+        assert_eq!(json["expansion"]["planned_attachments_published"], 3);
+        assert_eq!(json["expansion"]["planned_attachments_avoided"], 4);
+        assert_eq!(json["candidates"]["prepared_choice_requests"], 8);
+        assert_eq!(json["candidates"]["prepared_choice_unique"], 7);
+        assert_eq!(json["candidates"]["prepared_placements"], 117);
+        assert_eq!(json["candidates"]["prepared_choices_unused"], 2);
+        assert_eq!(json["candidates"]["unplanned_fallbacks"], 1);
         assert_eq!((snapshot.queue_min, snapshot.queue_max), (1, 1));
         assert_eq!(snapshot.owners[0].idle_micros, 13);
         assert_eq!(snapshot.owners[1].busy_micros, 11);
@@ -6924,7 +7274,262 @@ rocksdb.stall.micros COUNT : 17\n";
     }
 
     #[test]
-    fn choose_next_prefers_a_persisted_successor() {
+    fn expand_publishes_a_complete_plan_and_duplicate_expand_is_a_no_op() {
+        let (path, db, owners) = test_db();
+        let bag = TetrisPieceBagState::from_pieces([
+            TetrisPiece::O_PIECE,
+            TetrisPiece::I_PIECE,
+            TetrisPiece::T_PIECE,
+        ]);
+        let state = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+            .expect("test state must encode");
+        put_node_for_test(&db, state, NodeRecord::INIT);
+
+        let dead_filter = test_dead_filter();
+        let mut sequence = 0;
+        let mut scratch = WorkerScratch::new().expect("worker scratch must allocate");
+        let mut processor =
+            BatchProcessor::new(&db, &owners, &dead_filter, 0, &mut sequence, &mut scratch)
+                .expect("batch processor must initialize");
+        let command = Command::Expand { state };
+        let claimed = [ClaimedCommand {
+            key: WorkKey::new(0, command.priority(), 0, 0).expect("work key must encode"),
+            command,
+        }];
+        processor
+            .prepare_and_prefetch_batch(&claimed)
+            .expect("candidate-aware prefetch must succeed");
+        processor.expand(state).expect("expansion must succeed");
+
+        let expanded = processor
+            .load_node(state)
+            .expect("expanded state read must succeed")
+            .expect("expanded state must exist");
+        for piece in bag.iter_pieces() {
+            assert!(matches!(
+                expanded.slot(piece).expect("slot must decode"),
+                MoveSlot::Pending(_)
+            ));
+            assert_eq!(
+                processor
+                    .scratch
+                    .outputs
+                    .iter()
+                    .filter(|output| {
+                        matches!(
+                            output.command,
+                            Command::AttachEdge { pred, piece: output_piece, .. }
+                                if pred == state && output_piece == piece
+                        )
+                    })
+                    .count(),
+                1
+            );
+        }
+        assert_eq!(processor.scratch.outputs.len(), 3);
+        assert!(
+            processor
+                .scratch
+                .outputs
+                .iter()
+                .all(|output| matches!(output.command, Command::AttachEdge { .. }))
+        );
+        assert_eq!(processor.metrics.expansion.doomed, 0);
+        assert_eq!(processor.metrics.expansion.planned_attachments_published, 3);
+        assert_eq!(processor.metrics.expansion.planned_attachments_avoided, 0);
+        assert_eq!(processor.metrics.candidates.prepared_choice_requests, 3);
+        assert_eq!(processor.metrics.candidates.prepared_choice_unique, 3);
+        assert_eq!(processor.metrics.candidates.unplanned_fallbacks, 0);
+        assert_eq!(processor.metrics.node_reads.candidate_db_gets, 0);
+        assert_eq!(processor.metrics.candidates.reuse_probes, 0);
+        assert_eq!(
+            processor.metrics.candidates.chosen_likely_existing
+                + processor.metrics.candidates.chosen_definitely_new,
+            3
+        );
+
+        let outputs_before_duplicate = processor.scratch.outputs.len();
+        let published_before_duplicate = processor.metrics.expansion.planned_attachments_published;
+        processor
+            .expand(state)
+            .expect("duplicate expansion must be a no-op");
+        assert_eq!(processor.scratch.outputs.len(), outputs_before_duplicate);
+        assert_eq!(
+            processor.metrics.expansion.planned_attachments_published,
+            published_before_duplicate
+        );
+
+        drop(processor);
+        drop(db);
+        fs::remove_dir_all(path).expect("test database must be removable");
+    }
+
+    #[test]
+    fn late_exhaustion_discards_the_complete_new_plan() {
+        let (path, db, owners) = test_db();
+        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::O_PIECE, TetrisPiece::I_PIECE]);
+        let state = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+            .expect("test state must encode");
+        put_node_for_test(&db, state, NodeRecord::INIT);
+        let forced: Vec<_> = bag.iter_pieces().collect();
+        assert_eq!(forced.len(), 2);
+
+        let dead_filter = test_dead_filter();
+        assert!(persist_piece_successors_dead(&db, &dead_filter, state, forced[1]) > 0);
+        let mut sequence = 0;
+        let mut scratch = WorkerScratch::new().expect("worker scratch must allocate");
+        let mut processor =
+            BatchProcessor::new(&db, &owners, &dead_filter, 0, &mut sequence, &mut scratch)
+                .expect("batch processor must initialize");
+        let command = Command::Expand { state };
+        let claimed = [ClaimedCommand {
+            key: WorkKey::new(0, command.priority(), 0, 0).expect("work key must encode"),
+            command,
+        }];
+        processor
+            .prepare_and_prefetch_batch(&claimed)
+            .expect("candidate-aware prefetch must succeed");
+        processor
+            .expand(state)
+            .expect("doomed expansion must transition to dead");
+
+        let dead = processor
+            .load_node(state)
+            .expect("dead state read must succeed")
+            .expect("dead state must exist");
+        assert!(dead.is_dead(bag).expect("dead state must validate"));
+        assert_eq!(
+            dead.slot(forced[0]).expect("first slot must decode"),
+            MoveSlot::Unexpanded
+        );
+        assert_eq!(
+            dead.slot(forced[1]).expect("doomed slot must decode"),
+            MoveSlot::Exhausted
+        );
+        assert_eq!(processor.scratch.outputs.len(), 1);
+        assert!(matches!(
+            processor.scratch.outputs[0].command,
+            Command::DrainDead { succ } if succ == state
+        ));
+        assert_eq!(processor.metrics.expansion.doomed, 1);
+        assert_eq!(processor.metrics.expansion.planned_attachments_published, 0);
+        assert_eq!(processor.metrics.expansion.planned_attachments_avoided, 1);
+        assert_eq!(processor.metrics.candidates.unplanned_fallbacks, 0);
+        assert_eq!(processor.metrics.node_reads.candidate_db_gets, 0);
+        assert_eq!(processor.metrics.dead_filter.checks, 0);
+        assert_eq!(processor.metrics.candidates.chosen_likely_existing, 0);
+        assert_eq!(processor.metrics.candidates.chosen_definitely_new, 0);
+
+        drop(processor);
+        drop(db);
+        fs::remove_dir_all(path).expect("test database must be removable");
+    }
+
+    #[test]
+    fn doomed_partial_expansion_detaches_only_preexisting_edges() {
+        let (path, db, owners) = test_db();
+        let bag = TetrisPieceBagState::from_pieces([
+            TetrisPiece::O_PIECE,
+            TetrisPiece::I_PIECE,
+            TetrisPiece::T_PIECE,
+            TetrisPiece::L_PIECE,
+        ]);
+        let state = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+            .expect("test state must encode");
+        let forced: Vec<_> = bag.iter_pieces().collect();
+        assert_eq!(forced.len(), 4);
+
+        let mut record = NodeRecord::INIT;
+        let active_orientation = first_admissible_orientation(state, forced[0]);
+        let pending_orientation = first_admissible_orientation(state, forced[1]);
+        record
+            .set_slot(forced[0], MoveSlot::Active(active_orientation.index()))
+            .expect("active slot must be valid");
+        record
+            .set_slot(forced[1], MoveSlot::Pending(pending_orientation.index()))
+            .expect("pending slot must be valid");
+        put_node_for_test(&db, state, record);
+
+        let dead_filter = test_dead_filter();
+        assert!(persist_piece_successors_dead(&db, &dead_filter, state, forced[3]) > 0);
+        let mut sequence = 0;
+        let mut scratch = WorkerScratch::new().expect("worker scratch must allocate");
+        let mut processor =
+            BatchProcessor::new(&db, &owners, &dead_filter, 0, &mut sequence, &mut scratch)
+                .expect("batch processor must initialize");
+        let command = Command::Expand { state };
+        let claimed = [ClaimedCommand {
+            key: WorkKey::new(0, command.priority(), 0, 0).expect("work key must encode"),
+            command,
+        }];
+        processor
+            .prepare_and_prefetch_batch(&claimed)
+            .expect("candidate-aware prefetch must succeed");
+        processor
+            .expand(state)
+            .expect("partial expansion must transition to dead");
+
+        let dead = processor
+            .load_node(state)
+            .expect("dead state read must succeed")
+            .expect("dead state must exist");
+        assert!(dead.is_dead(bag).expect("dead state must validate"));
+        assert_eq!(
+            dead.slot(forced[2]).expect("planned slot must decode"),
+            MoveSlot::Unexpanded
+        );
+        assert_eq!(
+            dead.slot(forced[3]).expect("doomed slot must decode"),
+            MoveSlot::Exhausted
+        );
+        assert_eq!(
+            processor
+                .scratch
+                .outputs
+                .iter()
+                .filter(|output| matches!(output.command, Command::DrainDead { .. }))
+                .count(),
+            1
+        );
+        assert_eq!(
+            processor
+                .scratch
+                .outputs
+                .iter()
+                .filter(|output| matches!(output.command, Command::DetachEdge { .. }))
+                .count(),
+            2
+        );
+        assert!(
+            processor
+                .scratch
+                .outputs
+                .iter()
+                .all(|output| !matches!(output.command, Command::AttachEdge { .. }))
+        );
+        assert_eq!(processor.metrics.expansion.doomed, 1);
+        assert_eq!(processor.metrics.expansion.planned_attachments_published, 0);
+        assert_eq!(processor.metrics.expansion.planned_attachments_avoided, 1);
+        assert_eq!(processor.metrics.candidates.unplanned_fallbacks, 0);
+        assert_eq!(
+            processor
+                .scratch
+                .prepared_choices
+                .iter()
+                .filter(|choice| choice.used)
+                .count(),
+            2
+        );
+        assert_eq!(processor.metrics.candidates.chosen_likely_existing, 0);
+        assert_eq!(processor.metrics.candidates.chosen_definitely_new, 0);
+
+        drop(processor);
+        drop(db);
+        fs::remove_dir_all(path).expect("test database must be removable");
+    }
+
+    #[test]
+    fn choose_next_prefers_a_persisted_successor_without_publishing_it() {
         let (path, db, owners) = test_db();
         let pred = empty_key();
         let piece = TetrisPiece::O_PIECE;
@@ -6951,8 +7556,184 @@ rocksdb.stall.micros COUNT : 17\n";
 
         assert_eq!(chosen.succ, existing);
         assert!(chosen.reuse.is_likely_existing());
-        assert_eq!(processor.metrics.candidates.chosen_likely_existing, 1);
+        assert_eq!(processor.metrics.candidates.chosen_likely_existing, 0);
         assert_eq!(processor.metrics.candidates.chosen_definitely_new, 0);
+
+        drop(processor);
+        drop(db);
+        fs::remove_dir_all(path).expect("test database must be removable");
+    }
+
+    #[test]
+    fn prepared_choice_uses_exact_prefetched_existence_without_scalar_reads() {
+        let (path, db, owners) = test_db();
+        let piece = TetrisPiece::O_PIECE;
+        let bag = TetrisPieceBagState::from_pieces([piece]);
+        let pred = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+            .expect("predecessor must encode");
+        let orientation = TetrisPiecePlacement::all_from_piece(piece)
+            .last()
+            .expect("O piece must have placements")
+            .orientation;
+        let existing = successor(pred, piece, orientation)
+            .expect("successor calculation must succeed")
+            .expect("edge O placement must be admissible");
+        put_node_for_test(&db, pred, NodeRecord::INIT);
+        put_node_for_test(&db, existing, NodeRecord::INIT);
+
+        let command = Command::Expand { state: pred };
+        let claimed = [ClaimedCommand {
+            key: WorkKey::new(0, command.priority(), 0, 0).expect("work key must encode"),
+            command,
+        }];
+        let dead_filter = test_dead_filter();
+        let mut sequence = 0;
+        let mut scratch = WorkerScratch::new().expect("worker scratch must allocate");
+        let mut processor =
+            BatchProcessor::new(&db, &owners, &dead_filter, 0, &mut sequence, &mut scratch)
+                .expect("batch processor must initialize");
+        processor
+            .prepare_and_prefetch_batch(&claimed)
+            .expect("candidate-aware prefetch must succeed");
+        let chosen = processor
+            .choose_next(pred, piece)
+            .expect("prepared candidate selection must succeed")
+            .expect("O piece must have a viable placement");
+
+        assert_eq!(chosen.succ, existing);
+        assert_eq!(chosen.reuse, CandidateReuse::Existing);
+        assert_eq!(processor.metrics.candidates.prepared_choice_requests, 1);
+        assert_eq!(processor.metrics.candidates.prepared_choice_unique, 1);
+        assert_eq!(
+            processor.metrics.candidates.prepared_placements,
+            TetrisPiecePlacement::all_from_piece(piece).len() as u64
+        );
+        assert_eq!(processor.metrics.candidates.unplanned_fallbacks, 0);
+        assert_eq!(processor.metrics.node_reads.candidate_db_gets, 0);
+        assert_eq!(processor.metrics.candidates.reuse_probes, 0);
+        assert_eq!(processor.metrics.dead_filter.checks, 0);
+
+        drop(processor);
+        drop(db);
+        fs::remove_dir_all(path).expect("test database must be removable");
+    }
+
+    #[test]
+    fn duplicate_choice_requests_share_one_prepared_placement_set() {
+        let (path, db, owners) = test_db();
+        let piece = TetrisPiece::O_PIECE;
+        let bag = TetrisPieceBagState::from_pieces([piece]);
+        let pred = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+            .expect("predecessor must encode");
+        put_node_for_test(&db, pred, NodeRecord::INIT);
+
+        let command = Command::Expand { state: pred };
+        let claimed = [
+            ClaimedCommand {
+                key: WorkKey::new(0, command.priority(), 0, 0).expect("work key must encode"),
+                command,
+            },
+            ClaimedCommand {
+                key: WorkKey::new(0, command.priority(), 0, 1).expect("work key must encode"),
+                command,
+            },
+        ];
+        let dead_filter = test_dead_filter();
+        let mut sequence = 0;
+        let mut scratch = WorkerScratch::new().expect("worker scratch must allocate");
+        let mut processor =
+            BatchProcessor::new(&db, &owners, &dead_filter, 0, &mut sequence, &mut scratch)
+                .expect("batch processor must initialize");
+        processor
+            .prepare_and_prefetch_batch(&claimed)
+            .expect("candidate-aware prefetch must succeed");
+
+        assert_eq!(processor.metrics.candidates.prepared_choice_requests, 2);
+        assert_eq!(processor.metrics.candidates.prepared_choice_unique, 1);
+        assert_eq!(processor.scratch.prepared_choices.len(), 1);
+        assert_eq!(
+            processor.scratch.prepared_placements.len(),
+            TetrisPiecePlacement::all_from_piece(piece).len()
+        );
+
+        drop(processor);
+        drop(db);
+        fs::remove_dir_all(path).expect("test database must be removable");
+    }
+
+    #[test]
+    fn prepared_choice_observes_same_batch_overlay_mutations() {
+        let (path, db, owners) = test_db();
+        let piece = TetrisPiece::O_PIECE;
+        let bag = TetrisPieceBagState::from_pieces([piece]);
+        let pred = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+            .expect("predecessor must encode");
+        let orientation = TetrisPiecePlacement::all_from_piece(piece)
+            .last()
+            .expect("O piece must have placements")
+            .orientation;
+        let candidate = successor(pred, piece, orientation)
+            .expect("successor calculation must succeed")
+            .expect("edge O placement must be admissible");
+        put_node_for_test(&db, pred, NodeRecord::INIT);
+
+        let command = Command::Expand { state: pred };
+        let claimed = [ClaimedCommand {
+            key: WorkKey::new(0, command.priority(), 0, 0).expect("work key must encode"),
+            command,
+        }];
+        let dead_filter = test_dead_filter();
+        let mut sequence = 0;
+        let mut scratch = WorkerScratch::new().expect("worker scratch must allocate");
+        let owner = owners.owner(candidate);
+        let mut processor = BatchProcessor::new(
+            &db,
+            &owners,
+            &dead_filter,
+            owner,
+            &mut sequence,
+            &mut scratch,
+        )
+        .expect("batch processor must initialize");
+        processor
+            .prepare_and_prefetch_batch(&claimed)
+            .expect("candidate-aware prefetch must succeed");
+        let prefetched = processor
+            .scratch
+            .nodes
+            .get(&candidate)
+            .expect("candidate must have an exact prefetched entry");
+        assert_eq!(prefetched.original, None);
+        assert_eq!(prefetched.record, None);
+
+        processor
+            .put_node(candidate, NodeRecord::INIT)
+            .expect("same-batch creation must succeed");
+        let chosen = processor
+            .choose_next(pred, piece)
+            .expect("prepared candidate selection must succeed")
+            .expect("created candidate must be viable");
+        assert_eq!(chosen.succ, candidate);
+        assert_eq!(chosen.reuse, CandidateReuse::Existing);
+
+        let candidate_bag = candidate.bag().expect("candidate bag must decode");
+        let witness = candidate_bag
+            .iter_pieces()
+            .next()
+            .expect("candidate bag must be nonempty");
+        let mut dead = NodeRecord::INIT;
+        dead.set_slot(witness, MoveSlot::Exhausted)
+            .expect("death witness must be valid");
+        processor
+            .put_node(candidate, dead)
+            .expect("same-batch death must succeed");
+        let rerouted = processor
+            .choose_next(pred, piece)
+            .expect("prepared candidate reselection must succeed")
+            .expect("another O placement must remain viable");
+        assert_ne!(rerouted.succ, candidate);
+        assert_eq!(processor.metrics.candidates.unplanned_fallbacks, 0);
+        assert_eq!(processor.metrics.node_reads.candidate_db_gets, 0);
 
         drop(processor);
         drop(db);
@@ -7004,12 +7785,20 @@ rocksdb.stall.micros COUNT : 17\n";
         let mut scratch = WorkerScratch::new().expect("worker scratch must allocate");
         let capacities = (
             scratch.nodes.capacity(),
+            scratch.node_prefetch_plan.capacity(),
+            scratch.choice_requests.capacity(),
+            scratch.prepared_choices.capacity(),
+            scratch.prepared_placements.capacity(),
             scratch.redges.capacity(),
             scratch.outputs.capacity(),
             scratch.ordered_redges.capacity(),
             scratch.drain_edges.capacity(),
         );
         let pointers = (
+            scratch.node_prefetch_plan.as_ptr(),
+            scratch.choice_requests.as_ptr(),
+            scratch.prepared_choices.as_ptr(),
+            scratch.prepared_placements.as_ptr(),
             scratch.outputs.as_ptr(),
             scratch.ordered_redges.as_ptr(),
             scratch.drain_edges.as_ptr(),
@@ -7025,16 +7814,24 @@ rocksdb.stall.micros COUNT : 17\n";
             capacities,
             (
                 scratch.nodes.capacity(),
+                scratch.node_prefetch_plan.capacity(),
+                scratch.choice_requests.capacity(),
+                scratch.prepared_choices.capacity(),
+                scratch.prepared_placements.capacity(),
                 scratch.redges.capacity(),
                 scratch.outputs.capacity(),
                 scratch.ordered_redges.capacity(),
                 scratch.drain_edges.capacity(),
             )
         );
-        assert_eq!(NodePrefetchPlan::capacity(), WORK_BATCH_COMMANDS);
+        assert!(scratch.node_prefetch_plan.capacity() >= MAX_NODE_OVERLAY_ENTRIES);
         assert_eq!(
             pointers,
             (
+                scratch.node_prefetch_plan.as_ptr(),
+                scratch.choice_requests.as_ptr(),
+                scratch.prepared_choices.as_ptr(),
+                scratch.prepared_placements.as_ptr(),
                 scratch.outputs.as_ptr(),
                 scratch.ordered_redges.as_ptr(),
                 scratch.drain_edges.as_ptr(),
@@ -7087,6 +7884,28 @@ rocksdb.stall.micros COUNT : 17\n";
         assert_eq!(expansion.outputs, TetrisPiece::NUM_PIECES as u64);
 
         let snapshot = shared.stats.snapshot();
+        assert_eq!(snapshot.expansion.doomed, 0);
+        assert_eq!(
+            snapshot.expansion.planned_attachments_published,
+            TetrisPiece::NUM_PIECES as u64
+        );
+        assert_eq!(snapshot.expansion.planned_attachments_avoided, 0);
+        assert_eq!(
+            snapshot.candidates.prepared_choice_requests,
+            TetrisPiece::NUM_PIECES as u64
+        );
+        assert_eq!(
+            snapshot.candidates.prepared_choice_unique,
+            TetrisPiece::NUM_PIECES as u64
+        );
+        assert_eq!(
+            snapshot.candidates.prepared_placements,
+            TetrisPiecePlacement::NUM_PLACEMENTS as u64
+        );
+        assert_eq!(snapshot.candidates.prepared_choices_unused, 0);
+        assert_eq!(snapshot.candidates.unplanned_fallbacks, 0);
+        assert_eq!(snapshot.node_reads.candidate_db_gets, 0);
+        assert_eq!(snapshot.candidates.reuse_probes, 0);
         assert_eq!(snapshot.closure.nodes_not_dead, 1);
         assert_eq!(snapshot.closure.states_with_unexpanded, 0);
         assert_eq!(snapshot.closure.states_with_pending, 1);
@@ -7210,6 +8029,11 @@ rocksdb.stall.micros COUNT : 17\n";
         assert_eq!(processor.metrics.reroutes, 1);
         assert_eq!(processor.metrics.reroutes_from_pending, 1);
         assert_eq!(processor.metrics.reroutes_from_active, 0);
+        assert_eq!(
+            processor.metrics.candidates.chosen_likely_existing
+                + processor.metrics.candidates.chosen_definitely_new,
+            1
+        );
 
         drop(processor);
         drop(db);
