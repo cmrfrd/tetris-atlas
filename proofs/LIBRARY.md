@@ -134,6 +134,9 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | `Policy`, `trace`, `SurvivesForever` | the survival abstraction |
 | **`safe_invariant`** (+ `SurvivesForever_iff_exists_invariant`) | preserved loss-avoiding invariant ⇒ survives (universal template) |
 | `ClosedCycle` + `closed_cycle_survives`; `exists_survivesForever_of_exists_init_cycle` | **local-to-global**: finite closed set+policy ⇒ infinite play (M2/M3 backbone) |
+| `ClearRate.cleared`, `mass_ledger`, `init_ledger` | mass conservation along a trace: board mass + `cols`·cleared = `4`·placements — the deficit **is** the board |
+| **`ClearRate.bags_sandwich`**, `lost_of_clear_deficit`, `not_survivesForever_of_rate_lt`, **`survival_forces_clear_rate`** | the **2.8 rows/bag law**: `2.8m − 20 ≤ cleared ≤ 2.8m`; sub-`2.8` clearing tops out, super-`2.8` is impossible, immortal play converges to exactly `28/10` |
+| `ClearRate.play_bag_sandwich`; `average_clears_bounds`, `expected_clears_bounds` | the same law without a policy (every trajectory, adversarial included) and under any finite average / probability distribution |
 
 ---
 
@@ -184,7 +187,7 @@ Proofs/
   Invariants/    StepInvariants Gameplay GameplayExtra Holes StateSpace
                  Wqo HoleyCarrier SurfaceFiber HoleDebt BandShift
                  BandMechanisms PlinthShift SlotAlgebra LaneCalculus           ✓
-  Survival/      Survival                                                      ✓
+  Survival/      Survival Lasso ClearRate                                      ✓
   Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite
                  SkylineInvariant ShiftCertificate BandSchedule PlinthCert     ✓
 ProofsExperiments.lean       -- separate lib (route reductions, native_decide, Scratch/*)

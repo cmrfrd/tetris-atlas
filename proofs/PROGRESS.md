@@ -13,7 +13,7 @@ new tick — it tells you where the prior tick left off.
 
 ## Current build status
 
-- `lake build` (green `Proofs`) — **PASSING** (8292 jobs); base-axiom-clean
+- `lake build` (green `Proofs`) — **PASSING** (8299 jobs); base-axiom-clean
   (`propext`, `Classical.choice`, `Quot.sound`), **no `sorry`, no `native_decide`**.
 - `lake build ProofsExperiments` (research routes) — **PASSING** (8288 jobs); may use
   `native_decide`.
@@ -27,6 +27,30 @@ green tree (token-aware: backtick-quoted docstring mentions are ignored).
 When sorries are added as scaffolding, list them here with `file:line — why`.
 
 ## Last tick
+
+Tick (manual, 2026-08-21) — **the clearing-rate law**
+(`Survival/ClearRate.lean`, new green module, base-axiom-clean, no warnings).
+Formalizes the "≥2.8 rows cleared per bag is needed for infinite play"
+folklore and settles it: the rate is pinned from BOTH sides, so the answer is
+an equality, not an inequality. `mass_ledger`/`init_ledger` give conservation
+along a policy trace (`board.count + cols·cleared = 4·placements`), which makes
+the clearing deficit *literally* the board mass. Hence `bags_sandwich`:
+`2.8m − 20 ≤ cleared ≤ 2.8m` — floor from the ≤200-cell capacity of a live
+board, ceiling because a row must be filled before it can be cleared (equality
+iff perfect clear, `cleared_eq_iff_board_empty`). Consequences:
+**`lost_of_clear_deficit`** (a boardful behind ⇒ already lost — a finite death
+certificate), **`survival_forces_clear_rate`** (`bagRate → 2.8`, squeeze),
+**`not_survivesForever_of_rate_lt`** (eventually `≤ 2.8 − ε` ⇒ tops out), and
+`not_rate_ge_add` (`2.8 + ε` is unreachable at ANY horizon). `play_bag_sandwich`
+restates it policy-free over arbitrary placement lists (covers adversarial
+solvers); `average_clears_bounds` / `expected_clears_bounds` push it through
+finite averages and arbitrary probability measures. Interpretation: 2.8 is a
+CONSERVATION LAW, not a budget to beat — the open problem is the geometry of
+cashing the drains, never the rate arithmetic (cf. `BagBurst`'s
+`drain_budget_ge_clearing_need`). Next tick: burstiness/variance bounds forced
+by the 7-bag, and combine the rate window with
+`perfect_rectangle_bag_period_even` to bound how often immortal play can sit at
+a perfect clear.
 
 Tick (manual, 2026-07-27b) — **the traveling-wave design: the coupled 9-column
 schedule as bouncing staircases** (design tick; arithmetic hand-verified
@@ -41557,6 +41581,60 @@ Next: <subtask id and one-line description>
 ## Tick log
 
 *(append newest at top below this line)*
+
+---
+
+### Tick (manual, 2026-08-21) — the clearing-rate law: 2.8 rows/bag, exactly
+
+What I changed:
+- **NEW** `proofs/Proofs/Survival/ClearRate.lean` (green) — formalizes the
+  "you need 2.8 rows cleared per bag to play forever" folklore, and pins down
+  which half of it is true.
+  - `cleared cfg π g0 n` — cumulative rows cleared over the first `n` moves of
+    a policy trace; `cleared_succ`, `cleared_mono`, `trace_board_wf`.
+  - `mass_ledger` / `init_ledger` — mass conservation along a trace:
+    `board.count + cols · cleared = g0.count + 4n`. The clearing **deficit is
+    exactly the board mass**; the whole slack in the rate law is the ≤200-cell
+    buffer.
+  - `cols_mul_cleared_le` (ceiling `cols·cleared ≤ 4n`) and
+    `le_cols_mul_cleared` (floor `4n ≤ cols·cleared + cols·rows`, needs
+    `¬ lost`), with `cleared_eq_iff_board_empty` — the ceiling is attained iff
+    the board is empty (perfect clear).
+  - Standard-width per-bag forms `bags_cleared_le`, `bags_le_cleared`,
+    **`bags_sandwich`**: `2.8m − 20 ≤ cleared ≤ 2.8m`.
+  - **`lost_of_clear_deficit`** / `not_survivesForever_of_clear_deficit` — the
+    finite certificate form: fall a boardful behind the treadmill at any bag
+    count and the state is *already* lost.
+  - `bagRate`, `bagRate_le`, `le_bagRate`, `abs_bagRate_sub_le`
+    (`|rate − 2.8| ≤ 20/m`), **`survival_forces_clear_rate`**
+    (`Tendsto (bagRate π) atTop (𝓝 2.8)` — squeeze), and the two-sided
+    necessity: **`not_survivesForever_of_rate_lt`** (eventually `≤ 2.8 − ε`
+    ⇒ tops out) and `not_rate_ge_add` (`2.8 + ε` unreachable at any horizon).
+    **Verdict on the folklore: the required rate is not `> 2.8`, it is `= 2.8`.**
+  - `play_bag_sandwich` — the same law with no policy at all, quantified over
+    an arbitrary placement list, so it covers every trajectory of every solver
+    against every piece sequence (adversarial included).
+  - `average_clears_bounds` (finite ensemble) and `expected_clears_bounds`
+    (arbitrary probability space, randomized strategy) + the two integral
+    helpers — the pathwise bounds pass through averaging unchanged, so no
+    distribution over piece orders can move the rate off 2.8.
+- `proofs/Proofs.lean` — import `Proofs.Survival.ClearRate`.
+- `proofs/LIBRARY.md` — three Layer-4 rows + module tree updated.
+
+Reuses `Invariants/BagGrowth` (`count_applyStep_add`, `count_le_capacity`,
+`clearing_rate`, `count_playFrom_add_cleared`), which had the finite `playFrom`
+bound but no rate/limit statement, no ceiling, and no tie to `SurvivesForever`.
+
+Build: PASS (green `Proofs`, 8299 jobs; ClearRate built with no warnings)
+Sorries: 0 → 0; `check-green-clean.sh` OK
+Axioms: all 15 exported theorems verified `[propext, Classical.choice, Quot.sound]`
+
+Next: the ceiling makes `2.8` a *conservation law*, not a budget — so the open
+question is geometric, not arithmetic (cf. `project_bagburst`: the I-drain
+budget already exceeds the clearing need). Natural follow-ups: (a) a lower
+bound on the *variance* / burstiness of `cleared` per bag forced by the 7-bag,
+(b) combine `abs_bagRate_sub_le` with `perfect_rectangle_bag_period_even` to
+bound how often an immortal play can be at (or near) a perfect clear.
 
 ---
 
