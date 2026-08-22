@@ -506,5 +506,83 @@ theorem le_clearingSteps_of_max_clear {π : Policy GameConfig.standard}
     _ = 10 * K * clearingSteps GameConfig.standard π GameState.init n + 200 := by
         ring
 
+/-! ## Design laws: what a solver can compute about itself
+
+The results above are stated for analysis — given a run, what must be true. The
+same ledger read forwards gives a solver **exact, checkable obligations from its
+own current state**, with no lookahead and no heuristic. Occupancy is the whole
+sufficient statistic: nothing else about the clearing constraint is visible to
+the future. -/
+
+/-- **The runway.** From a board holding `D` cells, at most `(200 − D)/4` more
+placements can be made before a row *must* be cleared: dropping `w` pieces
+without a clear leaves `D + 4w` cells, and the board holds 200. An exact,
+O(1)-computable deadline — not an estimate. -/
+theorem dry_runway_le {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n w : ℕ}
+    (hdry : cleared GameConfig.standard π GameState.init (n + w)
+          = cleared GameConfig.standard π GameState.init n)
+    (hlive : ¬ (trace GameConfig.standard π GameState.init (n + w)).lost
+      GameConfig.standard) :
+    (trace GameConfig.standard π GameState.init n).board.count + 4 * w ≤ 200 := by
+  have h1 := init_ledger hv n
+  have h2 := init_ledger hv (n + w)
+  rw [GameConfig.standard_cols] at h1 h2
+  have hcap := count_lt_two_hundred_one hv hlive
+  omega
+
+/-- Contrapositive: overrunning the runway is death. -/
+theorem lost_of_runway_overrun {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n w : ℕ}
+    (hdry : cleared GameConfig.standard π GameState.init (n + w)
+          = cleared GameConfig.standard π GameState.init n)
+    (hover : 200 < (trace GameConfig.standard π GameState.init n).board.count + 4 * w) :
+    (trace GameConfig.standard π GameState.init (n + w)).lost GameConfig.standard := by
+  by_contra hlive
+  have := dry_runway_le hv hdry hlive
+  omega
+
+/-- **The clearing obligation.** Surviving the next `w` placements from a board
+holding `D` cells requires clearing at least `(4w + D − 200)/10` rows in that
+window. A solver can evaluate this for any horizon from its current state alone
+and prune every search branch that cannot meet it — a sound pruning rule, not a
+heuristic one. -/
+theorem window_clears_ge_of_count {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n w : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init (n + w)).lost
+      GameConfig.standard) :
+    4 * w + (trace GameConfig.standard π GameState.init n).board.count
+      ≤ 10 * (cleared GameConfig.standard π GameState.init (n + w)
+              - cleared GameConfig.standard π GameState.init n) + 200 := by
+  have h1 := init_ledger hv n
+  have h2 := init_ledger hv (n + w)
+  rw [GameConfig.standard_cols] at h1 h2
+  have hcap := count_lt_two_hundred_one hv hlive
+  have hm := cleared_mono GameConfig.standard π GameState.init (Nat.le_add_right n w)
+  omega
+
+/-! ## The state carries its own phase -/
+
+/-- **A state knows where it is in the 35-piece cycle.** The board's cell count
+fixes the piece count mod 5 and the bag's size fixes it mod 7, so `(board, bag)`
+determines the phase mod 35 — the solver never has to store it, and two states
+at different phases can never be equal.
+
+For cycle search this is the operational form: **only states `35k` placements
+apart can possibly coincide.** Comparing states at any other separation is
+wasted work. -/
+theorem phase_mod_thirtyfive_of_trace_eq {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ n, (π (trace GameConfig.standard π GameState.init n)).piece
+      ∈ (trace GameConfig.standard π GameState.init n).bag)
+    {n₁ n₂ : ℕ}
+    (h : trace GameConfig.standard π GameState.init n₁
+        = trace GameConfig.standard π GameState.init n₂) :
+    n₁ % 35 = n₂ % 35 := by
+  rcases le_total n₁ n₂ with h12 | h21
+  · exact (Nat.modEq_iff_dvd' h12).mpr (thirtyfive_dvd_of_trace_eq hv hdraw h12 h)
+  · exact ((Nat.modEq_iff_dvd' h21).mpr
+      (thirtyfive_dvd_of_trace_eq hv hdraw h21 h.symm)).symm
+
 end ClearRate
 end Tetris

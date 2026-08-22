@@ -41688,6 +41688,25 @@ Second half of the tick — **the cell-count distribution, and its limits**:
     and says nothing about where in `[0,200]` the board sits. Any theorem about
     the shape of the occupancy distribution must come from geometry.
 
+Third half of the tick — **the trade-off, and the solver-facing design laws**:
+  - `cleared_le_mul_clearingSteps`, `fullRows_card_le_of_count_le`,
+    **`le_clearingSteps_of_max_clear`** — max clear size `K` forces clearing on
+    ≥`4/(10K)` of pieces (K=4 ⇒ 1/10, K=1 ⇒ 2/5), and an occupancy ceiling of
+    `10K−4` caps `K`. **Tight occupancy XOR rare clears — never both.** This is
+    what the 2.8 rate actually determines about the occupancy distribution: a
+    RELATION, not a shape.
+  - **`dry_runway_le`** / `lost_of_runway_overrun` — from a board holding `D`
+    cells, at most `(200−D)/4` further placements before a clear is forced. An
+    exact O(1) deadline computable from the board alone.
+  - **`window_clears_ge_of_count`** — surviving the next `w` placements requires
+    clearing ≥`(4w+D−200)/10` rows. A SOUND pruning rule for beam/atlas search
+    (prune any branch that cannot meet it), not a heuristic.
+  - **`phase_mod_thirtyfive_of_trace_eq`** — the cell count fixes `n mod 5` and
+    the bag size fixes `n mod 7`, so `(board, bag)` determines `n mod 35`. The
+    state carries its own phase; **cycle search need only compare states `35k`
+    placements apart.** (Directly corrects the MCGS cycle-detection depth: the
+    right quantum is 35 placements, not 1 bag.)
+
 Next: (a) sharpen `exists_count_eq_le` from 201 to ~101 using `count_mod_ten`
 (only 21 residue-compatible values per checkpoint), (b) push the 35 ∣ Δn bound
 into `ClosedCycle` / `AdversarialClosedCycle` so it constrains the M2 artifact
