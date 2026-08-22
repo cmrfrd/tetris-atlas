@@ -524,6 +524,41 @@ down to "no pair of bags is *negatively* correlated" and the conclusion
 survives: with a common variance and bounded partial sums, that variance is
 zero. So an immortal solver must carry genuinely negative autocovariance —
 self-correction after a bad bag is not a design choice, it is forced. -/
+theorem card_mul_variance_le_of_nonneg_covariance {Ω : Type*} [MeasurableSpace Ω]
+    (μ : Measure Ω) [IsProbabilityMeasure μ] (X : ℕ → Ω → ℝ)
+    (hmem : ∀ i, MemLp (X i) 2 μ)
+    {B : ℝ} (hB : ∀ (m : ℕ) (ω : Ω), |∑ i ∈ Finset.range m, X i ω| ≤ B)
+    {σ2 : ℝ} (hvar : ∀ i, variance (X i) μ = σ2)
+    {L : ℕ} (hcov : ∀ i ∈ Finset.range L, ∀ j ∈ Finset.range L, i ≠ j →
+      0 ≤ ProbabilityTheory.covariance (X i) (X j) μ) :
+    (L : ℝ) * σ2 ≤ B ^ 2 := by
+  have hsum := covariance_sum_le μ X hmem hB L
+  have hdiag : ∀ i ∈ Finset.range L,
+      ProbabilityTheory.covariance (X i) (X i) μ
+        ≤ ∑ j ∈ Finset.range L, ProbabilityTheory.covariance (X i) (X j) μ := by
+    intro i hi
+    refine Finset.single_le_sum (f := fun j =>
+      ProbabilityTheory.covariance (X i) (X j) μ) ?_ hi
+    intro j hj
+    dsimp only
+    rcases eq_or_ne i j with rfl | hij
+    · rw [ProbabilityTheory.covariance_self (hmem i).aemeasurable]
+      exact variance_nonneg _ _
+    · exact hcov i hi j hj hij
+  have hlow := Finset.sum_le_sum hdiag
+  have hconst : ∑ i ∈ Finset.range L,
+      ProbabilityTheory.covariance (X i) (X i) μ = (L : ℝ) * σ2 := by
+    have hpt : ∀ i ∈ Finset.range L,
+        ProbabilityTheory.covariance (X i) (X i) μ = σ2 := by
+      intro i _
+      rw [ProbabilityTheory.covariance_self (hmem i).aemeasurable, hvar i]
+    rw [Finset.sum_congr rfl hpt, Finset.sum_const, Finset.card_range,
+      nsmul_eq_mul]
+  rw [hconst] at hlow
+  linarith
+
+/-- Letting the horizon grow: if the non-negativity holds at every lag, the
+variance must vanish. -/
 theorem variance_zero_of_nonneg_covariance {Ω : Type*} [MeasurableSpace Ω]
     (μ : Measure Ω) [IsProbabilityMeasure μ] (X : ℕ → Ω → ℝ)
     (hmem : ∀ i, MemLp (X i) 2 μ)
@@ -534,36 +569,11 @@ theorem variance_zero_of_nonneg_covariance {Ω : Type*} [MeasurableSpace Ω]
   have hσ : 0 ≤ σ2 := by
     have h := variance_nonneg (X 0) μ
     rwa [hvar 0] at h
-  have hkey : ∀ m : ℕ, (m : ℝ) * σ2 ≤ B ^ 2 := by
-    intro m
-    have hsum := covariance_sum_le μ X hmem hB m
-    have hdiag : ∀ i ∈ Finset.range m,
-        ProbabilityTheory.covariance (X i) (X i) μ
-          ≤ ∑ j ∈ Finset.range m, ProbabilityTheory.covariance (X i) (X j) μ := by
-      intro i hi
-      refine Finset.single_le_sum (f := fun j =>
-        ProbabilityTheory.covariance (X i) (X j) μ) ?_ hi
-      intro j _
-      dsimp only
-      rcases eq_or_ne i j with rfl | hij
-      · rw [ProbabilityTheory.covariance_self (hmem i).aemeasurable]
-        exact variance_nonneg _ _
-      · exact hcov i j hij
-    have hlow := Finset.sum_le_sum hdiag
-    have hconst : ∑ i ∈ Finset.range m,
-        ProbabilityTheory.covariance (X i) (X i) μ = (m : ℝ) * σ2 := by
-      have hpt : ∀ i ∈ Finset.range m,
-          ProbabilityTheory.covariance (X i) (X i) μ = σ2 := by
-        intro i _
-        rw [ProbabilityTheory.covariance_self (hmem i).aemeasurable, hvar i]
-      rw [Finset.sum_congr rfl hpt, Finset.sum_const, Finset.card_range,
-        nsmul_eq_mul]
-    rw [hconst] at hlow
-    linarith
   by_contra hne
   have hpos : 0 < σ2 := lt_of_le_of_ne hσ (Ne.symm hne)
   obtain ⟨m, hm⟩ := exists_nat_gt (B ^ 2 / σ2)
-  have hkm := hkey m
+  have hkm := card_mul_variance_le_of_nonneg_covariance μ X hmem hB hvar
+    (L := m) (fun i _ j _ hij => hcov i j hij)
   rw [div_lt_iff₀ hpos] at hm
   linarith
 
@@ -594,6 +604,45 @@ theorem survival_forces_indep_variance_zero {Ω : Type*} [MeasurableSpace Ω]
     exact Finset.sum_congr rfl fun k _ => hX k ω
   rw [hs]
   exact abs_centered_le (hv ω) (hsurv ω (7 * m))
+
+/-- **The recovery deadline.** The previous theorems say an immortal solver must
+correct itself; this one says *when*. Suppose its per-bag clear counts have
+variance `σ² > 0` and that across a window of `L` bags no pair is negatively
+correlated — that is, for `L` bags the solver never systematically compensates
+for a bad bag. Then
+
+  `L ≤ 400 / σ²`.
+
+Correction cannot be postponed past that horizon: the deviations would otherwise
+accumulate like a random walk and overrun the board's 20-row budget. The noisier
+a solver's clearing, the sooner it must correct — stddev 1 row buys 400 bags,
+stddev 2 buys 100, stddev 4 buys 25.
+
+Design reading: the accumulated clear debt has to be an *input* to the policy on
+a timescale of `400/σ²` bags. A policy that ignores it for longer is not merely
+suboptimal — it provably tops out. -/
+theorem recovery_deadline {Ω : Type*} [MeasurableSpace Ω] (μ : Measure Ω)
+    [IsProbabilityMeasure μ] (strat : Ω → Policy GameConfig.standard)
+    (hv : ∀ ω g, (strat ω g).Valid GameConfig.standard)
+    (hsurv : ∀ ω, SurvivesForever GameConfig.standard (strat ω) GameState.init)
+    (X : ℕ → Ω → ℝ)
+    (hX : ∀ k ω, X k ω = (bagClears (strat ω) k : ℝ) - 2.8)
+    (hmem : ∀ k, MemLp (X k) 2 μ)
+    {σ2 : ℝ} (hvar : ∀ k, variance (X k) μ = σ2) (hσ : 0 < σ2)
+    {L : ℕ} (hcov : ∀ i ∈ Finset.range L, ∀ j ∈ Finset.range L, i ≠ j →
+      0 ≤ ProbabilityTheory.covariance (X i) (X j) μ) :
+    (L : ℝ) ≤ 400 / σ2 := by
+  have hB : ∀ (m : ℕ) (ω : Ω), |∑ i ∈ Finset.range m, X i ω| ≤ 20 := by
+    intro m ω
+    have hs : ∑ k ∈ Finset.range m, X k ω = centered (strat ω) m := by
+      rw [← sum_bagClears_centered (strat ω) m]
+      exact Finset.sum_congr rfl fun k _ => hX k ω
+    rw [hs]
+    exact abs_centered_le (hv ω) (hsurv ω (7 * m))
+  have h := card_mul_variance_le_of_nonneg_covariance μ X hmem hB hvar hcov
+  norm_num at h
+  rw [le_div_iff₀ hσ]
+  linarith
 
 /-- Spelled out: under independence, an immortal solver's per-bag clear count is
 almost surely equal to its own mean — a deterministic schedule, not a

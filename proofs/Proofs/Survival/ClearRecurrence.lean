@@ -584,5 +584,158 @@ theorem phase_mod_thirtyfive_of_trace_eq {π : Policy GameConfig.standard}
   · exact ((Nat.modEq_iff_dvd' h21).mpr
       (thirtyfive_dvd_of_trace_eq hv hdraw h21 h.symm)).symm
 
+/-! ## From arbitrary starts: the quantum applies to any closed cycle
+
+The results above start from `init`. A cycle certificate need not: it is entered
+somewhere in the middle of a game. These variants take an arbitrary start and
+only assume the placements actually played are legal, which is exactly what a
+`ClosedCycle` supplies. -/
+
+/-- Trace-local well-formedness: only the placements actually played need to be
+in-bounds. -/
+theorem trace_board_wf_of_trace {cfg : GameConfig} {π : Policy cfg} {g0 : GameState}
+    (hv : ∀ n, (π (trace cfg π g0 n)).Valid cfg) (hwf : Board.WF cfg g0.board) (n : ℕ) :
+    Board.WF cfg (trace cfg π g0 n).board := by
+  induction n with
+  | zero => simpa using hwf
+  | succ k ih =>
+    rw [trace_succ, GameState.step_board]
+    exact Placement.applyStep_wf ih (hv k)
+
+/-- The mass ledger from an arbitrary start, with trace-local legality. -/
+theorem mass_ledger_of_trace {cfg : GameConfig} {π : Policy cfg} {g0 : GameState}
+    (hv : ∀ n, (π (trace cfg π g0 n)).Valid cfg) (hwf : Board.WF cfg g0.board) (n : ℕ) :
+    (trace cfg π g0 n).board.count + cfg.cols * cleared cfg π g0 n
+      = g0.board.count + 4 * n := by
+  induction n with
+  | zero => simp
+  | succ k ih =>
+    have hstep := BagGrowth.count_applyStep_add
+      (trace_board_wf_of_trace hv hwf k) (hv k)
+    rw [trace_succ, GameState.step_board, cleared_succ, Nat.mul_add]
+    omega
+
+/-- Equal occupancy still forces `5 ∣ Δn` from an arbitrary start. -/
+theorem five_dvd_of_count_eq_from {π : Policy GameConfig.standard} {g0 : GameState}
+    (hv : ∀ n, (π (trace GameConfig.standard π g0 n)).Valid GameConfig.standard)
+    (hwf : Board.WF GameConfig.standard g0.board) {n₁ n₂ : ℕ} (h12 : n₁ ≤ n₂)
+    (hc : (trace GameConfig.standard π g0 n₁).board.count
+        = (trace GameConfig.standard π g0 n₂).board.count) :
+    5 ∣ (n₂ - n₁) := by
+  have h1 := mass_ledger_of_trace hv hwf n₁
+  have h2 := mass_ledger_of_trace hv hwf n₂
+  rw [GameConfig.standard_cols] at h1 h2
+  have hm := cleared_mono GameConfig.standard π g0 h12
+  omega
+
+/-- **The bag clock from an arbitrary start.** Legal draws cycle the bag size
+through `7, 6, …, 1, 7, …`, so from a start holding `c₀` pieces the size after
+`n` placements is `7 − (7 − c₀ + n) mod 7`. -/
+theorem bag_card_trace_from {cfg : GameConfig} {π : Policy cfg} {g0 : GameState}
+    (hdraw : ∀ n, (π (trace cfg π g0 n)).piece ∈ (trace cfg π g0 n).bag) (n : ℕ) :
+    (trace cfg π g0 n).bag.card = 7 - ((7 - g0.bag.card) + n) % 7 := by
+  have hle : g0.bag.card ≤ 7 := Bag.card_le_seven g0.bag
+  have hpos : 0 < g0.bag.card := Finset.card_pos.mpr ⟨_, hdraw 0⟩
+  induction n with
+  | zero =>
+    simp only [trace_zero, Nat.add_zero]
+    omega
+  | succ k ih =>
+    have hmod : ((7 - g0.bag.card) + k) % 7 < 7 := Nat.mod_lt _ (by omega)
+    rw [trace_succ, GameState.step_bag, card_draw (hdraw k), ih]
+    split <;> omega
+
+/-- Equal bag sizes force equal piece counts mod 7. -/
+theorem seven_mod_eq_of_bag_card_eq {cfg : GameConfig} {π : Policy cfg} {g0 : GameState}
+    (hdraw : ∀ n, (π (trace cfg π g0 n)).piece ∈ (trace cfg π g0 n).bag)
+    {n₁ n₂ : ℕ}
+    (h : (trace cfg π g0 n₁).bag.card = (trace cfg π g0 n₂).bag.card) :
+    n₁ % 7 = n₂ % 7 := by
+  have hle : g0.bag.card ≤ 7 := Bag.card_le_seven g0.bag
+  have hpos : 0 < g0.bag.card := Finset.card_pos.mpr ⟨_, hdraw 0⟩
+  have h1 := bag_card_trace_from hdraw n₁
+  have h2 := bag_card_trace_from hdraw n₂
+  have hm1 : ((7 - g0.bag.card) + n₁) % 7 < 7 := Nat.mod_lt _ (by omega)
+  have hm2 : ((7 - g0.bag.card) + n₂) % 7 < 7 := Nat.mod_lt _ (by omega)
+  rw [h1, h2] at h
+  omega
+
+/-- **The 5-bag quantum, from any start.** Any legal trace that revisits a state
+does so after a multiple of 35 placements — regardless of where it began. -/
+theorem thirtyfive_dvd_of_trace_eq_from {π : Policy GameConfig.standard}
+    {g0 : GameState}
+    (hv : ∀ n, (π (trace GameConfig.standard π g0 n)).Valid GameConfig.standard)
+    (hwf : Board.WF GameConfig.standard g0.board)
+    (hdraw : ∀ n, (π (trace GameConfig.standard π g0 n)).piece
+      ∈ (trace GameConfig.standard π g0 n).bag)
+    {n₁ n₂ : ℕ} (h12 : n₁ ≤ n₂)
+    (h : trace GameConfig.standard π g0 n₁ = trace GameConfig.standard π g0 n₂) :
+    35 ∣ (n₂ - n₁) := by
+  have h5 : 5 ∣ (n₂ - n₁) := five_dvd_of_count_eq_from hv hwf h12 (by rw [h])
+  have h7 : n₁ % 7 = n₂ % 7 := seven_mod_eq_of_bag_card_eq hdraw (by rw [h])
+  omega
+
+/-- **The M2 certificate is quantised.** A closed cycle's trace can only return
+to a state it has already visited after a multiple of **35 placements = 5
+bags**. Cycle search over a `ClosedCycle` therefore never needs to test
+separations that are not multiples of 35, and no certificate shorter than 35
+placements exists. -/
+theorem closedCycle_thirtyfive_dvd
+    (C : ClosedCycle GameConfig.standard) {g0 : GameState} (h0 : g0 ∈ C.states)
+    (hwf : Board.WF GameConfig.standard g0.board) {n₁ n₂ : ℕ} (h12 : n₁ ≤ n₂)
+    (h : trace GameConfig.standard C.policy g0 n₁
+        = trace GameConfig.standard C.policy g0 n₂) :
+    35 ∣ (n₂ - n₁) :=
+  thirtyfive_dvd_of_trace_eq_from
+    (fun n => C.valid _ (C.trace_mem_states h0 n)) hwf
+    (fun n => C.legal_draw _ (C.trace_mem_states h0 n)) h12 h
+
+/-- A closed cycle's nontrivial period is at least 5 bags. -/
+theorem closedCycle_thirtyfive_le
+    (C : ClosedCycle GameConfig.standard) {g0 : GameState} (h0 : g0 ∈ C.states)
+    (hwf : Board.WF GameConfig.standard g0.board) {n₁ n₂ : ℕ} (h12 : n₁ < n₂)
+    (h : trace GameConfig.standard C.policy g0 n₁
+        = trace GameConfig.standard C.policy g0 n₂) :
+    n₁ + 35 ≤ n₂ := by
+  have hd := closedCycle_thirtyfive_dvd C h0 hwf (le_of_lt h12) h
+  omega
+
+/-! ## The sharpened recurrence gap -/
+
+/-- **Exact balance recurs within 105 placements.** Sharpening
+`exists_count_eq_le`: checkpoints spaced 5 apart all carry the *same* occupancy
+residue (`count_mod_ten`), so only 21 cell counts are available to them and 22
+such checkpoints must repeat. The guaranteed gap drops from 201 placements to
+`5 · 21 = 105`. -/
+theorem exists_count_eq_le_of_step_five {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hsurv : SurvivesForever GameConfig.standard π GameState.init) (a : ℕ) :
+    ∃ i j, i < j ∧ j ≤ 21 ∧
+      (trace GameConfig.standard π GameState.init (a + 5 * i)).board.count
+        = (trace GameConfig.standard π GameState.init (a + 5 * j)).board.count := by
+  have hres : ∀ i : ℕ,
+      (trace GameConfig.standard π GameState.init (a + 5 * i)).board.count % 10
+        = (4 * a) % 10 := by
+    intro i
+    rw [count_mod_ten hv]
+    omega
+  have hmaps : ∀ i ∈ Finset.range 22,
+      (trace GameConfig.standard π GameState.init (a + 5 * i)).board.count / 10
+        ∈ Finset.range 21 := by
+    intro i _
+    have hb := count_lt_two_hundred_one hv (hsurv (a + 5 * i))
+    exact Finset.mem_range.mpr (by omega)
+  have hcard : (Finset.range 21).card < (Finset.range 22).card := by simp
+  obtain ⟨x, hx, y, hy, hxy, hfxy⟩ :=
+    Finset.exists_ne_map_eq_of_card_lt_of_maps_to hcard hmaps
+  have heq : (trace GameConfig.standard π GameState.init (a + 5 * x)).board.count
+      = (trace GameConfig.standard π GameState.init (a + 5 * y)).board.count := by
+    have h1 := hres x
+    have h2 := hres y
+    omega
+  rcases lt_or_gt_of_ne hxy with h | h
+  · exact ⟨x, y, h, by have := Finset.mem_range.mp hy; omega, heq⟩
+  · exact ⟨y, x, h, by have := Finset.mem_range.mp hx; omega, heq.symm⟩
+
 end ClearRate
 end Tetris

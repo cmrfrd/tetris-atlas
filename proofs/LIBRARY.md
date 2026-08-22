@@ -148,6 +148,9 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | `cleared_le_mul_clearingSteps`, `fullRows_card_le_of_count_le`, **`le_clearingSteps_of_max_clear`** | the tightness/frequency trade-off: max clear `K` ⇒ ≥`4/(10K)` of pieces must clear; an occupancy ceiling caps `K`. Tight board XOR rare clears |
 | **`dry_runway_le`** / `lost_of_runway_overrun`, **`window_clears_ge_of_count`** | solver-facing design laws: exact dry runway `(200−count)/4` placements, and the sound pruning obligation "clear ≥ `(4w+count−200)/10` rows in the next `w`" |
 | **`phase_mod_thirtyfive_of_trace_eq`** | `(board, bag)` determines the piece count mod 35 ⇒ **cycle search need only compare states 35k apart** |
+| **`recovery_deadline`** (`ClearDeviation`), `card_mul_variance_le_of_nonneg_covariance` | *when* a solver must correct: no negative correlation for `L` bags ⇒ `L ≤ 400/σ²` — the debt must enter the policy on that timescale |
+| `mass_ledger_of_trace`, `bag_card_trace_from`, `thirtyfive_dvd_of_trace_eq_from`; **`closedCycle_thirtyfive_dvd` / `_le`** | the 5-bag quantum from ANY start, applied to the M2 artifact: a `ClosedCycle` period is `35k` placements and never shorter than 35 |
+| `exists_count_eq_le_of_step_five` | sharpened recurrence gap: an exact-balance window within **105** placements (was 201), via the mod-10 clock |
 
 ---
 

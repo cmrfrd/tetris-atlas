@@ -41707,10 +41707,31 @@ Third half of the tick — **the trade-off, and the solver-facing design laws**:
     placements apart.** (Directly corrects the MCGS cycle-detection depth: the
     right quantum is 35 placements, not 1 bag.)
 
-Next: (a) sharpen `exists_count_eq_le` from 201 to ~101 using `count_mod_ten`
-(only 21 residue-compatible values per checkpoint), (b) push the 35 ∣ Δn bound
-into `ClosedCycle` / `AdversarialClosedCycle` so it constrains the M2 artifact
-directly rather than trace revisits.
+Fourth part of the tick — **the three follow-ups, all closed**:
+  - **`recovery_deadline`** (`ClearDeviation`, factored through the new
+    `card_mul_variance_le_of_nonneg_covariance`): if a solver's per-bag clears
+    have variance `σ² > 0` and no pair over a window of `L` bags is negatively
+    correlated, then `L ≤ 400/σ²`. Turns "you must self-correct" into a
+    DEADLINE: stddev 1 row buys 400 bags, stddev 2 buys 100, stddev 4 buys 25.
+    Design reading: the accumulated clear debt must be an input to the policy on
+    that timescale, or the solver provably tops out.
+  - `trace_board_wf_of_trace`, `mass_ledger_of_trace` (trace-local legality —
+    only the placements actually played need to be valid),
+    `five_dvd_of_count_eq_from`, **`bag_card_trace_from`** (bag size from an
+    arbitrary start is `7 − (7 − c₀ + n) % 7`), `seven_mod_eq_of_bag_card_eq`,
+    `thirtyfive_dvd_of_trace_eq_from`, and finally
+    **`closedCycle_thirtyfive_dvd` / `closedCycle_thirtyfive_le`** — the 5-bag
+    quantum now constrains the M2 artifact itself: a `ClosedCycle` period is
+    `35k` placements and never shorter than 35.
+  - **`exists_count_eq_le_of_step_five`** — checkpoints spaced 5 apart share an
+    occupancy residue, so only 21 values are available and 22 checkpoints must
+    repeat: the guaranteed exact-balance window drops from 201 placements to
+    **105**.
+
+Next: (a) an adversarial analogue of the 35-quantum for `AdversarialClosedCycle`
+/ `Atlas.IsClosedOn` (the `TetrisSolvable` side, not just the cooperative one);
+(b) tighten `recovery_deadline` from "no negative correlation at all" to a
+per-lag bound so it names the lag at which correction must appear.
 
 ---
 
