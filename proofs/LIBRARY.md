@@ -143,6 +143,8 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | **`covariance_sum_le`**, `variance_zero_of_bounded_partial_sums`, `variance_zero_of_nonneg_covariance`, `survival_forces_indep_variance_zero` | the whole covariance matrix sums to ≤ 400 ⇒ independent — indeed merely non-negatively-correlated — per-bag clearing with any spread is fatal |
 | `count_mod_ten`, `five_dvd_of_count_eq`, `exists_count_eq_le`, `exists_recurrent_count` (`ClearRecurrence`) | occupancy ≡ `4n` mod 10 (a clock); equal occupancy ⇒ the window balanced EXACTLY and `5 ∣ Δn`; such a window occurs every ≤201 placements and some occupancy recurs forever |
 | `bag_card_trace` (bag = mod-7 clock); **`thirtyfive_dvd_of_trace_eq`**, `thirtyfive_le_of_trace_eq` | **every closed cycle has length divisible by 35 placements = 5 bags** — an arithmetic lower bound on any M2 certificate, no geometry used |
+| `count_even`, `count_mod_ten_ne`, `five_dvd_of_count_eq_zero`, `clear_step_le`, `thirtysix_le_count_of_tetris` | cell-count arithmetic: always even, residue exactly uniform over `{0,2,4,6,8}`, empty only at `5 ∣ n`, a tetris needs 36 cells banked |
+| `clearingSteps`, `fullRows_card_le_four`, **`clearingSteps_le` / `le_clearingSteps`** | the fraction of line-clearing pieces is trapped in `[1/10, 2/5]` (tetris-only vs singles-only). The *level* of the count is NOT determined by counting — that needs geometry |
 
 ---
 

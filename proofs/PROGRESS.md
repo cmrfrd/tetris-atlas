@@ -41666,6 +41666,28 @@ that `perfect_rectangle_bag_period_even` (even bag period) and the zone-rate /
 tessellation analyses reached separately — those together give 10 bags for a
 density-1 flat-to-flat renewal, this gives 5 bags for ANY cycle.
 
+Second half of the tick — **the cell-count distribution, and its limits**:
+  - `count_even`; `count_mod_ten_add_five` (5-periodic residue);
+    **`count_mod_ten_ne`** — two times share a cell-count residue iff they agree
+    mod 5, so across any 5 placements the board visits each even residue
+    `{0,2,4,6,8}` exactly once. The residue distribution is EXACTLY uniform,
+    deterministically.
+  - `five_dvd_of_count_eq_zero` — the board can be empty (perfect clear) only at
+    piece counts divisible by 5.
+  - `clear_step_le` (`10k ≤ count + 4`) and **`thirtysix_le_count_of_tetris`** —
+    a tetris requires 36 cells already banked, so deep-clearing strategies are
+    committed to running high.
+  - `trace_board_no_full`, `fullRows_card_le_four`, `cleared_succ_le`,
+    `clearingSteps` + `clearingSteps_le_cleared` /
+    `cleared_le_four_mul_clearingSteps`, then **`clearingSteps_le` and
+    `le_clearingSteps`: the fraction of line-clearing pieces of any immortal
+    solver lies in `[1/10, 2/5]`** — 1/10 exactly for tetris-only, 2/5 exactly
+    for singles-only, nothing outside.
+  - **Recorded negative:** the LEVEL of the cell count is NOT determined. The
+    ledger is one linear equation; it fixes the residue and the increment mean
+    and says nothing about where in `[0,200]` the board sits. Any theorem about
+    the shape of the occupancy distribution must come from geometry.
+
 Next: (a) sharpen `exists_count_eq_le` from 201 to ~101 using `count_mod_ten`
 (only 21 residue-compatible values per checkpoint), (b) push the 35 ∣ Δn bound
 into `ClosedCycle` / `AdversarialClosedCycle` so it constrains the M2 artifact

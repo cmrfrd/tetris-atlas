@@ -39,6 +39,29 @@ Everything again reads off the ledger `board.count n + 10 · cleared n = 4n`.
 
 That last item is the payoff: a purely arithmetic lower bound on the size of
 any M2 certificate, derived without touching board geometry at all.
+
+## The cell-count distribution: what is and is not determined
+
+**Determined.** The count is always even (`count_even`); its residue mod 10 is
+`4n`, hence 5-periodic (`count_mod_ten_add_five`) and **exactly uniform** over
+`{0,2,4,6,8}` — two times share a residue iff they agree mod 5
+(`count_mod_ten_ne`); the board can be empty only at multiples of 5 placements
+(`five_dvd_of_count_eq_zero`); a drop clearing `k` rows needs `10k ≤ count + 4`
+beforehand (`clear_step_le`), so a **tetris demands 36 cells already on the
+stack** (`thirtysix_le_count_of_tetris`).
+
+Also determined: the **frequency of clearing events**. Every clearing drop
+removes between 1 and 4 rows (`fullRows_card_le_four`), and the total must hold
+the `0.4`-rows-per-piece pace, so the fraction of line-clearing pieces is
+trapped between `1/10` and `2/5` (`clearingSteps_le`, `le_clearingSteps`) —
+`1/10` for a tetris-only strategy, `2/5` for a singles-only one.
+
+**Not determined.** Where in `[0, 200]` the count actually *sits*. The ledger is
+one linear equation: it fixes the residue and the mean of the increments, and
+says nothing about the level. A perfect-clear-heavy strategy would hover near
+`0`, a downstacking one near the ceiling, and no counting argument separates
+them. Any theorem about the *shape* of the occupancy distribution has to come
+from board geometry, not from this file.
 -/
 
 namespace Tetris
@@ -239,6 +262,176 @@ theorem thirtyfive_le_of_trace_eq {π : Policy GameConfig.standard}
         = trace GameConfig.standard π GameState.init n₂) :
     n₁ + 35 ≤ n₂ := by
   have h35 := thirtyfive_dvd_of_trace_eq hv hdraw (le_of_lt h12) h
+  omega
+
+/-! ## What the ledger does and does not say about the cell-count distribution
+
+The ledger determines the *arithmetic* of the cell count completely — its
+parity, its residue, which times admit an empty board — and it determines the
+*frequency* of clearing events. It says nothing whatever about the **level**:
+where in `[0, 200]` an immortal solver's board actually sits is not a counting
+question, and no theorem here decides it. -/
+
+/-- The board's cell count is always even. -/
+theorem count_even {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (n : ℕ) :
+    (trace GameConfig.standard π GameState.init n).board.count % 2 = 0 := by
+  have h := init_ledger hv n
+  rw [GameConfig.standard_cols] at h
+  omega
+
+/-- The residue is 5-periodic in the piece count. -/
+theorem count_mod_ten_add_five {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (n : ℕ) :
+    (trace GameConfig.standard π GameState.init (n + 5)).board.count % 10
+      = (trace GameConfig.standard π GameState.init n).board.count % 10 := by
+  rw [count_mod_ten hv, count_mod_ten hv]
+  omega
+
+/-- **The residue distribution is exactly uniform.** Two times carry the same
+cell-count residue iff they agree mod 5, so across any five consecutive
+placements the board visits each of the five even residues `{0,2,4,6,8}`
+exactly once. This is the one distributional statement about occupancy that is
+fully determined — and it is determined deterministically, not just on
+average. -/
+theorem count_mod_ten_ne {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {i j : ℕ} (hij : i % 5 ≠ j % 5) :
+    (trace GameConfig.standard π GameState.init i).board.count % 10
+      ≠ (trace GameConfig.standard π GameState.init j).board.count % 10 := by
+  rw [count_mod_ten hv, count_mod_ten hv]
+  omega
+
+/-- **The board can only be empty at multiples of 5 placements.** A perfect
+clear at piece `n` forces `5 ∣ n`. -/
+theorem five_dvd_of_count_eq_zero {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hz : (trace GameConfig.standard π GameState.init n).board.count = 0) :
+    5 ∣ n := by
+  have h := init_ledger hv n
+  rw [GameConfig.standard_cols, hz] at h
+  omega
+
+/-- **Clearing costs mass you must already have.** A drop clearing `k` rows
+needs `10k` cells present after the drop, of which the piece supplies only 4:
+`10k ≤ count + 4`. -/
+theorem clear_step_le {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (n : ℕ) :
+    10 * (cleared GameConfig.standard π GameState.init (n + 1)
+          - cleared GameConfig.standard π GameState.init n)
+      ≤ (trace GameConfig.standard π GameState.init n).board.count + 4 := by
+  have hwf : Board.WF GameConfig.standard
+      (trace GameConfig.standard π GameState.init n).board :=
+    trace_board_wf hv (GameState.init_board_wf GameConfig.standard) n
+  have h := BagGrowth.count_clearLines_add_cols
+    (Placement.place_wf hwf (hv (trace GameConfig.standard π GameState.init n)))
+  rw [Placement.count_place, GameConfig.standard_cols] at h
+  rw [cleared_succ]
+  omega
+
+/-- **A tetris needs 36 cells on the board first.** Clearing four rows at once
+consumes 40 cells and the piece brings 4, so the stack must already hold 36 —
+nearly four full rows. Deep-clearing strategies are therefore committed to
+running the board high. -/
+theorem thirtysix_le_count_of_tetris {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (h4 : 4 ≤ cleared GameConfig.standard π GameState.init (n + 1)
+              - cleared GameConfig.standard π GameState.init n) :
+    36 ≤ (trace GameConfig.standard π GameState.init n).board.count := by
+  have h := clear_step_le hv n
+  omega
+
+/-! ## How often a piece clears -/
+
+/-- Number of the first `n` placements that cleared at least one row. -/
+def clearingSteps (cfg : GameConfig) (π : Policy cfg) (g0 : GameState) : ℕ → ℕ
+  | 0 => 0
+  | n + 1 =>
+      clearingSteps cfg π g0 n
+        + (if 0 < (Board.fullRows cfg
+              ((π (trace cfg π g0 n)).place (trace cfg π g0 n).board)).card then 1 else 0)
+
+@[simp] theorem clearingSteps_zero (cfg : GameConfig) (π : Policy cfg) (g0 : GameState) :
+    clearingSteps cfg π g0 0 = 0 := rfl
+
+theorem clearingSteps_succ (cfg : GameConfig) (π : Policy cfg) (g0 : GameState) (n : ℕ) :
+    clearingSteps cfg π g0 (n + 1)
+      = clearingSteps cfg π g0 n
+        + (if 0 < (Board.fullRows cfg
+              ((π (trace cfg π g0 n)).place (trace cfg π g0 n).board)).card then 1 else 0) :=
+  rfl
+
+/-- No row of a trace board is full: `init` is empty and every later board is a
+`clearLines` image. -/
+theorem trace_board_no_full {cfg : GameConfig} {π : Policy cfg} (n : ℕ) (r : ℕ) :
+    ¬ Board.isFull cfg (trace cfg π GameState.init n).board r := by
+  cases n with
+  | zero =>
+    intro hfull
+    have h0 := hfull 0 (Finset.mem_range.2 cfg.cols_pos)
+    rw [trace_zero] at h0
+    exact GameState.init_board_no_mem _ h0
+  | succ k =>
+    rw [trace_succ, GameState.step_board, Placement.applyStep_eq_clearLines_place]
+    exact Board.clearLines_no_full _ cfg.cols_pos r
+
+/-- A single drop clears at most 4 rows. -/
+theorem fullRows_card_le_four {cfg : GameConfig} {π : Policy cfg} (n : ℕ) :
+    (Board.fullRows cfg ((π (trace cfg π GameState.init n)).place
+      (trace cfg π GameState.init n).board)).card ≤ 4 := by
+  have h := linesCleared_place_le_four cfg
+    (trace cfg π GameState.init n).board (π (trace cfg π GameState.init n))
+    (trace_board_no_full n)
+  rwa [Board.linesCleared] at h
+
+/-- Restated on the cumulative counter. -/
+theorem cleared_succ_le {cfg : GameConfig} {π : Policy cfg} (n : ℕ) :
+    cleared cfg π GameState.init (n + 1) ≤ cleared cfg π GameState.init n + 4 := by
+  have h := fullRows_card_le_four (cfg := cfg) (π := π) n
+  rw [cleared_succ]
+  omega
+
+/-- Every clearing step contributes at least one row. -/
+theorem clearingSteps_le_cleared {cfg : GameConfig} {π : Policy cfg} (n : ℕ) :
+    clearingSteps cfg π GameState.init n ≤ cleared cfg π GameState.init n := by
+  induction n with
+  | zero => simp
+  | succ k ih =>
+    rw [clearingSteps_succ, cleared_succ]
+    split <;> omega
+
+/-- Every clearing step contributes at most four rows. -/
+theorem cleared_le_four_mul_clearingSteps {cfg : GameConfig} {π : Policy cfg} (n : ℕ) :
+    cleared cfg π GameState.init n ≤ 4 * clearingSteps cfg π GameState.init n := by
+  induction n with
+  | zero => simp
+  | succ k ih =>
+    have h4 := fullRows_card_le_four (cfg := cfg) (π := π) k
+    rw [clearingSteps_succ, cleared_succ]
+    split <;> omega
+
+/-- **At most two pieces in five clear a row.** Each clearing piece removes at
+least one row, and the total rows cleared can never exceed `0.4` per piece. -/
+theorem clearingSteps_le {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (n : ℕ) :
+    10 * clearingSteps GameConfig.standard π GameState.init n ≤ 4 * n := by
+  have h1 := clearingSteps_le_cleared (cfg := GameConfig.standard) (π := π) n
+  have h2 := cols_mul_cleared_le hv n
+  rw [GameConfig.standard_cols] at h2
+  omega
+
+/-- **At least one piece in ten clears a row.** Each clearing piece removes at
+most four rows, and the total rows cleared must keep pace at `0.4` per piece.
+Together with `clearingSteps_le`: **the fraction of line-clearing pieces of any
+immortal solver lies between `1/10` and `2/5`** — `1/10` exactly for a
+tetris-only strategy, `2/5` exactly for a singles-only strategy, and nothing
+outside that band is possible. -/
+theorem le_clearingSteps {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init n).lost GameConfig.standard) :
+    4 * n ≤ 40 * clearingSteps GameConfig.standard π GameState.init n + 200 := by
+  have h1 := cleared_le_four_mul_clearingSteps (cfg := GameConfig.standard) (π := π) n
+  have h2 := le_cols_mul_cleared hv hlive
+  rw [GameConfig.standard_cols, GameConfig.standard_rows] at h2
   omega
 
 end ClearRate
