@@ -137,6 +137,10 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | `ClearRate.cleared`, `mass_ledger`, `init_ledger` | mass conservation along a trace: board mass + `cols`·cleared = `4`·placements — the deficit **is** the board |
 | **`ClearRate.bags_sandwich`**, `lost_of_clear_deficit`, `not_survivesForever_of_rate_lt`, **`survival_forces_clear_rate`** | the **2.8 rows/bag law**: `2.8m − 20 ≤ cleared ≤ 2.8m`; sub-`2.8` clearing tops out, super-`2.8` is impossible, immortal play converges to exactly `28/10` |
 | `ClearRate.play_bag_sandwich`; `average_clears_bounds`, `expected_clears_bounds` | the same law without a policy (every trajectory, adversarial included) and under any finite average / probability distribution |
+| `ClearRate.deficit`, **`deficit_eq_mass`**, `window_bags_ge/le` (`ClearDeviation`) | the deficit **is** the board mass ⇒ over ANY window of `w` bags the clears land within 20 rows of `2.8w` |
+| **`lost_of_sustained_shortfall`** / `sustained_shortfall_window_le`; `lost_of_dry_spell`; `bagClears_le_twentytwo` | death horizon: shortfall `β` lasts ≤ `20/β` bags; **no eight dry bags**; per-bag clears ∈ `{0..22}` (⇒ no marginal-variance bound) |
+| `centered`, `centered_nonpos`, `abs_centered_le`, `centered_div_sqrt_tendsto_zero`, `centered_sq_div_tendsto_zero` | never ahead, never 20 behind; the `√m`-scaled deviation and the long-run-variance estimator both vanish |
+| **`covariance_sum_le`**, `variance_zero_of_bounded_partial_sums`, `survival_forces_indep_variance_zero` | the whole covariance matrix sums to ≤ 400 ⇒ independent per-bag clearing with any spread is fatal |
 
 ---
 
@@ -187,7 +191,7 @@ Proofs/
   Invariants/    StepInvariants Gameplay GameplayExtra Holes StateSpace
                  Wqo HoleyCarrier SurfaceFiber HoleDebt BandShift
                  BandMechanisms PlinthShift SlotAlgebra LaneCalculus           ✓
-  Survival/      Survival Lasso ClearRate                                      ✓
+  Survival/      Survival Lasso ClearRate ClearDeviation                       ✓
   Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite
                  SkylineInvariant ShiftCertificate BandSchedule PlinthCert     ✓
 ProofsExperiments.lean       -- separate lib (route reductions, native_decide, Scratch/*)

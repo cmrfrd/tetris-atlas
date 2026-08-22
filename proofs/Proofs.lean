@@ -44,6 +44,7 @@ import Proofs.Invariants.BagGrowth
 -- Survival — policy / trace / cycle vocabulary
 import Proofs.Survival.Survival
 import Proofs.Survival.ClearRate
+import Proofs.Survival.ClearDeviation
 import Proofs.Survival.Lasso
 
 -- Safety — safe-set GFP, Atlas, the solvability reduction, computable iteration, obstructions

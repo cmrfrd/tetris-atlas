@@ -13,7 +13,7 @@ new tick — it tells you where the prior tick left off.
 
 ## Current build status
 
-- `lake build` (green `Proofs`) — **PASSING** (8299 jobs); base-axiom-clean
+- `lake build` (green `Proofs`) — **PASSING** (8300 jobs); base-axiom-clean
   (`propext`, `Classical.choice`, `Quot.sound`), **no `sorry`, no `native_decide`**.
 - `lake build ProofsExperiments` (research routes) — **PASSING** (8288 jobs); may use
   `native_decide`.
@@ -27,6 +27,30 @@ green tree (token-aware: backtick-quoted docstring mentions are ignored).
 When sorries are added as scaffolding, list them here with `file:line — why`.
 
 ## Last tick
+
+Tick (manual, 2026-08-21b) — **the deviation calculus**
+(`Survival/ClearDeviation.lean`, new green module, 21 theorems,
+base-axiom-clean, no warnings). Quantifies the drift the 2.8 law permits. Core:
+`deficit n = 4n − cols·cleared n` and **`deficit_eq_mass`** — the deficit IS the
+board occupancy, so it is confined to `[0,200]` forever. Readings: (1)
+**uniform window bound** — over ANY `w`-bag window the clears land within 20
+rows of `2.8w`; one 20-row budget shared across every time scale. (2)
+**`centered_nonpos`** — a solver is never AHEAD; surplus cannot be banked, so
+"clear extra now, spend later" is not a strategy that exists. (3) **the
+shortfall hyperbola** `sustained_shortfall_window_le`: a shortfall of β rows/bag
+survives at most `20/β` bags; contrapositive `lost_of_sustained_shortfall` is
+the predictive death-horizon test. (4) **`lost_of_dry_spell`** — 8 bags deliver
+224 > 200 cells, so no solver goes eight bags without clearing; seven is the
+hard max. (5) `bagClears_le_twentytwo` — per-bag clears ∈ {0..22}, so the
+MARGINAL variance is unconstrained; the real constraint is on the LONG-RUN
+variance, which `centered_sq_div_tendsto_zero` shows is exactly 0. (6)
+**`covariance_sum_le`** — with no dependence assumption the whole `m×m`
+covariance matrix sums to ≤ 400, so the autocovariances must cancel the marginal
+variance completely; specialized, **`survival_forces_indep_variance_zero`**:
+independent per-bag clearing with any spread whatsoever is fatal. Honest limit:
+the deterministic certificates fire exactly at death, never strictly before, so
+prediction requires an extrapolation hypothesis. Next: per-lag autocorrelation
+bounds; couple the dry-spell bound to `perfect_rectangle_bag_period_even`.
 
 Tick (manual, 2026-08-21) — **the clearing-rate law**
 (`Survival/ClearRate.lean`, new green module, base-axiom-clean, no warnings).
@@ -41581,6 +41605,57 @@ Next: <subtask id and one-line description>
 ## Tick log
 
 *(append newest at top below this line)*
+
+---
+
+### Tick (manual, 2026-08-21b) — the deviation calculus: how far off 2.8, and for how long
+
+What I changed:
+- **NEW** `proofs/Proofs/Survival/ClearDeviation.lean` (green, no warnings, 21
+  exported theorems, all base-axiom-clean). Answers "how far out of line can a
+  solver be, and what statistics certify it will lose".
+  - `deficit cfg π g0 n : ℤ` = `4n − cols·cleared n`; **`deficit_eq_mass`** —
+    the deficit *is* the board occupancy. `deficit_nonneg`,
+    `deficit_le_capacity` confine it to `[0, 200]` forever.
+  - `window_identity`, `window_clears_ge/le`, **`window_bags_ge/le`** — the
+    bound holds over EVERY window, not just from the origin: any `w`-bag window
+    clears within **20 rows** of `2.8w`. One 20-row budget, shared across all
+    time scales simultaneously.
+  - **`lost_of_window_shortfall`** (finite certificate), **`lost_of_dry_spell`**
+    (eight bags deliver 224 > 200 ⇒ **no solver goes 8 bags without a clear**;
+    7 is the hard max), `bagClears_le_twentytwo` (≤22 rows in one bag ⇒ the
+    marginal variance is NOT bounded usefully).
+  - `centered π m = cleared − 2.8m`; `centered_eq_neg_deficit` (= −mass/10),
+    **`centered_nonpos`** (a solver is NEVER ahead — no surplus can be banked),
+    `neg_twenty_le_centered`, `abs_centered_le`, `mul_abs_bagRate_sub_eq`.
+  - **`sustained_shortfall_window_le`**: a shortfall of `β` rows/bag lasts at
+    most `20/β` bags — the size×duration hyperbola. Contrapositive
+    **`lost_of_sustained_shortfall`** is the predictive death-horizon test.
+  - `centered_div_sqrt_tendsto_zero` and `centered_sq_div_tendsto_zero`: the
+    `√m`-scaled deviation and the long-run-variance estimator `(∑d)²/m` both
+    vanish ⇒ **long-run variance is exactly zero**; incompatible with any CLT.
+  - `bagClears`, `sum_bagClears_centered` (centered = partial sum of per-bag
+    deviations), **`covariance_sum_le`** (the full `m×m` covariance matrix sums
+    to ≤ 400, no dependence assumption), `variance_zero_of_bounded_partial_sums`
+    (abstract: bounded partial sums + pairwise independence + common variance ⇒
+    variance 0), **`survival_forces_indep_variance_zero`** and
+    `survival_forces_indep_ae_const` (game instances).
+- `proofs/Proofs.lean` — import; `proofs/LIBRARY.md` — four Layer-4 rows.
+
+Build: PASS (green `Proofs`, 8300 jobs; ClearDeviation no warnings)
+Sorries: 0 → 0; `check-green-clean.sh` OK
+Axioms: all 21 verified `[propext, Classical.choice, Quot.sound]`
+
+Honest limitation recorded in the module docstring: because the `≤200` cap is
+what aliveness *means*, the deterministic certificates fire exactly at death,
+never strictly before it. Genuine prediction needs an extrapolation hypothesis —
+a sustained rate (`lost_of_sustained_shortfall`) or a stochastic model
+(`survival_forces_indep_variance_zero`).
+
+Next: (a) lower-bound the negative autocorrelation explicitly (turn
+`covariance_sum_le` into a per-lag statement), (b) combine the 7-bag dry-spell
+bound with `BagGrowth.perfect_rectangle_bag_period_even` to bound how often
+immortal play can sit at a perfect clear.
 
 ---
 
