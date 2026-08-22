@@ -141,6 +141,8 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | **`lost_of_sustained_shortfall`** / `sustained_shortfall_window_le`; `lost_of_dry_spell`; `bagClears_le_twentytwo` | death horizon: shortfall `β` lasts ≤ `20/β` bags; **no eight dry bags**; per-bag clears ∈ `{0..22}` (⇒ no marginal-variance bound) |
 | `centered`, `centered_nonpos`, `abs_centered_le`, `abs_centered_sub_le`, `centered_div_sqrt_tendsto_zero`, `centered_sq_div_tendsto_zero` | never ahead, never 20 behind, max drawdown 20; the `√m`-scaled deviation and the long-run-variance estimator both vanish |
 | **`covariance_sum_le`**, `variance_zero_of_bounded_partial_sums`, `variance_zero_of_nonneg_covariance`, `survival_forces_indep_variance_zero` | the whole covariance matrix sums to ≤ 400 ⇒ independent — indeed merely non-negatively-correlated — per-bag clearing with any spread is fatal |
+| `count_mod_ten`, `five_dvd_of_count_eq`, `exists_count_eq_le`, `exists_recurrent_count` (`ClearRecurrence`) | occupancy ≡ `4n` mod 10 (a clock); equal occupancy ⇒ the window balanced EXACTLY and `5 ∣ Δn`; such a window occurs every ≤201 placements and some occupancy recurs forever |
+| `bag_card_trace` (bag = mod-7 clock); **`thirtyfive_dvd_of_trace_eq`**, `thirtyfive_le_of_trace_eq` | **every closed cycle has length divisible by 35 placements = 5 bags** — an arithmetic lower bound on any M2 certificate, no geometry used |
 
 ---
 
@@ -191,7 +193,7 @@ Proofs/
   Invariants/    StepInvariants Gameplay GameplayExtra Holes StateSpace
                  Wqo HoleyCarrier SurfaceFiber HoleDebt BandShift
                  BandMechanisms PlinthShift SlotAlgebra LaneCalculus           ✓
-  Survival/      Survival Lasso ClearRate ClearDeviation                       ✓
+  Survival/      Survival Lasso ClearRate ClearDeviation ClearRecurrence       ✓
   Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite
                  SkylineInvariant ShiftCertificate BandSchedule PlinthCert     ✓
 ProofsExperiments.lean       -- separate lib (route reductions, native_decide, Scratch/*)

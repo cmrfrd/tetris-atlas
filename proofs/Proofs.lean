@@ -45,6 +45,7 @@ import Proofs.Invariants.BagGrowth
 import Proofs.Survival.Survival
 import Proofs.Survival.ClearRate
 import Proofs.Survival.ClearDeviation
+import Proofs.Survival.ClearRecurrence
 import Proofs.Survival.Lasso
 
 -- Safety — safe-set GFP, Atlas, the solvability reduction, computable iteration, obstructions

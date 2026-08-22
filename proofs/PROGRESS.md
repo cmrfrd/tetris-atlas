@@ -13,7 +13,7 @@ new tick — it tells you where the prior tick left off.
 
 ## Current build status
 
-- `lake build` (green `Proofs`) — **PASSING** (8300 jobs); base-axiom-clean
+- `lake build` (green `Proofs`) — **PASSING** (8301 jobs); base-axiom-clean
   (`propext`, `Classical.choice`, `Quot.sound`), **no `sorry`, no `native_decide`**.
 - `lake build ProofsExperiments` (research routes) — **PASSING** (8288 jobs); may use
   `native_decide`.
@@ -27,6 +27,27 @@ green tree (token-aware: backtick-quoted docstring mentions are ignored).
 When sorries are added as scaffolding, list them here with `file:line — why`.
 
 ## Last tick
+
+Tick (manual, 2026-08-22) — **recurrence and period**
+(`Survival/ClearRecurrence.lean`, new green module, 12 theorems,
+base-axiom-clean, no warnings). The structural statistics of an immortal
+solver, all off the same ledger. **`count_mod_ten`**: occupancy `≡ 4n (mod 10)`
+— clears move mass in units of 10, so the residue is a clock and only 21 of the
+201 cell counts are available at any moment. **`five_dvd_of_count_eq`**: if the
+board ever returns to a previous cell count, the window between the visits
+cleared at EXACTLY 2.8/bag (zero error) and its length is a multiple of 5.
+**`exists_count_eq_le`**: by pigeonhole every 201 placements contains such an
+exact-balance window — the 2.8 rate is attained on the nose at bounded
+intervals, not merely in the limit; `exists_recurrent_count` upgrades this to
+"some occupancy recurs infinitely often". **`bag_card_trace`**: under legal
+draws the bag holds `7 − n%7` pieces, a mod-7 clock. Combining the two clocks,
+**`thirtyfive_dvd_of_trace_eq`: every closed cycle in the state graph has length
+divisible by 35 placements = 5 bags** — an arithmetic lower bound on any M2
+certificate with no geometry, no reachability and no search. Independent
+confirmation of the 5-bag lattice that `perfect_rectangle_bag_period_even` and
+the zone-rate/tessellation analyses reached separately. Next: sharpen the
+pigeonhole constant 201 → ~101 via `count_mod_ten`; push `35 ∣ Δn` into
+`ClosedCycle`/`AdversarialClosedCycle` so it constrains the M2 artifact itself.
 
 Tick (manual, 2026-08-21b) — **the deviation calculus**
 (`Survival/ClearDeviation.lean`, new green module, 21 theorems,
@@ -41605,6 +41626,50 @@ Next: <subtask id and one-line description>
 ## Tick log
 
 *(append newest at top below this line)*
+
+---
+
+### Tick (manual, 2026-08-22) — recurrence and period: every closed cycle is 5 bags
+
+What I changed:
+- **NEW** `proofs/Proofs/Survival/ClearRecurrence.lean` (green, no warnings, 12
+  theorems, base-axiom-clean). The structural statistics left over after the
+  rate law and the deviation bounds.
+  - **`count_mod_ten`** — occupancy `≡ 4n (mod 10)`: clears remove exactly 10
+    cells, so they cannot move the residue. Only 21 of 201 cell counts are
+    available at any moment, fixed by the piece count alone.
+  - **`five_dvd_of_count_eq`** / `exact_balance_of_count_eq` — if the board ever
+    returns to a cell count it held before, the window between the visits
+    cleared at EXACTLY the 2.8 pace (`10·Δcleared = 4·Δn`, zero error) and
+    `5 ∣ Δn`.
+  - **`exists_count_eq_le`** — pigeonhole on the 201 available occupancies: every
+    201 placements contains an exact-balance window. The 2.8 rate is not merely
+    an asymptotic average, it is ATTAINED on the nose at bounded intervals.
+  - `exists_recurrent_count` — some occupancy value recurs infinitely often
+    (`Finite.exists_infinite_fiber`); the occupancy series is a recurrent walk
+    on a finite set, never a drift.
+  - `card_draw`, **`bag_card_trace`** — under legal draws the bag holds
+    `7 − n % 7` pieces: the bag is a mod-7 clock.
+  - **`thirtyfive_dvd_of_trace_eq`** / `thirtyfive_le_of_trace_eq` — combining
+    the mass clock (mod 5) with the bag clock (mod 7): **every closed cycle in
+    the state graph has length divisible by 35 placements = 5 bags.** A lower
+    bound on the size of any M2 certificate, derived from counting alone: no
+    board geometry, no reachability, no search.
+- `proofs/Proofs.lean` — import; `proofs/LIBRARY.md` — two Layer-4 rows.
+
+Build: PASS (green `Proofs`, 8301 jobs; ClearRecurrence no warnings)
+Sorries: 0 → 0; `check-green-clean.sh` OK
+Axioms: all 12 verified `[propext, Classical.choice, Quot.sound]`
+
+Note the independent confirmation: the 5-bag quantum matches the lattice point
+that `perfect_rectangle_bag_period_even` (even bag period) and the zone-rate /
+tessellation analyses reached separately — those together give 10 bags for a
+density-1 flat-to-flat renewal, this gives 5 bags for ANY cycle.
+
+Next: (a) sharpen `exists_count_eq_le` from 201 to ~101 using `count_mod_ten`
+(only 21 residue-compatible values per checkpoint), (b) push the 35 ∣ Δn bound
+into `ClosedCycle` / `AdversarialClosedCycle` so it constrains the M2 artifact
+directly rather than trace revisits.
 
 ---
 
