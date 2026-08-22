@@ -434,5 +434,77 @@ theorem le_clearingSteps {π : Policy GameConfig.standard}
   rw [GameConfig.standard_cols, GameConfig.standard_rows] at h2
   omega
 
+/-! ## The trade-off the rate *does* impose
+
+The limiting rate is a single number — the mean of the increments — and a
+single number cannot determine a distribution. What it does determine is a
+**relation** between two features of the distribution: how high the board is
+allowed to run, and how often the solver must clear.
+
+Keeping the board low caps the clear size (a `k`-row clear needs `10k − 4` cells
+banked), and capping the clear size forces the clearing *frequency* up, because
+the `0.4`-rows-per-piece pace has to be met either way. A solver may buy a tight
+occupancy distribution or a low clearing frequency — never both. -/
+
+/-- If no drop ever clears more than `K` rows, the cumulative clears are at most
+`K` per clearing piece. -/
+theorem cleared_le_mul_clearingSteps {cfg : GameConfig} {π : Policy cfg} {K : ℕ}
+    (hK : ∀ n, (Board.fullRows cfg ((π (trace cfg π GameState.init n)).place
+      (trace cfg π GameState.init n).board)).card ≤ K) (n : ℕ) :
+    cleared cfg π GameState.init n ≤ K * clearingSteps cfg π GameState.init n := by
+  induction n with
+  | zero => simp
+  | succ k ih =>
+    rw [cleared_succ, clearingSteps_succ]
+    by_cases hc : 0 < (Board.fullRows cfg ((π (trace cfg π GameState.init k)).place
+        (trace cfg π GameState.init k).board)).card
+    · rw [if_pos hc, Nat.mul_add, Nat.mul_one]
+      exact Nat.add_le_add ih (hK k)
+    · have hc0 : (Board.fullRows cfg ((π (trace cfg π GameState.init k)).place
+          (trace cfg π GameState.init k).board)).card = 0 := by omega
+      rw [if_neg hc, hc0, Nat.add_zero, Nat.add_zero]
+      exact ih
+
+/-- **An occupancy ceiling caps the clear size.** If the board never holds more
+than `10K − 4` cells, no drop can ever clear more than `K` rows: the mass simply
+is not there. -/
+theorem fullRows_card_le_of_count_le {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {K : ℕ}
+    (hM : ∀ n, (trace GameConfig.standard π GameState.init n).board.count + 4 ≤ 10 * K)
+    (n : ℕ) :
+    (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init n)).place
+        (trace GameConfig.standard π GameState.init n).board)).card ≤ K := by
+  have h := clear_step_le hv n
+  rw [cleared_succ] at h
+  have hm := hM n
+  omega
+
+/-- **The tightness/frequency trade-off.** A solver whose drops never clear more
+than `K` rows must clear on at least a `4/(10K)` fraction of its pieces. With
+`K = 4` this is the familiar `1/10` (tetris-only); with `K = 1` it is `2/5`
+(singles-only). Combined with `fullRows_card_le_of_count_le`: **holding the
+occupancy distribution tight forces the clearing frequency up, and buying a low
+clearing frequency forces the board to run high.** That relation — not the shape
+of either distribution on its own — is what the `2.8` rate actually
+determines. -/
+theorem le_clearingSteps_of_max_clear {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {K : ℕ}
+    (hK : ∀ n, (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init n)).place
+        (trace GameConfig.standard π GameState.init n).board)).card ≤ K)
+    {n : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init n).lost GameConfig.standard) :
+    4 * n ≤ 10 * K * clearingSteps GameConfig.standard π GameState.init n + 200 := by
+  have h1 := cleared_le_mul_clearingSteps (cfg := GameConfig.standard) (π := π) hK n
+  have h2 := le_cols_mul_cleared hv hlive
+  rw [GameConfig.standard_cols, GameConfig.standard_rows] at h2
+  calc 4 * n
+      ≤ 10 * cleared GameConfig.standard π GameState.init n + 200 := h2
+    _ ≤ 10 * (K * clearingSteps GameConfig.standard π GameState.init n) + 200 :=
+        Nat.add_le_add_right (Nat.mul_le_mul_left 10 h1) 200
+    _ = 10 * K * clearingSteps GameConfig.standard π GameState.init n + 200 := by
+        ring
+
 end ClearRate
 end Tetris
