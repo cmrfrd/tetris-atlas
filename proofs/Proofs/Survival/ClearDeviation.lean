@@ -605,6 +605,63 @@ theorem survival_forces_indep_variance_zero {Ω : Type*} [MeasurableSpace Ω]
   rw [hs]
   exact abs_centered_le (hv ω) (hsurv ω (7 * m))
 
+/-- The partial sums of an immortal randomized solver's centered per-bag counts
+never leave the 20-row band. -/
+theorem abs_sum_bagDeviation_le {Ω : Type*}
+    (strat : Ω → Policy GameConfig.standard)
+    (hv : ∀ ω g, (strat ω g).Valid GameConfig.standard)
+    (hsurv : ∀ ω, SurvivesForever GameConfig.standard (strat ω) GameState.init)
+    (X : ℕ → Ω → ℝ)
+    (hX : ∀ k ω, X k ω = (bagClears (strat ω) k : ℝ) - 2.8)
+    (m : ℕ) (ω : Ω) :
+    |∑ i ∈ Finset.range m, X i ω| ≤ 20 := by
+  have hs : ∑ k ∈ Finset.range m, X k ω = centered (strat ω) m := by
+    rw [← sum_bagClears_centered (strat ω) m]
+    exact Finset.sum_congr rfl fun k _ => hX k ω
+  rw [hs]
+  exact abs_centered_le (hv ω) (hsurv ω (7 * m))
+
+/-- **The off-diagonal covariance budget.** Peeling the diagonal off
+`covariance_sum_le`: across the first `L` bags the *cross* terms must absorb the
+entire marginal variance `L σ²`, up to the board's `B²`. -/
+theorem offDiag_covariance_sum_le {Ω : Type*} [MeasurableSpace Ω]
+    (μ : Measure Ω) [IsProbabilityMeasure μ] (X : ℕ → Ω → ℝ)
+    (hmem : ∀ i, MemLp (X i) 2 μ)
+    {B : ℝ} (hB : ∀ (m : ℕ) (ω : Ω), |∑ i ∈ Finset.range m, X i ω| ≤ B)
+    {σ2 : ℝ} (hvar : ∀ i, variance (X i) μ = σ2) (L : ℕ) :
+    ∑ i ∈ Finset.range L, ∑ j ∈ (Finset.range L).erase i,
+        ProbabilityTheory.covariance (X i) (X j) μ
+      ≤ B ^ 2 - (L : ℝ) * σ2 := by
+  have hsum := covariance_sum_le μ X hmem hB L
+  have hsplit : ∀ i ∈ Finset.range L,
+      ∑ j ∈ Finset.range L, ProbabilityTheory.covariance (X i) (X j) μ
+        = σ2 + ∑ j ∈ (Finset.range L).erase i,
+            ProbabilityTheory.covariance (X i) (X j) μ := by
+    intro i hi
+    rw [← Finset.add_sum_erase _ (fun j => ProbabilityTheory.covariance (X i) (X j) μ) hi,
+      ProbabilityTheory.covariance_self (hmem i).aemeasurable, hvar i]
+  rw [Finset.sum_congr rfl hsplit, Finset.sum_add_distrib, Finset.sum_const,
+    Finset.card_range, nsmul_eq_mul] at hsum
+  linarith
+
+/-- **Correction is located, not merely eventual.** Once the horizon `L` exceeds
+`B²/σ²`, some *specific pair* of bags inside the first `L` has negatively
+correlated clear counts. The solver does not just self-correct "in the limit" —
+a correcting pair sits within every sufficiently long window. -/
+theorem exists_neg_covariance_of_horizon {Ω : Type*} [MeasurableSpace Ω]
+    (μ : Measure Ω) [IsProbabilityMeasure μ] (X : ℕ → Ω → ℝ)
+    (hmem : ∀ i, MemLp (X i) 2 μ)
+    {B : ℝ} (hB : ∀ (m : ℕ) (ω : Ω), |∑ i ∈ Finset.range m, X i ω| ≤ B)
+    {σ2 : ℝ} (hvar : ∀ i, variance (X i) μ = σ2)
+    {L : ℕ} (hL : B ^ 2 < (L : ℝ) * σ2) :
+    ∃ i ∈ Finset.range L, ∃ j ∈ Finset.range L, i ≠ j ∧
+      ProbabilityTheory.covariance (X i) (X j) μ < 0 := by
+  by_contra hcon
+  push Not at hcon
+  have h := card_mul_variance_le_of_nonneg_covariance μ X hmem hB hvar
+    (L := L) (fun i hi j hj hij => hcon i hi j hj hij)
+  linarith
+
 /-- **The recovery deadline.** The previous theorems say an immortal solver must
 correct itself; this one says *when*. Suppose its per-bag clear counts have
 variance `σ² > 0` and that across a window of `L` bags no pair is negatively
@@ -632,16 +689,32 @@ theorem recovery_deadline {Ω : Type*} [MeasurableSpace Ω] (μ : Measure Ω)
     {L : ℕ} (hcov : ∀ i ∈ Finset.range L, ∀ j ∈ Finset.range L, i ≠ j →
       0 ≤ ProbabilityTheory.covariance (X i) (X j) μ) :
     (L : ℝ) ≤ 400 / σ2 := by
-  have hB : ∀ (m : ℕ) (ω : Ω), |∑ i ∈ Finset.range m, X i ω| ≤ 20 := by
-    intro m ω
-    have hs : ∑ k ∈ Finset.range m, X k ω = centered (strat ω) m := by
-      rw [← sum_bagClears_centered (strat ω) m]
-      exact Finset.sum_congr rfl fun k _ => hX k ω
-    rw [hs]
-    exact abs_centered_le (hv ω) (hsurv ω (7 * m))
-  have h := card_mul_variance_le_of_nonneg_covariance μ X hmem hB hvar hcov
+  have h := card_mul_variance_le_of_nonneg_covariance μ X hmem
+    (abs_sum_bagDeviation_le strat hv hsurv X hX) hvar hcov
   norm_num at h
   rw [le_div_iff₀ hσ]
+  linarith
+
+/-- **The per-lag recovery law.** Take an immortal randomized solver whose
+per-bag clear counts have variance `σ² > 0`, and any window of `L > 400/σ²`
+bags. Then two *named* bags inside that window have negatively correlated clear
+counts. Self-correction is not an asymptotic tendency — it is scheduled, and the
+schedule's period is at most `400/σ²` bags. -/
+theorem exists_correcting_pair {Ω : Type*} [MeasurableSpace Ω] (μ : Measure Ω)
+    [IsProbabilityMeasure μ] (strat : Ω → Policy GameConfig.standard)
+    (hv : ∀ ω g, (strat ω g).Valid GameConfig.standard)
+    (hsurv : ∀ ω, SurvivesForever GameConfig.standard (strat ω) GameState.init)
+    (X : ℕ → Ω → ℝ)
+    (hX : ∀ k ω, X k ω = (bagClears (strat ω) k : ℝ) - 2.8)
+    (hmem : ∀ k, MemLp (X k) 2 μ)
+    {σ2 : ℝ} (hvar : ∀ k, variance (X k) μ = σ2) (hσ : 0 < σ2)
+    {L : ℕ} (hL : 400 / σ2 < (L : ℝ)) :
+    ∃ i ∈ Finset.range L, ∃ j ∈ Finset.range L, i ≠ j ∧
+      ProbabilityTheory.covariance (X i) (X j) μ < 0 := by
+  refine exists_neg_covariance_of_horizon μ X hmem
+    (abs_sum_bagDeviation_le strat hv hsurv X hX) hvar ?_
+  rw [div_lt_iff₀ hσ] at hL
+  norm_num
   linarith
 
 /-- Spelled out: under independence, an immortal solver's per-bag clear count is

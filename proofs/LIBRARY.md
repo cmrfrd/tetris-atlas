@@ -151,6 +151,8 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | **`recovery_deadline`** (`ClearDeviation`), `card_mul_variance_le_of_nonneg_covariance` | *when* a solver must correct: no negative correlation for `L` bags ⇒ `L ≤ 400/σ²` — the debt must enter the policy on that timescale |
 | `mass_ledger_of_trace`, `bag_card_trace_from`, `thirtyfive_dvd_of_trace_eq_from`; **`closedCycle_thirtyfive_dvd` / `_le`** | the 5-bag quantum from ANY start, applied to the M2 artifact: a `ClosedCycle` period is `35k` placements and never shorter than 35 |
 | `exists_count_eq_le_of_step_five` | sharpened recurrence gap: an exact-balance window within **105** placements (was 201), via the mod-10 clock |
+| `offDiag_covariance_sum_le`, `exists_neg_covariance_of_horizon`, **`exists_correcting_pair`** | per-lag form: once `L > 400/σ²`, a NAMED pair of bags inside the window is negatively correlated — correction is scheduled, not asymptotic |
+| **`adversarialClosedCycle_thirtyfive_dvd` / `_le`** (`Safety/CycleQuantum`) | the 5-bag quantum on the ADVERSARIAL M2 artifact (the `TetrisSolvable` side): both clocks survive the adversary, who picks which piece but not how many cells |
 
 ---
 
@@ -203,7 +205,8 @@ Proofs/
                  BandMechanisms PlinthShift SlotAlgebra LaneCalculus           ✓
   Survival/      Survival Lasso ClearRate ClearDeviation ClearRecurrence       ✓
   Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite
-                 SkylineInvariant ShiftCertificate BandSchedule PlinthCert     ✓
+                 SkylineInvariant ShiftCertificate BandSchedule PlinthCert
+                 CycleQuantum                                                  ✓
 ProofsExperiments.lean       -- separate lib (route reductions, native_decide, Scratch/*)
 Proofs/Experiments/          -- WqoCarrier/HoleyCarrier reductions, EnergyGame, PieceCharge,
                                 carrier zoo (SurfaceInvariant, FiveBagReset), Scratch/*

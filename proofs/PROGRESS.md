@@ -13,7 +13,7 @@ new tick — it tells you where the prior tick left off.
 
 ## Current build status
 
-- `lake build` (green `Proofs`) — **PASSING** (8301 jobs); base-axiom-clean
+- `lake build` (green `Proofs`) — **PASSING** (8302 jobs); base-axiom-clean
   (`propext`, `Classical.choice`, `Quot.sound`), **no `sorry`, no `native_decide`**.
 - `lake build ProofsExperiments` (research routes) — **PASSING** (8288 jobs); may use
   `native_decide`.
@@ -41728,10 +41728,29 @@ Fourth part of the tick — **the three follow-ups, all closed**:
     repeat: the guaranteed exact-balance window drops from 201 placements to
     **105**.
 
-Next: (a) an adversarial analogue of the 35-quantum for `AdversarialClosedCycle`
-/ `Atlas.IsClosedOn` (the `TetrisSolvable` side, not just the cooperative one);
-(b) tighten `recovery_deadline` from "no negative correlation at all" to a
-per-lag bound so it names the lag at which correction must appear.
+Fifth part of the tick — **both follow-ups closed**:
+  - **NEW** `proofs/Proofs/Safety/CycleQuantum.lean` (green, Safety layer so the
+    import direction stays Survival → Safety): the 5-bag quantum transported to
+    the ADVERSARIAL artifact. Both clocks survive the adversary, who chooses
+    *which* piece arrives but never how many cells it carries —
+    `adversarialTrace_count_mod_ten` (mass clock),
+    `bag_card_adversarialTrace` (bag clock), `placement_with_piece_self` (the
+    piece-forcing in `adversarialStep` is a no-op once the solver answers with
+    the announced piece), then `thirtyfive_dvd_of_adversarialTrace_eq` and
+    **`adversarialClosedCycle_thirtyfive_dvd` / `_le`**. An M2/M3 hunt over
+    adversarial cycles never has to test a non-multiple-of-35 separation, and
+    can reject any certificate shorter than five bags without looking at its
+    geometry.
+  - **`exists_correcting_pair`** (`ClearDeviation`), via
+    `offDiag_covariance_sum_le` (peel the diagonal off `covariance_sum_le`) and
+    `exists_neg_covariance_of_horizon`: once `L > 400/σ²`, a NAMED pair of bags
+    inside the first `L` is negatively correlated. Correction is not an
+    asymptotic tendency — it is scheduled, with period ≤ `400/σ²`. Also factored
+    out `abs_sum_bagDeviation_le` (the shared 20-row partial-sum bound).
+
+Next: (a) restate the quantum for `Atlas.IsClosedOn` directly (it is the M4
+object; `AdversarialClosedCycle` is the M2 one); (b) a stationary-case corollary
+naming the lag itself rather than "some pair in the window".
 
 ---
 
