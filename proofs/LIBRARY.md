@@ -139,8 +139,8 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | `ClearRate.play_bag_sandwich`; `average_clears_bounds`, `expected_clears_bounds` | the same law without a policy (every trajectory, adversarial included) and under any finite average / probability distribution |
 | `ClearRate.deficit`, **`deficit_eq_mass`**, `window_bags_ge/le` (`ClearDeviation`) | the deficit **is** the board mass ⇒ over ANY window of `w` bags the clears land within 20 rows of `2.8w` |
 | **`lost_of_sustained_shortfall`** / `sustained_shortfall_window_le`; `lost_of_dry_spell`; `bagClears_le_twentytwo` | death horizon: shortfall `β` lasts ≤ `20/β` bags; **no eight dry bags**; per-bag clears ∈ `{0..22}` (⇒ no marginal-variance bound) |
-| `centered`, `centered_nonpos`, `abs_centered_le`, `centered_div_sqrt_tendsto_zero`, `centered_sq_div_tendsto_zero` | never ahead, never 20 behind; the `√m`-scaled deviation and the long-run-variance estimator both vanish |
-| **`covariance_sum_le`**, `variance_zero_of_bounded_partial_sums`, `survival_forces_indep_variance_zero` | the whole covariance matrix sums to ≤ 400 ⇒ independent per-bag clearing with any spread is fatal |
+| `centered`, `centered_nonpos`, `abs_centered_le`, `abs_centered_sub_le`, `centered_div_sqrt_tendsto_zero`, `centered_sq_div_tendsto_zero` | never ahead, never 20 behind, max drawdown 20; the `√m`-scaled deviation and the long-run-variance estimator both vanish |
+| **`covariance_sum_le`**, `variance_zero_of_bounded_partial_sums`, `variance_zero_of_nonneg_covariance`, `survival_forces_indep_variance_zero` | the whole covariance matrix sums to ≤ 400 ⇒ independent — indeed merely non-negatively-correlated — per-bag clearing with any spread is fatal |
 
 ---
 

@@ -41611,7 +41611,7 @@ Next: <subtask id and one-line description>
 ### Tick (manual, 2026-08-21b) — the deviation calculus: how far off 2.8, and for how long
 
 What I changed:
-- **NEW** `proofs/Proofs/Survival/ClearDeviation.lean` (green, no warnings, 21
+- **NEW** `proofs/Proofs/Survival/ClearDeviation.lean` (green, no warnings, 28
   exported theorems, all base-axiom-clean). Answers "how far out of line can a
   solver be, and what statistics certify it will lose".
   - `deficit cfg π g0 n : ℤ` = `4n − cols·cleared n`; **`deficit_eq_mass`** —
@@ -41634,17 +41634,21 @@ What I changed:
   - `centered_div_sqrt_tendsto_zero` and `centered_sq_div_tendsto_zero`: the
     `√m`-scaled deviation and the long-run-variance estimator `(∑d)²/m` both
     vanish ⇒ **long-run variance is exactly zero**; incompatible with any CLT.
+  - `abs_centered_sub_le` — max drawdown 20 rows between any two live
+    checkpoints (the diagnostic curve lives in a 20-row band forever).
   - `bagClears`, `sum_bagClears_centered` (centered = partial sum of per-bag
     deviations), **`covariance_sum_le`** (the full `m×m` covariance matrix sums
     to ≤ 400, no dependence assumption), `variance_zero_of_bounded_partial_sums`
     (abstract: bounded partial sums + pairwise independence + common variance ⇒
-    variance 0), **`survival_forces_indep_variance_zero`** and
-    `survival_forces_indep_ae_const` (game instances).
+    variance 0), `variance_zero_of_nonneg_covariance` (independence weakened to
+    merely non-negative pairwise correlation — same conclusion), and
+    **`survival_forces_indep_variance_zero`** / `survival_forces_indep_ae_const`
+    (game instances).
 - `proofs/Proofs.lean` — import; `proofs/LIBRARY.md` — four Layer-4 rows.
 
 Build: PASS (green `Proofs`, 8300 jobs; ClearDeviation no warnings)
 Sorries: 0 → 0; `check-green-clean.sh` OK
-Axioms: all 21 verified `[propext, Classical.choice, Quot.sound]`
+Axioms: all 28 verified `[propext, Classical.choice, Quot.sound]`
 
 Honest limitation recorded in the module docstring: because the `≤200` cap is
 what aliveness *means*, the deterministic certificates fire exactly at death,

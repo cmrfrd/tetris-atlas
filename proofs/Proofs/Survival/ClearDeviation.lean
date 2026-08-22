@@ -31,7 +31,8 @@ to `[0, 200]` forever. Every result below is a reading of that confinement.
 * **Never ahead** (`centered_nonpos`): the centered clear count
   `cleared − 2.8m` is always `≤ 0`. A solver can run a deficit but can never
   bank a surplus, so "clear extra now to spend later" is not a strategy that
-  exists.
+  exists. Its **maximum drawdown is 20 rows** (`abs_centered_sub_le`) — plot it
+  and the whole curve lives in a 20-row band, forever.
 * **The shortfall/duration hyperbola** (`sustained_shortfall_window_le`): a
   sustained shortfall of `β` rows per bag can persist for at most `20/β` bags.
   Contrapositive `lost_of_sustained_shortfall`: exceed that and the solver is
@@ -61,6 +62,10 @@ to `[0, 200]` forever. Every result below is a reading of that confinement.
   Independent-increment behaviour with any spread whatsoever is fatal — the
   per-bag deviations of an immortal solver must be strongly negatively
   correlated, exactly cancelling at every horizon.
+* **Not even nonnegative correlation** (`variance_zero_of_nonneg_covariance`):
+  independence can be weakened to "no pair of bags is negatively correlated" and
+  the same conclusion holds. Genuine negative autocovariance — self-correction
+  after a bad bag — is forced, not optional.
 
 ## What it does not buy
 
@@ -273,6 +278,24 @@ theorem mul_abs_bagRate_sub_eq {π : Policy GameConfig.standard} {m : ℕ} (hm :
     rw [bagRate, centered, sub_div, mul_div_assoc, div_self hne, mul_one]
   rw [hkey, abs_div, abs_of_pos hm']
   field_simp
+
+/-- **Maximum drawdown.** Between any two live checkpoints the centered clear
+count moves by at most 20 rows. Plot `centered` against bag index for a running
+solver and the entire curve is confined to a 20-row band forever: it is the one
+diagnostic worth watching, and leaving the band *is* death. -/
+theorem abs_centered_sub_le {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {a b : ℕ}
+    (ha : ¬ (trace GameConfig.standard π GameState.init (7 * a)).lost
+      GameConfig.standard)
+    (hb : ¬ (trace GameConfig.standard π GameState.init (7 * b)).lost
+      GameConfig.standard) :
+    |centered π b - centered π a| ≤ 20 := by
+  have h1 := centered_nonpos hv a
+  have h2 := centered_nonpos hv b
+  have h3 := neg_twenty_le_centered hv ha
+  have h4 := neg_twenty_le_centered hv hb
+  rw [abs_le]
+  constructor <;> linarith
 
 /-! ## The shortfall–duration hyperbola -/
 
@@ -494,6 +517,54 @@ theorem covariance_sum_le {Ω : Type*} [MeasurableSpace Ω] (μ : Measure Ω)
   have hvle := variance_le_expectation_sq (μ := μ)
     (X := ∑ i ∈ Finset.range m, X i) hSmem.aestronglyMeasurable
   rw [hdec] at hvle
+  linarith
+
+/-- **Nonnegative autocorrelation is fatal.** Weaken independence all the way
+down to "no pair of bags is *negatively* correlated" and the conclusion
+survives: with a common variance and bounded partial sums, that variance is
+zero. So an immortal solver must carry genuinely negative autocovariance —
+self-correction after a bad bag is not a design choice, it is forced. -/
+theorem variance_zero_of_nonneg_covariance {Ω : Type*} [MeasurableSpace Ω]
+    (μ : Measure Ω) [IsProbabilityMeasure μ] (X : ℕ → Ω → ℝ)
+    (hmem : ∀ i, MemLp (X i) 2 μ)
+    (hcov : ∀ i j, i ≠ j → 0 ≤ ProbabilityTheory.covariance (X i) (X j) μ)
+    {B : ℝ} (hB : ∀ (m : ℕ) (ω : Ω), |∑ i ∈ Finset.range m, X i ω| ≤ B)
+    {σ2 : ℝ} (hvar : ∀ i, variance (X i) μ = σ2) :
+    σ2 = 0 := by
+  have hσ : 0 ≤ σ2 := by
+    have h := variance_nonneg (X 0) μ
+    rwa [hvar 0] at h
+  have hkey : ∀ m : ℕ, (m : ℝ) * σ2 ≤ B ^ 2 := by
+    intro m
+    have hsum := covariance_sum_le μ X hmem hB m
+    have hdiag : ∀ i ∈ Finset.range m,
+        ProbabilityTheory.covariance (X i) (X i) μ
+          ≤ ∑ j ∈ Finset.range m, ProbabilityTheory.covariance (X i) (X j) μ := by
+      intro i hi
+      refine Finset.single_le_sum (f := fun j =>
+        ProbabilityTheory.covariance (X i) (X j) μ) ?_ hi
+      intro j _
+      dsimp only
+      rcases eq_or_ne i j with rfl | hij
+      · rw [ProbabilityTheory.covariance_self (hmem i).aemeasurable]
+        exact variance_nonneg _ _
+      · exact hcov i j hij
+    have hlow := Finset.sum_le_sum hdiag
+    have hconst : ∑ i ∈ Finset.range m,
+        ProbabilityTheory.covariance (X i) (X i) μ = (m : ℝ) * σ2 := by
+      have hpt : ∀ i ∈ Finset.range m,
+          ProbabilityTheory.covariance (X i) (X i) μ = σ2 := by
+        intro i _
+        rw [ProbabilityTheory.covariance_self (hmem i).aemeasurable, hvar i]
+      rw [Finset.sum_congr rfl hpt, Finset.sum_const, Finset.card_range,
+        nsmul_eq_mul]
+    rw [hconst] at hlow
+    linarith
+  by_contra hne
+  have hpos : 0 < σ2 := lt_of_le_of_ne hσ (Ne.symm hne)
+  obtain ⟨m, hm⟩ := exists_nat_gt (B ^ 2 / σ2)
+  have hkm := hkey m
+  rw [div_lt_iff₀ hpos] at hm
   linarith
 
 /-- **Independent per-bag clearing is fatal unless it is deterministic.**
