@@ -434,6 +434,66 @@ theorem le_clearingSteps {π : Policy GameConfig.standard}
   rw [GameConfig.standard_cols, GameConfig.standard_rows] at h2
   omega
 
+/-! ## Which piece can clear four rows -/
+
+/-- A dropped piece touches the same number of distinct rows as its profile:
+hard-dropping only translates it. -/
+theorem dropped_rows_card (b : Board) (pl : Placement) :
+    ((pl.dropped b).image Prod.snd).card = (pl.shapeUp.image Prod.snd).card := by
+  have h : (pl.dropped b).image Prod.snd
+      = (pl.shapeUp.image Prod.snd).image (fun r => pl.dropOffset b + r) := by
+    unfold Placement.dropped Placement.cellsAt
+    rw [Finset.image_image, Finset.image_image]
+    rfl
+  rw [h, Finset.card_image_of_injective _ (add_right_injective (pl.dropOffset b))]
+
+/-- **Only the I tetromino spans four rows.** A 28-case check over every piece
+and rotation. -/
+theorem four_rows_only_I :
+    ∀ (p : Piece) (r : Rotation),
+      4 ≤ ((p.shapeUp r).image Prod.snd).card → p = Piece.I := by
+  decide
+
+/-- **A tetris requires an I piece.** On a board with no pending full rows,
+every row cleared by a drop must contain a cell of that drop — so clearing four
+rows forces the piece to span four rows, and only I does.
+
+Operationally this is the sharpest constraint on a tetris-oriented solver: a bag
+contains exactly one I, so a bag admits **at most one tetris**. Sustaining the
+`2.8`-rows-per-bag pace on tetrises alone therefore demands converting `0.7` of
+every bag's single I into a four-row clear — a 70% conversion rate on the one
+piece the adversary controls the timing of. -/
+theorem tetris_requires_I {cfg : GameConfig} {b : Board} {pl : Placement}
+    (hnf : ∀ r, ¬ Board.isFull cfg b r)
+    (h4 : 4 ≤ (Board.fullRows cfg (pl.place b)).card) :
+    pl.piece = Piece.I := by
+  have hsub : Board.fullRows cfg (pl.place b) ⊆ (pl.dropped b).image Prod.snd := by
+    intro r hr
+    simp only [Board.fullRows, Finset.mem_filter] at hr
+    obtain ⟨c, hc, hcb⟩ : ∃ c ∈ Finset.range cfg.cols, (c, r) ∉ b := by
+      by_contra hcon
+      push Not at hcon
+      exact hnf r hcon
+    have hcplace : (c, r) ∈ pl.place b := hr.2 c hc
+    have hcdrop : (c, r) ∈ pl.dropped b := by
+      simp only [Placement.place, Finset.mem_union] at hcplace
+      rcases hcplace with hb' | hd
+      · exact absurd hb' hcb
+      · exact hd
+    rw [Finset.mem_image]
+    exact ⟨(c, r), hcdrop, rfl⟩
+  have hcard := Finset.card_le_card hsub
+  rw [dropped_rows_card] at hcard
+  exact four_rows_only_I pl.piece pl.rot (le_trans h4 hcard)
+
+/-- Trace form: a four-row clear along a policy trace is played with an I. -/
+theorem tetris_requires_I_trace {cfg : GameConfig} {π : Policy cfg} {n : ℕ}
+    (h4 : 4 ≤ (Board.fullRows cfg
+      ((π (trace cfg π GameState.init n)).place
+        (trace cfg π GameState.init n).board)).card) :
+    (π (trace cfg π GameState.init n)).piece = Piece.I :=
+  tetris_requires_I (trace_board_no_full n) h4
+
 /-! ## The trade-off the rate *does* impose
 
 The limiting rate is a single number — the mean of the increments — and a
