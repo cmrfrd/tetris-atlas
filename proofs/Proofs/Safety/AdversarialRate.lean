@@ -947,5 +947,34 @@ theorem adversarial_mass_band {σ : Solver GameConfig.standard}
   have hclm := clearedAdv_mono GameConfig.standard σ s GameState.init hnm
   exact ⟨by omega, by omega⟩
 
+/-- **Silence dominates adversarially too**: of the 35 placements in an
+adversarial cycle period, only between 4 and 14 clear anything, whoever
+picks the pieces. -/
+theorem adversary_period_clear_events_bounds {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35)) :
+    4 ≤ (sizeCountAdv GameConfig.standard σ s 1 (n + 35)
+          - sizeCountAdv GameConfig.standard σ s 1 n)
+        + (sizeCountAdv GameConfig.standard σ s 2 (n + 35)
+          - sizeCountAdv GameConfig.standard σ s 2 n)
+        + (sizeCountAdv GameConfig.standard σ s 3 (n + 35)
+          - sizeCountAdv GameConfig.standard σ s 3 n)
+        + (sizeCountAdv GameConfig.standard σ s 4 (n + 35)
+          - sizeCountAdv GameConfig.standard σ s 4 n)
+      ∧ (sizeCountAdv GameConfig.standard σ s 1 (n + 35)
+          - sizeCountAdv GameConfig.standard σ s 1 n)
+        + (sizeCountAdv GameConfig.standard σ s 2 (n + 35)
+          - sizeCountAdv GameConfig.standard σ s 2 n)
+        + (sizeCountAdv GameConfig.standard σ s 3 (n + 35)
+          - sizeCountAdv GameConfig.standard σ s 3 n)
+        + (sizeCountAdv GameConfig.standard σ s 4 (n + 35)
+          - sizeCountAdv GameConfig.standard σ s 4 n)
+        ≤ 14 := by
+  have h := adversary_period_mix_fourteen hv hcyc
+  exact ⟨by omega, by omega⟩
+
 end ClearRate
 end Tetris

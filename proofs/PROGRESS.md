@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23tt) — clear-event frequency (bank 42/N)
+
+- `period_clear_events_bounds` — SILENCE DOMINATES: of a period's 35
+  placements only between 4 and 14 clear anything; at least 21 (and up to 31)
+  placements are pure stacking. 14 rows over events of size ≤ 4 need ≥ 4
+  events; size ≥ 1 permits ≤ 14.
+- `multi_period_clear_events_bounds` — `7j ≤ 2·events` and `events ≤ 14j`.
+- `adversary_period_clear_events_bounds` — the same bounds whoever picks the
+  pieces.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ss) — windowed mix + size densities (bank 41/N)
 
 - `mix_window_identity` — `Δa₁ + 2Δa₂ + 3Δa₃ + 4Δa₄ = Δcleared` over ANY

@@ -637,6 +637,60 @@ theorem cycle_size_density {π : Policy GameConfig.standard}
   have hm3 := sizeCount_mono GameConfig.standard π GameState.init 3 hhi
   refine ⟨?_, ?_, ?_⟩ <;> omega
 
+/-- **Silence dominates a cycle**: of the 35 placements in a period, only
+between 4 and 14 clear anything — at least 21 and at most 31 placements are
+silent. Fourteen rows shared among events of size ≤ 4 need ≥ 4 events; events
+of size ≥ 1 permit ≤ 14. -/
+theorem period_clear_events_bounds {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    4 ≤ (sizeCount GameConfig.standard π GameState.init 1 (n + 35)
+          - sizeCount GameConfig.standard π GameState.init 1 n)
+        + (sizeCount GameConfig.standard π GameState.init 2 (n + 35)
+          - sizeCount GameConfig.standard π GameState.init 2 n)
+        + (sizeCount GameConfig.standard π GameState.init 3 (n + 35)
+          - sizeCount GameConfig.standard π GameState.init 3 n)
+        + (sizeCount GameConfig.standard π GameState.init 4 (n + 35)
+          - sizeCount GameConfig.standard π GameState.init 4 n)
+      ∧ (sizeCount GameConfig.standard π GameState.init 1 (n + 35)
+          - sizeCount GameConfig.standard π GameState.init 1 n)
+        + (sizeCount GameConfig.standard π GameState.init 2 (n + 35)
+          - sizeCount GameConfig.standard π GameState.init 2 n)
+        + (sizeCount GameConfig.standard π GameState.init 3 (n + 35)
+          - sizeCount GameConfig.standard π GameState.init 3 n)
+        + (sizeCount GameConfig.standard π GameState.init 4 (n + 35)
+          - sizeCount GameConfig.standard π GameState.init 4 n)
+        ≤ 14 := by
+  have h := period_mix_fourteen hv hcyc
+  exact ⟨by omega, by omega⟩
+
+/-- Multi-period clear-event bounds: over `j` periods, `2·events ≥ 7j` (i.e.
+events ≥ 3.5·j) and `events ≤ 14j`. -/
+theorem multi_period_clear_events_bounds {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) (j : ℕ) :
+    7 * j ≤ 2 * ((sizeCount GameConfig.standard π GameState.init 1 (n + 35 * j)
+          - sizeCount GameConfig.standard π GameState.init 1 n)
+        + (sizeCount GameConfig.standard π GameState.init 2 (n + 35 * j)
+          - sizeCount GameConfig.standard π GameState.init 2 n)
+        + (sizeCount GameConfig.standard π GameState.init 3 (n + 35 * j)
+          - sizeCount GameConfig.standard π GameState.init 3 n)
+        + (sizeCount GameConfig.standard π GameState.init 4 (n + 35 * j)
+          - sizeCount GameConfig.standard π GameState.init 4 n))
+      ∧ (sizeCount GameConfig.standard π GameState.init 1 (n + 35 * j)
+          - sizeCount GameConfig.standard π GameState.init 1 n)
+        + (sizeCount GameConfig.standard π GameState.init 2 (n + 35 * j)
+          - sizeCount GameConfig.standard π GameState.init 2 n)
+        + (sizeCount GameConfig.standard π GameState.init 3 (n + 35 * j)
+          - sizeCount GameConfig.standard π GameState.init 3 n)
+        + (sizeCount GameConfig.standard π GameState.init 4 (n + 35 * j)
+          - sizeCount GameConfig.standard π GameState.init 4 n)
+        ≤ 14 * j := by
+  have h := multi_period_mix_fourteen hv hcyc j
+  exact ⟨by omega, by omega⟩
+
 /-- The cooperative size counter agrees with the windowed filter cardinality. -/
 theorem sizeCount_eq_card_filter {cfg : GameConfig} {π : Policy cfg} (k n : ℕ) :
     sizeCount cfg π GameState.init k n
