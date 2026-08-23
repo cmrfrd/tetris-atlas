@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ah) — tail periodicity (bank 55/N)
+
+- `trace_tail_periodic` — one 35-return makes the trace periodic at EVERY
+  later index (generic cfg), packaging `trace_eq_of_state_eq`.
+- `cycle_count_periodic` — occupancy periodic on the tail.
+- `cycle_piece_stream_periodic` — a cooperative cycle deals itself a
+  35-periodic piece stream: exactly the `hper` hypothesis the adversarial
+  multi-period theory requires. Any concrete cooperative loop witness
+  automatically provides a periodic adversarial stream — the theories meet.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ag) — the mass diameter (bank 54/N)
 
 - `cycle_mass_diameter` / `adversarial_mass_diameter` — any two states on a

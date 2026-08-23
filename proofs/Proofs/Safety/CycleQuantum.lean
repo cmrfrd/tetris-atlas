@@ -1056,5 +1056,36 @@ theorem init_closedCycle_reachable_minimal_orbit
   closedCycle_contains_minimal_orbit C h0
     (GameState.init_board_wf GameConfig.standard)
 
+/-- **The whole tail is periodic**: one 35-return makes the trace 35-periodic
+at every later index, not just at the entry point — determinism carries the
+return forward. The packaged form of `trace_eq_of_state_eq` for cycles. -/
+theorem trace_tail_periodic {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {n : ℕ}
+    (hcyc : trace cfg π g0 n = trace cfg π g0 (n + 35)) {m : ℕ} (hnm : n ≤ m) :
+    trace cfg π g0 m = trace cfg π g0 (m + 35) := by
+  have h := trace_eq_of_state_eq π g0 hcyc (m - n)
+  rw [show n + (m - n) = m by omega] at h
+  rw [show n + 35 + (m - n) = m + 35 by omega] at h
+  exact h
+
+/-- Every scalar face of the state is periodic on the tail — occupancy in
+particular: `count(m + 35) = count(m)` for all `m ≥ n`. -/
+theorem cycle_count_periodic {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {n : ℕ}
+    (hcyc : trace cfg π g0 n = trace cfg π g0 (n + 35)) {m : ℕ} (hnm : n ≤ m) :
+    (trace cfg π g0 (m + 35)).board.count = (trace cfg π g0 m).board.count := by
+  rw [← trace_tail_periodic hcyc hnm]
+
+/-- **A cycle is its own periodic adversary**: the piece stream a cooperative
+cycle deals itself is 35-periodic on the tail — exactly the `hper` hypothesis
+the adversarial multi-period theory requires. The two theories meet: any
+concrete cooperative loop witness automatically provides a periodic
+adversarial stream. -/
+theorem cycle_piece_stream_periodic {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {n : ℕ}
+    (hcyc : trace cfg π g0 n = trace cfg π g0 (n + 35)) {m : ℕ} (hnm : n ≤ m) :
+    (π (trace cfg π g0 (m + 35))).piece = (π (trace cfg π g0 m)).piece := by
+  rw [← trace_tail_periodic hcyc hnm]
+
 end ClearRate
 end Tetris
