@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ar) — M2 artifact diversity (bank 65/N)
+
+- `trace_window_boards_ge_five_from` / `trace_window_bags_ge_seven_from` —
+  the diversity floors from ANY well-formed seed (via the general ledger
+  `five_dvd_of_count_eq_from` and the existing `bag_card_trace_from`).
+- `closedCycle_boards_ge_five` / `closedCycle_bags_ge_seven` — every
+  cooperative closed cycle spans ≥ 5 boards and ≥ 7 bag states.
+- `adversarialClosedCycle_diversity` — same for the adversarial artifact.
+- All three certificate shapes (ClosedCycle, AdversarialClosedCycle,
+  Atlas.IsClosedOn) now carry the full profile: card ≥ 35 (∈[35,2^207] for
+  M4), boards ≥ 5, bags ≥ 7.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23aq) — M4 witness diversity (bank 64/N)
 
 - `isClosedOn_boards_ge_five` / `isClosedOn_bags_ge_seven` — any closed

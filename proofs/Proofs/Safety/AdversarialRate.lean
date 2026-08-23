@@ -1357,5 +1357,161 @@ theorem init_closed_atlas_diversity {A : Atlas GameConfig.standard}
       (GameState.init_board_wf GameConfig.standard) GameState.init_bag_nonempty,
     isClosedOn_bags_ge_seven h hinit GameState.init_bag_nonempty⟩
 
+/-- The five-board diversity floor from any well-formed seed (not just
+`init`): the mass clock runs on the general ledger. -/
+theorem trace_window_boards_ge_five_from {π : Policy GameConfig.standard}
+    {g0 : GameState}
+    (hv : ∀ k, (π (trace GameConfig.standard π g0 k)).Valid GameConfig.standard)
+    (hwf : Board.WF GameConfig.standard g0.board) (n : ℕ) :
+    5 ≤ ((Finset.range 35).image
+      (fun k => (trace GameConfig.standard π g0 (n + k)).board)).card := by
+  classical
+  by_contra hcon
+  push Not at hcon
+  have hle : (Finset.range 35).card ≤ 7 * ((Finset.range 35).image
+      (fun k => (trace GameConfig.standard π g0 (n + k)).board)).card := by
+    apply Finset.card_le_mul_card_image
+    intro a ha
+    have hinj : ∀ i ∈ (Finset.range 35).filter (fun k =>
+          (trace GameConfig.standard π g0 (n + k)).board = a),
+        ∀ k ∈ (Finset.range 35).filter (fun k =>
+          (trace GameConfig.standard π g0 (n + k)).board = a),
+        i / 5 = k / 5 → i = k := by
+      intro i hi k hk hdiv
+      rw [Finset.mem_filter, Finset.mem_range] at hi hk
+      have hcnt : (trace GameConfig.standard π g0 (n + i)).board.count
+          = (trace GameConfig.standard π g0 (n + k)).board.count := by
+        rw [hi.2, hk.2]
+      rcases Nat.lt_or_ge k i with hik | hik
+      · have hd := five_dvd_of_count_eq_from hv hwf
+          (show n + k ≤ n + i by omega) hcnt.symm
+        omega
+      · have hd := five_dvd_of_count_eq_from hv hwf
+          (show n + i ≤ n + k by omega) hcnt
+        omega
+    have hmap : ∀ i ∈ (Finset.range 35).filter (fun k =>
+          (trace GameConfig.standard π g0 (n + k)).board = a),
+        i / 5 ∈ Finset.range 7 := by
+      intro i hi
+      rw [Finset.mem_filter, Finset.mem_range] at hi
+      rw [Finset.mem_range]
+      omega
+    have := Finset.card_le_card_of_injOn (fun i => i / 5) hmap hinj
+    rw [Finset.card_range] at this
+    exact this
+  rw [Finset.card_range] at hle
+  omega
+
+/-- The seven-bag diversity floor from any legally-drawn seed. -/
+theorem trace_window_bags_ge_seven_from {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState}
+    (hdraw : ∀ k, (π (trace cfg π g0 k)).piece ∈ (trace cfg π g0 k).bag)
+    (n : ℕ) :
+    7 ≤ ((Finset.range 35).image
+      (fun k => (trace cfg π g0 (n + k)).bag)).card := by
+  classical
+  by_contra hcon
+  push Not at hcon
+  have hle : (Finset.range 35).card ≤ 5 * ((Finset.range 35).image
+      (fun k => (trace cfg π g0 (n + k)).bag)).card := by
+    apply Finset.card_le_mul_card_image
+    intro a ha
+    have hinj : ∀ i ∈ (Finset.range 35).filter (fun k =>
+          (trace cfg π g0 (n + k)).bag = a),
+        ∀ k ∈ (Finset.range 35).filter (fun k =>
+          (trace cfg π g0 (n + k)).bag = a),
+        i / 7 = k / 7 → i = k := by
+      intro i hi k hk hdiv
+      rw [Finset.mem_filter, Finset.mem_range] at hi hk
+      have h1 := bag_card_trace_from hdraw (n + i)
+      have h2 := bag_card_trace_from hdraw (n + k)
+      rw [hi.2] at h1
+      rw [hk.2] at h2
+      have hle7 : g0.bag.card ≤ 7 := Bag.card_le_seven g0.bag
+      have hpos : 0 < g0.bag.card := Finset.card_pos.mpr ⟨_, hdraw 0⟩
+      omega
+    have hmap : ∀ i ∈ (Finset.range 35).filter (fun k =>
+          (trace cfg π g0 (n + k)).bag = a),
+        i / 7 ∈ Finset.range 5 := by
+      intro i hi
+      rw [Finset.mem_filter, Finset.mem_range] at hi
+      rw [Finset.mem_range]
+      omega
+    have := Finset.card_le_card_of_injOn (fun i => i / 7) hmap hinj
+    rw [Finset.card_range] at this
+    exact this
+  rw [Finset.card_range] at hle
+  omega
+
+/-- **The M2 artifact spans five boards**: every closed cycle's state set
+shows at least five distinct boards. -/
+theorem closedCycle_boards_ge_five (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (hg0 : g0 ∈ C.states)
+    (hwf : Board.WF GameConfig.standard g0.board) :
+    5 ≤ (C.states.image (fun g => g.board)).card := by
+  classical
+  have hv : ∀ k, (C.policy (trace GameConfig.standard C.policy g0 k)).Valid
+      GameConfig.standard :=
+    fun k => C.valid _ (C.trace_mem_states hg0 k)
+  have hwin := trace_window_boards_ge_five_from hv hwf 0
+  refine le_trans hwin (Finset.card_le_card ?_)
+  intro b hb
+  rw [Finset.mem_image] at hb ⊢
+  obtain ⟨k, -, rfl⟩ := hb
+  exact ⟨_, C.trace_mem_states hg0 (0 + k), rfl⟩
+
+/-- **The M2 artifact spans seven bag states** — a full bag-clock cycle. -/
+theorem closedCycle_bags_ge_seven (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (hg0 : g0 ∈ C.states) :
+    7 ≤ (C.states.image (fun g => g.bag)).card := by
+  classical
+  have hdraw : ∀ k, (C.policy (trace GameConfig.standard C.policy g0 k)).piece
+      ∈ (trace GameConfig.standard C.policy g0 k).bag :=
+    fun k => C.legal_draw _ (C.trace_mem_states hg0 k)
+  have hwin := trace_window_bags_ge_seven_from hdraw 0
+  refine le_trans hwin (Finset.card_le_card ?_)
+  intro b hb
+  rw [Finset.mem_image] at hb ⊢
+  obtain ⟨k, -, rfl⟩ := hb
+  exact ⟨_, C.trace_mem_states hg0 (0 + k), rfl⟩
+
+/-- The adversarial M2 artifact spans five boards and seven bag states. -/
+theorem adversarialClosedCycle_diversity
+    (C : AdversarialClosedCycle GameConfig.standard) {g0 : GameState}
+    (hg0 : g0 ∈ C.states) (hwf : Board.WF GameConfig.standard g0.board)
+    (hbag : g0.bag.Nonempty) :
+    5 ≤ (C.states.image (fun g => g.board)).card
+      ∧ 7 ≤ (C.states.image (fun g => g.bag)).card := by
+  classical
+  obtain ⟨t, ht⟩ := BagCadence.exists_legalSequenceFrom hbag
+  have hdraw : ∀ n, t n
+      ∈ (adversarialTrace GameConfig.standard C.solver t g0 n).bag := by
+    intro n
+    have hn := ht n
+    rw [Bag.canDraw_iff_mem] at hn
+    rw [adversarialTrace_bag_from]
+    exact hn
+  have hv : ∀ n, ({ C.solver (adversarialTrace GameConfig.standard C.solver t
+      g0 n) (t n) with piece := t n } : Placement).Valid GameConfig.standard := by
+    intro n
+    obtain ⟨hp, hval⟩ :=
+      C.valid _ (C.adversarialTrace_mem_states_from_mem hg0 ht n) (t n) (hdraw n)
+    rw [placement_with_piece_self hp]
+    exact hval
+  constructor
+  · have hwin := adversarialTrace_window_boards_ge_five
+      (σ := C.solver) (s := t) (g0 := g0) hwf hv 0
+    refine le_trans hwin (Finset.card_le_card ?_)
+    intro b hb
+    rw [Finset.mem_image] at hb ⊢
+    obtain ⟨k, -, rfl⟩ := hb
+    exact ⟨_, C.adversarialTrace_mem_states_from_mem hg0 ht (0 + k), rfl⟩
+  · have hwin := adversarialTrace_window_bags_ge_seven hdraw 0
+    refine le_trans hwin (Finset.card_le_card ?_)
+    intro b hb
+    rw [Finset.mem_image] at hb ⊢
+    obtain ⟨k, -, rfl⟩ := hb
+    exact ⟨_, C.adversarialTrace_mem_states_from_mem hg0 ht (0 + k), rfl⟩
+
 end ClearRate
 end Tetris
