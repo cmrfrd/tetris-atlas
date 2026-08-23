@@ -824,5 +824,64 @@ theorem refill_window_bounds {initBag : Bag} {s : ℕ → Piece}
   have h2 := refill_multiblock_balanced hl hfull p (q + 1)
   omega
 
+/-- A pre-refill stretch repeats no piece: within `[n, n + card)` each piece
+appears at most once. -/
+theorem prefix_le_one {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {n c : ℕ}
+    (hc : (bagAt initBag s n).card = c) (p : Piece) :
+    ((Finset.range c).filter (fun j => s (n + j) = p)).card ≤ 1 := by
+  classical
+  have hc7 : c ≤ 7 := hc ▸ Bag.card_le_seven _
+  rw [Finset.card_le_one]
+  intro a ha b hb
+  rw [Finset.mem_filter, Finset.mem_range] at ha hb
+  by_contra hne
+  have key : ∀ i k : ℕ, i < k → k < c → s (n + i) = p → s (n + k) = p → False := by
+    intro i k hik hkc hsi hsk
+    refine no_refill_no_repeat hl hsi hsk (by omega) ?_
+    intro r hr1 hr2 hrfull
+    have hj : r - n < c := by omega
+    have hcard := bagAt_card_countdown hl hc (r - n) hj
+    rw [show n + (r - n) = r by omega, hrfull] at hcard
+    have hfc : (Bag.full : Bag).card = 7 := Bag.full_card
+    omega
+  rcases Nat.lt_or_ge a b with hab | hab
+  · exact key a b hab hb.1 ha.2 hb.2
+  · have hba : b < a := by omega
+    exact key b a hba ha.1 hb.2 ha.2
+
+/-- **The true frequency law**: in *any* window of any length, from *any*
+starting point, every piece appears between `⌊(w−7)/7⌋` and `⌊w/7⌋ + 2`
+times — the frequency is `1/7` with error at most two pieces at every scale.
+Split at the first refill: the pre-refill stretch holds at most one, the
+aligned tail is exact to ±1. -/
+theorem window_frequency_law {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) (n : ℕ) (p : Piece) (w : ℕ) :
+    (w - 7) / 7 ≤ ((Finset.range w).filter (fun j => s (n + j) = p)).card
+      ∧ ((Finset.range w).filter (fun j => s (n + j) = p)).card
+        ≤ w / 7 + 2 := by
+  classical
+  obtain ⟨c, hc⟩ : ∃ c, (bagAt initBag s n).card = c := ⟨_, rfl⟩
+  have hc1 : 1 ≤ c := hc ▸ Finset.card_pos.mpr ⟨s n, hl n⟩
+  have hc7 : c ≤ 7 := hc ▸ Bag.card_le_seven _
+  have hfull : bagAt initBag s (n + c) = Bag.full :=
+    bagAt_add_card_eq_full hl c n hc
+  rcases Nat.lt_or_ge w c with hwc | hwc
+  · -- the whole window sits inside the pre-refill stretch
+    have hsub : ((Finset.range w).filter (fun j => s (n + j) = p)).card
+        ≤ ((Finset.range c).filter (fun j => s (n + j) = p)).card :=
+      Finset.card_le_card (Finset.filter_subset_filter _
+        (by intro x hx; rw [Finset.mem_range] at hx ⊢; omega))
+    have hone := prefix_le_one hl hc p
+    exact ⟨by omega, by omega⟩
+  · -- split at the refill
+    have hsplit := card_filter_range_add (fun j => s (n + j) = p) c (w - c)
+    rw [show c + (w - c) = w by omega] at hsplit
+    have hone := prefix_le_one hl hc p
+    have htail := refill_window_bounds hl hfull p (w - c)
+    have harg : ∀ x : ℕ, n + (c + x) = (n + c) + x := fun x => by ring
+    simp only [harg] at hsplit
+    omega
+
 end BagCadence
 end Tetris

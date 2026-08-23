@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bn) — THE TRUE FREQUENCY LAW (bank 87/N) ★
+
+- `prefix_le_one` — a pre-refill stretch repeats no piece (countdown +
+  no_refill_no_repeat; needs `c ≤ 7` in scope for the contradiction).
+- **`window_frequency_law`** — in ANY window from ANY start, every piece
+  appears between `⌊(w−7)/7⌋` and `⌊w/7⌋ + 2` times: split at the first
+  refill (≤ 1 in the prefix, exact ±1 in the aligned tail). Frequency 1/7
+  with error ≤ 2 at EVERY scale — supersedes the [4/35, 6/35] sandwich for
+  all large windows (e.g. per 350 draws: [49, 52] vs the old [40, 60]).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bm) — aligned exactness (bank 86/N)
 
 - `refill_multiblock_balanced` — `7k` aligned draws deal each piece exactly
