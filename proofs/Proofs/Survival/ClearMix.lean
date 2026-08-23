@@ -825,5 +825,43 @@ theorem sizeCount_window {cfg : GameConfig} {π : Policy cfg} (k n : ℕ) :
       omega
     · omega
 
+/-- **The survivor's clearing floor, windowed**: a live trace clears at least
+`(4w − 200)` tenths-of-rows over any `w`-window — the ledger forces
+`10·Δcleared ≥ 4w − 200` whenever the endpoint is alive. -/
+theorem survivor_window_clears_floor {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n w : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init (n + w)).lost
+      GameConfig.standard) :
+    4 * w ≤ 10 * (cleared GameConfig.standard π GameState.init (n + w)
+        - cleared GameConfig.standard π GameState.init n) + 200 := by
+  have h1 := init_ledger hv n
+  have h2 := init_ledger hv (n + w)
+  rw [GameConfig.standard_cols] at h1 h2
+  have hcap := count_lt_two_hundred_one hv hlive
+  have hmono := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right n w)
+  omega
+
+/-- **The survivor's event floor**: a live trace clears on at least
+`(w − 50)/10` of any `w` placements — clearing events cannot be rarer than
+one in ten, sustainably, because each event removes at most four rows and
+the ledger demands `0.4` rows per placement. -/
+theorem survivor_window_events_floor {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n w : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init (n + w)).lost
+      GameConfig.standard) :
+    4 * w ≤ 40 * ((sizeCount GameConfig.standard π GameState.init 1 (n + w)
+          - sizeCount GameConfig.standard π GameState.init 1 n)
+        + (sizeCount GameConfig.standard π GameState.init 2 (n + w)
+          - sizeCount GameConfig.standard π GameState.init 2 n)
+        + (sizeCount GameConfig.standard π GameState.init 3 (n + w)
+          - sizeCount GameConfig.standard π GameState.init 3 n)
+        + (sizeCount GameConfig.standard π GameState.init 4 (n + w)
+          - sizeCount GameConfig.standard π GameState.init 4 n)) + 200 := by
+  have hcl := survivor_window_clears_floor hv hlive
+  have hmix := mix_window_identity (cfg := GameConfig.standard) (π := π)
+    (Nat.le_add_right n w)
+  omega
+
 end ClearRate
 end Tetris

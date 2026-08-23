@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23br) — the survivor's floors (bank 91/N)
+
+- `survivor_window_clears_floor` — any window ending alive clears
+  `≥ (4w − 200)/10` rows (windowed ledger + capacity).
+- `survivor_window_events_floor` — clearing EVENTS in any live window number
+  `≥ (4w − 200)/40`: events cannot be rarer than ~1 in 10 placements,
+  sustainably (each event ≤ 4 rows, the ledger demands 0.4/placement).
+- With the event ceiling (silence dominates: ≤ 14/35 = 40% on cycles), the
+  event rate is pinned to [10%, 40%].
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bq) — adversarial frequency cap (bank 90/N)
 
 - `adversary_tetris_frequency_cap` — at most `⌊Δn/7⌋+2` tetrises in any
