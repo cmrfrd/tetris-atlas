@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bx) — the block alphabet (bank 97/N)
+
+- `block_draws_injective` — within one bag block no piece repeats (index
+  form; refill-straddle + countdown).
+- `block_image_eq_univ` — a block's image is EVERY piece
+  (`Finset.eq_univ_of_card` + injectivity): the permutation statement in
+  its cleanest set form.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bw) — the bag content law (bank 96/N)
 
 - `refill_bag_sdiff` — the bag is the COMPLEMENT of the block prefix: for

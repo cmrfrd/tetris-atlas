@@ -935,5 +935,43 @@ theorem refill_bag_sdiff {initBag : Bag} {s : ℕ → Piece}
         exact hnot ⟨j, Or.inr hj, hqj⟩
 
 
+/-- Block draws are pairwise distinct: within one bag block no piece repeats
+(direct from the two-draws-straddle-a-refill law). -/
+theorem block_draws_injective {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {r : ℕ}
+    (hfull : bagAt initBag s r = Bag.full) {i k : ℕ} (hi : i < 7) (hk : k < 7)
+    (heq : s (r + i) = s (r + k)) : i = k := by
+  by_contra hne
+  have key : ∀ a b : ℕ, a < b → b < 7 → s (r + a) = s (r + b) → False := by
+    intro a b hab hb7 hs
+    refine no_refill_no_repeat hl hs rfl (by omega) ?_
+    intro q hq1 hq2 hqfull
+    have hc7 : (bagAt initBag s r).card = 7 := by
+      rw [hfull]
+      exact Bag.full_card
+    have hcard := bagAt_card_countdown hl hc7 (q - r) (by omega)
+    rw [show r + (q - r) = q by omega, hqfull] at hcard
+    have hfc : (Bag.full : Bag).card = 7 := Bag.full_card
+    omega
+  rcases Nat.lt_or_ge i k with hik | hik
+  · exact key i k hik hk heq
+  · exact key k i (by omega) hi heq.symm
+
+/-- **A block deals the whole alphabet**: the image of one bag block is every
+piece — the permutation statement in its cleanest form. -/
+theorem block_image_eq_univ {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {r : ℕ}
+    (hfull : bagAt initBag s r = Bag.full) :
+    (Finset.range 7).image (fun j => s (r + j))
+      = (Finset.univ : Finset Piece) := by
+  classical
+  apply Finset.eq_univ_of_card
+  rw [Finset.card_image_of_injOn, Finset.card_range]
+  · decide
+  · intro i hi k hk heq
+    rw [Finset.coe_range, Set.mem_Iio] at hi hk
+    exact block_draws_injective hl hfull hi hk heq
+
+
 end BagCadence
 end Tetris
