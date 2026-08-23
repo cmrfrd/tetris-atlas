@@ -13,7 +13,7 @@ new tick — it tells you where the prior tick left off.
 
 ## Current build status
 
-- `lake build` (green `Proofs`) — **PASSING** (8302 jobs); base-axiom-clean
+- `lake build` (green `Proofs`) — **PASSING** (8303 jobs); base-axiom-clean
   (`propext`, `Classical.choice`, `Quot.sound`), **no `sorry`, no `native_decide`**.
 - `lake build ProofsExperiments` (research routes) — **PASSING** (8288 jobs); may use
   `native_decide`.
@@ -41626,6 +41626,45 @@ Next: <subtask id and one-line description>
 ## Tick log
 
 *(append newest at top below this line)*
+
+---
+
+### Tick (manual, 2026-08-22b) — the clear-size mix is free
+
+Question: must a surviving player use singles/doubles/triples/tetrises in some
+forced proportion?
+
+**Answer: no.** **NEW** `proofs/Proofs/Survival/ClearMix.lean` (green, no
+warnings, base-axiom-clean):
+- `sizeCount cfg π g0 k n` — drops among the first `n` clearing exactly `k`
+  rows; `iCount` — drops playing an I.
+- **`mix_identity`**: `a₁ + 2a₂ + 3a₃ + 4a₄ = cleared` (every cleared row belongs
+  to exactly one drop; `fullRows_card_le_four` makes the four sizes exhaustive).
+- **`mix_law`**: `10·(a₁+2a₂+3a₃+4a₄) + occupancy = 4·pieces`. **One linear
+  equation in four unknowns ⇒ three degrees of freedom ⇒ NO proportion is
+  forced.** Per bag: `f₁+2f₂+3f₃+4f₄ = 2.8`, all four corners available
+  (singles 2.8/bag = 40% of pieces, doubles 1.4, triples 14/15, tetrises 0.7).
+- Corners made sharp: **`tetris_only_count_ge`** (`28m ≤ 40a₄ + 200`, i.e. a
+  tetris-only player must tetris in ≥`0.7m − 5` bags — 70% of all bags, lifetime
+  slack five) and `singles_only_count_ge` (`28m ≤ 10a₁ + 200`).
+- The one genuine side-constraint: **`sizeCount_four_le_iCount`** — only I spans
+  four rows (`tetris_requires_I`), so `a₄ ≤ #I` and a bag admits ≤1 tetris. It
+  does **not** bind asymptotically: `ten_mul_sizeCount_four_le` gives
+  `10a₄ ≤ n` from the rate alone, tighter than the I supply `n/7`. That
+  non-collision is exactly why the tetris corner is arithmetically reachable.
+
+Recorded negative (module docstring): arithmetic admits every mix but constructs
+none. Whether a mix is *playable* is geometry. The content is that **no counting
+argument will ever rule a mix out** — any obstruction to a pure strategy must be
+structural.
+
+Build: PASS (green `Proofs`, 8303 jobs; ClearMix no warnings)
+Sorries: 0 → 0; `check-green-clean.sh` OK
+Axioms: all verified `[propext, Classical.choice, Quot.sound]`
+
+Next: the I-drought bound (max 12 consecutive non-I pieces under the 7-bag) —
+combined with `tetris_requires_I` it is the natural bridge from counting into
+geometry, bounding whether tetris-well architectures survive the worst I timing.
 
 ---
 

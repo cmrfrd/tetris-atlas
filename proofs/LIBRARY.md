@@ -145,6 +145,8 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | `bag_card_trace` (bag = mod-7 clock); **`thirtyfive_dvd_of_trace_eq`**, `thirtyfive_le_of_trace_eq` | **every closed cycle has length divisible by 35 placements = 5 bags** — an arithmetic lower bound on any M2 certificate, no geometry used |
 | `count_even`, `count_mod_ten_ne`, `five_dvd_of_count_eq_zero`, `clear_step_le`, `thirtysix_le_count_of_tetris` | cell-count arithmetic: always even, residue exactly uniform over `{0,2,4,6,8}`, empty only at `5 ∣ n`, a tetris needs 36 cells banked |
 | `clearingSteps`, `fullRows_card_le_four`, **`clearingSteps_le` / `le_clearingSteps`** | the fraction of line-clearing pieces is trapped in `[1/10, 2/5]` (tetris-only vs singles-only). The *level* of the count is NOT determined by counting — that needs geometry |
+| `sizeCount`, `iCount`, **`mix_identity`** / **`mix_law`** (`ClearMix`) | `a₁+2a₂+3a₃+4a₄ = cleared`, hence `10·(…) + occupancy = 4·pieces` — **one equation in four unknowns ⇒ the clear-size mix is free (3 d.o.f.)** |
+| `tetris_only_count_ge`, `singles_only_count_ge`; `sizeCount_four_le_iCount`, `ten_mul_sizeCount_four_le` | the corners: tetris-only must tetris ≥`0.7m−5` bags (70%, lifetime slack 5); singles-only clears on 40% of pieces. Only side-constraint: `a₄ ≤ #I` (≤1 tetris/bag), and it does not bind |
 | **`tetris_requires_I`** (+ `four_rows_only_I`, `dropped_rows_card`, `tetris_requires_I_trace`) | every cleared row must contain a cell of the drop ⇒ a four-row clear spans four rows ⇒ **only I can tetris** ⇒ ≤1 tetris per bag ⇒ tetris-only play needs a 70% I-conversion rate |
 | `cleared_le_mul_clearingSteps`, `fullRows_card_le_of_count_le`, **`le_clearingSteps_of_max_clear`** | the tightness/frequency trade-off: max clear `K` ⇒ ≥`4/(10K)` of pieces must clear; an occupancy ceiling caps `K`. Tight board XOR rare clears |
 | **`dry_runway_le`** / `lost_of_runway_overrun`, **`window_clears_ge_of_count`** | solver-facing design laws: exact dry runway `(200−count)/4` placements, and the sound pruning obligation "clear ≥ `(4w+count−200)/10` rows in the next `w`" |
@@ -204,7 +206,8 @@ Proofs/
   Invariants/    StepInvariants Gameplay GameplayExtra Holes StateSpace
                  Wqo HoleyCarrier SurfaceFiber HoleDebt BandShift
                  BandMechanisms PlinthShift SlotAlgebra LaneCalculus           ✓
-  Survival/      Survival Lasso ClearRate ClearDeviation ClearRecurrence       ✓
+  Survival/      Survival Lasso ClearRate ClearDeviation ClearRecurrence
+                 ClearMix                                                      ✓
   Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite
                  SkylineInvariant ShiftCertificate BandSchedule PlinthCert
                  CycleQuantum                                                  ✓
