@@ -41629,6 +41629,27 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23t) — the quantum on the M4 artifact (bank 16/N)
+
+`CycleQuantum` additions — the size floor lands on `Atlas.IsClosedOn`, the
+exact M4 witness shape:
+- `isClosedOn_trace_forced_valid` — along any legal trace through a closed
+  atlas, the materialised solver's forced placement is valid (totality +
+  `Atlas.toSolver_apply_of_some` + `placement_with_piece_self`).
+- `isClosedOn_thirtyfive_dvd` — the trace revisits states only at multiples
+  of 35.
+- **`isClosedOn_card_ge_thirtyfive`** — a closed Atlas covering any WF,
+  nonempty-bag state holds ≥ 35 states (greedy legal sequence + pairwise
+  distinctness of the first 35 trace states).
+- **`init_closed_atlas_card_ge_thirtyfive`** — any init-containing closed
+  Atlas (the `tetrisSolvable_of_exists_init_closed_atlas` witness) has ≥ 35
+  entries. With `solvable_implies_bounded_atlas`: **the M4 artifact's size is
+  pinned to [35, 2^207] by counting alone.**
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23s) — cycles hold ≥ 35 states (bank 15/N)
 
 - **`exists_legalSequenceFrom`** (BagCadence) — legal sequences exist from

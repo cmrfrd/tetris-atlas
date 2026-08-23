@@ -215,5 +215,77 @@ theorem adversarialClosedCycle_card_ge_thirtyfive
         omega
   rwa [Finset.card_range] at hcalc
 
+/-! ## The quantum on the M4 artifact itself -/
+
+/-- Along any legal trace from a closed-atlas state, the materialised solver's
+forced placement is valid: the atlas is total on drawable pieces and its
+answers play the announced piece in bounds. -/
+theorem isClosedOn_trace_forced_valid {cfg : GameConfig} {A : Atlas cfg}
+    {S : Finset GameState} (h : A.IsClosedOn cfg S) {g₀ : GameState}
+    (hg₀ : g₀ ∈ S) {t : ℕ → Piece} (hl : LegalSequenceFrom g₀.bag t) (n : ℕ) :
+    ({ A.toSolver (adversarialTrace cfg A.toSolver t g₀ n) (t n)
+        with piece := t n } : Placement).Valid cfg := by
+  have hgS : adversarialTrace cfg A.toSolver t g₀ n ∈ S :=
+    h.toSolver_adversarialTrace_mem hg₀ hl n
+  have hp : t n ∈ (adversarialTrace cfg A.toSolver t g₀ n).bag := by
+    rw [adversarialTrace_bag_from]
+    exact hl n
+  obtain ⟨pl, hpl⟩ := Option.isSome_iff_exists.mp (h.total _ hgS (t n) hp)
+  obtain ⟨hpiece, hvalid⟩ := h.valid _ hgS (t n) hp pl hpl
+  have hts : A.toSolver (adversarialTrace cfg A.toSolver t g₀ n) (t n) = pl :=
+    Atlas.toSolver_apply_of_some hpl
+  rw [hts, placement_with_piece_self hpiece]
+  exact hvalid
+
+/-- **The five-bag quantum on a closed Atlas.** The materialised solver's trace
+through a closed atlas revisits a state only at multiples of 35 placements. -/
+theorem isClosedOn_thirtyfive_dvd {A : Atlas GameConfig.standard}
+    {S : Finset GameState} (h : A.IsClosedOn GameConfig.standard S)
+    {g₀ : GameState} (hg₀ : g₀ ∈ S)
+    (hwf : Board.WF GameConfig.standard g₀.board) {t : ℕ → Piece}
+    (hl : LegalSequenceFrom g₀.bag t) {n₁ n₂ : ℕ} (h12 : n₁ ≤ n₂)
+    (heq : adversarialTrace GameConfig.standard A.toSolver t g₀ n₁
+        = adversarialTrace GameConfig.standard A.toSolver t g₀ n₂) :
+    35 ∣ (n₂ - n₁) :=
+  thirtyfive_dvd_of_adversarialTrace_eq hwf
+    (isClosedOn_trace_forced_valid h hg₀ hl)
+    (fun n => by rw [adversarialTrace_bag_from]; exact hl n) h12 heq
+
+/-- **A closed Atlas covering a real state holds at least 35 states.** Running
+the greedy legal sequence from any member with a well-formed board and a
+nonempty bag, the first 35 trace states are pairwise distinct and all lie in
+`S`. -/
+theorem isClosedOn_card_ge_thirtyfive {A : Atlas GameConfig.standard}
+    {S : Finset GameState} (h : A.IsClosedOn GameConfig.standard S)
+    {g₀ : GameState} (hg₀ : g₀ ∈ S)
+    (hwf : Board.WF GameConfig.standard g₀.board) (hbag : g₀.bag.Nonempty) :
+    35 ≤ S.card := by
+  obtain ⟨t, ht⟩ := BagCadence.exists_legalSequenceFrom hbag
+  have hcalc : (Finset.range 35).card ≤ S.card := by
+    refine Finset.card_le_card_of_injOn
+      (fun i => adversarialTrace GameConfig.standard A.toSolver t g₀ i) ?_ ?_
+    · intro i _
+      exact h.toSolver_adversarialTrace_mem hg₀ ht i
+    · intro i hi j hj hEq
+      simp only [Finset.coe_range, Set.mem_Iio] at hi hj
+      dsimp only at hEq
+      rcases le_total i j with hij | hij
+      · have := isClosedOn_thirtyfive_dvd h hg₀ hwf ht hij hEq
+        omega
+      · have := isClosedOn_thirtyfive_dvd h hg₀ hwf ht hij hEq.symm
+        omega
+  rwa [Finset.card_range] at hcalc
+
+/-- **The Atlas has at least 35 entries.** Any init-containing closed Atlas —
+the exact M4 witness shape of `tetrisSolvable_of_exists_init_closed_atlas` —
+covers at least 35 states. Together with `solvable_implies_bounded_atlas` the
+M4 artifact's size is pinned to `[35, 2^207]` by counting alone. -/
+theorem init_closed_atlas_card_ge_thirtyfive {A : Atlas GameConfig.standard}
+    {S : Finset GameState} (h : A.IsClosedOn GameConfig.standard S)
+    (hinit : GameState.init ∈ S) :
+    35 ≤ S.card :=
+  isClosedOn_card_ge_thirtyfive h hinit
+    (GameState.init_board_wf GameConfig.standard) GameState.init_bag_nonempty
+
 end ClearRate
 end Tetris
