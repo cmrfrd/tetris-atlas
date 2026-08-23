@@ -136,5 +136,21 @@ theorem selection_update_mem {cfg : GameConfig} {σ : Solver cfg}
   · simp only [if_neg hcase]
     exact hσ g hg p hp
 
+/-- Every listed move is in the finite enumeration `allValidFor`: the maximal
+table's fibers live inside a computable finite set. -/
+theorem safeMoves_subset_allValidFor (cfg : GameConfig) (g : GameState)
+    (p : Piece) :
+    safeMoves cfg g p ⊆ ↑(Placement.allValidFor cfg p) := by
+  rintro pl ⟨hpiece, hvalid, -⟩
+  exact Finset.mem_coe.mpr ((Placement.mem_allValidFor cfg p pl).mpr ⟨hpiece, hvalid⟩)
+
+/-- **The maximal table has finite fibers.** At each state and piece the set of
+safe answers is finite — the Atlas-as-relation is a finitely-branching object
+even before any state-space truncation. -/
+theorem safeMoves_finite (cfg : GameConfig) (g : GameState) (p : Piece) :
+    (safeMoves cfg g p).Finite :=
+  Set.Finite.subset (Placement.allValidFor cfg p).finite_toSet
+    (safeMoves_subset_allValidFor cfg g p)
+
 end MaximalAtlas
 end Tetris

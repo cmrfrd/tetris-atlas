@@ -155,5 +155,25 @@ theorem not_tetrisSolvableValidFor_flat : ¬ TetrisSolvableValidFor GameConfig.f
   rintro ⟨σ, hσ⟩
   exact init_not_safe_flat (init_safe_of_solvesTetrisValid hσ)
 
+/-! ## A degeneracy worth knowing: empty-bag states are vacuously safe
+
+`safe` quantifies over the pieces *in the bag*; a state whose bag is empty has
+nothing to answer and sits in the greatest fixed point as long as it is not
+already lost. Such states are unreachable in real play (legal draws keep the
+bag nonempty), but they explain why `safe` is an infinite set and why the
+finite-invariant construction (`Safety/FiniteInvariant`) works from the
+*reachable cone* of a solver rather than from `safe` itself. -/
+
+/-- A non-lost state with an empty bag is safe — vacuously: there is no piece
+to answer. -/
+theorem mem_safe_of_bag_empty {cfg : GameConfig} {g : GameState}
+    (hnl : ¬ g.lost cfg) (hb : g.bag = ∅) : g ∈ safe cfg := by
+  refine safe_greatest {g' : GameState | ¬ g'.lost cfg ∧ g'.bag = ∅} ?_ ⟨hnl, hb⟩
+  rintro g' ⟨hnl', hb'⟩
+  refine ⟨hnl', ?_⟩
+  intro p hp
+  rw [hb'] at hp
+  exact absurd hp (Finset.notMem_empty p)
+
 end CountingBarrier
 end Tetris

@@ -268,5 +268,24 @@ theorem same_piece_three_apart {initBag : Bag} {s : ℕ → Piece}
   by_contra hcon
   exact not_full_of_full_close hl hr1full (by omega) (by omega) hr2full
 
+/-- **Every piece is drawn infinitely often** along any legal sequence — the
+ω-form of syndeticity. -/
+theorem every_piece_infinitely_often {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) (p : Piece) :
+    {n : ℕ | s n = p}.Infinite := by
+  refine Set.infinite_of_not_bddAbove ?_
+  rintro ⟨N, hN⟩
+  obtain ⟨k, -, hk⟩ := every_piece_within_thirteen hl p (N + 1)
+  have hmem : (N + 1 + k) ∈ {n : ℕ | s n = p} := hk
+  have := hN hmem
+  omega
+
+/-- The I piece — the only piece that can clear four rows — arrives infinitely
+often, whatever the adversary does with the ordering. -/
+theorem exists_I_infinitely_often {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) :
+    {n : ℕ | s n = Piece.I}.Infinite :=
+  every_piece_infinitely_often hl Piece.I
+
 end BagCadence
 end Tetris

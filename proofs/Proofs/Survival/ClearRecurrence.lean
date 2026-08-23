@@ -815,6 +815,20 @@ theorem clear_free_le_fifty {π : Policy GameConfig.standard}
   have hcap := count_lt_two_hundred_one hv hlive
   omega
 
+/-- Config-generic form: clear-free survival is bounded by a quarter of the
+playfield capacity, whatever the board dimensions. -/
+theorem clear_free_le_capacity {cfg : GameConfig} {π : Policy cfg}
+    (hv : ∀ g, (π g).Valid cfg) {n : ℕ}
+    (hlive : ¬ (trace cfg π GameState.init n).lost cfg)
+    (hnc : cleared cfg π GameState.init n = 0) :
+    4 * n ≤ cfg.cols * cfg.rows := by
+  have h := init_ledger hv n
+  rw [hnc] at h
+  have hcap := BagGrowth.count_le_capacity
+    (trace_board_wf hv (GameState.init_board_wf cfg) n)
+    ((GameState.not_lost_iff_forall_row_lt cfg _).mp hlive)
+  omega
+
 /-- **The first clear arrives by placement fifty-one.** Any surviving policy
 has cleared at least one row within its first 51 placements. -/
 theorem first_clear_by_fiftyone {π : Policy GameConfig.standard}

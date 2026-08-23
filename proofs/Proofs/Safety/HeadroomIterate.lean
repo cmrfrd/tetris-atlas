@@ -621,6 +621,16 @@ theorem init_mem_safeIterate_twentyfive :
     GameState.init ?_ ?_ ?_ <;>
     exact fun q hq => absurd hq (GameState.init_board_no_mem q)
 
+/-- The ladder is config-generic: on the 4 × 4 `tiny` board, flat play
+certifies two safe steps from the empty board. -/
+theorem init_mem_safeIterate_tiny_two :
+    GameState.init ∈ safeIterate GameConfig.tiny 2 := by
+  refine mem_safeIterate_of_flat_headroom (by norm_num [GameConfig.tiny]) 2 ?_
+    GameState.init ?_
+  · rw [GameConfig.tiny_rows_eq_four]
+  · intro q hq
+    exact absurd hq (GameState.init_board_no_mem q)
+
 /-- Monotone form: every depth up to twenty-five is certified. -/
 theorem init_mem_safeIterate_of_le_twentyfive {k : ℕ} (hk : k ≤ 25) :
     GameState.init ∈ safeIterate GameConfig.standard k :=

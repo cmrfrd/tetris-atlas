@@ -41629,6 +41629,30 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23n) — API round-out across five files (bank 10/N)
+
+Six theorems in one batch:
+- `mem_safe_of_bag_empty` (CountingBarrier) — the empty-bag degeneracy of
+  `safe` made explicit: non-lost empty-bag states are vacuously safe. Explains
+  why `safe` is infinite and why FiniteInvariant works from the reachable cone.
+  (Also checked and rejected a tempting claim: `safe flat` restricted to
+  nonempty bags is NOT obviously empty — an O on a 1-row board with row 0
+  filled 8/10 CAN clear and survive; only init-emptiness makes the 10×1 kill
+  work. Recorded to avoid a future false lemma.)
+- `clear_free_le_capacity` (ClearRecurrence) — the clear-free bound
+  config-generic: `4n ≤ cols·rows`.
+- `init_mem_safeIterate_tiny_two` (HeadroomIterate) — the ladder is
+  config-generic; flat play certifies 2 steps on the 4×4 `tiny` board.
+- `safeMoves_subset_allValidFor` + **`safeMoves_finite`** (MaximalAtlas) — the
+  maximal table has FINITE fibers: the Atlas-as-relation is finitely
+  branching before any truncation.
+- `every_piece_infinitely_often` + `exists_I_infinitely_often` (BagCadence) —
+  ω-form of syndeticity via `Set.infinite_of_not_bddAbove`.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23m) — the clear-free horizon is 50 (bank 9/N) + honesty fix
 
 Correction: the depth-25 docstring/commit overclaimed "past 25 requires
