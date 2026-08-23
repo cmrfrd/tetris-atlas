@@ -180,6 +180,7 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | **`trace_window_phase_determined`**, `adversarialTrace_window_phase_determined` | the phase is observable: bag fill level + occupancy mod 10 jointly reconstruct a state's position within any 35-window (CRT of the clocks), in both settings |
 | **`isClosedOn_grid_inhabited`** | the CRT grid: a closed Atlas set inhabits every cell of the 7 × 5 (bag level × mass phase) grid — the 35-floor is exactly the Chinese-remainder product of the two clocks |
 | `closedCycle_stratum_ge_five`, `adversarialClosedCycle_stratum_ge_five` | the stratified floor on both M2 artifacts: ≥ 5 states at every bag fill level |
+| `isClosedOn_count_stratum_ge_seven` | the dual stratification: ≥ 7 states at every mass phase the trajectory carries — the 7 × 5 grid decomposed from the other axis |
 | **`isClosedOn_stratum_ge_five`** | the stratified floor: a closed Atlas set holds ≥ 5 states at EVERY bag fill level 1–7 — the 35-state floor decomposed into its seven bag strata of five |
 | **`isClosedOn_boards_ge_five`**, `isClosedOn_bags_ge_seven`, `init_closed_atlas_diversity` | the M4 witness diversity: any closed Atlas set spans ≥ 5 distinct boards and ≥ 7 distinct bag states — a full bag-clock cycle lives inside every certificate |
 | `adversarialTrace_window_boards_ge_five`, `adversarialTrace_window_bags_ge_seven` | the diversity floors are adversary-proof: both clocks tick whoever picks the pieces |

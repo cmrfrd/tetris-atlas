@@ -1880,5 +1880,48 @@ theorem adversary_survivor_window_events {σ : Solver GameConfig.standard}
     (Nat.le_add_right n w)
   exact ⟨by omega, by omega⟩
 
+/-- **The mass-phase stratification**: a closed Atlas set holds at least
+seven states at every mass phase the trajectory carries — the dual of the
+bag stratification, completing the 35 = 7 × 5 grid decomposition from the
+other axis. -/
+theorem isClosedOn_count_stratum_ge_seven {A : Atlas GameConfig.standard}
+    {S : Finset GameState} (h : A.IsClosedOn GameConfig.standard S)
+    {g₀ : GameState} (hg₀ : g₀ ∈ S)
+    (hwf : Board.WF GameConfig.standard g₀.board) (hbag : g₀.bag.Nonempty)
+    (i : ℕ) :
+    7 ≤ (S.filter (fun g => g.board.count % 10
+      = (g₀.board.count + 4 * i) % 10)).card := by
+  classical
+  obtain ⟨t, ht⟩ := BagCadence.exists_legalSequenceFrom hbag
+  have hdraw : ∀ n, t n
+      ∈ (adversarialTrace GameConfig.standard A.toSolver t g₀ n).bag :=
+    fun n => by rw [adversarialTrace_bag_from]; exact ht n
+  have hv := isClosedOn_trace_forced_valid h hg₀ ht
+  have hcnt := adversarialTrace_count_mod_ten hwf hv
+  have hrc : ∀ j, (adversarialTrace GameConfig.standard A.toSolver t g₀
+      (i + 5 * j)).board.count % 10 = (g₀.board.count + 4 * i) % 10 := by
+    intro j
+    rw [hcnt]
+    omega
+  refine le_trans ?_ (Finset.card_le_card_of_injOn
+    (s := Finset.range 7)
+    (fun j => adversarialTrace GameConfig.standard A.toSolver t g₀ (i + 5 * j))
+    ?_ ?_)
+  · rw [Finset.card_range]
+  · intro j hj
+    exact Finset.mem_filter.mpr
+      ⟨h.toSolver_adversarialTrace_mem hg₀ ht (i + 5 * j), hrc j⟩
+  · intro a ha b hb hEq
+    rw [Finset.coe_range, Set.mem_Iio] at ha hb
+    rcases Nat.lt_or_ge a b with hab | hab
+    · have hd := isClosedOn_thirtyfive_dvd h hg₀ hwf ht
+        (show i + 5 * a ≤ i + 5 * b by omega) hEq
+      omega
+    · rcases Nat.eq_or_lt_of_le hab with heq | hab'
+      · omega
+      · have hd := isClosedOn_thirtyfive_dvd h hg₀ hwf ht
+          (show i + 5 * b ≤ i + 5 * a by omega) hEq.symm
+        omega
+
 end ClearRate
 end Tetris

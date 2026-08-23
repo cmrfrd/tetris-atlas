@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bv) — the dual stratification (bank 95/N)
+
+- `isClosedOn_count_stratum_ge_seven` — a closed Atlas set holds ≥ 7 states
+  at every mass phase (indices i + 5j, j < 7, kept distinct by the quantum):
+  the 35-floor decomposed from the mass axis, dual to batch 81's bag axis.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bu) — the grid bijection (bank 94/N)
 
 - `trace_window_grid_unique` — the ∃!-form capstone of the clock-grid arc:
