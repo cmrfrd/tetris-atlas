@@ -13,7 +13,7 @@ new tick — it tells you where the prior tick left off.
 
 ## Current build status
 
-- `lake build` (green `Proofs`) — **PASSING** (8304 jobs); base-axiom-clean
+- `lake build` (green `Proofs`) — **PASSING** (8305 jobs); base-axiom-clean
   (`propext`, `Classical.choice`, `Quot.sound`), **no `sorry`, no `native_decide`**.
 - `lake build ProofsExperiments` (research routes) — **PASSING** (8288 jobs); may use
   `native_decide`.
@@ -41626,6 +41626,41 @@ Next: <subtask id and one-line description>
 ## Tick log
 
 *(append newest at top below this line)*
+
+---
+
+### Tick (manual, 2026-08-23) — the adversary cannot touch the rate
+
+Question: can a piece-choosing adversary (legal 7-bag draws) *force* the clear
+rate above 2.8 rows per bag?
+
+**Answer: no — it cannot force it even once, and it also cannot prevent it.**
+**NEW** `proofs/Proofs/Safety/AdversarialRate.lean` (green, no warnings):
+- `clearedAdv cfg σ s g0 n` — cumulative clears along an adversarial trace
+  (solver σ vs piece sequence s), with `clearedAdv_ledger`: mass conservation
+  holds along EVERY adversarial trace — the adversary picks *which* piece
+  arrives, but every piece carries exactly 4 cells.
+- **`adversary_cleared_le`** / `adversary_bags_le` / `advBagRate_le` /
+  **`adversary_cannot_force_gt`** — the ceiling: from the empty board,
+  `10·cleared ≤ 4n` against every sequence; the cumulative rate never reaches
+  `2.8 + ε` at any horizon for any ε > 0. "Forcing more than 2.8" names a
+  ledger state that cannot exist.
+- **`adversary_forces_ge`** / `le_advBagRate` / **`adversary_forces_rate`** —
+  the floor, which every adversary gets for free with no strategy at all: any
+  solver surviving the whole sequence has `advBagRate → 2.8` (squeeze between
+  `2.8 − 20/m` and `2.8`).
+- Interpretation recorded in the docstring: the adversary's power is
+  ORTHOGONAL to the rate. It can contest survival (whether the floor is
+  geometrically meetable), but the rate of any survivor is pinned at exactly
+  2.8 from both sides regardless of who picks the pieces. A "rate-attacking"
+  adversary attacks a conserved quantity.
+- Proof gotcha: the `{x with piece := p}` structure-update elaborates as a
+  `let __src` in the goal but eta-expanded in hypothesis instantiations —
+  `omega` sees two atoms. `dsimp only at hstep ⊢` (zeta+proj) normalizes both.
+
+Build: PASS (green `Proofs`, 8305 jobs; AdversarialRate no warnings)
+Sorries: 0 → 0; `check-green-clean.sh` OK
+Axioms: all 8 verified `[propext, Classical.choice, Quot.sound]`
 
 ---
 
