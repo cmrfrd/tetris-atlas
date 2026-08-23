@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23an) — the 47-point mix polytope (bank 61/N)
+
+- `periodMixes` + `periodMixes_card` — the period-mix polytope
+  `{(a₁,a₂,a₃,a₄) : a₁+2a₂+3a₃+4a₄ = 14}` has EXACTLY 47 points, kernel-
+  decided over the 2400-tuple bounding box (needs maxRecDepth 40000; plain
+  `decide`, no native_decide).
+- `period_mix_mem_polytope` — every cycle period's clear-size delta vector
+  is one of the 47.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23am) — adversarial homogeneity (bank 60/N)
 
 - `adversarial_window_mix_stationary` / `_tetris_le_three_stationary` /

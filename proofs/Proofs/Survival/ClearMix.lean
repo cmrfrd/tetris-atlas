@@ -742,6 +742,38 @@ theorem period_mix_no_small_clears {π : Policy GameConfig.standard}
   have h := period_mix_fourteen hv hcyc
   exact ⟨by omega, by omega⟩
 
+/-- The period-mix polytope: all clear-size vectors `(a₁, a₂, a₃, a₄)`
+weight-summing to fourteen. -/
+def periodMixes : Finset (ℕ × ℕ × ℕ × ℕ) :=
+  ((Finset.range 15) ×ˢ (Finset.range 8) ×ˢ (Finset.range 5) ×ˢ
+      (Finset.range 4)).filter
+    (fun v => v.1 + 2 * v.2.1 + 3 * v.2.2.1 + 4 * v.2.2.2 = 14)
+
+set_option maxRecDepth 40000 in
+/-- **The period-mix polytope has exactly 47 points**: a cycle period's
+clearing profile is one of 47 explicit possibilities. -/
+theorem periodMixes_card : periodMixes.card = 47 := by decide
+
+/-- Every cycle period's clear-size delta vector lies in the 47-point
+polytope. -/
+theorem period_mix_mem_polytope {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    (sizeCount GameConfig.standard π GameState.init 1 (n + 35)
+        - sizeCount GameConfig.standard π GameState.init 1 n,
+      sizeCount GameConfig.standard π GameState.init 2 (n + 35)
+        - sizeCount GameConfig.standard π GameState.init 2 n,
+      sizeCount GameConfig.standard π GameState.init 3 (n + 35)
+        - sizeCount GameConfig.standard π GameState.init 3 n,
+      sizeCount GameConfig.standard π GameState.init 4 (n + 35)
+        - sizeCount GameConfig.standard π GameState.init 4 n)
+      ∈ periodMixes := by
+  have h := period_mix_fourteen hv hcyc
+  simp only [periodMixes, Finset.mem_filter, Finset.mem_product,
+    Finset.mem_range]
+  refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_⟩ <;> omega
+
 /-- The cooperative size counter agrees with the windowed filter cardinality. -/
 theorem sizeCount_eq_card_filter {cfg : GameConfig} {π : Policy cfg} (k n : ℕ) :
     sizeCount cfg π GameState.init k n
