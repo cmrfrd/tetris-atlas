@@ -41629,6 +41629,24 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ac) — the minimal-orbit theorem (bank 50/N) ★
+
+- `cycle_orbit_subset_period` / `orbitCycleP` — the orbit-window lemma and
+  sub-cycle construction generalized from period 35 to any period `P`.
+- **`closedCycle_contains_minimal_orbit`** — capstone of the orbit arc:
+  EVERY closed cycle contains a sub-`ClosedCycle` whose state count is
+  EXACTLY the trace's minimal period — positive, a multiple of 35, ≤ the
+  ambient size. Pigeonhole gives a return; `Nat.find` picks the minimal
+  period; minimality forces the window injective; the window is closed.
+- The M2 artifact always contains a tight, quantised certificate.
+- Lean note: omega is linear-only — `q * P` with symbolic `P` needs
+  `Nat.div_add_mod` + `mul_comm/add_assoc` rewrites, and hypotheses must be
+  INSIDE the `show ... by omega` block's scope.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ab) — existence of the period (bank 49/N)
 
 - `closedCycle_exists_return` — pigeonhole over `card + 1` trace indices:

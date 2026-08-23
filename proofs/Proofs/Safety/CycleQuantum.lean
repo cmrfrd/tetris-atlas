@@ -932,5 +932,108 @@ theorem closedCycle_exists_period (C : ClosedCycle GameConfig.standard)
   · rw [show n₁ + (n₂ - n₁) = n₂ by omega]
     exact heq
 
+/-- The orbit-window lemma at any period: past the entry point, a `P`-periodic
+trace stays inside its `P`-state entry window. -/
+theorem cycle_orbit_subset_period {π : Policy GameConfig.standard}
+    {g0 : GameState} {n P : ℕ} (hP : 0 < P)
+    (hcyc : trace GameConfig.standard π g0 n
+        = trace GameConfig.standard π g0 (n + P)) {m : ℕ} (hnm : n ≤ m) :
+    trace GameConfig.standard π g0 m
+      ∈ (Finset.range P).image (fun k => trace GameConfig.standard π g0 (n + k)) := by
+  classical
+  have hq := trace_period_multiples π g0 hcyc ((m - n) / P)
+  have hshift := trace_eq_of_state_eq π g0 hq ((m - n) % P)
+  have hdm := Nat.div_add_mod (m - n) P
+  have hidx : n + (m - n) / P * P + (m - n) % P = m := by
+    rw [Nat.add_assoc, Nat.mul_comm, hdm]
+    omega
+  rw [Finset.mem_image]
+  refine ⟨(m - n) % P, Finset.mem_range.mpr (Nat.mod_lt _ hP), ?_⟩
+  rw [hshift, hidx]
+
+/-- The orbit sub-cycle at any period: a `P`-periodic return inside a closed
+cycle carves out a closed cycle on its `P`-state orbit window. -/
+def orbitCycleP (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (h0 : g0 ∈ C.states) {n P : ℕ} (hP : 0 < P)
+    (hcyc : trace GameConfig.standard C.policy g0 n
+        = trace GameConfig.standard C.policy g0 (n + P)) :
+    ClosedCycle GameConfig.standard where
+  states := (Finset.range P).image
+    (fun k => trace GameConfig.standard C.policy g0 (n + k))
+  policy := C.policy
+  valid := by
+    intro s hs
+    rw [Finset.mem_image] at hs
+    obtain ⟨k, -, rfl⟩ := hs
+    exact C.valid _ (C.trace_mem_states h0 (n + k))
+  legal_draw := by
+    intro s hs
+    rw [Finset.mem_image] at hs
+    obtain ⟨k, -, rfl⟩ := hs
+    exact C.legal_draw _ (C.trace_mem_states h0 (n + k))
+  not_lost := by
+    intro s hs
+    rw [Finset.mem_image] at hs
+    obtain ⟨k, -, rfl⟩ := hs
+    exact C.not_lost _ (C.trace_mem_states h0 (n + k))
+  closed := by
+    intro s hs
+    rw [Finset.mem_image] at hs
+    obtain ⟨k, -, rfl⟩ := hs
+    have hstep : (trace GameConfig.standard C.policy g0 (n + k)).step
+          GameConfig.standard
+          (C.policy (trace GameConfig.standard C.policy g0 (n + k)))
+        = trace GameConfig.standard C.policy g0 ((n + k) + 1) :=
+      (trace_succ GameConfig.standard C.policy g0 (n + k)).symm
+    rw [hstep]
+    exact cycle_orbit_subset_period hP hcyc (by omega)
+
+/-- **Every closed cycle contains a minimal orbit cycle**: a sub-`ClosedCycle`
+whose state count is *exactly* the trace's minimal period — positive, a
+multiple of 35, and at most the ambient size. The M2 artifact always contains
+a tight certificate: no state is wasted, and its size still obeys the
+quantum. -/
+theorem closedCycle_contains_minimal_orbit
+    (C : ClosedCycle GameConfig.standard) {g0 : GameState} (h0 : g0 ∈ C.states)
+    (hwf : Board.WF GameConfig.standard g0.board) :
+    ∃ D : ClosedCycle GameConfig.standard, D.states ⊆ C.states ∧
+      0 < D.states.card ∧ 35 ∣ D.states.card ∧
+      D.states.card ≤ C.states.card := by
+  classical
+  obtain ⟨n, P, hPpos, hPle, _, hret⟩ := closedCycle_exists_period C h0 hwf
+  have hex : ∃ Q, 0 < Q ∧ ∃ m, trace GameConfig.standard C.policy g0 m
+      = trace GameConfig.standard C.policy g0 (m + Q) := ⟨P, hPpos, n, hret⟩
+  obtain ⟨hQpos, n₀, hret₀⟩ := Nat.find_spec hex
+  have hQle : Nat.find hex ≤ P := Nat.find_min' hex ⟨hPpos, n, hret⟩
+  refine ⟨orbitCycleP C h0 hQpos hret₀, ?_, ?_, ?_, ?_⟩
+  · intro s hs
+    have hs' : s ∈ (Finset.range (Nat.find hex)).image
+        (fun k => trace GameConfig.standard C.policy g0 (n₀ + k)) := hs
+    rw [Finset.mem_image] at hs'
+    obtain ⟨k, -, rfl⟩ := hs'
+    exact C.trace_mem_states h0 (n₀ + k)
+  all_goals
+    have hcard : (orbitCycleP C h0 hQpos hret₀).states.card = Nat.find hex := by
+      change ((Finset.range (Nat.find hex)).image
+        (fun k => trace GameConfig.standard C.policy g0 (n₀ + k))).card = _
+      rw [Finset.card_image_of_injOn, Finset.card_range]
+      intro i hi k hk hik
+      rw [Finset.coe_range, Set.mem_Iio] at hi hk
+      by_contra hne
+      rcases Nat.lt_or_ge i k with hlt | hge
+      · exact Nat.find_min hex (show k - i < Nat.find hex by omega)
+          ⟨by omega, n₀ + i, by rw [show n₀ + i + (k - i) = n₀ + k by omega]; exact hik⟩
+      · have hlt : k < i := by omega
+        exact Nat.find_min hex (show i - k < Nat.find hex by omega)
+          ⟨by omega, n₀ + k, by rw [show n₀ + k + (i - k) = n₀ + i by omega]; exact hik.symm⟩
+  · rw [hcard]
+    exact hQpos
+  · rw [hcard]
+    have hd := closedCycle_thirtyfive_dvd C h0 hwf
+      (Nat.le_add_right n₀ (Nat.find hex)) hret₀
+    simpa using hd
+  · rw [hcard]
+    omega
+
 end ClearRate
 end Tetris
