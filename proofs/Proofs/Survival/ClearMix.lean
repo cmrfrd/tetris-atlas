@@ -691,6 +691,57 @@ theorem multi_period_clear_events_bounds {π : Policy GameConfig.standard}
   have h := multi_period_mix_fourteen hv hcyc j
   exact ⟨by omega, by omega⟩
 
+/-- **No pure-tetris cycle**: a cycle period cannot clear exclusively via
+tetrises — `4 ∤ 14`. A tetris-only strategy can never close a loop. -/
+theorem no_pure_tetris_period {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35))
+    (h1 : sizeCount GameConfig.standard π GameState.init 1 (n + 35)
+      = sizeCount GameConfig.standard π GameState.init 1 n)
+    (h2 : sizeCount GameConfig.standard π GameState.init 2 (n + 35)
+      = sizeCount GameConfig.standard π GameState.init 2 n)
+    (h3 : sizeCount GameConfig.standard π GameState.init 3 (n + 35)
+      = sizeCount GameConfig.standard π GameState.init 3 n) :
+    False := by
+  have h := period_mix_fourteen hv hcyc
+  omega
+
+/-- **No pure-triple cycle** either: `3 ∤ 14`. Together with
+`no_pure_tetris_period`: every cycle's clearing mix must involve a single or
+a double (or mix triples with tetrises — `2·3 + 2·4 = 14` is the unique
+singles-and-doubles-free period mix). -/
+theorem no_pure_triple_period {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35))
+    (h1 : sizeCount GameConfig.standard π GameState.init 1 (n + 35)
+      = sizeCount GameConfig.standard π GameState.init 1 n)
+    (h2 : sizeCount GameConfig.standard π GameState.init 2 (n + 35)
+      = sizeCount GameConfig.standard π GameState.init 2 n)
+    (h4 : sizeCount GameConfig.standard π GameState.init 4 (n + 35)
+      = sizeCount GameConfig.standard π GameState.init 4 n) :
+    False := by
+  have h := period_mix_fourteen hv hcyc
+  omega
+
+/-- The unique singles-and-doubles-free period mix: exactly two triples and
+two tetrises. -/
+theorem period_mix_no_small_clears {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35))
+    (h1 : sizeCount GameConfig.standard π GameState.init 1 (n + 35)
+      = sizeCount GameConfig.standard π GameState.init 1 n)
+    (h2 : sizeCount GameConfig.standard π GameState.init 2 (n + 35)
+      = sizeCount GameConfig.standard π GameState.init 2 n) :
+    sizeCount GameConfig.standard π GameState.init 3 (n + 35)
+        - sizeCount GameConfig.standard π GameState.init 3 n = 2
+      ∧ sizeCount GameConfig.standard π GameState.init 4 (n + 35)
+        - sizeCount GameConfig.standard π GameState.init 4 n = 2 := by
+  have h := period_mix_fourteen hv hcyc
+  exact ⟨by omega, by omega⟩
+
 /-- The cooperative size counter agrees with the windowed filter cardinality. -/
 theorem sizeCount_eq_card_filter {cfg : GameConfig} {π : Policy cfg} (k n : ℕ) :
     sizeCount cfg π GameState.init k n

@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ww) — purity obstructions (bank 45/N)
+
+- `no_pure_tetris_period` — a cycle period cannot clear exclusively via
+  tetrises: `4 ∤ 14`. A TETRIS-ONLY STRATEGY CAN NEVER CLOSE A LOOP.
+- `no_pure_triple_period` — nor exclusively via triples: `3 ∤ 14`.
+- `period_mix_no_small_clears` — the unique singles-and-doubles-free period
+  mix is exactly two triples + two tetrises (`2·3 + 2·4 = 14`).
+- `adversary_no_pure_tetris_period` / `adversary_no_pure_triple_period` —
+  the same obstructions whoever picks the pieces.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23vv) — adversarial dry-spell mirror (bank 44/N)
 
 - `adversarial_window_clears_fourteen` / `adversarial_dry_spell_le` — the

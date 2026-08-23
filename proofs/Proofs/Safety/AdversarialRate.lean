@@ -1021,5 +1021,39 @@ theorem adversarial_dry_spell_le {σ : Solver GameConfig.standard}
     (Nat.le_add_right m₀ 69)
   omega
 
+/-- No pure-tetris adversarial cycle: `4 ∤ 14`, whoever picks the pieces. -/
+theorem adversary_no_pure_tetris_period {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    (h1 : sizeCountAdv GameConfig.standard σ s 1 (n + 35)
+      = sizeCountAdv GameConfig.standard σ s 1 n)
+    (h2 : sizeCountAdv GameConfig.standard σ s 2 (n + 35)
+      = sizeCountAdv GameConfig.standard σ s 2 n)
+    (h3 : sizeCountAdv GameConfig.standard σ s 3 (n + 35)
+      = sizeCountAdv GameConfig.standard σ s 3 n) :
+    False := by
+  have h := adversary_period_mix_fourteen hv hcyc
+  omega
+
+/-- No pure-triple adversarial cycle: `3 ∤ 14`. -/
+theorem adversary_no_pure_triple_period {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    (h1 : sizeCountAdv GameConfig.standard σ s 1 (n + 35)
+      = sizeCountAdv GameConfig.standard σ s 1 n)
+    (h2 : sizeCountAdv GameConfig.standard σ s 2 (n + 35)
+      = sizeCountAdv GameConfig.standard σ s 2 n)
+    (h4 : sizeCountAdv GameConfig.standard σ s 4 (n + 35)
+      = sizeCountAdv GameConfig.standard σ s 4 n) :
+    False := by
+  have h := adversary_period_mix_fourteen hv hcyc
+  omega
+
 end ClearRate
 end Tetris
