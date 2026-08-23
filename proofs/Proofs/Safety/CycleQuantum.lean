@@ -2292,5 +2292,45 @@ theorem trace_window_grid_unique {π : Policy GameConfig.standard}
     rw [h2] at hkcnt
     omega
 
+/-- **The trace bag content law**: from the empty board, the bag at step `n`
+is the full bag minus the pieces played since the block boundary `7⌊n/7⌋`. -/
+theorem trace_bag_eq_sdiff {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) (n : ℕ) :
+    (trace GameConfig.standard π GameState.init n).bag
+      = Bag.full \ ((Finset.range (n % 7)).image (fun j =>
+          (π (trace GameConfig.standard π GameState.init
+            (7 * (n / 7) + j))).piece)) := by
+  have hl := legalSequence_of_trace_draws hdraw
+  have hl' : LegalSequenceFrom Bag.full
+      (fun m => (π (trace GameConfig.standard π GameState.init m)).piece) := by
+    have hb : GameState.init.bag = Bag.full := GameState.init_bag
+    rwa [hb] at hl
+  have h := BagCadence.bagAt_eq_sdiff hl' n
+  rw [trace_bag_eq_bagAt]
+  rw [show GameState.init.bag = Bag.full from GameState.init_bag]
+  exact h
+
+/-- **The availability criterion**: a piece is drawable at step `n` iff the
+policy has not played it since the current block began — bag membership is
+an explicit statement about the last `n mod 7` moves. -/
+theorem trace_piece_available_iff {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) (n : ℕ)
+    (p : Piece) :
+    p ∈ (trace GameConfig.standard π GameState.init n).bag
+      ↔ ∀ j, j < n % 7 →
+        (π (trace GameConfig.standard π GameState.init
+          (7 * (n / 7) + j))).piece ≠ p := by
+  rw [trace_bag_eq_sdiff hdraw, Finset.mem_sdiff]
+  constructor
+  · rintro ⟨-, hnot⟩ j hj hp
+    exact hnot (Finset.mem_image.mpr ⟨j, Finset.mem_range.mpr hj, hp⟩)
+  · intro h
+    refine ⟨Bag.mem_full p, ?_⟩
+    intro hmem
+    obtain ⟨j, hj, hp⟩ := Finset.mem_image.mp hmem
+    exact h j (Finset.mem_range.mp hj) hp
+
 end ClearRate
 end Tetris

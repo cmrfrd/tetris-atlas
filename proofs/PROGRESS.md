@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bz) — the availability criterion (bank 99/N)
+
+- `trace_bag_eq_sdiff` — on cooperative traces the bag is the full bag
+  minus the pieces played since the block boundary `7⌊n/7⌋`.
+- `trace_piece_available_iff` — a piece is drawable at step `n` IFF the
+  policy has not played it in the last `n mod 7` moves: bag membership made
+  fully explicit in terms of recent history.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23by) — the global bag content law (bank 98/N)
 
 - `bag_full_of_card_seven` — any bag holding seven pieces IS the full bag.
