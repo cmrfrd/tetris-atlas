@@ -13,7 +13,7 @@ new tick — it tells you where the prior tick left off.
 
 ## Current build status
 
-- `lake build` (green `Proofs`) — **PASSING** (8305 jobs); base-axiom-clean
+- `lake build` (green `Proofs`) — **PASSING** (8306 jobs); base-axiom-clean
   (`propext`, `Classical.choice`, `Quot.sound`), **no `sorry`, no `native_decide`**.
 - `lake build ProofsExperiments` (research routes) — **PASSING** (8288 jobs); may use
   `native_decide`.
@@ -41626,6 +41626,44 @@ Next: <subtask id and one-line description>
 ## Tick log
 
 *(append newest at top below this line)*
+
+---
+
+### Tick (manual, 2026-08-23b) — proof by contradiction: the route and the barrier
+
+Question: can we assume no solver exists and derive a contradiction from the
+ledger corpus?
+
+**Both halves answered.** **NEW** `proofs/Proofs/Safety/CountingBarrier.lean`
+(green, no warnings):
+- **The route exists and is already in the library** (docstring synthesis):
+  solvable ⟺ `init ∈ safe` ⟺ `init ∈ safeIterFinite` (finite iterations of a
+  computable operator) ⇒ ¬solvable ⟺ a FINITE object — an adversarial
+  kill-tree of depth N defeating every solver. So "a solver must exist" ⟺ "no
+  finite refutation exists": contradiction-shaped, and even decidable, just
+  astronomically large. Counting contributes: `adversary_cannot_force_gt`
+  refutes every budget-shaped kill-tree — a kill certificate must kill through
+  geometry.
+- **The barrier, made rigorous with a witness:**
+  - `GameConfig.flat` — the 10×1 board. Every ledger theorem is config-generic
+    and holds there verbatim.
+  - `flat_O_step_lost` — every placement of O on the empty 10×1 board tops out
+    (O occupies rows 0–1 in every rotation; only 2 of 10 columns touched ⇒ no
+    clear; `clearLines_id_of_no_full`; cell at row 1 ≥ rows = 1).
+  - `init_not_safe_flat` — `init ∉ safe ⟨10,1⟩` (safe would have to answer the
+    adversary's opening O; `safe_forall_step` + `safe_not_lost`).
+  - **`not_tetrisSolvableValidFor_flat`** — the FIRST machine-checked
+    unsolvability instance in the library (via
+    `init_safe_of_solvesTetrisValid`).
+  - Meta-conclusion: any scheme deriving solvability from config-generic
+    counting alone would prove 10×1 solvable too ⇒ contradiction ⇒ the
+    distinguishing ingredient is irreducibly geometric (the fit of the 7
+    shapes against 20 rows) — exactly what the safe-set/carrier program
+    targets.
+
+Build: PASS (green `Proofs`, 8306 jobs; CountingBarrier no warnings)
+Sorries: 0 → 0; `check-green-clean.sh` OK
+Axioms: all 3 core theorems `[propext, Classical.choice, Quot.sound]`
 
 ---
 

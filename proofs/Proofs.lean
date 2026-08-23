@@ -62,6 +62,7 @@ import Proofs.Safety.PlinthCert
 import Proofs.Safety.CycleQuantum
 import Proofs.Safety.MaximalAtlas
 import Proofs.Safety.AdversarialRate
+import Proofs.Safety.CountingBarrier
 import Proofs.Safety.SafeIterate
 import Proofs.Safety.SafeIterateFinite
 import Proofs.Safety.Safety
