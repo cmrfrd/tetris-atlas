@@ -883,5 +883,57 @@ theorem window_frequency_law {initBag : Bag} {s : ℕ → Piece}
     simp only [harg] at hsplit
     omega
 
+/-- **The bag is the complement of the block prefix**: for `k ≤ 6` draws past
+a refill, the bag holds exactly the pieces not yet drawn in this block. The
+full bag content — not just its size — is determined by the draw history. -/
+theorem refill_bag_sdiff {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {r : ℕ}
+    (hfull : bagAt initBag s r = Bag.full) :
+    ∀ k, k ≤ 6 → bagAt initBag s (r + k)
+      = Bag.full \ ((Finset.range k).image (fun j => s (r + j))) := by
+  intro k
+  induction k with
+  | zero =>
+    intro _
+    simpa using hfull
+  | succ k ih =>
+    intro hk6
+    have hprev := ih (by omega)
+    have hcard : (bagAt initBag s (r + k)).card = 7 - k := by
+      have hc7 : (bagAt initBag s r).card = 7 := by
+        rw [hfull]
+        exact Bag.full_card
+      have := bagAt_card_countdown hl hc7 k (by omega)
+      omega
+    have hmem : s (r + k) ∈ bagAt initBag s (r + k) := hl (r + k)
+    have herase_ne : (bagAt initBag s (r + k)).erase (s (r + k)) ≠ ∅ := by
+      intro hemp
+      have := Finset.card_erase_of_mem hmem
+      rw [hemp, Finset.card_empty] at this
+      omega
+    have hstep : bagAt initBag s (r + (k + 1))
+        = (bagAt initBag s (r + k)).erase (s (r + k)) := by
+      rw [show r + (k + 1) = (r + k) + 1 by omega]
+      change (bagAt initBag s (r + k)).draw (s (r + k)) = _
+      unfold Bag.draw
+      rw [if_neg herase_ne]
+    rw [hstep, hprev]
+    ext q
+    simp only [Finset.mem_erase, Finset.mem_sdiff, Finset.mem_image,
+      Finset.mem_range, Finset.range_add_one, Finset.mem_insert]
+    constructor
+    · rintro ⟨hqne, hqfull, hnot⟩
+      refine ⟨hqfull, ?_⟩
+      rintro ⟨j, hj | hj, hqj⟩
+      · exact hqne (by rw [← hqj, hj])
+      · exact hnot ⟨j, hj, hqj⟩
+    · rintro ⟨hqfull, hnot⟩
+      refine ⟨?_, hqfull, ?_⟩
+      · intro hq
+        exact hnot ⟨k, Or.inl rfl, hq.symm⟩
+      · rintro ⟨j, hj, hqj⟩
+        exact hnot ⟨j, Or.inr hj, hqj⟩
+
+
 end BagCadence
 end Tetris

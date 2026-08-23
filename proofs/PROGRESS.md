@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bw) — the bag content law (bank 96/N)
+
+- `refill_bag_sdiff` — the bag is the COMPLEMENT of the block prefix: for
+  `k ≤ 6` draws past a refill, `bagAt (r+k) = full ∖ {draws so far}`. The
+  full bag content, not just its size, is determined by the draw history —
+  the structural lemma piece-availability arguments will ride on.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bv) — the dual stratification (bank 95/N)
 
 - `isClosedOn_count_stratum_ge_seven` — a closed Atlas set holds ≥ 7 states
