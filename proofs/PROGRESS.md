@@ -41629,6 +41629,23 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23zz) — the minimal sub-cycle construction (bank 48/N)
+
+- `orbitCycle` — CONSTRUCTIVE: a five-bag return inside a `ClosedCycle`
+  carves out a genuine 35-state `ClosedCycle` (the orbit window), all fields
+  inherited, closure via `cycle_orbit_subset` on the trace successor.
+- `orbitCycle_subset` — it sits inside the ambient cycle.
+- `orbitCycle_card` — it has EXACTLY 35 states (well-formed seed).
+- Every cycle admitting a minimal return CONTAINS the minimal certificate.
+- Lean notes: defs named `ClosedCycle.foo` inside namespace `ClearRate` do
+  NOT support `C.foo` dot-notation (resolves against `Tetris.ClosedCycle`);
+  structure-literal `.states` unfolds by defeq — use `change`/type-ascribed
+  `have`, and the linter rejects `show` for defeq changes.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23yy) — the exact orbit (bank 47/N)
 
 - `cycle_orbit_subset` — past the entry point, every state of a periodic

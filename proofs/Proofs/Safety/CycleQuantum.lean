@@ -816,5 +816,82 @@ theorem trace_window_image_card_thirtyfive {π : Policy GameConfig.standard}
         (show n + k ≤ n + i by omega) hik.symm
       omega
 
+/-- **The minimal sub-cycle**: a five-bag return inside a closed cycle carves
+out a `ClosedCycle` of its own — the 35-state orbit window. Every field is
+inherited from the ambient cycle; closure is `cycle_orbit_subset` applied to
+the trace successor. -/
+def orbitCycle (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (h0 : g0 ∈ C.states) {n : ℕ}
+    (hcyc : trace GameConfig.standard C.policy g0 n
+        = trace GameConfig.standard C.policy g0 (n + 35)) :
+    ClosedCycle GameConfig.standard where
+  states := (Finset.range 35).image
+    (fun k => trace GameConfig.standard C.policy g0 (n + k))
+  policy := C.policy
+  valid := by
+    intro s hs
+    rw [Finset.mem_image] at hs
+    obtain ⟨k, -, rfl⟩ := hs
+    exact C.valid _ (C.trace_mem_states h0 (n + k))
+  legal_draw := by
+    intro s hs
+    rw [Finset.mem_image] at hs
+    obtain ⟨k, -, rfl⟩ := hs
+    exact C.legal_draw _ (C.trace_mem_states h0 (n + k))
+  not_lost := by
+    intro s hs
+    rw [Finset.mem_image] at hs
+    obtain ⟨k, -, rfl⟩ := hs
+    exact C.not_lost _ (C.trace_mem_states h0 (n + k))
+  closed := by
+    intro s hs
+    rw [Finset.mem_image] at hs
+    obtain ⟨k, -, rfl⟩ := hs
+    have hstep : (trace GameConfig.standard C.policy g0 (n + k)).step
+          GameConfig.standard
+          (C.policy (trace GameConfig.standard C.policy g0 (n + k)))
+        = trace GameConfig.standard C.policy g0 ((n + k) + 1) :=
+      (trace_succ GameConfig.standard C.policy g0 (n + k)).symm
+    rw [hstep]
+    exact cycle_orbit_subset hcyc (by omega)
+
+/-- The minimal sub-cycle's states sit inside the ambient cycle. -/
+theorem orbitCycle_subset (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (h0 : g0 ∈ C.states) {n : ℕ}
+    (hcyc : trace GameConfig.standard C.policy g0 n
+        = trace GameConfig.standard C.policy g0 (n + 35)) :
+    (orbitCycle C h0 hcyc).states ⊆ C.states := by
+  intro s hs
+  have hs' : s ∈ (Finset.range 35).image
+      (fun k => trace GameConfig.standard C.policy g0 (n + k)) := hs
+  rw [Finset.mem_image] at hs'
+  obtain ⟨k, -, rfl⟩ := hs'
+  exact C.trace_mem_states h0 (n + k)
+
+/-- **The minimal sub-cycle has exactly 35 states** (well-formed seed):
+every closed cycle admitting a five-bag return contains a closed cycle of
+the exact minimal size. -/
+theorem orbitCycle_card (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (h0 : g0 ∈ C.states)
+    (hwf : Board.WF GameConfig.standard g0.board) {n : ℕ}
+    (hcyc : trace GameConfig.standard C.policy g0 n
+        = trace GameConfig.standard C.policy g0 (n + 35)) :
+    (orbitCycle C h0 hcyc).states.card = 35 := by
+  classical
+  change ((Finset.range 35).image
+    (fun k => trace GameConfig.standard C.policy g0 (n + k))).card = 35
+  rw [Finset.card_image_of_injOn, Finset.card_range]
+  intro i hi k hk hik
+  rw [Finset.coe_range, Set.mem_Iio] at hi hk
+  rcases Nat.lt_or_ge i k with hlt | hge
+  · have hd := closedCycle_thirtyfive_dvd C h0 hwf
+      (show n + i ≤ n + k by omega) hik
+    omega
+  · rcases Nat.eq_or_lt_of_le hge with heq | hlt'
+    · omega
+    · have hd := closedCycle_thirtyfive_dvd C h0 hwf
+        (show n + k ≤ n + i by omega) hik.symm
+      omega
+
 end ClearRate
 end Tetris
