@@ -41629,6 +41629,23 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23nn) — adversarial periodicity (bank 36/N)
+
+- `adversarialTrace_periodic` — the adversarial determinism lemma: a single
+  35-return does not iterate on its own, but with a 35-PERIODIC announced
+  stream the return pushes around the loop.
+- `adversarialTrace_period_multiples` — the return iterates to every multiple.
+- `adversarial_multi_period_clears` — against a periodic stream, a solver
+  that returns after one period clears exactly `14j` rows over `j` periods:
+  the linear clearing law survives adversarial piece choice whenever the
+  loop witness is periodic (as any concrete adversarial cycle certificate is).
+- This supplies exactly the hypothesis batch 33 identified as missing for
+  adversarial multi-period laws.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23mm) — multi-block window law (bank 35/N)
 
 - `window_multiblock_bounds` — any `35q` consecutive legal draws hold between

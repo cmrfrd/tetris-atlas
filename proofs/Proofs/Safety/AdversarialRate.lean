@@ -766,5 +766,62 @@ theorem adversary_period_size_caps {σ : Solver GameConfig.standard}
   have h := adversary_period_mix_fourteen hv hcyc
   omega
 
+/-- **Adversarial periodicity needs a periodic stream**: a single 35-return
+does *not* iterate on its own (the adversary may continue arbitrarily), but
+if the announced stream is 35-periodic, determinism pushes the return around
+the loop — the adversarial analog of `trace_eq_of_state_eq`. -/
+theorem adversarialTrace_periodic {cfg : GameConfig} {σ : Solver cfg}
+    {s : ℕ → Piece} {g0 : GameState}
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace cfg σ s g0 n
+        = adversarialTrace cfg σ s g0 (n + 35)) :
+    ∀ k, adversarialTrace cfg σ s g0 (n + k)
+      = adversarialTrace cfg σ s g0 (n + 35 + k) := by
+  intro k
+  induction k with
+  | zero => simpa using hcyc
+  | succ k ih =>
+    have hs : s (n + 35 + k) = s (n + k) := by
+      rw [show n + 35 + k = (n + k) + 35 by omega]
+      exact hper (n + k)
+    rw [show n + (k + 1) = (n + k) + 1 by omega,
+      show n + 35 + (k + 1) = (n + 35 + k) + 1 by omega,
+      adversarialTrace_succ, adversarialTrace_succ, ih, hs]
+
+/-- Periodic-stream returns iterate to every multiple of the period. -/
+theorem adversarialTrace_period_multiples {cfg : GameConfig} {σ : Solver cfg}
+    {s : ℕ → Piece} {g0 : GameState}
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace cfg σ s g0 n
+        = adversarialTrace cfg σ s g0 (n + 35)) :
+    ∀ j, adversarialTrace cfg σ s g0 n
+      = adversarialTrace cfg σ s g0 (n + 35 * j) := by
+  intro j
+  induction j with
+  | zero => simp
+  | succ j ih =>
+    have hstep := adversarialTrace_periodic hper hcyc (35 * j)
+    rw [show n + 35 * (j + 1) = n + 35 + 35 * j by ring]
+    exact ih.trans hstep
+
+/-- **The adversarial linear clearing law**: against a 35-periodic piece
+stream, a solver that returns after one period clears exactly `14·j` rows
+over `j` periods — the cooperative multi-period law survives adversarial
+piece choice whenever the loop witness is periodic (as any concrete
+adversarial cycle certificate is). -/
+theorem adversarial_multi_period_clears {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    (j : ℕ) :
+    clearedAdv GameConfig.standard σ s GameState.init (n + 35 * j)
+      - clearedAdv GameConfig.standard σ s GameState.init n = 14 * j := by
+  have hiter := adversarialTrace_period_multiples hper hcyc j
+  have hbal := adversarialTrace_eq_clears hv (Nat.le_add_right n (35 * j)) hiter
+  omega
+
 end ClearRate
 end Tetris
