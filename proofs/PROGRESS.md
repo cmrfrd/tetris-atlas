@@ -41629,6 +41629,23 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23aa) — general window floor + I-cadence lifts (bank 23/N)
+
+- `exists_block_hit` (BagCadence) — from a refill every piece is drawn within
+  seven steps (shared helper extracted).
+- **`window_thirtyfive_ge_four`** — ANY 35 consecutive draws hold at least
+  four of every piece, no cycle hypothesis: a 35-window always contains four
+  complete bag blocks. (Exactly five with matching bag states.)
+- `trace_exists_I_within_thirteen` / `closedCycle_exists_I_within_thirteen`
+  (CycleQuantum) — the 13-syndetic I-cadence lifted through
+  `legalSequence_of_trace_draws` to policy traces and the M2 artifact.
+- Dropped the now-unneeded maxRecDepth/heartbeats/diagnostics options from
+  BagCadence (the irreducible-bagAt section made them moot).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23z) — the period mix polytope (bank 22/N)
 
 - `sizeCount_mono` / `sizeCountAdv_mono` — size counters are monotone.

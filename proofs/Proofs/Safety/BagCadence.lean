@@ -549,6 +549,68 @@ theorem window_thirtyfive_balanced {initBag : Bag} {s : ℕ → Piece}
     omega
   omega
 
+/-- Every full-bag block hits every piece: from a refill, each piece is drawn
+within seven steps. -/
+theorem exists_block_hit {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {r : ℕ}
+    (hfull : bagAt initBag s r = Bag.full) (p : Piece) :
+    ∃ k, k < 7 ∧ s (r + k) = p := by
+  have hcard : (bagAt initBag s r).card = 7 := by
+    rw [hfull]
+    exact Bag.full_card
+  obtain ⟨k, hk, hks⟩ := exists_draw_within_card hl 7 r p hcard
+    (by rw [hfull]; exact Bag.mem_full p)
+  exact ⟨k, hk, hks⟩
+
+/-- **Any 35 consecutive draws hold at least four of every piece** — no cycle
+hypothesis needed: a 35-window always contains four complete bag blocks, and
+each block deals every piece. (With matching bag states the count is exactly
+five, `window_thirtyfive_balanced`.) -/
+theorem window_thirtyfive_ge_four {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) (n : ℕ) (p : Piece) :
+    4 ≤ ((Finset.range 35).filter (fun k => s (n + k) = p)).card := by
+  classical
+  obtain ⟨c, hc⟩ : ∃ c, (bagAt initBag s n).card = c := ⟨_, rfl⟩
+  have hc1 : 1 ≤ c := hc ▸ Finset.card_pos.mpr ⟨s n, hl n⟩
+  have hc7 : c ≤ 7 := hc ▸ Bag.card_le_seven _
+  have hfull0 : bagAt initBag s (n + c) = Bag.full :=
+    bagAt_add_card_eq_full hl c n hc
+  have hfull : ∀ i, bagAt initBag s (n + c + 7 * i) = Bag.full :=
+    bagAt_full_iterate hl hfull0
+  have hblock : ∀ i, i < 4 → ∃ k, k < c + 7 * i + 7 ∧
+      c + 7 * i ≤ k ∧ s (n + k) = p := by
+    intro i _
+    obtain ⟨k, hk7, hks⟩ := exists_block_hit hl (hfull i) p
+    exact ⟨c + 7 * i + k, by omega, by omega,
+      by rw [show n + (c + 7 * i + k) = n + c + 7 * i + k by omega]; exact hks⟩
+  obtain ⟨k1, hk1b, hk1a, hs1⟩ := hblock 0 (by omega)
+  obtain ⟨k2, hk2b, hk2a, hs2⟩ := hblock 1 (by omega)
+  obtain ⟨k3, hk3b, hk3a, hs3⟩ := hblock 2 (by omega)
+  obtain ⟨k4, hk4b, hk4a, hs4⟩ := hblock 3 (by omega)
+  have hsub : ({k1, k2, k3, k4} : Finset ℕ)
+      ⊆ (Finset.range 35).filter (fun k => s (n + k) = p) := by
+    intro x hx
+    simp only [Finset.mem_insert, Finset.mem_singleton] at hx
+    rcases hx with rfl | rfl | rfl | rfl
+    · exact Finset.mem_filter.mpr ⟨Finset.mem_range.mpr (by omega), hs1⟩
+    · exact Finset.mem_filter.mpr ⟨Finset.mem_range.mpr (by omega), hs2⟩
+    · exact Finset.mem_filter.mpr ⟨Finset.mem_range.mpr (by omega), hs3⟩
+    · exact Finset.mem_filter.mpr ⟨Finset.mem_range.mpr (by omega), hs4⟩
+  have hcard4 : ({k1, k2, k3, k4} : Finset ℕ).card = 4 := by
+    have h2 : k1 ∉ ({k2, k3, k4} : Finset ℕ) := by
+      simp only [Finset.mem_insert, Finset.mem_singleton]
+      omega
+    have h3 : k2 ∉ ({k3, k4} : Finset ℕ) := by
+      simp only [Finset.mem_insert, Finset.mem_singleton]
+      omega
+    have h4 : k3 ∉ ({k4} : Finset ℕ) := by
+      simp only [Finset.mem_singleton]
+      omega
+    rw [Finset.card_insert_of_notMem h2, Finset.card_insert_of_notMem h3,
+      Finset.card_insert_of_notMem h4, Finset.card_singleton]
+  calc 4 = ({k1, k2, k3, k4} : Finset ℕ).card := hcard4.symm
+    _ ≤ _ := Finset.card_le_card hsub
+
 end BalanceIrred
 
 end BagCadence

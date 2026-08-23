@@ -359,5 +359,26 @@ theorem adversarialClosedCycle_period_piece_balanced
     rw [← adversarialTrace_bag_from, ← adversarialTrace_bag_from, hcyc]
   exact BagCadence.window_thirtyfive_balanced hl hbag p
 
+/-- The I-cadence on policy traces: with legal draws, an I is played within
+every window of thirteen placements. -/
+theorem trace_exists_I_within_thirteen {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState}
+    (hdraw : ∀ k, (π (trace cfg π g0 k)).piece ∈ (trace cfg π g0 k).bag)
+    (n : ℕ) :
+    ∃ k, k < 13 ∧ (π (trace cfg π g0 (n + k))).piece = Piece.I := by
+  obtain ⟨k, hk, hks⟩ := BagCadence.exists_I_within_thirteen
+    (legalSequence_of_trace_draws hdraw) n
+  exact ⟨k, hk, hks⟩
+
+/-- **A closed cycle plays an I within every thirteen placements** — the
+tetris-fuel cadence holds along the M2 artifact's own trajectory. -/
+theorem closedCycle_exists_I_within_thirteen (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (h0 : g0 ∈ C.states) (n : ℕ) :
+    ∃ k, k < 13 ∧
+      (C.policy (trace GameConfig.standard C.policy g0 (n + k))).piece
+        = Piece.I :=
+  trace_exists_I_within_thirteen
+    (fun k => C.legal_draw _ (C.trace_mem_states h0 k)) n
+
 end ClearRate
 end Tetris
