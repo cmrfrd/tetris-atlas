@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23jj) — the mass band (bank 32/N)
+
+- `cycle_mass_band` — on a cycle the board occupancy stays within
+  `[count(n) − 140, count(n) + 136]` at EVERY horizon: the ledger converts
+  the clearing bracket into a 14-row mass band. A cycle policy is a
+  bounded-occupancy policy, quantitatively.
+- `cycle_mass_periodic` — occupancy exactly periodic at boundaries.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ii) — density brackets at every horizon (bank 31/N)
 
 - `cycle_clears_bracket` — on a cycle, `14⌊Δn/35⌋ ≤ Δcleared ≤ 14⌊Δn/35⌋ + 14`

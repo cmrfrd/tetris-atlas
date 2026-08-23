@@ -894,6 +894,40 @@ theorem cycle_clears_bracket {π : Policy GameConfig.standard}
   · omega
   · omega
 
+/-- **The mass band**: on a cycle the board occupancy is trapped within a
+fourteen-row band of its boundary value at *every* horizon —
+`count(n) − 140 ≤ count(m) ≤ count(n) + 136`. The ledger converts the
+clearing bracket into a mass bracket: between period boundaries at most
+34 placements (136 cells) can accumulate, and at most one period's worth of
+clearing (140 cells) can drain. -/
+theorem cycle_mass_band {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m : ℕ}
+    (hnm : n ≤ m) :
+    (trace GameConfig.standard π GameState.init m).board.count
+        ≤ (trace GameConfig.standard π GameState.init n).board.count + 136
+      ∧ (trace GameConfig.standard π GameState.init n).board.count
+        ≤ (trace GameConfig.standard π GameState.init m).board.count + 140 := by
+  have hln := init_ledger hv n
+  have hlm := init_ledger hv m
+  rw [GameConfig.standard_cols] at hln hlm
+  obtain ⟨hlo, hhi⟩ := cycle_clears_bracket hv hcyc hnm
+  have hclm := cleared_mono GameConfig.standard π GameState.init hnm
+  have hdiv : 35 * ((m - n) / 35) ≤ m - n ∧ m - n < 35 * ((m - n) / 35) + 35 := by
+    omega
+  omega
+
+/-- Board occupancy is exactly periodic at cycle boundaries: `j` periods
+return the mass to its boundary value. -/
+theorem cycle_mass_periodic {π : Policy GameConfig.standard} {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) (j : ℕ) :
+    (trace GameConfig.standard π GameState.init (n + 35 * j)).board.count
+      = (trace GameConfig.standard π GameState.init n).board.count := by
+  have hiter := trace_period_multiples π GameState.init hcyc j
+  rw [show n + 35 * j = n + j * 35 by ring, ← hiter]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
