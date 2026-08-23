@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bb) — survival ⟺ live return (bank 75/N) ★
+
+- `survivesForever_of_trace_return` — ANY live return proves survival (the
+  general form behind the PC route).
+- `survivesForever_exists_return` — a surviving valid trace MUST return:
+  live states are in-field and well-formed, hence finitely many (embed into
+  `InFieldBoard × Bag`, no `Finset.univ` construction), pigeonhole.
+- **`survivesForever_iff_live_return`** — the characterization: cooperative
+  infinite play ⟺ a finite live prefix ending in a state revisit. Infinite
+  play IS finite checkable evidence. (CycleQuantum now imports
+  Invariants.StateSpace.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ba) — survival from finite evidence (bank 74/N)
 
 - `survivesForever_of_perfect_clear_pair` — liveness on the finite prefix
