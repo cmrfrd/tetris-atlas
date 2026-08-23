@@ -472,6 +472,105 @@ theorem period_singles_le_fourteen {π : Policy GameConfig.standard}
   have h := period_mix_fourteen hv hcyc
   omega
 
+/-- **The multi-period mix**: over `j` cycle periods the clear-size increments
+weight-sum to exactly `14·j` rows. -/
+theorem multi_period_mix_fourteen {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) (j : ℕ) :
+    (sizeCount GameConfig.standard π GameState.init 1 (n + 35 * j)
+        - sizeCount GameConfig.standard π GameState.init 1 n)
+      + 2 * (sizeCount GameConfig.standard π GameState.init 2 (n + 35 * j)
+        - sizeCount GameConfig.standard π GameState.init 2 n)
+      + 3 * (sizeCount GameConfig.standard π GameState.init 3 (n + 35 * j)
+        - sizeCount GameConfig.standard π GameState.init 3 n)
+      + 4 * (sizeCount GameConfig.standard π GameState.init 4 (n + 35 * j)
+        - sizeCount GameConfig.standard π GameState.init 4 n)
+      = 14 * j := by
+  have h1 := mix_identity (cfg := GameConfig.standard) (π := π) n
+  have h2 := mix_identity (cfg := GameConfig.standard) (π := π) (n + 35 * j)
+  have hcl := multi_period_clears hv hcyc j
+  have hm1 := sizeCount_mono GameConfig.standard π GameState.init 1
+    (Nat.le_add_right n (35 * j))
+  have hm2 := sizeCount_mono GameConfig.standard π GameState.init 2
+    (Nat.le_add_right n (35 * j))
+  have hm3 := sizeCount_mono GameConfig.standard π GameState.init 3
+    (Nat.le_add_right n (35 * j))
+  have hm4 := sizeCount_mono GameConfig.standard π GameState.init 4
+    (Nat.le_add_right n (35 * j))
+  omega
+
+/-- **At most `3·j` tetrises over `j` cycle periods** — the per-period row
+budget telescopes, which is strictly sharper than the aggregate mix
+(`⌊14j/4⌋ = 3.5j`): the periodic boundary re-arms the bound each lap. -/
+theorem multi_period_tetris_le {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    ∀ j, sizeCount GameConfig.standard π GameState.init 4 (n + 35 * j)
+      - sizeCount GameConfig.standard π GameState.init 4 n ≤ 3 * j := by
+  intro j
+  induction j with
+  | zero => simp
+  | succ j ih =>
+    have hj := trace_period_multiples π GameState.init hcyc j
+    have hj1 := trace_period_multiples π GameState.init hcyc (j + 1)
+    have hcycj : trace GameConfig.standard π GameState.init (n + 35 * j)
+        = trace GameConfig.standard π GameState.init ((n + 35 * j) + 35) := by
+      rw [show (n + 35 * j) + 35 = n + (j + 1) * 35 by ring,
+        show n + 35 * j = n + j * 35 by ring]
+      exact hj.symm.trans hj1
+    have hstep := period_tetris_le_three hv hcycj
+    have hmono := sizeCount_mono GameConfig.standard π GameState.init 4
+      (Nat.le_add_right n (35 * j))
+    rw [show n + 35 * (j + 1) = (n + 35 * j) + 35 by ring]
+    omega
+
+/-- At most `4·j` triples over `j` cycle periods (telescoped; sharper than
+the aggregate `⌊14j/3⌋`). -/
+theorem multi_period_triples_le {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    ∀ j, sizeCount GameConfig.standard π GameState.init 3 (n + 35 * j)
+      - sizeCount GameConfig.standard π GameState.init 3 n ≤ 4 * j := by
+  intro j
+  induction j with
+  | zero => simp
+  | succ j ih =>
+    have hj := trace_period_multiples π GameState.init hcyc j
+    have hj1 := trace_period_multiples π GameState.init hcyc (j + 1)
+    have hcycj : trace GameConfig.standard π GameState.init (n + 35 * j)
+        = trace GameConfig.standard π GameState.init ((n + 35 * j) + 35) := by
+      rw [show (n + 35 * j) + 35 = n + (j + 1) * 35 by ring,
+        show n + 35 * j = n + j * 35 by ring]
+      exact hj.symm.trans hj1
+    have hstep := period_triples_le_four hv hcycj
+    have hmono := sizeCount_mono GameConfig.standard π GameState.init 3
+      (Nat.le_add_right n (35 * j))
+    rw [show n + 35 * (j + 1) = (n + 35 * j) + 35 by ring]
+    omega
+
+/-- At most `7·j` doubles over `j` cycle periods (direct from the mix). -/
+theorem multi_period_doubles_le {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) (j : ℕ) :
+    sizeCount GameConfig.standard π GameState.init 2 (n + 35 * j)
+      - sizeCount GameConfig.standard π GameState.init 2 n ≤ 7 * j := by
+  have h := multi_period_mix_fourteen hv hcyc j
+  omega
+
+/-- At most `14·j` singles over `j` cycle periods (direct from the mix). -/
+theorem multi_period_singles_le {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) (j : ℕ) :
+    sizeCount GameConfig.standard π GameState.init 1 (n + 35 * j)
+      - sizeCount GameConfig.standard π GameState.init 1 n ≤ 14 * j := by
+  have h := multi_period_mix_fourteen hv hcyc j
+  omega
+
 /-- The cooperative size counter agrees with the windowed filter cardinality. -/
 theorem sizeCount_eq_card_filter {cfg : GameConfig} {π : Policy cfg} (k n : ℕ) :
     sizeCount cfg π GameState.init k n

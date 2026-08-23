@@ -851,6 +851,20 @@ theorem trace_eq_thirtyfive_clears_fourteen {π : Policy GameConfig.standard}
   have hbal := trace_eq_clears hv (Nat.le_add_right n 35) h
   omega
 
+/-- **The linear clearing law on cycles**: one 35-return pins every horizon —
+`j` periods clear exactly `14·j` rows. Periodicity iterates
+(`trace_period_multiples`) and the ledger balances exactly on each return. -/
+theorem multi_period_clears {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) (j : ℕ) :
+    cleared GameConfig.standard π GameState.init (n + 35 * j)
+      - cleared GameConfig.standard π GameState.init n = 14 * j := by
+  have hiter := trace_period_multiples π GameState.init hcyc j
+  rw [show n + j * 35 = n + 35 * j by ring] at hiter
+  have hbal := trace_eq_clears hv (Nat.le_add_right n (35 * j)) hiter
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23hh) — multi-period accumulation (bank 30/N)
+
+- `multi_period_clears` — one 35-return pins every horizon: `j` periods clear
+  exactly `14j` rows (`trace_period_multiples` + the exact ledger).
+- `multi_period_mix_fourteen` — the mix weight-sum is exactly `14j` over `j`
+  periods.
+- `multi_period_tetris_le` / `multi_period_triples_le` — TELESCOPED caps
+  `3j` / `4j`: the periodic boundary re-arms the row budget each lap, strictly
+  sharper than the aggregate mix (`⌊14j/4⌋ = 3.5j`, `⌊14j/3⌋ ≈ 4.67j`).
+- `multi_period_doubles_le` / `multi_period_singles_le` — `7j` / `14j` direct.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23gg) — cooperative counter bridges (bank 29/N)
 
 - `sizeCount_eq_card_filter` / `iCount_eq_card_filter` — the cooperative
