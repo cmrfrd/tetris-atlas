@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bl) — the block permutation (bank 85/N)
+
+- `refill_block_balanced` — a full-bag block IS a permutation: from any
+  refill point, the next seven draws deal each piece exactly once. The
+  7-bag's defining property recovered from legality alone (counting: ≥ 1
+  each by `exists_block_hit`, sum = 7 by fiberwise decomposition, so = 1).
+- The cadence theory's exactness completes: =1 per block, [4,6] per
+  35-window, =5 per period.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bk) — the phase is observable (bank 84/N)
 
 - `trace_window_phase_determined` / `adversarialTrace_window_phase_determined`

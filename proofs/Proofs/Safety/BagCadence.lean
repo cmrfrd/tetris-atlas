@@ -717,5 +717,52 @@ theorem window_thirtyfive_le_six {initBag : Bag} {s : ℕ → Piece}
 
 end BalanceIrred
 
+/-- **A full-bag block is a permutation**: from a refill, the next seven
+draws deal each of the seven pieces exactly once — the 7-bag's defining
+property, recovered from legality alone. Sharpens `exists_block_hit` (≥ 1)
+to exactness by counting. -/
+theorem refill_block_balanced {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {r : ℕ}
+    (hfull : bagAt initBag s r = Bag.full) (p : Piece) :
+    ((Finset.range 7).filter (fun k => s (r + k) = p)).card = 1 := by
+  classical
+  have hge : ∀ q : Piece,
+      1 ≤ ((Finset.range 7).filter (fun k => s (r + k) = q)).card := by
+    intro q
+    obtain ⟨k, hk7, hks⟩ := exists_block_hit hl hfull q
+    exact Finset.card_pos.mpr
+      ⟨k, Finset.mem_filter.mpr ⟨Finset.mem_range.mpr hk7, hks⟩⟩
+  have hsum : (∑ q : Piece,
+      ((Finset.range 7).filter (fun k => s (r + k) = q)).card) = 7 := by
+    rw [← Finset.card_eq_sum_card_fiberwise
+      (f := fun k => s (r + k)) (t := (Finset.univ : Finset Piece))
+      (fun k _ => Finset.mem_univ _)]
+    exact Finset.card_range 7
+  by_contra hne
+  have h2 : 2 ≤ ((Finset.range 7).filter (fun k => s (r + k) = p)).card := by
+    have := hge p
+    omega
+  have hpoint : ∀ q ∈ (Finset.univ : Finset Piece),
+      (if q = p then 2 else 1)
+        ≤ ((Finset.range 7).filter (fun k => s (r + k) = q)).card := by
+    intro q _
+    by_cases hq : q = p
+    · rw [if_pos hq, hq]
+      exact h2
+    · rw [if_neg hq]
+      exact hge q
+  have hsum_ge := Finset.sum_le_sum hpoint
+  have hsplit : (∑ q : Piece, if q = p then 2 else 1)
+      = (∑ q : Piece, 1) + (∑ q : Piece, if q = p then 1 else 0) := by
+    rw [← Finset.sum_add_distrib]
+    exact Finset.sum_congr rfl (fun q _ => by by_cases hq : q = p <;> simp [hq])
+  have hone : (∑ q : Piece, if q = p then 1 else 0) = 1 := by
+    rw [Finset.sum_ite_eq' Finset.univ p (fun _ => 1)]
+    simp
+  have hcard7 : (∑ q : Piece, 1) = 7 := by
+    rw [Finset.sum_const, smul_eq_mul, mul_one]
+    decide
+  omega
+
 end BagCadence
 end Tetris
