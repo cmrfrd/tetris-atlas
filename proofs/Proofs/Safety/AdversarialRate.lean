@@ -735,5 +735,36 @@ theorem closedCycle_period_tetris_le_five (C : ClosedCycle GameConfig.standard)
             = Piece.I)).card := Finset.card_le_card hsub
     _ = 5 := hbal
 
+/-- **At most three tetrises per adversarial cycle period** — fourteen rows
+cannot absorb a fourth, whoever picks the pieces. Sharper than the five-I
+supply. -/
+theorem adversary_period_tetris_le_three {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+      with piece := s n } : Placement).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35)) :
+    sizeCountAdv GameConfig.standard σ s 4 (n + 35)
+      - sizeCountAdv GameConfig.standard σ s 4 n ≤ 3 := by
+  have h := adversary_period_mix_fourteen hv hcyc
+  omega
+
+/-- Adversarial period caps for the other sizes: triples ≤ 4, doubles ≤ 7,
+singles ≤ 14. -/
+theorem adversary_period_size_caps {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+      with piece := s n } : Placement).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35)) :
+    sizeCountAdv GameConfig.standard σ s 3 (n + 35)
+        - sizeCountAdv GameConfig.standard σ s 3 n ≤ 4
+      ∧ sizeCountAdv GameConfig.standard σ s 2 (n + 35)
+        - sizeCountAdv GameConfig.standard σ s 2 n ≤ 7
+      ∧ sizeCountAdv GameConfig.standard σ s 1 (n + 35)
+        - sizeCountAdv GameConfig.standard σ s 1 n ≤ 14 := by
+  have h := adversary_period_mix_fourteen hv hcyc
+  omega
+
 end ClearRate
 end Tetris

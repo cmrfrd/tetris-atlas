@@ -41629,6 +41629,23 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ff) — the period size caps: tetrises ≤ 3 (bank 28/N)
+
+One-omega corollaries of `period_mix_fourteen`, both settings:
+- **`period_tetris_le_three`** / `adversary_period_tetris_le_three` — at most
+  THREE tetrises per cycle period: fourteen rows cannot absorb a fourth
+  (4·4 = 16 > 14). **Sharper than the five-I supply bound** — the row budget,
+  not the piece supply, is the binding constraint on cycle tetrises.
+- `period_triples_le_four`, `period_doubles_le_seven`,
+  `period_singles_le_fourteen` + `adversary_period_size_caps`.
+
+Tetris budget final table: ≤2/7-window, ≤6/35-window, **≤3/period** (row
+budget), ≤5/period (I supply, dominated), ≤ I-count cumulative.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ee) — tetris caps on periods, both settings (bank 27/N)
 
 - `adversary_window_tetris_le_six` — ≤ 6 four-row clears per 35 adversarial

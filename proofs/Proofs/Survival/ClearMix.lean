@@ -429,5 +429,48 @@ theorem period_mix_fourteen {π : Policy GameConfig.standard}
     (Nat.le_add_right n 35)
   omega
 
+/-- **At most three tetrises per cycle period** — sharper than the five-I
+supply: fourteen rows simply cannot absorb a fourth tetris (`4·4 > 14`). The
+mix polytope also caps triples at four, doubles at seven, singles at
+fourteen. -/
+theorem period_tetris_le_three {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    sizeCount GameConfig.standard π GameState.init 4 (n + 35)
+      - sizeCount GameConfig.standard π GameState.init 4 n ≤ 3 := by
+  have h := period_mix_fourteen hv hcyc
+  omega
+
+/-- At most four triples per cycle period. -/
+theorem period_triples_le_four {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    sizeCount GameConfig.standard π GameState.init 3 (n + 35)
+      - sizeCount GameConfig.standard π GameState.init 3 n ≤ 4 := by
+  have h := period_mix_fourteen hv hcyc
+  omega
+
+/-- At most seven doubles per cycle period. -/
+theorem period_doubles_le_seven {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    sizeCount GameConfig.standard π GameState.init 2 (n + 35)
+      - sizeCount GameConfig.standard π GameState.init 2 n ≤ 7 := by
+  have h := period_mix_fourteen hv hcyc
+  omega
+
+/-- At most fourteen singles per cycle period. -/
+theorem period_singles_le_fourteen {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    sizeCount GameConfig.standard π GameState.init 1 (n + 35)
+      - sizeCount GameConfig.standard π GameState.init 1 n ≤ 14 := by
+  have h := period_mix_fourteen hv hcyc
+  omega
+
 end ClearRate
 end Tetris
