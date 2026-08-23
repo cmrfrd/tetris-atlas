@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23au) — the observable loop (bank 68/N)
+
+- `cycle_bag_periodic` / `cycle_clear_size_periodic` — bag state and
+  per-step clear size are 35-periodic on the tail (generic cfg).
+- `cycle_window_sizeCount_shift` — every windowed clearing statistic
+  repeats VERBATIM one period later: the counter increments over
+  `[m+35, m+35+w)` equal those over `[m, m+w)`.
+- The batch-55 observable-periodicity family is complete: state, count,
+  piece stream, bag, clear sizes, windowed statistics.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23at) — adversarial idle I's (bank 67/N)
 
 - `adversary_period_idle_I_ge_two` — the idle-I law survives adversarial

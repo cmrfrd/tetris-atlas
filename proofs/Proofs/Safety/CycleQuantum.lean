@@ -1373,5 +1373,46 @@ theorem period_idle_I_ge_two {π : Policy GameConfig.standard}
   simp only [ne_eq] at hsplit hIfour ⊢
   omega
 
+/-- The bag is periodic on the tail of a cycle. -/
+theorem cycle_bag_periodic {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {n : ℕ}
+    (hcyc : trace cfg π g0 n = trace cfg π g0 (n + 35)) {m : ℕ} (hnm : n ≤ m) :
+    (trace cfg π g0 (m + 35)).bag = (trace cfg π g0 m).bag := by
+  rw [← trace_tail_periodic hcyc hnm]
+
+/-- **The clearing pattern loops**: the number of rows cleared at step
+`m + 35` equals the number cleared at step `m`, for every `m ≥ n` — the
+observable clear-size sequence of a cycle is 35-periodic. -/
+theorem cycle_clear_size_periodic {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {n : ℕ}
+    (hcyc : trace cfg π g0 n = trace cfg π g0 (n + 35)) {m : ℕ} (hnm : n ≤ m) :
+    (Board.fullRows cfg ((π (trace cfg π g0 (m + 35))).place
+        (trace cfg π g0 (m + 35)).board)).card
+      = (Board.fullRows cfg ((π (trace cfg π g0 m)).place
+        (trace cfg π g0 m).board)).card := by
+  rw [← trace_tail_periodic hcyc hnm]
+
+set_option maxRecDepth 4000 in
+/-- **Windowed size counters are shift-invariant by a period**: the number of
+`k`-row clears in `[m + 35, m + 35 + w)` equals the number in `[m, m + w)` —
+every statistic of the clearing process repeats verbatim one period later. -/
+theorem cycle_window_sizeCount_shift {π : Policy GameConfig.standard} {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) (k : ℕ) {m : ℕ}
+    (hnm : n ≤ m) (w : ℕ) :
+    sizeCount GameConfig.standard π GameState.init k (m + 35 + w)
+        - sizeCount GameConfig.standard π GameState.init k (m + 35)
+      = sizeCount GameConfig.standard π GameState.init k (m + w)
+        - sizeCount GameConfig.standard π GameState.init k m := by
+  classical
+  have h1 := sizeCount_window (cfg := GameConfig.standard) (π := π) k (m + 35) w
+  have h2 := sizeCount_window (cfg := GameConfig.standard) (π := π) k m w
+  rw [h1, h2]
+  refine congrArg Finset.card (Finset.filter_congr ?_)
+  intro j hj
+  have hper := cycle_clear_size_periodic (π := π) (g0 := GameState.init) hcyc
+    (show n ≤ m + j by omega)
+  rw [show m + 35 + j = (m + j) + 35 by omega, hper]
+
 end ClearRate
 end Tetris
