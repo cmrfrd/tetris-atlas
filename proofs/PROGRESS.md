@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23cb) — the adversary's freedom, explicit (bank 101/N)
+
+- `adversarialTrace_bag_eq_sdiff` / `adversary_piece_available_iff` — the
+  adversarial mirrors of the bag content law: THE ADVERSARY'S ENTIRE
+  FREEDOM IS A NO-REPEAT-WITHIN-BLOCK RULE — a piece is announceable at
+  step n iff it wasn't announced in the last n mod 7 steps.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ca) — bank 100 ★ MILESTONE
 
 - `survivesForever_of_trace_return_from` / `survivesForever_iff_live_return_from`

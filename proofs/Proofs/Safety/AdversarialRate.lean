@@ -1923,5 +1923,45 @@ theorem isClosedOn_count_stratum_ge_seven {A : Atlas GameConfig.standard}
           (show i + 5 * b ≤ i + 5 * a by omega) hEq.symm
         omega
 
+/-- The adversarial bag content law: the bag at step `n` is the full bag
+minus the pieces announced since the block boundary. -/
+theorem adversarialTrace_bag_eq_sdiff {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hdraw : ∀ n, s n
+      ∈ (adversarialTrace GameConfig.standard σ s GameState.init n).bag)
+    (n : ℕ) :
+    (adversarialTrace GameConfig.standard σ s GameState.init n).bag
+      = Bag.full \ ((Finset.range (n % 7)).image
+          (fun j => s (7 * (n / 7) + j))) := by
+  have hl : LegalSequenceFrom Bag.full s := by
+    intro k
+    have := hdraw k
+    rw [adversarialTrace_bag_from] at this
+    rwa [show GameState.init.bag = Bag.full from GameState.init_bag] at this
+  have h := BagCadence.bagAt_eq_sdiff hl n
+  rw [adversarialTrace_bag_from,
+    show GameState.init.bag = Bag.full from GameState.init_bag]
+  exact h
+
+/-- **The adversary's announcement constraint, explicit**: a piece is
+announceable at step `n` iff it was not announced in the last `n mod 7`
+steps — the adversary's entire freedom is a no-repeat-within-block rule. -/
+theorem adversary_piece_available_iff {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hdraw : ∀ n, s n
+      ∈ (adversarialTrace GameConfig.standard σ s GameState.init n).bag)
+    (n : ℕ) (p : Piece) :
+    p ∈ (adversarialTrace GameConfig.standard σ s GameState.init n).bag
+      ↔ ∀ j, j < n % 7 → s (7 * (n / 7) + j) ≠ p := by
+  rw [adversarialTrace_bag_eq_sdiff hdraw, Finset.mem_sdiff]
+  constructor
+  · rintro ⟨-, hnot⟩ j hj hp
+    exact hnot (Finset.mem_image.mpr ⟨j, Finset.mem_range.mpr hj, hp⟩)
+  · intro h
+    refine ⟨Bag.mem_full p, ?_⟩
+    intro hmem
+    obtain ⟨j, hj, hp⟩ := Finset.mem_image.mp hmem
+    exact h j (Finset.mem_range.mp hj) hp
+
 end ClearRate
 end Tetris
