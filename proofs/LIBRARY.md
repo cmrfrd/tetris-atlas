@@ -133,6 +133,7 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | **`iInter_safeIterate_subset_safe`** / **`safe_eq_iInter_safeIterate`** (`Safety/HorizonCompactness`) | **horizon compactness (König)**: the safe set = ⋂ of the finite-horizon iterates, unconditionally — a placement succeeding at cofinally many depths succeeds at all (finite move set + pigeonhole) |
 | `solvable_iff_forall_horizon`, `solvable_or_finite_refutation`, **`solvable_iff_exists_invariant`** | solver exists ⟺ every finite horizon is winnable; either solvable or a finite kill certificate exists; and **the irreducible core: solvable ⟺ a closed invariant exists** — the witness is equivalent to the theorem, but compressible to any describable closed predicate |
 | `solverReachable_finite`, **`solvable_iff_exists_finite_invariant`**, **`solvable_implies_bounded_atlas`** (`Safety/FiniteInvariant`) | **the Atlas may be taken FINITE, with an a-priori bound**: solvable ⟺ ∃ finite closed invariant, of size ≤ `2^207` (`2^200` in-field boards × 128 bags) |
+| `applyStep_row_lt`, **`mem_safeIterate_of_headroom`**, **`init_mem_safeIterate_five`** (`Safety/HeadroomIterate`) | headroom-graded safety: `4k` rows of clearance ⇒ `safeIterate k` with NO strategy; init's 20 rows ⇒ **no kill certificate of depth ≤ 5** — tight (5 vertical pieces reach height 20) |
 | `GameConfig.flat` (10×1), `flat_O_step_lost`, `init_not_safe_flat`, **`not_tetrisSolvableValidFor_flat`** (`Safety/CountingBarrier`) | **first machine-checked unsolvability instance** — and the counting barrier: every ledger theorem holds at 10×1 verbatim, yet 10×1 is unsolvable ⇒ no config-generic counting argument can prove the standard game solvable; the missing ingredient is geometric |
 | `LegalSequenceFrom.splice`, `adversarialTrace_*`, the pigeonhole cycle-existence lemmas | the survival + cycle-existence engine under the bridge |
 
@@ -223,7 +224,7 @@ Proofs/
   Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite
                  SkylineInvariant ShiftCertificate BandSchedule PlinthCert
                  CycleQuantum MaximalAtlas AdversarialRate CountingBarrier
-                 BagCadence FiniteInvariant
+                 BagCadence FiniteInvariant HeadroomIterate
                  HorizonCompactness                                            ✓
 ProofsExperiments.lean       -- separate lib (route reductions, native_decide, Scratch/*)
 Proofs/Experiments/          -- WqoCarrier/HoleyCarrier reductions, EnergyGame, PieceCharge,

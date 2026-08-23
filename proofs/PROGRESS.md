@@ -13,7 +13,7 @@ new tick — it tells you where the prior tick left off.
 
 ## Current build status
 
-- `lake build` (green `Proofs`) — **PASSING** (8310 jobs); base-axiom-clean
+- `lake build` (green `Proofs`) — **PASSING** (8311 jobs); base-axiom-clean
   (`propext`, `Classical.choice`, `Quot.sound`), **no `sorry`, no `native_decide`**.
 - `lake build ProofsExperiments` (research routes) — **PASSING** (8288 jobs); may use
   `native_decide`.
@@ -41626,6 +41626,28 @@ Next: <subtask id and one-line description>
 ## Tick log
 
 *(append newest at top below this line)*
+
+---
+
+### Tick (manual, 2026-08-23h) — headroom-graded safety: no depth-5 kill tree (bank 4/N)
+
+**NEW** `proofs/Proofs/Safety/HeadroomIterate.lean` (green):
+- `exists_valid_placement_of_cols` — rotation 0 at column 0 is valid whenever
+  `4 ≤ cols` (standalone; previously placement existence was safety-gated).
+- `colHeight_le_of_forall_row_lt`, `dropped_row_lt`, `clearLines_row_le`,
+  **`applyStep_row_lt`** — one full move raises the stack < 4 rows,
+  for EVERY placement (valid or not): drop offset ≤ stack top, profile ≤ 4
+  tall, clears only lower cells.
+- **`mem_safeIterate_of_headroom`** — 4k rows of clearance ⇒ `safeIterate k`,
+  with any valid placement, no strategy: the adversary's choice is irrelevant.
+- **`init_mem_safeIterate_five`** — the first five rungs of the compactness
+  ladder certified with zero search: **no adversarial kill certificate of
+  depth ≤ 5 exists**. Tight for strategy-free play (five vertical pieces reach
+  height 20; the sixth placement is the first that requires a decision).
+
+Build: PASS (8311 jobs); hygiene OK; all `[propext, Classical.choice,
+Quot.sound]`. Gotcha: `omega` won't reduce structure-literal projections
+(`{piece := p, ...}.col`) — `dsimp only` first.
 
 ---
 
