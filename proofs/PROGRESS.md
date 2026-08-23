@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23am) — adversarial homogeneity (bank 60/N)
+
+- `adversarial_window_mix_stationary` / `_tetris_le_three_stationary` /
+  `_events_stationary` — every 35-window of a periodic-stream adversarial
+  cycle is a full period: mix exactly 14, ≤ 3 tetrises, 4–14 clear events,
+  from any starting point. Homogeneity parity complete.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23al) — statistical homogeneity (bank 59/N)
 
 - On a cycle EVERY 35-window is a full period, from any starting point:

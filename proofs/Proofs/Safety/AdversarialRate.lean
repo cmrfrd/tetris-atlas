@@ -1161,5 +1161,72 @@ theorem adversarial_dry_spell_le_thirtyfour {σ : Solver GameConfig.standard}
     (Nat.le_add_right m₀ 35)
   omega
 
+/-- Every 35-window's mix weight-sums to exactly fourteen, adversarially,
+from any starting point under a periodic stream. -/
+theorem adversarial_window_mix_stationary {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    {m₀ : ℕ} (hm : n ≤ m₀) :
+    (sizeCountAdv GameConfig.standard σ s 1 (m₀ + 35)
+        - sizeCountAdv GameConfig.standard σ s 1 m₀)
+      + 2 * (sizeCountAdv GameConfig.standard σ s 2 (m₀ + 35)
+        - sizeCountAdv GameConfig.standard σ s 2 m₀)
+      + 3 * (sizeCountAdv GameConfig.standard σ s 3 (m₀ + 35)
+        - sizeCountAdv GameConfig.standard σ s 3 m₀)
+      + 4 * (sizeCountAdv GameConfig.standard σ s 4 (m₀ + 35)
+        - sizeCountAdv GameConfig.standard σ s 4 m₀)
+      = 14 :=
+  adversary_period_mix_fourteen hv
+    (adversarialTrace_tail_periodic hper hcyc hm)
+
+/-- Every 35-window holds at most three adversarial tetrises, from any
+starting point under a periodic stream. -/
+theorem adversarial_window_tetris_le_three_stationary
+    {σ : Solver GameConfig.standard} {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    {m₀ : ℕ} (hm : n ≤ m₀) :
+    sizeCountAdv GameConfig.standard σ s 4 (m₀ + 35)
+      - sizeCountAdv GameConfig.standard σ s 4 m₀ ≤ 3 :=
+  adversary_period_tetris_le_three hv
+    (adversarialTrace_tail_periodic hper hcyc hm)
+
+/-- Every 35-window clears on 4–14 of its placements, adversarially, from
+any starting point under a periodic stream. -/
+theorem adversarial_window_events_stationary {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    {m₀ : ℕ} (hm : n ≤ m₀) :
+    4 ≤ (sizeCountAdv GameConfig.standard σ s 1 (m₀ + 35)
+          - sizeCountAdv GameConfig.standard σ s 1 m₀)
+        + (sizeCountAdv GameConfig.standard σ s 2 (m₀ + 35)
+          - sizeCountAdv GameConfig.standard σ s 2 m₀)
+        + (sizeCountAdv GameConfig.standard σ s 3 (m₀ + 35)
+          - sizeCountAdv GameConfig.standard σ s 3 m₀)
+        + (sizeCountAdv GameConfig.standard σ s 4 (m₀ + 35)
+          - sizeCountAdv GameConfig.standard σ s 4 m₀)
+      ∧ (sizeCountAdv GameConfig.standard σ s 1 (m₀ + 35)
+          - sizeCountAdv GameConfig.standard σ s 1 m₀)
+        + (sizeCountAdv GameConfig.standard σ s 2 (m₀ + 35)
+          - sizeCountAdv GameConfig.standard σ s 2 m₀)
+        + (sizeCountAdv GameConfig.standard σ s 3 (m₀ + 35)
+          - sizeCountAdv GameConfig.standard σ s 3 m₀)
+        + (sizeCountAdv GameConfig.standard σ s 4 (m₀ + 35)
+          - sizeCountAdv GameConfig.standard σ s 4 m₀)
+        ≤ 14 :=
+  adversary_period_clear_events_bounds hv
+    (adversarialTrace_tail_periodic hper hcyc hm)
+
 end ClearRate
 end Tetris
