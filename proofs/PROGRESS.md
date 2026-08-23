@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bp) — the big-clear frequency cap (bank 89/N)
+
+- `big_clear_frequency_cap` — triples and tetrises together number at most
+  `3⌊Δn/7⌋ + 6` in ANY window: the 3-clear and 4-clear fibers are disjoint,
+  embed into the I∪L∪J fiber, and the three frequency laws bound the union.
+  The big-clear rate can never exceed 3/7 of placements.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bo) — counter frequency laws (bank 88/N)
 
 - `iCount_frequency_law` — `⌊(Δn−7)/7⌋ ≤ ΔiCount ≤ ⌊Δn/7⌋+2` at every

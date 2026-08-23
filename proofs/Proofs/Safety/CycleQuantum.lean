@@ -2162,5 +2162,105 @@ theorem tetris_frequency_cap {π : Policy GameConfig.standard}
   obtain ⟨-, hI⟩ := iCount_frequency_law hdraw hnm
   omega
 
+/-- **The big-clear frequency cap**: triples and tetrises together number at
+most `3⌊Δn/7⌋ + 6` in any window past the seed — every 3+-clear rides an I,
+L or J, and each of those runs at `1/7 + O(1)`. -/
+theorem big_clear_frequency_cap {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n m : ℕ}
+    (hnm : n ≤ m) :
+    (sizeCount GameConfig.standard π GameState.init 3 m
+        - sizeCount GameConfig.standard π GameState.init 3 n)
+      + (sizeCount GameConfig.standard π GameState.init 4 m
+        - sizeCount GameConfig.standard π GameState.init 4 n)
+      ≤ 3 * ((m - n) / 7) + 6 := by
+  classical
+  have hl := legalSequence_of_trace_draws hdraw
+  set w := m - n with hw
+  -- windowed counters as filter cards
+  have h3 := sizeCount_window (cfg := GameConfig.standard) (π := π) 3 n w
+  have h4 := sizeCount_window (cfg := GameConfig.standard) (π := π) 4 n w
+  rw [show n + w = m by omega] at h3 h4
+  -- the two big-clear fibers are disjoint and land in the ILJ fiber
+  set A := (Finset.range w).filter (fun j =>
+    (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init (n + j))).place
+        (trace GameConfig.standard π GameState.init (n + j)).board)).card = 3)
+    with hA
+  set B := (Finset.range w).filter (fun j =>
+    (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init (n + j))).place
+        (trace GameConfig.standard π GameState.init (n + j)).board)).card = 4)
+    with hB
+  set C := (Finset.range w).filter (fun j =>
+    (π (trace GameConfig.standard π GameState.init (n + j))).piece = Piece.I
+      ∨ (π (trace GameConfig.standard π GameState.init (n + j))).piece = Piece.L
+      ∨ (π (trace GameConfig.standard π GameState.init (n + j))).piece = Piece.J)
+    with hC
+  have hdisj : Disjoint A B := by
+    rw [Finset.disjoint_left]
+    intro j hjA hjB
+    rw [hA, Finset.mem_filter] at hjA
+    rw [hB, Finset.mem_filter] at hjB
+    omega
+  have hAC : A ⊆ C := by
+    intro j hj
+    rw [hA, Finset.mem_filter] at hj
+    rw [hC, Finset.mem_filter]
+    exact ⟨hj.1, three_clear_requires_I_L_or_J_trace hv (le_of_eq hj.2.symm)⟩
+  have hBC : B ⊆ C := by
+    intro j hj
+    rw [hB, Finset.mem_filter] at hj
+    rw [hC, Finset.mem_filter]
+    refine ⟨hj.1, three_clear_requires_I_L_or_J_trace hv ?_⟩
+    omega
+  have hunion : A.card + B.card ≤ C.card := by
+    rw [← Finset.card_union_of_disjoint hdisj]
+    exact Finset.card_le_card (Finset.union_subset hAC hBC)
+  -- the ILJ fiber splits into the three piece fibers
+  have hCsplit : C.card
+      ≤ ((Finset.range w).filter (fun j =>
+          (π (trace GameConfig.standard π GameState.init (n + j))).piece
+            = Piece.I)).card
+        + ((Finset.range w).filter (fun j =>
+          (π (trace GameConfig.standard π GameState.init (n + j))).piece
+            = Piece.L)).card
+        + ((Finset.range w).filter (fun j =>
+          (π (trace GameConfig.standard π GameState.init (n + j))).piece
+            = Piece.J)).card := by
+    have hsub : C ⊆ ((Finset.range w).filter (fun j =>
+          (π (trace GameConfig.standard π GameState.init (n + j))).piece
+            = Piece.I))
+        ∪ (((Finset.range w).filter (fun j =>
+          (π (trace GameConfig.standard π GameState.init (n + j))).piece
+            = Piece.L))
+        ∪ ((Finset.range w).filter (fun j =>
+          (π (trace GameConfig.standard π GameState.init (n + j))).piece
+            = Piece.J))) := by
+      intro j hj
+      rw [hC, Finset.mem_filter] at hj
+      rw [Finset.mem_union, Finset.mem_union]
+      rcases hj.2 with h | h | h
+      · exact Or.inl (Finset.mem_filter.mpr ⟨hj.1, h⟩)
+      · exact Or.inr (Or.inl (Finset.mem_filter.mpr ⟨hj.1, h⟩))
+      · exact Or.inr (Or.inr (Finset.mem_filter.mpr ⟨hj.1, h⟩))
+    calc C.card ≤ _ := Finset.card_le_card hsub
+      _ ≤ _ := le_trans (Finset.card_union_le _ _)
+        (by
+          have := Finset.card_union_le
+            ((Finset.range w).filter (fun j =>
+              (π (trace GameConfig.standard π GameState.init (n + j))).piece
+                = Piece.L))
+            ((Finset.range w).filter (fun j =>
+              (π (trace GameConfig.standard π GameState.init (n + j))).piece
+                = Piece.J))
+          omega)
+  -- each piece fiber obeys the frequency law
+  have hI := BagCadence.window_frequency_law hl n Piece.I w
+  have hL := BagCadence.window_frequency_law hl n Piece.L w
+  have hJ := BagCadence.window_frequency_law hl n Piece.J w
+  omega
+
 end ClearRate
 end Tetris
