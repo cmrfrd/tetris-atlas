@@ -1165,5 +1165,74 @@ theorem cycle_dry_spell_le_thirtyfour {π : Policy GameConfig.standard}
     (Nat.le_add_right m₀ 35)
   omega
 
+/-- **Every 35-window of a cycle is piece-balanced**: from any starting point
+each of the seven pieces is dealt exactly five times — the cycle is
+statistically homogeneous, window by window. -/
+theorem cycle_window_piece_balanced_stationary {π : Policy GameConfig.standard}
+    {g0 : GameState}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π g0 k)).piece
+      ∈ (trace GameConfig.standard π g0 k).bag) {n : ℕ}
+    (hcyc : trace GameConfig.standard π g0 n
+        = trace GameConfig.standard π g0 (n + 35)) {m₀ : ℕ} (hm : n ≤ m₀)
+    (p : Piece) :
+    ((Finset.range 35).filter (fun k =>
+        (π (trace GameConfig.standard π g0 (m₀ + k))).piece = p)).card = 5 :=
+  trace_period_piece_balanced hdraw (trace_tail_periodic hcyc hm) p
+
+/-- Every 35-window's clear-size mix weight-sums to exactly fourteen, from
+any starting point. -/
+theorem cycle_window_mix_stationary {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) :
+    (sizeCount GameConfig.standard π GameState.init 1 (m₀ + 35)
+        - sizeCount GameConfig.standard π GameState.init 1 m₀)
+      + 2 * (sizeCount GameConfig.standard π GameState.init 2 (m₀ + 35)
+        - sizeCount GameConfig.standard π GameState.init 2 m₀)
+      + 3 * (sizeCount GameConfig.standard π GameState.init 3 (m₀ + 35)
+        - sizeCount GameConfig.standard π GameState.init 3 m₀)
+      + 4 * (sizeCount GameConfig.standard π GameState.init 4 (m₀ + 35)
+        - sizeCount GameConfig.standard π GameState.init 4 m₀)
+      = 14 :=
+  period_mix_fourteen hv (trace_tail_periodic hcyc hm)
+
+/-- Every 35-window of a cycle holds at most three tetrises, from any
+starting point — sharper on cycles than the general six-per-window law. -/
+theorem cycle_window_tetris_le_three_stationary {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) :
+    sizeCount GameConfig.standard π GameState.init 4 (m₀ + 35)
+      - sizeCount GameConfig.standard π GameState.init 4 m₀ ≤ 3 :=
+  period_tetris_le_three hv (trace_tail_periodic hcyc hm)
+
+/-- Every 35-window of a cycle clears on 4–14 of its placements, from any
+starting point — silence dominates every window, not just the periods. -/
+theorem cycle_window_events_stationary {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) :
+    4 ≤ (sizeCount GameConfig.standard π GameState.init 1 (m₀ + 35)
+          - sizeCount GameConfig.standard π GameState.init 1 m₀)
+        + (sizeCount GameConfig.standard π GameState.init 2 (m₀ + 35)
+          - sizeCount GameConfig.standard π GameState.init 2 m₀)
+        + (sizeCount GameConfig.standard π GameState.init 3 (m₀ + 35)
+          - sizeCount GameConfig.standard π GameState.init 3 m₀)
+        + (sizeCount GameConfig.standard π GameState.init 4 (m₀ + 35)
+          - sizeCount GameConfig.standard π GameState.init 4 m₀)
+      ∧ (sizeCount GameConfig.standard π GameState.init 1 (m₀ + 35)
+          - sizeCount GameConfig.standard π GameState.init 1 m₀)
+        + (sizeCount GameConfig.standard π GameState.init 2 (m₀ + 35)
+          - sizeCount GameConfig.standard π GameState.init 2 m₀)
+        + (sizeCount GameConfig.standard π GameState.init 3 (m₀ + 35)
+          - sizeCount GameConfig.standard π GameState.init 3 m₀)
+        + (sizeCount GameConfig.standard π GameState.init 4 (m₀ + 35)
+          - sizeCount GameConfig.standard π GameState.init 4 m₀)
+        ≤ 14 :=
+  period_clear_events_bounds hv (trace_tail_periodic hcyc hm)
+
 end ClearRate
 end Tetris

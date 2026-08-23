@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23al) — statistical homogeneity (bank 59/N)
+
+- On a cycle EVERY 35-window is a full period, from any starting point:
+- `cycle_window_piece_balanced_stationary` — each piece exactly 5 times.
+- `cycle_window_mix_stationary` — mix weight-sum exactly 14.
+- `cycle_window_tetris_le_three_stationary` — ≤ 3 tetrises (beats the
+  general ≤ 6 window law on cycles).
+- `cycle_window_events_stationary` — 4–14 clear events (≥ 21 silent).
+- The anchored period laws are now all shift-invariant.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ak) — the sharp dry-spell bound (bank 58/N)
 
 - `cycle_window_clears_exact` — every 35-window of a cycle clears EXACTLY
