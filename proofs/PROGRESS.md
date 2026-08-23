@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23dd) — windowed tetris caps on traces (bank 26/N)
+
+- `trace_board_no_full_of_pos` — from ANY seed, trace boards after step one
+  carry no full row (every successor is a clearLines image).
+- `trace_tetris_step_I` — a 4-clear at any positive trace step is an I, from
+  any seed (removes the init-only restriction of `tetris_requires_I_trace`).
+- **`trace_window_tetris_le_six`** / `closedCycle_window_tetris_le_six` — at
+  most six tetrises per 35 placements along any legal trace, including the
+  M2 artifact's own trajectory.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23cc) — window law on traces and cycles (bank 25/N)
 
 - `trace_window_piece_bounds` — the [4,6] window law lifted to policy traces

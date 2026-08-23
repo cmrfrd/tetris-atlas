@@ -409,5 +409,54 @@ theorem closedCycle_window_piece_bounds (C : ClosedCycle GameConfig.standard)
   trace_window_piece_bounds
     (fun k => C.legal_draw _ (C.trace_mem_states h0 k)) n p
 
+/-- From any seed, trace boards after the first step carry no full row: every
+successor board is a `clearLines` image. -/
+theorem trace_board_no_full_of_pos {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {m : ℕ} (hm : 1 ≤ m) (r : ℕ) :
+    ¬ Board.isFull cfg (trace cfg π g0 m).board r := by
+  obtain ⟨k, rfl⟩ : ∃ k, m = k + 1 := ⟨m - 1, by omega⟩
+  rw [trace_succ, GameState.step_board, Placement.applyStep_eq_clearLines_place]
+  exact Board.clearLines_no_full _ cfg.cols_pos r
+
+/-- A four-row clear at any positive trace step is played with an I — from any
+seed, not just `init`. -/
+theorem trace_tetris_step_I {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {m : ℕ} (hm : 1 ≤ m)
+    (h4 : 4 ≤ (Board.fullRows cfg
+      ((π (trace cfg π g0 m)).place (trace cfg π g0 m).board)).card) :
+    (π (trace cfg π g0 m)).piece = Piece.I :=
+  tetris_requires_I (fun r => trace_board_no_full_of_pos hm r) h4
+
+/-- **At most six tetrises per 35 placements, along any legal trace** (windows
+past the seed): four-row clears require an I and the window law caps the I's
+at six. -/
+theorem trace_window_tetris_le_six {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState}
+    (hdraw : ∀ k, (π (trace cfg π g0 k)).piece ∈ (trace cfg π g0 k).bag)
+    {n : ℕ} (hn : 1 ≤ n) :
+    ((Finset.range 35).filter (fun k => 4 ≤ (Board.fullRows cfg
+        ((π (trace cfg π g0 (n + k))).place
+          (trace cfg π g0 (n + k)).board)).card)).card ≤ 6 := by
+  have hsub : (Finset.range 35).filter (fun k => 4 ≤ (Board.fullRows cfg
+        ((π (trace cfg π g0 (n + k))).place
+          (trace cfg π g0 (n + k)).board)).card)
+      ⊆ (Finset.range 35).filter (fun k =>
+        (π (trace cfg π g0 (n + k))).piece = Piece.I) := by
+    intro k hk
+    obtain ⟨h1, h2⟩ := Finset.mem_filter.mp hk
+    exact Finset.mem_filter.mpr ⟨h1, trace_tetris_step_I (by omega) h2⟩
+  exact le_trans (Finset.card_le_card hsub)
+    (trace_window_piece_bounds hdraw n Piece.I).2
+
+/-- The tetris window cap along the M2 artifact's trajectory. -/
+theorem closedCycle_window_tetris_le_six (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (h0 : g0 ∈ C.states) {n : ℕ} (hn : 1 ≤ n) :
+    ((Finset.range 35).filter (fun k => 4 ≤ (Board.fullRows GameConfig.standard
+        ((C.policy (trace GameConfig.standard C.policy g0 (n + k))).place
+          (trace GameConfig.standard C.policy g0 (n + k)).board)).card)).card
+      ≤ 6 :=
+  trace_window_tetris_le_six
+    (fun k => C.legal_draw _ (C.trace_mem_states h0 k)) hn
+
 end ClearRate
 end Tetris
