@@ -972,6 +972,26 @@ theorem cycle_dry_spell_le {π : Policy GameConfig.standard}
     (Nat.le_add_right m₀ 69)
   omega
 
+/-- **A heavy cycle keeps a tall column forever**: if the cycle's boundary
+board carries more than `140 + 10·H` cells, then at *every* horizon some
+column rises strictly above `H` — the mass band caps the drainage at 140
+cells, and mass needs volume. A cycle cannot alternately flatten and
+rebuild past this floor. -/
+theorem cycle_height_floor {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {H m : ℕ}
+    (hnm : n ≤ m)
+    (hheavy : 140 + 10 * H
+      < (trace GameConfig.standard π GameState.init n).board.count) :
+    H < Board.maxHeight GameConfig.standard
+      (trace GameConfig.standard π GameState.init m).board := by
+  obtain ⟨-, hlo⟩ := cycle_mass_band hv hcyc hnm
+  have hwf := trace_board_wf hv (GameState.init_board_wf GameConfig.standard) m
+  apply Board.lt_maxHeight_of_cols_mul_lt_count hwf
+  rw [GameConfig.standard_cols]
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

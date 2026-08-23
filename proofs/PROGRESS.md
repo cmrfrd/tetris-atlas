@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ae) — the cycle height floor (bank 52/N)
+
+- `cycle_height_floor` — a heavy cycle keeps a tall column FOREVER: if the
+  boundary board carries more than `140 + 10H` cells, every horizon has some
+  column strictly above `H`. The mass band caps drainage at 140 cells and
+  mass needs volume (`lt_maxHeight_of_cols_mul_lt_count`). A cycle cannot
+  alternately flatten and rebuild past this floor.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ad) — the M3 bridge (bank 51/N)
 
 - `closedCycle_contains_minimal_orbit` STRENGTHENED: the tight sub-cycle's
