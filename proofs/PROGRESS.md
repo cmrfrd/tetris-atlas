@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ii) — density brackets at every horizon (bank 31/N)
+
+- `cycle_clears_bracket` — on a cycle, `14⌊Δn/35⌋ ≤ Δcleared ≤ 14⌊Δn/35⌋ + 14`
+  at EVERY horizon: within 14 rows of the linear 2.8/bag law, sharper on
+  cycles than the general 20-row deviation budget. Squeeze between enclosing
+  period boundaries.
+- `cycle_tetris_density` — `Δtetris ≤ 3⌊Δn/35⌋ + 3`: asymptotic tetris
+  density ≤ 3/35 ≈ 0.086 per placement, pinned by the row budget alone.
+- Lean note: `omega` handles `/` and `%` by numeral constants natively — no
+  `Nat.div_mul_le_self` chains needed (`Nat.lt_div_add_one_mul_self` does not
+  exist).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23hh) — multi-period accumulation (bank 30/N)
 
 - `multi_period_clears` — one 35-return pins every horizon: `j` periods clear

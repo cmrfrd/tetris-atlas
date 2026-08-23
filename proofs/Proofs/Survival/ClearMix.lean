@@ -571,6 +571,24 @@ theorem multi_period_singles_le {π : Policy GameConfig.standard}
   have h := multi_period_mix_fourteen hv hcyc j
   omega
 
+/-- **The tetris density law**: on a cycle, every horizon holds at most
+`3·⌊(m−n)/35⌋ + 3` tetrises — asymptotic density ≤ 3/35 per placement
+(≈ 0.086), pinned by the row budget alone. Round up to the enclosing period
+boundary and telescope. -/
+theorem cycle_tetris_density {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m : ℕ}
+    (hnm : n ≤ m) :
+    sizeCount GameConfig.standard π GameState.init 4 m
+      - sizeCount GameConfig.standard π GameState.init 4 n
+      ≤ 3 * ((m - n) / 35) + 3 := by
+  set j := (m - n) / 35 with hj
+  have hhi : m ≤ n + 35 * (j + 1) := by omega
+  have hcap := multi_period_tetris_le hv hcyc (j + 1)
+  have hmono := sizeCount_mono GameConfig.standard π GameState.init 4 hhi
+  omega
+
 /-- The cooperative size counter agrees with the windowed filter cardinality. -/
 theorem sizeCount_eq_card_filter {cfg : GameConfig} {π : Policy cfg} (k n : ℕ) :
     sizeCount cfg π GameState.init k n

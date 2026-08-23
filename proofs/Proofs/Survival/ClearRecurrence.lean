@@ -865,6 +865,35 @@ theorem multi_period_clears {π : Policy GameConfig.standard}
   have hbal := trace_eq_clears hv (Nat.le_add_right n (35 * j)) hiter
   omega
 
+/-- **The clearing bracket at every horizon**: on a cycle, the cleared count
+never strays more than fourteen rows from the linear 2.8-per-bag law —
+`14·⌊(m−n)/35⌋ ≤ Δcleared ≤ 14·⌊(m−n)/35⌋ + 14` for every `m ≥ n`. Squeeze
+between the two enclosing period boundaries; sharper on cycles than the
+general 20-row deviation budget. -/
+theorem cycle_clears_bracket {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m : ℕ}
+    (hnm : n ≤ m) :
+    14 * ((m - n) / 35)
+        ≤ cleared GameConfig.standard π GameState.init m
+          - cleared GameConfig.standard π GameState.init n
+      ∧ cleared GameConfig.standard π GameState.init m
+          - cleared GameConfig.standard π GameState.init n
+        ≤ 14 * ((m - n) / 35) + 14 := by
+  set j := (m - n) / 35 with hj
+  have hlo : n + 35 * j ≤ m := by omega
+  have hhi : m ≤ n + 35 * (j + 1) := by omega
+  have hjlaw := multi_period_clears hv hcyc j
+  have hjlaw' := multi_period_clears hv hcyc (j + 1)
+  have hm1 := cleared_mono GameConfig.standard π GameState.init hlo
+  have hm2 := cleared_mono GameConfig.standard π GameState.init hhi
+  have hm0 := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right n (35 * j))
+  constructor
+  · omega
+  · omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
