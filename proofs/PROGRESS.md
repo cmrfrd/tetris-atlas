@@ -41629,6 +41629,31 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23l) — the third group: depth 25 (bank 8/N)
+
+`HeadroomIterate` additions:
+- `narrowRot` + `shapeUp_narrowRot_bounds` — every piece has a rotation
+  fitting a 2×4 box (verticals; O 2×2; I stands 1×4). 7-case decide.
+- `applyStep_group_bound'` — the group-local move bound made parametric in
+  the (width, height, rotation) of the played piece.
+- **`mem_safeIterate_of_three_group`** — static quotas kA, kB, kC over column
+  groups [0,4), [4,8), [8,·) with per-group budgets HA+2kA ≤ rows,
+  HB+2kB ≤ rows, HC+4kC ≤ rows certify kA+kB+kC steps (exhaust A flat, then
+  B flat, then C narrow). Simpler than the two-group min-selection — static
+  quotas need NO parity bookkeeping — and subsumes it.
+- **`init_mem_safeIterate_twentyfive`** (+ `_of_le_twentyfive`) — quotas
+  10+10+5 exhaust 60 rows of budget at 2+2+4 rows per placement: **no
+  adversarial kill certificate of depth ≤ 25 exists.**
+
+Ladder: 5 (any play) → 10 (flat) → 20 (two-group) → **25 (three-group)**.
+This is the clear-free ceiling of the schedule family: all ten columns are
+now used, and pushing past 25 requires actually CLEARING rows — the first
+rung where the real game begins.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23k) — refill periodicity + repetition floor (bank 7/N)
 
 `BagCadence` additions:
