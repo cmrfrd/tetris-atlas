@@ -1870,5 +1870,96 @@ theorem survivesForever_iff_bounded_evidence {π : Policy GameConfig.standard}
   · rintro ⟨n₂, -, n₁, hlt, hret, hlive⟩
     exact survivesForever_of_trace_return hlt hret hlive
 
+/-- The closed cycle carved from any live return — the general form of
+`perfectClearCycle`, detecting the loop by state equality directly. -/
+def closedCycleOfReturn {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {g0 : GameState}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π g0 k)).piece
+      ∈ (trace GameConfig.standard π g0 k).bag) {n₁ n₂ : ℕ} (hlt : n₁ < n₂)
+    (hret : trace GameConfig.standard π g0 n₁
+        = trace GameConfig.standard π g0 n₂)
+    (hlive : ∀ k, ¬ (trace GameConfig.standard π g0 k).lost
+      GameConfig.standard) :
+    ClosedCycle GameConfig.standard where
+  states := (Finset.range (n₂ - n₁)).image
+    (fun k => trace GameConfig.standard π g0 (n₁ + k))
+  policy := π
+  valid := fun s _ => hv s
+  legal_draw := by
+    intro s hs
+    rw [Finset.mem_image] at hs
+    obtain ⟨k, -, rfl⟩ := hs
+    rw [Bag.canDraw_iff_mem]
+    exact hdraw (n₁ + k)
+  not_lost := by
+    intro s hs
+    rw [Finset.mem_image] at hs
+    obtain ⟨k, -, rfl⟩ := hs
+    exact hlive (n₁ + k)
+  closed := by
+    intro s hs
+    rw [Finset.mem_image] at hs
+    obtain ⟨k, -, rfl⟩ := hs
+    have hret' : trace GameConfig.standard π g0 n₁
+        = trace GameConfig.standard π g0 (n₁ + (n₂ - n₁)) := by
+      rw [show n₁ + (n₂ - n₁) = n₂ by omega]
+      exact hret
+    have hstep : (trace GameConfig.standard π g0 (n₁ + k)).step
+          GameConfig.standard (π (trace GameConfig.standard π g0 (n₁ + k)))
+        = trace GameConfig.standard π g0 ((n₁ + k) + 1) :=
+      (trace_succ GameConfig.standard π g0 (n₁ + k)).symm
+    rw [hstep]
+    exact cycle_orbit_subset_period (show 0 < n₂ - n₁ by omega) hret' (by omega)
+
+/-- A surviving trace from a well-formed seed returns (general-seed form of
+the pigeonhole). -/
+theorem survivesForever_exists_return_from {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {g0 : GameState}
+    (hwf : Board.WF GameConfig.standard g0.board)
+    (hs : SurvivesForever GameConfig.standard π g0) :
+    ∃ n₁ n₂, n₁ < n₂ ∧ trace GameConfig.standard π g0 n₁
+        = trace GameConfig.standard π g0 n₂ := by
+  have hfin : (Set.range (trace GameConfig.standard π g0)).Finite := by
+    apply Set.Finite.subset (Set.finite_univ.image
+      (fun q : InFieldBoard GameConfig.standard × Bag =>
+        GameState.mk q.1.val q.2))
+    rintro g ⟨n, rfl⟩
+    have hwfn := trace_board_wf hv hwf n
+    have hif : ∀ p ∈ (trace GameConfig.standard π g0 n).board,
+        p.2 < GameConfig.standard.rows :=
+      (GameState.not_lost_iff_forall_row_lt GameConfig.standard _).mp (hs n)
+    exact ⟨(⟨(trace GameConfig.standard π g0 n).board, hwfn, hif⟩,
+      (trace GameConfig.standard π g0 n).bag), Set.mem_univ _, rfl⟩
+  have hninj : ¬ Function.Injective (trace GameConfig.standard π g0) := by
+    intro hinj
+    exact Set.infinite_range_of_injective hinj hfin
+  rw [Function.not_injective_iff] at hninj
+  obtain ⟨a, b, heq, hne⟩ := hninj
+  rcases Nat.lt_or_ge a b with hab | hab
+  · exact ⟨a, b, hab, heq⟩
+  · exact ⟨b, a, by omega, heq.symm⟩
+
+/-- **Every surviving policy hides a closed cycle**: a valid, legally-drawn
+policy surviving forever from any well-formed seed yields a nonempty
+`ClosedCycle` — the M2 artifact is extracted, not assumed. With
+`closed_cycle_survives` (the converse), cooperative infinite play and the
+existence of cycle certificates are the same phenomenon. -/
+theorem exists_closedCycle_of_survives {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {g0 : GameState}
+    (hwf : Board.WF GameConfig.standard g0.board)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π g0 k)).piece
+      ∈ (trace GameConfig.standard π g0 k).bag)
+    (hs : SurvivesForever GameConfig.standard π g0) :
+    ∃ C : ClosedCycle GameConfig.standard, C.states.Nonempty := by
+  obtain ⟨n₁, n₂, hlt, hret⟩ := survivesForever_exists_return_from hv hwf hs
+  refine ⟨closedCycleOfReturn hv hdraw hlt hret (fun k => hs k), ?_⟩
+  refine ⟨trace GameConfig.standard π g0 n₁, ?_⟩
+  have : trace GameConfig.standard π g0 n₁
+      ∈ (Finset.range (n₂ - n₁)).image
+        (fun k => trace GameConfig.standard π g0 (n₁ + k)) := by
+    rw [Finset.mem_image]
+    exact ⟨0, Finset.mem_range.mpr (by omega), by rw [Nat.add_zero]⟩
+  exact this
+
 end ClearRate
 end Tetris

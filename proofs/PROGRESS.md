@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23be) — every survivor hides a cycle (bank 78/N)
+
+- `closedCycleOfReturn` — the general orbit constructor: any live return of
+  a valid, legally-drawn policy trace becomes a `ClosedCycle`.
+- `survivesForever_exists_return_from` — the pigeonhole return at any
+  well-formed seed.
+- **`exists_closedCycle_of_survives`** — every surviving policy yields a
+  nonempty ClosedCycle: the M2 artifact is EXTRACTED, not assumed. With
+  `closed_cycle_survives` (converse), cooperative infinite play ⟺ cycle
+  certificates.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bd) — survival is a bounded formula (bank 77/N)
 
 - `survivesForever_iff_bounded_evidence` — the Π⁰₁ statement
