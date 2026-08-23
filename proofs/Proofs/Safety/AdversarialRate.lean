@@ -595,5 +595,26 @@ theorem sizeCountAdv_four_le_I_card {cfg : GameConfig} {σ : Solver cfg}
   obtain ⟨h1, h2⟩ := Finset.mem_filter.mp hm
   exact Finset.mem_filter.mpr ⟨h1, adversary_tetris_step_I h2.ge⟩
 
+/-- **Adversarial cycle windows balance exactly too**: between two equal
+adversarial states, `10·Δcleared = 4·Δn` — every adversarial cycle period
+clears exactly `14k` rows, whoever picks the pieces. -/
+theorem adversarialTrace_eq_clears {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+      with piece := s n } : Placement).Valid GameConfig.standard)
+    {n₁ n₂ : ℕ} (h12 : n₁ ≤ n₂)
+    (h : adversarialTrace GameConfig.standard σ s GameState.init n₁
+        = adversarialTrace GameConfig.standard σ s GameState.init n₂) :
+    10 * (clearedAdv GameConfig.standard σ s GameState.init n₂
+          - clearedAdv GameConfig.standard σ s GameState.init n₁)
+      = 4 * (n₂ - n₁) := by
+  have h1 := clearedAdv_ledger (GameState.init_board_wf GameConfig.standard) hv n₁
+  have h2 := clearedAdv_ledger (GameState.init_board_wf GameConfig.standard) hv n₂
+  rw [GameConfig.standard_cols, GameState.init_board_count] at h1 h2
+  have hc : (adversarialTrace GameConfig.standard σ s GameState.init n₁).board.count
+      = (adversarialTrace GameConfig.standard σ s GameState.init n₂).board.count := by
+    rw [h]
+  omega
+
 end ClearRate
 end Tetris

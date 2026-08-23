@@ -828,6 +828,29 @@ theorem init_closedCycle_card_ge_thirtyfive (C : ClosedCycle GameConfig.standard
     (h0 : GameState.init ∈ C.states) : 35 ≤ C.states.card :=
   closedCycle_card_ge_thirtyfive C h0 (GameState.init_board_wf GameConfig.standard)
 
+/-- **A cycle window clears exactly 2.8 per bag — no error.** Between two
+visits to the same state the ledger balances exactly: `10·Δcleared = 4·Δn`.
+With the quantum `Δn = 35k`, every closed-cycle period clears **exactly `14k`
+rows** — the minimal five-bag cycle clears exactly 14. -/
+theorem trace_eq_clears {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n₁ n₂ : ℕ} (h12 : n₁ ≤ n₂)
+    (h : trace GameConfig.standard π GameState.init n₁
+        = trace GameConfig.standard π GameState.init n₂) :
+    10 * (cleared GameConfig.standard π GameState.init n₂
+          - cleared GameConfig.standard π GameState.init n₁)
+      = 4 * (n₂ - n₁) :=
+  exact_balance_of_count_eq hv h12 (by rw [h])
+
+/-- The minimal-period form: a 35-placement return clears exactly 14 rows. -/
+theorem trace_eq_thirtyfive_clears_fourteen {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (h : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    cleared GameConfig.standard π GameState.init (n + 35)
+      - cleared GameConfig.standard π GameState.init n = 14 := by
+  have hbal := trace_eq_clears hv (Nat.le_add_right n 35) h
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

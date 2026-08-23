@@ -41629,6 +41629,24 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23w) — 14 rows per five-bag period, exactly (bank 19/N)
+
+- `trace_eq_clears` (ClearRecurrence) — between two equal states the ledger
+  balances exactly (`10·Δcleared = 4·Δn`); named cycle-facing form of
+  `exact_balance_of_count_eq`.
+- **`trace_eq_thirtyfive_clears_fourteen`** — the minimal cycle period clears
+  EXACTLY 14 rows.
+- `adversarialTrace_eq_clears` (AdversarialRate — `clearedAdv` lives
+  downstream of CycleQuantum, import direction matters) — the same exactness
+  against every piece order.
+
+Every M2 certificate is now pinned in period (35k), size (≥ 35), AND clearing
+content (exactly 14k rows per period).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23v) — counter↔filter bridge (bank 18/N)
 
 - `sizeCountAdv_eq_card_filter` — the recursive size counter equals the
