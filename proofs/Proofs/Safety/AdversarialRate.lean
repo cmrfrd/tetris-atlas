@@ -1228,5 +1228,87 @@ theorem adversarial_window_events_stationary {σ : Solver GameConfig.standard}
   adversary_period_clear_events_bounds hv
     (adversarialTrace_tail_periodic hper hcyc hm)
 
+/-- Any 35-window of an adversarial trace shows at least five distinct
+boards — the mass clock is adversary-proof. -/
+theorem adversarialTrace_window_boards_ge_five {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {g0 : GameState}
+    (hwf : Board.WF GameConfig.standard g0.board)
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s g0 n) (s n)
+      with piece := s n } : Placement).Valid GameConfig.standard) (n : ℕ) :
+    5 ≤ ((Finset.range 35).image
+      (fun k => (adversarialTrace GameConfig.standard σ s g0 (n + k)).board)).card := by
+  classical
+  by_contra hcon
+  push Not at hcon
+  have hle : (Finset.range 35).card ≤ 7 * ((Finset.range 35).image
+      (fun k => (adversarialTrace GameConfig.standard σ s g0 (n + k)).board)).card := by
+    apply Finset.card_le_mul_card_image
+    intro a ha
+    have hinj : ∀ i ∈ (Finset.range 35).filter (fun k =>
+          (adversarialTrace GameConfig.standard σ s g0 (n + k)).board = a),
+        ∀ k ∈ (Finset.range 35).filter (fun k =>
+          (adversarialTrace GameConfig.standard σ s g0 (n + k)).board = a),
+        i / 5 = k / 5 → i = k := by
+      intro i hi k hk hdiv
+      rw [Finset.mem_filter, Finset.mem_range] at hi hk
+      have h1 := adversarialTrace_count_mod_ten hwf hv (n + i)
+      have h2 := adversarialTrace_count_mod_ten hwf hv (n + k)
+      rw [hi.2] at h1
+      rw [hk.2] at h2
+      omega
+    have hmap : ∀ i ∈ (Finset.range 35).filter (fun k =>
+          (adversarialTrace GameConfig.standard σ s g0 (n + k)).board = a),
+        i / 5 ∈ Finset.range 7 := by
+      intro i hi
+      rw [Finset.mem_filter, Finset.mem_range] at hi
+      rw [Finset.mem_range]
+      omega
+    have := Finset.card_le_card_of_injOn (fun i => i / 5) hmap hinj
+    rw [Finset.card_range] at this
+    exact this
+  rw [Finset.card_range] at hle
+  omega
+
+/-- Any 35-window of a legally-drawn adversarial trace shows at least seven
+distinct bag states — the bag clock is adversary-proof too. -/
+theorem adversarialTrace_window_bags_ge_seven {cfg : GameConfig}
+    {σ : Solver cfg} {s : ℕ → Piece} {g0 : GameState}
+    (hdraw : ∀ n, s n ∈ (adversarialTrace cfg σ s g0 n).bag) (n : ℕ) :
+    7 ≤ ((Finset.range 35).image
+      (fun k => (adversarialTrace cfg σ s g0 (n + k)).bag)).card := by
+  classical
+  by_contra hcon
+  push Not at hcon
+  have hle : (Finset.range 35).card ≤ 5 * ((Finset.range 35).image
+      (fun k => (adversarialTrace cfg σ s g0 (n + k)).bag)).card := by
+    apply Finset.card_le_mul_card_image
+    intro a ha
+    have hinj : ∀ i ∈ (Finset.range 35).filter (fun k =>
+          (adversarialTrace cfg σ s g0 (n + k)).bag = a),
+        ∀ k ∈ (Finset.range 35).filter (fun k =>
+          (adversarialTrace cfg σ s g0 (n + k)).bag = a),
+        i / 7 = k / 7 → i = k := by
+      intro i hi k hk hdiv
+      rw [Finset.mem_filter, Finset.mem_range] at hi hk
+      have h1 := bag_card_adversarialTrace hdraw (n + i)
+      have h2 := bag_card_adversarialTrace hdraw (n + k)
+      rw [hi.2] at h1
+      rw [hk.2] at h2
+      have hle7 : g0.bag.card ≤ 7 := Bag.card_le_seven g0.bag
+      have hpos : 0 < g0.bag.card := Finset.card_pos.mpr ⟨_, hdraw 0⟩
+      omega
+    have hmap : ∀ i ∈ (Finset.range 35).filter (fun k =>
+          (adversarialTrace cfg σ s g0 (n + k)).bag = a),
+        i / 7 ∈ Finset.range 5 := by
+      intro i hi
+      rw [Finset.mem_filter, Finset.mem_range] at hi
+      rw [Finset.mem_range]
+      omega
+    have := Finset.card_le_card_of_injOn (fun i => i / 7) hmap hinj
+    rw [Finset.card_range] at this
+    exact this
+  rw [Finset.card_range] at hle
+  omega
+
 end ClearRate
 end Tetris

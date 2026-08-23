@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ap) — adversarial window diversity (bank 63/N)
+
+- `adversarialTrace_window_boards_ge_five` / `_bags_ge_seven` — the state
+  diversity floors are adversary-proof: the mass and bag clocks tick
+  whoever picks the pieces. Sets up the M4 corollary (closed Atlas sets
+  inherit the diversity floors) for the next batch.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ao) — window state diversity (bank 62/N)
 
 - `trace_window_boards_ge_five` — any 35 consecutive trace states show at
