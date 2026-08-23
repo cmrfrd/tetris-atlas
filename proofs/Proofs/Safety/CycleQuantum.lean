@@ -2048,5 +2048,38 @@ theorem exists_survivor_iff_exists_nonempty_cycle :
         (show g0 ∈ (ClosedCycle.globalize C).states from hg0)
       exact hs
 
+/-- **Any 35-window shows at least five distinct occupancy values** — the
+finest diversity observable: the count's residue mod 10 steps through all
+five even-cycle residues within any five consecutive placements. Refines
+`trace_window_boards_ge_five` at the level of a single scalar. -/
+theorem trace_window_counts_ge_five {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (n : ℕ) :
+    5 ≤ ((Finset.range 35).image
+      (fun k => (trace GameConfig.standard π GameState.init (n + k)).board.count)).card := by
+  classical
+  have hsub : (Finset.range 5).image
+        (fun k => (trace GameConfig.standard π GameState.init (n + k)).board.count)
+      ⊆ (Finset.range 35).image
+        (fun k => (trace GameConfig.standard π GameState.init (n + k)).board.count) := by
+    apply Finset.image_subset_image
+    intro x hx
+    rw [Finset.mem_range] at hx ⊢
+    omega
+  refine le_trans ?_ (Finset.card_le_card hsub)
+  have hinj : ∀ i ∈ Finset.range 5, ∀ k ∈ Finset.range 5,
+      (trace GameConfig.standard π GameState.init (n + i)).board.count
+        = (trace GameConfig.standard π GameState.init (n + k)).board.count
+      → i = k := by
+    intro i hi k hk heq
+    rw [Finset.mem_range] at hi hk
+    have h1 := count_mod_ten hv (n + i)
+    have h2 := count_mod_ten hv (n + k)
+    rw [heq] at h1
+    omega
+  have := Finset.card_image_of_injOn (s := Finset.range 5)
+    (f := fun k => (trace GameConfig.standard π GameState.init (n + k)).board.count)
+    (fun i hi k hk => hinj i hi k hk)
+  rw [this, Finset.card_range]
+
 end ClearRate
 end Tetris

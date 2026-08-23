@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bg) — count-value diversity (bank 80/N)
+
+- `trace_window_counts_ge_five` — any 35-window (indeed any FIVE consecutive
+  placements) shows five distinct occupancy values: the count's mod-10
+  residue steps through its entire 5-cycle. The finest scalar refinement of
+  the board-diversity floor.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bf) — the cooperative equivalence (bank 79/N) ★
 
 - `ClosedCycle.globalPolicy` / `globalize` — patch a cycle's on-set policy
