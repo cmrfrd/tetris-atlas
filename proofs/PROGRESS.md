@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23uu) — the dry-spell bound (bank 43/N)
+
+- `cycle_window_clears_fourteen` — every 69-window on a cycle clears ≥ 14
+  rows: an unaligned start wastes ≤ 34 placements before the next period
+  boundary, then a full period must clear exactly 14.
+- `cycle_dry_spell_le` — DRY SPELLS ON A CYCLE LAST ≤ 68 PLACEMENTS, at
+  every point, forever — unlike the general 50-placement clear-free horizon
+  (which only binds from the empty board via capacity).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23tt) — clear-event frequency (bank 42/N)
 
 - `period_clear_events_bounds` — SILENCE DOMINATES: of a period's 35

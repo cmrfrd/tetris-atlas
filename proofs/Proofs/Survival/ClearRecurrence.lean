@@ -928,6 +928,50 @@ theorem cycle_mass_periodic {π : Policy GameConfig.standard} {n : ℕ}
   have hiter := trace_period_multiples π GameState.init hcyc j
   rw [show n + 35 * j = n + j * 35 by ring, ← hiter]
 
+/-- **Every 69-window on a cycle clears (at least fourteen rows)**: any such
+window contains a complete aligned period, and every period clears exactly
+14. The window bound is tight in form: an unaligned start can waste up to 34
+placements before the next period boundary. -/
+theorem cycle_window_clears_fourteen {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) :
+    14 ≤ cleared GameConfig.standard π GameState.init (m₀ + 69)
+      - cleared GameConfig.standard π GameState.init m₀ := by
+  set i := (m₀ - n + 34) / 35 with hi
+  have hb1 : m₀ ≤ n + 35 * i := by omega
+  have hb2 : n + 35 * i ≤ m₀ + 34 := by omega
+  have hlaw1 := multi_period_clears hv hcyc i
+  have hlaw2 := multi_period_clears hv hcyc (i + 1)
+  have hmono0 := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right n (35 * i))
+  have hmono1 := cleared_mono GameConfig.standard π GameState.init hb1
+  have hmono2 := cleared_mono GameConfig.standard π GameState.init
+    (show n + 35 * (i + 1) ≤ m₀ + 69 by omega)
+  omega
+
+/-- **Dry spells on a cycle last at most 68 placements**: a clear-free
+stretch of 69 would contain a full period, which must clear. Far tighter
+than the general 50-placement clear-free horizon from capacity — and it
+applies at every point of the cycle forever, not just from the empty
+board. -/
+theorem cycle_dry_spell_le {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ L : ℕ}
+    (hm : n ≤ m₀)
+    (hdry : cleared GameConfig.standard π GameState.init (m₀ + L)
+      = cleared GameConfig.standard π GameState.init m₀) :
+    L ≤ 68 := by
+  by_contra hcon
+  have h69 := cycle_window_clears_fourteen hv hcyc hm
+  have hmono := cleared_mono GameConfig.standard π GameState.init
+    (show m₀ + 69 ≤ m₀ + L by omega)
+  have hmono0 := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right m₀ 69)
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
