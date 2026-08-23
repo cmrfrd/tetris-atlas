@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bu) — the grid bijection (bank 94/N)
+
+- `trace_window_grid_unique` — the ∃!-form capstone of the clock-grid arc:
+  within any 35-window every (bag level, mass phase) cell is realised at
+  EXACTLY one position. Existence by the CRT index (r from the bag clock
+  with 6 ≡ −1 mod 7; j = 3(i−r) mod 5), uniqueness by observable phase.
+  The five-bag window IS the 7 × 5 clock grid.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bt) — adversarial survivor brackets (bank 93/N)
 
 - `adversarialTrace_count_lt` — the live-capacity bound on adversarial

@@ -2262,5 +2262,35 @@ theorem big_clear_frequency_cap {π : Policy GameConfig.standard}
   have hJ := BagCadence.window_frequency_law hl n Piece.J w
   omega
 
+/-- **The window grid is a bijection**: within any 35-window, every
+(bag level, mass phase) cell is realised at exactly one position — existence
+by Chinese-remainder index choice, uniqueness by the observable phase.
+The five-bag window *is* the 7 × 5 clock grid. -/
+theorem trace_window_grid_unique {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) (n : ℕ)
+    {c : ℕ} (hc1 : 1 ≤ c) (hc7 : c ≤ 7) {i : ℕ} (hi : i < 5) :
+    ∃! k, k < 35
+      ∧ (trace GameConfig.standard π GameState.init (n + k)).bag.card = c
+      ∧ (trace GameConfig.standard π GameState.init (n + k)).board.count % 10
+        = (4 * (n + i)) % 10 := by
+  have hbagf := bag_card_trace hdraw
+  have hcntf := count_mod_ten hv
+  -- the residue giving bag level c, then the CRT block choice for the phase
+  set r := (7 - c + 6 * (n % 7)) % 7 with hr
+  set j := (3 * (i + 5 - r % 5)) % 5 with hj
+  refine ⟨r + 7 * j, ⟨by omega, ?_, ?_⟩, ?_⟩
+  · rw [hbagf]
+    omega
+  · rw [hcntf]
+    omega
+  · rintro k ⟨hk35, hkbag, hkcnt⟩
+    have h1 := hbagf (n + k)
+    have h2 := hcntf (n + k)
+    rw [h1] at hkbag
+    rw [h2] at hkcnt
+    omega
+
 end ClearRate
 end Tetris
