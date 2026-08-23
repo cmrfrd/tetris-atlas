@@ -886,5 +886,66 @@ theorem adversarial_multi_period_tetris_le {σ : Solver GameConfig.standard}
     rw [show n + 35 * (j + 1) = (n + 35 * j) + 35 by ring]
     omega
 
+/-- Adversarial cumulative clears never decrease. -/
+theorem clearedAdv_mono (cfg : GameConfig) (σ : Solver cfg) (s : ℕ → Piece)
+    (g0 : GameState) : Monotone (clearedAdv cfg σ s g0) := by
+  apply monotone_nat_of_le_succ
+  intro n
+  rw [clearedAdv_succ]
+  exact Nat.le_add_right _ _
+
+/-- **The adversarial clearing bracket**: against a 35-periodic stream, a
+returning solver's cleared count stays within fourteen rows of the linear
+2.8-per-bag law at *every* horizon. -/
+theorem adversarial_clears_bracket {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    {m : ℕ} (hnm : n ≤ m) :
+    14 * ((m - n) / 35)
+        ≤ clearedAdv GameConfig.standard σ s GameState.init m
+          - clearedAdv GameConfig.standard σ s GameState.init n
+      ∧ clearedAdv GameConfig.standard σ s GameState.init m
+          - clearedAdv GameConfig.standard σ s GameState.init n
+        ≤ 14 * ((m - n) / 35) + 14 := by
+  set j := (m - n) / 35 with hj
+  have hlo : n + 35 * j ≤ m := by omega
+  have hhi : m ≤ n + 35 * (j + 1) := by omega
+  have hjlaw := adversarial_multi_period_clears hv hper hcyc j
+  have hjlaw' := adversarial_multi_period_clears hv hper hcyc (j + 1)
+  have hm1 := clearedAdv_mono GameConfig.standard σ s GameState.init hlo
+  have hm2 := clearedAdv_mono GameConfig.standard σ s GameState.init hhi
+  have hm0 := clearedAdv_mono GameConfig.standard σ s GameState.init
+    (Nat.le_add_right n (35 * j))
+  exact ⟨by omega, by omega⟩
+
+/-- **The adversarial mass band**: against a 35-periodic stream, a returning
+solver's board occupancy is trapped within a fourteen-row band of its
+boundary value at every horizon — `count(n) − 140 ≤ count(m) ≤ count(n) + 136`.
+The bounded-occupancy character of cycle play is adversary-proof. -/
+theorem adversarial_mass_band {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    {m : ℕ} (hnm : n ≤ m) :
+    (adversarialTrace GameConfig.standard σ s GameState.init m).board.count
+        ≤ (adversarialTrace GameConfig.standard σ s GameState.init n).board.count
+          + 136
+      ∧ (adversarialTrace GameConfig.standard σ s GameState.init n).board.count
+        ≤ (adversarialTrace GameConfig.standard σ s GameState.init m).board.count
+          + 140 := by
+  have hln := clearedAdv_ledger (GameState.init_board_wf GameConfig.standard) hv n
+  have hlm := clearedAdv_ledger (GameState.init_board_wf GameConfig.standard) hv m
+  rw [GameConfig.standard_cols, GameState.init_board_count] at hln hlm
+  obtain ⟨hlo, hhi⟩ := adversarial_clears_bracket hv hper hcyc hnm
+  have hclm := clearedAdv_mono GameConfig.standard σ s GameState.init hnm
+  exact ⟨by omega, by omega⟩
+
 end ClearRate
 end Tetris

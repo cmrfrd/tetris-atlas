@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23pp) — adversarial bracket + mass band (bank 38/N)
+
+- `clearedAdv_mono` — the missing monotonicity of adversarial clears.
+- `adversarial_clears_bracket` — the every-horizon 14-row clearing bracket
+  under a periodic stream.
+- `adversarial_mass_band` — board occupancy trapped in [−140, +136] cells of
+  its boundary value at every horizon: the bounded-occupancy character of
+  cycle play is ADVERSARY-PROOF.
+- Cooperative/adversarial parity complete for: clears (exact 14j), mix
+  (exact 14j), tetris cap (3j telescoped), bracket (±14 rows), mass band.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23oo) — adversarial multi-period caps (bank 37/N)
 
 - `adversarial_multi_period_mix` — against a 35-periodic stream the clear-size
