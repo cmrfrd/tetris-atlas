@@ -764,5 +764,65 @@ theorem refill_block_balanced {initBag : Bag} {s : ℕ → Piece}
     decide
   omega
 
+/-- Splitting a filtered range count at an interior point (local copy of the
+lemma downstream in `CycleQuantum`). -/
+theorem card_filter_range_add (P : ℕ → Prop) [DecidablePred P] (a : ℕ) :
+    ∀ b, ((Finset.range (a + b)).filter P).card
+      = ((Finset.range a).filter P).card
+        + ((Finset.range b).filter (fun k => P (a + k))).card := by
+  intro b
+  induction b with
+  | zero => simp
+  | succ b ih =>
+    rw [show a + (b + 1) = (a + b) + 1 by ring, Finset.range_add_one,
+      Finset.range_add_one, Finset.filter_insert, Finset.filter_insert]
+    by_cases h : P (a + b)
+    · rw [if_pos h, if_pos h, Finset.card_insert_of_notMem (by simp),
+        Finset.card_insert_of_notMem (by simp), ih]
+      omega
+    · rw [if_neg h, if_neg h, ih]
+
+/-- Aligned exactness: from a refill, `7k` draws deal each piece exactly `k`
+times — blocks concatenate. -/
+theorem refill_multiblock_balanced {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {r : ℕ}
+    (hfull : bagAt initBag s r = Bag.full) (p : Piece) :
+    ∀ k, ((Finset.range (7 * k)).filter (fun j => s (r + j) = p)).card = k := by
+  intro k
+  induction k with
+  | zero => simp
+  | succ k ih =>
+    have hsplit := card_filter_range_add
+      (fun j => s (r + j) = p) (7 * k) 7
+    rw [show 7 * (k + 1) = 7 * k + 7 by ring, hsplit, ih]
+    have hfull' := bagAt_full_iterate hl hfull k
+    have hbal := refill_block_balanced hl hfull' p
+    have harg : ∀ x : ℕ, r + (7 * k + x) = (r + 7 * k) + x := fun x => by ring
+    simp only [harg]
+    rw [hbal]
+
+/-- **The aligned window law is exact to ±1**: any `w` draws from a refill
+contain between `⌊w/7⌋` and `⌊w/7⌋ + 1` of every piece — alignment removes
+almost all the frequency slack of the general `[4/35, 6/35]` sandwich. -/
+theorem refill_window_bounds {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {r : ℕ}
+    (hfull : bagAt initBag s r = Bag.full) (p : Piece) (w : ℕ) :
+    w / 7 ≤ ((Finset.range w).filter (fun j => s (r + j) = p)).card
+      ∧ ((Finset.range w).filter (fun j => s (r + j) = p)).card
+        ≤ w / 7 + 1 := by
+  classical
+  set q := w / 7 with hq
+  have hin : ((Finset.range (7 * q)).filter (fun j => s (r + j) = p)).card
+      ≤ ((Finset.range w).filter (fun j => s (r + j) = p)).card :=
+    Finset.card_le_card (Finset.filter_subset_filter _
+      (by intro x hx; rw [Finset.mem_range] at hx ⊢; omega))
+  have hout : ((Finset.range w).filter (fun j => s (r + j) = p)).card
+      ≤ ((Finset.range (7 * (q + 1))).filter (fun j => s (r + j) = p)).card :=
+    Finset.card_le_card (Finset.filter_subset_filter _
+      (by intro x hx; rw [Finset.mem_range] at hx ⊢; omega))
+  have h1 := refill_multiblock_balanced hl hfull p q
+  have h2 := refill_multiblock_balanced hl hfull p (q + 1)
+  omega
+
 end BagCadence
 end Tetris

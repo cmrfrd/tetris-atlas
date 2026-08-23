@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bm) — aligned exactness (bank 86/N)
+
+- `refill_multiblock_balanced` — `7k` aligned draws deal each piece exactly
+  `k` times (blocks concatenate).
+- `refill_window_bounds` — ANY aligned window is exact to ±1:
+  `⌊w/7⌋ ≤ hits ≤ ⌊w/7⌋+1`. Alignment removes the general sandwich's slack.
+- (Local copy of `card_filter_range_add` added to BagCadence — the original
+  lives downstream in CycleQuantum; import direction forbids reuse.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bl) — the block permutation (bank 85/N)
 
 - `refill_block_balanced` — a full-bag block IS a permutation: from any
