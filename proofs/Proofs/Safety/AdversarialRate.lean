@@ -1719,5 +1719,37 @@ theorem adversarialClosedCycle_stratum_ge_five
           (show r + 7 * j ≤ r + 7 * i by omega) hEq.symm
         omega
 
+/-- **The CRT grid**: a closed Atlas set inhabits *every* cell of the
+7 × 5 grid (bag fill level × mass phase) — for each bag level `c` and each
+of the five mass residues the trajectory carries, some state realises both
+simultaneously. The 35-state floor is exactly this grid, by the Chinese
+remainders of the two clocks. -/
+theorem isClosedOn_grid_inhabited {A : Atlas GameConfig.standard}
+    {S : Finset GameState} (h : A.IsClosedOn GameConfig.standard S)
+    {g₀ : GameState} (hg₀ : g₀ ∈ S)
+    (hwf : Board.WF GameConfig.standard g₀.board) (hbag : g₀.bag.Nonempty)
+    {c : ℕ} (hc1 : 1 ≤ c) (hc7 : c ≤ 7) {i : ℕ} (hi : i < 5) :
+    ∃ s ∈ S, s.bag.card = c
+      ∧ s.board.count % 10 = (g₀.board.count + 4 * i) % 10 := by
+  classical
+  obtain ⟨t, ht⟩ := BagCadence.exists_legalSequenceFrom hbag
+  have hdraw : ∀ n, t n
+      ∈ (adversarialTrace GameConfig.standard A.toSolver t g₀ n).bag :=
+    fun n => by rw [adversarialTrace_bag_from]; exact ht n
+  have hv := isClosedOn_trace_forced_valid h hg₀ ht
+  have hbagcard := bag_card_adversarialTrace hdraw
+  have hcnt := adversarialTrace_count_mod_ten hwf hv
+  have hle7 : g₀.bag.card ≤ 7 := Bag.card_le_seven g₀.bag
+  have hpos : 0 < g₀.bag.card := Finset.card_pos.mpr ⟨_, hdraw 0⟩
+  -- the bag-level residue and the CRT-matched block index
+  set r := (7 - c + g₀.bag.card) % 7 with hr
+  set j := (3 * (i + 5 - r % 5)) % 5 with hj
+  refine ⟨adversarialTrace GameConfig.standard A.toSolver t g₀ (r + 7 * j),
+    h.toSolver_adversarialTrace_mem hg₀ ht (r + 7 * j), ?_, ?_⟩
+  · rw [hbagcard]
+    omega
+  · rw [hcnt]
+    omega
+
 end ClearRate
 end Tetris

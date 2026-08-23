@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bj) — the CRT grid (bank 83/N)
+
+- `isClosedOn_grid_inhabited` — a closed Atlas set inhabits EVERY cell of
+  the 7 × 5 (bag fill level × mass phase) grid: pick the index
+  `r + 7j` with `j = 3(i − r) mod 5` (3 = 2⁻¹ mod 5) so the bag clock and
+  mass clock land simultaneously. The 35-state floor IS the Chinese-
+  remainder product of the two clocks.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bi) — stratified floors everywhere (bank 82/N)
 
 - `closedCycle_stratum_ge_five` / `adversarialClosedCycle_stratum_ge_five`
