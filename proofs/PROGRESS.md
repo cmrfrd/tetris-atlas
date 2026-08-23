@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ax) — per-step conservation (bank 71/N)
+
+- `count_step_eq` — the exact per-step law: `count(m+1) + 10·size(m) =
+  count(m) + 4`. The occupancy trajectory moves by +4/−6/−16/−26/−36.
+- `clear_requires_mass` — a `k`-clear needs `10k − 4` standing cells (the
+  piece brings only four).
+- `tetris_requires_thirtysix` — a tetris stands on ≥ 36 cells: no light
+  board hosts a four-clear.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23aw) — tetris burst spacing (bank 70/N)
 
 - `trace_three_tetrises_span` — three tetrises on any legally-drawn trace

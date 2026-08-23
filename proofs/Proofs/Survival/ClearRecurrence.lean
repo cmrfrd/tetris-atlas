@@ -1049,6 +1049,46 @@ theorem cycle_mass_diameter {π : Policy GameConfig.standard}
   obtain ⟨hup2, hlo2⟩ := cycle_mass_band hv hcyc h2
   omega
 
+/-- **Per-step mass conservation**: one placement adds four cells and a
+`k`-row clear removes `10k` — `count(m+1) + 10·size(m) = count(m) + 4`
+exactly, at every step. The occupancy trajectory moves by
+`+4, −6, −16, −26, −36` according to the clear size. -/
+theorem count_step_eq {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (m : ℕ) :
+    (trace GameConfig.standard π GameState.init (m + 1)).board.count
+        + 10 * (Board.fullRows GameConfig.standard
+          ((π (trace GameConfig.standard π GameState.init m)).place
+            (trace GameConfig.standard π GameState.init m).board)).card
+      = (trace GameConfig.standard π GameState.init m).board.count + 4 := by
+  have h1 := init_ledger hv m
+  have h2 := init_ledger hv (m + 1)
+  have hc := cleared_succ GameConfig.standard π GameState.init m
+  rw [GameConfig.standard_cols] at h1 h2
+  omega
+
+/-- **Clearing needs standing mass**: a `k`-row clear at step `m` requires at
+least `10k − 4` cells already on the board — the piece brings only four. In
+particular a tetris needs **36 standing cells**: no board lighter than 36
+cells can host a four-clear. -/
+theorem clear_requires_mass {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (m : ℕ) :
+    10 * (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board)).card
+      ≤ (trace GameConfig.standard π GameState.init m).board.count + 4 := by
+  have h := count_step_eq hv m
+  omega
+
+/-- A tetris step stands on at least 36 cells. -/
+theorem tetris_requires_thirtysix {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ}
+    (h4 : (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board)).card = 4) :
+    36 ≤ (trace GameConfig.standard π GameState.init m).board.count := by
+  have h := clear_requires_mass hv m
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
