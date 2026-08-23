@@ -1072,5 +1072,58 @@ theorem adversarial_mass_diameter {σ : Solver GameConfig.standard}
   obtain ⟨hup2, hlo2⟩ := adversarial_mass_band hv hper hcyc h2
   omega
 
+/-- Adversarial tail periodicity, packaged: under a periodic stream, every
+later index anchors the return. -/
+theorem adversarialTrace_tail_periodic {cfg : GameConfig} {σ : Solver cfg}
+    {s : ℕ → Piece} {g0 : GameState}
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace cfg σ s g0 n
+        = adversarialTrace cfg σ s g0 (n + 35)) {m : ℕ} (hnm : n ≤ m) :
+    adversarialTrace cfg σ s g0 m = adversarialTrace cfg σ s g0 (m + 35) := by
+  have h := adversarialTrace_periodic hper hcyc (m - n)
+  rw [show n + (m - n) = m by omega] at h
+  rw [show n + 35 + (m - n) = m + 35 by omega] at h
+  exact h
+
+/-- The adversarial clearing bracket from every anchor:
+`[14⌊w/35⌋, 14⌊w/35⌋ + 14]` in every window, whoever picks the pieces. -/
+theorem adversarial_clears_bracket_stationary {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    {m₀ : ℕ} (hm : n ≤ m₀) (w : ℕ) :
+    14 * (w / 35)
+        ≤ clearedAdv GameConfig.standard σ s GameState.init (m₀ + w)
+          - clearedAdv GameConfig.standard σ s GameState.init m₀
+      ∧ clearedAdv GameConfig.standard σ s GameState.init (m₀ + w)
+          - clearedAdv GameConfig.standard σ s GameState.init m₀
+        ≤ 14 * (w / 35) + 14 := by
+  have hbr := adversarial_clears_bracket hv hper
+    (adversarialTrace_tail_periodic hper hcyc hm) (Nat.le_add_right m₀ w)
+  rw [show m₀ + w - m₀ = w by omega] at hbr
+  exact hbr
+
+/-- The sharp adversarial mass diameter: `+136/−140` cells between any two
+ordered horizons under a periodic stream. -/
+theorem adversarial_mass_diameter_sharp {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    {m₁ m₂ : ℕ} (h1 : n ≤ m₁) (h12 : m₁ ≤ m₂) :
+    (adversarialTrace GameConfig.standard σ s GameState.init m₂).board.count
+        ≤ (adversarialTrace GameConfig.standard σ s GameState.init m₁).board.count
+          + 136
+      ∧ (adversarialTrace GameConfig.standard σ s GameState.init m₁).board.count
+        ≤ (adversarialTrace GameConfig.standard σ s GameState.init m₂).board.count
+          + 140 :=
+  adversarial_mass_band hv hper
+    (adversarialTrace_tail_periodic hper hcyc h1) h12
+
 end ClearRate
 end Tetris

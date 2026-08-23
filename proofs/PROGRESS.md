@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23aj) — adversarial anchors (bank 57/N)
+
+- `adversarialTrace_tail_periodic` + `adversarial_clears_bracket_stationary`
+  + `adversarial_mass_diameter_sharp` — the anchor upgrade mirrored: under a
+  periodic stream every later index anchors the return, so the sharp
+  stationary bracket and the `+136/−140` diameter hold adversarially too.
+- Stationary-law parity complete across both settings.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ai) — every point is an anchor (bank 56/N)
 
 - Tail periodicity (batch 55) means every `m₀ ≥ n` satisfies the anchored
