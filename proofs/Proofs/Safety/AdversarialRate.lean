@@ -823,5 +823,68 @@ theorem adversarial_multi_period_clears {σ : Solver GameConfig.standard}
   have hbal := adversarialTrace_eq_clears hv (Nat.le_add_right n (35 * j)) hiter
   omega
 
+/-- **The adversarial multi-period mix**: against a 35-periodic stream, a
+returning solver's clear-size increments weight-sum to exactly `14·j` over
+`j` periods. -/
+theorem adversarial_multi_period_mix {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    (j : ℕ) :
+    (sizeCountAdv GameConfig.standard σ s 1 (n + 35 * j)
+        - sizeCountAdv GameConfig.standard σ s 1 n)
+      + 2 * (sizeCountAdv GameConfig.standard σ s 2 (n + 35 * j)
+        - sizeCountAdv GameConfig.standard σ s 2 n)
+      + 3 * (sizeCountAdv GameConfig.standard σ s 3 (n + 35 * j)
+        - sizeCountAdv GameConfig.standard σ s 3 n)
+      + 4 * (sizeCountAdv GameConfig.standard σ s 4 (n + 35 * j)
+        - sizeCountAdv GameConfig.standard σ s 4 n)
+      = 14 * j := by
+  have h1 := mix_identity_adv (cfg := GameConfig.standard) (σ := σ) (s := s) n
+  have h2 := mix_identity_adv (cfg := GameConfig.standard) (σ := σ) (s := s)
+    (n + 35 * j)
+  have hcl := adversarial_multi_period_clears hv hper hcyc j
+  have hm1 := sizeCountAdv_mono GameConfig.standard σ s 1
+    (Nat.le_add_right n (35 * j))
+  have hm2 := sizeCountAdv_mono GameConfig.standard σ s 2
+    (Nat.le_add_right n (35 * j))
+  have hm3 := sizeCountAdv_mono GameConfig.standard σ s 3
+    (Nat.le_add_right n (35 * j))
+  have hm4 := sizeCountAdv_mono GameConfig.standard σ s 4
+    (Nat.le_add_right n (35 * j))
+  omega
+
+/-- **At most `3·j` adversarial tetrises over `j` periods** — the telescoped
+row budget survives adversarial piece choice under a periodic stream. -/
+theorem adversarial_multi_period_tetris_le {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35)) :
+    ∀ j, sizeCountAdv GameConfig.standard σ s 4 (n + 35 * j)
+      - sizeCountAdv GameConfig.standard σ s 4 n ≤ 3 * j := by
+  intro j
+  induction j with
+  | zero => simp
+  | succ j ih =>
+    have hj := adversarialTrace_period_multiples hper hcyc j
+    have hj1 := adversarialTrace_period_multiples hper hcyc (j + 1)
+    have hcycj : adversarialTrace GameConfig.standard σ s GameState.init
+          (n + 35 * j)
+        = adversarialTrace GameConfig.standard σ s GameState.init
+          ((n + 35 * j) + 35) := by
+      rw [show (n + 35 * j) + 35 = n + 35 * (j + 1) by ring]
+      exact hj.symm.trans hj1
+    have hstep := adversary_period_tetris_le_three hv hcycj
+    have hmono := sizeCountAdv_mono GameConfig.standard σ s 4
+      (Nat.le_add_right n (35 * j))
+    rw [show n + 35 * (j + 1) = (n + 35 * j) + 35 by ring]
+    omega
+
 end ClearRate
 end Tetris

@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23oo) — adversarial multi-period caps (bank 37/N)
+
+- `adversarial_multi_period_mix` — against a 35-periodic stream the clear-size
+  increments weight-sum to exactly `14j` over `j` periods.
+- `adversarial_multi_period_tetris_le` — at most `3j` adversarial tetrises
+  over `j` periods: the telescoped row budget survives adversarial piece
+  choice under a periodic loop witness.
+- The adversarial multi-period family now matches the cooperative one
+  (clears exact, mix exact, tetris cap telescoped).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23nn) — adversarial periodicity (bank 36/N)
 
 - `adversarialTrace_periodic` — the adversarial determinism lemma: a single
