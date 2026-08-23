@@ -41629,6 +41629,26 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23y) — balance on the M2 artifacts (bank 21/N)
+
+`CycleQuantum` additions:
+- `trace_bag_eq_bagAt` — policy-trace bags ARE the `bagAt` stream of the
+  pieces the policy plays (definitional induction; done OUTSIDE the
+  irreducible-bagAt section since it needs the defeq).
+- `legalSequence_of_trace_draws` — legal draws make the played-piece stream a
+  `LegalSequenceFrom`.
+- **`closedCycle_period_piece_balanced`** — every 35-placement period of a
+  `ClosedCycle` plays each piece EXACTLY five times: 5 T's per period (the
+  charge-theory input), 5 I's per period (tetris cap 5/period, sharpening the
+  cumulative I-supply bound on cycles).
+- **`adversarialClosedCycle_period_piece_balanced`** — adversarially: inside
+  a cycle the adversary's entire freedom is the ORDER of a fixed multiset
+  (5 of each piece).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23x) — the balance theorem: 5 of each piece per period (bank 20/N)
 
 **`window_thirtyfive_balanced`** (BagCadence): a 35-draw window with equal bag

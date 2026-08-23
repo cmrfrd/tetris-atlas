@@ -295,5 +295,69 @@ theorem init_closed_atlas_card_ge_thirtyfive {A : Atlas GameConfig.standard}
   isClosedOn_card_ge_thirtyfive h hinit
     (GameState.init_board_wf GameConfig.standard) GameState.init_bag_nonempty
 
+/-! ## The balance theorem on the cycle artifacts -/
+
+/-- Policy-trace bags are the `bagAt` stream of the pieces the policy plays. -/
+theorem trace_bag_eq_bagAt {cfg : GameConfig} (π : Policy cfg) (g0 : GameState) :
+    ∀ k, (trace cfg π g0 k).bag
+      = bagAt g0.bag (fun m => (π (trace cfg π g0 m)).piece) k
+  | 0 => rfl
+  | k + 1 => by
+      rw [trace_succ, GameState.step_bag]
+      change (trace cfg π g0 k).bag.draw _
+        = (bagAt g0.bag (fun m => (π (trace cfg π g0 m)).piece) k).draw _
+      rw [trace_bag_eq_bagAt π g0 k]
+
+/-- Legal draws make the played-piece stream a legal sequence. -/
+theorem legalSequence_of_trace_draws {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState}
+    (hdraw : ∀ k, (π (trace cfg π g0 k)).piece ∈ (trace cfg π g0 k).bag) :
+    LegalSequenceFrom g0.bag (fun m => (π (trace cfg π g0 m)).piece) := by
+  intro k
+  change (π (trace cfg π g0 k)).piece
+    ∈ bagAt g0.bag (fun m => (π (trace cfg π g0 m)).piece) k
+  rw [← trace_bag_eq_bagAt]
+  exact hdraw k
+
+/-- **Every closed-cycle period plays each piece exactly five times.** The
+balance theorem landed on the cooperative M2 artifact: over any 35-placement
+period of a `ClosedCycle`, the policy's piece stream contains each of the
+seven pieces exactly five times — in particular exactly five T's and exactly
+five I's per period. -/
+theorem closedCycle_period_piece_balanced (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (h0 : g0 ∈ C.states) {n : ℕ}
+    (hcyc : trace GameConfig.standard C.policy g0 n
+        = trace GameConfig.standard C.policy g0 (n + 35)) (p : Piece) :
+    ((Finset.range 35).filter (fun k =>
+        (C.policy (trace GameConfig.standard C.policy g0 (n + k))).piece
+          = p)).card = 5 := by
+  have hdraw : ∀ k, (C.policy (trace GameConfig.standard C.policy g0 k)).piece
+      ∈ (trace GameConfig.standard C.policy g0 k).bag :=
+    fun k => C.legal_draw _ (C.trace_mem_states h0 k)
+  have hl := legalSequence_of_trace_draws hdraw
+  have hbag : bagAt g0.bag
+        (fun m => (C.policy (trace GameConfig.standard C.policy g0 m)).piece)
+        (n + 35)
+      = bagAt g0.bag
+        (fun m => (C.policy (trace GameConfig.standard C.policy g0 m)).piece)
+        n := by
+    rw [← trace_bag_eq_bagAt, ← trace_bag_eq_bagAt, hcyc]
+  exact BagCadence.window_thirtyfive_balanced hl hbag p
+
+/-- **The adversarial period is balanced too**: over any 35-placement period of
+an `AdversarialClosedCycle`, the announced piece sequence contains each piece
+exactly five times — the adversary's freedom inside a cycle is limited to the
+order of a fixed multiset. -/
+theorem adversarialClosedCycle_period_piece_balanced
+    (C : AdversarialClosedCycle GameConfig.standard) {g0 : GameState}
+    {t : ℕ → Piece} (hl : LegalSequenceFrom g0.bag t) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard C.solver t g0 n
+        = adversarialTrace GameConfig.standard C.solver t g0 (n + 35))
+    (p : Piece) :
+    ((Finset.range 35).filter (fun k => t (n + k) = p)).card = 5 := by
+  have hbag : bagAt g0.bag t (n + 35) = bagAt g0.bag t n := by
+    rw [← adversarialTrace_bag_from, ← adversarialTrace_bag_from, hcyc]
+  exact BagCadence.window_thirtyfive_balanced hl hbag p
+
 end ClearRate
 end Tetris
