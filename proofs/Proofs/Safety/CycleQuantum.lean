@@ -2332,5 +2332,45 @@ theorem trace_piece_available_iff {π : Policy GameConfig.standard}
     obtain ⟨j, hj, hp⟩ := Finset.mem_image.mp hmem
     exact h j (Finset.mem_range.mp hj) hp
 
+/-- Any live return proves survival, from any seed. -/
+theorem survivesForever_of_trace_return_from {π : Policy GameConfig.standard}
+    {g0 : GameState} {n₁ n₂ : ℕ} (hlt : n₁ < n₂)
+    (hret : trace GameConfig.standard π g0 n₁
+        = trace GameConfig.standard π g0 n₂)
+    (hlive : ∀ k, k < n₂ →
+      ¬ (trace GameConfig.standard π g0 k).lost GameConfig.standard) :
+    SurvivesForever GameConfig.standard π g0 := by
+  intro m
+  rcases Nat.lt_or_ge m n₁ with hm | hm
+  · exact hlive m (by omega)
+  · have hret' : trace GameConfig.standard π g0 n₁
+        = trace GameConfig.standard π g0 (n₁ + (n₂ - n₁)) := by
+      rw [show n₁ + (n₂ - n₁) = n₂ by omega]
+      exact hret
+    have hmem := cycle_orbit_subset_period (show 0 < n₂ - n₁ by omega) hret' hm
+    rw [Finset.mem_image] at hmem
+    obtain ⟨k, hk, heq⟩ := hmem
+    rw [← heq]
+    exact hlive (n₁ + k) (by have := Finset.mem_range.mp hk; omega)
+
+/-- **The survival characterization at every well-formed seed**: a valid
+policy survives forever from `g0` iff its trace shows a finite live prefix
+ending in a revisit. The bank-75 init theorem, seed-general. -/
+theorem survivesForever_iff_live_return_from {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {g0 : GameState}
+    (hwf : Board.WF GameConfig.standard g0.board) :
+    SurvivesForever GameConfig.standard π g0
+      ↔ ∃ n₁ n₂, n₁ < n₂
+          ∧ trace GameConfig.standard π g0 n₁
+            = trace GameConfig.standard π g0 n₂
+          ∧ ∀ k, k < n₂ →
+            ¬ (trace GameConfig.standard π g0 k).lost GameConfig.standard := by
+  constructor
+  · intro hs
+    obtain ⟨n₁, n₂, hlt, hret⟩ := survivesForever_exists_return_from hv hwf hs
+    exact ⟨n₁, n₂, hlt, hret, fun k _ => hs k⟩
+  · rintro ⟨n₁, n₂, hlt, hret, hlive⟩
+    exact survivesForever_of_trace_return_from hlt hret hlive
+
 end ClearRate
 end Tetris

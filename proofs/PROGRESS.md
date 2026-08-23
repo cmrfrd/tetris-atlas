@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ca) — bank 100 ★ MILESTONE
+
+- `survivesForever_of_trace_return_from` / `survivesForever_iff_live_return_from`
+  — the survival characterization generalized to every well-formed seed.
+- ONE HUNDRED bank batches complete (154c536..HEAD): the counting theory
+  (rate/mix/balance/quantum), the anchor upgrade, the frequency law, the
+  diversity/stratification/CRT-grid family, the orbit and minimal-cycle
+  constructors, the PC route, the survival ⟺ return characterization with
+  its 2^207 bound, solver-design impossibilities, and the bag content laws
+  — all green, sorry-free, base-axioms-only.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bz) — the availability criterion (bank 99/N)
 
 - `trace_bag_eq_sdiff` — on cooperative traces the bag is the full bag
