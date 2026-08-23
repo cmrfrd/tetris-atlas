@@ -1520,5 +1520,29 @@ theorem no_cycle_of_I_strictly_tetris {π : Policy GameConfig.standard}
     exact hcon.2 (hpol (n + j) hcon.1)
   omega
 
+/-- **Three tetrises span at least seven placements**: tetrises ride I's,
+three draws of one piece must straddle two bag refills, and refills sit
+seven apart. Tetris bursts come at most in pairs — a triple burst inside
+seven placements is impossible on any legally-drawn trace. -/
+theorem trace_three_tetrises_span {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag)
+    {i j k : ℕ} (hi : 1 ≤ i) (hij : i < j) (hjk : j < k)
+    (h4i : 4 ≤ (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init i)).place
+        (trace GameConfig.standard π GameState.init i).board)).card)
+    (h4j : 4 ≤ (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init j)).place
+        (trace GameConfig.standard π GameState.init j).board)).card)
+    (h4k : 4 ≤ (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init k)).place
+        (trace GameConfig.standard π GameState.init k).board)).card) :
+    i + 7 ≤ k := by
+  have hl := legalSequence_of_trace_draws hdraw
+  exact BagCadence.same_piece_three_apart hl
+    (trace_tetris_step_I (by omega) h4i)
+    (trace_tetris_step_I (by omega) h4j)
+    (trace_tetris_step_I (by omega) h4k) hij hjk
+
 end ClearRate
 end Tetris

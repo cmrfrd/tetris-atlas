@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23aw) — tetris burst spacing (bank 70/N)
+
+- `trace_three_tetrises_span` — three tetrises on any legally-drawn trace
+  span at least seven placements: tetrises ride I's, three same-piece draws
+  straddle two refills, refills sit seven apart. TETRIS BURSTS COME AT MOST
+  IN PAIRS.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23av) — solver-design impossibilities (bank 69/N)
 
 - `no_cycle_of_only_tetris_clears` — a policy whose every clearing step is a
