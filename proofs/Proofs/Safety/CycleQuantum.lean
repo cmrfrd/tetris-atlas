@@ -508,6 +508,55 @@ theorem iCount_window_bounds {π : Policy GameConfig.standard}
   have hblock := window_multiblock_bounds hl n Piece.I q
   omega
 
+/-- **The window law at every length**: any `w` consecutive legal draws hold
+between `4·⌊w/35⌋` and `6·⌊w/35⌋ + 6` of every piece — the piece frequency is
+sandwiched in `[4/35, 6/35]` at every scale, no alignment or periodicity
+required. Squeeze between the enclosed and enclosing block windows. -/
+theorem window_bounds_any_length {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) (n w : ℕ) (p : Piece) :
+    4 * (w / 35) ≤ ((Finset.range w).filter (fun k => s (n + k) = p)).card
+      ∧ ((Finset.range w).filter (fun k => s (n + k) = p)).card
+        ≤ 6 * (w / 35) + 6 := by
+  classical
+  set q := w / 35 with hq
+  have hlo : 35 * q ≤ w := by omega
+  have hhi : w ≤ 35 * (q + 1) := by omega
+  have hin : ((Finset.range (35 * q)).filter (fun k => s (n + k) = p)).card
+      ≤ ((Finset.range w).filter (fun k => s (n + k) = p)).card :=
+    Finset.card_le_card (Finset.filter_subset_filter _
+      (by intro x hx; rw [Finset.mem_range] at hx ⊢; omega))
+  have hout : ((Finset.range w).filter (fun k => s (n + k) = p)).card
+      ≤ ((Finset.range (35 * (q + 1))).filter (fun k => s (n + k) = p)).card :=
+    Finset.card_le_card (Finset.filter_subset_filter _
+      (by intro x hx; rw [Finset.mem_range] at hx ⊢; omega))
+  obtain ⟨hg, _⟩ := window_multiblock_bounds hl n p q
+  obtain ⟨_, hle⟩ := window_multiblock_bounds hl n p (q + 1)
+  constructor
+  · omega
+  · omega
+
+/-- **The I-counter bracket at every horizon** — aligned or not: on any
+legally-drawn trace from `init`, `4·⌊Δn/35⌋ ≤ ΔiCount ≤ 6·⌊Δn/35⌋ + 6`.
+The I supply is linear with slope in `[4/35, 6/35]` at all scales. -/
+theorem iCount_bracket_any {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n m : ℕ}
+    (hnm : n ≤ m) :
+    4 * ((m - n) / 35) ≤ iCount GameConfig.standard π GameState.init m
+        - iCount GameConfig.standard π GameState.init n
+      ∧ iCount GameConfig.standard π GameState.init m
+        - iCount GameConfig.standard π GameState.init n
+        ≤ 6 * ((m - n) / 35) + 6 := by
+  have hl := legalSequence_of_trace_draws hdraw
+  have h1 := iCount_eq_card_filter (cfg := GameConfig.standard) (π := π) n
+  have h2 := iCount_eq_card_filter (cfg := GameConfig.standard) (π := π) m
+  have hsplit := card_filter_range_add (fun k =>
+    (π (trace GameConfig.standard π GameState.init k)).piece = Piece.I)
+    n (m - n)
+  rw [show n + (m - n) = m by omega] at hsplit
+  have hwin := window_bounds_any_length hl n (m - n) Piece.I
+  omega
+
 /-- **The adversarial period is balanced too**: over any 35-placement period of
 an `AdversarialClosedCycle`, the announced piece sequence contains each piece
 exactly five times — the adversary's freedom inside a cycle is limited to the

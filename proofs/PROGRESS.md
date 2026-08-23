@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23qq) — window law at every length (bank 39/N)
+
+- `window_bounds_any_length` — any `w` consecutive legal draws hold between
+  `4⌊w/35⌋` and `6⌊w/35⌋ + 6` of every piece: the piece frequency is
+  sandwiched in `[4/35, 6/35]` at EVERY scale, no alignment or periodicity.
+  Squeeze between the enclosed and enclosing block windows.
+- `iCount_bracket_any` — the I-counter bracket at every unaligned horizon.
+- Lean note: `Finset.range_subset.mpr` unfolds oddly here; a two-line
+  `intro/mem_range/omega` subset proof is more robust.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23pp) — adversarial bracket + mass band (bank 38/N)
 
 - `clearedAdv_mono` — the missing monotonicity of adversarial clears.
