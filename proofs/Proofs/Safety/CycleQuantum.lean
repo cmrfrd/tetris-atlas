@@ -2081,5 +2081,51 @@ theorem trace_window_counts_ge_five {π : Policy GameConfig.standard}
     (fun i hi k hk => hinj i hi k hk)
   rw [this, Finset.card_range]
 
+/-- **The phase is observable**: within any 35-window, a state's bag fill
+level and occupancy residue mod 10 determine its position — the two cheap
+scalar observables jointly reconstruct the five-bag phase (CRT of the two
+clocks). -/
+theorem trace_window_phase_determined {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n i k : ℕ}
+    (hi : i < 35) (hk : k < 35)
+    (hbag : (trace GameConfig.standard π GameState.init (n + i)).bag.card
+        = (trace GameConfig.standard π GameState.init (n + k)).bag.card)
+    (hcnt : (trace GameConfig.standard π GameState.init (n + i)).board.count % 10
+        = (trace GameConfig.standard π GameState.init (n + k)).board.count % 10) :
+    i = k := by
+  have h1 := bag_card_trace hdraw (n + i)
+  have h2 := bag_card_trace hdraw (n + k)
+  have h3 := count_mod_ten hv (n + i)
+  have h4 := count_mod_ten hv (n + k)
+  rw [h1, h2] at hbag
+  rw [h3, h4] at hcnt
+  omega
+
+/-- The adversarial mirror: the two clocks reconstruct the phase whoever
+picks the pieces (any well-formed seed). -/
+theorem adversarialTrace_window_phase_determined {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {g0 : GameState}
+    (hwf : Board.WF GameConfig.standard g0.board)
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s g0 n) (s n)
+      with piece := s n } : Placement).Valid GameConfig.standard)
+    (hdraw : ∀ n, s n ∈ (adversarialTrace GameConfig.standard σ s g0 n).bag)
+    {n i k : ℕ} (hi : i < 35) (hk : k < 35)
+    (hbag : (adversarialTrace GameConfig.standard σ s g0 (n + i)).bag.card
+        = (adversarialTrace GameConfig.standard σ s g0 (n + k)).bag.card)
+    (hcnt : (adversarialTrace GameConfig.standard σ s g0 (n + i)).board.count % 10
+        = (adversarialTrace GameConfig.standard σ s g0 (n + k)).board.count % 10) :
+    i = k := by
+  have h1 := bag_card_adversarialTrace hdraw (n + i)
+  have h2 := bag_card_adversarialTrace hdraw (n + k)
+  have h3 := adversarialTrace_count_mod_ten hwf hv (n + i)
+  have h4 := adversarialTrace_count_mod_ten hwf hv (n + k)
+  have hle7 : g0.bag.card ≤ 7 := Bag.card_le_seven g0.bag
+  have hpos : 0 < g0.bag.card := Finset.card_pos.mpr ⟨_, hdraw 0⟩
+  rw [h1, h2] at hbag
+  rw [h3, h4] at hcnt
+  omega
+
 end ClearRate
 end Tetris

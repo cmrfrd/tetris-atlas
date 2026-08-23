@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bk) — the phase is observable (bank 84/N)
+
+- `trace_window_phase_determined` / `adversarialTrace_window_phase_determined`
+  — within any 35-window, a state's bag fill level and occupancy residue
+  mod 10 jointly determine its position: the five-bag phase is
+  reconstructible from two cheap scalar observables (CRT of the clocks).
+  Practical: an Atlas implementation can shard by observable phase with no
+  bookkeeping.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bj) — the CRT grid (bank 83/N)
 
 - `isClosedOn_grid_inhabited` — a closed Atlas set inhabits EVERY cell of
