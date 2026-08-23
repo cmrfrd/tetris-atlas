@@ -1310,5 +1310,52 @@ theorem adversarialTrace_window_bags_ge_seven {cfg : GameConfig}
   rw [Finset.card_range] at hle
   omega
 
+/-- **A closed Atlas set spans at least five distinct boards**: the diversity
+floor of any legal trace window transfers to the M4 witness set. -/
+theorem isClosedOn_boards_ge_five {A : Atlas GameConfig.standard}
+    {S : Finset GameState} (h : A.IsClosedOn GameConfig.standard S)
+    {g₀ : GameState} (hg₀ : g₀ ∈ S)
+    (hwf : Board.WF GameConfig.standard g₀.board) (hbag : g₀.bag.Nonempty) :
+    5 ≤ (S.image (fun g => g.board)).card := by
+  classical
+  obtain ⟨t, ht⟩ := BagCadence.exists_legalSequenceFrom hbag
+  have hv := isClosedOn_trace_forced_valid h hg₀ ht
+  have hwin := adversarialTrace_window_boards_ge_five
+    (σ := A.toSolver) (s := t) (g0 := g₀) hwf hv 0
+  refine le_trans hwin (Finset.card_le_card ?_)
+  intro b hb
+  rw [Finset.mem_image] at hb ⊢
+  obtain ⟨k, -, rfl⟩ := hb
+  exact ⟨_, h.toSolver_adversarialTrace_mem hg₀ ht (0 + k), rfl⟩
+
+/-- **A closed Atlas set spans at least seven distinct bag states** — it must
+carry a full bag-clock cycle. -/
+theorem isClosedOn_bags_ge_seven {A : Atlas GameConfig.standard}
+    {S : Finset GameState} (h : A.IsClosedOn GameConfig.standard S)
+    {g₀ : GameState} (hg₀ : g₀ ∈ S) (hbag : g₀.bag.Nonempty) :
+    7 ≤ (S.image (fun g => g.bag)).card := by
+  classical
+  obtain ⟨t, ht⟩ := BagCadence.exists_legalSequenceFrom hbag
+  have hdraw : ∀ n, t n
+      ∈ (adversarialTrace GameConfig.standard A.toSolver t g₀ n).bag :=
+    fun n => by rw [adversarialTrace_bag_from]; exact ht n
+  have hwin := adversarialTrace_window_bags_ge_seven hdraw 0
+  refine le_trans hwin (Finset.card_le_card ?_)
+  intro b hb
+  rw [Finset.mem_image] at hb ⊢
+  obtain ⟨k, -, rfl⟩ := hb
+  exact ⟨_, h.toSolver_adversarialTrace_mem hg₀ ht (0 + k), rfl⟩
+
+/-- The M4 witness diversity: any init-containing closed Atlas spans at least
+five boards and seven bag states. -/
+theorem init_closed_atlas_diversity {A : Atlas GameConfig.standard}
+    {S : Finset GameState} (h : A.IsClosedOn GameConfig.standard S)
+    (hinit : GameState.init ∈ S) :
+    5 ≤ (S.image (fun g => g.board)).card
+      ∧ 7 ≤ (S.image (fun g => g.bag)).card :=
+  ⟨isClosedOn_boards_ge_five h hinit
+      (GameState.init_board_wf GameConfig.standard) GameState.init_bag_nonempty,
+    isClosedOn_bags_ge_seven h hinit GameState.init_bag_nonempty⟩
+
 end ClearRate
 end Tetris

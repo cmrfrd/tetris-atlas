@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23aq) — M4 witness diversity (bank 64/N)
+
+- `isClosedOn_boards_ge_five` / `isClosedOn_bags_ge_seven` — any closed
+  Atlas set spans at least five distinct boards and seven distinct bag
+  states: the trace-window diversity floors transfer to the certificate set
+  via the greedy legal stream.
+- `init_closed_atlas_diversity` — bundled for the init-containing M4 witness.
+- The M4 profile now: card ∈ [35, 2^207], boards ≥ 5, bags ≥ 7 (a full
+  bag-clock cycle lives inside every certificate).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ap) — adversarial window diversity (bank 63/N)
 
 - `adversarialTrace_window_boards_ge_five` / `_bags_ge_seven` — the state
