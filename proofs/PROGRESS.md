@@ -41629,6 +41629,28 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23i) — flat play doubles the horizon: depth 10 (bank 5/N)
+
+`HeadroomIterate` additions:
+- `shapeUp_row_lt_two_rot_zero` — rotation 0 of EVERY piece has a drop profile
+  ≤ 2 rows tall (7-case decide; I is horizontal at r0).
+- `dropped_row_lt'` / `applyStep_row_lt'` — profile-height-graded move bounds
+  (parametric in the profile height `h`).
+- **`mem_safeIterate_of_flat_headroom`** — 2k rows of clearance ⇒
+  `safeIterate k` by flat play: the placement is the PLAYER'S choice, so the
+  worst-rotation charge (vertical I, 4 tall) is not forced.
+- **`init_mem_safeIterate_ten`** + `init_mem_safeIterate_of_le_ten` — **no
+  adversarial kill certificate of depth ≤ 10 exists**, zero search. This is
+  the flat-play ceiling: four columns cannot fill a ten-wide row, so no
+  clears — rung 11 of the compactness ladder is the first that requires
+  clearing or spreading. (Note: rung 11+ likely provable with a slightly
+  smarter static schedule — spread flat placements across 2-3 column groups —
+  before genuine strategy is needed; a future tick.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23h) — headroom-graded safety: no depth-5 kill tree (bank 4/N)
 
 **NEW** `proofs/Proofs/Safety/HeadroomIterate.lean` (green):

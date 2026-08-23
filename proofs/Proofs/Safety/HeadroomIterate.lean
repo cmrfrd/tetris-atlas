@@ -120,6 +120,84 @@ theorem mem_safeIterate_of_headroom {cfg : GameConfig} (hcols : 4 ≤ cfg.cols) 
       have hstep := applyStep_row_lt hb _ hq
       omega
 
+/-! ## Doubling the horizon: the player picks the rotation
+
+The four-rows-per-step grading charges for the worst rotation (vertical I).
+But the placement is the *player's* choice, and **rotation `0` of every piece
+is at most two rows tall** — so flat play buys a guaranteed step for only two
+rows of headroom, and the empty board's twenty rows certify ten steps. -/
+
+/-- Rotation `0` of every piece has a drop profile at most two rows tall. -/
+theorem shapeUp_row_lt_two_rot_zero :
+    ∀ p : Piece, ∀ cell ∈ p.shapeUp 0, cell.2 < 2 := by
+  decide
+
+/-- Profile-height-graded drop bound: a piece whose profile is under `h` rows
+tall lands strictly below `H + h`. -/
+theorem dropped_row_lt' {b : Board} {H h : ℕ} (hb : ∀ q ∈ b, q.2 < H)
+    {pl : Placement} (hsh : ∀ cell ∈ pl.shapeUp, cell.2 < h)
+    {q : Coord} (hq : q ∈ pl.dropped b) : q.2 < H + h := by
+  unfold Placement.dropped Placement.cellsAt at hq
+  rw [Finset.mem_image] at hq
+  obtain ⟨cell, hcell, rfl⟩ := hq
+  have hcellh : cell.2 < h := hsh cell hcell
+  have hoff : pl.dropOffset b ≤ H := by
+    rw [Placement.dropOffset_eq_sup]
+    refine Finset.sup_le fun c _ => ?_
+    have := colHeight_le_of_forall_row_lt hb (pl.col + c.1)
+    omega
+  dsimp only
+  omega
+
+/-- Profile-height-graded move bound. -/
+theorem applyStep_row_lt' {cfg : GameConfig} {b : Board} {H h : ℕ}
+    (hb : ∀ q ∈ b, q.2 < H) {pl : Placement}
+    (hsh : ∀ cell ∈ pl.shapeUp, cell.2 < h) {q : Coord}
+    (hq : q ∈ Placement.applyStep cfg b pl) : q.2 < H + h := by
+  unfold Placement.applyStep at hq
+  obtain ⟨q', hq', hle⟩ := clearLines_row_le hq
+  unfold Placement.place at hq'
+  rcases Finset.mem_union.mp hq' with hmem | hmem
+  · have := hb q' hmem
+    omega
+  · have := dropped_row_lt' hb hsh hmem
+    omega
+
+/-- **Flat-play headroom grading: two rows per step.** Playing every piece in
+its flat rotation, `2k` rows of clearance certify `k` safe steps. -/
+theorem mem_safeIterate_of_flat_headroom {cfg : GameConfig} (hcols : 4 ≤ cfg.cols) :
+    ∀ k, 2 * k ≤ cfg.rows → ∀ g : GameState,
+      (∀ q ∈ g.board, q.2 + 2 * k ≤ cfg.rows) → g ∈ safeIterate cfg k := by
+  intro k
+  induction k with
+  | zero =>
+    intro _ g _
+    rw [safeIterate_zero]
+    trivial
+  | succ k ih =>
+    intro hR g hg
+    rw [safeIterate_succ]
+    refine ⟨?_, ?_⟩
+    · rw [GameState.not_lost_iff_forall_row_lt]
+      intro q hq
+      have := hg q hq
+      omega
+    · intro p hp
+      refine ⟨⟨p, 0, 0⟩, rfl, ?_, ih (by omega) _ ?_⟩
+      · intro cell hcell
+        have h4 := Piece.shapeUp_col_lt_four p 0 cell hcell
+        dsimp only
+        omega
+      · intro q hq
+        rw [adversarialStep_board] at hq
+        have hb : ∀ q' ∈ g.board, q'.2 < cfg.rows - (2 * k + 1) := by
+          intro q' hq'
+          have := hg q' hq'
+          omega
+        have hstep := applyStep_row_lt' hb
+          (pl := ⟨p, 0, 0⟩) (h := 2) (shapeUp_row_lt_two_rot_zero p) hq
+        omega
+
 /-- The empty board's twenty rows of headroom certify five safe steps. -/
 theorem init_mem_safeIterate_of_le {k : ℕ} (hk : k ≤ 5) :
     GameState.init ∈ safeIterate GameConfig.standard k := by
@@ -137,5 +215,22 @@ first requires a decision. -/
 theorem init_mem_safeIterate_five :
     GameState.init ∈ safeIterate GameConfig.standard 5 :=
   init_mem_safeIterate_of_le le_rfl
+
+/-- **No adversarial kill certificate of depth ten exists.** Flat play doubles
+the strategy-free horizon: rotation `0` of every piece is at most two rows
+tall, so ten pieces fit in twenty rows. This is the flat-play ceiling — the
+stack never clears (four columns cannot fill a ten-wide row), so rung eleven
+of the compactness ladder is the first that requires clearing or spreading. -/
+theorem init_mem_safeIterate_ten :
+    GameState.init ∈ safeIterate GameConfig.standard 10 := by
+  refine mem_safeIterate_of_flat_headroom (by norm_num) 10 ?_ GameState.init ?_
+  · rw [GameConfig.standard_rows]
+  · intro q hq
+    exact absurd hq (GameState.init_board_no_mem q)
+
+/-- Monotone form: every depth up to ten is certified. -/
+theorem init_mem_safeIterate_of_le_ten {k : ℕ} (hk : k ≤ 10) :
+    GameState.init ∈ safeIterate GameConfig.standard k :=
+  safeIterate_antitone GameConfig.standard hk init_mem_safeIterate_ten
 
 end Tetris
