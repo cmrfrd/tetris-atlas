@@ -1592,5 +1592,50 @@ theorem adversary_period_idle_I_ge_two {σ : Solver GameConfig.standard}
   dsimp only at h1 h2 hspl hsplit hIfour ⊢
   omega
 
+/-- **The stratified floor**: a closed Atlas set holds at least five states
+at *every* bag fill level `c ∈ {1, …, 7}` — the 35-state floor decomposed
+into its seven bag strata of five. The greedy trace passes through the
+target stratum once per bag, and the quantum keeps those visits distinct. -/
+theorem isClosedOn_stratum_ge_five {A : Atlas GameConfig.standard}
+    {S : Finset GameState} (h : A.IsClosedOn GameConfig.standard S)
+    {g₀ : GameState} (hg₀ : g₀ ∈ S)
+    (hwf : Board.WF GameConfig.standard g₀.board) (hbag : g₀.bag.Nonempty)
+    {c : ℕ} (hc1 : 1 ≤ c) (hc7 : c ≤ 7) :
+    5 ≤ (S.filter (fun s => s.bag.card = c)).card := by
+  classical
+  obtain ⟨t, ht⟩ := BagCadence.exists_legalSequenceFrom hbag
+  have hdraw : ∀ n, t n
+      ∈ (adversarialTrace GameConfig.standard A.toSolver t g₀ n).bag :=
+    fun n => by rw [adversarialTrace_bag_from]; exact ht n
+  have hcard := bag_card_adversarialTrace hdraw
+  have hle7 : g₀.bag.card ≤ 7 := Bag.card_le_seven g₀.bag
+  have hpos : 0 < g₀.bag.card := Finset.card_pos.mpr ⟨_, hdraw 0⟩
+  -- the residue r < 7 whose indices carry bag card c
+  set r := (7 - c + g₀.bag.card) % 7 with hr
+  have hrc : ∀ j, (adversarialTrace GameConfig.standard A.toSolver t g₀
+      (r + 7 * j)).bag.card = c := by
+    intro j
+    rw [hcard]
+    omega
+  refine le_trans ?_ (Finset.card_le_card_of_injOn
+    (s := Finset.range 5)
+    (fun j => adversarialTrace GameConfig.standard A.toSolver t g₀ (r + 7 * j))
+    ?_ ?_)
+  · rw [Finset.card_range]
+  · intro j hj
+    exact Finset.mem_filter.mpr
+      ⟨h.toSolver_adversarialTrace_mem hg₀ ht (r + 7 * j), hrc j⟩
+  · intro i hi j hj hEq
+    rw [Finset.coe_range, Set.mem_Iio] at hi hj
+    rcases Nat.lt_or_ge i j with hij | hij
+    · have hd := isClosedOn_thirtyfive_dvd h hg₀ hwf ht
+        (show r + 7 * i ≤ r + 7 * j by omega) hEq
+      omega
+    · rcases Nat.eq_or_lt_of_le hij with heq | hij'
+      · omega
+      · have hd := isClosedOn_thirtyfive_dvd h hg₀ hwf ht
+          (show r + 7 * j ≤ r + 7 * i by omega) hEq.symm
+        omega
+
 end ClearRate
 end Tetris

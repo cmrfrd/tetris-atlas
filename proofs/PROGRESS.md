@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bh) — the stratified floor (bank 81/N)
+
+- `isClosedOn_stratum_ge_five` — a closed Atlas set holds at least FIVE
+  states at every bag fill level c ∈ {1..7}: the greedy trace passes the
+  target stratum once per bag (residue arithmetic on the bag clock), the
+  quantum keeps the five visits distinct. The 35-floor decomposed: 35 = 7
+  strata × 5.
+- Lean note: a stuck `Quot.lift`-shaped Finset-membership goal rejects
+  anonymous-constructor and simp mem_filter — use term-level
+  `Finset.mem_filter.mpr`.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bg) — count-value diversity (bank 80/N)
 
 - `trace_window_counts_ge_five` — any 35-window (indeed any FIVE consecutive
