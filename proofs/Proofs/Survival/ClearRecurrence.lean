@@ -797,6 +797,30 @@ theorem exists_count_eq_le_of_step_five {π : Policy GameConfig.standard}
   · exact ⟨x, y, h, by have := Finset.mem_range.mp hy; omega, heq⟩
   · exact ⟨y, x, h, by have := Finset.mem_range.mp hx; omega, heq.symm⟩
 
+/-- **Every closed cycle holds at least 35 states.** The first 35 trace states
+from any cycle member are pairwise distinct — a coincidence at distance below
+35 would violate the cycle quantum — and all of them lie in the cycle. The
+counting lower bound on the M2 artifact: no certificate smaller than five bags
+of states exists. -/
+theorem closedCycle_card_ge_thirtyfive (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (h0 : g0 ∈ C.states)
+    (hwf : Board.WF GameConfig.standard g0.board) :
+    35 ≤ C.states.card := by
+  have hcalc : (Finset.range 35).card ≤ C.states.card := by
+    refine Finset.card_le_card_of_injOn
+      (fun i => trace GameConfig.standard C.policy g0 i) ?_ ?_
+    · intro i _
+      exact C.trace_mem_states h0 i
+    · intro i hi j hj hEq
+      simp only [Finset.coe_range, Set.mem_Iio] at hi hj
+      dsimp only at hEq
+      rcases le_total i j with h | h
+      · have := closedCycle_thirtyfive_dvd C h0 hwf h hEq
+        omega
+      · have := closedCycle_thirtyfive_dvd C h0 hwf h hEq.symm
+        omega
+  rwa [Finset.card_range] at hcalc
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

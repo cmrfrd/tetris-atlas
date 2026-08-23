@@ -330,5 +330,43 @@ theorem exists_I_infinitely_often {initBag : Bag} {s : ℕ → Piece}
     {n : ℕ | s n = Piece.I}.Infinite :=
   every_piece_infinitely_often hl Piece.I
 
+/-! ## Legal sequences exist -/
+
+/-- The greedy bag stream: from a nonempty bag, always draw some member.
+Draws keep the bag nonempty (`Bag.draw_nonempty`), so the stream never
+stalls. -/
+noncomputable def greedyBag (b0 : {b : Bag // b.Nonempty}) :
+    ℕ → {b : Bag // b.Nonempty}
+  | 0 => b0
+  | n + 1 =>
+      ⟨(greedyBag b0 n).1.draw (greedyBag b0 n).2.choose,
+       Bag.draw_nonempty _ _⟩
+
+/-- The piece drawn at each step of the greedy stream. -/
+noncomputable def greedySeq (b0 : {b : Bag // b.Nonempty}) (n : ℕ) : Piece :=
+  (greedyBag b0 n).2.choose
+
+theorem bagAt_greedy (b0 : {b : Bag // b.Nonempty}) :
+    ∀ n, bagAt b0.1 (greedySeq b0) n = (greedyBag b0 n).1
+  | 0 => rfl
+  | n + 1 => by
+      change (bagAt b0.1 (greedySeq b0) n).draw (greedySeq b0 n)
+        = ((greedyBag b0 (n + 1)) : {b : Bag // b.Nonempty}).1
+      rw [bagAt_greedy b0 n]
+      rfl
+
+/-- **Legal sequences exist from every nonempty bag.** The 7-bag never
+paints itself into a corner: greedy drawing is always legal. This is the
+existence primitive that lets trace-based arguments run on arbitrary cycle
+certificates. -/
+theorem exists_legalSequenceFrom {b : Bag} (hb : b.Nonempty) :
+    ∃ s : ℕ → Piece, LegalSequenceFrom b s := by
+  refine ⟨greedySeq ⟨b, hb⟩, fun n => ?_⟩
+  have h := bagAt_greedy ⟨b, hb⟩ n
+  change greedySeq ⟨b, hb⟩ n ∈ bagAt b (greedySeq ⟨b, hb⟩) n
+  rw [show bagAt b (greedySeq ⟨b, hb⟩) n
+      = bagAt (⟨b, hb⟩ : {b : Bag // b.Nonempty}).1 (greedySeq ⟨b, hb⟩) n from rfl, h]
+  exact (greedyBag ⟨b, hb⟩ n).2.choose_spec
+
 end BagCadence
 end Tetris

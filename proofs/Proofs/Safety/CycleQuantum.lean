@@ -1,5 +1,6 @@
 import Mathlib
 import Proofs.Survival.ClearRecurrence
+import Proofs.Safety.BagCadence
 import Proofs.Safety.Adversarial
 import Proofs.Safety.SafeSet
 
@@ -186,6 +187,33 @@ theorem adversarialClosedCycle_thirtyfive_le
     n₁ + 35 ≤ n₂ := by
   have hd := adversarialClosedCycle_thirtyfive_dvd C hg0 hwf hl (le_of_lt h12) h
   omega
+
+/-- **Every adversarial closed cycle holds at least 35 states.** Run any legal
+sequence from a cycle member (one exists — `exists_legalSequenceFrom`): the
+first 35 trace states are pairwise distinct by the quantum and all lie in the
+cycle. The counting lower bound on the *adversarial* M2 artifact — the one
+`TetrisSolvable` needs. (The bag-nonemptiness hypothesis excludes the
+degenerate empty-bag singleton cycles, which certify nothing.) -/
+theorem adversarialClosedCycle_card_ge_thirtyfive
+    (C : AdversarialClosedCycle GameConfig.standard) {g0 : GameState}
+    (hg0 : g0 ∈ C.states) (hwf : Board.WF GameConfig.standard g0.board)
+    (hbag : g0.bag.Nonempty) :
+    35 ≤ C.states.card := by
+  obtain ⟨t, ht⟩ := BagCadence.exists_legalSequenceFrom hbag
+  have hcalc : (Finset.range 35).card ≤ C.states.card := by
+    refine Finset.card_le_card_of_injOn
+      (fun i => adversarialTrace GameConfig.standard C.solver t g0 i) ?_ ?_
+    · intro i _
+      exact C.adversarialTrace_mem_states_from_mem hg0 ht i
+    · intro i hi j hj hEq
+      simp only [Finset.coe_range, Set.mem_Iio] at hi hj
+      dsimp only at hEq
+      rcases le_total i j with h | h
+      · have := adversarialClosedCycle_thirtyfive_dvd C hg0 hwf ht h hEq
+        omega
+      · have := adversarialClosedCycle_thirtyfive_dvd C hg0 hwf ht h hEq.symm
+        omega
+  rwa [Finset.card_range] at hcalc
 
 end ClearRate
 end Tetris

@@ -41629,6 +41629,27 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23s) — cycles hold ≥ 35 states (bank 15/N)
+
+- **`exists_legalSequenceFrom`** (BagCadence) — legal sequences exist from
+  every nonempty bag: the greedy stream `greedyBag`/`greedySeq` (subtype-valued
+  recursion carrying Nonempty through `Bag.draw_nonempty`; `bagAt_greedy`
+  identifies the induced bags). The existence primitive that lets trace
+  arguments run on arbitrary certificates.
+- **`closedCycle_card_ge_thirtyfive`** (ClearRecurrence) — the first 35 trace
+  states from any cycle member are pairwise distinct (a coincidence below 35
+  violates the quantum) and all lie in the cycle ⇒ `35 ≤ C.states.card`.
+- **`adversarialClosedCycle_card_ge_thirtyfive`** (CycleQuantum) — same for
+  the adversarial M2 artifact, running the greedy legal sequence; bag
+  nonemptiness excludes the degenerate empty-bag singleton "cycles".
+
+The 35-quantum is now a SIZE floor, not just a period floor: no M2
+certificate with fewer than 35 states exists, cooperative or adversarial.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23r) — the mix, adversarially (bank 14/N)
 
 `AdversarialRate` additions (now imports ClearMix):
