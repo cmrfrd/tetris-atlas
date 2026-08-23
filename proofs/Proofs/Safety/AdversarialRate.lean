@@ -1,4 +1,5 @@
 import Mathlib
+import Proofs.Survival.ClearMix
 import Proofs.Safety.BagCadence
 import Proofs.Safety.CycleQuantum
 
@@ -449,6 +450,94 @@ theorem adversary_two_tetris_per_seven {cfg : GameConfig} {σ : Solver cfg}
       ≤ 2 :=
   le_trans (Finset.card_le_card (adversary_tetris_steps_subset a))
     (BagCadence.window_same_piece_card_le_two hl a Piece.I)
+
+/-! ## The clear-size mix, adversarially -/
+
+/-- An adversarial drop clears at most four rows (the pre-drop board never
+carries a full row). -/
+theorem adversary_fullRows_card_le_four {cfg : GameConfig} {σ : Solver cfg}
+    {s : ℕ → Piece} (n : ℕ) :
+    (Board.fullRows cfg
+      (({ σ (adversarialTrace cfg σ s GameState.init n) (s n) with piece := s n }
+          : Placement).place
+        (adversarialTrace cfg σ s GameState.init n).board)).card ≤ 4 := by
+  have h := linesCleared_place_le_four cfg
+    (adversarialTrace cfg σ s GameState.init n).board
+    ({ σ (adversarialTrace cfg σ s GameState.init n) (s n) with piece := s n })
+    (fun r => adversarialTrace_board_no_full n r)
+  rwa [Board.linesCleared] at h
+
+/-- **Triples require I, L or J — adversarially.** A drop clearing three or
+more rows at adversarial step `n` forces the announced piece into `{I, L, J}`:
+another read of the piece sequence off the clear log. -/
+theorem adversary_three_clear_ILJ {cfg : GameConfig} {σ : Solver cfg}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace cfg σ s GameState.init n) (s n)
+      with piece := s n } : Placement).Valid cfg) {n : ℕ}
+    (h3 : 3 ≤ (Board.fullRows cfg
+      (({ σ (adversarialTrace cfg σ s GameState.init n) (s n) with piece := s n }
+          : Placement).place
+        (adversarialTrace cfg σ s GameState.init n).board)).card) :
+    s n = Piece.I ∨ s n = Piece.L ∨ s n = Piece.J := by
+  have h := three_clear_requires_I_L_or_J (hv n)
+    (fun r => adversarialTrace_board_no_full n r) h3
+  exact h
+
+/-- Number of the first `n` adversarial drops that cleared exactly `k` rows. -/
+def sizeCountAdv (cfg : GameConfig) (σ : Solver cfg) (s : ℕ → Piece)
+    (k : ℕ) : ℕ → ℕ
+  | 0 => 0
+  | n + 1 =>
+      sizeCountAdv cfg σ s k n
+        + (if (Board.fullRows cfg
+              (({ σ (adversarialTrace cfg σ s GameState.init n) (s n)
+                  with piece := s n } : Placement).place
+                (adversarialTrace cfg σ s GameState.init n).board)).card = k
+           then 1 else 0)
+
+@[simp] theorem sizeCountAdv_zero (cfg : GameConfig) (σ : Solver cfg)
+    (s : ℕ → Piece) (k : ℕ) : sizeCountAdv cfg σ s k 0 = 0 := rfl
+
+theorem sizeCountAdv_succ (cfg : GameConfig) (σ : Solver cfg) (s : ℕ → Piece)
+    (k n : ℕ) :
+    sizeCountAdv cfg σ s k (n + 1)
+      = sizeCountAdv cfg σ s k n
+        + (if (Board.fullRows cfg
+              (({ σ (adversarialTrace cfg σ s GameState.init n) (s n)
+                  with piece := s n } : Placement).place
+                (adversarialTrace cfg σ s GameState.init n).board)).card = k
+           then 1 else 0) := rfl
+
+/-- **The mix identity, adversarially**: every cleared row belongs to exactly
+one drop, and drops clear at most four rows. -/
+theorem mix_identity_adv {cfg : GameConfig} {σ : Solver cfg} {s : ℕ → Piece}
+    (n : ℕ) :
+    sizeCountAdv cfg σ s 1 n + 2 * sizeCountAdv cfg σ s 2 n
+        + 3 * sizeCountAdv cfg σ s 3 n + 4 * sizeCountAdv cfg σ s 4 n
+      = clearedAdv cfg σ s GameState.init n := by
+  induction n with
+  | zero => simp
+  | succ k ih =>
+    have h4 := adversary_fullRows_card_le_four (cfg := cfg) (σ := σ) (s := s) k
+    rw [sizeCountAdv_succ, sizeCountAdv_succ, sizeCountAdv_succ,
+      sizeCountAdv_succ, clearedAdv_succ]
+    split_ifs <;> omega
+
+/-- **The mix law, adversarially**: one linear equation in four unknowns —
+the clear-size mix stays free against every piece order. -/
+theorem adversary_mix_law {σ : Solver GameConfig.standard} {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+      with piece := s n } : Placement).Valid GameConfig.standard) (n : ℕ) :
+    10 * (sizeCountAdv GameConfig.standard σ s 1 n
+          + 2 * sizeCountAdv GameConfig.standard σ s 2 n
+          + 3 * sizeCountAdv GameConfig.standard σ s 3 n
+          + 4 * sizeCountAdv GameConfig.standard σ s 4 n)
+        + (adversarialTrace GameConfig.standard σ s GameState.init n).board.count
+      = 4 * n := by
+  rw [mix_identity_adv]
+  have h := clearedAdv_ledger (GameState.init_board_wf GameConfig.standard) hv n
+  rw [GameConfig.standard_cols, GameState.init_board_count] at h
+  omega
 
 end ClearRate
 end Tetris

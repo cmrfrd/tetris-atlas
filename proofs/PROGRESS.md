@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23r) — the mix, adversarially (bank 14/N)
+
+`AdversarialRate` additions (now imports ClearMix):
+- `adversary_fullRows_card_le_four` — adversarial drops clear ≤ 4 rows.
+- `adversary_three_clear_ILJ` — a triple-or-more at step n reads
+  `s n ∈ {I, L, J}` off the clear log (cfg-generic).
+- `sizeCountAdv` + `mix_identity_adv` — a₁+2a₂+3a₃+4a₄ = clearedAdv.
+- **`adversary_mix_law`** — `10·(…) + count = 4n` against every piece order:
+  the clear-size mix keeps its three degrees of freedom adversarially.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23q) — counted cadence: ≤ 2 tetrises per 7 (bank 13/N)
 
 - **`window_same_piece_card_le_two`** (BagCadence) — the Finset-counted form
