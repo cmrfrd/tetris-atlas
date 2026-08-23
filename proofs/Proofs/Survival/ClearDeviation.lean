@@ -717,6 +717,145 @@ theorem exists_correcting_pair {Ω : Type*} [MeasurableSpace Ω] (μ : Measure �
   norm_num
   linarith
 
+/-! ## The full lag profile under stationarity -/
+
+/-- Pure double-sum algebra: a function of the index gap summed over the
+`L × L` grid decomposes into the diagonal plus twice the weighted lags:
+`∑∑ γ(|i−j|) = L·γ(0) + 2·∑_{l=1}^{L-1} (L−l)·γ(l)`. -/
+theorem sum_grid_gap_eq (γ : ℕ → ℝ) (L : ℕ) :
+    ∑ i ∈ Finset.range L, ∑ j ∈ Finset.range L, γ (max i j - min i j)
+      = (L : ℝ) * γ 0
+        + 2 * ∑ k ∈ Finset.range L, ((L - (k + 1) : ℕ) : ℝ) * γ (k + 1) := by
+  induction L with
+  | zero => simp
+  | succ L ih =>
+    have hreflect : ∑ j ∈ Finset.range L, γ (L - j)
+        = ∑ k ∈ Finset.range L, γ (k + 1) := by
+      rw [← Finset.sum_range_reflect (fun k => γ (k + 1)) L]
+      refine Finset.sum_congr rfl fun j hj => ?_
+      have hjL : j < L := Finset.mem_range.mp hj
+      congr 1
+      omega
+    have hnewrow : ∑ j ∈ Finset.range L, γ (max L j - min L j)
+        = ∑ k ∈ Finset.range L, γ (k + 1) := by
+      rw [Finset.sum_congr rfl (fun j hj => by
+        have hjL : j ≤ L := le_of_lt (Finset.mem_range.mp hj)
+        rw [max_eq_left hjL, min_eq_right hjL])]
+      exact hreflect
+    have hnewcol : ∑ i ∈ Finset.range L, γ (max i L - min i L)
+        = ∑ k ∈ Finset.range L, γ (k + 1) := by
+      rw [Finset.sum_congr rfl (fun i hi => by
+        have hiL : i ≤ L := le_of_lt (Finset.mem_range.mp hi)
+        rw [max_eq_right hiL, min_eq_left hiL])]
+      exact hreflect
+    have hsum_expand :
+        ∑ k ∈ Finset.range (L + 1), ((L + 1 - (k + 1) : ℕ) : ℝ) * γ (k + 1)
+          = (∑ k ∈ Finset.range L, ((L - (k + 1) : ℕ) : ℝ) * γ (k + 1))
+            + ∑ k ∈ Finset.range L, γ (k + 1) := by
+      rw [Finset.sum_range_succ]
+      have hzero : ((L + 1 - (L + 1) : ℕ) : ℝ) * γ (L + 1) = 0 := by simp
+      rw [hzero, add_zero, ← Finset.sum_add_distrib]
+      refine Finset.sum_congr rfl fun k hk => ?_
+      have hkL := Finset.mem_range.mp hk
+      have hstep : (L + 1 - (k + 1) : ℕ) = (L - (k + 1)) + 1 := by omega
+      rw [hstep, Nat.cast_add, Nat.cast_one]
+      ring
+    calc ∑ i ∈ Finset.range (L + 1), ∑ j ∈ Finset.range (L + 1),
+            γ (max i j - min i j)
+        = ∑ i ∈ Finset.range (L + 1),
+            ((∑ j ∈ Finset.range L, γ (max i j - min i j))
+              + γ (max i L - min i L)) :=
+          Finset.sum_congr rfl fun i _ => Finset.sum_range_succ _ L
+      _ = (∑ i ∈ Finset.range (L + 1),
+            ∑ j ∈ Finset.range L, γ (max i j - min i j))
+            + ∑ i ∈ Finset.range (L + 1), γ (max i L - min i L) :=
+          Finset.sum_add_distrib
+      _ = ((∑ i ∈ Finset.range L, ∑ j ∈ Finset.range L, γ (max i j - min i j))
+            + ∑ j ∈ Finset.range L, γ (max L j - min L j))
+            + ((∑ i ∈ Finset.range L, γ (max i L - min i L))
+              + γ (max L L - min L L)) := by
+          rw [Finset.sum_range_succ, Finset.sum_range_succ
+            (fun i => γ (max i L - min i L))]
+      _ = ((L : ℝ) * γ 0
+            + 2 * ∑ k ∈ Finset.range L, ((L - (k + 1) : ℕ) : ℝ) * γ (k + 1))
+            + (∑ k ∈ Finset.range L, γ (k + 1))
+            + ((∑ k ∈ Finset.range L, γ (k + 1)) + γ 0) := by
+          rw [ih, hnewrow, hnewcol, max_self, min_self, Nat.sub_self]
+      _ = ((L + 1 : ℕ) : ℝ) * γ 0
+            + 2 * ∑ k ∈ Finset.range (L + 1),
+                ((L + 1 - (k + 1) : ℕ) : ℝ) * γ (k + 1) := by
+          rw [hsum_expand]
+          push_cast
+          ring
+
+/-- **The stationary lag-profile budget.** If the per-index covariances depend
+only on the lag — `cov(Xᵢ, Xᵢ₊ₗ) = γ(l)` — then bounded partial sums cap the
+entire weighted lag profile at every horizon:
+
+  `L·γ(0) + 2·∑_{l=1}^{L-1} (L−l)·γ(l) ≤ B²`.
+
+This is the exact variance of the `L`-step partial sum, so it packages the
+covariance budget into the standard time-series object: the long-run variance
+(spectral density at zero) of the process is pinned to `O(B²/L) → 0`. -/
+theorem stationary_covariance_budget {Ω : Type*} [MeasurableSpace Ω]
+    (μ : Measure Ω) [IsProbabilityMeasure μ] (X : ℕ → Ω → ℝ)
+    (hmem : ∀ i, MemLp (X i) 2 μ)
+    {B : ℝ} (hB : ∀ (m : ℕ) (ω : Ω), |∑ i ∈ Finset.range m, X i ω| ≤ B)
+    (γ : ℕ → ℝ)
+    (hstat : ∀ i k, ProbabilityTheory.covariance (X i) (X (i + k)) μ = γ k)
+    (L : ℕ) :
+    (L : ℝ) * γ 0
+        + 2 * ∑ k ∈ Finset.range L, ((L - (k + 1) : ℕ) : ℝ) * γ (k + 1)
+      ≤ B ^ 2 := by
+  have hcov := covariance_sum_le μ X hmem hB L
+  have hpt : ∀ i ∈ Finset.range L, ∀ j ∈ Finset.range L,
+      ProbabilityTheory.covariance (X i) (X j) μ = γ (max i j - min i j) := by
+    intro i _ j _
+    rcases le_total i j with h | h
+    · have hj : j = i + (j - i) := by omega
+      rw [max_eq_right h, min_eq_left h]
+      calc ProbabilityTheory.covariance (X i) (X j) μ
+          = ProbabilityTheory.covariance (X i) (X (i + (j - i))) μ := by rw [← hj]
+        _ = γ (j - i) := hstat i (j - i)
+    · have hi : i = j + (i - j) := by omega
+      rw [max_eq_left h, min_eq_right h]
+      calc ProbabilityTheory.covariance (X i) (X j) μ
+          = ProbabilityTheory.covariance (X (j + (i - j))) (X j) μ := by rw [← hi]
+        _ = ProbabilityTheory.covariance (X j) (X (j + (i - j))) μ :=
+            ProbabilityTheory.covariance_comm _ _
+        _ = γ (i - j) := hstat j (i - j)
+  rw [Finset.sum_congr rfl (fun i hi => Finset.sum_congr rfl
+      (fun j hj => hpt i hi j hj)), sum_grid_gap_eq] at hcov
+  exact hcov
+
+/-- **The immortal solver's lag profile, in numbers.** For a surviving
+randomized solver whose centered per-bag clears are covariance-stationary with
+lag profile `γ`, every horizon obeys
+
+  `L·γ(0) + 2·∑_{l=1}^{L-1} (L−l)·γ(l) ≤ 400`.
+
+Divide by `L`: the Cesàro-weighted sum of the autocovariances is at most
+`400/L` — the spectral density at zero vanishes, quantitatively, with the
+negative lags obligated to cancel `γ(0)` at rate `O(1/L)`. -/
+theorem survival_stationary_lag_budget {Ω : Type*} [MeasurableSpace Ω]
+    (μ : Measure Ω) [IsProbabilityMeasure μ]
+    (strat : Ω → Policy GameConfig.standard)
+    (hv : ∀ ω g, (strat ω g).Valid GameConfig.standard)
+    (hsurv : ∀ ω, SurvivesForever GameConfig.standard (strat ω) GameState.init)
+    (X : ℕ → Ω → ℝ)
+    (hX : ∀ k ω, X k ω = (bagClears (strat ω) k : ℝ) - 2.8)
+    (hmem : ∀ k, MemLp (X k) 2 μ)
+    (γ : ℕ → ℝ)
+    (hstat : ∀ i k, ProbabilityTheory.covariance (X i) (X (i + k)) μ = γ k)
+    (L : ℕ) :
+    (L : ℝ) * γ 0
+        + 2 * ∑ k ∈ Finset.range L, ((L - (k + 1) : ℕ) : ℝ) * γ (k + 1)
+      ≤ 400 := by
+  have h := stationary_covariance_budget μ X hmem
+    (abs_sum_bagDeviation_le strat hv hsurv X hX) γ hstat L
+  norm_num at h
+  exact h
+
 /-- Spelled out: under independence, an immortal solver's per-bag clear count is
 almost surely equal to its own mean — a deterministic schedule, not a
 distribution. -/

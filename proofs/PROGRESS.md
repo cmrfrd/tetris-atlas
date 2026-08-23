@@ -41629,6 +41629,27 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23g) — the stationary lag profile (bank expansion 3/N)
+
+The last statistical stone. `ClearDeviation` additions:
+- **`sum_grid_gap_eq`** — pure double-sum algebra: `∑∑ γ(|i−j|)` over the L×L
+  grid = `L·γ(0) + 2·∑_{l=1}^{L−1} (L−l)·γ(l)`. Induction on L peeling the new
+  row+column; `Finset.sum_range_reflect` handles the reversal.
+- **`stationary_covariance_budget`** — if the covariances depend only on the
+  lag (`cov(Xᵢ, Xᵢ₊ₗ) = γ(l)`), bounded partial sums cap the whole weighted
+  lag profile: `L·γ(0) + 2·∑ (L−l)·γ(l) ≤ B²`. This is exactly Var(S_L) under
+  stationarity, so it packages `covariance_sum_le` into the standard
+  time-series object.
+- **`survival_stationary_lag_budget`** — the game instance with B = 20:
+  `L·γ(0) + 2·∑ (L−l)·γ(l) ≤ 400` for every horizon. Divide by L: the
+  spectral density at zero of an immortal solver's clear series vanishes at
+  rate O(1/L), with the negative lags obligated to cancel γ(0).
+
+Build: PASS (8310 jobs); hygiene OK; all 3 `[propext, Classical.choice,
+Quot.sound]`. Gotcha: `ProbabilityTheory.covariance_comm` takes X Y EXPLICIT.
+
+---
+
 ### Tick (manual, 2026-08-23f) — the Atlas may be taken finite (bank expansion 2/N)
 
 **NEW** `proofs/Proofs/Safety/FiniteInvariant.lean` (green, no warnings):
