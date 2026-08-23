@@ -390,5 +390,44 @@ theorem sizeCount_big_le_iljCount {cfg : GameConfig} {π : Policy cfg}
       · rw [if_neg h3, if_neg h4]
         split <;> omega
 
+/-- Size counters never decrease. -/
+theorem sizeCount_mono (cfg : GameConfig) (π : Policy cfg) (g0 : GameState)
+    (k : ℕ) : Monotone (sizeCount cfg π g0 k) := by
+  apply monotone_nat_of_le_succ
+  intro n
+  rw [sizeCount_succ]
+  exact Nat.le_add_right _ _
+
+/-- **The period mix.** Over any 35-placement cycle period the clear-size
+increments weight-sum to exactly the period's fourteen rows:
+`Δa₁ + 2Δa₂ + 3Δa₃ + 4Δa₄ = 14`. Combined with the period piece balance
+(five I's per period) the admissible per-period mixes form a small explicit
+polytope — e.g. three tetrises and a double leave `14 − 14 = 0` singles. -/
+theorem period_mix_fourteen {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    (sizeCount GameConfig.standard π GameState.init 1 (n + 35)
+        - sizeCount GameConfig.standard π GameState.init 1 n)
+      + 2 * (sizeCount GameConfig.standard π GameState.init 2 (n + 35)
+        - sizeCount GameConfig.standard π GameState.init 2 n)
+      + 3 * (sizeCount GameConfig.standard π GameState.init 3 (n + 35)
+        - sizeCount GameConfig.standard π GameState.init 3 n)
+      + 4 * (sizeCount GameConfig.standard π GameState.init 4 (n + 35)
+        - sizeCount GameConfig.standard π GameState.init 4 n)
+      = 14 := by
+  have h1 := mix_identity (cfg := GameConfig.standard) (π := π) n
+  have h2 := mix_identity (cfg := GameConfig.standard) (π := π) (n + 35)
+  have hbal := trace_eq_clears hv (Nat.le_add_right n 35) hcyc
+  have hm1 := sizeCount_mono GameConfig.standard π GameState.init 1
+    (Nat.le_add_right n 35)
+  have hm2 := sizeCount_mono GameConfig.standard π GameState.init 2
+    (Nat.le_add_right n 35)
+  have hm3 := sizeCount_mono GameConfig.standard π GameState.init 3
+    (Nat.le_add_right n 35)
+  have hm4 := sizeCount_mono GameConfig.standard π GameState.init 4
+    (Nat.le_add_right n 35)
+  omega
+
 end ClearRate
 end Tetris

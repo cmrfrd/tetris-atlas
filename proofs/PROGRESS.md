@@ -41629,6 +41629,24 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23z) — the period mix polytope (bank 22/N)
+
+- `sizeCount_mono` / `sizeCountAdv_mono` — size counters are monotone.
+- **`period_mix_fourteen`** (ClearMix) — over any 35-placement cycle period
+  the clear-size increments satisfy `Δa₁ + 2Δa₂ + 3Δa₃ + 4Δa₄ = 14`
+  (mix_identity at both ends + trace_eq_clears + monotonicity, omega).
+- **`adversary_period_mix_fourteen`** (AdversarialRate) — the same against
+  every piece order.
+
+With the period piece balance (5 I's per period ⇒ Δa₄ ≤ 5), the per-period
+clear mixes now form a small explicit polytope: solutions of
+`a₁+2a₂+3a₃+4a₄ = 14` with `a₄ ≤ 5` — e.g. tetris-heavy `(0,1,0,3)`,
+singles-only `(14,0,0,0)`, balanced `(2,3,2,0)`.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23y) — balance on the M2 artifacts (bank 21/N)
 
 `CycleQuantum` additions:

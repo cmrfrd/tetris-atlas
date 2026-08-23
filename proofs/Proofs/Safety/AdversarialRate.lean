@@ -616,5 +616,39 @@ theorem adversarialTrace_eq_clears {σ : Solver GameConfig.standard}
     rw [h]
   omega
 
+/-- Adversarial size counters never decrease. -/
+theorem sizeCountAdv_mono (cfg : GameConfig) (σ : Solver cfg) (s : ℕ → Piece)
+    (k : ℕ) : Monotone (sizeCountAdv cfg σ s k) := by
+  apply monotone_nat_of_le_succ
+  intro n
+  rw [sizeCountAdv_succ]
+  exact Nat.le_add_right _ _
+
+/-- **The adversarial period mix**: over any 35-placement adversarial cycle
+period, `Δa₁ + 2Δa₂ + 3Δa₃ + 4Δa₄ = 14`, whoever picks the pieces. -/
+theorem adversary_period_mix_fourteen {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+      with piece := s n } : Placement).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35)) :
+    (sizeCountAdv GameConfig.standard σ s 1 (n + 35)
+        - sizeCountAdv GameConfig.standard σ s 1 n)
+      + 2 * (sizeCountAdv GameConfig.standard σ s 2 (n + 35)
+        - sizeCountAdv GameConfig.standard σ s 2 n)
+      + 3 * (sizeCountAdv GameConfig.standard σ s 3 (n + 35)
+        - sizeCountAdv GameConfig.standard σ s 3 n)
+      + 4 * (sizeCountAdv GameConfig.standard σ s 4 (n + 35)
+        - sizeCountAdv GameConfig.standard σ s 4 n)
+      = 14 := by
+  have h1 := mix_identity_adv (cfg := GameConfig.standard) (σ := σ) (s := s) n
+  have h2 := mix_identity_adv (cfg := GameConfig.standard) (σ := σ) (s := s) (n + 35)
+  have hbal := adversarialTrace_eq_clears hv (Nat.le_add_right n 35) hcyc
+  have hm1 := sizeCountAdv_mono GameConfig.standard σ s 1 (Nat.le_add_right n 35)
+  have hm2 := sizeCountAdv_mono GameConfig.standard σ s 2 (Nat.le_add_right n 35)
+  have hm3 := sizeCountAdv_mono GameConfig.standard σ s 3 (Nat.le_add_right n 35)
+  have hm4 := sizeCountAdv_mono GameConfig.standard σ s 4 (Nat.le_add_right n 35)
+  omega
+
 end ClearRate
 end Tetris
