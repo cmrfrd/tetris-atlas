@@ -41629,6 +41629,28 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23k) — refill periodicity + repetition floor (bank 7/N)
+
+`BagCadence` additions:
+- `bagAt_card_of_full` — from a full bag the card counts down 7,6,…,1 over six
+  legal draws.
+- `not_full_of_full_close` — **refills are at least seven apart**.
+- `exists_refill_between` — two draws of the same piece straddle a refill
+  (once drawn, a piece is absent until renewal; by_contra + upward induction
+  keeping it out of every intermediate bag).
+- **`same_piece_three_apart`** — three draws of one piece span ≥ 7 placements
+  ⇒ any 7-window holds AT MOST TWO of any piece type. With
+  `tetris_requires_I`: back-to-back tetrises possible (I last-in-bag then
+  first-in-next), but a third tetris is ≥ 7 placements after the first —
+  **tetris bursts come in pairs, never triples**.
+
+Together with `every_piece_within_thirteen` the bag's cadence is now bounded
+on BOTH sides: each piece at least once per 13, at most twice per 7.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23j) — the two-group schedule: depth 20 (bank 6/N)
 
 `HeadroomIterate` additions:

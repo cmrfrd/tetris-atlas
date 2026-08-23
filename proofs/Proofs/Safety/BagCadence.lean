@@ -141,5 +141,132 @@ theorem exists_I_within_thirteen {initBag : Bag} {s : ℕ → Piece}
     ∃ k < 13, s (n + k) = Piece.I :=
   every_piece_within_thirteen hl Piece.I n
 
+/-! ## Refill periodicity and the repetition floor
+
+The refill instants are exactly seven apart (`bagAt_card_of_full`,
+`not_full_of_full_close`), and two draws of the *same* piece must straddle a
+refill (`exists_refill_between`) — after a piece is drawn it is simply absent
+until the bag renews. Consequently three draws of one piece span at least
+seven placements (`same_piece_three_apart`): a window of seven consecutive
+draws holds **at most two** of any piece type.
+
+With `tetris_requires_I` this caps burst clearing: back-to-back tetrises are
+possible (an I last in one bag, first in the next), but a *third* tetris is at
+least seven placements after the first — tetris bursts come in pairs, never
+triples. -/
+
+/-- From a full bag, the card counts down `7, 6, …` for six legal draws. -/
+theorem bagAt_card_of_full {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {r : ℕ}
+    (hfull : bagAt initBag s r = Bag.full) :
+    ∀ j ≤ 6, (bagAt initBag s (r + j)).card = 7 - j := by
+  intro j
+  induction j with
+  | zero =>
+    intro _
+    rw [Nat.add_zero, hfull]
+    simp
+  | succ j ih =>
+    intro hj6
+    have hcard := ih (by omega)
+    have hsn : s (r + j) ∈ bagAt initBag s (r + j) := hl (r + j)
+    have herase_ne : (bagAt initBag s (r + j)).erase (s (r + j)) ≠ ∅ := by
+      intro h
+      have := Finset.card_erase_of_mem hsn
+      rw [h, Finset.card_empty] at this
+      omega
+    have hnext : bagAt initBag s (r + j + 1)
+        = (bagAt initBag s (r + j)).erase (s (r + j)) := by
+      change (bagAt initBag s (r + j)).draw (s (r + j)) = _
+      unfold Bag.draw
+      rw [if_neg herase_ne]
+    rw [show r + (j + 1) = r + j + 1 by omega, hnext,
+      Finset.card_erase_of_mem hsn, hcard]
+    omega
+
+/-- **Refills are at least seven apart.** Between one refill and the next the
+bag drains a full seven pieces. -/
+theorem not_full_of_full_close {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {r r' : ℕ}
+    (hfull : bagAt initBag s r = Bag.full) (hlt : r < r') (hclose : r' < r + 7) :
+    bagAt initBag s r' ≠ Bag.full := by
+  intro hfull'
+  have hj : r' = r + (r' - r) := by omega
+  have hcard := bagAt_card_of_full hl hfull (r' - r) (by omega)
+  rw [← hj, hfull'] at hcard
+  have : (Bag.full : Bag).card = 7 := Bag.full_card
+  omega
+
+/-- **Two draws of the same piece straddle a refill.** Once drawn, a piece is
+absent from the bag until the next renewal. -/
+theorem exists_refill_between {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {t t' : ℕ} {p : Piece}
+    (h1 : s t = p) (h2 : s t' = p) (hlt : t < t') :
+    ∃ r, t < r ∧ r ≤ t' ∧ bagAt initBag s r = Bag.full := by
+  by_contra hno
+  push Not at hno
+  -- with no refill in (t, t'], the piece stays absent after its draw
+  have key : ∀ m, t + 1 ≤ m → m ≤ t' → p ∉ bagAt initBag s m := by
+    intro m
+    induction m with
+    | zero => omega
+    | succ m ihm =>
+      intro h1m hmt
+      by_cases hbase : m = t
+      · -- the step that drew p
+        subst hbase
+        have hsn : s m ∈ bagAt initBag s m := hl m
+        have herase_ne : (bagAt initBag s m).erase (s m) ≠ ∅ := by
+          intro h
+          have hfull : bagAt initBag s (m + 1) = Bag.full := by
+            change (bagAt initBag s m).draw (s m) = _
+            unfold Bag.draw
+            rw [if_pos h]
+          exact hno (m + 1) (by omega) (by omega) hfull
+        have hnext : bagAt initBag s (m + 1)
+            = (bagAt initBag s m).erase (s m) := by
+          change (bagAt initBag s m).draw (s m) = _
+          unfold Bag.draw
+          rw [if_neg herase_ne]
+        rw [hnext, h1]
+        intro hmem
+        exact absurd rfl (Finset.mem_erase.mp hmem).1
+      · -- a later step: p already absent, draws of other pieces keep it out
+        have hprev : p ∉ bagAt initBag s m := ihm (by omega) (by omega)
+        have hsn : s m ∈ bagAt initBag s m := hl m
+        have herase_ne : (bagAt initBag s m).erase (s m) ≠ ∅ := by
+          intro h
+          have hfull : bagAt initBag s (m + 1) = Bag.full := by
+            change (bagAt initBag s m).draw (s m) = _
+            unfold Bag.draw
+            rw [if_pos h]
+          exact hno (m + 1) (by omega) (by omega) hfull
+        have hnext : bagAt initBag s (m + 1)
+            = (bagAt initBag s m).erase (s m) := by
+          change (bagAt initBag s m).draw (s m) = _
+          unfold Bag.draw
+          rw [if_neg herase_ne]
+        rw [hnext]
+        intro hmem
+        exact hprev (Finset.mem_erase.mp hmem).2
+  have := key t' (by omega) le_rfl
+  rw [← h2] at this
+  exact this (hl t')
+
+/-- **Three draws of one piece span at least seven placements.** Each
+consecutive pair straddles a refill, refills are seven apart, and both refills
+fit inside the span — so any window of seven consecutive draws holds at most
+two of any piece type. With `tetris_requires_I`: tetris bursts come in pairs,
+never triples. -/
+theorem same_piece_three_apart {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {t t' t'' : ℕ} {p : Piece}
+    (h1 : s t = p) (h2 : s t' = p) (h3 : s t'' = p)
+    (h12 : t < t') (h23 : t' < t'') :
+    t + 7 ≤ t'' := by
+  obtain ⟨r1, hr1t, hr1t', hr1full⟩ := exists_refill_between hl h1 h2 h12
+  obtain ⟨r2, hr2t, hr2t', hr2full⟩ := exists_refill_between hl h2 h3 h23
+  by_contra hcon
+  exact not_full_of_full_close hl hr1full (by omega) (by omega) hr2full
+
 end BagCadence
 end Tetris
