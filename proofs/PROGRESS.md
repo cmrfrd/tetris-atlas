@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ao) — window state diversity (bank 62/N)
+
+- `trace_window_boards_ge_five` — any 35 consecutive trace states show at
+  least FIVE distinct boards: equal boards ⇒ equal counts ⇒ the mass clock
+  separates indices by multiples of 5; a residue class meets a 35-range ≤ 7
+  times (`Finset.card_le_mul_card_image` + `card_le_card_of_injOn (·/5)`).
+- `trace_window_bags_ge_seven` — and at least SEVEN distinct bag states
+  (tight: exactly the seven fill levels), via the bag clock mod 7.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23an) — the 47-point mix polytope (bank 61/N)
 
 - `periodMixes` + `periodMixes_card` — the period-mix polytope

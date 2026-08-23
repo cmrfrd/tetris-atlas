@@ -1234,5 +1234,90 @@ theorem cycle_window_events_stationary {π : Policy GameConfig.standard}
         ≤ 14 :=
   period_clear_events_bounds hv (trace_tail_periodic hcyc hm)
 
+/-- **Any 35-window shows at least five distinct boards**: equal boards force
+equal counts, the mass clock forces index separation in multiples of five, a
+residue class meets a 35-range at most seven times — pigeonhole. -/
+theorem trace_window_boards_ge_five {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (n : ℕ) :
+    5 ≤ ((Finset.range 35).image
+      (fun k => (trace GameConfig.standard π GameState.init (n + k)).board)).card := by
+  classical
+  by_contra hcon
+  push Not at hcon
+  have hle : (Finset.range 35).card ≤ 7 * ((Finset.range 35).image
+      (fun k => (trace GameConfig.standard π GameState.init (n + k)).board)).card := by
+    apply Finset.card_le_mul_card_image
+    intro a ha
+    have hinj : ∀ i ∈ (Finset.range 35).filter (fun k =>
+          (trace GameConfig.standard π GameState.init (n + k)).board = a),
+        ∀ k ∈ (Finset.range 35).filter (fun k =>
+          (trace GameConfig.standard π GameState.init (n + k)).board = a),
+        i / 5 = k / 5 → i = k := by
+      intro i hi k hk hdiv
+      rw [Finset.mem_filter, Finset.mem_range] at hi hk
+      have hcnt : (trace GameConfig.standard π GameState.init (n + i)).board.count
+          = (trace GameConfig.standard π GameState.init (n + k)).board.count := by
+        rw [hi.2, hk.2]
+      rcases Nat.lt_or_ge k i with hik | hik
+      · have hd := (five_dvd_of_count_eq hv
+          (show n + k ≤ n + i by omega) hcnt.symm).1
+        omega
+      · have hd := (five_dvd_of_count_eq hv
+          (show n + i ≤ n + k by omega) hcnt).1
+        omega
+    have hmap : ∀ i ∈ (Finset.range 35).filter (fun k =>
+          (trace GameConfig.standard π GameState.init (n + k)).board = a),
+        i / 5 ∈ Finset.range 7 := by
+      intro i hi
+      rw [Finset.mem_filter, Finset.mem_range] at hi
+      rw [Finset.mem_range]
+      omega
+    have := Finset.card_le_card_of_injOn (fun i => i / 5) hmap hinj
+    rw [Finset.card_range] at this
+    exact this
+  rw [Finset.card_range] at hle
+  omega
+
+/-- **Any 35-window shows at least seven distinct bag states** — tight: the
+bag clock cycles through exactly seven fill levels. Equal bags force equal
+cards, the card determines the index mod 7, and a residue class meets a
+35-range at most five times. -/
+theorem trace_window_bags_ge_seven {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) (n : ℕ) :
+    7 ≤ ((Finset.range 35).image
+      (fun k => (trace GameConfig.standard π GameState.init (n + k)).bag)).card := by
+  classical
+  by_contra hcon
+  push Not at hcon
+  have hle : (Finset.range 35).card ≤ 5 * ((Finset.range 35).image
+      (fun k => (trace GameConfig.standard π GameState.init (n + k)).bag)).card := by
+    apply Finset.card_le_mul_card_image
+    intro a ha
+    have hinj : ∀ i ∈ (Finset.range 35).filter (fun k =>
+          (trace GameConfig.standard π GameState.init (n + k)).bag = a),
+        ∀ k ∈ (Finset.range 35).filter (fun k =>
+          (trace GameConfig.standard π GameState.init (n + k)).bag = a),
+        i / 7 = k / 7 → i = k := by
+      intro i hi k hk hdiv
+      rw [Finset.mem_filter, Finset.mem_range] at hi hk
+      have hc1 := bag_card_trace hdraw (n + i)
+      have hc2 := bag_card_trace hdraw (n + k)
+      rw [hi.2] at hc1
+      rw [hk.2] at hc2
+      omega
+    have hmap : ∀ i ∈ (Finset.range 35).filter (fun k =>
+          (trace GameConfig.standard π GameState.init (n + k)).bag = a),
+        i / 7 ∈ Finset.range 5 := by
+      intro i hi
+      rw [Finset.mem_filter, Finset.mem_range] at hi
+      rw [Finset.mem_range]
+      omega
+    have := Finset.card_le_card_of_injOn (fun i => i / 7) hmap hinj
+    rw [Finset.card_range] at this
+    exact this
+  rw [Finset.card_range] at hle
+  omega
+
 end ClearRate
 end Tetris
