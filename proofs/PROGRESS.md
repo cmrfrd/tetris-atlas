@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23xx) — per-piece bracket on cycles (bank 46/N)
+
+- `cycle_piece_bracket` — on a periodic legally-drawn trace, EVERY piece's
+  count over any horizon lies in `[5⌊Δn/35⌋, 5⌊Δn/35⌋ + 5]`: frequency
+  exactly 1/7 with error at most one period, sharpening the general
+  `[4/35, 6/35]` sandwich.
+- `cycle_iCount_bracket` — the I-counter sharpened to slope exactly 1/7 on
+  cycles.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ww) — purity obstructions (bank 45/N)
 
 - `no_pure_tetris_period` — a cycle period cannot clear exclusively via

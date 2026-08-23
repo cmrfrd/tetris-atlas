@@ -718,5 +718,61 @@ theorem tetris_bracket_any {π : Policy GameConfig.standard}
   obtain ⟨_, hI⟩ := iCount_bracket_any hdraw hnm
   omega
 
+/-- **The per-piece bracket on cycles, at every horizon**: on a periodic
+legally-drawn trace, every piece's count over `[n, m)` lies within
+`[5⌊Δn/35⌋, 5⌊Δn/35⌋ + 5]` — frequency exactly `1/7` with error at most one
+period's worth, sharpening the general `[4/35, 6/35]` sandwich. -/
+theorem cycle_piece_bracket {π : Policy GameConfig.standard} {g0 : GameState}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π g0 k)).piece
+      ∈ (trace GameConfig.standard π g0 k).bag) {n : ℕ}
+    (hcyc : trace GameConfig.standard π g0 n
+        = trace GameConfig.standard π g0 (n + 35)) (p : Piece) (m : ℕ) :
+    5 * ((m - n) / 35)
+        ≤ ((Finset.range (m - n)).filter (fun k =>
+            (π (trace GameConfig.standard π g0 (n + k))).piece = p)).card
+      ∧ ((Finset.range (m - n)).filter (fun k =>
+            (π (trace GameConfig.standard π g0 (n + k))).piece = p)).card
+        ≤ 5 * ((m - n) / 35) + 5 := by
+  classical
+  set j := (m - n) / 35 with hj
+  have hbal := trace_multi_period_piece_balanced hdraw hcyc p j
+  have hbal' := trace_multi_period_piece_balanced hdraw hcyc p (j + 1)
+  have hin : ((Finset.range (35 * j)).filter (fun k =>
+        (π (trace GameConfig.standard π g0 (n + k))).piece = p)).card
+      ≤ ((Finset.range (m - n)).filter (fun k =>
+        (π (trace GameConfig.standard π g0 (n + k))).piece = p)).card :=
+    Finset.card_le_card (Finset.filter_subset_filter _
+      (by intro x hx; rw [Finset.mem_range] at hx ⊢; omega))
+  have hout : ((Finset.range (m - n)).filter (fun k =>
+        (π (trace GameConfig.standard π g0 (n + k))).piece = p)).card
+      ≤ ((Finset.range (35 * (j + 1))).filter (fun k =>
+        (π (trace GameConfig.standard π g0 (n + k))).piece = p)).card :=
+    Finset.card_le_card (Finset.filter_subset_filter _
+      (by intro x hx; rw [Finset.mem_range] at hx ⊢; omega))
+  omega
+
+/-- **The I-counter bracket on cycles**: `5⌊Δn/35⌋ ≤ ΔiCount ≤ 5⌊Δn/35⌋ + 5`
+at every horizon — the cycle sharpens `iCount_bracket_any` to slope exactly
+`1/7`. -/
+theorem cycle_iCount_bracket {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m : ℕ}
+    (hnm : n ≤ m) :
+    5 * ((m - n) / 35) ≤ iCount GameConfig.standard π GameState.init m
+        - iCount GameConfig.standard π GameState.init n
+      ∧ iCount GameConfig.standard π GameState.init m
+        - iCount GameConfig.standard π GameState.init n
+        ≤ 5 * ((m - n) / 35) + 5 := by
+  have h1 := iCount_eq_card_filter (cfg := GameConfig.standard) (π := π) n
+  have h2 := iCount_eq_card_filter (cfg := GameConfig.standard) (π := π) m
+  have hsplit := card_filter_range_add (fun k =>
+    (π (trace GameConfig.standard π GameState.init k)).piece = Piece.I)
+    n (m - n)
+  rw [show n + (m - n) = m by omega] at hsplit
+  have hbr := cycle_piece_bracket hdraw hcyc Piece.I m
+  omega
+
 end ClearRate
 end Tetris
