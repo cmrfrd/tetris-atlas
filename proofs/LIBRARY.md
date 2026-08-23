@@ -128,6 +128,8 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | `PlinthCert` + **`tetrisSolvableValid_of_plinthCert`** (`Safety/PlinthCert`); plinth transport T1′/T2′ + well plug (`Invariants/PlinthShift`) | the CORRECTED inhabitation target (findings D1/D2: v1 certs sound but uninhabitable — base never rises; row-0 hole blocks re-anchoring): immortal floor, mid-row drain, `ReanchorsTo` membership; open remainder = T/L/J/I schedule + boot tree + rate bookkeeping |
 | **`safe_isGreatest`** / `safe_unique`, `isClosedOn_subset_safe`, **`safeMoves`** + `atlas_choice_mem_safeMoves`, `selection_survives` / `selection_update_mem` (`Safety/MaximalAtlas`) | **the global solver is unique as a RELATION, not as a function**: `safe` is the one greatest closed state set, `safeMoves` the one maximal table; every closed atlas is pointwise inside it, and solvers are its (many) selections |
 | `clearedAdv`, `clearedAdv_ledger`, **`adversary_cannot_force_gt`**, `adversary_forces_ge`, **`adversary_forces_rate`** (`Safety/AdversarialRate`) | **no adversary can force the rate above 2.8** (the ceiling is a conservation law, piece choice is powerless against it), and every adversary pins any survivor at exactly 2.8 for free — the adversary's only lever is survival itself |
+| **`iInter_safeIterate_subset_safe`** / **`safe_eq_iInter_safeIterate`** (`Safety/HorizonCompactness`) | **horizon compactness (König)**: the safe set = ⋂ of the finite-horizon iterates, unconditionally — a placement succeeding at cofinally many depths succeeds at all (finite move set + pigeonhole) |
+| `solvable_iff_forall_horizon`, `solvable_or_finite_refutation`, **`solvable_iff_exists_invariant`** | solver exists ⟺ every finite horizon is winnable; either solvable or a finite kill certificate exists; and **the irreducible core: solvable ⟺ a closed invariant exists** — the witness is equivalent to the theorem, but compressible to any describable closed predicate |
 | `GameConfig.flat` (10×1), `flat_O_step_lost`, `init_not_safe_flat`, **`not_tetrisSolvableValidFor_flat`** (`Safety/CountingBarrier`) | **first machine-checked unsolvability instance** — and the counting barrier: every ledger theorem holds at 10×1 verbatim, yet 10×1 is unsolvable ⇒ no config-generic counting argument can prove the standard game solvable; the missing ingredient is geometric |
 | `LegalSequenceFrom.splice`, `adversarialTrace_*`, the pigeonhole cycle-existence lemmas | the survival + cycle-existence engine under the bridge |
 
@@ -214,7 +216,8 @@ Proofs/
                  ClearMix                                                      ✓
   Safety/        Safety Adversarial SafeSet SafeIterate SafeIterateFinite
                  SkylineInvariant ShiftCertificate BandSchedule PlinthCert
-                 CycleQuantum MaximalAtlas AdversarialRate CountingBarrier      ✓
+                 CycleQuantum MaximalAtlas AdversarialRate CountingBarrier
+                 HorizonCompactness                                            ✓
 ProofsExperiments.lean       -- separate lib (route reductions, native_decide, Scratch/*)
 Proofs/Experiments/          -- WqoCarrier/HoleyCarrier reductions, EnergyGame, PieceCharge,
                                 carrier zoo (SurfaceInvariant, FiveBagReset), Scratch/*

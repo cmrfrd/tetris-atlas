@@ -13,7 +13,7 @@ new tick — it tells you where the prior tick left off.
 
 ## Current build status
 
-- `lake build` (green `Proofs`) — **PASSING** (8306 jobs); base-axiom-clean
+- `lake build` (green `Proofs`) — **PASSING** (8307 jobs); base-axiom-clean
   (`propext`, `Classical.choice`, `Quot.sound`), **no `sorry`, no `native_decide`**.
 - `lake build ProofsExperiments` (research routes) — **PASSING** (8288 jobs); may use
   `native_decide`.
@@ -41626,6 +41626,44 @@ Next: <subtask id and one-line description>
 ## Tick log
 
 *(append newest at top below this line)*
+
+---
+
+### Tick (manual, 2026-08-23c) — witness-free existence: compactness, dichotomy, and the irreducible core
+
+Question: can "a solver exists" be proved abstractly, with no enumeration and
+no constructed witness?
+
+**NEW** `proofs/Proofs/Safety/HorizonCompactness.lean` (green, no warnings):
+- **`iInter_safeIterate_subset_safe`** — the missing König/compactness theorem,
+  proved UNCONDITIONALLY (no finite-universe hypothesis, no convergence stage):
+  the ⋂ of the finite-horizon iterates is closed under `safeOp`. Argument: at
+  each (state, piece) the move set `allValidFor` is FINITE, so `choose` a
+  per-depth placement, pigeonhole via `Finite.exists_infinite_fiber` to get one
+  placement chosen at cofinally many depths, then `safeIterate_antitone` pushes
+  it down to every depth. Built first try.
+- **`safe_eq_iInter_safeIterate`** — `safe = ⋂ n, safeIterate n` exactly.
+- **`solvable_iff_forall_horizon`** — a solver exists ⟺ the player wins EVERY
+  finite-horizon game: infinite survival carries no content beyond its finite
+  approximations.
+- **`solvable_or_finite_refutation`** — the classical dichotomy: solvable ∨
+  ∃ finite kill certificate. Both disjuncts finitary.
+- **`solvable_iff_exists_invariant`** — the irreducible core: solvable ⟺ a
+  closed invariant exists (forward: S := safe; backward:
+  `tetrisSolvableValid_of_invariant`). **The witness is equivalent to the
+  theorem** — it cannot be eliminated, but it compresses: any finitely
+  DESCRIBED closed predicate qualifies; no strategy, table, or enumeration
+  required.
+
+Synthesis recorded in the docstring: Tarski gives `safe` for free; compactness
+gives "solvable ⟺ all finite horizons"; classical logic gives the dichotomy;
+and the invariant-iff shows that is the END of the witness-free road — combined
+with `CountingBarrier`, the invariant's description must be geometric, which is
+exactly the carrier program's remit.
+
+Build: PASS (green `Proofs`, 8307 jobs; HorizonCompactness no warnings)
+Sorries: 0 → 0; `check-green-clean.sh` OK
+Axioms: all 5 `[propext, Classical.choice, Quot.sound]`
 
 ---
 
