@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23as) — idle I's (bank 66/N)
+
+- `period_idle_I_ge_two` — at least TWO of every period's five I pieces do
+  not clear four rows: the balance theorem deals exactly 5 I's but the row
+  budget admits ≤ 3 tetrises. The I piece cannot be a pure tetris tool on
+  any cycle — every cycle strategy must burn I's on lesser work.
+- Lean notes: `Finset.filter_card_add_filter_neg_card_eq_card` is
+  deprecated → `card_filter_add_card_filter_not`; `ne_eq` normalization
+  needed to make filter-card atoms match for omega.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ar) — M2 artifact diversity (bank 65/N)
 
 - `trace_window_boards_ge_five_from` / `trace_window_bags_ge_seven_from` —

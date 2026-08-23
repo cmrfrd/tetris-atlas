@@ -1319,5 +1319,59 @@ theorem trace_window_bags_ge_seven {π : Policy GameConfig.standard}
   rw [Finset.card_range] at hle
   omega
 
+/-- **At least two of every period's five I's are idle**: a cycle period
+deals exactly five I pieces but its row budget admits at most three
+tetrises, so at least two I placements per period do lesser work. The I
+piece cannot serve as a pure tetris tool on any cycle. -/
+theorem period_idle_I_ge_two {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n : ℕ}
+    (hn : 1 ≤ n)
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    2 ≤ ((Finset.range 35).filter (fun k =>
+        (π (trace GameConfig.standard π GameState.init (n + k))).piece
+            = Piece.I
+          ∧ (Board.fullRows GameConfig.standard
+              ((π (trace GameConfig.standard π GameState.init (n + k))).place
+                (trace GameConfig.standard π GameState.init (n + k)).board)).card
+            ≠ 4)).card := by
+  classical
+  have hbal := trace_period_piece_balanced hdraw hcyc Piece.I
+  -- split the five I's by whether they clear four rows
+  have hsplit := Finset.card_filter_add_card_filter_not
+    (s := (Finset.range 35).filter (fun k =>
+      (π (trace GameConfig.standard π GameState.init (n + k))).piece = Piece.I))
+    (p := fun k => (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init (n + k))).place
+        (trace GameConfig.standard π GameState.init (n + k)).board)).card = 4)
+  rw [Finset.filter_filter, Finset.filter_filter, hbal] at hsplit
+  -- the (I ∧ 4-clear) fiber is exactly the tetris fiber
+  have hIfour : ((Finset.range 35).filter (fun k =>
+        (π (trace GameConfig.standard π GameState.init (n + k))).piece
+            = Piece.I
+          ∧ (Board.fullRows GameConfig.standard
+              ((π (trace GameConfig.standard π GameState.init (n + k))).place
+                (trace GameConfig.standard π GameState.init (n + k)).board)).card
+            = 4)).card
+      = ((Finset.range 35).filter (fun k =>
+        (Board.fullRows GameConfig.standard
+          ((π (trace GameConfig.standard π GameState.init (n + k))).place
+            (trace GameConfig.standard π GameState.init (n + k)).board)).card
+          = 4)).card := by
+    congr 1
+    apply Finset.filter_congr
+    intro k hk
+    constructor
+    · intro h
+      exact h.2
+    · intro h
+      exact ⟨trace_tetris_step_I (by omega) (le_of_eq h.symm), h⟩
+  have hszw := sizeCount_window (cfg := GameConfig.standard) (π := π) 4 n 35
+  have htet := period_tetris_le_three hv hcyc
+  simp only [ne_eq] at hsplit hIfour ⊢
+  omega
+
 end ClearRate
 end Tetris
