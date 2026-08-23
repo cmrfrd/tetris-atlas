@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23q) — counted cadence: ≤ 2 tetrises per 7 (bank 13/N)
+
+- **`window_same_piece_card_le_two`** (BagCadence) — the Finset-counted form
+  of the repetition floor: `card ((range 7).filter (s (a+·) = p)) ≤ 2`.
+  Extraction of three ordered elements via min'/erase/min'/erase/min', then
+  `same_piece_three_apart` gives a span ≥ 7 inside a 6-wide window.
+- `adversary_tetris_steps_subset` — tetris steps embed in I steps
+  (via `adversary_tetris_step_I`).
+- **`adversary_two_tetris_per_seven`** — ≤ 2 four-row clears in ANY seven
+  consecutive adversarial placements: cadence alone caps tetris bursts,
+  no board reasoning. (AdversarialRate now imports BagCadence.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23p) — adversarial mirrors + generic five-bag wrapper (bank 12/N)
 
 - `adversary_six_le_count_of_clearing` — six banked cells before every

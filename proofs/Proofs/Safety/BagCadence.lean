@@ -268,6 +268,49 @@ theorem same_piece_three_apart {initBag : Bag} {s : ℕ → Piece}
   by_contra hcon
   exact not_full_of_full_close hl hr1full (by omega) (by omega) hr2full
 
+/-- **Counted form: any seven consecutive draws hold at most two of one
+piece.** Three indices in a 7-window would give three draws spanning at most
+six placements, contradicting `same_piece_three_apart`. -/
+theorem window_same_piece_card_le_two {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) (a : ℕ) (p : Piece) :
+    ((Finset.range 7).filter (fun k => s (a + k) = p)).card ≤ 2 := by
+  classical
+  by_contra h
+  push Not at h
+  set S := (Finset.range 7).filter (fun k => s (a + k) = p) with hS
+  have hprop : ∀ m ∈ S, m < 7 ∧ s (a + m) = p := by
+    intro m hm
+    obtain ⟨h1, h2⟩ := Finset.mem_filter.mp hm
+    exact ⟨Finset.mem_range.mp h1, h2⟩
+  have hne1 : S.Nonempty := Finset.card_pos.mp (by omega)
+  set m1 := S.min' hne1 with hm1def
+  have hm1 : m1 ∈ S := S.min'_mem hne1
+  have hne2 : (S.erase m1).Nonempty := by
+    refine Finset.card_pos.mp ?_
+    rw [Finset.card_erase_of_mem hm1]
+    omega
+  set m2 := (S.erase m1).min' hne2 with hm2def
+  have hm2e : m2 ∈ S.erase m1 := (S.erase m1).min'_mem hne2
+  have hm2 : m2 ∈ S := (Finset.mem_erase.mp hm2e).2
+  have h12 : m1 < m2 :=
+    lt_of_le_of_ne (S.min'_le m2 hm2) (Ne.symm (Finset.mem_erase.mp hm2e).1)
+  have hne3 : ((S.erase m1).erase m2).Nonempty := by
+    refine Finset.card_pos.mp ?_
+    rw [Finset.card_erase_of_mem hm2e, Finset.card_erase_of_mem hm1]
+    omega
+  set m3 := ((S.erase m1).erase m2).min' hne3 with hm3def
+  have hm3e : m3 ∈ (S.erase m1).erase m2 := ((S.erase m1).erase m2).min'_mem hne3
+  have hm3e1 : m3 ∈ S.erase m1 := (Finset.mem_erase.mp hm3e).2
+  have hm3 : m3 ∈ S := (Finset.mem_erase.mp hm3e1).2
+  have h23 : m2 < m3 :=
+    lt_of_le_of_ne ((S.erase m1).min'_le m3 hm3e1)
+      (Ne.symm (Finset.mem_erase.mp hm3e).1)
+  obtain ⟨hlt1, hp1⟩ := hprop m1 hm1
+  obtain ⟨hlt3, hp3⟩ := hprop m3 hm3
+  have hspan := same_piece_three_apart hl hp1 (hprop m2 hm2).2 hp3
+    (by omega) (by omega)
+  omega
+
 /-- **Every piece is drawn infinitely often** along any legal sequence — the
 ω-form of syndeticity. -/
 theorem every_piece_infinitely_often {initBag : Bag} {s : ℕ → Piece}

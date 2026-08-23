@@ -1,4 +1,5 @@
 import Mathlib
+import Proofs.Safety.BagCadence
 import Proofs.Safety.CycleQuantum
 
 /-!
@@ -420,6 +421,34 @@ theorem adversary_card_empty_times_le {σ : Solver GameConfig.standard}
       omega
   rw [Finset.card_range] at hcard
   omega
+
+/-- Tetris steps are I steps: the set of adversarial moves that clear four
+rows embeds in the set of moves where the sequence dealt an I. -/
+theorem adversary_tetris_steps_subset {cfg : GameConfig} {σ : Solver cfg}
+    {s : ℕ → Piece} (a : ℕ) :
+    (Finset.range 7).filter (fun k => 4 ≤ (Board.fullRows cfg
+        (({ σ (adversarialTrace cfg σ s GameState.init (a + k)) (s (a + k))
+            with piece := s (a + k) } : Placement).place
+          (adversarialTrace cfg σ s GameState.init (a + k)).board)).card)
+      ⊆ (Finset.range 7).filter (fun k => s (a + k) = Piece.I) := by
+  intro k hk
+  obtain ⟨h1, h2⟩ := Finset.mem_filter.mp hk
+  exact Finset.mem_filter.mpr ⟨h1, adversary_tetris_step_I h2⟩
+
+/-- **At most two tetrises in any seven adversarial placements.** Four-row
+clears require an I (`adversary_tetris_step_I`), and the 7-bag deals at most
+two I's per seven draws (`window_same_piece_card_le_two`) — so tetris bursts
+are capped at pairs on every window, a purely cadence-driven bound with no
+board reasoning. -/
+theorem adversary_two_tetris_per_seven {cfg : GameConfig} {σ : Solver cfg}
+    {s : ℕ → Piece} (hl : LegalSequence s) (a : ℕ) :
+    ((Finset.range 7).filter (fun k => 4 ≤ (Board.fullRows cfg
+        (({ σ (adversarialTrace cfg σ s GameState.init (a + k)) (s (a + k))
+            with piece := s (a + k) } : Placement).place
+          (adversarialTrace cfg σ s GameState.init (a + k)).board)).card)).card
+      ≤ 2 :=
+  le_trans (Finset.card_le_card (adversary_tetris_steps_subset a))
+    (BagCadence.window_same_piece_card_le_two hl a Piece.I)
 
 end ClearRate
 end Tetris
