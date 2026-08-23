@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23mm) — multi-block window law (bank 35/N)
+
+- `window_multiblock_bounds` — any `35q` consecutive legal draws hold between
+  `4q` and `6q` of every piece, NO periodicity hypothesis: split into `q`
+  35-blocks (`card_filter_range_add`) and sum the two-sided window law.
+- `iCount_window_bounds` — the I-counter bracket at every aligned horizon on
+  any legally-drawn trace: `4q ≤ ΔiCount ≤ 6q` per `q` quints. A cycle
+  sharpens it to exactly `5q` (`cycle_iCount_linear`).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ll) — trace-level balance + iCount law (bank 34/N)
 
 - `trace_period_piece_balanced` / `trace_multi_period_piece_balanced` — the
