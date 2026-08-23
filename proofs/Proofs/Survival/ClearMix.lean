@@ -863,5 +863,42 @@ theorem survivor_window_events_floor {π : Policy GameConfig.standard}
     (Nat.le_add_right n w)
   omega
 
+/-- The windowed clearing ceiling: `10·Δcleared ≤ 4w + 200` whenever the
+window *starts* alive — you cannot clear rows that were never delivered. -/
+theorem survivor_window_clears_ceiling {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n w : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init n).lost
+      GameConfig.standard) :
+    10 * (cleared GameConfig.standard π GameState.init (n + w)
+        - cleared GameConfig.standard π GameState.init n) ≤ 4 * w + 200 := by
+  have h1 := init_ledger hv n
+  have h2 := init_ledger hv (n + w)
+  rw [GameConfig.standard_cols] at h1 h2
+  have hcap := count_lt_two_hundred_one hv hlive
+  have hmono := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right n w)
+  omega
+
+/-- **The event-rate bracket**: on a live window, clearing events number at
+most `(4w + 200)/10` — with the floor, the event rate is pinned to roughly
+`[10%, 40%]` of placements at every scale. -/
+theorem survivor_window_events_ceiling {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n w : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init n).lost
+      GameConfig.standard) :
+    10 * ((sizeCount GameConfig.standard π GameState.init 1 (n + w)
+          - sizeCount GameConfig.standard π GameState.init 1 n)
+        + (sizeCount GameConfig.standard π GameState.init 2 (n + w)
+          - sizeCount GameConfig.standard π GameState.init 2 n)
+        + (sizeCount GameConfig.standard π GameState.init 3 (n + w)
+          - sizeCount GameConfig.standard π GameState.init 3 n)
+        + (sizeCount GameConfig.standard π GameState.init 4 (n + w)
+          - sizeCount GameConfig.standard π GameState.init 4 n))
+      ≤ 4 * w + 200 := by
+  have hcl := survivor_window_clears_ceiling hv (w := w) hlive
+  have hmix := mix_window_identity (cfg := GameConfig.standard) (π := π)
+    (Nat.le_add_right n w)
+  omega
+
 end ClearRate
 end Tetris

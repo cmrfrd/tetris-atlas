@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bs) — the event-rate bracket closes (bank 92/N)
+
+- `survivor_window_clears_ceiling` — `10·Δcleared ≤ 4w + 200` on windows
+  starting alive (nothing clears that wasn't delivered).
+- `survivor_window_events_ceiling` — events ≤ `(4w+200)/10`.
+- With batch 91's floors: THE LIVE EVENT RATE IS PINNED TO [~10%, ~40%] of
+  placements at every scale, on every surviving trace.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23br) — the survivor's floors (bank 91/N)
 
 - `survivor_window_clears_floor` — any window ending alive clears
