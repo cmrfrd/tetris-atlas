@@ -41629,6 +41629,34 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23x) — the balance theorem: 5 of each piece per period (bank 20/N)
+
+**`window_thirtyfive_balanced`** (BagCadence): a 35-draw window with equal bag
+states at both ends — every closed-cycle period — deals **every piece exactly
+five times**. Proof by the counting trick (no uniqueness bookkeeping):
+- `mem_bagAt_succ_of_ne` / `mem_bagAt_of_not_drawn` — a piece not drawn
+  survives (erase keeps it; refill restores it).
+- `bagAt_full_iterate` — refills every 7 from a refill.
+- Lower bound 5 per piece: one hit in the head (drains the current bag) OR
+  the tail (else the piece would survive to the equal end bag), plus one in
+  each of four full blocks.
+- Total = 35 (`Finset.card_eq_sum_card_fiberwise`) and 7 × 5 = 35 forces
+  equality (sum-split with `Finset.sum_ite_eq'`).
+
+Consequences queued: #T = 5k per cycle period (the charge-theory input);
+#I = 5k ⇒ tetris count ≤ 5k per period.
+
+**MAJOR proof-engineering find:** `bagAt`'s `draw` duplicates its argument in
+the ite condition AND branch, so any whnf at a symbolic offset (n + 35)
+doubles the term per layer — exponential (1M+ `Finset.val` unfolds; found via
+`set_option diagnostics true`). Fix: `attribute [local irreducible] bagAt` in
+a section around the theorem — every proof step uses opaque lemmas anyway.
+Record for ALL future bagAt-heavy proofs.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23w) — 14 rows per five-bag period, exactly (bank 19/N)
 
 - `trace_eq_clears` (ClearRecurrence) — between two equal states the ledger

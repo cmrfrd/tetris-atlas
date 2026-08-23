@@ -368,5 +368,188 @@ theorem exists_legalSequenceFrom {b : Bag} (hb : b.Nonempty) :
       = bagAt (⟨b, hb⟩ : {b : Bag // b.Nonempty}).1 (greedySeq ⟨b, hb⟩) n from rfl, h]
   exact (greedyBag ⟨b, hb⟩ n).2.choose_spec
 
+/-! ## The balance theorem: five of each piece per cycle window
+
+A 35-draw window whose bag state matches at both ends — the situation at every
+closed-cycle period — deals **every piece exactly five times**. The proof needs
+no uniqueness bookkeeping: each piece is hit at least once in each of five
+disjoint sub-windows (the head that drains the current bag, four full bag
+blocks, and the tail that must reproduce the end bag), and seven pieces at
+five hits each already exhaust all `35` draws. -/
+
+/-- A piece not drawn survives the step: erasing another piece keeps it, and a
+refill restores everything. -/
+theorem mem_bagAt_succ_of_ne {initBag : Bag} {s : ℕ → Piece} {m : ℕ} {p : Piece}
+    (hp : p ∈ bagAt initBag s m) (hne : s m ≠ p) :
+    p ∈ bagAt initBag s (m + 1) := by
+  change p ∈ (bagAt initBag s m).draw (s m)
+  unfold Bag.draw
+  split
+  · exact Bag.mem_full p
+  · exact Finset.mem_erase.mpr ⟨fun h => hne h.symm, hp⟩
+
+/-- A piece never drawn over an interval survives the whole interval. -/
+theorem mem_bagAt_of_not_drawn {initBag : Bag} {s : ℕ → Piece} {p : Piece}
+    {a : ℕ} (ha : p ∈ bagAt initBag s a) :
+    ∀ b, a ≤ b → (∀ m, a ≤ m → m < b → s m ≠ p) → p ∈ bagAt initBag s b := by
+  intro b
+  induction b with
+  | zero =>
+    intro hab _
+    exact Nat.le_zero.mp hab ▸ ha
+  | succ b ih =>
+    intro hab hnd
+    rcases Nat.lt_or_ge a (b + 1) with hlt | hge
+    · have hab' : a ≤ b := by omega
+      exact mem_bagAt_succ_of_ne
+        (ih hab' (fun m h1 h2 => hnd m h1 (by omega))) (hnd b hab' (by omega))
+    · have : a = b + 1 := by omega
+      exact this ▸ ha
+
+/-- Refills iterate: from a full bag, the bag is full again after every
+multiple of seven draws. -/
+theorem bagAt_full_iterate {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {r : ℕ}
+    (hfull : bagAt initBag s r = Bag.full) :
+    ∀ i, bagAt initBag s (r + 7 * i) = Bag.full := by
+  intro i
+  induction i with
+  | zero => simpa using hfull
+  | succ j ih =>
+    have hcard : (bagAt initBag s (r + 7 * j)).card = 7 := by
+      rw [ih]
+      exact Bag.full_card
+    have h := bagAt_add_card_eq_full hl _ (r + 7 * j) hcard
+    rw [show r + 7 * (j + 1) = r + 7 * j + 7 by omega]
+    exact h
+
+section BalanceIrred
+
+attribute [local irreducible] bagAt
+
+/-- **The balance theorem.** A 35-draw window with equal bag states at both
+ends deals every piece exactly five times. Head + tail jointly cover each
+piece once (the head drains the current bag; the tail must carve the end bag
+back out of a fresh one), each of the four full blocks covers each piece once,
+and `7 × 5 = 35` leaves no slack. -/
+theorem window_thirtyfive_balanced {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {n : ℕ}
+    (hbag : bagAt initBag s (n + 35) = bagAt initBag s n) (p : Piece) :
+    ((Finset.range 35).filter (fun k => s (n + k) = p)).card = 5 := by
+  classical
+  obtain ⟨c, hc⟩ : ∃ c, (bagAt initBag s n).card = c := ⟨_, rfl⟩
+  have hc1 : 1 ≤ c := hc ▸ Finset.card_pos.mpr ⟨s n, hl n⟩
+  have hc7 : c ≤ 7 := hc ▸ Bag.card_le_seven _
+  have hfull0 : bagAt initBag s (n + c) = Bag.full :=
+    bagAt_add_card_eq_full hl c n hc
+  have hfull : ∀ i, bagAt initBag s (n + c + 7 * i) = Bag.full :=
+    bagAt_full_iterate hl hfull0
+  -- lower bound: every piece is drawn at least five times
+  have hlow : ∀ q : Piece,
+      5 ≤ ((Finset.range 35).filter (fun k => s (n + k) = q)).card := by
+    intro q
+    -- one hit in each of the four full blocks
+    have hblock : ∀ i, i < 4 → ∃ k, k < c + 7 * i + 7 ∧
+        c + 7 * i ≤ k ∧ s (n + k) = q := by
+      intro i _
+      have hcard : (bagAt initBag s (n + c + 7 * i)).card = 7 := by
+        rw [hfull i]
+        exact Bag.full_card
+      obtain ⟨k, hk7, hks⟩ := exists_draw_within_card hl 7 (n + c + 7 * i) q
+        hcard (by rw [hfull i]; exact Bag.mem_full q)
+      exact ⟨c + 7 * i + k, by omega, by omega,
+        by rw [show n + (c + 7 * i + k) = n + c + 7 * i + k by omega]; exact hks⟩
+    obtain ⟨k1, hk1b, hk1a, hs1⟩ := hblock 0 (by omega)
+    obtain ⟨k2, hk2b, hk2a, hs2⟩ := hblock 1 (by omega)
+    obtain ⟨k3, hk3b, hk3a, hs3⟩ := hblock 2 (by omega)
+    obtain ⟨k4, hk4b, hk4a, hs4⟩ := hblock 3 (by omega)
+    -- one hit in the head (piece in the current bag) or the tail (otherwise)
+    have hhead_or_tail : ∃ k0, k0 < 35 ∧ (k0 < c ∨ c + 28 ≤ k0) ∧ s (n + k0) = q := by
+      rcases Classical.em (q ∈ bagAt initBag s n) with hq | hq
+      · obtain ⟨k, hk, hks⟩ := exists_draw_within_card hl c n q hc hq
+        exact ⟨k, by omega, Or.inl hk, hks⟩
+      · -- not in the end bag either; if never drawn in the tail it would be
+        by_contra hno
+        push Not at hno
+        have hmem : q ∈ bagAt initBag s (n + c + 28) := by
+          have h4 := hfull 4
+          rw [show n + c + 7 * 4 = n + c + 28 by omega] at h4
+          rw [h4]
+          exact Bag.mem_full q
+        have hsurv : q ∈ bagAt initBag s (n + 35) := by
+          refine mem_bagAt_of_not_drawn hmem (n + 35) (by omega) ?_
+          intro m h1 h2 hsm
+          have hm35 : m - n < 35 := by omega
+          have hmc : c + 28 ≤ m - n := by omega
+          have hcon := hno (m - n) hm35 (Or.inr hmc)
+          rw [show n + (m - n) = m by omega] at hcon
+          exact hcon hsm
+        rw [hbag] at hsurv
+        exact hq hsurv
+    obtain ⟨k0, hk0lt, hk0r, hs0⟩ := hhead_or_tail
+    -- five pairwise-distinct hits
+    have hsub : ({k0, k1, k2, k3, k4} : Finset ℕ)
+        ⊆ (Finset.range 35).filter (fun k => s (n + k) = q) := by
+      intro x hx
+      simp only [Finset.mem_insert, Finset.mem_singleton] at hx
+      rcases hx with rfl | rfl | rfl | rfl | rfl
+      · exact Finset.mem_filter.mpr ⟨Finset.mem_range.mpr (by omega), hs0⟩
+      · exact Finset.mem_filter.mpr ⟨Finset.mem_range.mpr (by omega), hs1⟩
+      · exact Finset.mem_filter.mpr ⟨Finset.mem_range.mpr (by omega), hs2⟩
+      · exact Finset.mem_filter.mpr ⟨Finset.mem_range.mpr (by omega), hs3⟩
+      · exact Finset.mem_filter.mpr ⟨Finset.mem_range.mpr (by omega), hs4⟩
+    have hcard5 : ({k0, k1, k2, k3, k4} : Finset ℕ).card = 5 := by
+      have h1 : k0 ∉ ({k1, k2, k3, k4} : Finset ℕ) := by
+        simp only [Finset.mem_insert, Finset.mem_singleton]
+        omega
+      have h2 : k1 ∉ ({k2, k3, k4} : Finset ℕ) := by
+        simp only [Finset.mem_insert, Finset.mem_singleton]
+        omega
+      have h3 : k2 ∉ ({k3, k4} : Finset ℕ) := by
+        simp only [Finset.mem_insert, Finset.mem_singleton]
+        omega
+      have h4 : k3 ∉ ({k4} : Finset ℕ) := by
+        simp only [Finset.mem_singleton]
+        omega
+      rw [Finset.card_insert_of_notMem h1, Finset.card_insert_of_notMem h2,
+        Finset.card_insert_of_notMem h3, Finset.card_insert_of_notMem h4,
+        Finset.card_singleton]
+    calc 5 = ({k0, k1, k2, k3, k4} : Finset ℕ).card := hcard5.symm
+      _ ≤ _ := Finset.card_le_card hsub
+  -- total: the 35 draws distribute over the seven pieces
+  have htotal : ∑ q ∈ (Finset.univ : Finset Piece),
+      ((Finset.range 35).filter (fun k => s (n + k) = q)).card = 35 := by
+    rw [← Finset.card_eq_sum_card_fiberwise
+      (f := fun k => s (n + k)) (fun x _ => Finset.mem_univ _)]
+    exact Finset.card_range 35
+  -- equality: seven pieces at five hits each exhaust the window
+  by_contra hne
+  have h6 : 6 ≤ ((Finset.range 35).filter (fun k => s (n + k) = p)).card := by
+    have := hlow p
+    omega
+  have hbig : (36 : ℕ) ≤ ∑ q ∈ (Finset.univ : Finset Piece),
+      ((Finset.range 35).filter (fun k => s (n + k) = q)).card := by
+    have hpt : ∀ q ∈ (Finset.univ : Finset Piece),
+        (if q = p then 6 else 5)
+          ≤ ((Finset.range 35).filter (fun k => s (n + k) = q)).card := by
+      intro q _
+      split_ifs with h
+      · exact h ▸ h6
+      · exact hlow q
+    have hsum := Finset.sum_le_sum hpt
+    have hsplit : ∀ q : Piece,
+        (if q = p then 6 else 5) = 5 + (if q = p then 1 else 0) := by
+      intro q
+      split_ifs <;> rfl
+    rw [Finset.sum_congr rfl (fun q _ => hsplit q), Finset.sum_add_distrib,
+      Finset.sum_const, Finset.sum_ite_eq' Finset.univ p (fun _ => 1),
+      if_pos (Finset.mem_univ p)] at hsum
+    have h7 : (Finset.univ : Finset Piece).card = 7 := by decide
+    rw [h7] at hsum
+    omega
+  omega
+
+end BalanceIrred
+
 end BagCadence
 end Tetris
