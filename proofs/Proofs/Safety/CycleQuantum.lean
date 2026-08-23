@@ -671,5 +671,52 @@ theorem closedCycle_window_tetris_le_six (C : ClosedCycle GameConfig.standard)
   trace_window_tetris_le_six
     (fun k => C.legal_draw _ (C.trace_mem_states h0 k)) hn
 
+/-- **The windowed tetris–I embedding**: past the seed, the tetris increment
+over any window never exceeds the I increment — each four-clear step *is* an
+I step, windowed. -/
+theorem tetris_le_I_window {π : Policy GameConfig.standard} {n m : ℕ}
+    (hn : 1 ≤ n) (hnm : n ≤ m) :
+    sizeCount GameConfig.standard π GameState.init 4 m
+        - sizeCount GameConfig.standard π GameState.init 4 n
+      ≤ iCount GameConfig.standard π GameState.init m
+        - iCount GameConfig.standard π GameState.init n := by
+  classical
+  have hsz := sizeCount_window (cfg := GameConfig.standard) (π := π) 4 n (m - n)
+  rw [show n + (m - n) = m by omega] at hsz
+  have h1 := iCount_eq_card_filter (cfg := GameConfig.standard) (π := π) n
+  have h2 := iCount_eq_card_filter (cfg := GameConfig.standard) (π := π) m
+  have hsplit := card_filter_range_add (fun k =>
+    (π (trace GameConfig.standard π GameState.init k)).piece = Piece.I)
+    n (m - n)
+  rw [show n + (m - n) = m by omega] at hsplit
+  have hsub : ((Finset.range (m - n)).filter (fun j =>
+        (Board.fullRows GameConfig.standard
+          ((π (trace GameConfig.standard π GameState.init (n + j))).place
+            (trace GameConfig.standard π GameState.init (n + j)).board)).card
+          = 4)).card
+      ≤ ((Finset.range (m - n)).filter (fun j =>
+        (π (trace GameConfig.standard π GameState.init (n + j))).piece
+          = Piece.I)).card := by
+    apply Finset.card_le_card
+    intro j hj
+    rw [Finset.mem_filter] at hj ⊢
+    exact ⟨hj.1, trace_tetris_step_I (by omega) (le_of_eq hj.2.symm)⟩
+  omega
+
+/-- **The tetris bracket at every horizon — no cycle needed**: on any
+legally-drawn trace, at most `6⌊Δn/35⌋ + 6` tetrises past the seed, because
+the I supply itself is capped. A cycle sharpens the slope to `3/35`
+(`cycle_tetris_density`). -/
+theorem tetris_bracket_any {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n m : ℕ}
+    (hn : 1 ≤ n) (hnm : n ≤ m) :
+    sizeCount GameConfig.standard π GameState.init 4 m
+        - sizeCount GameConfig.standard π GameState.init 4 n
+      ≤ 6 * ((m - n) / 35) + 6 := by
+  have hemb := tetris_le_I_window (π := π) hn hnm
+  obtain ⟨_, hI⟩ := iCount_bracket_any hdraw hnm
+  omega
+
 end ClearRate
 end Tetris

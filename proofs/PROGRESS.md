@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23rr) — windowed tetris–I embedding (bank 40/N)
+
+- `tetris_le_I_window` — the tetris increment over any window past the seed
+  never exceeds the I increment: the cumulative embedding
+  `sizeCount_four_le_iCount` windowed, via the counter↔filter bridges and a
+  filter-subset argument (`trace_tetris_step_I`).
+- `tetris_bracket_any` — at most `6⌊Δn/35⌋ + 6` tetrises at every horizon on
+  any legally-drawn trace, NO cycle: the I supply itself is capped. Cycles
+  sharpen the slope to 3/35.
+- Lean note: `Finset.monotone_filter_right` mis-unifies here (List.Mem
+  appears); explicit `intro/mem_filter` subset proofs are more robust.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23qq) — window law at every length (bank 39/N)
 
 - `window_bounds_any_length` — any `w` consecutive legal draws hold between
