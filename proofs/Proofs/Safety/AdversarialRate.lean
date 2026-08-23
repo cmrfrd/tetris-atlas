@@ -1751,5 +1751,47 @@ theorem isClosedOn_grid_inhabited {A : Atlas GameConfig.standard}
   · rw [hcnt]
     omega
 
+/-- **The adversarial tetris frequency cap**: at most `⌊Δn/7⌋ + 2` tetrises
+in any window, whoever picks the pieces — every four-clear reads `I` off the
+announced stream, and the stream obeys the frequency law. -/
+theorem adversary_tetris_frequency_cap {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hdraw : ∀ n, s n
+      ∈ (adversarialTrace GameConfig.standard σ s GameState.init n).bag)
+    {n m : ℕ} (hnm : n ≤ m) :
+    sizeCountAdv GameConfig.standard σ s 4 m
+        - sizeCountAdv GameConfig.standard σ s 4 n
+      ≤ (m - n) / 7 + 2 := by
+  classical
+  have hl : LegalSequenceFrom GameState.init.bag s := by
+    intro k
+    have := hdraw k
+    rwa [adversarialTrace_bag_from] at this
+  have h1 := sizeCountAdv_eq_card_filter (cfg := GameConfig.standard)
+    (σ := σ) (s := s) 4 n
+  have h2 := sizeCountAdv_eq_card_filter (cfg := GameConfig.standard)
+    (σ := σ) (s := s) 4 (m)
+  have hsplit := card_filter_range_add (fun k => (Board.fullRows
+    GameConfig.standard
+    (({ σ (adversarialTrace GameConfig.standard σ s GameState.init k) (s k)
+        with piece := s k } : Placement).place
+      (adversarialTrace GameConfig.standard σ s GameState.init k).board)).card
+      = 4) n (m - n)
+  rw [show n + (m - n) = m by omega] at hsplit
+  have hsub : ((Finset.range (m - n)).filter (fun j => (Board.fullRows
+        GameConfig.standard
+        (({ σ (adversarialTrace GameConfig.standard σ s GameState.init (n + j))
+            (s (n + j)) with piece := s (n + j) } : Placement).place
+          (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + j)).board)).card = 4)).card
+      ≤ ((Finset.range (m - n)).filter
+          (fun j => s (n + j) = Piece.I)).card := by
+    apply Finset.card_le_card
+    intro j hj
+    rw [Finset.mem_filter] at hj ⊢
+    exact ⟨hj.1, adversary_tetris_step_I (le_of_eq hj.2.symm)⟩
+  have hwin := BagCadence.window_frequency_law hl n Piece.I (m - n)
+  omega
+
 end ClearRate
 end Tetris

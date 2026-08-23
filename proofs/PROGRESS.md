@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bq) — adversarial frequency cap (bank 90/N)
+
+- `adversary_tetris_frequency_cap` — at most `⌊Δn/7⌋+2` tetrises in any
+  window whoever picks the pieces: the four-clear reads I off the announced
+  stream and the stream obeys the frequency law. The frequency-law arc has
+  full cooperative/adversarial parity for the tetris cap.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bp) — the big-clear frequency cap (bank 89/N)
 
 - `big_clear_frequency_cap` — triples and tetrises together number at most
