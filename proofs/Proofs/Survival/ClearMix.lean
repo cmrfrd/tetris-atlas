@@ -198,5 +198,148 @@ theorem ten_mul_sizeCount_four_le {π : Policy GameConfig.standard}
   have h := mix_law hv n
   omega
 
+/-! ## Which pieces can clear how many rows
+
+Spanning `k` rows is *necessary* to clear `k`, but it is not sufficient, and the
+gap matters. A hard drop rests **on top** of the stack: in every column the piece
+occupies, the board is empty at and above the piece's lowest cell there. So if a
+cleared row `r` is not filled by the piece in some occupied column, the board
+must supply that cell — which forces `r` to lie strictly *below* the piece's cell
+in that column.
+
+Reading that off the drop profile gives an exact per-shape ceiling
+(`maxClears`), and it is strictly sharper than the row span:
+
+| piece | rows spanned | rows actually clearable |
+|---|---|---|
+| I | 4 | **4** |
+| L, J | 3 | **3** |
+| S, Z, T | 3 | **2** |
+| O | 2 | **2** |
+
+S, Z and T span three rows but can never clear three: whichever column fails to
+reach the top row would need a board cell above the piece's resting level there,
+and the hard drop forbids it. Only **I, L and J** can clear three or more
+(`three_clear_requires_I_L_or_J`), and only **I** can clear four
+(`tetris_requires_I`). -/
+
+/-- Every column the piece occupies is low enough for the piece to reach it:
+`colHeight ≤ dropOffset + cell height` for each profile cell. -/
+theorem colHeight_le_dropOffset_add {b : Board} {pl : Placement} {cell : Coord}
+    (hcell : cell ∈ pl.shapeUp) :
+    b.colHeight (pl.col + cell.1) ≤ pl.dropOffset b + cell.2 := by
+  have hle : b.colHeight (pl.col + cell.1) - cell.2 ≤ pl.dropOffset b := by
+    rw [Placement.dropOffset_eq_sup]
+    exact Finset.le_sup
+      (f := fun c : Coord => b.colHeight (pl.col + c.1) - c.2) hcell
+  omega
+
+/-- A relative row `t` of a drop profile is *clearable* when every occupied
+column either has a profile cell at `t`, or has its lowest cell strictly above
+`t` (so the board may legally supply the missing cell from underneath). -/
+def ClearableRow (S : Finset Coord) (t : ℕ) : Prop :=
+  ∀ cell ∈ S, ((cell.1, t) ∈ S) ∨ t < cell.2
+
+instance (S : Finset Coord) (t : ℕ) : Decidable (ClearableRow S t) := by
+  unfold ClearableRow; infer_instance
+
+/-- The per-shape ceiling on rows cleared by one drop. -/
+def maxClears (p : Piece) (r : Rotation) : ℕ :=
+  (((p.shapeUp r).image Prod.snd).filter (fun t => ClearableRow (p.shapeUp r) t)).card
+
+/-- **The hard-drop clearing ceiling.** One drop onto a board with no pending
+full rows clears at most `maxClears` rows. -/
+theorem fullRows_card_le_maxClears {cfg : GameConfig} {b : Board} {pl : Placement}
+    (hv : pl.Valid cfg) (hnf : ∀ r, ¬ Board.isFull cfg b r) :
+    (Board.fullRows cfg (pl.place b)).card ≤ maxClears pl.piece pl.rot := by
+  classical
+  have hsub : Board.fullRows cfg (pl.place b)
+      ⊆ ((pl.shapeUp.image Prod.snd).filter
+            (fun t => ClearableRow pl.shapeUp t)).image
+          (fun t => pl.dropOffset b + t) := by
+    intro r hr
+    simp only [Board.fullRows, Finset.mem_filter] at hr
+    -- the cleared row contains a cell of the drop
+    obtain ⟨c, hc, hcb⟩ : ∃ c ∈ Finset.range cfg.cols, (c, r) ∉ b := by
+      by_contra hcon
+      push Not at hcon
+      exact hnf r hcon
+    have hcdrop : (c, r) ∈ pl.dropped b := by
+      have hcplace : (c, r) ∈ pl.place b := hr.2 c hc
+      simp only [Placement.place, Finset.mem_union] at hcplace
+      rcases hcplace with hb' | hd
+      · exact absurd hb' hcb
+      · exact hd
+    obtain ⟨cell₀, hcell₀, hEq⟩ : ∃ cell ∈ pl.shapeUp,
+        (pl.col + cell.1, pl.dropOffset b + cell.2) = (c, r) := by
+      unfold Placement.dropped Placement.cellsAt at hcdrop
+      rw [Finset.mem_image] at hcdrop
+      exact hcdrop
+    have hrt : r = pl.dropOffset b + cell₀.2 := (congrArg Prod.snd hEq).symm
+    -- and every occupied column either supplies it or sits above it
+    have hclear : ClearableRow pl.shapeUp cell₀.2 := by
+      intro cell hcell
+      have hlt : pl.col + cell.1 < cfg.cols := hv cell hcell
+      have hmem : (pl.col + cell.1, r) ∈ pl.place b :=
+        hr.2 _ (Finset.mem_range.mpr hlt)
+      simp only [Placement.place, Finset.mem_union] at hmem
+      rcases hmem with hb' | hd
+      · right
+        have h1 : r < b.colHeight (pl.col + cell.1) := Board.lt_colHeight hb'
+        have h2 := colHeight_le_dropOffset_add (b := b) (pl := pl) hcell
+        omega
+      · left
+        unfold Placement.dropped Placement.cellsAt at hd
+        rw [Finset.mem_image] at hd
+        obtain ⟨cell', hcell', hEq'⟩ := hd
+        have hc1 : pl.col + cell'.1 = pl.col + cell.1 := congrArg Prod.fst hEq'
+        have hc2 : pl.dropOffset b + cell'.2 = r := congrArg Prod.snd hEq'
+        have : cell' = (cell.1, cell₀.2) := by
+          refine Prod.ext ?_ ?_ <;> simp <;> omega
+        rwa [this] at hcell'
+    rw [Finset.mem_image]
+    exact ⟨cell₀.2, Finset.mem_filter.mpr
+      ⟨Finset.mem_image.mpr ⟨cell₀, hcell₀, rfl⟩, hclear⟩, hrt.symm⟩
+  calc (Board.fullRows cfg (pl.place b)).card
+      ≤ (((pl.shapeUp.image Prod.snd).filter
+            (fun t => ClearableRow pl.shapeUp t)).image
+          (fun t => pl.dropOffset b + t)).card := Finset.card_le_card hsub
+    _ ≤ ((pl.shapeUp.image Prod.snd).filter
+            (fun t => ClearableRow pl.shapeUp t)).card := Finset.card_image_le
+
+/-- **S, Z, T and O can never clear three rows.** A 28-case check of the
+per-shape ceiling. -/
+theorem maxClears_le_two (p : Piece) (r : Rotation)
+    (hI : p ≠ Piece.I) (hL : p ≠ Piece.L) (hJ : p ≠ Piece.J) :
+    maxClears p r ≤ 2 := by
+  revert hI hL hJ
+  revert r
+  revert p
+  decide
+
+/-- **Only I, L and J can clear three or more rows in one drop.** Sharper than
+the row-span bound: S, Z and T *span* three rows but the hard drop can never
+convert that into a triple. -/
+theorem three_clear_requires_I_L_or_J {cfg : GameConfig} {b : Board} {pl : Placement}
+    (hv : pl.Valid cfg) (hnf : ∀ r, ¬ Board.isFull cfg b r)
+    (h3 : 3 ≤ (Board.fullRows cfg (pl.place b)).card) :
+    pl.piece = Piece.I ∨ pl.piece = Piece.L ∨ pl.piece = Piece.J := by
+  by_contra hcon
+  push Not at hcon
+  have hle := maxClears_le_two pl.piece pl.rot hcon.1 hcon.2.1 hcon.2.2
+  have hb := fullRows_card_le_maxClears hv hnf
+  omega
+
+/-- Trace form of the triple constraint. -/
+theorem three_clear_requires_I_L_or_J_trace {cfg : GameConfig} {π : Policy cfg}
+    (hv : ∀ g, (π g).Valid cfg) {n : ℕ}
+    (h3 : 3 ≤ (Board.fullRows cfg
+      ((π (trace cfg π GameState.init n)).place
+        (trace cfg π GameState.init n).board)).card) :
+    (π (trace cfg π GameState.init n)).piece = Piece.I
+      ∨ (π (trace cfg π GameState.init n)).piece = Piece.L
+      ∨ (π (trace cfg π GameState.init n)).piece = Piece.J :=
+  three_clear_requires_I_L_or_J (hv _) (trace_board_no_full n) h3
+
 end ClearRate
 end Tetris
