@@ -472,5 +472,56 @@ theorem period_singles_le_fourteen {π : Policy GameConfig.standard}
   have h := period_mix_fourteen hv hcyc
   omega
 
+/-- The cooperative size counter agrees with the windowed filter cardinality. -/
+theorem sizeCount_eq_card_filter {cfg : GameConfig} {π : Policy cfg} (k n : ℕ) :
+    sizeCount cfg π GameState.init k n
+      = ((Finset.range n).filter (fun m => (Board.fullRows cfg
+          ((π (trace cfg π GameState.init m)).place
+            (trace cfg π GameState.init m).board)).card = k)).card := by
+  classical
+  induction n with
+  | zero => simp
+  | succ m ih =>
+    rw [sizeCount_succ, ih, Finset.range_add_one, Finset.filter_insert]
+    split_ifs with h
+    · rw [Finset.card_insert_of_notMem (by simp)]
+    · omega
+
+/-- The I counter agrees with the windowed filter cardinality. -/
+theorem iCount_eq_card_filter {cfg : GameConfig} {π : Policy cfg} (n : ℕ) :
+    iCount cfg π GameState.init n
+      = ((Finset.range n).filter (fun m =>
+          (π (trace cfg π GameState.init m)).piece = Piece.I)).card := by
+  classical
+  induction n with
+  | zero => simp
+  | succ m ih =>
+    rw [iCount_succ, ih, Finset.range_add_one, Finset.filter_insert]
+    split_ifs with h
+    · rw [Finset.card_insert_of_notMem (by simp)]
+    · omega
+
+/-- The size-counter *increment* over a window is the window's own filter
+count — the bridge between the cumulative counters and the windowed cap
+theorems. -/
+theorem sizeCount_window {cfg : GameConfig} {π : Policy cfg} (k n : ℕ) :
+    ∀ w, sizeCount cfg π GameState.init k (n + w)
+        - sizeCount cfg π GameState.init k n
+      = ((Finset.range w).filter (fun j => (Board.fullRows cfg
+          ((π (trace cfg π GameState.init (n + j))).place
+            (trace cfg π GameState.init (n + j)).board)).card = k)).card := by
+  classical
+  intro w
+  induction w with
+  | zero => simp
+  | succ w ih =>
+    have hmono := sizeCount_mono cfg π GameState.init k (Nat.le_add_right n w)
+    rw [show n + (w + 1) = (n + w) + 1 by omega, sizeCount_succ,
+      Finset.range_add_one, Finset.filter_insert]
+    split_ifs with h
+    · rw [Finset.card_insert_of_notMem (by simp)]
+      omega
+    · omega
+
 end ClearRate
 end Tetris

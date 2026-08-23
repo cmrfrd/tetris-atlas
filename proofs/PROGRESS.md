@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23gg) — cooperative counter bridges (bank 29/N)
+
+- `sizeCount_eq_card_filter` / `iCount_eq_card_filter` — the cooperative
+  counters equal their windowed filter cardinalities (mirrors of the
+  adversarial bridge; `Finset.range_add_one` + `filter_insert`).
+- `sizeCount_window` — the increment over a window equals the window's own
+  filter count: cumulative counters and windowed cap theorems are now fully
+  interchangeable in both settings.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ff) — the period size caps: tetrises ≤ 3 (bank 28/N)
 
 One-omega corollaries of `period_mix_fourteen`, both settings:
