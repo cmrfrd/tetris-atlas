@@ -1055,5 +1055,22 @@ theorem adversary_no_pure_triple_period {σ : Solver GameConfig.standard}
   have h := adversary_period_mix_fourteen hv hcyc
   omega
 
+/-- The adversarial mass diameter: under a periodic stream, any two states of
+a returning solver's trace differ by at most 276 cells of occupancy. -/
+theorem adversarial_mass_diameter {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    {m₁ m₂ : ℕ} (h1 : n ≤ m₁) (h2 : n ≤ m₂) :
+    (adversarialTrace GameConfig.standard σ s GameState.init m₁).board.count
+      ≤ (adversarialTrace GameConfig.standard σ s GameState.init m₂).board.count
+        + 276 := by
+  obtain ⟨hup1, hlo1⟩ := adversarial_mass_band hv hper hcyc h1
+  obtain ⟨hup2, hlo2⟩ := adversarial_mass_band hv hper hcyc h2
+  omega
+
 end ClearRate
 end Tetris

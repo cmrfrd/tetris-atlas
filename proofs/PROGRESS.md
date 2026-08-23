@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ag) — the mass diameter (bank 54/N)
+
+- `cycle_mass_diameter` / `adversarial_mass_diameter` — any two states on a
+  cycle differ by at most 276 cells of occupancy: the whole cycle lives in a
+  276-cell (≈ 28-row) corridor, whoever picks the pieces.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23af) — the stationary bracket (bank 53/N)
 
 - `cycle_clears_stationary_bracket` — SHIFT-INVARIANT: at every position of

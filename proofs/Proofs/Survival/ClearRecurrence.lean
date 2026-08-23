@@ -1035,6 +1035,20 @@ theorem cycle_clears_stationary_bracket {π : Policy GameConfig.standard}
     have hmono' := cleared_mono GameConfig.standard π GameState.init hm
     omega
 
+/-- **The mass diameter**: any two states on a cycle differ by at most 276
+cells of occupancy — both sit inside the `[count(n) − 140, count(n) + 136]`
+band. The whole cycle lives in a 276-cell (≈ 28-row) occupancy corridor. -/
+theorem cycle_mass_diameter {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₁ m₂ : ℕ}
+    (h1 : n ≤ m₁) (h2 : n ≤ m₂) :
+    (trace GameConfig.standard π GameState.init m₁).board.count
+      ≤ (trace GameConfig.standard π GameState.init m₂).board.count + 276 := by
+  obtain ⟨hup1, hlo1⟩ := cycle_mass_band hv hcyc h1
+  obtain ⟨hup2, hlo2⟩ := cycle_mass_band hv hcyc h2
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
