@@ -344,6 +344,56 @@ theorem closedCycle_period_piece_balanced (C : ClosedCycle GameConfig.standard)
     rw [← trace_bag_eq_bagAt, ← trace_bag_eq_bagAt, hcyc]
   exact BagCadence.window_thirtyfive_balanced hl hbag p
 
+/-- Splitting a filtered range count at an interior point: the count over
+`[0, a + b)` is the count over `[0, a)` plus the shifted count over `[0, b)`. -/
+theorem card_filter_range_add (P : ℕ → Prop) [DecidablePred P] (a : ℕ) :
+    ∀ b, ((Finset.range (a + b)).filter P).card
+      = ((Finset.range a).filter P).card
+        + ((Finset.range b).filter (fun k => P (a + k))).card := by
+  intro b
+  induction b with
+  | zero => simp
+  | succ b ih =>
+    rw [show a + (b + 1) = (a + b) + 1 by ring, Finset.range_add_one,
+      Finset.range_add_one, Finset.filter_insert, Finset.filter_insert]
+    by_cases h : P (a + b)
+    · rw [if_pos h, if_pos h, Finset.card_insert_of_notMem (by simp),
+        Finset.card_insert_of_notMem (by simp), ih]
+      omega
+    · rw [if_neg h, if_neg h, ih]
+
+/-- **Multi-period balance**: over `j` cycle periods a closed cycle plays
+each piece exactly `5·j` times — in particular exactly `5j` I's and `5j` T's.
+Periodicity re-arms the balance theorem on every lap and the windows sum. -/
+theorem closedCycle_multi_period_piece_balanced
+    (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (h0 : g0 ∈ C.states) {n : ℕ}
+    (hcyc : trace GameConfig.standard C.policy g0 n
+        = trace GameConfig.standard C.policy g0 (n + 35)) (p : Piece) :
+    ∀ j, ((Finset.range (35 * j)).filter (fun k =>
+        (C.policy (trace GameConfig.standard C.policy g0 (n + k))).piece
+          = p)).card = 5 * j := by
+  intro j
+  induction j with
+  | zero => simp
+  | succ j ih =>
+    have hsplit := card_filter_range_add (fun k =>
+      (C.policy (trace GameConfig.standard C.policy g0 (n + k))).piece = p)
+      (35 * j) 35
+    rw [show 35 * (j + 1) = 35 * j + 35 by ring, hsplit, ih]
+    have hj := trace_period_multiples C.policy g0 hcyc j
+    have hj1 := trace_period_multiples C.policy g0 hcyc (j + 1)
+    have hcycj : trace GameConfig.standard C.policy g0 (n + 35 * j)
+        = trace GameConfig.standard C.policy g0 ((n + 35 * j) + 35) := by
+      rw [show (n + 35 * j) + 35 = n + (j + 1) * 35 by ring,
+        show n + 35 * j = n + j * 35 by ring]
+      exact hj.symm.trans hj1
+    have hbal := closedCycle_period_piece_balanced C h0 hcycj p
+    have harg : ∀ x : ℕ, n + (35 * j + x) = (n + 35 * j) + x := fun x => by ring
+    simp only [harg]
+    rw [hbal]
+    ring
+
 /-- **The adversarial period is balanced too**: over any 35-placement period of
 an `AdversarialClosedCycle`, the announced piece sequence contains each piece
 exactly five times — the adversary's freedom inside a cycle is limited to the

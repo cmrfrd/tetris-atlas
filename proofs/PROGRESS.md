@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23kk) — multi-period balance (bank 33/N)
+
+- `card_filter_range_add` — generic: a filtered-range count over `[0, a+b)`
+  splits at `a` into the head count plus the shifted tail count.
+- `closedCycle_multi_period_piece_balanced` — over `j` periods a closed cycle
+  plays EVERY piece exactly `5j` times: periodicity re-arms the balance
+  theorem each lap and the windows sum. In particular exactly `5j` I's and
+  `5j` T's over any multi-period horizon.
+- (Adversarial mirror deliberately skipped: one 35-return of an adversarial
+  trace does NOT iterate — the piece stream continues freely after the
+  return, so multi-period balance needs a periodic-stream hypothesis.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23jj) — the mass band (bank 32/N)
 
 - `cycle_mass_band` — on a cycle the board occupancy stays within
