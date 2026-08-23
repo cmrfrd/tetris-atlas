@@ -774,5 +774,47 @@ theorem cycle_iCount_bracket {π : Policy GameConfig.standard}
   have hbr := cycle_piece_bracket hdraw hcyc Piece.I m
   omega
 
+/-- **The forward orbit of a cycle is its first 35 states**: past the entry
+point every visited state already appears in the entry window — the orbit of
+a five-bag cycle is a finite set traversed in lockstep. -/
+theorem cycle_orbit_subset {π : Policy GameConfig.standard} {g0 : GameState}
+    {n : ℕ}
+    (hcyc : trace GameConfig.standard π g0 n
+        = trace GameConfig.standard π g0 (n + 35)) {m : ℕ} (hnm : n ≤ m) :
+    trace GameConfig.standard π g0 m
+      ∈ (Finset.range 35).image (fun k => trace GameConfig.standard π g0 (n + k)) := by
+  classical
+  have hq := trace_period_multiples π g0 hcyc ((m - n) / 35)
+  have hshift := trace_eq_of_state_eq π g0 hq ((m - n) % 35)
+  rw [Finset.mem_image]
+  refine ⟨(m - n) % 35, Finset.mem_range.mpr (Nat.mod_lt _ (by omega)), ?_⟩
+  rw [hshift, show n + (m - n) / 35 * 35 + (m - n) % 35 = m by omega]
+
+/-- **Any 35 consecutive trace states are pairwise distinct** — the quantum
+forbids any return shorter than five bags, so every 35-window is an injective
+run. On a cycle, `cycle_orbit_subset` adds that every later state revisits
+this window: **a minimal five-bag cycle visits exactly 35 states**, matching
+`closedCycle_card_ge_thirtyfive` from the other side. -/
+theorem trace_window_image_card_thirtyfive {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) (n : ℕ) :
+    ((Finset.range 35).image
+      (fun k => trace GameConfig.standard π GameState.init (n + k))).card
+      = 35 := by
+  classical
+  rw [Finset.card_image_of_injOn, Finset.card_range]
+  intro i hi k hk hik
+  rw [Finset.coe_range, Set.mem_Iio] at hi hk
+  rcases Nat.lt_or_ge i k with hlt | hge
+  · have hd := thirtyfive_dvd_of_trace_eq hv hdraw
+      (show n + i ≤ n + k by omega) hik
+    omega
+  · rcases Nat.eq_or_lt_of_le hge with heq | hlt'
+    · omega
+    · have hd := thirtyfive_dvd_of_trace_eq hv hdraw
+        (show n + k ≤ n + i by omega) hik.symm
+      omega
+
 end ClearRate
 end Tetris

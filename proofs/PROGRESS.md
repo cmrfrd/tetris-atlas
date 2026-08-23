@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23yy) — the exact orbit (bank 47/N)
+
+- `cycle_orbit_subset` — past the entry point, every state of a periodic
+  trace already appears in the 35-state entry window (decompose Δn into
+  periods + remainder; determinism shifts the return).
+- `trace_window_image_card_thirtyfive` — any 35 consecutive trace states are
+  pairwise distinct (the quantum forbids shorter returns), so the window
+  image has card exactly 35 — no cycle hypothesis needed for distinctness.
+- Together: A MINIMAL FIVE-BAG CYCLE VISITS EXACTLY 35 STATES — the ≥ 35
+  size floor (`closedCycle_card_ge_thirtyfive`) is met with equality by the
+  orbit itself.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23xx) — per-piece bracket on cycles (bank 46/N)
 
 - `cycle_piece_bracket` — on a periodic legally-drawn trace, EVERY piece's
