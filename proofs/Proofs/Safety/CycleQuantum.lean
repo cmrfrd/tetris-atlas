@@ -2127,5 +2127,40 @@ theorem adversarialTrace_window_phase_determined {σ : Solver GameConfig.standar
   rw [h3, h4] at hcnt
   omega
 
+/-- **The I-counter frequency law**: `⌊(Δn−7)/7⌋ ≤ ΔiCount ≤ ⌊Δn/7⌋ + 2` at
+every horizon — the I supply is `1/7` of the placements with error at most
+two, at every scale. Supersedes the 35-block bracket. -/
+theorem iCount_frequency_law {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n m : ℕ}
+    (hnm : n ≤ m) :
+    (m - n - 7) / 7 ≤ iCount GameConfig.standard π GameState.init m
+        - iCount GameConfig.standard π GameState.init n
+      ∧ iCount GameConfig.standard π GameState.init m
+        - iCount GameConfig.standard π GameState.init n
+        ≤ (m - n) / 7 + 2 := by
+  have hl := legalSequence_of_trace_draws hdraw
+  have h1 := iCount_eq_card_filter (cfg := GameConfig.standard) (π := π) n
+  have h2 := iCount_eq_card_filter (cfg := GameConfig.standard) (π := π) m
+  have hsplit := card_filter_range_add (fun k =>
+    (π (trace GameConfig.standard π GameState.init k)).piece = Piece.I)
+    n (m - n)
+  rw [show n + (m - n) = m by omega] at hsplit
+  have hwin := BagCadence.window_frequency_law hl n Piece.I (m - n)
+  omega
+
+/-- **The tetris frequency cap**: at most `⌊Δn/7⌋ + 2` tetrises at every
+horizon past the seed — each rides an I, and I's run at `1/7 + O(1)`. -/
+theorem tetris_frequency_cap {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n m : ℕ}
+    (hn : 1 ≤ n) (hnm : n ≤ m) :
+    sizeCount GameConfig.standard π GameState.init 4 m
+        - sizeCount GameConfig.standard π GameState.init 4 n
+      ≤ (m - n) / 7 + 2 := by
+  have hemb := tetris_le_I_window (π := π) hn hnm
+  obtain ⟨-, hI⟩ := iCount_frequency_law hdraw hnm
+  omega
+
 end ClearRate
 end Tetris

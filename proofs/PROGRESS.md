@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bo) — counter frequency laws (bank 88/N)
+
+- `iCount_frequency_law` — `⌊(Δn−7)/7⌋ ≤ ΔiCount ≤ ⌊Δn/7⌋+2` at every
+  horizon: the I supply is 1/7 of placements with error ≤ 2 at every scale.
+- `tetris_frequency_cap` — at most `⌊Δn/7⌋+2` tetrises at every horizon
+  past the seed. Both supersede the 35-block brackets (batches 39–40).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bn) — THE TRUE FREQUENCY LAW (bank 87/N) ★
 
 - `prefix_le_one` — a pre-refill stretch repeats no piece (countdown +
