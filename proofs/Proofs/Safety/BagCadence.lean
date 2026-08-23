@@ -997,5 +997,126 @@ theorem bagAt_eq_sdiff {s : ℕ → Piece}
   exact this
 
 
+/-- The bag formula under block-injectivity alone: if a stream never repeats
+a piece within an aligned block, its induced bag is the block-prefix
+complement — proven without assuming legality. -/
+theorem bagAt_eq_sdiff_of_block_injective {s : ℕ → Piece}
+    (hinj : ∀ b : ℕ, ∀ j < 7, ∀ j' < 7, j ≠ j' → s (7 * b + j) ≠ s (7 * b + j')) :
+    ∀ n, bagAt Bag.full s n
+      = Bag.full \ ((Finset.range (n % 7)).image
+          (fun j => s (7 * (n / 7) + j))) := by
+  intro n
+  induction n with
+  | zero => simp [bagAt]
+  | succ n ih =>
+    classical
+    -- the bag at n has card 7 − n % 7 by the formula
+    have hprefix_card :
+        ((Finset.range (n % 7)).image (fun j => s (7 * (n / 7) + j))).card
+          = n % 7 := by
+      rw [Finset.card_image_of_injOn, Finset.card_range]
+      intro a ha b hb hab
+      rw [Finset.coe_range, Set.mem_Iio] at ha hb
+      by_contra hne
+      exact hinj (n / 7) a (by omega) b (by omega) hne hab
+    have hsub : ((Finset.range (n % 7)).image (fun j => s (7 * (n / 7) + j)))
+        ⊆ Bag.full := fun q _ => Bag.mem_full q
+    have hbag_card : (bagAt Bag.full s n).card = 7 - n % 7 := by
+      rw [ih, Finset.card_sdiff]
+      have hint : ((Finset.range (n % 7)).image (fun j => s (7 * (n / 7) + j)))
+          ∩ Bag.full
+          = (Finset.range (n % 7)).image (fun j => s (7 * (n / 7) + j)) :=
+        Finset.inter_eq_left.mpr hsub
+      rw [hint, hprefix_card]
+      have : (Bag.full : Bag).card = 7 := Bag.full_card
+      omega
+    have hstep : bagAt Bag.full s (n + 1) = (bagAt Bag.full s n).draw (s n) :=
+      rfl
+    rcases Nat.lt_or_ge (n % 7) 6 with hn6 | hn6
+    · -- interior draw: the erase is nonempty, bag shrinks by the new piece
+      have hsn_mem : s n ∈ bagAt Bag.full s n := by
+        rw [ih, Finset.mem_sdiff]
+        refine ⟨Bag.mem_full _, ?_⟩
+        intro hmem
+        obtain ⟨j, hj, hpj⟩ := Finset.mem_image.mp hmem
+        rw [Finset.mem_range] at hj
+        exact hinj (n / 7) j (by omega) (n % 7) (by omega) (by omega)
+          (by rw [show 7 * (n / 7) + n % 7 = n by omega]; exact hpj)
+      have herase_ne : (bagAt Bag.full s n).erase (s n) ≠ ∅ := by
+        intro hemp
+        have := Finset.card_erase_of_mem hsn_mem
+        rw [hemp, Finset.card_empty] at this
+        omega
+      rw [hstep]
+      unfold Bag.draw
+      rw [if_neg herase_ne, ih]
+      have hmod : (n + 1) % 7 = n % 7 + 1 := by omega
+      have hdiv : (n + 1) / 7 = n / 7 := by omega
+      rw [hmod, hdiv]
+      ext q
+      simp only [Finset.mem_erase, Finset.mem_sdiff, Finset.mem_image,
+        Finset.mem_range, Finset.range_add_one, Finset.mem_insert]
+      constructor
+      · rintro ⟨hqne, hqfull, hnot⟩
+        refine ⟨hqfull, ?_⟩
+        rintro ⟨j, hj | hj, hqj⟩
+        · exact hqne (by rw [← hqj, hj, show 7 * (n / 7) + n % 7 = n by omega])
+        · exact hnot ⟨j, hj, hqj⟩
+      · rintro ⟨hqfull, hnot⟩
+        refine ⟨?_, hqfull, ?_⟩
+        · intro hq
+          exact hnot ⟨n % 7, Or.inl rfl,
+            by rw [show 7 * (n / 7) + n % 7 = n by omega, hq]⟩
+        · rintro ⟨j, hj, hqj⟩
+          exact hnot ⟨j, Or.inr hj, hqj⟩
+    · -- the seventh draw: the erase empties, the bag refills
+      have hn6' : n % 7 = 6 := by omega
+      have hbag1 : (bagAt Bag.full s n).card = 1 := by omega
+      have hsn_mem : s n ∈ bagAt Bag.full s n := by
+        rw [ih, Finset.mem_sdiff]
+        refine ⟨Bag.mem_full _, ?_⟩
+        intro hmem
+        obtain ⟨j, hj, hpj⟩ := Finset.mem_image.mp hmem
+        rw [Finset.mem_range] at hj
+        exact hinj (n / 7) j (by omega) (n % 7) (by omega) (by omega)
+          (by rw [show 7 * (n / 7) + n % 7 = n by omega]; exact hpj)
+      have herase_emp : (bagAt Bag.full s n).erase (s n) = ∅ := by
+        rw [← Finset.card_eq_zero]
+        have := Finset.card_erase_of_mem hsn_mem
+        omega
+      rw [hstep]
+      unfold Bag.draw
+      rw [if_pos herase_emp]
+      have hmod : (n + 1) % 7 = 0 := by omega
+      rw [hmod]
+      simp
+
+/-- **Legality is block-injectivity**: a stream is a legal 7-bag sequence
+from the full bag iff it never repeats a piece within an aligned block —
+the constructive characterization that makes building legal witnesses
+trivial. -/
+theorem legalSequenceFrom_iff_block_injective (s : ℕ → Piece) :
+    LegalSequenceFrom Bag.full s
+      ↔ ∀ b : ℕ, ∀ j < 7, ∀ j' < 7, j ≠ j'
+          → s (7 * b + j) ≠ s (7 * b + j') := by
+  constructor
+  · intro hl b j hj j' hj' hne heq
+    have hfull0 : bagAt Bag.full s 0 = Bag.full := rfl
+    have hr : bagAt Bag.full s (7 * b) = Bag.full := by
+      have := bagAt_full_iterate hl hfull0 b
+      rwa [Nat.zero_add] at this
+    exact hne (block_draws_injective hl hr hj hj' heq)
+  · intro hinj n
+    have hform := bagAt_eq_sdiff_of_block_injective hinj n
+    rw [Bag.canDraw_iff_mem, hform, Finset.mem_sdiff]
+    refine ⟨Bag.mem_full _, ?_⟩
+    intro hmem
+    obtain ⟨j, hj, hpj⟩ := Finset.mem_image.mp hmem
+    rw [Finset.mem_range] at hj
+    have hmod7 : n % 7 < 7 := Nat.mod_lt _ (by omega)
+    exact hinj (n / 7) j (by omega) (n % 7) (by omega) (by omega)
+      (by rw [show 7 * (n / 7) + n % 7 = n by omega]; exact hpj)
+
+
 end BagCadence
 end Tetris

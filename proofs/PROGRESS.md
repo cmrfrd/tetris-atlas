@@ -41629,6 +41629,23 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23cc) — legality IS block-injectivity (bank 102/N) ★
+
+- `bagAt_eq_sdiff_of_block_injective` — the bag formula proven from
+  block-injectivity ALONE (no legality assumed; the induction carries the
+  refill case n % 7 = 6 explicitly).
+- **`legalSequenceFrom_iff_block_injective`** — a stream is a legal 7-bag
+  sequence from the full bag IFF it never repeats a piece within an aligned
+  block. Constructing legal witnesses (e.g. 35-periodic streams for
+  adversarial cycle certificates) reduces to a per-block distinctness check.
+- Lean notes: this Mathlib's `Finset.card_sdiff` takes NO subset hypothesis
+  (uses `∩` on the RHS); `LegalSequenceFrom` unfolds to `canDraw`, so goals
+  need `Bag.canDraw_iff_mem` before `mem_sdiff`.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23cb) — the adversary's freedom, explicit (bank 101/N)
 
 - `adversarialTrace_bag_eq_sdiff` / `adversary_piece_available_iff` — the
