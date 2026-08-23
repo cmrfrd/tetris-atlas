@@ -184,6 +184,35 @@ theorem bagAt_card_of_full {initBag : Bag} {s : ℕ → Piece}
       Finset.card_erase_of_mem hsn, hcard]
     omega
 
+/-- From any start, the card counts down until the refill: `c − j` after `j`
+draws, for `j < c`. -/
+theorem bagAt_card_countdown {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {c n : ℕ}
+    (hc : (bagAt initBag s n).card = c) :
+    ∀ j, j < c → (bagAt initBag s (n + j)).card = c - j := by
+  intro j
+  induction j with
+  | zero =>
+    intro _
+    simpa using hc
+  | succ j ih =>
+    intro hj
+    have hcard := ih (by omega)
+    have hsn : s (n + j) ∈ bagAt initBag s (n + j) := hl (n + j)
+    have herase_ne : (bagAt initBag s (n + j)).erase (s (n + j)) ≠ ∅ := by
+      intro h
+      have := Finset.card_erase_of_mem hsn
+      rw [h, Finset.card_empty] at this
+      omega
+    have hnext : bagAt initBag s (n + j + 1)
+        = (bagAt initBag s (n + j)).erase (s (n + j)) := by
+      change (bagAt initBag s (n + j)).draw (s (n + j)) = _
+      unfold Bag.draw
+      rw [if_neg herase_ne]
+    rw [show n + (j + 1) = n + j + 1 by omega, hnext,
+      Finset.card_erase_of_mem hsn, hcard]
+    omega
+
 /-- **Refills are at least seven apart.** Between one refill and the next the
 bag drains a full seven pieces. -/
 theorem not_full_of_full_close {initBag : Bag} {s : ℕ → Piece}
@@ -610,6 +639,81 @@ theorem window_thirtyfive_ge_four {initBag : Bag} {s : ℕ → Piece}
       Finset.card_insert_of_notMem h4, Finset.card_singleton]
   calc 4 = ({k1, k2, k3, k4} : Finset ℕ).card := hcard4.symm
     _ ≤ _ := Finset.card_le_card hsub
+
+/-- Two draws of one piece with no refill strictly between them are absurd. -/
+theorem no_refill_no_repeat {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {t t' : ℕ} {p : Piece}
+    (h1 : s t = p) (h2 : s t' = p) (hlt : t < t')
+    (hno : ∀ r, t < r → r ≤ t' → bagAt initBag s r ≠ Bag.full) : False := by
+  obtain ⟨r, hr1, hr2, hrf⟩ := exists_refill_between hl h1 h2 hlt
+  exact hno r hr1 hr2 hrf
+
+/-- **Any 35 consecutive draws hold at most six of every piece.** The window
+meets at most six bag blocks (the partial head plus five), and a block repeats
+no piece — two same-piece draws must straddle a refill, and block interiors
+are refill-free. With `window_thirtyfive_ge_four`: **every 35-window's piece
+counts lie in `[4, 6]`**, and exactly `5` on cycle periods. -/
+theorem window_thirtyfive_le_six {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) (n : ℕ) (p : Piece) :
+    ((Finset.range 35).filter (fun k => s (n + k) = p)).card ≤ 6 := by
+  classical
+  by_contra hcon
+  push Not at hcon
+  obtain ⟨c, hc⟩ : ∃ c, (bagAt initBag s n).card = c := ⟨_, rfl⟩
+  have hc1 : 1 ≤ c := hc ▸ Finset.card_pos.mpr ⟨s n, hl n⟩
+  have hc7 : c ≤ 7 := hc ▸ Bag.card_le_seven _
+  have hfull0 : bagAt initBag s (n + c) = Bag.full :=
+    bagAt_add_card_eq_full hl c n hc
+  have hfull : ∀ i, bagAt initBag s (n + c + 7 * i) = Bag.full :=
+    bagAt_full_iterate hl hfull0
+  -- pigeonhole: seven hits into six zones
+  have hmaps : ∀ k ∈ (Finset.range 35).filter (fun k => s (n + k) = p),
+      (if k < c then 0 else (k - c) / 7 + 1) ∈ Finset.range 6 := by
+    intro k hk
+    have hk35 : k < 35 := Finset.mem_range.mp (Finset.mem_filter.mp hk).1
+    rw [Finset.mem_range]
+    split_ifs
+    · omega
+    · omega
+  have hcard : (Finset.range 6).card
+      < ((Finset.range 35).filter (fun k => s (n + k) = p)).card := by
+    rw [Finset.card_range]
+    omega
+  obtain ⟨x, hx, y, hy, hxy, hzone⟩ :=
+    Finset.exists_ne_map_eq_of_card_lt_of_maps_to hcard hmaps
+  obtain ⟨hx35, hxs⟩ := Finset.mem_filter.mp hx
+  obtain ⟨hy35, hys⟩ := Finset.mem_filter.mp hy
+  rw [Finset.mem_range] at hx35 hy35
+  -- order the pair; the argument is symmetric
+  have key : ∀ a b : ℕ, a < b → b < 35 → s (n + a) = p → s (n + b) = p →
+      (if a < c then 0 else (a - c) / 7 + 1)
+        = (if b < c then 0 else (b - c) / 7 + 1) → False := by
+    intro a b hab hb35 hsa hsb hz
+    refine no_refill_no_repeat hl hsa hsb (by omega) ?_
+    intro r hr1 hr2 hrfull
+    by_cases ha : a < c <;> by_cases hb : b < c
+    · -- both in the head: interior cards are c − j < 7
+      have hj : r - n < c := by omega
+      have hcard' := bagAt_card_countdown hl hc (r - n) hj
+      rw [show n + (r - n) = r by omega] at hcard'
+      rw [hrfull] at hcard'
+      have : (Bag.full : Bag).card = 7 := Bag.full_card
+      omega
+    · rw [if_pos ha, if_neg hb] at hz
+      omega
+    · rw [if_neg ha, if_pos hb] at hz
+      omega
+    · -- both in block i: interiors are refill-free
+      rw [if_neg ha, if_neg hb] at hz
+      have hi : (a - c) / 7 = (b - c) / 7 := by omega
+      have hblo : c + 7 * ((a - c) / 7) ≤ a := by omega
+      have hbhi : b < c + 7 * ((a - c) / 7) + 7 := by omega
+      exact not_full_of_full_close hl (hfull ((a - c) / 7))
+        (by omega) (by omega) hrfull
+  rcases Nat.lt_or_ge x y with hlt | hge
+  · exact key x y hlt hy35 hxs hys hzone
+  · have hlt : y < x := by omega
+    exact key y x hlt hx35 hys hxs hzone.symm
 
 end BalanceIrred
 

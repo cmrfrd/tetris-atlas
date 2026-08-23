@@ -41629,6 +41629,28 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bb) — the two-sided window law [4,6] (bank 24/N)
+
+- `bagAt_card_countdown` — from any start the card counts down `c − j` until
+  the refill (head interiors are never full).
+- `no_refill_no_repeat` — packaging: two same-piece draws with a refill-free
+  gap are absurd.
+- **`window_thirtyfive_le_six`** — any 35 consecutive draws hold ≤ 6 of every
+  piece: pigeonhole seven hits into six zones (head + five blocks) and
+  zone interiors are refill-free (countdown for the head,
+  `not_full_of_full_close` for blocks).
+
+**The two-sided window law: every 35-window's piece counts lie in [4, 6],
+exactly 5 on cycle periods.** Tactic gotcha: `split_ifs at hz` can AUTO-CLOSE
+branches whose hypothesis becomes `0 = k+1`, silently shifting bullet
+alignment ("No goals to be solved" at the last bullet) — use explicit
+`by_cases … <;> by_cases …` with `rw [if_pos/if_neg] at` when bullet
+structure matters.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23aa) — general window floor + I-cadence lifts (bank 23/N)
 
 - `exists_block_hit` (BagCadence) — from a refill every piece is drawn within
