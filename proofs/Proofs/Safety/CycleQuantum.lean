@@ -1784,5 +1784,68 @@ theorem survivesForever_iff_live_return {π : Policy GameConfig.standard}
   · rintro ⟨n₁, n₂, hlt, hret, hlive⟩
     exact survivesForever_of_trace_return hlt hret hlive
 
+/-- The full state space of live play: `2^200` in-field boards times `2^7`
+bags is `2^207` states. -/
+theorem card_infield_times_bag :
+    Fintype.card (InFieldBoard GameConfig.standard × Bag) = 2 ^ 207 := by
+  rw [Fintype.card_prod, InFieldBoard.standard_fintype_card]
+  have hbag : Fintype.card Bag = 2 ^ 7 := by
+    rw [Fintype.card_finset]
+    congr 1
+  rw [hbag, ← pow_add]
+
+/-- **The return is bounded**: a surviving valid trace revisits a state
+within `2^207` steps, and the revisit separation is a positive multiple of
+35 — the characterization of survival made quantitative. Deciding
+cooperative survival is a finite (astronomically finite) computation. -/
+theorem survivesForever_return_within {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag)
+    (hs : SurvivesForever GameConfig.standard π GameState.init) :
+    ∃ n₁ n₂, n₁ < n₂ ∧ n₂ ≤ 2 ^ 207 ∧
+      trace GameConfig.standard π GameState.init n₁
+        = trace GameConfig.standard π GameState.init n₂
+      ∧ 35 ∣ (n₂ - n₁) := by
+  classical
+  have hwf : ∀ n, Board.WF GameConfig.standard
+      (trace GameConfig.standard π GameState.init n).board :=
+    trace_board_wf hv (GameState.init_board_wf GameConfig.standard)
+  have hif : ∀ n, ∀ p ∈ (trace GameConfig.standard π GameState.init n).board,
+      p.2 < GameConfig.standard.rows :=
+    fun n => (GameState.not_lost_iff_forall_row_lt GameConfig.standard _).mp
+      (hs n)
+  set f : Fin (2 ^ 207 + 1) → InFieldBoard GameConfig.standard × Bag :=
+    fun i => (⟨(trace GameConfig.standard π GameState.init i).board,
+      hwf i, hif i⟩, (trace GameConfig.standard π GameState.init i).bag)
+    with hf
+  have hlt : Fintype.card (InFieldBoard GameConfig.standard × Bag)
+      < Fintype.card (Fin (2 ^ 207 + 1)) := by
+    rw [Fintype.card_fin, card_infield_times_bag]
+    exact Nat.lt_succ_self _
+  obtain ⟨i, j, hne, hfeq⟩ := Fintype.exists_ne_map_eq_of_card_lt f hlt
+  have hstates : trace GameConfig.standard π GameState.init i
+      = trace GameConfig.standard π GameState.init j := by
+    have hb : (trace GameConfig.standard π GameState.init i).board
+        = (trace GameConfig.standard π GameState.init j).board :=
+      congrArg (fun q : InFieldBoard GameConfig.standard × Bag => q.1.val) hfeq
+    have hg : (trace GameConfig.standard π GameState.init i).bag
+        = (trace GameConfig.standard π GameState.init j).bag :=
+      congrArg Prod.snd hfeq
+    calc trace GameConfig.standard π GameState.init i
+        = ⟨(trace GameConfig.standard π GameState.init i).board,
+          (trace GameConfig.standard π GameState.init i).bag⟩ := rfl
+      _ = ⟨(trace GameConfig.standard π GameState.init j).board,
+          (trace GameConfig.standard π GameState.init j).bag⟩ := by
+          rw [hb, hg]
+      _ = trace GameConfig.standard π GameState.init j := rfl
+  have hij : (i : ℕ) ≠ (j : ℕ) := fun h => hne (Fin.ext h)
+  rcases Nat.lt_or_ge (i : ℕ) (j : ℕ) with hlt' | hge
+  · refine ⟨i, j, hlt', by have := j.isLt; omega, hstates, ?_⟩
+    exact thirtyfive_dvd_of_trace_eq hv hdraw (le_of_lt hlt') hstates
+  · have hlt'' : (j : ℕ) < (i : ℕ) := by omega
+    refine ⟨j, i, hlt'', by have := i.isLt; omega, hstates.symm, ?_⟩
+    exact thirtyfive_dvd_of_trace_eq hv hdraw (le_of_lt hlt'') hstates.symm
+
 end ClearRate
 end Tetris

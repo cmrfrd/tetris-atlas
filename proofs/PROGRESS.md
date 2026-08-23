@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bc) — the quantitative return bound (bank 76/N)
+
+- `card_infield_times_bag` — the live state space is exactly `2^207`
+  (`2^200` in-field boards × `2^7` bags).
+- `survivesForever_return_within` — a surviving valid trace revisits a
+  state within `2^207` steps, revisit separation a positive multiple of 35:
+  the characterization made quantitative — deciding cooperative survival is
+  a finite (astronomically finite) computation.
+- Lean note: pigeonhole via `Fintype.exists_ne_map_eq_of_card_lt` on
+  `Fin (2^207 + 1)`; avoid `omega` on `2^207` (treat as atom, use
+  `Nat.lt_succ_self` and `Fin.isLt`).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bb) — survival ⟺ live return (bank 75/N) ★
 
 - `survivesForever_of_trace_return` — ANY live return proves survival (the
