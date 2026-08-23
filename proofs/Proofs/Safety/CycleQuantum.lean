@@ -1087,5 +1087,52 @@ theorem cycle_piece_stream_periodic {cfg : GameConfig} {π : Policy cfg}
     (π (trace cfg π g0 (m + 35))).piece = (π (trace cfg π g0 m)).piece := by
   rw [← trace_tail_periodic hcyc hnm]
 
+/-- **Every point of a cycle is an anchor**, so the anchored clearing bracket
+holds verbatim from any `m₀ ≥ n`: `14⌊w/35⌋ ≤ Δcleared ≤ 14⌊w/35⌋ + 14` —
+strictly sharper than subtracting boundary brackets. -/
+theorem cycle_clears_bracket_stationary {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) (w : ℕ) :
+    14 * (w / 35)
+        ≤ cleared GameConfig.standard π GameState.init (m₀ + w)
+          - cleared GameConfig.standard π GameState.init m₀
+      ∧ cleared GameConfig.standard π GameState.init (m₀ + w)
+          - cleared GameConfig.standard π GameState.init m₀
+        ≤ 14 * (w / 35) + 14 := by
+  have hbr := cycle_clears_bracket hv (trace_tail_periodic hcyc hm)
+    (Nat.le_add_right m₀ w)
+  rw [show m₀ + w - m₀ = w by omega] at hbr
+  exact hbr
+
+/-- The tetris density from every anchor: `≤ 3⌊w/35⌋ + 3` in every window. -/
+theorem cycle_tetris_density_stationary {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) (w : ℕ) :
+    sizeCount GameConfig.standard π GameState.init 4 (m₀ + w)
+        - sizeCount GameConfig.standard π GameState.init 4 m₀
+      ≤ 3 * (w / 35) + 3 := by
+  have hd := cycle_tetris_density hv (trace_tail_periodic hcyc hm)
+    (Nat.le_add_right m₀ w)
+  rw [show m₀ + w - m₀ = w by omega] at hd
+  exact hd
+
+/-- **The sharp mass diameter**: between any two ordered horizons of a cycle
+the occupancy moves by at most `+136 / −140` cells — the 276-cell corridor
+(`cycle_mass_diameter`) tightened to the band's own asymmetric width. -/
+theorem cycle_mass_diameter_sharp {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₁ m₂ : ℕ}
+    (h1 : n ≤ m₁) (h12 : m₁ ≤ m₂) :
+    (trace GameConfig.standard π GameState.init m₂).board.count
+        ≤ (trace GameConfig.standard π GameState.init m₁).board.count + 136
+      ∧ (trace GameConfig.standard π GameState.init m₁).board.count
+        ≤ (trace GameConfig.standard π GameState.init m₂).board.count + 140 :=
+  cycle_mass_band hv (trace_tail_periodic hcyc h1) h12
+
 end ClearRate
 end Tetris
