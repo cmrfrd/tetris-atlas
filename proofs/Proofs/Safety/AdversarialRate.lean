@@ -1637,5 +1637,87 @@ theorem isClosedOn_stratum_ge_five {A : Atlas GameConfig.standard}
           (show r + 7 * j ≤ r + 7 * i by omega) hEq.symm
         omega
 
+/-- The stratified floor on the cooperative M2 artifact: at least five
+states at every bag fill level. -/
+theorem closedCycle_stratum_ge_five (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (hg0 : g0 ∈ C.states)
+    (hwf : Board.WF GameConfig.standard g0.board) {c : ℕ}
+    (hc1 : 1 ≤ c) (hc7 : c ≤ 7) :
+    5 ≤ (C.states.filter (fun s => s.bag.card = c)).card := by
+  classical
+  have hdraw : ∀ k, (C.policy (trace GameConfig.standard C.policy g0 k)).piece
+      ∈ (trace GameConfig.standard C.policy g0 k).bag :=
+    fun k => C.legal_draw _ (C.trace_mem_states hg0 k)
+  have hcard := bag_card_trace_from hdraw
+  have hle7 : g0.bag.card ≤ 7 := Bag.card_le_seven g0.bag
+  have hpos : 0 < g0.bag.card := Finset.card_pos.mpr ⟨_, hdraw 0⟩
+  set r := (7 - c + g0.bag.card) % 7 with hr
+  have hrc : ∀ j, (trace GameConfig.standard C.policy g0 (r + 7 * j)).bag.card
+      = c := by
+    intro j
+    rw [hcard]
+    omega
+  refine le_trans ?_ (Finset.card_le_card_of_injOn
+    (s := Finset.range 5)
+    (fun j => trace GameConfig.standard C.policy g0 (r + 7 * j)) ?_ ?_)
+  · rw [Finset.card_range]
+  · intro j hj
+    exact Finset.mem_filter.mpr ⟨C.trace_mem_states hg0 (r + 7 * j), hrc j⟩
+  · intro i hi j hj hEq
+    rw [Finset.coe_range, Set.mem_Iio] at hi hj
+    rcases Nat.lt_or_ge i j with hij | hij
+    · have hd := closedCycle_thirtyfive_dvd C hg0 hwf
+        (show r + 7 * i ≤ r + 7 * j by omega) hEq
+      omega
+    · rcases Nat.eq_or_lt_of_le hij with heq | hij'
+      · omega
+      · have hd := closedCycle_thirtyfive_dvd C hg0 hwf
+          (show r + 7 * j ≤ r + 7 * i by omega) hEq.symm
+        omega
+
+/-- The stratified floor on the adversarial M2 artifact. -/
+theorem adversarialClosedCycle_stratum_ge_five
+    (C : AdversarialClosedCycle GameConfig.standard) {g0 : GameState}
+    (hg0 : g0 ∈ C.states) (hwf : Board.WF GameConfig.standard g0.board)
+    (hbag : g0.bag.Nonempty) {c : ℕ} (hc1 : 1 ≤ c) (hc7 : c ≤ 7) :
+    5 ≤ (C.states.filter (fun s => s.bag.card = c)).card := by
+  classical
+  obtain ⟨t, ht⟩ := BagCadence.exists_legalSequenceFrom hbag
+  have hdraw : ∀ n, t n
+      ∈ (adversarialTrace GameConfig.standard C.solver t g0 n).bag := by
+    intro n
+    have hn := ht n
+    rw [Bag.canDraw_iff_mem] at hn
+    rw [adversarialTrace_bag_from]
+    exact hn
+  have hcard := bag_card_adversarialTrace hdraw
+  have hle7 : g0.bag.card ≤ 7 := Bag.card_le_seven g0.bag
+  have hpos : 0 < g0.bag.card := Finset.card_pos.mpr ⟨_, hdraw 0⟩
+  set r := (7 - c + g0.bag.card) % 7 with hr
+  have hrc : ∀ j, (adversarialTrace GameConfig.standard C.solver t g0
+      (r + 7 * j)).bag.card = c := by
+    intro j
+    rw [hcard]
+    omega
+  refine le_trans ?_ (Finset.card_le_card_of_injOn
+    (s := Finset.range 5)
+    (fun j => adversarialTrace GameConfig.standard C.solver t g0 (r + 7 * j))
+    ?_ ?_)
+  · rw [Finset.card_range]
+  · intro j hj
+    exact Finset.mem_filter.mpr
+      ⟨C.adversarialTrace_mem_states_from_mem hg0 ht (r + 7 * j), hrc j⟩
+  · intro i hi j hj hEq
+    rw [Finset.coe_range, Set.mem_Iio] at hi hj
+    rcases Nat.lt_or_ge i j with hij | hij
+    · have hd := adversarialClosedCycle_thirtyfive_dvd C hg0 hwf ht
+        (show r + 7 * i ≤ r + 7 * j by omega) hEq
+      omega
+    · rcases Nat.eq_or_lt_of_le hij with heq | hij'
+      · omega
+      · have hd := adversarialClosedCycle_thirtyfive_dvd C hg0 hwf ht
+          (show r + 7 * j ≤ r + 7 * i by omega) hEq.symm
+        omega
+
 end ClearRate
 end Tetris

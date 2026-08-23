@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bi) — stratified floors everywhere (bank 82/N)
+
+- `closedCycle_stratum_ge_five` / `adversarialClosedCycle_stratum_ge_five`
+  — the per-stratum floor (≥ 5 states at every bag fill level) on both M2
+  artifact shapes, matching batch 81's M4 version. All three certificate
+  shapes now carry the stratified 35 = 7 × 5 decomposition.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bh) — the stratified floor (bank 81/N)
 
 - `isClosedOn_stratum_ge_five` — a closed Atlas set holds at least FIVE
