@@ -976,5 +976,50 @@ theorem adversary_period_clear_events_bounds {σ : Solver GameConfig.standard}
   have h := adversary_period_mix_fourteen hv hcyc
   exact ⟨by omega, by omega⟩
 
+/-- Every 69-window of a periodic-stream adversarial cycle clears at least
+fourteen rows — the window contains a complete aligned period. -/
+theorem adversarial_window_clears_fourteen {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    {m₀ : ℕ} (hm : n ≤ m₀) :
+    14 ≤ clearedAdv GameConfig.standard σ s GameState.init (m₀ + 69)
+      - clearedAdv GameConfig.standard σ s GameState.init m₀ := by
+  set i := (m₀ - n + 34) / 35 with hi
+  have hb1 : m₀ ≤ n + 35 * i := by omega
+  have hlaw1 := adversarial_multi_period_clears hv hper hcyc i
+  have hlaw2 := adversarial_multi_period_clears hv hper hcyc (i + 1)
+  have hmono0 := clearedAdv_mono GameConfig.standard σ s GameState.init
+    (Nat.le_add_right n (35 * i))
+  have hmono1 := clearedAdv_mono GameConfig.standard σ s GameState.init hb1
+  have hmono2 := clearedAdv_mono GameConfig.standard σ s GameState.init
+    (show n + 35 * (i + 1) ≤ m₀ + 69 by omega)
+  omega
+
+/-- **Adversarial dry spells last at most 68 placements too**: under a
+periodic stream, a returning solver clears within every 69-placement
+stretch, whoever orders the pieces. -/
+theorem adversarial_dry_spell_le {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    {m₀ L : ℕ} (hm : n ≤ m₀)
+    (hdry : clearedAdv GameConfig.standard σ s GameState.init (m₀ + L)
+      = clearedAdv GameConfig.standard σ s GameState.init m₀) :
+    L ≤ 68 := by
+  by_contra hcon
+  have h69 := adversarial_window_clears_fourteen hv hper hcyc hm
+  have hmono := clearedAdv_mono GameConfig.standard σ s GameState.init
+    (show m₀ + 69 ≤ m₀ + L by omega)
+  have hmono0 := clearedAdv_mono GameConfig.standard σ s GameState.init
+    (Nat.le_add_right m₀ 69)
+  omega
+
 end ClearRate
 end Tetris

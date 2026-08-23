@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23vv) — adversarial dry-spell mirror (bank 44/N)
+
+- `adversarial_window_clears_fourteen` / `adversarial_dry_spell_le` — the
+  69-window clearing law and the 68-placement dry-spell bound survive
+  adversarial piece choice under a periodic stream. Full parity for the
+  dry-spell theory.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23uu) — the dry-spell bound (bank 43/N)
 
 - `cycle_window_clears_fourteen` — every 69-window on a cycle clears ≥ 14
