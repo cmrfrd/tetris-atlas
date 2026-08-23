@@ -67,6 +67,7 @@ import Proofs.Safety.AdversarialRate
 import Proofs.Safety.CountingBarrier
 import Proofs.Safety.SafeIterate
 import Proofs.Safety.HorizonCompactness
+import Proofs.Safety.FiniteInvariant
 import Proofs.Safety.SafeIterateFinite
 import Proofs.Safety.Safety
 import Proofs.Safety.SolverProperties

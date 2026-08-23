@@ -13,7 +13,7 @@ new tick — it tells you where the prior tick left off.
 
 ## Current build status
 
-- `lake build` (green `Proofs`) — **PASSING** (8309 jobs); base-axiom-clean
+- `lake build` (green `Proofs`) — **PASSING** (8310 jobs); base-axiom-clean
   (`propext`, `Classical.choice`, `Quot.sound`), **no `sorry`, no `native_decide`**.
 - `lake build ProofsExperiments` (research routes) — **PASSING** (8288 jobs); may use
   `native_decide`.
@@ -41626,6 +41626,34 @@ Next: <subtask id and one-line description>
 ## Tick log
 
 *(append newest at top below this line)*
+
+---
+
+### Tick (manual, 2026-08-23f) — the Atlas may be taken finite (bank expansion 2/N)
+
+**NEW** `proofs/Proofs/Safety/FiniteInvariant.lean` (green, no warnings):
+- `solverReachable_subset_image` / **`solverReachable_finite`** — a
+  `SolvesTetrisValid` solver's reachable cone embeds in
+  `InFieldBoard × Bag` (boards WF + in-field via the existing
+  `solverReachable_wf/not_lost_of_solvesTetrisValid`), hence is finite.
+- **`solvable_iff_exists_finite_invariant`** — solvable ⟺ ∃ FINITE closed
+  invariant (`Finset GameState`). Forward: the reachable cone as
+  `hfin.toFinset`, closed under the solver's own replies; backward: coe +
+  `tetrisSolvableValid_of_invariant`.
+- **`solvable_implies_bounded_atlas`** — the a-priori size bound: if solvable,
+  an Atlas of ≤ `2^207` entries exists (`2^200` in-field boards × 128 bags,
+  `InFieldBoard.standard_fintype_card` + `Bag.fintype_card`).
+
+The witness-compression ladder is now complete in the green library:
+strategy → set invariant (HorizonCompactness) → 5-bag-boundary description
+(block coinduction) → FINITE table with explicit bound (this file).
+
+Build: PASS (green `Proofs`, 8310 jobs)
+Sorries: 0 → 0; hygiene OK; all 3 `[propext, Classical.choice, Quot.sound]`
+Gotcha: NEVER construct a term of `Finset.univ` for the `2^200`-sized Fintype
+(`Finset.mem_univ` hits maxRecDepth even at 8000); bound cards via
+`Fintype.card_le_of_injective` + `Fintype.card_coe` instead — lemma rewrites
+only, no univ terms.
 
 ---
 
