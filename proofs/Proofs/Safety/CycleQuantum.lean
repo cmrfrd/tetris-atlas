@@ -893,5 +893,44 @@ theorem orbitCycle_card (C : ClosedCycle GameConfig.standard)
         (show n + k ≤ n + i by omega) hik.symm
       omega
 
+/-- **Every closed cycle's trace returns**: the trace lives inside the finite
+state set, so within `card + 1` steps two indices collide — a return exists,
+by pigeonhole, with both indices at most the cycle's size. -/
+theorem closedCycle_exists_return (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (h0 : g0 ∈ C.states) :
+    ∃ n₁ n₂, n₁ < n₂ ∧ n₂ ≤ C.states.card ∧
+      trace GameConfig.standard C.policy g0 n₁
+        = trace GameConfig.standard C.policy g0 n₂ := by
+  classical
+  have hmaps : ∀ m ∈ Finset.range (C.states.card + 1),
+      trace GameConfig.standard C.policy g0 m ∈ C.states :=
+    fun m _ => C.trace_mem_states h0 m
+  have hcard : C.states.card < (Finset.range (C.states.card + 1)).card := by
+    rw [Finset.card_range]
+    omega
+  obtain ⟨i, hi, j, hj, hij, heq⟩ :=
+    Finset.exists_ne_map_eq_of_card_lt_of_maps_to hcard hmaps
+  rw [Finset.mem_range] at hi hj
+  rcases Nat.lt_or_ge i j with hlt | hge
+  · exact ⟨i, j, hlt, by omega, heq⟩
+  · have hlt : j < i := by omega
+    exact ⟨j, i, hlt, by omega, heq.symm⟩
+
+/-- **Every closed cycle carries a five-bag-quantised period**: there is a
+return of period `P` with `35 ∣ P`, `0 < P ≤ card`. The M2 artifact always
+contains its own quantised loop — combined with `orbitCycle`, a cycle with a
+*minimal* (35-placement) return contains the exactly-35-state certificate. -/
+theorem closedCycle_exists_period (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (h0 : g0 ∈ C.states)
+    (hwf : Board.WF GameConfig.standard g0.board) :
+    ∃ n P, 0 < P ∧ P ≤ C.states.card ∧ 35 ∣ P ∧
+      trace GameConfig.standard C.policy g0 n
+        = trace GameConfig.standard C.policy g0 (n + P) := by
+  obtain ⟨n₁, n₂, hlt, hle, heq⟩ := closedCycle_exists_return C h0
+  refine ⟨n₁, n₂ - n₁, by omega, by omega, ?_, ?_⟩
+  · exact closedCycle_thirtyfive_dvd C h0 hwf (le_of_lt hlt) heq
+  · rw [show n₁ + (n₂ - n₁) = n₂ by omega]
+    exact heq
+
 end ClearRate
 end Tetris

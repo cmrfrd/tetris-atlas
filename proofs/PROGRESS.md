@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ab) — existence of the period (bank 49/N)
+
+- `closedCycle_exists_return` — pigeonhole over `card + 1` trace indices:
+  every closed cycle's trace returns, with both indices ≤ card.
+- `closedCycle_exists_period` — the return period is a positive multiple of
+  35, at most `card`: EVERY M2 artifact carries its own quantised loop.
+  With `orbitCycle`: a cycle whose period is minimal contains the exact
+  35-state certificate.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23zz) — the minimal sub-cycle construction (bank 48/N)
 
 - `orbitCycle` — CONSTRUCTIVE: a five-bag return inside a `ClosedCycle`
