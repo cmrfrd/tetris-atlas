@@ -41629,6 +41629,31 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23j) — the two-group schedule: depth 20 (bank 6/N)
+
+`HeadroomIterate` additions:
+- `colHeight_le_of_col_row_lt` (column-local height bound),
+  `clearLines_col_row_le` (clears preserve columns, never raise cells),
+  **`applyStep_group_bound`** — a flat piece at column base c₀ leaves every
+  post-move cell either descending in its own column or new in [c₀, c₀+4)
+  strictly below H+2.
+- **`mem_safeIterate_of_two_group`** — the two-group flat schedule: even
+  per-group budgets HA, HB ≤ rows with HA+HB+2k ≤ 2·rows certify k steps by
+  always playing flat into the SHORTER group. Evenness + even rows closes the
+  parity gap (even min below even rows leaves 2 rows).
+- **`init_mem_safeIterate_twenty`** (+ `_of_le_twenty`) — **no adversarial
+  kill certificate of depth ≤ 20 exists**: forty rows of shared budget at two
+  rows per placement. The first certified rung that requires a DECISION
+  (which group is shorter), though still zero lookahead.
+
+Ladder status: 5 (any play) → 10 (flat play) → **20 (two-group schedule)**.
+Rung 21+ would need a third 2-wide group (vertical rotations, ≤3 tall, cols
+8–9: ≈ +6) or genuine clears.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23i) — flat play doubles the horizon: depth 10 (bank 5/N)
 
 `HeadroomIterate` additions:
