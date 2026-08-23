@@ -61,6 +61,7 @@ import Proofs.Safety.ShiftCertificate
 import Proofs.Safety.BandSchedule
 import Proofs.Safety.PlinthCert
 import Proofs.Safety.CycleQuantum
+import Proofs.Safety.BagCadence
 import Proofs.Safety.MaximalAtlas
 import Proofs.Safety.AdversarialRate
 import Proofs.Safety.CountingBarrier

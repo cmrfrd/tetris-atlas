@@ -147,4 +147,56 @@ theorem solvable_iff_exists_invariant :
   · rintro ⟨S, hinit, hnl, hstep⟩
     exact tetrisSolvableValid_of_invariant S hinit hnl hstep
 
+/-! ## Block coinduction: the invariant only has to re-close per block
+
+The invariant obligation in `solvable_iff_exists_invariant` demands closure
+after *every single placement*. That is stricter than necessary: by iterate
+coinduction (`le_gfp_of_le_iterate`), it suffices for the invariant to re-enter
+itself after any fixed block of `n` placements, with arbitrary certified play
+inside the block.
+
+The canonical block length is **35 placements = 5 bags**: by the cycle quantum
+(`thirtyfive_dvd_of_trace_eq`, `closedCycle_thirtyfive_dvd`) any recurrent
+structure in the state graph lives on multiples of 35, so an invariant designed
+to recur at all naturally recurs at 35. Concretely this means the carrier
+program only needs to *describe* boards at five-bag boundaries; the within-block
+states never have to satisfy the described predicate. -/
+
+/-- **Generic block coinduction.** A set that re-closes after `n` placements
+(any positive `n`), together with a bootstrap landing `init` in its `n`-step
+closure, certifies `init ∈ safe`. Generalises `init_mem_safe_of_bag_invariant`
+from `n = 7` to arbitrary block length. -/
+theorem init_mem_safe_of_block_invariant {cfg : GameConfig} {n : ℕ} (hn : 0 < n)
+    (Q : Set GameState)
+    (hblock : Q ⊆ (⇑(safeOp cfg))^[n] Q)
+    (hboot : GameState.init ∈ (⇑(safeOp cfg))^[n] Q) :
+    GameState.init ∈ safe cfg := by
+  have hQsafe : Q ⊆ safe cfg := le_gfp_of_le_iterate (safeOp cfg) hn hblock
+  have hstep : (⇑(safeOp cfg))^[n] Q ≤ safe cfg := by
+    calc (⇑(safeOp cfg))^[n] Q
+        ≤ (⇑(safeOp cfg))^[n] (safe cfg) :=
+          (Monotone.iterate (OrderHom.mono (safeOp cfg)) n) hQsafe
+      _ = safe cfg := Function.iterate_fixed (safe_eq cfg) n
+  exact hstep hboot
+
+/-- **Five-bag coinduction.** The block length aligned to the cycle quantum: an
+invariant that re-closes over 35 placements — five whole bags, the smallest
+period any recurrent structure can have — plus a five-bag bootstrap, certifies
+safety. The invariant describes boards only at five-bag boundaries. -/
+theorem init_mem_safe_of_five_bag_invariant {cfg : GameConfig}
+    (Q : Set GameState)
+    (hblock : Q ⊆ (⇑(safeOp cfg))^[35] Q)
+    (hboot : GameState.init ∈ (⇑(safeOp cfg))^[35] Q) :
+    GameState.init ∈ safe cfg :=
+  init_mem_safe_of_block_invariant (by norm_num) Q hblock hboot
+
+/-- Solvability from a five-bag invariant, at the standard configuration. -/
+theorem tetrisSolvableValid_of_five_bag_invariant
+    (Q : Set GameState)
+    (hblock : Q ⊆ (⇑(safeOp GameConfig.standard))^[35] Q)
+    (hboot : GameState.init ∈ (⇑(safeOp GameConfig.standard))^[35] Q) :
+    TetrisSolvableValid :=
+  tetrisSolvableValid_iff_init_safe.mpr
+    (init_mem_safe_of_five_bag_invariant Q hblock hboot)
+
 end Tetris

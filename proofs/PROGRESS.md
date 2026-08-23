@@ -13,7 +13,7 @@ new tick — it tells you where the prior tick left off.
 
 ## Current build status
 
-- `lake build` (green `Proofs`) — **PASSING** (8308 jobs); base-axiom-clean
+- `lake build` (green `Proofs`) — **PASSING** (8309 jobs); base-axiom-clean
   (`propext`, `Classical.choice`, `Quot.sound`), **no `sorry`, no `native_decide`**.
 - `lake build ProofsExperiments` (research routes) — **PASSING** (8288 jobs); may use
   `native_decide`.
@@ -41626,6 +41626,40 @@ Next: <subtask id and one-line description>
 ## Tick log
 
 *(append newest at top below this line)*
+
+---
+
+### Tick (manual, 2026-08-23e) — cadence, block coinduction, ILJ supply (proof-bank expansion 1/N)
+
+Three pieces, one commit:
+
+1. **NEW** `proofs/Proofs/Safety/BagCadence.lean` — **the 7-bag is 13-syndetic**:
+   - `exists_draw_within_card` — a piece in the bag is drawn within `card`
+     steps (legal draws shrink the bag one at a time until refill).
+   - `bagAt_add_card_eq_full` — the bag refills in exactly `card` steps.
+   - **`every_piece_within_thirteen`** — every piece type appears in EVERY
+     window of 13 consecutive legal draws (in-bag: ≤ 7; missing: refill ≤ 6
+     then ≤ 7 more). Tight: 12-draw gap achievable (first-in-bag then
+     last-in-next).
+   - **`exists_I_within_thirteen`** — max I-drought = 12 placements. With
+     `tetris_requires_I`: the worst case a tetris-well architecture must
+     survive is 12 consecutive non-I pieces = 48 cells housed elsewhere.
+     First *cadence* (vs count) theorem about the bag.
+2. `HorizonCompactness` additions — **block coinduction at the cycle quantum**:
+   `init_mem_safe_of_block_invariant` (generic positive block length,
+   generalizing the n=7 bag-block), **`init_mem_safe_of_five_bag_invariant`**
+   (n=35: the invariant only describes boards at FIVE-BAG boundaries — the
+   natural block since recurrence is quantized at 35), and the solvability
+   wrapper `tetrisSolvableValid_of_five_bag_invariant`.
+3. `ClearMix` addition — `iljCount` + **`sizeCount_big_le_iljCount`**:
+   triples + tetrises ≤ #{I,L,J} placements (3/7 supply); like the I-cap it
+   constrains timing, not the asymptotic mix (`3a₃+4a₄ ≤ 0.4n < 3n/7·3`).
+
+Build: PASS (green `Proofs`, 8309 jobs; all three no warnings)
+Sorries: 0 → 0; `check-green-clean.sh` OK
+Axioms: all 8 new `[propext, Classical.choice, Quot.sound]`
+Gotcha: `bagAt (n+1)` unfolds by `change (bagAt ...).draw (s n) = _` (not
+`show` — linter) + `unfold Bag.draw` + `if_pos/if_neg`.
 
 ---
 

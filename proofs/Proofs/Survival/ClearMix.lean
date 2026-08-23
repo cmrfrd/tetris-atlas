@@ -341,5 +341,54 @@ theorem three_clear_requires_I_L_or_J_trace {cfg : GameConfig} {π : Policy cfg}
       ∨ (π (trace cfg π GameState.init n)).piece = Piece.J :=
   three_clear_requires_I_L_or_J (hv _) (trace_board_no_full n) h3
 
+/-! ## Big clears are capped by the I/L/J supply -/
+
+/-- Number of the first `n` drops that played an I, L or J. -/
+def iljCount (cfg : GameConfig) (π : Policy cfg) (g0 : GameState) : ℕ → ℕ
+  | 0 => 0
+  | n + 1 =>
+      iljCount cfg π g0 n
+        + (if (π (trace cfg π g0 n)).piece = Piece.I
+              ∨ (π (trace cfg π g0 n)).piece = Piece.L
+              ∨ (π (trace cfg π g0 n)).piece = Piece.J then 1 else 0)
+
+@[simp] theorem iljCount_zero (cfg : GameConfig) (π : Policy cfg) (g0 : GameState) :
+    iljCount cfg π g0 0 = 0 := rfl
+
+theorem iljCount_succ (cfg : GameConfig) (π : Policy cfg) (g0 : GameState) (n : ℕ) :
+    iljCount cfg π g0 (n + 1)
+      = iljCount cfg π g0 n
+        + (if (π (trace cfg π g0 n)).piece = Piece.I
+              ∨ (π (trace cfg π g0 n)).piece = Piece.L
+              ∨ (π (trace cfg π g0 n)).piece = Piece.J then 1 else 0) := rfl
+
+/-- **Triples and tetrises are capped by the I/L/J supply.** Only I, L and J can
+clear three or more rows (`three_clear_requires_I_L_or_J`), so
+`a₃ + a₄ ≤ #{I,L,J} placements` — three sevenths of the pieces. Like the
+tetris/I cap this constrains *timing* rather than the asymptotic mix: the rate
+law caps `3a₃ + 4a₄` at `0.4n` already, well below the `3n/7` supply. -/
+theorem sizeCount_big_le_iljCount {cfg : GameConfig} {π : Policy cfg}
+    (hv : ∀ g, (π g).Valid cfg) (n : ℕ) :
+    sizeCount cfg π GameState.init 3 n + sizeCount cfg π GameState.init 4 n
+      ≤ iljCount cfg π GameState.init n := by
+  induction n with
+  | zero => simp
+  | succ k ih =>
+    rw [sizeCount_succ, sizeCount_succ, iljCount_succ]
+    by_cases h3 : (Board.fullRows cfg
+        ((π (trace cfg π GameState.init k)).place
+          (trace cfg π GameState.init k).board)).card = 3
+    · have hilj := three_clear_requires_I_L_or_J_trace hv (n := k) (by omega)
+      rw [if_pos h3, if_neg (by omega), if_pos hilj]
+      omega
+    · by_cases h4 : (Board.fullRows cfg
+          ((π (trace cfg π GameState.init k)).place
+            (trace cfg π GameState.init k).board)).card = 4
+      · have hilj := three_clear_requires_I_L_or_J_trace hv (n := k) (by omega)
+        rw [if_neg h3, if_pos h4, if_pos hilj]
+        omega
+      · rw [if_neg h3, if_neg h4]
+        split <;> omega
+
 end ClearRate
 end Tetris
