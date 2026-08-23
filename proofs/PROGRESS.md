@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ak) — the sharp dry-spell bound (bank 58/N)
+
+- `cycle_window_clears_exact` — every 35-window of a cycle clears EXACTLY
+  fourteen rows, from any starting point (every point anchors the exact
+  ledger balance).
+- `cycle_dry_spell_le_thirtyfour` — dry spells last ≤ 34 placements: a
+  clear-free stretch never reaches one full period. HALVES batch 43's 68.
+- `adversarial_window_clears_exact` / `adversarial_dry_spell_le_thirtyfour`
+  — the same, whoever picks the pieces (periodic stream).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23aj) — adversarial anchors (bank 57/N)
 
 - `adversarialTrace_tail_periodic` + `adversarial_clears_bracket_stationary`

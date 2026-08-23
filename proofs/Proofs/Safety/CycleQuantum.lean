@@ -1134,5 +1134,36 @@ theorem cycle_mass_diameter_sharp {π : Policy GameConfig.standard}
         ≤ (trace GameConfig.standard π GameState.init m₂).board.count + 140 :=
   cycle_mass_band hv (trace_tail_periodic hcyc h1) h12
 
+/-- **Every 35-window of a cycle clears exactly fourteen rows** — from any
+starting point, not just the entry boundary: every point is an anchor and
+the ledger balances exactly on each return. -/
+theorem cycle_window_clears_exact {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) :
+    cleared GameConfig.standard π GameState.init (m₀ + 35)
+      - cleared GameConfig.standard π GameState.init m₀ = 14 :=
+  trace_eq_thirtyfive_clears_fourteen hv (trace_tail_periodic hcyc hm)
+
+/-- **Dry spells on a cycle last at most 34 placements** — the sharp form:
+any 35 consecutive placements clear (exactly fourteen rows), so a clear-free
+stretch never reaches one full period. Halves the pre-anchor 68 bound. -/
+theorem cycle_dry_spell_le_thirtyfour {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ L : ℕ}
+    (hm : n ≤ m₀)
+    (hdry : cleared GameConfig.standard π GameState.init (m₀ + L)
+      = cleared GameConfig.standard π GameState.init m₀) :
+    L ≤ 34 := by
+  by_contra hcon
+  have hex := cycle_window_clears_exact hv hcyc hm
+  have hmono := cleared_mono GameConfig.standard π GameState.init
+    (show m₀ + 35 ≤ m₀ + L by omega)
+  have hmono0 := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right m₀ 35)
+  omega
+
 end ClearRate
 end Tetris

@@ -1125,5 +1125,41 @@ theorem adversarial_mass_diameter_sharp {σ : Solver GameConfig.standard}
   adversarial_mass_band hv hper
     (adversarialTrace_tail_periodic hper hcyc h1) h12
 
+/-- Every 35-window of a periodic-stream adversarial cycle clears exactly
+fourteen rows, from any starting point. -/
+theorem adversarial_window_clears_exact {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    {m₀ : ℕ} (hm : n ≤ m₀) :
+    clearedAdv GameConfig.standard σ s GameState.init (m₀ + 35)
+      - clearedAdv GameConfig.standard σ s GameState.init m₀ = 14 := by
+  have h := adversarial_multi_period_clears hv hper
+    (adversarialTrace_tail_periodic hper hcyc hm) 1
+  simpa using h
+
+/-- Adversarial dry spells last at most 34 placements — the sharp form. -/
+theorem adversarial_dry_spell_le_thirtyfour {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    {m₀ L : ℕ} (hm : n ≤ m₀)
+    (hdry : clearedAdv GameConfig.standard σ s GameState.init (m₀ + L)
+      = clearedAdv GameConfig.standard σ s GameState.init m₀) :
+    L ≤ 34 := by
+  by_contra hcon
+  have hex := adversarial_window_clears_exact hv hper hcyc hm
+  have hmono := clearedAdv_mono GameConfig.standard σ s GameState.init
+    (show m₀ + 35 ≤ m₀ + L by omega)
+  have hmono0 := clearedAdv_mono GameConfig.standard σ s GameState.init
+    (Nat.le_add_right m₀ 35)
+  omega
+
 end ClearRate
 end Tetris
