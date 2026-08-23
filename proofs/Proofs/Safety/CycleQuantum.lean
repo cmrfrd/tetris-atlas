@@ -1544,5 +1544,63 @@ theorem trace_three_tetrises_span {π : Policy GameConfig.standard}
     (trace_tetris_step_I (by omega) h4j)
     (trace_tetris_step_I (by omega) h4k) hij hjk
 
+/-- Two perfect clears sit a multiple of five placements apart — the mass
+clock reads zero at both. -/
+theorem perfect_clear_spacing {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n₁ n₂ : ℕ} (h12 : n₁ ≤ n₂)
+    (h1 : (trace GameConfig.standard π GameState.init n₁).board.count = 0)
+    (h2 : (trace GameConfig.standard π GameState.init n₂).board.count = 0) :
+    5 ∣ (n₂ - n₁) :=
+  (five_dvd_of_count_eq hv h12 (by rw [h1, h2])).1
+
+/-- **Aligned perfect clears close the loop**: empty boards with equal bags
+are the *same state* — a policy that perfect-clears twice at the same bag
+phase has returned. -/
+theorem perfect_clear_pair_return {π : Policy GameConfig.standard} {n₁ n₂ : ℕ}
+    (h1 : (trace GameConfig.standard π GameState.init n₁).board.count = 0)
+    (h2 : (trace GameConfig.standard π GameState.init n₂).board.count = 0)
+    (hbag : (trace GameConfig.standard π GameState.init n₁).bag
+        = (trace GameConfig.standard π GameState.init n₂).bag) :
+    trace GameConfig.standard π GameState.init n₁
+      = trace GameConfig.standard π GameState.init n₂ := by
+  have hb : (trace GameConfig.standard π GameState.init n₁).board
+      = (trace GameConfig.standard π GameState.init n₂).board := by
+    rw [(Board.count_eq_zero_iff_eq_empty _).mp h1,
+      (Board.count_eq_zero_iff_eq_empty _).mp h2]
+  calc trace GameConfig.standard π GameState.init n₁
+      = ⟨(trace GameConfig.standard π GameState.init n₁).board,
+        (trace GameConfig.standard π GameState.init n₁).bag⟩ := rfl
+    _ = ⟨(trace GameConfig.standard π GameState.init n₂).board,
+        (trace GameConfig.standard π GameState.init n₂).bag⟩ := by
+        rw [hb, hbag]
+    _ = trace GameConfig.standard π GameState.init n₂ := rfl
+
+/-- **Two aligned perfect clears prove infinite play**: if the policy stays
+live between them, it stays live forever — the segment loops. A concrete,
+checkable route to an M2 certificate: exhibit one live perfect-clear-to-
+perfect-clear segment at matching bag phase. -/
+theorem survives_forever_of_perfect_clear_pair {π : Policy GameConfig.standard}
+    {n₁ n₂ : ℕ} (hlt : n₁ < n₂)
+    (h1 : (trace GameConfig.standard π GameState.init n₁).board.count = 0)
+    (h2 : (trace GameConfig.standard π GameState.init n₂).board.count = 0)
+    (hbag : (trace GameConfig.standard π GameState.init n₁).bag
+        = (trace GameConfig.standard π GameState.init n₂).bag)
+    (hlive : ∀ k, k < n₂ - n₁ →
+      ¬ (trace GameConfig.standard π GameState.init (n₁ + k)).lost
+        GameConfig.standard) :
+    ∀ m, n₁ ≤ m →
+      ¬ (trace GameConfig.standard π GameState.init m).lost
+        GameConfig.standard := by
+  intro m hm
+  have hret : trace GameConfig.standard π GameState.init n₁
+      = trace GameConfig.standard π GameState.init (n₁ + (n₂ - n₁)) := by
+    rw [show n₁ + (n₂ - n₁) = n₂ by omega]
+    exact perfect_clear_pair_return h1 h2 hbag
+  have hmem := cycle_orbit_subset_period (show 0 < n₂ - n₁ by omega) hret hm
+  rw [Finset.mem_image] at hmem
+  obtain ⟨k, hk, heq⟩ := hmem
+  rw [← heq]
+  exact hlive k (Finset.mem_range.mp hk)
+
 end ClearRate
 end Tetris

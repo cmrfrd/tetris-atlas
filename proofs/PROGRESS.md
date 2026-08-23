@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ay) — the perfect-clear route (bank 72/N)
+
+- `perfect_clear_spacing` — perfect clears sit multiples of 5 apart.
+- `perfect_clear_pair_return` — empty boards with equal bags ARE the same
+  state (structure eta): a second aligned PC closes the loop.
+- **`survives_forever_of_perfect_clear_pair`** — a live PC-to-PC segment at
+  matching bag phase proves infinite play from the first PC on. A concrete,
+  CHECKABLE route to an M2 certificate: exhibit one such segment.
+- Connects to project_phase_atlas (~64% PC rate observed empirically): a
+  single verified PC loop suffices.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ax) — per-step conservation (bank 71/N)
 
 - `count_step_eq` — the exact per-step law: `count(m+1) + 10·size(m) =
