@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ba) — survival from finite evidence (bank 74/N)
+
+- `survivesForever_of_perfect_clear_pair` — liveness on the finite prefix
+  `[0, n₂)` plus two aligned perfect clears proves `SurvivesForever`
+  OUTRIGHT: every hypothesis is checkable by running the policy for `n₂`
+  steps. The cooperative infinite-play certificate reduced to finite data.
+- The PC route is complete: spacing → return → forever-liveness →
+  ClosedCycle constructor → SurvivesForever from a finite run.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23az) — the perfect-clear cycle constructor (bank 73/N)
 
 - `perfectClearCycle` — the M2 artifact CONSTRUCTED: a live PC-to-PC

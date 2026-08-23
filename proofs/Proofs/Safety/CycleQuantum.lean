@@ -1690,5 +1690,25 @@ theorem perfectClearCycle_card_ge {π : Policy GameConfig.standard}
     (mem_perfectClearCycle hv hdraw hlt h1 h2 hbag hlive)
     (trace_board_wf hv (GameState.init_board_wf GameConfig.standard) n₁)
 
+/-- **Survival from finitely much evidence**: liveness on the finite prefix
+`[0, n₂)` plus two aligned perfect clears proves `SurvivesForever` outright —
+every hypothesis of this theorem is checkable by running the policy for `n₂`
+steps. The cooperative infinite-play certificate reduced to finite data. -/
+theorem survivesForever_of_perfect_clear_pair {π : Policy GameConfig.standard}
+    {n₁ n₂ : ℕ} (hlt : n₁ < n₂)
+    (h1 : (trace GameConfig.standard π GameState.init n₁).board.count = 0)
+    (h2 : (trace GameConfig.standard π GameState.init n₂).board.count = 0)
+    (hbag : (trace GameConfig.standard π GameState.init n₁).bag
+        = (trace GameConfig.standard π GameState.init n₂).bag)
+    (hlive : ∀ k, k < n₂ →
+      ¬ (trace GameConfig.standard π GameState.init k).lost
+        GameConfig.standard) :
+    SurvivesForever GameConfig.standard π GameState.init := by
+  intro m
+  rcases Nat.lt_or_ge m n₁ with hm | hm
+  · exact hlive m (by omega)
+  · exact survives_forever_of_perfect_clear_pair hlt h1 h2 hbag
+      (fun k hk => hlive (n₁ + k) (by omega)) m hm
+
 end ClearRate
 end Tetris
