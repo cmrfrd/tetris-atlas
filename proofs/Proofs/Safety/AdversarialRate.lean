@@ -212,5 +212,132 @@ theorem adversary_first_clear_by_fiftyone {σ : Solver GameConfig.standard}
   rw [GameConfig.standard_cols, GameConfig.standard_rows] at hcap
   omega
 
+/-! ## Standing inventory, adversarially
+
+The occupancy statistics of `Survival/StandingInventory` are properties of the
+dynamics, not of the cooperative setting: they transfer verbatim to
+adversarial traces. An immortal solver carries at least `2.4` cells of
+time-averaged inventory *against every piece order*, banks at least six cells
+before every clearing moment, and leaves its board empty at most a fifth of
+the time. -/
+
+/-- Cumulative occupancy over the first `n` checkpoints of an adversarial
+trace. -/
+def sumCountAdv (σ : Solver GameConfig.standard) (s : ℕ → Piece) : ℕ → ℕ
+  | 0 => 0
+  | n + 1 =>
+      sumCountAdv σ s n
+        + (adversarialTrace GameConfig.standard σ s GameState.init n).board.count
+
+@[simp] theorem sumCountAdv_zero (σ : Solver GameConfig.standard)
+    (s : ℕ → Piece) : sumCountAdv σ s 0 = 0 := rfl
+
+theorem sumCountAdv_succ (σ : Solver GameConfig.standard) (s : ℕ → Piece)
+    (n : ℕ) :
+    sumCountAdv σ s (n + 1)
+      = sumCountAdv σ s n
+        + (adversarialTrace GameConfig.standard σ s GameState.init n).board.count :=
+  rfl
+
+/-- Number of the first `n` adversarial moves that cleared at least one row. -/
+def clearingStepsAdv (σ : Solver GameConfig.standard) (s : ℕ → Piece) : ℕ → ℕ
+  | 0 => 0
+  | n + 1 =>
+      clearingStepsAdv σ s n
+        + (if 0 < (Board.fullRows GameConfig.standard
+              (({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+                  with piece := s n } : Placement).place
+                (adversarialTrace GameConfig.standard σ s GameState.init n).board)).card
+           then 1 else 0)
+
+@[simp] theorem clearingStepsAdv_zero (σ : Solver GameConfig.standard)
+    (s : ℕ → Piece) : clearingStepsAdv σ s 0 = 0 := rfl
+
+theorem clearingStepsAdv_succ (σ : Solver GameConfig.standard) (s : ℕ → Piece)
+    (n : ℕ) :
+    clearingStepsAdv σ s (n + 1)
+      = clearingStepsAdv σ s n
+        + (if 0 < (Board.fullRows GameConfig.standard
+              (({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+                  with piece := s n } : Placement).place
+                (adversarialTrace GameConfig.standard σ s GameState.init n).board)).card
+           then 1 else 0) := rfl
+
+/-- Adversarial per-step clear bound: a drop clearing `k` rows needs `10k`
+cells present after it, of which the piece supplies four. -/
+theorem clearAdv_step_le {σ : Solver GameConfig.standard} {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+      with piece := s n } : Placement).Valid GameConfig.standard) (n : ℕ) :
+    10 * (clearedAdv GameConfig.standard σ s GameState.init (n + 1)
+          - clearedAdv GameConfig.standard σ s GameState.init n)
+      ≤ (adversarialTrace GameConfig.standard σ s GameState.init n).board.count + 4 := by
+  have hwf := adversarialTrace_board_wf
+    (GameState.init_board_wf GameConfig.standard) hv n
+  have h := BagGrowth.count_clearLines_add_cols
+    (Placement.place_wf hwf (hv n))
+  rw [Placement.count_place, GameConfig.standard_cols] at h
+  rw [clearedAdv_succ]
+  omega
+
+/-- Adversarial banked-mass ledger: clears are financed by standing inventory,
+up to four cells of same-drop credit per clearing moment. -/
+theorem ten_clearedAdv_le_sumCountAdv {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+      with piece := s n } : Placement).Valid GameConfig.standard) (n : ℕ) :
+    10 * clearedAdv GameConfig.standard σ s GameState.init n
+      ≤ sumCountAdv σ s n + 4 * clearingStepsAdv σ s n := by
+  induction n with
+  | zero => simp
+  | succ k ih =>
+    have hstep := clearAdv_step_le hv k
+    rw [clearedAdv_succ] at hstep
+    rw [clearedAdv_succ, clearingStepsAdv_succ, sumCountAdv_succ]
+    split_ifs with hc
+    · omega
+    · omega
+
+/-- Adversarial clearing-frequency ceiling: at most two placements in five can
+clear, whoever picks the pieces. -/
+theorem clearingStepsAdv_le_clearedAdv (σ : Solver GameConfig.standard)
+    (s : ℕ → Piece) (n : ℕ) :
+    clearingStepsAdv σ s n
+      ≤ clearedAdv GameConfig.standard σ s GameState.init n := by
+  induction n with
+  | zero => simp
+  | succ k ih =>
+    rw [clearingStepsAdv_succ, clearedAdv_succ]
+    split_ifs with hc
+    · omega
+    · omega
+
+theorem clearingStepsAdv_le {σ : Solver GameConfig.standard} {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+      with piece := s n } : Placement).Valid GameConfig.standard) (n : ℕ) :
+    10 * clearingStepsAdv σ s n ≤ 4 * n := by
+  have h1 := clearingStepsAdv_le_clearedAdv σ s n
+  have h2 := adversary_cleared_le hv n
+  omega
+
+/-- **The standing-inventory floor, adversarially.** Against every legal piece
+order, a live trace's time-averaged occupancy is at least `2.4 − 200/n` cells:
+the adversary can neither starve the solver's inventory nor excuse it. -/
+theorem adversary_standing_inventory_floor {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+      with piece := s n } : Placement).Valid GameConfig.standard) {n : ℕ}
+    (hlive : ¬ (adversarialTrace GameConfig.standard σ s GameState.init n).lost
+      GameConfig.standard) :
+    12 * n ≤ 5 * sumCountAdv σ s n + 1000 := by
+  have h1 := ten_clearedAdv_le_sumCountAdv hv n
+  have h3 := clearingStepsAdv_le hv n
+  have hled := clearedAdv_ledger (GameState.init_board_wf GameConfig.standard) hv n
+  rw [GameConfig.standard_cols, GameState.init_board_count] at hled
+  have hcap := BagGrowth.count_le_capacity
+    (adversarialTrace_board_wf (GameState.init_board_wf GameConfig.standard) hv n)
+    ((GameState.not_lost_iff_forall_row_lt GameConfig.standard _).mp hlive)
+  rw [GameConfig.standard_cols, GameConfig.standard_rows] at hcap
+  omega
+
 end ClearRate
 end Tetris

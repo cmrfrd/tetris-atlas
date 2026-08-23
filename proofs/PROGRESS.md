@@ -41629,6 +41629,28 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23o) — adversarial standing inventory (bank 11/N)
+
+`AdversarialRate` additions — the occupancy statistics transferred to
+adversarial traces:
+- `sumCountAdv` / `clearingStepsAdv` — cumulative occupancy and clearing-step
+  counters along an adversarial trace.
+- `clearAdv_step_le` — per-step clear financing (10k ≤ count + 4),
+  adversarially.
+- `ten_clearedAdv_le_sumCountAdv` — the banked-mass ledger.
+- `clearingStepsAdv_le_clearedAdv`, `clearingStepsAdv_le` — clearing frequency
+  ≤ 0.4 per placement.
+- **`adversary_standing_inventory_floor`** — `12n ≤ 5·sumCountAdv + 1000`:
+  time-averaged inventory ≥ 2.4 − 200/n cells AGAINST EVERY PIECE ORDER. The
+  adversary can neither starve the solver's inventory nor excuse it.
+
+Gotcha: an `induction n` with an n-dependent hypothesis in context produces
+unusable IHs — hoist the inner claim to a standalone lemma.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23n) — API round-out across five files (bank 10/N)
 
 Six theorems in one batch:
