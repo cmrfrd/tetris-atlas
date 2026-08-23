@@ -1793,5 +1793,92 @@ theorem adversary_tetris_frequency_cap {σ : Solver GameConfig.standard}
   have hwin := BagCadence.window_frequency_law hl n Piece.I (m - n)
   omega
 
+/-- The adversarial live-window capacity bound on occupancy. -/
+theorem adversarialTrace_count_lt {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard) {n : ℕ}
+    (hlive : ¬ (adversarialTrace GameConfig.standard σ s GameState.init n).lost
+      GameConfig.standard) :
+    (adversarialTrace GameConfig.standard σ s GameState.init n).board.count
+      < 201 := by
+  have h := BagGrowth.count_le_capacity
+    (adversarialTrace_board_wf (GameState.init_board_wf GameConfig.standard)
+      hv n)
+    ((GameState.not_lost_iff_forall_row_lt GameConfig.standard _).mp hlive)
+  rw [GameConfig.standard_cols, GameConfig.standard_rows] at h
+  omega
+
+/-- **The adversarial survivor's clearing bracket, windowed**: on any window
+of a live adversarial trace, `4w − 200 ≤ 10·ΔclearedAdv ≤ 4w + 200` —
+the 2.8-per-bag law with one-boardful slack, whoever picks the pieces. -/
+theorem adversary_survivor_window_clears {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {n w : ℕ}
+    (hlive_n : ¬ (adversarialTrace GameConfig.standard σ s GameState.init
+      n).lost GameConfig.standard)
+    (hlive_m : ¬ (adversarialTrace GameConfig.standard σ s GameState.init
+      (n + w)).lost GameConfig.standard) :
+    4 * w ≤ 10 * (clearedAdv GameConfig.standard σ s GameState.init (n + w)
+        - clearedAdv GameConfig.standard σ s GameState.init n) + 200
+      ∧ 10 * (clearedAdv GameConfig.standard σ s GameState.init (n + w)
+        - clearedAdv GameConfig.standard σ s GameState.init n)
+        ≤ 4 * w + 200 := by
+  have h1 := clearedAdv_ledger (GameState.init_board_wf GameConfig.standard)
+    hv n
+  have h2 := clearedAdv_ledger (GameState.init_board_wf GameConfig.standard)
+    hv (n + w)
+  rw [GameConfig.standard_cols, GameState.init_board_count] at h1 h2
+  have hcap1 := adversarialTrace_count_lt hv hlive_n
+  have hcap2 := adversarialTrace_count_lt hv hlive_m
+  have hmono := clearedAdv_mono GameConfig.standard σ s GameState.init
+    (Nat.le_add_right n w)
+  exact ⟨by omega, by omega⟩
+
+/-- The adversarial event-rate bracket: clearing events on a live window
+number between `(4w − 200)/40` and `(4w + 200)/10`. -/
+theorem adversary_survivor_window_events {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {n w : ℕ}
+    (hlive_n : ¬ (adversarialTrace GameConfig.standard σ s GameState.init
+      n).lost GameConfig.standard)
+    (hlive_m : ¬ (adversarialTrace GameConfig.standard σ s GameState.init
+      (n + w)).lost GameConfig.standard) :
+    4 * w ≤ 40 * ((sizeCountAdv GameConfig.standard σ s 1 (n + w)
+          - sizeCountAdv GameConfig.standard σ s 1 n)
+        + (sizeCountAdv GameConfig.standard σ s 2 (n + w)
+          - sizeCountAdv GameConfig.standard σ s 2 n)
+        + (sizeCountAdv GameConfig.standard σ s 3 (n + w)
+          - sizeCountAdv GameConfig.standard σ s 3 n)
+        + (sizeCountAdv GameConfig.standard σ s 4 (n + w)
+          - sizeCountAdv GameConfig.standard σ s 4 n)) + 200
+      ∧ 10 * ((sizeCountAdv GameConfig.standard σ s 1 (n + w)
+          - sizeCountAdv GameConfig.standard σ s 1 n)
+        + (sizeCountAdv GameConfig.standard σ s 2 (n + w)
+          - sizeCountAdv GameConfig.standard σ s 2 n)
+        + (sizeCountAdv GameConfig.standard σ s 3 (n + w)
+          - sizeCountAdv GameConfig.standard σ s 3 n)
+        + (sizeCountAdv GameConfig.standard σ s 4 (n + w)
+          - sizeCountAdv GameConfig.standard σ s 4 n))
+        ≤ 4 * w + 200 := by
+  obtain ⟨hfl, hce⟩ := adversary_survivor_window_clears hv hlive_n hlive_m
+  have hm1 := mix_identity_adv (cfg := GameConfig.standard) (σ := σ)
+    (s := s) n
+  have hm2 := mix_identity_adv (cfg := GameConfig.standard) (σ := σ)
+    (s := s) (n + w)
+  have hs1 := sizeCountAdv_mono GameConfig.standard σ s 1
+    (Nat.le_add_right n w)
+  have hs2 := sizeCountAdv_mono GameConfig.standard σ s 2
+    (Nat.le_add_right n w)
+  have hs3 := sizeCountAdv_mono GameConfig.standard σ s 3
+    (Nat.le_add_right n w)
+  have hs4 := sizeCountAdv_mono GameConfig.standard σ s 4
+    (Nat.le_add_right n w)
+  exact ⟨by omega, by omega⟩
+
 end ClearRate
 end Tetris

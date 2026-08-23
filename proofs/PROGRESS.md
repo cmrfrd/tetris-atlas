@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bt) — adversarial survivor brackets (bank 93/N)
+
+- `adversarialTrace_count_lt` — the live-capacity bound on adversarial
+  boards (< 201 cells).
+- `adversary_survivor_window_clears` — `4w − 200 ≤ 10·ΔclearedAdv ≤
+  4w + 200` on live windows, whoever picks the pieces.
+- `adversary_survivor_window_events` — the event-rate bracket
+  `[(4w−200)/40, (4w+200)/10]` adversarially. Survivor-bracket parity done.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bs) — the event-rate bracket closes (bank 92/N)
 
 - `survivor_window_clears_ceiling` — `10·Δcleared ≤ 4w + 200` on windows
