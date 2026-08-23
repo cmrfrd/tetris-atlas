@@ -609,8 +609,11 @@ theorem mem_safeIterate_of_three_group {cfg : GameConfig} (hcols : 10 ≤ cfg.co
 
 /-- **No adversarial kill certificate of depth twenty-five exists.** Quotas
 `10 + 10 + 5` across the three column groups exhaust sixty rows of budget at
-`2 + 2 + 4` rows per placement. The static-quota ceiling of clear-free play on
-a ten-wide board: pushing further requires actually clearing rows. -/
+`2 + 2 + 4` rows per placement. This is the ceiling of the disjoint-group
+schedule family (all ten columns in use, worst-case per-piece charge); the
+absolute clear-free ceiling is 50 by mass (`clear_free_le_fifty` in
+`ClearRecurrence`), so rungs 26–50 need tighter packing and rungs 51+ provably
+need clears. -/
 theorem init_mem_safeIterate_twentyfive :
     GameState.init ∈ safeIterate GameConfig.standard 25 := by
   refine mem_safeIterate_of_three_group (by norm_num) 25 10 10 5 0 0 0

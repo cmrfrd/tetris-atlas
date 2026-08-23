@@ -797,5 +797,35 @@ theorem exists_count_eq_le_of_step_five {π : Policy GameConfig.standard}
   · exact ⟨x, y, h, by have := Finset.mem_range.mp hy; omega, heq⟩
   · exact ⟨y, x, h, by have := Finset.mem_range.mp hx; omega, heq.symm⟩
 
+/-! ## The clear-free horizon is fifty placements -/
+
+/-- **Clear-free survival ends by placement fifty.** With no rows cleared the
+delivered mass sits on the board in full, and the board holds 200 cells: a
+live clear-free trace has `4n ≤ 200`. Any safety certificate of depth 51 or
+more must therefore include line clears — the exact point where the
+headroom/packing schedule family (`HeadroomIterate`) provably cannot reach. -/
+theorem clear_free_le_fifty {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init n).lost
+      GameConfig.standard)
+    (hnc : cleared GameConfig.standard π GameState.init n = 0) :
+    n ≤ 50 := by
+  have h := init_ledger hv n
+  rw [GameConfig.standard_cols, hnc] at h
+  have hcap := count_lt_two_hundred_one hv hlive
+  omega
+
+/-- **The first clear arrives by placement fifty-one.** Any surviving policy
+has cleared at least one row within its first 51 placements. -/
+theorem first_clear_by_fiftyone {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ} (hn : 51 ≤ n)
+    (hlive : ¬ (trace GameConfig.standard π GameState.init n).lost
+      GameConfig.standard) :
+    0 < cleared GameConfig.standard π GameState.init n := by
+  by_contra hc
+  have hz : cleared GameConfig.standard π GameState.init n = 0 := by omega
+  have := clear_free_le_fifty hv hlive hz
+  omega
+
 end ClearRate
 end Tetris

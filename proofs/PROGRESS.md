@@ -41629,6 +41629,26 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23m) — the clear-free horizon is 50 (bank 9/N) + honesty fix
+
+Correction: the depth-25 docstring/commit overclaimed "past 25 requires
+clears" — 25 is the DISJOINT-GROUP schedule ceiling; mass permits clear-free
+play up to 50. Fixed the docstring and proved the true bounds:
+- **`clear_free_le_fifty`** (ClearRecurrence) — a live clear-free trace has
+  `4n ≤ 200` ⇒ n ≤ 50. Rungs 26–50 need tighter packing (not clears);
+  **rungs 51+ provably need clears.**
+- `first_clear_by_fiftyone` — any surviving policy has cleared ≥ 1 row within
+  its first 51 placements.
+- `adversary_first_clear_by_fiftyone` (AdversarialRate) — same along every
+  adversarial trace.
+
+Ladder status annotated: 5 / 10 / 20 / 25 certified; 26–50 open to packing
+schedules; 51+ = the first genuinely clearing certificates.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23l) — the third group: depth 25 (bank 8/N)
 
 `HeadroomIterate` additions:

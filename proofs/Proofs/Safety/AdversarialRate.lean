@@ -192,5 +192,25 @@ theorem adversary_forces_rate {σ : Solver GameConfig.standard} {s : ℕ → Pie
     exact le_advBagRate hv hm (hsurv (7 * m))
   · exact Eventually.of_forall fun m => advBagRate_le hv m
 
+/-- **Adversarially too, the first clear arrives by placement fifty-one.**
+Along any adversarial trace that is still alive at `n ≥ 51`, at least one row
+has been cleared: with zero clears the delivered mass `4n > 200` cannot fit a
+live board. Certificates past depth 50 must clear, whoever picks the pieces. -/
+theorem adversary_first_clear_by_fiftyone {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+      with piece := s n } : Placement).Valid GameConfig.standard)
+    {n : ℕ} (hn : 51 ≤ n)
+    (hlive : ¬ (adversarialTrace GameConfig.standard σ s GameState.init n).lost
+      GameConfig.standard) :
+    0 < clearedAdv GameConfig.standard σ s GameState.init n := by
+  have h := clearedAdv_ledger (GameState.init_board_wf GameConfig.standard) hv n
+  rw [GameConfig.standard_cols, GameState.init_board_count] at h
+  have hcap := BagGrowth.count_le_capacity
+    (adversarialTrace_board_wf (GameState.init_board_wf GameConfig.standard) hv n)
+    ((GameState.not_lost_iff_forall_row_lt GameConfig.standard _).mp hlive)
+  rw [GameConfig.standard_cols, GameConfig.standard_rows] at hcap
+  omega
+
 end ClearRate
 end Tetris
