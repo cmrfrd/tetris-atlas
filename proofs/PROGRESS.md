@@ -41629,6 +41629,23 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ee) — tetris caps on periods, both settings (bank 27/N)
+
+- `adversary_window_tetris_le_six` — ≤ 6 four-row clears per 35 adversarial
+  placements (init-seeded).
+- `adversarialTrace_board_no_full_of_pos` — from any seed, adversarial
+  successor boards carry no full row.
+- **`adversarialClosedCycle_period_tetris_le_five`** /
+  **`closedCycle_period_tetris_le_five`** — at most FIVE tetrises per cycle
+  period (windows past the seed), matching the period's exactly-five I's.
+
+The tetris budget is bracketed at every scale in both settings: ≤2/7-window,
+≤6/35-window, ≤5/period (= the I supply), ≤ I-count cumulatively.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23dd) — windowed tetris caps on traces (bank 26/N)
 
 - `trace_board_no_full_of_pos` — from ANY seed, trace boards after step one

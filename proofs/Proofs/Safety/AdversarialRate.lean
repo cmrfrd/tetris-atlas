@@ -650,5 +650,90 @@ theorem adversary_period_mix_fourteen {σ : Solver GameConfig.standard}
   have hm4 := sizeCountAdv_mono GameConfig.standard σ s 4 (Nat.le_add_right n 35)
   omega
 
+/-- **At most six tetrises per 35 adversarial placements**: four-row clears
+require an I and any 35-window deals at most six I's. -/
+theorem adversary_window_tetris_le_six {cfg : GameConfig} {σ : Solver cfg}
+    {s : ℕ → Piece} (hl : LegalSequence s) (a : ℕ) :
+    ((Finset.range 35).filter (fun k => 4 ≤ (Board.fullRows cfg
+        (({ σ (adversarialTrace cfg σ s GameState.init (a + k)) (s (a + k))
+            with piece := s (a + k) } : Placement).place
+          (adversarialTrace cfg σ s GameState.init (a + k)).board)).card)).card
+      ≤ 6 := by
+  have hsub : (Finset.range 35).filter (fun k => 4 ≤ (Board.fullRows cfg
+        (({ σ (adversarialTrace cfg σ s GameState.init (a + k)) (s (a + k))
+            with piece := s (a + k) } : Placement).place
+          (adversarialTrace cfg σ s GameState.init (a + k)).board)).card)
+      ⊆ (Finset.range 35).filter (fun k => s (a + k) = Piece.I) := by
+    intro k hk
+    obtain ⟨h1, h2⟩ := Finset.mem_filter.mp hk
+    exact Finset.mem_filter.mpr ⟨h1, adversary_tetris_step_I h2⟩
+  exact le_trans (Finset.card_le_card hsub)
+    (BagCadence.window_thirtyfive_le_six hl a Piece.I)
+
+/-- From any seed, adversarial trace boards after the first step carry no
+full row. -/
+theorem adversarialTrace_board_no_full_of_pos {cfg : GameConfig}
+    {σ : Solver cfg} {s : ℕ → Piece} {g0 : GameState} {m : ℕ} (hm : 1 ≤ m)
+    (r : ℕ) :
+    ¬ Board.isFull cfg (adversarialTrace cfg σ s g0 m).board r := by
+  obtain ⟨k, rfl⟩ : ∃ k, m = k + 1 := ⟨m - 1, by omega⟩
+  rw [adversarialTrace_succ, adversarialStep_board]
+  unfold Placement.applyStep
+  exact Board.clearLines_no_full _ cfg.cols_pos r
+
+/-- **At most five tetrises per adversarial cycle period** — the period deals
+exactly five I's, and every tetris consumes one. -/
+theorem adversarialClosedCycle_period_tetris_le_five
+    (C : AdversarialClosedCycle GameConfig.standard) {g0 : GameState}
+    {t : ℕ → Piece} (hl : LegalSequenceFrom g0.bag t) {n : ℕ} (hn : 1 ≤ n)
+    (hcyc : adversarialTrace GameConfig.standard C.solver t g0 n
+        = adversarialTrace GameConfig.standard C.solver t g0 (n + 35)) :
+    ((Finset.range 35).filter (fun k => 4 ≤ (Board.fullRows GameConfig.standard
+        (({ C.solver (adversarialTrace GameConfig.standard C.solver t g0 (n + k))
+              (t (n + k)) with piece := t (n + k) } : Placement).place
+          (adversarialTrace GameConfig.standard C.solver t g0 (n + k)).board)).card)).card
+      ≤ 5 := by
+  have hbal := adversarialClosedCycle_period_piece_balanced C hl hcyc Piece.I
+  have hsub : (Finset.range 35).filter (fun k => 4 ≤ (Board.fullRows GameConfig.standard
+        (({ C.solver (adversarialTrace GameConfig.standard C.solver t g0 (n + k))
+              (t (n + k)) with piece := t (n + k) } : Placement).place
+          (adversarialTrace GameConfig.standard C.solver t g0 (n + k)).board)).card)
+      ⊆ (Finset.range 35).filter (fun k => t (n + k) = Piece.I) := by
+    intro k hk
+    obtain ⟨h1, h2⟩ := Finset.mem_filter.mp hk
+    refine Finset.mem_filter.mpr ⟨h1, ?_⟩
+    exact tetris_requires_I
+      (fun r => adversarialTrace_board_no_full_of_pos (by omega : 1 ≤ n + k) r) h2
+  calc ((Finset.range 35).filter _).card
+      ≤ ((Finset.range 35).filter (fun k => t (n + k) = Piece.I)).card :=
+        Finset.card_le_card hsub
+    _ = 5 := hbal
+
+/-- **At most five tetrises per cooperative cycle period** (windows past the
+seed): the period plays exactly five I's. -/
+theorem closedCycle_period_tetris_le_five (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (h0 : g0 ∈ C.states) {n : ℕ} (hn : 1 ≤ n)
+    (hcyc : trace GameConfig.standard C.policy g0 n
+        = trace GameConfig.standard C.policy g0 (n + 35)) :
+    ((Finset.range 35).filter (fun k => 4 ≤ (Board.fullRows GameConfig.standard
+        ((C.policy (trace GameConfig.standard C.policy g0 (n + k))).place
+          (trace GameConfig.standard C.policy g0 (n + k)).board)).card)).card
+      ≤ 5 := by
+  have hbal := closedCycle_period_piece_balanced C h0 hcyc Piece.I
+  have hsub : (Finset.range 35).filter (fun k => 4 ≤ (Board.fullRows GameConfig.standard
+        ((C.policy (trace GameConfig.standard C.policy g0 (n + k))).place
+          (trace GameConfig.standard C.policy g0 (n + k)).board)).card)
+      ⊆ (Finset.range 35).filter (fun k =>
+        (C.policy (trace GameConfig.standard C.policy g0 (n + k))).piece
+          = Piece.I) := by
+    intro k hk
+    obtain ⟨h1, h2⟩ := Finset.mem_filter.mp hk
+    exact Finset.mem_filter.mpr ⟨h1, trace_tetris_step_I (by omega) h2⟩
+  calc ((Finset.range 35).filter _).card
+      ≤ ((Finset.range 35).filter (fun k =>
+          (C.policy (trace GameConfig.standard C.policy g0 (n + k))).piece
+            = Piece.I)).card := Finset.card_le_card hsub
+    _ = 5 := hbal
+
 end ClearRate
 end Tetris
