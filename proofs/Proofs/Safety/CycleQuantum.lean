@@ -1,5 +1,6 @@
 import Mathlib
 import Proofs.Survival.ClearRecurrence
+import Proofs.Survival.ClearMix
 import Proofs.Safety.BagCadence
 import Proofs.Safety.Adversarial
 import Proofs.Safety.SafeSet
@@ -393,6 +394,77 @@ theorem closedCycle_multi_period_piece_balanced
     simp only [harg]
     rw [hbal]
     ring
+
+/-- The balance theorem at policy-trace level: a 35-return of a legally-drawn
+policy trace deals each piece exactly five times. (`ClosedCycle` supplies the
+`hdraw` hypothesis from its `legal_draw` field.) -/
+theorem trace_period_piece_balanced {π : Policy GameConfig.standard}
+    {g0 : GameState}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π g0 k)).piece
+      ∈ (trace GameConfig.standard π g0 k).bag) {n : ℕ}
+    (hcyc : trace GameConfig.standard π g0 n
+        = trace GameConfig.standard π g0 (n + 35)) (p : Piece) :
+    ((Finset.range 35).filter (fun k =>
+        (π (trace GameConfig.standard π g0 (n + k))).piece = p)).card = 5 := by
+  have hl := legalSequence_of_trace_draws hdraw
+  have hbag : bagAt g0.bag
+        (fun m => (π (trace GameConfig.standard π g0 m)).piece) (n + 35)
+      = bagAt g0.bag
+        (fun m => (π (trace GameConfig.standard π g0 m)).piece) n := by
+    rw [← trace_bag_eq_bagAt, ← trace_bag_eq_bagAt, hcyc]
+  exact BagCadence.window_thirtyfive_balanced hl hbag p
+
+/-- Multi-period balance at policy-trace level: `j` periods deal each piece
+exactly `5·j` times. -/
+theorem trace_multi_period_piece_balanced {π : Policy GameConfig.standard}
+    {g0 : GameState}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π g0 k)).piece
+      ∈ (trace GameConfig.standard π g0 k).bag) {n : ℕ}
+    (hcyc : trace GameConfig.standard π g0 n
+        = trace GameConfig.standard π g0 (n + 35)) (p : Piece) :
+    ∀ j, ((Finset.range (35 * j)).filter (fun k =>
+        (π (trace GameConfig.standard π g0 (n + k))).piece = p)).card
+      = 5 * j := by
+  intro j
+  induction j with
+  | zero => simp
+  | succ j ih =>
+    have hsplit := card_filter_range_add (fun k =>
+      (π (trace GameConfig.standard π g0 (n + k))).piece = p) (35 * j) 35
+    rw [show 35 * (j + 1) = 35 * j + 35 by ring, hsplit, ih]
+    have hj := trace_period_multiples π g0 hcyc j
+    have hj1 := trace_period_multiples π g0 hcyc (j + 1)
+    have hcycj : trace GameConfig.standard π g0 (n + 35 * j)
+        = trace GameConfig.standard π g0 ((n + 35 * j) + 35) := by
+      rw [show (n + 35 * j) + 35 = n + (j + 1) * 35 by ring,
+        show n + 35 * j = n + j * 35 by ring]
+      exact hj.symm.trans hj1
+    have hbal := trace_period_piece_balanced hdraw hcycj p
+    have harg : ∀ x : ℕ, n + (35 * j + x) = (n + 35 * j) + x := fun x => by ring
+    simp only [harg]
+    rw [hbal]
+    ring
+
+/-- **The I-counter linear law**: on a periodic legally-drawn trace from
+`init`, the cumulative I count advances by exactly `5·j` over `j` periods —
+the counter feeding the tetris caps (`sizeCount_four_le_iCount`) is pinned
+linearly by the balance theorem. -/
+theorem cycle_iCount_linear {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) (j : ℕ) :
+    iCount GameConfig.standard π GameState.init (n + 35 * j)
+      - iCount GameConfig.standard π GameState.init n = 5 * j := by
+  have h1 := iCount_eq_card_filter (cfg := GameConfig.standard) (π := π) n
+  have h2 := iCount_eq_card_filter (cfg := GameConfig.standard) (π := π)
+    (n + 35 * j)
+  have hsplit := card_filter_range_add (fun m =>
+    (π (trace GameConfig.standard π GameState.init m)).piece = Piece.I)
+    n (35 * j)
+  have hbal := trace_multi_period_piece_balanced hdraw hcyc Piece.I j
+  rw [h1, h2, hsplit, hbal]
+  omega
 
 /-- **The adversarial period is balanced too**: over any 35-placement period of
 an `AdversarialClosedCycle`, the announced piece sequence contains each piece

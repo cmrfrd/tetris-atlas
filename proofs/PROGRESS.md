@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ll) — trace-level balance + iCount law (bank 34/N)
+
+- `trace_period_piece_balanced` / `trace_multi_period_piece_balanced` — the
+  balance theorem freed from the `ClosedCycle` structure: any legally-drawn
+  policy trace with a 35-return deals each piece exactly `5` (resp. `5j`)
+  times. `ClosedCycle` supplies `hdraw` via `legal_draw`.
+- `cycle_iCount_linear` — the cumulative I counter advances exactly `5j` per
+  `j` periods: the counter feeding `sizeCount_four_le_iCount` is pinned
+  linearly. (CycleQuantum now imports ClearMix for the counters.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23kk) — multi-period balance (bank 33/N)
 
 - `card_filter_range_add` — generic: a filtered-range count over `[0, a+b)`
