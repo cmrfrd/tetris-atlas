@@ -380,5 +380,34 @@ theorem closedCycle_exists_I_within_thirteen (C : ClosedCycle GameConfig.standar
   trace_exists_I_within_thirteen
     (fun k => C.legal_draw _ (C.trace_mem_states h0 k)) n
 
+/-- The two-sided window law on policy traces: over any 35 consecutive
+placements with legal draws, each piece is played between four and six
+times. -/
+theorem trace_window_piece_bounds {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState}
+    (hdraw : ∀ k, (π (trace cfg π g0 k)).piece ∈ (trace cfg π g0 k).bag)
+    (n : ℕ) (p : Piece) :
+    4 ≤ ((Finset.range 35).filter (fun k =>
+        (π (trace cfg π g0 (n + k))).piece = p)).card
+      ∧ ((Finset.range 35).filter (fun k =>
+        (π (trace cfg π g0 (n + k))).piece = p)).card ≤ 6 := by
+  have hl := legalSequence_of_trace_draws hdraw
+  exact ⟨BagCadence.window_thirtyfive_ge_four hl n p,
+    BagCadence.window_thirtyfive_le_six hl n p⟩
+
+/-- **The window law on the M2 artifact**: along a closed cycle's trajectory,
+every 35-placement window plays each piece between four and six times — and
+exactly five on full periods (`closedCycle_period_piece_balanced`). -/
+theorem closedCycle_window_piece_bounds (C : ClosedCycle GameConfig.standard)
+    {g0 : GameState} (h0 : g0 ∈ C.states) (n : ℕ) (p : Piece) :
+    4 ≤ ((Finset.range 35).filter (fun k =>
+        (C.policy (trace GameConfig.standard C.policy g0 (n + k))).piece
+          = p)).card
+      ∧ ((Finset.range 35).filter (fun k =>
+        (C.policy (trace GameConfig.standard C.policy g0 (n + k))).piece
+          = p)).card ≤ 6 :=
+  trace_window_piece_bounds
+    (fun k => C.legal_draw _ (C.trace_mem_states h0 k)) n p
+
 end ClearRate
 end Tetris

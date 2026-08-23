@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23cc) — window law on traces and cycles (bank 25/N)
+
+- `trace_window_piece_bounds` — the [4,6] window law lifted to policy traces
+  with legal draws (via `legalSequence_of_trace_draws`).
+- **`closedCycle_window_piece_bounds`** — the same along the M2 artifact's own
+  trajectory; exactly 5 on full periods.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bb) — the two-sided window law [4,6] (bank 24/N)
 
 - `bagAt_card_countdown` — from any start the card counts down `c − j` until
