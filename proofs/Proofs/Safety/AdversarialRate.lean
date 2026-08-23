@@ -564,5 +564,36 @@ theorem adversary_tetris_card_le_I_card {cfg : GameConfig} {σ : Solver cfg}
       ≤ (F.filter (fun n => s n = Piece.I)).card :=
   Finset.card_le_card (adversary_tetris_filter_subset F)
 
+/-- The recursive size counter agrees with the windowed filter cardinality:
+`sizeCountAdv k n` counts exactly the steps below `n` that cleared `k` rows. -/
+theorem sizeCountAdv_eq_card_filter {cfg : GameConfig} {σ : Solver cfg}
+    {s : ℕ → Piece} (k n : ℕ) :
+    sizeCountAdv cfg σ s k n
+      = ((Finset.range n).filter (fun m => (Board.fullRows cfg
+          (({ σ (adversarialTrace cfg σ s GameState.init m) (s m)
+              with piece := s m } : Placement).place
+            (adversarialTrace cfg σ s GameState.init m).board)).card = k)).card := by
+  classical
+  induction n with
+  | zero => simp
+  | succ m ih =>
+    rw [sizeCountAdv_succ, ih, Finset.range_add_one, Finset.filter_insert]
+    split_ifs with h
+    · rw [Finset.card_insert_of_notMem (by simp)]
+    · omega
+
+/-- **Adversarial tetris count is capped by the I supply.** The cumulative
+number of four-row clears never exceeds the number of I's the sequence has
+dealt: `sizeCountAdv 4 n ≤ #{m < n | s m = I}`. -/
+theorem sizeCountAdv_four_le_I_card {cfg : GameConfig} {σ : Solver cfg}
+    {s : ℕ → Piece} (n : ℕ) :
+    sizeCountAdv cfg σ s 4 n
+      ≤ ((Finset.range n).filter (fun m => s m = Piece.I)).card := by
+  rw [sizeCountAdv_eq_card_filter]
+  refine Finset.card_le_card ?_
+  intro m hm
+  obtain ⟨h1, h2⟩ := Finset.mem_filter.mp hm
+  exact Finset.mem_filter.mpr ⟨h1, adversary_tetris_step_I h2.ge⟩
+
 end ClearRate
 end Tetris

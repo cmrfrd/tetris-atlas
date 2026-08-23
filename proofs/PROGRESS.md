@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23v) — counter↔filter bridge (bank 18/N)
+
+- `sizeCountAdv_eq_card_filter` — the recursive size counter equals the
+  windowed filter cardinality (induction via `Finset.range_add_one` +
+  `filter_insert`; NOTE: `Finset.range_succ` no longer exists in this
+  Mathlib — use `range_add_one`).
+- `sizeCountAdv_four_le_I_card` — cumulative adversarial tetris count ≤ the
+  number of I's the sequence has dealt (`h2.ge` bridges the `= 4` filter to
+  the `4 ≤` hypothesis of `adversary_tetris_step_I`).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23u) — init-cycle floors + general tetris embedding (bank 17/N)
 
 - `init_closedCycle_card_ge_thirtyfive` / 
