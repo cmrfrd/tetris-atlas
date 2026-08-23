@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ad) — the M3 bridge (bank 51/N)
+
+- `closedCycle_contains_minimal_orbit` STRENGTHENED: the tight sub-cycle's
+  states are all trace-reachable from the seed state (5th conjunct, free
+  from the orbit construction).
+- `init_closedCycle_reachable_minimal_orbit` — the M3 bridge: a closed cycle
+  through `init` contains a tight quantised sub-cycle every state of which
+  is reached from the EMPTY BOARD by an explicit trace index. M2 ⇒ M3 for
+  init-seeded cycles, with the certificate minimal.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ac) — the minimal-orbit theorem (bank 50/N) ★
 
 - `cycle_orbit_subset_period` / `orbitCycleP` — the orbit-window lemma and

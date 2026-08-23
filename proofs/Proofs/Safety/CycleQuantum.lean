@@ -998,14 +998,15 @@ theorem closedCycle_contains_minimal_orbit
     (hwf : Board.WF GameConfig.standard g0.board) :
     ∃ D : ClosedCycle GameConfig.standard, D.states ⊆ C.states ∧
       0 < D.states.card ∧ 35 ∣ D.states.card ∧
-      D.states.card ≤ C.states.card := by
+      D.states.card ≤ C.states.card ∧
+      ∀ s ∈ D.states, ∃ m, s = trace GameConfig.standard C.policy g0 m := by
   classical
   obtain ⟨n, P, hPpos, hPle, _, hret⟩ := closedCycle_exists_period C h0 hwf
   have hex : ∃ Q, 0 < Q ∧ ∃ m, trace GameConfig.standard C.policy g0 m
       = trace GameConfig.standard C.policy g0 (m + Q) := ⟨P, hPpos, n, hret⟩
   obtain ⟨hQpos, n₀, hret₀⟩ := Nat.find_spec hex
   have hQle : Nat.find hex ≤ P := Nat.find_min' hex ⟨hPpos, n, hret⟩
-  refine ⟨orbitCycleP C h0 hQpos hret₀, ?_, ?_, ?_, ?_⟩
+  refine ⟨orbitCycleP C h0 hQpos hret₀, ?_, ?_, ?_, ?_, ?_⟩
   · intro s hs
     have hs' : s ∈ (Finset.range (Nat.find hex)).image
         (fun k => trace GameConfig.standard C.policy g0 (n₀ + k)) := hs
@@ -1034,6 +1035,26 @@ theorem closedCycle_contains_minimal_orbit
     simpa using hd
   · rw [hcard]
     omega
+  · intro s hs
+    have hs' : s ∈ (Finset.range (Nat.find hex)).image
+        (fun k => trace GameConfig.standard C.policy g0 (n₀ + k)) := hs
+    rw [Finset.mem_image] at hs'
+    obtain ⟨k, -, rfl⟩ := hs'
+    exact ⟨n₀ + k, rfl⟩
+
+/-- **The M3 bridge**: a closed cycle through the initial state contains a
+tight quantised sub-cycle every state of which is *reached from the empty
+board* by an explicit trace index — the minimal certificate is not only
+present but reachable. -/
+theorem init_closedCycle_reachable_minimal_orbit
+    (C : ClosedCycle GameConfig.standard) (h0 : GameState.init ∈ C.states) :
+    ∃ D : ClosedCycle GameConfig.standard, D.states ⊆ C.states ∧
+      0 < D.states.card ∧ 35 ∣ D.states.card ∧
+      D.states.card ≤ C.states.card ∧
+      ∀ s ∈ D.states, ∃ m,
+        s = trace GameConfig.standard C.policy GameState.init m :=
+  closedCycle_contains_minimal_orbit C h0
+    (GameState.init_board_wf GameConfig.standard)
 
 end ClearRate
 end Tetris
