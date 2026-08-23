@@ -992,6 +992,49 @@ theorem cycle_height_floor {π : Policy GameConfig.standard}
   rw [GameConfig.standard_cols]
   omega
 
+/-- **The stationary clearing bracket**: at *every* position of a cycle and
+*every* window length, the rows cleared track the 2.8-per-bag line —
+`14·⌊(w−34)/35⌋ ≤ Δcleared ≤ 14·⌊w/35⌋ + 28`. The lower bound counts the
+full aligned periods the window must contain; the upper bound subtracts two
+boundary brackets. Shift-invariant: no alignment with the cycle's entry
+point is assumed. -/
+theorem cycle_clears_stationary_bracket {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) (w : ℕ) :
+    14 * ((w - 34) / 35)
+        ≤ cleared GameConfig.standard π GameState.init (m₀ + w)
+          - cleared GameConfig.standard π GameState.init m₀
+      ∧ cleared GameConfig.standard π GameState.init (m₀ + w)
+          - cleared GameConfig.standard π GameState.init m₀
+        ≤ 14 * (w / 35) + 28 := by
+  constructor
+  · -- lower: the window contains ⌊(w−34)/35⌋ full aligned periods
+    rcases Nat.lt_or_ge w 34 with hw | hw
+    · have hz : (w - 34) / 35 = 0 := by omega
+      omega
+    set i := (m₀ - n + 34) / 35 with hi
+    set k := (w - 34) / 35 with hk
+    have hb1 : m₀ ≤ n + 35 * i := by omega
+    have hb2 : n + 35 * i ≤ m₀ + 34 := by omega
+    have hlaw1 := multi_period_clears hv hcyc i
+    have hlaw2 := multi_period_clears hv hcyc (i + k)
+    have hmono1 := cleared_mono GameConfig.standard π GameState.init hb1
+    have hmono2 := cleared_mono GameConfig.standard π GameState.init
+      (show n + 35 * (i + k) ≤ m₀ + w by omega)
+    have hmono0 := cleared_mono GameConfig.standard π GameState.init
+      (Nat.le_add_right n (35 * i))
+    omega
+  · -- upper: subtract the two boundary brackets
+    obtain ⟨hlo1, hhi1⟩ := cycle_clears_bracket hv hcyc
+      (show n ≤ m₀ + w by omega)
+    obtain ⟨hlo2, hhi2⟩ := cycle_clears_bracket hv hcyc hm
+    have hmono := cleared_mono GameConfig.standard π GameState.init
+      (Nat.le_add_right m₀ w)
+    have hmono' := cleared_mono GameConfig.standard π GameState.init hm
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

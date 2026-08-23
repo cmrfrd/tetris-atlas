@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23af) — the stationary bracket (bank 53/N)
+
+- `cycle_clears_stationary_bracket` — SHIFT-INVARIANT: at every position of
+  a cycle and every window length, `14⌊(w−34)/35⌋ ≤ Δcleared ≤ 14⌊w/35⌋+28`.
+  Lower bound counts the full aligned periods the window must contain
+  (with a `w < 34` degenerate case split); upper subtracts two boundary
+  brackets. Generalizes both `cycle_clears_bracket` (anchored) and
+  `cycle_window_clears_fourteen` (fixed 69-window).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ae) — the cycle height floor (bank 52/N)
 
 - `cycle_height_floor` — a heavy cycle keeps a tall column FOREVER: if the
