@@ -1602,5 +1602,93 @@ theorem survives_forever_of_perfect_clear_pair {π : Policy GameConfig.standard}
   rw [← heq]
   exact hlive k (Finset.mem_range.mp hk)
 
+/-- **The perfect-clear cycle**: a live perfect-clear-to-perfect-clear
+segment at matching bag phase, packaged as a genuine `ClosedCycle` — the M2
+artifact itself, constructed from one checkable trace segment. -/
+def perfectClearCycle {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n₁ n₂ : ℕ}
+    (hlt : n₁ < n₂)
+    (h1 : (trace GameConfig.standard π GameState.init n₁).board.count = 0)
+    (h2 : (trace GameConfig.standard π GameState.init n₂).board.count = 0)
+    (hbag : (trace GameConfig.standard π GameState.init n₁).bag
+        = (trace GameConfig.standard π GameState.init n₂).bag)
+    (hlive : ∀ k, k < n₂ - n₁ →
+      ¬ (trace GameConfig.standard π GameState.init (n₁ + k)).lost
+        GameConfig.standard) :
+    ClosedCycle GameConfig.standard where
+  states := (Finset.range (n₂ - n₁)).image
+    (fun k => trace GameConfig.standard π GameState.init (n₁ + k))
+  policy := π
+  valid := fun s _ => hv s
+  legal_draw := by
+    intro s hs
+    rw [Finset.mem_image] at hs
+    obtain ⟨k, -, rfl⟩ := hs
+    rw [Bag.canDraw_iff_mem]
+    exact hdraw (n₁ + k)
+  not_lost := by
+    intro s hs
+    rw [Finset.mem_image] at hs
+    obtain ⟨k, hk, rfl⟩ := hs
+    exact hlive k (Finset.mem_range.mp hk)
+  closed := by
+    intro s hs
+    rw [Finset.mem_image] at hs
+    obtain ⟨k, -, rfl⟩ := hs
+    have hret : trace GameConfig.standard π GameState.init n₁
+        = trace GameConfig.standard π GameState.init (n₁ + (n₂ - n₁)) := by
+      rw [show n₁ + (n₂ - n₁) = n₂ by omega]
+      exact perfect_clear_pair_return h1 h2 hbag
+    have hstep : (trace GameConfig.standard π GameState.init (n₁ + k)).step
+          GameConfig.standard
+          (π (trace GameConfig.standard π GameState.init (n₁ + k)))
+        = trace GameConfig.standard π GameState.init ((n₁ + k) + 1) :=
+      (trace_succ GameConfig.standard π GameState.init (n₁ + k)).symm
+    rw [hstep]
+    exact cycle_orbit_subset_period (show 0 < n₂ - n₁ by omega) hret (by omega)
+
+/-- The first perfect clear is in the cycle. -/
+theorem mem_perfectClearCycle {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n₁ n₂ : ℕ}
+    (hlt : n₁ < n₂)
+    (h1 : (trace GameConfig.standard π GameState.init n₁).board.count = 0)
+    (h2 : (trace GameConfig.standard π GameState.init n₂).board.count = 0)
+    (hbag : (trace GameConfig.standard π GameState.init n₁).bag
+        = (trace GameConfig.standard π GameState.init n₂).bag)
+    (hlive : ∀ k, k < n₂ - n₁ →
+      ¬ (trace GameConfig.standard π GameState.init (n₁ + k)).lost
+        GameConfig.standard) :
+    trace GameConfig.standard π GameState.init n₁
+      ∈ (perfectClearCycle hv hdraw hlt h1 h2 hbag hlive).states := by
+  have : trace GameConfig.standard π GameState.init n₁
+      ∈ (Finset.range (n₂ - n₁)).image
+        (fun k => trace GameConfig.standard π GameState.init (n₁ + k)) := by
+    rw [Finset.mem_image]
+    exact ⟨0, Finset.mem_range.mpr (by omega), by rw [Nat.add_zero]⟩
+  exact this
+
+/-- The perfect-clear cycle holds at least 35 states — the quantum floor on
+the constructed certificate. -/
+theorem perfectClearCycle_card_ge {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n₁ n₂ : ℕ}
+    (hlt : n₁ < n₂)
+    (h1 : (trace GameConfig.standard π GameState.init n₁).board.count = 0)
+    (h2 : (trace GameConfig.standard π GameState.init n₂).board.count = 0)
+    (hbag : (trace GameConfig.standard π GameState.init n₁).bag
+        = (trace GameConfig.standard π GameState.init n₂).bag)
+    (hlive : ∀ k, k < n₂ - n₁ →
+      ¬ (trace GameConfig.standard π GameState.init (n₁ + k)).lost
+        GameConfig.standard) :
+    35 ≤ (perfectClearCycle hv hdraw hlt h1 h2 hbag hlive).states.card :=
+  closedCycle_card_ge_thirtyfive _
+    (mem_perfectClearCycle hv hdraw hlt h1 h2 hbag hlive)
+    (trace_board_wf hv (GameState.init_board_wf GameConfig.standard) n₁)
+
 end ClearRate
 end Tetris

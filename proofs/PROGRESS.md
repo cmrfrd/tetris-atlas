@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23az) — the perfect-clear cycle constructor (bank 73/N)
+
+- `perfectClearCycle` — the M2 artifact CONSTRUCTED: a live PC-to-PC
+  segment at matching bag phase becomes a genuine `ClosedCycle` (states =
+  the orbit window; closure via `cycle_orbit_subset_period`).
+- `mem_perfectClearCycle` / `perfectClearCycle_card_ge` — the first PC is a
+  member and the certificate holds ≥ 35 states.
+- The proof-side interface for the empirical PC searches (project_phase_atlas
+  observed ~64% PC rate): ONE verified segment = the certificate.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ay) — the perfect-clear route (bank 72/N)
 
 - `perfect_clear_spacing` — perfect clears sit multiples of 5 apart.
