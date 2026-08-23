@@ -589,6 +589,54 @@ theorem cycle_tetris_density {π : Policy GameConfig.standard}
   have hmono := sizeCount_mono GameConfig.standard π GameState.init 4 hhi
   omega
 
+/-- **The mix identity, windowed**: over *any* window the clear-size
+increments weight-sum to exactly the rows cleared in that window —
+`Δa₁ + 2Δa₂ + 3Δa₃ + 4Δa₄ = Δcleared`, no cycle hypothesis. -/
+theorem mix_window_identity {cfg : GameConfig} {π : Policy cfg} {n m : ℕ}
+    (hnm : n ≤ m) :
+    (sizeCount cfg π GameState.init 1 m - sizeCount cfg π GameState.init 1 n)
+      + 2 * (sizeCount cfg π GameState.init 2 m
+        - sizeCount cfg π GameState.init 2 n)
+      + 3 * (sizeCount cfg π GameState.init 3 m
+        - sizeCount cfg π GameState.init 3 n)
+      + 4 * (sizeCount cfg π GameState.init 4 m
+        - sizeCount cfg π GameState.init 4 n)
+      = cleared cfg π GameState.init m - cleared cfg π GameState.init n := by
+  have h1 := mix_identity (cfg := cfg) (π := π) n
+  have h2 := mix_identity (cfg := cfg) (π := π) m
+  have hm1 := sizeCount_mono cfg π GameState.init 1 hnm
+  have hm2 := sizeCount_mono cfg π GameState.init 2 hnm
+  have hm3 := sizeCount_mono cfg π GameState.init 3 hnm
+  have hm4 := sizeCount_mono cfg π GameState.init 4 hnm
+  omega
+
+/-- Every-horizon size caps on a cycle: triples ≤ `4⌊Δn/35⌋ + 4`,
+doubles ≤ `7⌊Δn/35⌋ + 7`, singles ≤ `14⌊Δn/35⌋ + 14` — each telescoped
+per-period cap extended to unaligned horizons by rounding up to the enclosing
+period boundary (the tetris case is `cycle_tetris_density`). -/
+theorem cycle_size_density {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m : ℕ}
+    (hnm : n ≤ m) :
+    sizeCount GameConfig.standard π GameState.init 3 m
+        - sizeCount GameConfig.standard π GameState.init 3 n
+      ≤ 4 * ((m - n) / 35) + 4
+    ∧ sizeCount GameConfig.standard π GameState.init 2 m
+        - sizeCount GameConfig.standard π GameState.init 2 n
+      ≤ 7 * ((m - n) / 35) + 7
+    ∧ sizeCount GameConfig.standard π GameState.init 1 m
+        - sizeCount GameConfig.standard π GameState.init 1 n
+      ≤ 14 * ((m - n) / 35) + 14 := by
+  set j := (m - n) / 35 with hj
+  have hhi : m ≤ n + 35 * (j + 1) := by omega
+  have htr := multi_period_triples_le hv hcyc (j + 1)
+  have hmix := multi_period_mix_fourteen hv hcyc (j + 1)
+  have hm1 := sizeCount_mono GameConfig.standard π GameState.init 1 hhi
+  have hm2 := sizeCount_mono GameConfig.standard π GameState.init 2 hhi
+  have hm3 := sizeCount_mono GameConfig.standard π GameState.init 3 hhi
+  refine ⟨?_, ?_, ?_⟩ <;> omega
+
 /-- The cooperative size counter agrees with the windowed filter cardinality. -/
 theorem sizeCount_eq_card_filter {cfg : GameConfig} {π : Policy cfg} (k n : ℕ) :
     sizeCount cfg π GameState.init k n

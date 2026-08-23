@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ss) — windowed mix + size densities (bank 41/N)
+
+- `mix_window_identity` — `Δa₁ + 2Δa₂ + 3Δa₃ + 4Δa₄ = Δcleared` over ANY
+  window, no cycle hypothesis: the size counters are a complete accounting of
+  every window's clearing.
+- `cycle_size_density` — every-horizon caps on cycles for the other sizes:
+  triples ≤ `4⌊Δ/35⌋+4` (telescoped), doubles ≤ `7⌊Δ/35⌋+7`, singles ≤
+  `14⌊Δ/35⌋+14`. With `cycle_tetris_density` the per-size density table is
+  complete at all horizons.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23rr) — windowed tetris–I embedding (bank 40/N)
 
 - `tetris_le_I_window` — the tetris increment over any window past the seed
