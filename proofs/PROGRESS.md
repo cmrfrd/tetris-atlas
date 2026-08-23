@@ -13,7 +13,7 @@ new tick — it tells you where the prior tick left off.
 
 ## Current build status
 
-- `lake build` (green `Proofs`) — **PASSING** (8307 jobs); base-axiom-clean
+- `lake build` (green `Proofs`) — **PASSING** (8308 jobs); base-axiom-clean
   (`propext`, `Classical.choice`, `Quot.sound`), **no `sorry`, no `native_decide`**.
 - `lake build ProofsExperiments` (research routes) — **PASSING** (8288 jobs); may use
   `native_decide`.
@@ -41626,6 +41626,38 @@ Next: <subtask id and one-line description>
 ## Tick log
 
 *(append newest at top below this line)*
+
+---
+
+### Tick (manual, 2026-08-23d) — standing inventory: the occupancy FLOOR
+
+New statistical property of the ideal solver: survival forces a LOWER bound on
+time-averaged board occupancy. **NEW**
+`proofs/Proofs/Survival/StandingInventory.lean` (green, no warnings):
+- `sumCount π n` — cumulative occupancy over the first `n` checkpoints.
+- `six_le_count_of_clearing` — every clearing moment sits on ≥ 6 banked cells
+  (a `k`-clear needs `10k − 4`).
+- `ten_cleared_le_sumCount` — the banked-mass ledger: summing the per-clear
+  requirement, `10·cleared ≤ ∑count + 4·clearingSteps`.
+- **`standing_inventory_floor`** — `12n ≤ 5·∑count + 1000`: the time-averaged
+  occupancy of ANY surviving play is ≥ `2.4 − 200/n` cells. Derivation:
+  clearing duty ≥ 0.4 rows/piece (floor) + each clear needs banked mass +
+  clearing moments ≤ 0.4n. A singles-only sawtooth achieves average 4, so the
+  floor is within 2× of achievable. **Empty-board play is impossible.**
+- **`card_empty_times_le`** — `5·#{t<n | board empty} ≤ n+4`: the board can be
+  empty only at `5 ∣ t` (residue clock), so an immortal solver's board is
+  **occupied ≥ 80% of the time**, even for a perfect-clear-loop strategy.
+
+Solver-design consequence (docstring): evaluation functions that monotonically
+reward emptiness fight a provable floor; the ideal occupancy band is
+`[2.4, 200]` with mandatory stock (≥6) before every clear.
+
+Build: PASS (green `Proofs`, 8308 jobs; StandingInventory no warnings)
+Sorries: 0 → 0; `check-green-clean.sh` OK
+Axioms: all 4 `[propext, Classical.choice, Quot.sound]`
+Gotcha: `Finset.card_le_card_of_injOn` works in Set-coe land — `simp only
+[Finset.coe_range, Set.mem_Iio]` for the maps-to bullet, `dsimp only at hEq`
+to beta-reduce before `omega`.
 
 ---
 
