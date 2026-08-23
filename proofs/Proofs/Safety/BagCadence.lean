@@ -973,5 +973,29 @@ theorem block_image_eq_univ {initBag : Bag} {s : ℕ → Piece}
     exact block_draws_injective hl hfull hi hk heq
 
 
+/-- A bag holding seven pieces is the full bag. -/
+theorem bag_full_of_card_seven {b : Bag} (h : b.card = 7) : b = Bag.full := by
+  classical
+  apply Finset.eq_univ_of_card
+  rw [h]
+  decide
+
+/-- **The bag content law from the start**: on a full-bag stream, the bag at
+time `n` is the full bag minus the draws made since the last refill at
+`7·⌊n/7⌋`. The bag state is a pure function of the current block's prefix. -/
+theorem bagAt_eq_sdiff {s : ℕ → Piece}
+    (hl : LegalSequenceFrom Bag.full s) (n : ℕ) :
+    bagAt Bag.full s n
+      = Bag.full \ ((Finset.range (n % 7)).image
+          (fun j => s (7 * (n / 7) + j))) := by
+  have hfull0 : bagAt Bag.full s 0 = Bag.full := rfl
+  have hr : bagAt Bag.full s (7 * (n / 7)) = Bag.full := by
+    have := bagAt_full_iterate hl hfull0 (n / 7)
+    rwa [Nat.zero_add] at this
+  have := refill_bag_sdiff hl hr (n % 7) (by omega)
+  rw [show 7 * (n / 7) + n % 7 = n by omega] at this
+  exact this
+
+
 end BagCadence
 end Tetris

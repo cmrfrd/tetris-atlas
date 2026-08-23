@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23by) — the global bag content law (bank 98/N)
+
+- `bag_full_of_card_seven` — any bag holding seven pieces IS the full bag.
+- `bagAt_eq_sdiff` — on a full-bag stream, `bag(n) = full ∖ {draws since
+  the refill at 7⌊n/7⌋}`: the bag state is a pure function of the current
+  block's prefix. Refills sit exactly at multiples of 7 from a full start.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bx) — the block alphabet (bank 97/N)
 
 - `block_draws_injective` — within one bag block no piece repeats (index
