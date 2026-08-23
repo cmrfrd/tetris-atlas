@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23av) — solver-design impossibilities (bank 69/N)
+
+- `no_cycle_of_only_tetris_clears` — a policy whose every clearing step is a
+  four-clear admits NO 35-return anywhere (4 ∤ 14 lifted to policy level).
+- `no_cycle_of_only_triple_clears` — same for triples (3 ∤ 14).
+- `no_cycle_of_I_strictly_tetris` — a policy that plays I only when it
+  tetrises can never cycle: every period needs ≥ 2 idle I's.
+- Actionable for M2 search: candidate policies must mix clear sizes and
+  must burn I's on non-tetris work.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23au) — the observable loop (bank 68/N)
 
 - `cycle_bag_periodic` / `cycle_clear_size_periodic` — bag state and

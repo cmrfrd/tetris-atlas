@@ -1414,5 +1414,111 @@ theorem cycle_window_sizeCount_shift {π : Policy GameConfig.standard} {n : ℕ}
     (show n ≤ m + j by omega)
   rw [show m + 35 + j = (m + j) + 35 by omega, hper]
 
+/-- **A tetris-only clearer can never cycle**: a policy whose every clearing
+step is a four-clear admits no 35-return — `4 ∤ 14`. Impossibility at the
+solver-design level: perpetual pure-tetris play is not a loop. -/
+theorem no_cycle_of_only_tetris_clears {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hpol : ∀ m, (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board)).card = 0
+      ∨ (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board)).card = 4)
+    (n : ℕ) :
+    trace GameConfig.standard π GameState.init n
+      ≠ trace GameConfig.standard π GameState.init (n + 35) := by
+  classical
+  intro hcyc
+  have hzero : ∀ k, k = 1 ∨ k = 2 ∨ k = 3 →
+      sizeCount GameConfig.standard π GameState.init k (n + 35)
+        = sizeCount GameConfig.standard π GameState.init k n := by
+    intro k hk
+    have hw := sizeCount_window (cfg := GameConfig.standard) (π := π) k n 35
+    have hmono := sizeCount_mono GameConfig.standard π GameState.init k
+      (Nat.le_add_right n 35)
+    have hempty : ((Finset.range 35).filter (fun j =>
+        (Board.fullRows GameConfig.standard
+          ((π (trace GameConfig.standard π GameState.init (n + j))).place
+            (trace GameConfig.standard π GameState.init (n + j)).board)).card
+          = k)).card = 0 := by
+      rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
+      intro j hj
+      rcases hpol (n + j) with h0 | h4
+      · rw [h0]
+        omega
+      · rw [h4]
+        omega
+    omega
+  exact no_pure_tetris_period hv hcyc (hzero 1 (by omega)) (hzero 2 (by omega))
+    (hzero 3 (by omega))
+
+/-- A triple-only clearer can never cycle either: `3 ∤ 14`. -/
+theorem no_cycle_of_only_triple_clears {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hpol : ∀ m, (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board)).card = 0
+      ∨ (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board)).card = 3)
+    (n : ℕ) :
+    trace GameConfig.standard π GameState.init n
+      ≠ trace GameConfig.standard π GameState.init (n + 35) := by
+  classical
+  intro hcyc
+  have hzero : ∀ k, k = 1 ∨ k = 2 ∨ k = 4 →
+      sizeCount GameConfig.standard π GameState.init k (n + 35)
+        = sizeCount GameConfig.standard π GameState.init k n := by
+    intro k hk
+    have hw := sizeCount_window (cfg := GameConfig.standard) (π := π) k n 35
+    have hmono := sizeCount_mono GameConfig.standard π GameState.init k
+      (Nat.le_add_right n 35)
+    have hempty : ((Finset.range 35).filter (fun j =>
+        (Board.fullRows GameConfig.standard
+          ((π (trace GameConfig.standard π GameState.init (n + j))).place
+            (trace GameConfig.standard π GameState.init (n + j)).board)).card
+          = k)).card = 0 := by
+      rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
+      intro j hj
+      rcases hpol (n + j) with h0 | h3
+      · rw [h0]
+        omega
+      · rw [h3]
+        omega
+    omega
+  exact no_pure_triple_period hv hcyc (hzero 1 (by omega)) (hzero 2 (by omega))
+    (hzero 4 (by omega))
+
+/-- **A policy that plays I only for tetrises can never cycle** (past the
+seed): every period must contain at least two idle I's, but this discipline
+forbids them. The contrapositive of `period_idle_I_ge_two` as a solver-design
+impossibility. -/
+theorem no_cycle_of_I_strictly_tetris {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag)
+    (hpol : ∀ m, (π (trace GameConfig.standard π GameState.init m)).piece
+        = Piece.I
+      → (Board.fullRows GameConfig.standard
+          ((π (trace GameConfig.standard π GameState.init m)).place
+            (trace GameConfig.standard π GameState.init m).board)).card = 4)
+    {n : ℕ} (hn : 1 ≤ n) :
+    trace GameConfig.standard π GameState.init n
+      ≠ trace GameConfig.standard π GameState.init (n + 35) := by
+  classical
+  intro hcyc
+  have hidle := period_idle_I_ge_two hv hdraw hn hcyc
+  have hempty : ((Finset.range 35).filter (fun k =>
+      (π (trace GameConfig.standard π GameState.init (n + k))).piece = Piece.I
+        ∧ (Board.fullRows GameConfig.standard
+            ((π (trace GameConfig.standard π GameState.init (n + k))).place
+              (trace GameConfig.standard π GameState.init (n + k)).board)).card
+          ≠ 4)).card = 0 := by
+    rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
+    intro j hj hcon
+    exact hcon.2 (hpol (n + j) hcon.1)
+  omega
+
 end ClearRate
 end Tetris
