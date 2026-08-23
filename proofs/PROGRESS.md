@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23at) — adversarial idle I's (bank 67/N)
+
+- `adversary_period_idle_I_ge_two` — the idle-I law survives adversarial
+  piece choice: the announced stream is balanced by the bag (5 I's per
+  return window) yet the row budget still admits only 3 tetrises.
+- Lean notes: structure literals elaborate as `have __src := ...` lets in
+  some positions vs eta-expanded records in others — `dsimp only at * ⊢`
+  before omega reunifies the card atoms; `congr 1` can hit maxRecDepth on
+  deep filter terms (use `congrArg Finset.card (filter_congr _)` +
+  maxRecDepth bump).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23as) — idle I's (bank 66/N)
 
 - `period_idle_I_ge_two` — at least TWO of every period's five I pieces do

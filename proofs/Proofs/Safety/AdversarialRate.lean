@@ -1513,5 +1513,84 @@ theorem adversarialClosedCycle_diversity
     obtain ⟨k, -, rfl⟩ := hb
     exact ⟨_, C.adversarialTrace_mem_states_from_mem hg0 ht (0 + k), rfl⟩
 
+set_option maxRecDepth 4000 in
+/-- **The adversarial idle-I law**: even choosing the piece order, an
+adversary facing a returning solver sees at least two of each period's five
+I's do lesser work than a tetris — the row budget is order-independent. -/
+theorem adversary_period_idle_I_ge_two {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hdraw : ∀ n, s n
+      ∈ (adversarialTrace GameConfig.standard σ s GameState.init n).bag) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35)) :
+    2 ≤ ((Finset.range 35).filter (fun k =>
+        s (n + k) = Piece.I
+          ∧ (Board.fullRows GameConfig.standard
+              (({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+                    (n + k)) (s (n + k)) with piece := s (n + k) }
+                : Placement).place
+                (adversarialTrace GameConfig.standard σ s GameState.init
+                  (n + k)).board)).card ≠ 4)).card := by
+  classical
+  -- the announced stream is legal from the initial bag
+  have hl : LegalSequenceFrom GameState.init.bag s := by
+    intro m
+    have := hdraw m
+    rwa [adversarialTrace_bag_from] at this
+  -- bags at the return endpoints agree
+  have hbag : bagAt GameState.init.bag s (n + 35)
+      = bagAt GameState.init.bag s n := by
+    rw [← adversarialTrace_bag_from GameConfig.standard σ s GameState.init,
+      ← adversarialTrace_bag_from GameConfig.standard σ s GameState.init, hcyc]
+  have hbal := BagCadence.window_thirtyfive_balanced hl hbag Piece.I
+  -- split the five I's by whether they clear four rows
+  have hsplit := Finset.card_filter_add_card_filter_not
+    (s := (Finset.range 35).filter (fun k => s (n + k) = Piece.I))
+    (p := fun k => (Board.fullRows GameConfig.standard
+      (({ σ (adversarialTrace GameConfig.standard σ s GameState.init (n + k))
+          (s (n + k)) with piece := s (n + k) } : Placement).place
+        (adversarialTrace GameConfig.standard σ s GameState.init
+          (n + k)).board)).card = 4)
+  rw [Finset.filter_filter, Finset.filter_filter, hbal] at hsplit
+  -- the (I ∧ 4-clear) fiber is exactly the tetris fiber
+  have hIfour : ((Finset.range 35).filter (fun k =>
+        s (n + k) = Piece.I
+          ∧ (Board.fullRows GameConfig.standard
+              (({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+                    (n + k)) (s (n + k)) with piece := s (n + k) }
+                : Placement).place
+                (adversarialTrace GameConfig.standard σ s GameState.init
+                  (n + k)).board)).card = 4)).card
+      = ((Finset.range 35).filter (fun k =>
+        (Board.fullRows GameConfig.standard
+          (({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+                (n + k)) (s (n + k)) with piece := s (n + k) }
+            : Placement).place
+            (adversarialTrace GameConfig.standard σ s GameState.init
+              (n + k)).board)).card = 4)).card := by
+    refine congrArg Finset.card (Finset.filter_congr ?_)
+    intro k hk
+    constructor
+    · intro h
+      exact h.2
+    · intro h
+      exact ⟨adversary_tetris_step_I (le_of_eq h.symm), h⟩
+  -- the tetris fiber is the counter increment, capped at three
+  have h1 := sizeCountAdv_eq_card_filter (cfg := GameConfig.standard)
+    (σ := σ) (s := s) 4 n
+  have h2 := sizeCountAdv_eq_card_filter (cfg := GameConfig.standard)
+    (σ := σ) (s := s) 4 (n + 35)
+  have hspl := card_filter_range_add (fun m => (Board.fullRows GameConfig.standard
+    (({ σ (adversarialTrace GameConfig.standard σ s GameState.init m) (s m)
+        with piece := s m } : Placement).place
+      (adversarialTrace GameConfig.standard σ s GameState.init m).board)).card
+      = 4) n 35
+  have htet := adversary_period_tetris_le_three hv hcyc
+  simp only [ne_eq] at hsplit hIfour ⊢
+  dsimp only at h1 h2 hspl hsplit hIfour ⊢
+  omega
+
 end ClearRate
 end Tetris
