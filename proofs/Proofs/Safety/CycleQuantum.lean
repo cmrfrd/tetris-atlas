@@ -215,6 +215,14 @@ theorem adversarialClosedCycle_card_ge_thirtyfive
         omega
   rwa [Finset.card_range] at hcalc
 
+/-- The adversarial init-cycle floor: an `AdversarialClosedCycle` through the
+initial state holds at least 35 states. -/
+theorem init_adversarialClosedCycle_card_ge_thirtyfive
+    (C : AdversarialClosedCycle GameConfig.standard)
+    (h0 : GameState.init ∈ C.states) : 35 ≤ C.states.card :=
+  adversarialClosedCycle_card_ge_thirtyfive C h0
+    (GameState.init_board_wf GameConfig.standard) GameState.init_bag_nonempty
+
 /-! ## The quantum on the M4 artifact itself -/
 
 /-- Along any legal trace from a closed-atlas state, the materialised solver's

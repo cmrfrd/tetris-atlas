@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23u) — init-cycle floors + general tetris embedding (bank 17/N)
+
+- `init_closedCycle_card_ge_thirtyfive` / 
+  `init_adversarialClosedCycle_card_ge_thirtyfive` — the M2/M3 artifacts
+  seeded at init hold ≥ 35 states (one-line corollaries; init is WF with a
+  full bag).
+- `adversary_tetris_filter_subset` / `adversary_tetris_card_le_I_card` — the
+  tetris-steps-embed-in-I-steps argument generalized from 7-windows to ANY
+  finite index set: every window's tetris count ≤ its I count.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23t) — the quantum on the M4 artifact (bank 16/N)
 
 `CycleQuantum` additions — the size floor lands on `Atlas.IsClosedOn`, the

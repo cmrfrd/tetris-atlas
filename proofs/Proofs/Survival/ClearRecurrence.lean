@@ -821,6 +821,13 @@ theorem closedCycle_card_ge_thirtyfive (C : ClosedCycle GameConfig.standard)
         omega
   rwa [Finset.card_range] at hcalc
 
+/-- Any closed cycle through the initial state holds at least 35 states: the
+M3 artifact (a reachable cycle seeded at `init`) is never smaller than five
+bags of states. -/
+theorem init_closedCycle_card_ge_thirtyfive (C : ClosedCycle GameConfig.standard)
+    (h0 : GameState.init ∈ C.states) : 35 ≤ C.states.card :=
+  closedCycle_card_ge_thirtyfive C h0 (GameState.init_board_wf GameConfig.standard)
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -539,5 +539,30 @@ theorem adversary_mix_law {σ : Solver GameConfig.standard} {s : ℕ → Piece}
   rw [GameConfig.standard_cols, GameState.init_board_count] at h
   omega
 
+/-- **Tetris steps embed in I steps, on any index set.** Generalises the
+7-window form: over an arbitrary finite set of step indices, the moves that
+clear four rows are among the moves where the sequence dealt an I — so any
+window's tetris count is bounded by its I count. -/
+theorem adversary_tetris_filter_subset {cfg : GameConfig} {σ : Solver cfg}
+    {s : ℕ → Piece} (F : Finset ℕ) :
+    F.filter (fun n => 4 ≤ (Board.fullRows cfg
+        (({ σ (adversarialTrace cfg σ s GameState.init n) (s n)
+            with piece := s n } : Placement).place
+          (adversarialTrace cfg σ s GameState.init n).board)).card)
+      ⊆ F.filter (fun n => s n = Piece.I) := by
+  intro n hn
+  obtain ⟨h1, h2⟩ := Finset.mem_filter.mp hn
+  exact Finset.mem_filter.mpr ⟨h1, adversary_tetris_step_I h2⟩
+
+/-- Card form: the tetris count of any index window is at most its I count. -/
+theorem adversary_tetris_card_le_I_card {cfg : GameConfig} {σ : Solver cfg}
+    {s : ℕ → Piece} (F : Finset ℕ) :
+    (F.filter (fun n => 4 ≤ (Board.fullRows cfg
+        (({ σ (adversarialTrace cfg σ s GameState.init n) (s n)
+            with piece := s n } : Placement).place
+          (adversarialTrace cfg σ s GameState.init n).board)).card)).card
+      ≤ (F.filter (fun n => s n = Piece.I)).card :=
+  Finset.card_le_card (adversary_tetris_filter_subset F)
+
 end ClearRate
 end Tetris
