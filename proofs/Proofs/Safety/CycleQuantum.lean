@@ -1961,5 +1961,92 @@ theorem exists_closedCycle_of_survives {π : Policy GameConfig.standard}
     exact ⟨0, Finset.mem_range.mpr (by omega), by rw [Nat.add_zero]⟩
   exact this
 
+/-- The cycle's policy patched to be valid everywhere: on the cycle it plays
+the cycle's move, off it a fixed in-bounds placement. -/
+def ClosedCycle.globalPolicy (C : ClosedCycle GameConfig.standard) :
+    Policy GameConfig.standard := fun g =>
+  if g ∈ C.states then C.policy g else ⟨Piece.I, 0, 0⟩
+
+/-- The patched policy is valid at every state. -/
+theorem ClosedCycle.globalPolicy_valid (C : ClosedCycle GameConfig.standard)
+    (g : GameState) : (ClosedCycle.globalPolicy C g).Valid GameConfig.standard := by
+  unfold ClosedCycle.globalPolicy
+  split
+  · exact C.valid g ‹_›
+  · intro cell hcell
+    have h4 := Piece.shapeUp_col_lt_four Piece.I 0 cell hcell
+    dsimp only
+    rw [GameConfig.standard_cols]
+    omega
+
+/-- On cycle states the patched policy agrees with the cycle's. -/
+theorem ClosedCycle.globalPolicy_eq_on (C : ClosedCycle GameConfig.standard)
+    {g : GameState} (hg : g ∈ C.states) :
+    ClosedCycle.globalPolicy C g = C.policy g := by
+  unfold ClosedCycle.globalPolicy
+  rw [if_pos hg]
+
+/-- The cycle with its policy globalized — same states, same behaviour on
+them, but the policy is now valid everywhere. -/
+def ClosedCycle.globalize (C : ClosedCycle GameConfig.standard) :
+    ClosedCycle GameConfig.standard where
+  states := C.states
+  policy := ClosedCycle.globalPolicy C
+  valid := fun s _ => ClosedCycle.globalPolicy_valid C s
+  legal_draw := by
+    intro s hs
+    rw [ClosedCycle.globalPolicy_eq_on C hs]
+    exact C.legal_draw s hs
+  not_lost := C.not_lost
+  closed := by
+    intro s hs
+    rw [ClosedCycle.globalPolicy_eq_on C hs]
+    exact C.closed s hs
+
+/-- **Survivors and cycles are the same phenomenon**: there is a globally
+valid, trace-legal policy surviving forever from some seed iff there is a
+nonempty closed cycle. Forward extracts the orbit; backward globalizes the
+cycle's policy and rides `closed_cycle_survives`. -/
+theorem exists_survivor_iff_exists_nonempty_cycle :
+    (∃ (π : Policy GameConfig.standard) (g0 : GameState),
+        (∀ g, (π g).Valid GameConfig.standard)
+      ∧ Board.WF GameConfig.standard g0.board
+      ∧ (∀ k, (π (trace GameConfig.standard π g0 k)).piece
+          ∈ (trace GameConfig.standard π g0 k).bag)
+      ∧ SurvivesForever GameConfig.standard π g0)
+      ↔ ∃ C : ClosedCycle GameConfig.standard, C.states.Nonempty
+          ∧ ∀ s ∈ C.states, Board.WF GameConfig.standard s.board := by
+  constructor
+  · rintro ⟨π, g0, hv, hwf, hdraw, hs⟩
+    obtain ⟨n₁, n₂, hlt, hret⟩ := survivesForever_exists_return_from hv hwf hs
+    refine ⟨closedCycleOfReturn hv hdraw hlt hret (fun k => hs k), ?_, ?_⟩
+    · refine ⟨trace GameConfig.standard π g0 n₁, ?_⟩
+      have : trace GameConfig.standard π g0 n₁
+          ∈ (Finset.range (n₂ - n₁)).image
+            (fun k => trace GameConfig.standard π g0 (n₁ + k)) := by
+        rw [Finset.mem_image]
+        exact ⟨0, Finset.mem_range.mpr (by omega), by rw [Nat.add_zero]⟩
+      exact this
+    · intro s hs'
+      have hs'' : s ∈ (Finset.range (n₂ - n₁)).image
+          (fun k => trace GameConfig.standard π g0 (n₁ + k)) := hs'
+      rw [Finset.mem_image] at hs''
+      obtain ⟨k, -, rfl⟩ := hs''
+      exact trace_board_wf hv hwf (n₁ + k)
+  · rintro ⟨C, ⟨g0, hg0⟩, hwfs⟩
+    refine ⟨ClosedCycle.globalPolicy C, g0,
+      ClosedCycle.globalPolicy_valid C, hwfs g0 hg0, ?_, ?_⟩
+    · intro k
+      have hmem : trace GameConfig.standard (ClosedCycle.globalPolicy C) g0 k
+          ∈ C.states :=
+        (ClosedCycle.globalize C).trace_mem_states
+          (show g0 ∈ (ClosedCycle.globalize C).states from hg0) k
+      rw [ClosedCycle.globalPolicy_eq_on C hmem]
+      have := C.legal_draw _ hmem
+      rwa [Bag.canDraw_iff_mem] at this
+    · have hs := closed_cycle_survives (ClosedCycle.globalize C)
+        (show g0 ∈ (ClosedCycle.globalize C).states from hg0)
+      exact hs
+
 end ClearRate
 end Tetris

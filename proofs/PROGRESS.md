@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bf) — the cooperative equivalence (bank 79/N) ★
+
+- `ClosedCycle.globalPolicy` / `globalize` — patch a cycle's on-set policy
+  to global validity (off-cycle: the fixed placement ⟨I,0,0⟩), preserving
+  the cycle verbatim.
+- **`exists_survivor_iff_exists_nonempty_cycle`** — a globally-valid,
+  trace-legal, surviving policy exists ⟺ a nonempty well-formed
+  `ClosedCycle` exists. The M2 program's cooperative layer is now a genuine
+  equivalence, both directions constructive.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23be) — every survivor hides a cycle (bank 78/N)
 
 - `closedCycleOfReturn` — the general orbit constructor: any live return of
