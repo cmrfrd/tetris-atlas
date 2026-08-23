@@ -190,6 +190,16 @@ theorem init_mem_safe_of_five_bag_invariant {cfg : GameConfig}
     GameState.init ∈ safe cfg :=
   init_mem_safe_of_block_invariant (by norm_num) Q hblock hboot
 
+/-- Config-generic wrapper: a five-bag invariant certifies solvability on any
+board at least four columns wide. -/
+theorem tetrisSolvableValidFor_of_five_bag_invariant {cfg : GameConfig}
+    (hcols : 4 ≤ cfg.cols) (Q : Set GameState)
+    (hblock : Q ⊆ (⇑(safeOp cfg))^[35] Q)
+    (hboot : GameState.init ∈ (⇑(safeOp cfg))^[35] Q) :
+    TetrisSolvableValidFor cfg :=
+  (tetrisSolvableValidFor_iff_init_safe hcols).mpr
+    (init_mem_safe_of_five_bag_invariant Q hblock hboot)
+
 /-- Solvability from a five-bag invariant, at the standard configuration. -/
 theorem tetrisSolvableValid_of_five_bag_invariant
     (Q : Set GameState)

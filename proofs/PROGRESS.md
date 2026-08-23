@@ -41629,6 +41629,24 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23p) — adversarial mirrors + generic five-bag wrapper (bank 12/N)
+
+- `adversary_six_le_count_of_clearing` — six banked cells before every
+  adversarial clearing moment.
+- `adversarialTrace_board_no_full` — adversarial trace boards never carry a
+  full row (init empty; every successor a clearLines image).
+- **`adversary_tetris_step_I`** — a four-row clear at adversarial step n forces
+  `s n = Piece.I`: the tetris constraint reads the adversary's piece sequence
+  directly off the clear log (cfg-generic).
+- `adversary_card_empty_times_le` — board empty at most a fifth of the time,
+  adversarially (residue clock).
+- `tetrisSolvableValidFor_of_five_bag_invariant` (HorizonCompactness) — the
+  five-bag block-coinduction wrapper made config-generic (4 ≤ cols).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23o) — adversarial standing inventory (bank 11/N)
 
 `AdversarialRate` additions — the occupancy statistics transferred to

@@ -339,5 +339,87 @@ theorem adversary_standing_inventory_floor {σ : Solver GameConfig.standard}
   rw [GameConfig.standard_cols, GameConfig.standard_rows] at hcap
   omega
 
+/-- Every clearing moment of an adversarial trace sits on six banked cells. -/
+theorem adversary_six_le_count_of_clearing {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+      with piece := s n } : Placement).Valid GameConfig.standard) {n : ℕ}
+    (hc : 0 < clearedAdv GameConfig.standard σ s GameState.init (n + 1)
+          - clearedAdv GameConfig.standard σ s GameState.init n) :
+    6 ≤ (adversarialTrace GameConfig.standard σ s GameState.init n).board.count := by
+  have h := clearAdv_step_le hv n
+  omega
+
+/-- Adversarial trace boards never carry a full row: the initial board is empty
+and every later board is a `clearLines` image. -/
+theorem adversarialTrace_board_no_full {cfg : GameConfig} {σ : Solver cfg}
+    {s : ℕ → Piece} (n r : ℕ) :
+    ¬ Board.isFull cfg (adversarialTrace cfg σ s GameState.init n).board r := by
+  cases n with
+  | zero =>
+    intro hfull
+    have h0 := hfull 0 (Finset.mem_range.2 cfg.cols_pos)
+    rw [adversarialTrace_zero] at h0
+    exact GameState.init_board_no_mem _ h0
+  | succ k =>
+    rw [adversarialTrace_succ, adversarialStep_board]
+    unfold Placement.applyStep
+    exact Board.clearLines_no_full _ cfg.cols_pos r
+
+/-- **A tetris identifies the adversary's piece.** If the drop at adversarial
+step `n` completes four rows, the piece announced at step `n` was an I: the
+tetris constraint reads the piece sequence directly off the clear log. -/
+theorem adversary_tetris_step_I {cfg : GameConfig} {σ : Solver cfg}
+    {s : ℕ → Piece} {n : ℕ}
+    (h4 : 4 ≤ (Board.fullRows cfg
+      (({ σ (adversarialTrace cfg σ s GameState.init n) (s n) with piece := s n }
+          : Placement).place
+        (adversarialTrace cfg σ s GameState.init n).board)).card) :
+    s n = Piece.I := by
+  have hI := tetris_requires_I
+    (b := (adversarialTrace cfg σ s GameState.init n).board)
+    (pl := { σ (adversarialTrace cfg σ s GameState.init n) (s n) with piece := s n })
+    (fun r => adversarialTrace_board_no_full n r) h4
+  exact hI
+
+/-- **The board is empty at most a fifth of the time, adversarially.** The
+occupancy residue clock (`adversarialTrace_count_mod_ten`) forces `5 ∣ n` at
+every empty checkpoint, whoever picks the pieces. -/
+theorem adversary_card_empty_times_le {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+      with piece := s n } : Placement).Valid GameConfig.standard) (n : ℕ) :
+    5 * ((Finset.range n).filter (fun t =>
+        (adversarialTrace GameConfig.standard σ s GameState.init t).board.count
+          = 0)).card
+      ≤ n + 4 := by
+  classical
+  set S := (Finset.range n).filter (fun t =>
+    (adversarialTrace GameConfig.standard σ s GameState.init t).board.count = 0)
+    with hS
+  have hmod : ∀ t ∈ S, t % 5 = 0 := by
+    intro t ht
+    obtain ⟨htr, hzero⟩ := Finset.mem_filter.mp ht
+    have h := adversarialTrace_count_mod_ten
+      (GameState.init_board_wf GameConfig.standard) hv t
+    rw [hzero, GameState.init_board_count] at h
+    omega
+  have hlt : ∀ t ∈ S, t < n := fun t ht =>
+    Finset.mem_range.mp (Finset.mem_filter.mp ht).1
+  have hcard : S.card ≤ (Finset.range ((n + 4) / 5)).card := by
+    refine Finset.card_le_card_of_injOn (· / 5) ?_ ?_
+    · intro t ht
+      have h1 := hmod t ht
+      have h2 := hlt t ht
+      simp only [Finset.coe_range, Set.mem_Iio]
+      omega
+    · intro t₁ ht₁ t₂ ht₂ hEq
+      have h1 := hmod t₁ ht₁
+      have h2 := hmod t₂ ht₂
+      dsimp only at hEq
+      omega
+  rw [Finset.card_range] at hcard
+  omega
+
 end ClearRate
 end Tetris
