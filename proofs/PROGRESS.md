@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23bd) — survival is a bounded formula (bank 77/N)
+
+- `survivesForever_iff_bounded_evidence` — the Π⁰₁ statement
+  `SurvivesForever` for a fixed valid policy is equivalent to a formula
+  whose EVERY quantifier is bounded by `2^207`: cooperative solvability
+  carries no logical strength beyond finite verification. (A `Decidable`
+  instance is NOT derivable — the policy `π` is an arbitrary function and
+  can't be evaluated constructively; the iff is the honest form.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23bc) — the quantitative return bound (bank 76/N)
 
 - `card_infield_times_bag` — the live state space is exactly `2^207`

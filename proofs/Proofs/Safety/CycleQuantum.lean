@@ -1847,5 +1847,28 @@ theorem survivesForever_return_within {π : Policy GameConfig.standard}
     refine ⟨j, i, hlt'', by have := i.isLt; omega, hstates.symm, ?_⟩
     exact thirtyfive_dvd_of_trace_eq hv hdraw (le_of_lt hlt'') hstates.symm
 
+/-- **Survival is a bounded formula**: `SurvivesForever` — a Π⁰₁ statement
+over all time — is equivalent to a statement whose every quantifier is
+bounded by `2^207`. Cooperative solvability of a fixed policy carries no
+logical strength beyond finite verification. -/
+theorem survivesForever_iff_bounded_evidence {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) :
+    SurvivesForever GameConfig.standard π GameState.init
+      ↔ ∃ n₂, n₂ ≤ 2 ^ 207 ∧ ∃ n₁, n₁ < n₂
+          ∧ trace GameConfig.standard π GameState.init n₁
+            = trace GameConfig.standard π GameState.init n₂
+          ∧ ∀ k, k < n₂ →
+            ¬ (trace GameConfig.standard π GameState.init k).lost
+              GameConfig.standard := by
+  constructor
+  · intro hs
+    obtain ⟨n₁, n₂, hlt, hbound, hret, -⟩ :=
+      survivesForever_return_within hv hdraw hs
+    exact ⟨n₂, hbound, n₁, hlt, hret, fun k _ => hs k⟩
+  · rintro ⟨n₂, -, n₁, hlt, hret, hlive⟩
+    exact survivesForever_of_trace_return hlt hret hlive
+
 end ClearRate
 end Tetris
