@@ -1373,6 +1373,92 @@ theorem cleared_row_was_six_tenths {π : Policy GameConfig.standard} {m r : ℕ}
   rw [GameConfig.standard_cols] at h
   omega
 
+/-- A full row of a well-formed board holds exactly `cols` cells. -/
+theorem rowCount_of_isFull {cfg : GameConfig} {b : Board}
+    (hwf : Board.WF cfg b) {r : ℕ} (hfull : Board.isFull cfg b r) :
+    b.rowCount r = cfg.cols := by
+  classical
+  apply le_antisymm
+  · unfold Board.rowCount
+    refine le_trans (Finset.card_le_card_of_injOn (fun p => p.1) ?_ ?_)
+      (le_of_eq (Finset.card_range cfg.cols))
+    · intro p hp
+      simp only [Finset.mem_coe, Finset.mem_filter] at hp
+      exact Finset.mem_range.mpr (hwf p hp.1)
+    · intro p hp q hq hpq
+      simp only [Finset.mem_coe, Finset.mem_filter] at hp hq
+      apply Prod.ext
+      · exact hpq
+      · rw [hp.2, hq.2]
+  · unfold Board.rowCount
+    have hsub : (Finset.range cfg.cols).image (fun c => ((c, r) : ℕ × ℕ))
+        ⊆ b.filter (fun p => p.2 = r) := by
+      intro p hp
+      rw [Finset.mem_image] at hp
+      obtain ⟨c, hc, rfl⟩ := hp
+      rw [Finset.mem_range] at hc
+      exact Finset.mem_filter.mpr ⟨Board.mem_of_isFull cfg hc hfull, rfl⟩
+    have := Finset.card_le_card hsub
+    rwa [Finset.card_image_of_injective _
+      (fun a b hab => by simpa using hab), Finset.card_range] at this
+
+/-- The piece's total contribution across any set of rows is at most four. -/
+theorem sum_row_added_le_four (b : Board) (pl : Placement) (R : Finset ℕ) :
+    ∑ r ∈ R, ((pl.dropped b).filter (fun p => p.2 = r)).card ≤ 4 := by
+  classical
+  have hdisj : ∀ r ∈ R, ∀ r' ∈ R, r ≠ r' →
+      Disjoint ((pl.dropped b).filter (fun p => p.2 = r))
+        ((pl.dropped b).filter (fun p => p.2 = r')) := by
+    intro r _ r' _ hne
+    rw [Finset.disjoint_left]
+    intro p hp hp'
+    rw [Finset.mem_filter] at hp hp'
+    exact hne (by rw [← hp.2, hp'.2])
+  calc ∑ r ∈ R, ((pl.dropped b).filter (fun p => p.2 = r)).card
+      = (R.biUnion (fun r => (pl.dropped b).filter (fun p => p.2 = r))).card :=
+        (Finset.card_biUnion hdisj).symm
+    _ ≤ (pl.dropped b).card := by
+        apply Finset.card_le_card
+        intro p hp
+        rw [Finset.mem_biUnion] at hp
+        obtain ⟨r, -, hpr⟩ := hp
+        exact (Finset.mem_filter.mp hpr).1
+    _ = 4 := Placement.card_dropped b pl
+
+/-- **The localized clear mass**: the rows a `k`-clear completes held at
+least `10k − 4` cells between them before the piece landed — the clearing
+mass must be standing in the *cleared rows themselves*, not merely
+somewhere on the board. Localizes the 36-cell tetris floor. -/
+theorem cleared_rows_pre_mass {cfg : GameConfig} {b : Board} {pl : Placement}
+    (hwf : Board.WF cfg b) (hv : pl.Valid cfg) :
+    cfg.cols * (Board.fullRows cfg (pl.place b)).card
+      ≤ (∑ r ∈ Board.fullRows cfg (pl.place b), b.rowCount r) + 4 := by
+  classical
+  have hplacewf : Board.WF cfg (pl.place b) := Placement.place_wf hwf hv
+  have hfullcnt : ∀ r ∈ Board.fullRows cfg (pl.place b),
+      Board.rowCount (pl.place b) r = cfg.cols := by
+    intro r hr
+    exact rowCount_of_isFull hplacewf (Board.isFull_of_mem_fullRows hr)
+  have hsplit : ∀ r, Board.rowCount (pl.place b) r
+      ≤ b.rowCount r + ((pl.dropped b).filter (fun p => p.2 = r)).card := by
+    intro r
+    unfold Board.rowCount
+    rw [Placement.place_eq_union_dropped, Finset.filter_union]
+    exact Finset.card_union_le _ _
+  have hsum : ∑ r ∈ Board.fullRows cfg (pl.place b),
+      Board.rowCount (pl.place b) r
+      ≤ (∑ r ∈ Board.fullRows cfg (pl.place b), b.rowCount r)
+        + ∑ r ∈ Board.fullRows cfg (pl.place b),
+          ((pl.dropped b).filter (fun p => p.2 = r)).card := by
+    rw [← Finset.sum_add_distrib]
+    exact Finset.sum_le_sum (fun r _ => hsplit r)
+  have hconst : ∑ r ∈ Board.fullRows cfg (pl.place b),
+      Board.rowCount (pl.place b) r
+      = cfg.cols * (Board.fullRows cfg (pl.place b)).card := by
+    rw [Finset.sum_congr rfl hfullcnt, Finset.sum_const, smul_eq_mul, mul_comm]
+  have hadd := sum_row_added_le_four b pl (Board.fullRows cfg (pl.place b))
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

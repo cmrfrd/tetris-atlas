@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24f) — the localized clear mass (bank 122/N)
+
+- `rowCount_of_isFull` — a full row of a WF board holds exactly `cols`.
+- `sum_row_added_le_four` — the piece's total contribution across any row
+  set is ≤ 4 (disjoint fibers → biUnion → card 4).
+- **`cleared_rows_pre_mass`** — the rows a `k`-clear completes held
+  ≥ `10k − 4` cells between them BEFORE the piece: the clearing mass must
+  stand in the cleared rows themselves, not merely somewhere on the board.
+  Localizes the 36-cell tetris floor to the four cleared rows.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24e) — clears must be prepared (bank 121/N)
 
 - `cleared_row_pre_count_ge` — a row completed by a placement held ≥
