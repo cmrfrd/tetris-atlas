@@ -2228,5 +2228,53 @@ theorem adversarial_survives_iff_return {σ : Solver GameConfig.standard}
     · intro k hk
       exact hlive k (by omega)
 
+/-- The canonical periodic stream `I O S Z T L J` repeated forever. -/
+def canonicalStream : ℕ → Piece := fun n => BagCadence.sevenPattern (n % 7)
+
+theorem canonicalStream_legal : LegalSequence canonicalStream :=
+  BagCadence.periodic_stream_legal BagCadence.sevenPattern (by decide)
+
+theorem canonicalStream_periodic : ∀ k, canonicalStream (k + 35)
+    = canonicalStream k := by
+  intro k
+  unfold canonicalStream
+  rw [show (k + 35) % 7 = k % 7 by omega]
+
+/-- **A finite necessary condition for solvability**: if Tetris is solvable
+by a valid solver, then some solver exhibits a live state-revisit against
+the canonical periodic stream — a single concrete, finitely checkable
+certificate shape that MUST exist if the mission can succeed at all. -/
+theorem tetrisSolvableValid_implies_canonical_evidence :
+    TetrisSolvableValid →
+      ∃ (σ : Solver GameConfig.standard) (n₁ n₂ : ℕ), n₁ < n₂
+        ∧ adversarialTrace GameConfig.standard σ canonicalStream
+            GameState.init n₁
+          = adversarialTrace GameConfig.standard σ canonicalStream
+              GameState.init n₂
+        ∧ ∀ k, k < n₂ →
+          ¬ (adversarialTrace GameConfig.standard σ canonicalStream
+              GameState.init k).lost GameConfig.standard := by
+  rintro ⟨σ, hval, hsolve⟩
+  have hdraw : ∀ n, canonicalStream n
+      ∈ (adversarialTrace GameConfig.standard σ canonicalStream
+        GameState.init n).bag := by
+    intro n
+    rw [adversarialTrace_bag_from,
+      show GameState.init.bag = Bag.full from GameState.init_bag]
+    have h := canonicalStream_legal n
+    rwa [Bag.canDraw_iff_mem] at h
+  have hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ canonicalStream
+      GameState.init n) (canonicalStream n) with piece := canonicalStream n }
+      : Placement).Valid GameConfig.standard := by
+    intro n
+    obtain ⟨hp, hval'⟩ := hval _ (canonicalStream n) (hdraw n)
+    rw [placement_with_piece_self hp]
+    exact hval'
+  have hs : ∀ m, ¬ (adversarialTrace GameConfig.standard σ canonicalStream
+      GameState.init m).lost GameConfig.standard :=
+    hsolve canonicalStream canonicalStream_legal
+  obtain ⟨n₁, n₂, hlt, hret⟩ := adversarial_survives_exists_return hv hs
+  exact ⟨σ, n₁, n₂, hlt, hret, fun k _ => hs k⟩
+
 end ClearRate
 end Tetris

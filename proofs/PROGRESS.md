@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23cl) — the canonical necessary condition (bank 111/N)
+
+- `canonicalStream` (+`_legal`, `_periodic`) — the `IOSZTLJ`-repeated
+  stream, packaged.
+- **`tetrisSolvableValid_implies_canonical_evidence`** — if Tetris is
+  solvable by a valid solver, some solver exhibits a live state-revisit
+  against the canonical stream: a single concrete, finitely-checkable
+  certificate shape that MUST exist if the mission can succeed. Search
+  guidance in theorem form.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ck) — periodic adversary ⟺ finite evidence (bank 110/N) ★
 
 - `adversarial_survives_exists_return` — a forever-live adversarial trace
