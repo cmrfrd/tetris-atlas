@@ -1193,6 +1193,42 @@ theorem cycle_column_load_exact {π : Policy GameConfig.standard}
     (Nat.le_add_right n (35 * k))
   omega
 
+/-- Column deliveries never decrease. -/
+theorem colDelivered_mono (π : Policy GameConfig.standard) (j : ℕ) :
+    Monotone (colDelivered π j) := by
+  apply monotone_nat_of_le_succ
+  intro n
+  rw [colDelivered_succ]
+  exact Nat.le_add_right _ _
+
+/-- **The per-column frequency law on cycles**: every window of a cycle
+delivers between `14⌊w/35⌋` and `14⌊w/35⌋ + 14` cells to every column —
+each column's intake runs at exactly `0.4` cells per placement with at most
+one period of slack, at every position and scale. -/
+theorem cycle_column_window_bracket {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {j : ℕ} (hj : j < 10) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) (w : ℕ) :
+    14 * (w / 35) ≤ colDelivered π j (m₀ + w) - colDelivered π j m₀
+      ∧ colDelivered π j (m₀ + w) - colDelivered π j m₀
+        ≤ 14 * (w / 35) + 14 := by
+  have hanchor : trace GameConfig.standard π GameState.init m₀
+      = trace GameConfig.standard π GameState.init (m₀ + 35) := by
+    have h := trace_eq_of_state_eq π GameState.init hcyc (m₀ - n)
+    rw [show n + (m₀ - n) = m₀ by omega] at h
+    rw [show n + 35 + (m₀ - n) = m₀ + 35 by omega] at h
+    exact h
+  set q := w / 35 with hq
+  have hexq := cycle_column_load_exact hv hj hanchor q
+  have hexq1 := cycle_column_load_exact hv hj hanchor (q + 1)
+  have hm1 := colDelivered_mono π j (Nat.le_add_right m₀ (35 * q))
+  have hm2 := colDelivered_mono π j
+    (show m₀ + 35 * q ≤ m₀ + w by omega)
+  have hm3 := colDelivered_mono π j
+    (show m₀ + w ≤ m₀ + 35 * (q + 1) by omega)
+  exact ⟨by omega, by omega⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

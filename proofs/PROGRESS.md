@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23cq) — the per-column frequency law (bank 116/N)
+
+- `colDelivered_mono` + `cycle_column_window_bracket` — every window of a
+  cycle delivers `[14⌊w/35⌋, 14⌊w/35⌋+14]` cells to EVERY column: each
+  column's intake runs at exactly 0.4 cells/placement with at most one
+  period of slack, at every position and scale (anchor inline via
+  `trace_eq_of_state_eq` — `trace_tail_periodic` lives downstream).
+- The column arc now matches the global clearing arc law-for-law.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23cp) — exact column loads (bank 115/N)
 
 - `column_pair_balance` — any two columns' cumulative deliveries differ by
