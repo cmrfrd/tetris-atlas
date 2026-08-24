@@ -2372,5 +2372,37 @@ theorem survivesForever_iff_live_return_from {π : Policy GameConfig.standard}
   · rintro ⟨n₁, n₂, hlt, hret, hlive⟩
     exact survivesForever_of_trace_return_from hlt hret hlive
 
+/-- The tetris well, on traces: past the seed, a four-clear's four gaps sit
+in one straight column of the current board. -/
+theorem trace_tetris_well {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ} (hm : 1 ≤ m)
+    (h4 : (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init m)).place
+        (trace GameConfig.standard π GameState.init m).board)).card = 4) :
+    ∃ c₀, ∀ r ∈ Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board),
+      (c₀, r) ∉ (trace GameConfig.standard π GameState.init m).board
+        ∧ (c₀, r) ∈ (π (trace GameConfig.standard π GameState.init m)).dropped
+            (trace GameConfig.standard π GameState.init m).board :=
+  tetris_gaps_share_column
+    (trace_board_wf hv (GameState.init_board_wf GameConfig.standard) m)
+    (hv _) (fun r => trace_board_no_full_of_pos hm r) h4
+
+/-- The unified per-row floor, on traces: past the seed, each row a step
+completes held at least `5 + k` cells. -/
+theorem trace_cleared_row_pre_ge {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ} (hm : 1 ≤ m) {r : ℕ}
+    (hr : r ∈ Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init m)).place
+        (trace GameConfig.standard π GameState.init m).board)) :
+    5 + (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board)).card
+      ≤ (trace GameConfig.standard π GameState.init m).board.rowCount r :=
+  cleared_row_pre_ge
+    (trace_board_wf hv (GameState.init_board_wf GameConfig.standard) m)
+    (hv _) (fun r' => trace_board_no_full_of_pos hm r') hr
+
 end ClearRate
 end Tetris

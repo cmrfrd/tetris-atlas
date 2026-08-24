@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24n) — anatomy on traces (bank 130/N)
+
+- `trace_tetris_well` / `trace_cleared_row_pre_ge` — the tetris-well and
+  per-row-floor theorems packaged at trace level: past the seed the
+  standing hypotheses (board WF, placement validity, no full rows) are
+  derived automatically. The anatomy arc is now directly usable in any
+  trace argument.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24m) — the unified per-row floor (bank 129/N)
 
 - `cleared_row_pre_ge` — each row of a `k`-clear held ≥ `5 + k` cells
