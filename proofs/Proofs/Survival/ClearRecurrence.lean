@@ -1305,6 +1305,48 @@ theorem cycle_tall_drop_column_cap {π : Policy GameConfig.standard}
       _ ≤ _ := Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
   omega
 
+/-- **The general column-profile cap**: per cycle period, placements
+delivering at least `p ≥ 1` cells into a fixed column number at most
+`⌊14/p⌋` — heavy feeders of any one column are rationed by its exact
+period budget (`p = 4`: ≤ 3 tall drops; `p = 3`: ≤ 4; `p = 2`: ≤ 7). -/
+theorem cycle_column_profile_cap {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {j : ℕ} (hj : j < 10) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35))
+    {p : ℕ} (hp : 1 ≤ p) :
+    ((Finset.range 35).filter (fun k =>
+        p ≤ (π (trace GameConfig.standard π GameState.init (n + k))).colProfile
+          j)).card ≤ 14 / p := by
+  classical
+  have hload := cycle_column_load_exact hv hj hcyc 1
+  rw [mul_one] at hload
+  have hwin := colDelivered_window π j n 35
+  have hsum : p * ((Finset.range 35).filter (fun k =>
+        p ≤ (π (trace GameConfig.standard π GameState.init (n + k))).colProfile
+          j)).card
+      ≤ ∑ k ∈ Finset.range 35,
+          (π (trace GameConfig.standard π GameState.init (n + k))).colProfile
+            j := by
+    calc p * ((Finset.range 35).filter (fun k =>
+          p ≤ (π (trace GameConfig.standard π GameState.init
+            (n + k))).colProfile j)).card
+        = ∑ _k ∈ (Finset.range 35).filter (fun k =>
+            p ≤ (π (trace GameConfig.standard π GameState.init
+              (n + k))).colProfile j), p := by
+          rw [Finset.sum_const, smul_eq_mul, mul_comm]
+      _ ≤ ∑ k ∈ (Finset.range 35).filter (fun k =>
+            p ≤ (π (trace GameConfig.standard π GameState.init
+              (n + k))).colProfile j),
+            (π (trace GameConfig.standard π GameState.init
+              (n + k))).colProfile j :=
+          Finset.sum_le_sum (fun k hk => (Finset.mem_filter.mp hk).2)
+      _ ≤ _ := Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
+  have hS : (∑ k ∈ Finset.range 35,
+      (π (trace GameConfig.standard π GameState.init (n + k))).colProfile j)
+      = 14 := by omega
+  have hmul := hsum.trans (le_of_eq hS)
+  exact (Nat.le_div_iff_mul_le hp).mpr (by rw [mul_comm]; exact hmul)
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

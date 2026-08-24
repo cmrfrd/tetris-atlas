@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24d) — the column rationing law (bank 120/N)
+
+- `cycle_column_profile_cap` — the general form: per period, placements
+  delivering ≥ p cells into a fixed column number ≤ ⌊14/p⌋ (p=4: ≤3 tall
+  drops; p=3: ≤4; p=2: ≤7). Heavy feeders of any one column are rationed
+  by its exact 14-cell budget.
+- Lean note: omega REJECTS nonlinear `p * card` even as a shared atom —
+  route through `le_trans`/`Nat.le_div_iff_mul_le` instead.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24c) — the tall-drop cap (bank 119/N)
 
 - `colDelivered_window` — window intake = sum of the window's profiles.
