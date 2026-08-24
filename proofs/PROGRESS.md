@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24r) — the I vanishes (bank 134/N)
+
+- `tetris_piece_vanishes` — every cell of a tetris's finishing piece lies
+  in a cleared row: the four one-cell fibers exhaust the four-cell piece
+  (biUnion card argument), so the vertical I is consumed whole. A tetris
+  changes the board's surviving cells ONLY by removing 36 old ones.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24q) — the total-gap bracket (bank 133/N)
 
 - `rowCount_le_cols` / `isFull_of_rowCount_eq_cols` — rows hold ≤ cols

@@ -1931,6 +1931,63 @@ theorem clearing_total_gaps_bracket {b : Board} {pl : Placement}
         Finset.sum_le_sum hpoint
       _ ≤ 4 := sum_row_added_le_four b pl _
 
+/-- **The I vanishes**: every cell of a tetris's finishing piece lies in a
+cleared row — the vertical I is consumed whole, leaving no trace of itself
+on the post-clear board. -/
+theorem tetris_piece_vanishes {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    ∀ q ∈ pl.dropped b, q.2 ∈ Board.fullRows GameConfig.standard
+      (pl.place b) := by
+  classical
+  -- each of the four rows takes exactly one piece cell
+  have hone : ∀ r ∈ Board.fullRows GameConfig.standard (pl.place b),
+      ((pl.dropped b).filter (fun p => p.2 = r)).card = 1 := by
+    intro r hr
+    have h9 := tetris_rows_pre_nine hwf hv hnf h4 hr
+    have hten : Board.rowCount (pl.place b) r = 10 := by
+      have h := rowCount_of_isFull (Placement.place_wf hwf hv)
+        (Board.isFull_of_mem_fullRows hr)
+      rwa [GameConfig.standard_cols] at h
+    have hsplit := rowCount_place_eq b pl r
+    omega
+  -- the four one-cell fibers exhaust the four-cell piece
+  have hdisj : ∀ r ∈ Board.fullRows GameConfig.standard (pl.place b),
+      ∀ r' ∈ Board.fullRows GameConfig.standard (pl.place b), r ≠ r' →
+      Disjoint ((pl.dropped b).filter (fun p => p.2 = r))
+        ((pl.dropped b).filter (fun p => p.2 = r')) := by
+    intro r _ r' _ hne
+    rw [Finset.disjoint_left]
+    intro p hp hp'
+    rw [Finset.mem_filter] at hp hp'
+    exact hne (by rw [← hp.2, hp'.2])
+  have hbicard : ((Board.fullRows GameConfig.standard (pl.place b)).biUnion
+      (fun r => (pl.dropped b).filter (fun p => p.2 = r))).card = 4 := by
+    rw [Finset.card_biUnion hdisj, Finset.sum_congr rfl hone,
+      Finset.sum_const, smul_eq_mul, mul_one, h4]
+  have hbisub : (Board.fullRows GameConfig.standard (pl.place b)).biUnion
+      (fun r => (pl.dropped b).filter (fun p => p.2 = r)) ⊆ pl.dropped b := by
+    intro q hq
+    rw [Finset.mem_biUnion] at hq
+    obtain ⟨r, -, hqr⟩ := hq
+    exact (Finset.mem_filter.mp hqr).1
+  have heq : (Board.fullRows GameConfig.standard (pl.place b)).biUnion
+      (fun r => (pl.dropped b).filter (fun p => p.2 = r)) = pl.dropped b :=
+    Finset.eq_of_subset_of_card_le hbisub
+      (by rw [hbicard, Placement.card_dropped])
+  intro q hq
+  have : q ∈ (Board.fullRows GameConfig.standard (pl.place b)).biUnion
+      (fun r => (pl.dropped b).filter (fun p => p.2 = r)) := by
+    rw [heq]
+    exact hq
+  rw [Finset.mem_biUnion] at this
+  obtain ⟨r, hr, hqr⟩ := this
+  rw [Finset.mem_filter] at hqr
+  rw [hqr.2]
+  exact hr
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
