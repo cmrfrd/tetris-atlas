@@ -1160,6 +1160,39 @@ theorem column_load_bracket {π : Policy GameConfig.standard}
   rw [GameConfig.standard_rows] at hcc
   exact ⟨by omega, by omega⟩
 
+/-- **Column-pair balance**: on a live trace, any two columns' cumulative
+deliveries differ by at most twenty cells. -/
+theorem column_pair_balance {π : Policy GameConfig.standard}
+    {j j' : ℕ} (hj : j < 10) (hj' : j' < 10) {n : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init n).lost
+      GameConfig.standard) :
+    colDelivered π j n ≤ colDelivered π j' n + 20 := by
+  obtain ⟨h1, h2⟩ := column_load_bracket (π := π) hj hlive
+  obtain ⟨h1', h2'⟩ := column_load_bracket (π := π) hj' hlive
+  omega
+
+/-- **Every column receives exactly `14·k` cells per `k` cycle periods**:
+the column's holdings return with the state, so its intake equals its
+clearing bill exactly — the 140-cells-per-period total splits as
+`10 × 14`, column by column. -/
+theorem cycle_column_load_exact {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {j : ℕ} (hj : j < 10) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) (k : ℕ) :
+    colDelivered π j (n + 35 * k) - colDelivered π j n = 14 * k := by
+  have hled1 := colDelivered_ledger (π := π) hj n
+  have hled2 := colDelivered_ledger (π := π) hj (n + 35 * k)
+  have hiter := trace_period_multiples π GameState.init hcyc k
+  rw [show n + k * 35 = n + 35 * k by ring] at hiter
+  have hcol : (trace GameConfig.standard π GameState.init
+        (n + 35 * k)).board.colCount j
+      = (trace GameConfig.standard π GameState.init n).board.colCount j := by
+    rw [← hiter]
+  have hcl := multi_period_clears hv hcyc k
+  have hclm := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right n (35 * k))
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23cp) — exact column loads (bank 115/N)
+
+- `column_pair_balance` — any two columns' cumulative deliveries differ by
+  at most 20 cells on a live trace.
+- **`cycle_column_load_exact`** — on a cycle EVERY column receives exactly
+  `14k` cells per `k` periods: the column's holdings return with the state,
+  so intake = clearing bill exactly. The 140-per-period total splits as
+  10 × 14, column by column. The finest conservation law in the bank.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23co) — THE LOAD-DISTRIBUTION LAW (bank 114/N) ★
 
 - `colDelivered` + `colDelivered_ledger` — the per-column trace ledger:
