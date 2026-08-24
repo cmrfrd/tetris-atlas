@@ -1118,5 +1118,38 @@ theorem legalSequenceFrom_iff_block_injective (s : ℕ → Piece) :
       (by rw [show 7 * (n / 7) + n % 7 = n by omega]; exact hpj)
 
 
+/-- **Any block pattern is legal**: repeating one injective 7-slot pattern
+forever is a legal 7-bag stream — the block-injectivity characterization
+makes the check pointwise. -/
+theorem periodic_stream_legal (f : ℕ → Piece)
+    (hf : ∀ j < 7, ∀ j' < 7, j ≠ j' → f j ≠ f j') :
+    LegalSequenceFrom Bag.full (fun n => f (n % 7)) := by
+  rw [legalSequenceFrom_iff_block_injective]
+  intro b j hj j' hj' hne
+  rw [show (7 * b + j) % 7 = j by omega, show (7 * b + j') % 7 = j' by omega]
+  exact hf j hj j' hj' hne
+
+/-- The canonical 7-slot pattern `I O S Z T L J`. -/
+def sevenPattern : ℕ → Piece
+  | 0 => Piece.I
+  | 1 => Piece.O
+  | 2 => Piece.S
+  | 3 => Piece.Z
+  | 4 => Piece.T
+  | 5 => Piece.L
+  | _ => Piece.J
+
+/-- **Periodic legal streams exist**: there is a legal 7-bag stream that is
+35-periodic — exactly the loop-witness shape the adversarial multi-period
+theory consumes. -/
+theorem exists_periodic_legal_stream :
+    ∃ s : ℕ → Piece, LegalSequenceFrom Bag.full s ∧ ∀ k, s (k + 35) = s k := by
+  refine ⟨fun n => sevenPattern (n % 7), periodic_stream_legal sevenPattern ?_, ?_⟩
+  · decide
+  · intro k
+    change sevenPattern ((k + 35) % 7) = sevenPattern (k % 7)
+    rw [show (k + 35) % 7 = k % 7 by omega]
+
+
 end BagCadence
 end Tetris

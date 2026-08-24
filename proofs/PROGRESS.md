@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23cd) — periodic legal streams exist (bank 103/N)
+
+- `periodic_stream_legal` — repeating one injective 7-slot pattern forever
+  is a legal 7-bag stream (pointwise check via the characterization).
+- `sevenPattern` + `exists_periodic_legal_stream` — the canonical
+  `I O S Z T L J` stream: legal AND 35-periodic — exactly the `hper`
+  loop-witness shape the adversarial multi-period theory consumes. The
+  adversarial theorems now have a concrete inhabitant of their hypothesis.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23cc) — legality IS block-injectivity (bank 102/N) ★
 
 - `bagAt_eq_sdiff_of_block_injective` — the bag formula proven from
