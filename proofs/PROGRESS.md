@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24q) — the total-gap bracket (bank 133/N)
+
+- `rowCount_le_cols` / `isFull_of_rowCount_eq_cols` — rows hold ≤ cols
+  cells, and a cols-count row is full (pigeonhole on columns).
+- `clearing_total_gaps_bracket` — a k-clear closes between k and FOUR gaps
+  in total: each completed row missed ≥ 1, and every closed gap is a piece
+  cell. (Pointwise route: 10 − pre ≤ added per row; avoids sum_tsub.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24p) — the clearing box (bank 132/N)
 
 - `clearing_gaps_in_four_box` — every pair of gaps a single placement

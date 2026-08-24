@@ -1837,6 +1837,100 @@ theorem clearing_gaps_in_four_box {cfg : GameConfig} {b : Board}
   have hb4 := Piece.shapeUp_row_lt_four pl.piece pl.rot cell' hcell'
   omega
 
+/-- Any row of a well-formed board holds at most `cols` cells. -/
+theorem rowCount_le_cols {cfg : GameConfig} {b : Board}
+    (hwf : Board.WF cfg b) (r : ℕ) : b.rowCount r ≤ cfg.cols := by
+  classical
+  unfold Board.rowCount
+  refine le_trans (Finset.card_le_card_of_injOn (fun p => p.1) ?_ ?_)
+    (le_of_eq (Finset.card_range cfg.cols))
+  · intro p hp
+    simp only [Finset.mem_coe, Finset.mem_filter] at hp
+    exact Finset.mem_range.mpr (hwf p hp.1)
+  · intro p hp q hq hpq
+    simp only [Finset.mem_coe, Finset.mem_filter] at hp hq
+    apply Prod.ext
+    · exact hpq
+    · rw [hp.2, hq.2]
+
+/-- A row of a well-formed board holding `cols` cells is full — its columns
+exhaust the range. -/
+theorem isFull_of_rowCount_eq_cols {cfg : GameConfig} {b : Board}
+    (hwf : Board.WF cfg b) {r : ℕ} (hfullcnt : b.rowCount r = cfg.cols) :
+    Board.isFull cfg b r := by
+  classical
+  set filled := (b.filter (fun p => p.2 = r)).image (fun p => p.1) with hfil
+  have hfsub : filled ⊆ Finset.range cfg.cols := by
+    intro c hc
+    rw [hfil, Finset.mem_image] at hc
+    obtain ⟨p, hp, rfl⟩ := hc
+    exact Finset.mem_range.mpr (hwf p (Finset.mem_filter.mp hp).1)
+  have hfcard : filled.card = cfg.cols := by
+    rw [hfil, Finset.card_image_of_injOn]
+    · unfold Board.rowCount at hfullcnt
+      exact hfullcnt
+    · intro p hp q hq hpq
+      simp only [Finset.mem_coe, Finset.mem_filter] at hp hq
+      apply Prod.ext
+      · exact hpq
+      · rw [hp.2, hq.2]
+  have heq : filled = Finset.range cfg.cols :=
+    Finset.eq_of_subset_of_card_le hfsub (by rw [hfcard, Finset.card_range])
+  intro c hc
+  have : c ∈ filled := heq ▸ hc
+  rw [hfil, Finset.mem_image] at this
+  obtain ⟨p, hp, rfl⟩ := this
+  rw [Finset.mem_filter] at hp
+  have : p = (p.1, r) := Prod.ext rfl hp.2
+  rw [← this]
+  exact hp.1
+
+/-- **The total-gap bracket**: a `k`-clear closes between `k` and four gaps
+in total — each completed row was missing at least one cell, and the piece
+carries only four. -/
+theorem clearing_total_gaps_bracket {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r) :
+    (Board.fullRows GameConfig.standard (pl.place b)).card
+        ≤ ∑ r ∈ Board.fullRows GameConfig.standard (pl.place b),
+          (10 - b.rowCount r)
+      ∧ ∑ r ∈ Board.fullRows GameConfig.standard (pl.place b),
+          (10 - b.rowCount r) ≤ 4 := by
+  classical
+  have hgap1 : ∀ r ∈ Board.fullRows GameConfig.standard (pl.place b),
+      1 ≤ 10 - b.rowCount r := by
+    intro r hr
+    have hle := rowCount_le_cols hwf r
+    rw [GameConfig.standard_cols] at hle
+    have hne : b.rowCount r ≠ 10 := by
+      intro heq
+      exact hnf r (isFull_of_rowCount_eq_cols hwf
+        (by rw [heq, GameConfig.standard_cols]))
+    omega
+  constructor
+  · calc (Board.fullRows GameConfig.standard (pl.place b)).card
+        = ∑ _r ∈ Board.fullRows GameConfig.standard (pl.place b), 1 := by
+          rw [Finset.sum_const, smul_eq_mul, mul_one]
+      _ ≤ _ := Finset.sum_le_sum hgap1
+  · have hplacewf := Placement.place_wf hwf hv
+    have hpoint : ∀ r ∈ Board.fullRows GameConfig.standard (pl.place b),
+        10 - b.rowCount r
+          ≤ ((pl.dropped b).filter (fun p => p.2 = r)).card := by
+      intro r hr
+      have hten : Board.rowCount (pl.place b) r = 10 := by
+        have h := rowCount_of_isFull hplacewf
+          (Board.isFull_of_mem_fullRows hr)
+        rwa [GameConfig.standard_cols] at h
+      have hsplit := rowCount_place_eq b pl r
+      omega
+    calc ∑ r ∈ Board.fullRows GameConfig.standard (pl.place b),
+        (10 - b.rowCount r)
+        ≤ ∑ r ∈ Board.fullRows GameConfig.standard (pl.place b),
+          ((pl.dropped b).filter (fun p => p.2 = r)).card :=
+        Finset.sum_le_sum hpoint
+      _ ≤ 4 := sum_row_added_le_four b pl _
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
