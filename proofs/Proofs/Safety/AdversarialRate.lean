@@ -2454,5 +2454,101 @@ theorem adversary_column_load_bracket {σ : Solver GameConfig.standard}
   rw [GameConfig.standard_rows] at hcc
   exact ⟨by omega, by omega⟩
 
+/-- Adversarial column deliveries never decrease. -/
+theorem colDeliveredAdv_mono (σ : Solver GameConfig.standard)
+    (s : ℕ → Piece) (j : ℕ) : Monotone (colDeliveredAdv σ s j) := by
+  apply monotone_nat_of_le_succ
+  intro n
+  rw [colDeliveredAdv_succ]
+  exact Nat.le_add_right _ _
+
+/-- The adversarial windowed column intake is the sum of the window's
+column profiles. -/
+theorem colDeliveredAdv_window (σ : Solver GameConfig.standard)
+    (s : ℕ → Piece) (j n : ℕ) :
+    ∀ w, colDeliveredAdv σ s j (n + w) - colDeliveredAdv σ s j n
+      = ∑ k ∈ Finset.range w,
+          ({ σ (adversarialTrace GameConfig.standard σ s GameState.init (n + k))
+              (s (n + k)) with piece := s (n + k) } : Placement).colProfile
+            j := by
+  intro w
+  induction w with
+  | zero => simp
+  | succ w ih =>
+    have hmono := colDeliveredAdv_mono σ s j (Nat.le_add_right n w)
+    rw [show n + (w + 1) = (n + w) + 1 by omega, colDeliveredAdv_succ,
+      Finset.sum_range_succ, ← ih]
+    omega
+
+/-- **The adversarial exact column law**: against a 35-periodic stream, a
+returning solver delivers exactly `14·k` cells to every column over `k`
+periods — the per-column billing of cycle play is adversary-proof. -/
+theorem adversary_column_load_exact {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {j : ℕ} (hj : j < 10) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    (k : ℕ) :
+    colDeliveredAdv σ s j (n + 35 * k) - colDeliveredAdv σ s j n
+      = 14 * k := by
+  have hled1 := colDeliveredAdv_ledger (σ := σ) (s := s) hj n
+  have hled2 := colDeliveredAdv_ledger (σ := σ) (s := s) hj (n + 35 * k)
+  have hiter := adversarialTrace_period_multiples hper hcyc k
+  have hcol : (adversarialTrace GameConfig.standard σ s GameState.init
+        (n + 35 * k)).board.colCount j
+      = (adversarialTrace GameConfig.standard σ s GameState.init
+        n).board.colCount j := by
+    rw [← hiter]
+  have hcl := adversarial_multi_period_clears hv hper hcyc k
+  have hclm := clearedAdv_mono GameConfig.standard σ s GameState.init
+    (Nat.le_add_right n (35 * k))
+  omega
+
+/-- **The adversarial tall-drop cap**: against a 35-periodic stream, a
+returning solver pours a full four-cell column feed into any one fixed
+column at most three times per period — tall-drop rationing, and with it
+tetris-well rotation, is adversary-proof. -/
+theorem adversary_tall_drop_column_cap {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {j : ℕ} (hj : j < 10) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35)) :
+    ((Finset.range 35).filter (fun k =>
+        ({ σ (adversarialTrace GameConfig.standard σ s GameState.init (n + k))
+            (s (n + k)) with piece := s (n + k) } : Placement).colProfile j
+          = 4)).card ≤ 3 := by
+  classical
+  have hload := adversary_column_load_exact hv hper hj hcyc 1
+  rw [mul_one] at hload
+  have hwin := colDeliveredAdv_window σ s j n 35
+  have hsum : 4 * ((Finset.range 35).filter (fun k =>
+        ({ σ (adversarialTrace GameConfig.standard σ s GameState.init (n + k))
+            (s (n + k)) with piece := s (n + k) } : Placement).colProfile j
+          = 4)).card
+      ≤ ∑ k ∈ Finset.range 35,
+          ({ σ (adversarialTrace GameConfig.standard σ s GameState.init (n + k))
+              (s (n + k)) with piece := s (n + k) } : Placement).colProfile
+            j := by
+    calc 4 * ((Finset.range 35).filter (fun k =>
+          ({ σ (adversarialTrace GameConfig.standard σ s GameState.init (n + k))
+              (s (n + k)) with piece := s (n + k) } : Placement).colProfile j
+            = 4)).card
+        = ∑ k ∈ (Finset.range 35).filter (fun k =>
+            ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+                (n + k)) (s (n + k)) with piece := s (n + k) }
+              : Placement).colProfile j = 4),
+            ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+                (n + k)) (s (n + k)) with piece := s (n + k) }
+              : Placement).colProfile j := by
+          rw [Finset.sum_congr rfl (fun k hk =>
+            (Finset.mem_filter.mp hk).2)]
+          rw [Finset.sum_const, smul_eq_mul, mul_comm]
+      _ ≤ _ := Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
+  omega
+
 end ClearRate
 end Tetris

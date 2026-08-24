@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24x) — the column ledger is adversary-proof (bank 140/N)
+
+- `colDeliveredAdv_mono` / `colDeliveredAdv_window` — adversarial column
+  intake is monotone and windows sum the profiles.
+- **`adversary_column_load_exact`** — against a 35-periodic stream a
+  returning solver delivers exactly 14k cells to every column over k
+  periods.
+- **`adversary_tall_drop_column_cap`** — and pours a full four-cell feed
+  into any one fixed column at most 3 times per period: tall-drop
+  rationing (hence tetris-well rotation) survives adversarial piece
+  choice.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24w) — the per-piece clear-cap ladder (bank 139/N)
 
 - `shape_rows_le_three_of_ne_I` / `shape_rows_le_two_of_O` — decide: row
