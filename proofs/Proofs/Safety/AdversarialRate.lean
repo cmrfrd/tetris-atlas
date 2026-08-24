@@ -1983,5 +1983,24 @@ theorem solvesTetris_iff_forall_patterns (σ : Solver GameConfig.standard) :
     rw [hseq]
     exact h F hF n
 
+/-- **The mission statement as a permutation game**: Tetris is solvable iff
+some solver survives every infinite sequence of bag permutations — the
+project's headline proposition with its adversary in combinatorial normal
+form. -/
+theorem tetrisSolvable_iff_pattern_game :
+    TetrisSolvable
+      ↔ ∃ σ : Solver GameConfig.standard,
+          ∀ F : ℕ → ℕ → Piece,
+            (∀ b : ℕ, ∀ j < 7, ∀ j' < 7, j ≠ j' → F b j ≠ F b j')
+            → ∀ n, ¬ (adversarialTrace GameConfig.standard σ
+                (fun m => F (m / 7) (m % 7)) GameState.init n).lost
+                GameConfig.standard := by
+  unfold TetrisSolvable
+  constructor
+  · rintro ⟨σ, hσ⟩
+    exact ⟨σ, (solvesTetris_iff_forall_patterns σ).mp hσ⟩
+  · rintro ⟨σ, hσ⟩
+    exact ⟨σ, (solvesTetris_iff_forall_patterns σ).mpr hσ⟩
+
 end ClearRate
 end Tetris

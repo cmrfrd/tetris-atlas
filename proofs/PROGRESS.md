@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ch) — the mission in normal form (bank 107/N)
+
+- `tetrisSolvable_iff_pattern_game` — TetrisSolvable ⟺ some solver survives
+  every infinite sequence of bag permutations. The project's headline
+  proposition with its adversary in combinatorial normal form.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23cg) — the adversary's strategy space (bank 106/N)
 
 - `solvesTetris_iff_forall_patterns` — σ solves Tetris IFF it survives the
