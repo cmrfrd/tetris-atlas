@@ -2067,5 +2067,74 @@ theorem adversarial_survives_of_return {σ : Solver GameConfig.standard}
     rw [← hx]
     exact hlive (n + (m - n) % 35) (by omega)
 
+/-- Adversarial determinism at any period: a `T`-return of the trace against
+a `T`-periodic stream pushes forward. -/
+theorem adversarialTrace_periodic_T {cfg : GameConfig} {σ : Solver cfg}
+    {s : ℕ → Piece} {g0 : GameState} {T : ℕ}
+    (hper : ∀ k, s (k + T) = s k) {n : ℕ}
+    (hcyc : adversarialTrace cfg σ s g0 n
+        = adversarialTrace cfg σ s g0 (n + T)) :
+    ∀ k, adversarialTrace cfg σ s g0 (n + k)
+      = adversarialTrace cfg σ s g0 (n + T + k) := by
+  intro k
+  induction k with
+  | zero => simpa using hcyc
+  | succ k ih =>
+    have hs : s (n + T + k) = s (n + k) := by
+      rw [show n + T + k = (n + k) + T by omega]
+      exact hper (n + k)
+    rw [show n + (k + 1) = (n + k) + 1 by omega,
+      show n + T + (k + 1) = (n + T + k) + 1 by omega,
+      adversarialTrace_succ, adversarialTrace_succ, ih, hs]
+
+/-- Tail `T`-returns iterate. -/
+theorem adversarialTrace_tail_period_multiples_T {cfg : GameConfig}
+    {σ : Solver cfg} {s : ℕ → Piece} {g0 : GameState} {T : ℕ}
+    (hper : ∀ k, s (k + T) = s k) {n : ℕ}
+    (hcyc : adversarialTrace cfg σ s g0 n
+        = adversarialTrace cfg σ s g0 (n + T)) {m : ℕ} (hnm : n ≤ m) :
+    ∀ j, adversarialTrace cfg σ s g0 m
+      = adversarialTrace cfg σ s g0 (m + T * j) := by
+  intro j
+  induction j with
+  | zero => simp
+  | succ j ih =>
+    have htail : adversarialTrace cfg σ s g0 (m + T * j)
+        = adversarialTrace cfg σ s g0 (m + T * j + T) := by
+      have := adversarialTrace_periodic_T hper hcyc (m + T * j - n)
+      rw [show n + (m + T * j - n) = m + T * j by omega,
+        show n + T + (m + T * j - n) = m + T * j + T by omega] at this
+      exact this
+    rw [show m + T * (j + 1) = (m + T * j) + T by ring]
+    exact ih.trans htail
+
+/-- **Adversarial survival from finite evidence, any period**: against a
+`T`-periodic stream (`T > 0`), liveness on `[0, n + T)` plus a `T`-return at
+`n` proves the trace lives forever. -/
+theorem adversarial_survives_of_return_T {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {T : ℕ} (hT : 0 < T) (hper : ∀ k, s (k + T) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + T))
+    (hlive : ∀ k, k < n + T →
+      ¬ (adversarialTrace GameConfig.standard σ s GameState.init k).lost
+        GameConfig.standard) :
+    ∀ m, ¬ (adversarialTrace GameConfig.standard σ s GameState.init m).lost
+      GameConfig.standard := by
+  intro m
+  rcases Nat.lt_or_ge m n with hm | hm
+  · exact hlive m (by omega)
+  · have hx : adversarialTrace GameConfig.standard σ s GameState.init
+        (n + (m - n) % T)
+        = adversarialTrace GameConfig.standard σ s GameState.init m := by
+      have := adversarialTrace_tail_period_multiples_T hper hcyc
+        (show n ≤ n + (m - n) % T by omega) ((m - n) / T)
+      rw [show n + (m - n) % T + T * ((m - n) / T) = m by
+        have := Nat.div_add_mod (m - n) T
+        omega] at this
+      exact this
+    rw [← hx]
+    have hmod : (m - n) % T < T := Nat.mod_lt _ hT
+    exact hlive (n + (m - n) % T) (by omega)
+
 end ClearRate
 end Tetris

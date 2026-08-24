@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23cj) — general-period adversarial survival (bank 109/N)
+
+- `adversarialTrace_periodic_T` / `_tail_period_multiples_T` /
+  `adversarial_survives_of_return_T` — the batch-108 route generalized from
+  period 35 to any `T`: against any `T`-periodic stream, a `T`-return with
+  a live `[0, n+T)` prefix proves the trace lives forever.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ci) — adversarial survival from finite evidence (bank 108/N)
 
 - `adversarial_perfect_clear_pair_return` — aligned PCs close the loop
