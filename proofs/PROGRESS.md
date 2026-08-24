@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23cn) — the bounded necessary condition (bank 113/N)
+
+- `tetrisSolvableValid_implies_canonical_evidence_bounded` — solvability
+  implies a live canonical revisit within 2^207 steps: the certificate
+  lives inside an explicitly bounded search space.
+- `not_tetrisSolvableValid_of_no_canonical_evidence` — the refutation
+  route: absence of bounded canonical evidence refutes the mission.
+- Memory updated through batch 113.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23cm) — bounded canonical evidence (bank 112/N)
 
 - `adversarial_survives_return_within` — the bounded adversarial pigeonhole

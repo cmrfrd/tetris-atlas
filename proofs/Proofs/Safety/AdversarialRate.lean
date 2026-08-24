@@ -2348,5 +2348,58 @@ theorem canonical_evidence_bounded {σ : Solver GameConfig.standard}
     adversarial_survives_return_within hv hs
   exact ⟨n₁, n₂, hlt, hbound, hret, fun k _ => hs k⟩
 
+/-- **The mission's bounded necessary condition**: if Tetris is solvable by
+a valid solver, some solver exhibits a live state-revisit against the
+canonical stream *within `2^207` steps* — solvability implies a certificate
+inside an explicitly bounded search space. -/
+theorem tetrisSolvableValid_implies_canonical_evidence_bounded :
+    TetrisSolvableValid →
+      ∃ (σ : Solver GameConfig.standard) (n₁ n₂ : ℕ), n₁ < n₂ ∧ n₂ ≤ 2 ^ 207
+        ∧ adversarialTrace GameConfig.standard σ canonicalStream
+            GameState.init n₁
+          = adversarialTrace GameConfig.standard σ canonicalStream
+              GameState.init n₂
+        ∧ ∀ k, k < n₂ →
+          ¬ (adversarialTrace GameConfig.standard σ canonicalStream
+              GameState.init k).lost GameConfig.standard := by
+  rintro ⟨σ, hval, hsolve⟩
+  have hdraw : ∀ n, canonicalStream n
+      ∈ (adversarialTrace GameConfig.standard σ canonicalStream
+        GameState.init n).bag := by
+    intro n
+    rw [adversarialTrace_bag_from,
+      show GameState.init.bag = Bag.full from GameState.init_bag]
+    have h := canonicalStream_legal n
+    rwa [Bag.canDraw_iff_mem] at h
+  have hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ canonicalStream
+      GameState.init n) (canonicalStream n) with piece := canonicalStream n }
+      : Placement).Valid GameConfig.standard := by
+    intro n
+    obtain ⟨hp, hval'⟩ := hval _ (canonicalStream n) (hdraw n)
+    rw [placement_with_piece_self hp]
+    exact hval'
+  have hs : ∀ m, ¬ (adversarialTrace GameConfig.standard σ canonicalStream
+      GameState.init m).lost GameConfig.standard :=
+    hsolve canonicalStream canonicalStream_legal
+  obtain ⟨n₁, n₂, hlt, hbound, hret, hlive⟩ := canonical_evidence_bounded hv hs
+  exact ⟨σ, n₁, n₂, hlt, hbound, hret, hlive⟩
+
+/-- **The refutation route**: if NO valid solver exhibits bounded live
+canonical evidence, Tetris is not solvable by a valid solver. An
+(astronomically large but finite and explicit) computation could, in
+principle, refute the mission. -/
+theorem not_tetrisSolvableValid_of_no_canonical_evidence
+    (h : ¬ ∃ (σ : Solver GameConfig.standard) (n₁ n₂ : ℕ), n₁ < n₂
+        ∧ n₂ ≤ 2 ^ 207
+        ∧ adversarialTrace GameConfig.standard σ canonicalStream
+            GameState.init n₁
+          = adversarialTrace GameConfig.standard σ canonicalStream
+              GameState.init n₂
+        ∧ ∀ k, k < n₂ →
+          ¬ (adversarialTrace GameConfig.standard σ canonicalStream
+              GameState.init k).lost GameConfig.standard) :
+    ¬ TetrisSolvableValid :=
+  fun hsolv => h (tetrisSolvableValid_implies_canonical_evidence_bounded hsolv)
+
 end ClearRate
 end Tetris
