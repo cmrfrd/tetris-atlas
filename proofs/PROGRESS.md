@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24y) — column starvation laws (bank 141/N)
+
+- **`starving_column_caps_clears`** — over any window where column j
+  receives no cells, the whole game clears at most colCount j (start):
+  every clear bills the starving column one unrestocked cell. Pure
+  two-ledger arithmetic.
+- **`cycle_column_starvation_le`** — on a cycle a starving window lasts
+  ≤ 34 placements (exact 14/period intake forbids a starved period).
+- Solver-design reading: every column must be actively fed at least once
+  per period; feed neglect anywhere freezes clearing everywhere.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24x) — the column ledger is adversary-proof (bank 140/N)
 
 - `colDeliveredAdv_mono` / `colDeliveredAdv_window` — adversarial column

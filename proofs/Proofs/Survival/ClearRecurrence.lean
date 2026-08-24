@@ -2264,6 +2264,35 @@ theorem clears_le_three_of_ne_I {cfg : GameConfig} {b : Board}
   unfold Placement.shapeUp at h
   exact le_trans h (shape_rows_le_three_of_ne_I pl.piece hI pl.rot)
 
+/-- **A starving column caps the game's clears**: over any window in which
+column `j` receives no cells, the whole game clears at most as many rows as
+column `j` held at the window's start — every clear bills the starving
+column one cell it never restocks. -/
+theorem starving_column_caps_clears {π : Policy GameConfig.standard}
+    {j : ℕ} (hj : j < 10) {n w : ℕ}
+    (hstarve : colDelivered π j (n + w) = colDelivered π j n) :
+    cleared GameConfig.standard π GameState.init (n + w)
+        - cleared GameConfig.standard π GameState.init n
+      ≤ (trace GameConfig.standard π GameState.init n).board.colCount j := by
+  have hled1 := colDelivered_ledger (π := π) hj n
+  have hled2 := colDelivered_ledger (π := π) hj (n + w)
+  have hclm := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right n w)
+  omega
+
+/-- **No column starves on a cycle**: on a cycle, a window in which some
+column receives no cells lasts at most 34 placements — the exact
+14-cells-per-period intake forbids a starving period. -/
+theorem cycle_column_starvation_le {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {j : ℕ} (hj : j < 10) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) {w : ℕ}
+    (hstarve : colDelivered π j (m₀ + w) = colDelivered π j m₀) :
+    w ≤ 34 := by
+  have hbr := (cycle_column_window_bracket hv hj hcyc hm w).1
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
