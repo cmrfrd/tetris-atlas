@@ -1610,6 +1610,72 @@ theorem tetris_rows_pre_nine {b : Board} {pl : Placement}
   have honer := hone r hr
   omega
 
+/-- A row holding `cols − 1` cells of a well-formed board misses exactly one
+column. -/
+theorem row_missing_unique {cfg : GameConfig} {b : Board}
+    (hwf : Board.WF cfg b) {r : ℕ}
+    (h9 : b.rowCount r + 1 = cfg.cols) :
+    ∃! c, c < cfg.cols ∧ (c, r) ∉ b := by
+  classical
+  set filled := (b.filter (fun p => p.2 = r)).image (fun p => p.1) with hfil
+  have hfsub : filled ⊆ Finset.range cfg.cols := by
+    intro c hc
+    rw [hfil, Finset.mem_image] at hc
+    obtain ⟨p, hp, rfl⟩ := hc
+    exact Finset.mem_range.mpr (hwf p (Finset.mem_filter.mp hp).1)
+  have hfcard : filled.card = cfg.cols - 1 := by
+    rw [hfil, Finset.card_image_of_injOn]
+    · unfold Board.rowCount at h9
+      omega
+    · intro p hp q hq hpq
+      simp only [Finset.mem_coe, Finset.mem_filter] at hp hq
+      apply Prod.ext
+      · exact hpq
+      · rw [hp.2, hq.2]
+  have hmem_iff : ∀ c, c ∈ filled ↔ (c, r) ∈ b := by
+    intro c
+    rw [hfil, Finset.mem_image]
+    constructor
+    · rintro ⟨p, hp, rfl⟩
+      rw [Finset.mem_filter] at hp
+      have : p = (p.1, r) := Prod.ext rfl hp.2
+      rw [← this]
+      exact hp.1
+    · intro h
+      exact ⟨(c, r), Finset.mem_filter.mpr ⟨h, rfl⟩, rfl⟩
+  have hcomp : ((Finset.range cfg.cols) \ filled).card = 1 := by
+    rw [Finset.card_sdiff, Finset.inter_eq_left.mpr hfsub,
+      Finset.card_range, hfcard]
+    omega
+  obtain ⟨c₀, hc₀⟩ := Finset.card_eq_one.mp hcomp
+  refine ⟨c₀, ?_, ?_⟩
+  · have : c₀ ∈ (Finset.range cfg.cols) \ filled := by
+      rw [hc₀]
+      exact Finset.mem_singleton_self c₀
+    rw [Finset.mem_sdiff, Finset.mem_range] at this
+    exact ⟨this.1, fun hmem => this.2 ((hmem_iff c₀).mpr hmem)⟩
+  · rintro c ⟨hclt, hcnot⟩
+    have : c ∈ (Finset.range cfg.cols) \ filled := by
+      rw [Finset.mem_sdiff, Finset.mem_range]
+      exact ⟨hclt, fun hmem => hcnot ((hmem_iff c).mp hmem)⟩
+    rw [hc₀, Finset.mem_singleton] at this
+    exact this
+
+/-- **The tetris well**: each of a four-clear's rows misses exactly one
+column before the piece — the four rows each present a single one-cell gap
+for the vertical I to fill. -/
+theorem tetris_row_missing_unique {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4)
+    {r : ℕ} (hr : r ∈ Board.fullRows GameConfig.standard (pl.place b)) :
+    ∃! c, c < 10 ∧ (c, r) ∉ b := by
+  have h9 := tetris_rows_pre_nine hwf hv hnf h4 hr
+  have := row_missing_unique (cfg := GameConfig.standard) hwf
+    (r := r) (by rw [h9, GameConfig.standard_cols])
+  rwa [GameConfig.standard_cols] at this
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

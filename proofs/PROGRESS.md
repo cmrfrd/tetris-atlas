@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24k) — the tetris well (bank 127/N)
+
+- `row_missing_unique` — a `cols−1`-full row of a WF board misses exactly
+  one column (∃!; complement-card-one argument).
+- **`tetris_row_missing_unique`** — each of a four-clear's rows misses
+  exactly one column before the piece: the tetris WELL — four one-cell
+  gaps awaiting the vertical I. (Next: the four gaps share one column.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24j) — nine-tenths exactly (bank 126/N)
 
 - `rowCount_place_eq` — placing splits row counts exactly (disjoint union).
