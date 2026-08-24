@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23cm) — bounded canonical evidence (bank 112/N)
+
+- `adversarial_survives_return_within` — the bounded adversarial pigeonhole
+  (revisit within 2^207 steps).
+- `canonical_evidence_bounded` — the canonical game's certificate is a
+  BOUNDED search: survival implies a live revisit within 2^207 steps.
+- Lean note (recurring): keep `InFieldBoard × Bag` as the ASCRIBED codomain
+  of the pigeonhole map (instances don't unfold the def), and extract
+  component equalities via TYPE-ASCRIBED `congrArg` haves (defeq does the
+  beta/f-unfolding; naked `rw` on projected pair equalities fails).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23cl) — the canonical necessary condition (bank 111/N)
 
 - `canonicalStream` (+`_legal`, `_periodic`) — the `IOSZTLJ`-repeated

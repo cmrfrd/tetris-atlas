@@ -2276,5 +2276,77 @@ theorem tetrisSolvableValid_implies_canonical_evidence :
   obtain ⟨n₁, n₂, hlt, hret⟩ := adversarial_survives_exists_return hv hs
   exact ⟨σ, n₁, n₂, hlt, hret, fun k _ => hs k⟩
 
+/-- The bounded adversarial pigeonhole: a forever-live adversarial trace
+revisits a state within `2^207` steps. -/
+theorem adversarial_survives_return_within {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hs : ∀ m, ¬ (adversarialTrace GameConfig.standard σ s GameState.init
+      m).lost GameConfig.standard) :
+    ∃ n₁ n₂, n₁ < n₂ ∧ n₂ ≤ 2 ^ 207
+      ∧ adversarialTrace GameConfig.standard σ s GameState.init n₁
+        = adversarialTrace GameConfig.standard σ s GameState.init n₂ := by
+  classical
+  have hwf : ∀ n, Board.WF GameConfig.standard
+      (adversarialTrace GameConfig.standard σ s GameState.init n).board :=
+    adversarialTrace_board_wf (GameState.init_board_wf GameConfig.standard) hv
+  have hif : ∀ n, ∀ p ∈ (adversarialTrace GameConfig.standard σ s
+      GameState.init n).board, p.2 < GameConfig.standard.rows :=
+    fun n => (GameState.not_lost_iff_forall_row_lt GameConfig.standard _).mp
+      (hs n)
+  have hlt : Fintype.card (InFieldBoard GameConfig.standard × Bag)
+      < Fintype.card (Fin (2 ^ 207 + 1)) := by
+    rw [Fintype.card_fin, ClearRate.card_infield_times_bag]
+    exact Nat.lt_succ_self _
+  obtain ⟨i, j, hne, hfeq⟩ := Fintype.exists_ne_map_eq_of_card_lt
+    (fun i : Fin (2 ^ 207 + 1) =>
+      ((⟨(adversarialTrace GameConfig.standard σ s GameState.init i).board,
+        hwf i, hif i⟩,
+      (adversarialTrace GameConfig.standard σ s GameState.init i).bag)
+        : InFieldBoard GameConfig.standard × Bag)) hlt
+  have hb : (adversarialTrace GameConfig.standard σ s GameState.init i).board
+      = (adversarialTrace GameConfig.standard σ s GameState.init j).board :=
+    congrArg (fun q : InFieldBoard GameConfig.standard × Bag => q.1.val) hfeq
+  have hg : (adversarialTrace GameConfig.standard σ s GameState.init i).bag
+      = (adversarialTrace GameConfig.standard σ s GameState.init j).bag :=
+    congrArg Prod.snd hfeq
+  have hstates : adversarialTrace GameConfig.standard σ s GameState.init i
+      = adversarialTrace GameConfig.standard σ s GameState.init j := by
+    calc adversarialTrace GameConfig.standard σ s GameState.init i
+        = ⟨(adversarialTrace GameConfig.standard σ s GameState.init i).board,
+          (adversarialTrace GameConfig.standard σ s GameState.init i).bag⟩ :=
+        rfl
+      _ = ⟨(adversarialTrace GameConfig.standard σ s GameState.init j).board,
+          (adversarialTrace GameConfig.standard σ s GameState.init j).bag⟩ :=
+        by rw [hb, hg]
+      _ = adversarialTrace GameConfig.standard σ s GameState.init j := rfl
+  have hij : (i : ℕ) ≠ (j : ℕ) := fun h => hne (Fin.ext h)
+  rcases Nat.lt_or_ge (i : ℕ) (j : ℕ) with hlt' | hge
+  · exact ⟨i, j, hlt', by have := j.isLt; omega, hstates⟩
+  · exact ⟨j, i, by omega, by have := i.isLt; omega, hstates.symm⟩
+
+/-- **The canonical game, characterized and bounded**: a valid solver
+survives the canonical periodic adversary forever iff it exhibits a live
+revisit — and if it does survive, the revisit occurs within `2^207` steps.
+The mission's necessary condition is a bounded search. -/
+theorem canonical_evidence_bounded {σ : Solver GameConfig.standard}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ canonicalStream
+      GameState.init n) (canonicalStream n) with piece := canonicalStream n }
+      : Placement).Valid GameConfig.standard)
+    (hs : ∀ m, ¬ (adversarialTrace GameConfig.standard σ canonicalStream
+      GameState.init m).lost GameConfig.standard) :
+    ∃ n₁ n₂, n₁ < n₂ ∧ n₂ ≤ 2 ^ 207
+      ∧ adversarialTrace GameConfig.standard σ canonicalStream
+          GameState.init n₁
+        = adversarialTrace GameConfig.standard σ canonicalStream
+            GameState.init n₂
+      ∧ ∀ k, k < n₂ →
+        ¬ (adversarialTrace GameConfig.standard σ canonicalStream
+            GameState.init k).lost GameConfig.standard := by
+  obtain ⟨n₁, n₂, hlt, hbound, hret⟩ :=
+    adversarial_survives_return_within hv hs
+  exact ⟨n₁, n₂, hlt, hbound, hret, fun k _ => hs k⟩
+
 end ClearRate
 end Tetris
