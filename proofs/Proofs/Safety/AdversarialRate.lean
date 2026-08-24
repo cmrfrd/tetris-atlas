@@ -1963,5 +1963,25 @@ theorem adversary_piece_available_iff {σ : Solver GameConfig.standard}
     obtain ⟨j, hj, hp⟩ := Finset.mem_image.mp hmem
     exact h j (Finset.mem_range.mp hj) hp
 
+/-- **Solving Tetris is surviving every permutation schedule**: `σ` solves
+iff it survives the concatenation of every sequence of block permutations —
+the adversary's strategy space reduced to its combinatorial core,
+`(7!)^ℕ`. -/
+theorem solvesTetris_iff_forall_patterns (σ : Solver GameConfig.standard) :
+    SolvesTetris GameConfig.standard σ
+      ↔ ∀ F : ℕ → ℕ → Piece,
+          (∀ b : ℕ, ∀ j < 7, ∀ j' < 7, j ≠ j' → F b j ≠ F b j')
+          → ∀ n, ¬ (adversarialTrace GameConfig.standard σ
+              (fun m => F (m / 7) (m % 7)) GameState.init n).lost
+              GameConfig.standard := by
+  constructor
+  · intro hσ F hF n
+    exact hσ _ (BagCadence.pattern_seq_legal F hF) n
+  · intro h s hs n
+    obtain ⟨F, hF, hseq⟩ :=
+      (BagCadence.legalSequenceFrom_iff_exists_pattern_seq s).mp hs
+    rw [hseq]
+    exact h F hF n
+
 end ClearRate
 end Tetris

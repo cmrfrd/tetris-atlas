@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23cg) — the adversary's strategy space (bank 106/N)
+
+- `solvesTetris_iff_forall_patterns` — σ solves Tetris IFF it survives the
+  concatenation of every sequence of block permutations: the headline
+  adversarial quantifier reduced to its combinatorial core, `(7!)^ℕ`.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23cf) — the 7-bag fully characterized (bank 105/N)
 
 - `legalSequenceFrom_iff_exists_pattern_seq` — a stream is legal from the
