@@ -1496,6 +1496,30 @@ theorem fullRows_place_span_le_three {cfg : GameConfig} {b : Board}
   dsimp only at hqr hqr'
   omega
 
+/-- **A tetris clears four consecutive rows**: when a placement completes
+four rows of a no-full-rows board, they form exactly the interval
+`[r₀, r₀ + 3]` — four distinct rows within a span of three have no other
+shape. -/
+theorem four_clear_rows_eq_Icc {cfg : GameConfig} {b : Board}
+    {pl : Placement} (hnf : ∀ r, ¬ Board.isFull cfg b r)
+    (h4 : (Board.fullRows cfg (pl.place b)).card = 4) :
+    ∃ r₀, Board.fullRows cfg (pl.place b) = Finset.Icc r₀ (r₀ + 3) := by
+  classical
+  have hne : (Board.fullRows cfg (pl.place b)).Nonempty :=
+    Finset.card_pos.mp (by omega)
+  set r₀ := (Board.fullRows cfg (pl.place b)).min' hne with hr₀
+  refine ⟨r₀, ?_⟩
+  have hsub : Board.fullRows cfg (pl.place b) ⊆ Finset.Icc r₀ (r₀ + 3) := by
+    intro r hr
+    have hmin := Finset.min'_le _ r hr
+    have hspan := fullRows_place_span_le_three hnf
+      ((Board.fullRows cfg (pl.place b)).min'_mem hne) hr hmin
+    rw [Finset.mem_Icc]
+    omega
+  apply Finset.eq_of_subset_of_card_le hsub
+  rw [h4, Nat.card_Icc]
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

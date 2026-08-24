@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24h) — the tetris interval (bank 124/N)
+
+- `four_clear_rows_eq_Icc` — a 4-clear's rows are exactly the interval
+  `[r₀, r₀+3]`: four distinct rows within a span of three have no other
+  shape. The geometry of the tetris, from counting + locality alone.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24g) — clears are vertically local (bank 123/N)
 
 - `mem_fullRows_place_has_piece_cell` — on a no-full-rows board, every row
