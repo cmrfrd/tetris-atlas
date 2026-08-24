@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24b) — the column sum identity (bank 118/N)
+
+- `sum_colDelivered` — total deliveries across the ten columns equal `4n`
+  exactly: the column ledgers decompose mass conservation (via
+  `Placement.sum_colProfile`).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24a) — adversarial column ledger (bank 117/N)
 
 - `colDeliveredAdv` (+`_succ`, `_ledger`) and

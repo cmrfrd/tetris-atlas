@@ -1229,6 +1229,35 @@ theorem cycle_column_window_bracket {π : Policy GameConfig.standard}
     (show m₀ + w ≤ m₀ + 35 * (q + 1) by omega)
   exact ⟨by omega, by omega⟩
 
+/-- **The column ledgers sum to the global ledger**: total deliveries across
+the ten columns equal the four cells of every placement — the ten column
+brackets are a decomposition of mass conservation, not new information
+piled on top. -/
+theorem sum_colDelivered {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (n : ℕ) :
+    ∑ j ∈ Finset.range 10, colDelivered π j n = 4 * n := by
+  induction n with
+  | zero => simp
+  | succ k ih =>
+    have hsum : ∑ j ∈ Finset.range 10,
+        (π (trace GameConfig.standard π GameState.init k)).colProfile j = 4 := by
+      have h := Placement.sum_colProfile
+        (hv (trace GameConfig.standard π GameState.init k))
+      rwa [GameConfig.standard_cols] at h
+    calc ∑ j ∈ Finset.range 10, colDelivered π j (k + 1)
+        = ∑ j ∈ Finset.range 10, (colDelivered π j k
+            + (π (trace GameConfig.standard π GameState.init k)).colProfile j)
+          := by
+          apply Finset.sum_congr rfl
+          intro j _
+          rw [colDelivered_succ]
+      _ = (∑ j ∈ Finset.range 10, colDelivered π j k)
+            + ∑ j ∈ Finset.range 10,
+              (π (trace GameConfig.standard π GameState.init k)).colProfile j
+          := Finset.sum_add_distrib
+      _ = 4 * k + 4 := by rw [ih, hsum]
+      _ = 4 * (k + 1) := by ring
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
