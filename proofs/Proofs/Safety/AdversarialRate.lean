@@ -2002,5 +2002,70 @@ theorem tetrisSolvable_iff_pattern_game :
   · rintro ⟨σ, hσ⟩
     exact ⟨σ, (solvesTetris_iff_forall_patterns σ).mpr hσ⟩
 
+/-- Aligned perfect clears close the loop adversarially too: empty boards
+with equal bags are the same state, whoever picked the pieces. -/
+theorem adversarial_perfect_clear_pair_return {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {g0 : GameState} {n₁ n₂ : ℕ}
+    (h1 : (adversarialTrace GameConfig.standard σ s g0 n₁).board.count = 0)
+    (h2 : (adversarialTrace GameConfig.standard σ s g0 n₂).board.count = 0)
+    (hbag : (adversarialTrace GameConfig.standard σ s g0 n₁).bag
+        = (adversarialTrace GameConfig.standard σ s g0 n₂).bag) :
+    adversarialTrace GameConfig.standard σ s g0 n₁
+      = adversarialTrace GameConfig.standard σ s g0 n₂ := by
+  have hb : (adversarialTrace GameConfig.standard σ s g0 n₁).board
+      = (adversarialTrace GameConfig.standard σ s g0 n₂).board := by
+    rw [(Board.count_eq_zero_iff_eq_empty _).mp h1,
+      (Board.count_eq_zero_iff_eq_empty _).mp h2]
+  calc adversarialTrace GameConfig.standard σ s g0 n₁
+      = ⟨(adversarialTrace GameConfig.standard σ s g0 n₁).board,
+        (adversarialTrace GameConfig.standard σ s g0 n₁).bag⟩ := rfl
+    _ = ⟨(adversarialTrace GameConfig.standard σ s g0 n₂).board,
+        (adversarialTrace GameConfig.standard σ s g0 n₂).bag⟩ := by
+        rw [hb, hbag]
+    _ = adversarialTrace GameConfig.standard σ s g0 n₂ := rfl
+
+/-- Tail periodicity iterates: every later index returns at every multiple
+of the period. -/
+theorem adversarialTrace_tail_period_multiples {cfg : GameConfig}
+    {σ : Solver cfg} {s : ℕ → Piece} {g0 : GameState}
+    (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace cfg σ s g0 n
+        = adversarialTrace cfg σ s g0 (n + 35)) {m : ℕ} (hnm : n ≤ m) :
+    ∀ j, adversarialTrace cfg σ s g0 m
+      = adversarialTrace cfg σ s g0 (m + 35 * j) := by
+  intro j
+  induction j with
+  | zero => simp
+  | succ j ih =>
+    have hstep := adversarialTrace_tail_periodic hper hcyc
+      (show n ≤ m + 35 * j by omega)
+    rw [show m + 35 * (j + 1) = (m + 35 * j) + 35 by ring]
+    exact ih.trans hstep
+
+/-- **Adversarial survival from finite evidence**: against a 35-periodic
+stream, liveness on `[0, n + 35)` plus a 35-return at `n` proves the trace
+lives forever — the perfect-clear route's finite check, adversarially. -/
+theorem adversarial_survives_of_return {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} (hper : ∀ k, s (k + 35) = s k) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    (hlive : ∀ k, k < n + 35 →
+      ¬ (adversarialTrace GameConfig.standard σ s GameState.init k).lost
+        GameConfig.standard) :
+    ∀ m, ¬ (adversarialTrace GameConfig.standard σ s GameState.init m).lost
+      GameConfig.standard := by
+  intro m
+  rcases Nat.lt_or_ge m n with hm | hm
+  · exact hlive m (by omega)
+  · have hx : adversarialTrace GameConfig.standard σ s GameState.init
+        (n + (m - n) % 35)
+        = adversarialTrace GameConfig.standard σ s GameState.init m := by
+      have := adversarialTrace_tail_period_multiples hper hcyc
+        (show n ≤ n + (m - n) % 35 by omega) ((m - n) / 35)
+      rw [show n + (m - n) % 35 + 35 * ((m - n) / 35) = m by omega] at this
+      exact this
+    rw [← hx]
+    exact hlive (n + (m - n) % 35) (by omega)
+
 end ClearRate
 end Tetris

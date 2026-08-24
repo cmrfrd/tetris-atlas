@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ci) — adversarial survival from finite evidence (bank 108/N)
+
+- `adversarial_perfect_clear_pair_return` — aligned PCs close the loop
+  whoever picked the pieces (structure eta).
+- `adversarialTrace_tail_period_multiples` — tail returns iterate.
+- **`adversarial_survives_of_return`** — against a 35-periodic stream,
+  liveness on `[0, n+35)` + a 35-return at `n` ⟹ the trace lives FOREVER:
+  the finite-check survival route, adversarially (for one fixed periodic
+  stream, e.g. `sevenPattern`).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ch) — the mission in normal form (bank 107/N)
 
 - `tetrisSolvable_iff_pattern_game` — TetrisSolvable ⟺ some solver survives
