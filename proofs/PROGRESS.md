@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24u) — the tetris feeds one column (bank 137/N)
+
+- **`tetris_feeds_single_column`** — at a four-clear ∃ c₀ < 10 with
+  colProfile c₀ = 4 and colProfile j = 0 for every other column. Proof:
+  the four shared-column gaps inject into the dropped piece's c₀-fiber
+  (≥4), the fiber is capped by card_dropped (≤4), and sum_colProfile = 4
+  zeroes the rest via add_sum_erase.
+- Quantitative closure of the tetris anatomy; hook for the column ledger:
+  tetrises at column j each burn 4 of j's 14-per-period delivery ⇒ ≤3
+  tetrises per column per period (future batch).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24t) — the four-cell feed pins the I (bank 136/N)
 
 - `shape_col_fiber_not_four_of_ne_I` — decide: no non-I shape puts four

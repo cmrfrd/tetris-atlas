@@ -2085,6 +2085,68 @@ theorem heavy_feed_requires_tall {pl : Placement} {j : ℕ}
       rw [hempty] at h3
       simp at h3
 
+/-- **The tetris feeds one column**: at a four-clear the finishing I pours
+all four of its cells into the well column and delivers nothing anywhere
+else — the column profile is `4` at one column and `0` at the other nine.
+The quantitative closure of the anatomy: combined with the column ledger,
+every tetris spends its entire four-cell feed budget on a single column. -/
+theorem tetris_feeds_single_column {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    ∃ c₀ < 10, pl.colProfile c₀ = 4 ∧
+      ∀ j < 10, j ≠ c₀ → pl.colProfile j = 0 := by
+  classical
+  obtain ⟨c₀, hc₀⟩ := tetris_gaps_share_column hwf hv hnf h4
+  -- the well column is on the board
+  have hne : (Board.fullRows GameConfig.standard (pl.place b)).Nonempty :=
+    Finset.card_pos.mp (by omega)
+  obtain ⟨r₀, hr₀⟩ := hne
+  have hc₀lt : c₀ < 10 := by
+    have hdropmem := (hc₀ r₀ hr₀).2
+    rw [Placement.dropped_eq_image, Finset.mem_image] at hdropmem
+    obtain ⟨cell, hcell, hEq⟩ := hdropmem
+    have h1 : pl.col + cell.1 = c₀ := congrArg Prod.fst hEq
+    have h2 := hv cell hcell
+    rw [GameConfig.standard_cols] at h2
+    omega
+  -- the four gap cells sit in the dropped piece's column-c₀ fiber
+  have hfour : 4 ≤ ((pl.dropped b).filter (fun p => p.1 = c₀)).card := by
+    have hinj : (Board.fullRows GameConfig.standard (pl.place b)).card
+        ≤ ((pl.dropped b).filter (fun p => p.1 = c₀)).card := by
+      refine Finset.card_le_card_of_injOn (fun r => (c₀, r)) ?_ ?_
+      · intro r hr
+        exact Finset.mem_filter.mpr ⟨(hc₀ r hr).2, rfl⟩
+      · intro r _ r' _ h
+        exact congrArg Prod.snd h
+    omega
+  -- and the fiber is the column profile, capped at four
+  have hprof : ((pl.dropped b).filter (fun p => p.1 = c₀)).card
+      = pl.colProfile c₀ := by
+    have h := Placement.colCount_cellsAt pl (pl.dropOffset b) c₀
+    unfold Board.colCount at h
+    unfold Placement.dropped
+    exact h
+  have hcap : ((pl.dropped b).filter (fun p => p.1 = c₀)).card ≤ 4 := by
+    calc ((pl.dropped b).filter (fun p => p.1 = c₀)).card
+        ≤ (pl.dropped b).card :=
+          Finset.card_le_card (Finset.filter_subset _ _)
+      _ = 4 := Placement.card_dropped b pl
+  have hc4 : pl.colProfile c₀ = 4 := by omega
+  -- the profile sums to four, so every other column gets nothing
+  have hsum : ∑ j ∈ Finset.range 10, pl.colProfile j = 4 := by
+    have h := Placement.sum_colProfile hv
+    rwa [GameConfig.standard_cols] at h
+  have herase : ∑ j ∈ (Finset.range 10).erase c₀, pl.colProfile j = 0 := by
+    have h := Finset.add_sum_erase (Finset.range 10) pl.colProfile
+      (Finset.mem_range.mpr hc₀lt)
+    omega
+  refine ⟨c₀, hc₀lt, hc4, ?_⟩
+  intro j hj hne
+  exact Finset.sum_eq_zero_iff.mp herase j
+    (Finset.mem_erase.mpr ⟨hne, Finset.mem_range.mpr hj⟩)
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
