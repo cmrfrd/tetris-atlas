@@ -41629,6 +41629,23 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24w) — the per-piece clear-cap ladder (bank 139/N)
+
+- `shape_rows_le_three_of_ne_I` / `shape_rows_le_two_of_O` — decide: row
+  spans of the shapes (non-I ≤ 3 rows, O ≤ 2).
+- **`clear_count_le_shape_rows`** — a placement completes at most as many
+  rows as its shape occupies (cleared rows inject into the piece's rows,
+  translation preserves the count).
+- `clears_le_two_of_O`, `clears_le_three_of_ne_I` — the ladder: O ≤ 2,
+  non-I ≤ 3, four ⇒ I (`tetris_requires_I`).
+- Lean notes: `rw [Finset.image_image]` needs a closing `rfl` (comp
+  lambda); cross-theorem card facts compose with `le_trans` + defeq, not
+  omega (instance atoms again).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24v) — tetris wells must rotate (bank 138/N)
 
 - `well_feed_four` — a four-clear whose completed rows all take a piece

@@ -2205,6 +2205,65 @@ theorem cycle_tetris_well_cap {π : Policy GameConfig.standard}
   rw [Finset.mem_filter] at hk ⊢
   exact ⟨hk.1, well_feed_four hk.2.1 hk.2.2⟩
 
+/-- Every non-I shape occupies at most three distinct rows (28 cases). -/
+theorem shape_rows_le_three_of_ne_I :
+    ∀ p : Piece, p ≠ Piece.I → ∀ r : Rotation,
+      ((p.shapeUp r).image (fun cell => cell.2)).card ≤ 3 := by
+  decide
+
+/-- The O shape occupies at most two distinct rows in every rotation. -/
+theorem shape_rows_le_two_of_O :
+    ∀ r : Rotation,
+      ((Piece.O.shapeUp r).image (fun cell => cell.2)).card ≤ 2 := by
+  decide
+
+/-- **Clears are bounded by the piece's row span**: a placement completes
+at most as many rows as its shape occupies — each cleared row must take a
+piece cell, and the cleared rows inject into the piece's occupied rows. -/
+theorem clear_count_le_shape_rows {cfg : GameConfig} {b : Board}
+    {pl : Placement} (hnf : ∀ r, ¬ Board.isFull cfg b r) :
+    (Board.fullRows cfg (pl.place b)).card
+      ≤ (pl.shapeUp.image (fun cell => cell.2)).card := by
+  classical
+  have hsub : Board.fullRows cfg (pl.place b)
+      ⊆ (pl.dropped b).image (fun q => q.2) := by
+    intro r hr
+    obtain ⟨q, hq, hqr⟩ := mem_fullRows_place_has_piece_cell hnf hr
+    exact Finset.mem_image.mpr ⟨q, hq, hqr⟩
+  calc (Board.fullRows cfg (pl.place b)).card
+      ≤ ((pl.dropped b).image (fun q => q.2)).card :=
+        Finset.card_le_card hsub
+    _ = (pl.shapeUp.image (fun cell => pl.dropOffset b + cell.2)).card := by
+        rw [Placement.dropped_eq_image, Finset.image_image]
+        rfl
+    _ = ((pl.shapeUp.image (fun cell => cell.2)).image
+          (fun x => pl.dropOffset b + x)).card := by
+        rw [Finset.image_image]
+        rfl
+    _ ≤ (pl.shapeUp.image (fun cell => cell.2)).card :=
+        Finset.card_image_le
+
+/-- **The O never clears more than two rows** — its square spans two rows
+in every rotation. -/
+theorem clears_le_two_of_O {cfg : GameConfig} {b : Board} {pl : Placement}
+    (hnf : ∀ r, ¬ Board.isFull cfg b r) (hO : pl.piece = Piece.O) :
+    (Board.fullRows cfg (pl.place b)).card ≤ 2 := by
+  have h := clear_count_le_shape_rows (pl := pl) hnf
+  unfold Placement.shapeUp at h
+  rw [hO] at h
+  exact le_trans h (shape_rows_le_two_of_O pl.rot)
+
+/-- **Only the I can clear more than three rows**: every other piece spans
+at most three rows — the graded companion of `tetris_requires_I`, and with
+it the full per-piece clear-cap ladder: O ≤ 2, non-I ≤ 3, four ⇒ I. -/
+theorem clears_le_three_of_ne_I {cfg : GameConfig} {b : Board}
+    {pl : Placement} (hnf : ∀ r, ¬ Board.isFull cfg b r)
+    (hI : pl.piece ≠ Piece.I) :
+    (Board.fullRows cfg (pl.place b)).card ≤ 3 := by
+  have h := clear_count_le_shape_rows (pl := pl) hnf
+  unfold Placement.shapeUp at h
+  exact le_trans h (shape_rows_le_three_of_ne_I pl.piece hI pl.rot)
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
