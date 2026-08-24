@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ce) — the general constructor + 5040 (bank 104/N)
+
+- `pattern_seq_legal` — ANY sequence of injective 7-slot block patterns
+  concatenates to a legal stream: the fully general legal-stream factory.
+- `card_block_patterns` — each block admits exactly 7! = 5040 orderings
+  (`Fintype.card_embedding_eq`): the 7-bag's per-block branching factor,
+  formalized.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23cd) — periodic legal streams exist (bank 103/N)
 
 - `periodic_stream_legal` — repeating one injective 7-slot pattern forever

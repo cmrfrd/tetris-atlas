@@ -1151,5 +1151,25 @@ theorem exists_periodic_legal_stream :
     rw [show (k + 35) % 7 = k % 7 by omega]
 
 
+/-- **The general stream constructor**: any sequence of injective 7-slot
+block patterns concatenates to a legal stream — the adversary (or a
+cooperative dealer) may re-choose the permutation every bag. -/
+theorem pattern_seq_legal (F : ℕ → ℕ → Piece)
+    (hF : ∀ b : ℕ, ∀ j < 7, ∀ j' < 7, j ≠ j' → F b j ≠ F b j') :
+    LegalSequenceFrom Bag.full (fun n => F (n / 7) (n % 7)) := by
+  rw [legalSequenceFrom_iff_block_injective]
+  intro b j hj j' hj' hne
+  rw [show (7 * b + j) / 7 = b by omega, show (7 * b + j) % 7 = j by omega,
+    show (7 * b + j') / 7 = b by omega, show (7 * b + j') % 7 = j' by omega]
+  exact hF b j hj j' hj' hne
+
+/-- **The bag's branching factor is 5040**: each block admits exactly `7!`
+legal orderings — the injections `Fin 7 ↪ Piece`. -/
+theorem card_block_patterns : Fintype.card (Fin 7 ↪ Piece) = 5040 := by
+  rw [Fintype.card_embedding_eq, Fintype.card_fin,
+    show Fintype.card Piece = 7 by decide]
+  decide
+
+
 end BagCadence
 end Tetris
