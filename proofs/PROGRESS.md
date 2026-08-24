@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23ck) — periodic adversary ⟺ finite evidence (bank 110/N) ★
+
+- `adversarial_survives_exists_return` — a forever-live adversarial trace
+  returns (pigeonhole on in-field states).
+- `stream_periodic_iterate` — 35-periodicity iterates to every multiple.
+- **`adversarial_survives_iff_return`** — against a LEGAL 35-periodic
+  stream, forever-liveness ⟺ a live prefix ending in a revisit: the
+  quantum turns the 35-periodicity into periodicity at the actual return
+  separation. One fixed periodic adversary's game is a finite check, both
+  ways.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23cj) — general-period adversarial survival (bank 109/N)
 
 - `adversarialTrace_periodic_T` / `_tail_period_multiples_T` /

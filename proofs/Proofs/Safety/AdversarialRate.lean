@@ -2136,5 +2136,97 @@ theorem adversarial_survives_of_return_T {σ : Solver GameConfig.standard}
     have hmod : (m - n) % T < T := Nat.mod_lt _ hT
     exact hlive (n + (m - n) % T) (by omega)
 
+/-- A forever-live adversarial trace must return — pigeonhole on the
+in-field states. -/
+theorem adversarial_survives_exists_return {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hs : ∀ m, ¬ (adversarialTrace GameConfig.standard σ s GameState.init
+      m).lost GameConfig.standard) :
+    ∃ n₁ n₂, n₁ < n₂
+      ∧ adversarialTrace GameConfig.standard σ s GameState.init n₁
+        = adversarialTrace GameConfig.standard σ s GameState.init n₂ := by
+  have hfin : (Set.range
+      (adversarialTrace GameConfig.standard σ s GameState.init)).Finite := by
+    apply Set.Finite.subset (Set.finite_univ.image
+      (fun q : InFieldBoard GameConfig.standard × Bag =>
+        GameState.mk q.1.val q.2))
+    rintro g ⟨n, rfl⟩
+    have hwfn := adversarialTrace_board_wf
+      (GameState.init_board_wf GameConfig.standard) hv n
+    have hif : ∀ p ∈ (adversarialTrace GameConfig.standard σ s GameState.init
+        n).board, p.2 < GameConfig.standard.rows :=
+      (GameState.not_lost_iff_forall_row_lt GameConfig.standard _).mp (hs n)
+    exact ⟨(⟨(adversarialTrace GameConfig.standard σ s GameState.init n).board,
+      hwfn, hif⟩,
+      (adversarialTrace GameConfig.standard σ s GameState.init n).bag),
+      Set.mem_univ _, rfl⟩
+  have hninj : ¬ Function.Injective
+      (adversarialTrace GameConfig.standard σ s GameState.init) := by
+    intro hinj
+    exact Set.infinite_range_of_injective hinj hfin
+  rw [Function.not_injective_iff] at hninj
+  obtain ⟨a, b, heq, hne⟩ := hninj
+  rcases Nat.lt_or_ge a b with hab | hab
+  · exact ⟨a, b, hab, heq⟩
+  · exact ⟨b, a, by omega, heq.symm⟩
+
+/-- 35-periodicity iterates to every multiple. -/
+theorem stream_periodic_iterate {s : ℕ → Piece}
+    (hper : ∀ k, s (k + 35) = s k) :
+    ∀ m k, s (k + 35 * m) = s k := by
+  intro m
+  induction m with
+  | zero => simp
+  | succ m ih =>
+    intro k
+    rw [show k + 35 * (m + 1) = (k + 35 * m) + 35 by ring, hper, ih]
+
+/-- **Surviving a periodic adversary ⟺ finite evidence**: against a legal
+35-periodic stream, a valid solver's trace lives forever iff it exhibits a
+live prefix ending in a state revisit. One fixed periodic adversary's game
+reduces to a finite check, both ways — the quantum supplies the periodicity
+at the return separation. -/
+theorem adversarial_survives_iff_return {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} (hl : LegalSequence s)
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) :
+    (∀ m, ¬ (adversarialTrace GameConfig.standard σ s GameState.init m).lost
+      GameConfig.standard)
+      ↔ ∃ n₁ n₂, n₁ < n₂
+          ∧ adversarialTrace GameConfig.standard σ s GameState.init n₁
+            = adversarialTrace GameConfig.standard σ s GameState.init n₂
+          ∧ ∀ k, k < n₂ →
+            ¬ (adversarialTrace GameConfig.standard σ s GameState.init k).lost
+              GameConfig.standard := by
+  constructor
+  · intro hs
+    obtain ⟨n₁, n₂, hlt, hret⟩ := adversarial_survives_exists_return hv hs
+    exact ⟨n₁, n₂, hlt, hret, fun k _ => hs k⟩
+  · rintro ⟨n₁, n₂, hlt, hret, hlive⟩
+    have hdraw : ∀ n, s n
+        ∈ (adversarialTrace GameConfig.standard σ s GameState.init n).bag := by
+      intro n
+      rw [adversarialTrace_bag_from,
+        show GameState.init.bag = Bag.full from GameState.init_bag]
+      have h := hl n
+      rwa [Bag.canDraw_iff_mem] at h
+    have hdvd : 35 ∣ (n₂ - n₁) :=
+      thirtyfive_dvd_of_adversarialTrace_eq
+        (GameState.init_board_wf GameConfig.standard) hv hdraw
+        (le_of_lt hlt) hret
+    obtain ⟨mm, hmm⟩ := hdvd
+    have hperT : ∀ k, s (k + (n₂ - n₁)) = s k := by
+      intro k
+      rw [hmm]
+      exact stream_periodic_iterate hper mm k
+    refine adversarial_survives_of_return_T (n := n₁) (by omega) hperT ?_ ?_
+    · rw [show n₁ + (n₂ - n₁) = n₂ by omega]
+      exact hret
+    · intro k hk
+      exact hlive k (by omega)
+
 end ClearRate
 end Tetris
