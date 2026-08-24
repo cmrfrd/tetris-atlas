@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24o) — horizontal locality (bank 131/N)
+
+- `cleared_row_gaps_within_four_cols` — any two cells missing from a
+  completed row lie within three columns of each other: both gaps are
+  filled by the piece, and pieces span ≤ 4 columns. The horizontal dual of
+  batch 123's vertical span law. A row's clearing gap-set is a ≤ 4-wide
+  cluster — scattered holes across a row can NEVER be closed in one move.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24n) — anatomy on traces (bank 130/N)
 
 - `trace_tetris_well` / `trace_cleared_row_pre_ge` — the tetris-well and

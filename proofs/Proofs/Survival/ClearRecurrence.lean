@@ -1792,6 +1792,26 @@ theorem cleared_row_pre_ge {b : Board} {pl : Placement}
       _ ≤ 4 := hsum
   omega
 
+/-- **Gaps are horizontally local**: any two cells missing from a row a
+placement completes lie within three columns of each other — both gaps are
+filled by the piece, and a piece spans at most four columns. The horizontal
+dual of the vertical span law. -/
+theorem cleared_row_gaps_within_four_cols {cfg : GameConfig} {b : Board}
+    {pl : Placement} {r c c' : ℕ} (hc : c < cfg.cols) (hc' : c' < cfg.cols)
+    (hnotb : (c, r) ∉ b) (hnotb' : (c', r) ∉ b)
+    (hr : r ∈ Board.fullRows cfg (pl.place b)) (hle : c ≤ c') :
+    c' - c ≤ 3 := by
+  have h1 := gap_filled_by_piece hc hnotb hr
+  have h2 := gap_filled_by_piece hc' hnotb' hr
+  rw [Placement.dropped_eq_image, Finset.mem_image] at h1 h2
+  obtain ⟨cell, hcell, hEq⟩ := h1
+  obtain ⟨cell', hcell', hEq'⟩ := h2
+  have hcol : pl.col + cell.1 = c := congrArg Prod.fst hEq
+  have hcol' : pl.col + cell'.1 = c' := congrArg Prod.fst hEq'
+  have hb1 := Piece.shapeUp_col_lt_four pl.piece pl.rot cell hcell
+  have hb2 := Piece.shapeUp_col_lt_four pl.piece pl.rot cell' hcell'
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
