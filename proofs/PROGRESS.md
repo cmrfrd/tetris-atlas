@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24t) — the four-cell feed pins the I (bank 136/N)
+
+- `shape_col_fiber_not_four_of_ne_I` — decide: no non-I shape puts four
+  cells in one column.
+- **`full_feed_requires_I`** — a placement delivering all four of its
+  cells into one column plays I. Completes the feed ladder: 3+ ⇒
+  {I,L,J,T} (batch 135), 4 ⇒ {I}. Combined with `I_four_rows_single_col`
+  and `tetris_piece_vanishes`: the tetris finisher's signature move is
+  exactly the unique full-column feed.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24s) — heavy feeds require tall pieces (bank 135/N)
 
 - `shape_col_fiber_not_big_of_SZO` / `shape_col_fiber_le_three_of_ne_I` —

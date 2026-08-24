@@ -2001,6 +2001,46 @@ theorem shape_col_fiber_le_three_of_ne_I :
       ((p.shapeUp r).filter (fun cell => cell.1 = t)).card ≤ 3 := by
   decide
 
+theorem shape_col_fiber_not_four_of_ne_I :
+    ∀ p : Piece, p ≠ Piece.I → ∀ r : Rotation, ∀ t < 4,
+      ¬ (4 ≤ ((p.shapeUp r).filter (fun cell => cell.1 = t)).card) := by
+  decide
+
+/-- **A full-column feed pins the I**: only the I piece can pour all four
+of its cells into a single column. -/
+theorem full_feed_requires_I {pl : Placement} {j : ℕ}
+    (h4 : 4 ≤ pl.colProfile j) : pl.piece = Piece.I := by
+  by_contra hI
+  unfold Placement.colProfile at h4
+  rcases Nat.lt_or_ge j pl.col with hj | hj
+  · have hempty : (pl.shapeUp.filter (fun cell => pl.col + cell.1 = j)) = ∅ := by
+      rw [Finset.filter_eq_empty_iff]
+      intro cell _
+      omega
+    rw [hempty] at h4
+    simp at h4
+  · set t := j - pl.col with ht
+    have hsame : (pl.shapeUp.filter (fun cell => pl.col + cell.1 = j))
+        = (pl.shapeUp.filter (fun cell => cell.1 = t)) := by
+      apply Finset.filter_congr
+      intro cell _
+      constructor
+      · intro h
+        omega
+      · intro h
+        omega
+    rw [hsame] at h4
+    rcases Nat.lt_or_ge t 4 with ht4 | ht4
+    · unfold Placement.shapeUp at h4
+      exact shape_col_fiber_not_four_of_ne_I pl.piece hI pl.rot t ht4 h4
+    · have hempty : (pl.shapeUp.filter (fun cell => cell.1 = t)) = ∅ := by
+        rw [Finset.filter_eq_empty_iff]
+        intro cell hcell
+        have := Piece.shapeUp_col_lt_four pl.piece pl.rot cell hcell
+        omega
+      rw [hempty] at h4
+      simp at h4
+
 /-- **Heavy column feeds require a tall piece**: a placement delivering
 three or more cells into one column plays I, L, J or T (vertical T carries
 a 3-cell column too) — S, Z and O cannot feed any column past two. -/
