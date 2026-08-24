@@ -1171,5 +1171,25 @@ theorem card_block_patterns : Fintype.card (Fin 7 ↪ Piece) = 5040 := by
   decide
 
 
+/-- **Legal streams are exactly pattern sequences**: a stream is legal from
+the full bag iff it is the concatenation of some sequence of injective
+7-slot block patterns. The 7-bag process, fully characterized. -/
+theorem legalSequenceFrom_iff_exists_pattern_seq (s : ℕ → Piece) :
+    LegalSequenceFrom Bag.full s
+      ↔ ∃ F : ℕ → ℕ → Piece,
+          (∀ b : ℕ, ∀ j < 7, ∀ j' < 7, j ≠ j' → F b j ≠ F b j')
+          ∧ s = fun n => F (n / 7) (n % 7) := by
+  constructor
+  · intro hl
+    refine ⟨fun b j => s (7 * b + j), ?_, ?_⟩
+    · intro b j hj j' hj' hne
+      exact (legalSequenceFrom_iff_block_injective s).mp hl b j hj j' hj' hne
+    · funext n
+      change s n = s (7 * (n / 7) + n % 7)
+      rw [show 7 * (n / 7) + n % 7 = n by omega]
+  · rintro ⟨F, hF, rfl⟩
+    exact pattern_seq_legal F hF
+
+
 end BagCadence
 end Tetris

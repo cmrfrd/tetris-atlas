@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23cf) — the 7-bag fully characterized (bank 105/N)
+
+- `legalSequenceFrom_iff_exists_pattern_seq` — a stream is legal from the
+  full bag IFF it is the concatenation of a sequence of injective 7-slot
+  block patterns. With `card_block_patterns` (5040 per block), the legal
+  stream space is exactly `(7!)^ℕ`. The stream-construction arc closes.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23ce) — the general constructor + 5040 (bank 104/N)
 
 - `pattern_seq_legal` — ANY sequence of injective 7-slot block patterns
