@@ -1551,6 +1551,65 @@ theorem four_clear_piece_rows_card {cfg : GameConfig} {b : Board}
     exact le_of_eq pl.shapeUp_card
   omega
 
+/-- Placing splits row counts exactly (the union is disjoint). -/
+theorem rowCount_place_eq (b : Board) (pl : Placement) (r : ℕ) :
+    Board.rowCount (pl.place b) r
+      = b.rowCount r + ((pl.dropped b).filter (fun p => p.2 = r)).card := by
+  classical
+  unfold Board.rowCount
+  rw [Placement.place_eq_union_dropped, Finset.filter_union,
+    Finset.card_union_of_disjoint
+      (Finset.disjoint_filter_filter (pl.dropped_disjoint b).symm)]
+
+/-- **The tetris anatomy completes**: at a four-clear, each of the four
+rows held *exactly nine* cells before the vertical I supplied its tenth —
+the four fibers of the piece split one cell per row, forced by counting. -/
+theorem tetris_rows_pre_nine {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4)
+    {r : ℕ} (hr : r ∈ Board.fullRows GameConfig.standard (pl.place b)) :
+    b.rowCount r = 9 := by
+  classical
+  have hplacewf := Placement.place_wf hwf hv
+  have hten : Board.rowCount (pl.place b) r = 10 := by
+    have h := rowCount_of_isFull hplacewf (Board.isFull_of_mem_fullRows hr)
+    rwa [GameConfig.standard_cols] at h
+  have hsplit := rowCount_place_eq b pl r
+  -- each of the four completed rows takes at least one piece cell
+  have hone : ∀ r' ∈ Board.fullRows GameConfig.standard (pl.place b),
+      1 ≤ ((pl.dropped b).filter (fun p => p.2 = r')).card := by
+    intro r' hr'
+    obtain ⟨q, hq, hqr⟩ := mem_fullRows_place_has_piece_cell hnf hr'
+    exact Finset.card_pos.mpr ⟨q, Finset.mem_filter.mpr ⟨hq, hqr⟩⟩
+  -- the row r takes at most one: the other three each take one of the four
+  have herase : 3 ≤ ∑ r' ∈ (Board.fullRows GameConfig.standard
+      (pl.place b)).erase r,
+      ((pl.dropped b).filter (fun p => p.2 = r')).card := by
+    have hcard : ((Board.fullRows GameConfig.standard (pl.place b)).erase
+        r).card = 3 := by
+      rw [Finset.card_erase_of_mem hr, h4]
+    calc (3 : ℕ) = ∑ _r' ∈ (Board.fullRows GameConfig.standard
+          (pl.place b)).erase r, 1 := by
+          rw [Finset.sum_const, hcard, smul_eq_mul, mul_one]
+      _ ≤ _ := Finset.sum_le_sum (fun r' hr' =>
+          hone r' (Finset.mem_of_mem_erase hr'))
+  have hsum := sum_row_added_le_four b pl
+    (Board.fullRows GameConfig.standard (pl.place b))
+  have hchain : ((pl.dropped b).filter (fun p => p.2 = r)).card + 3 ≤ 4 := by
+    calc ((pl.dropped b).filter (fun p => p.2 = r)).card + 3
+        ≤ ((pl.dropped b).filter (fun p => p.2 = r)).card
+          + ∑ r' ∈ (Board.fullRows GameConfig.standard (pl.place b)).erase r,
+            ((pl.dropped b).filter (fun p => p.2 = r')).card := by omega
+      _ = ∑ r' ∈ Board.fullRows GameConfig.standard (pl.place b),
+            ((pl.dropped b).filter (fun p => p.2 = r')).card :=
+          Finset.add_sum_erase _
+            (fun r' => ((pl.dropped b).filter (fun p => p.2 = r')).card) hr
+      _ ≤ 4 := hsum
+  have honer := hone r hr
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

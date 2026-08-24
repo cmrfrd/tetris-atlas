@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24j) — nine-tenths exactly (bank 126/N)
+
+- `rowCount_place_eq` — placing splits row counts exactly (disjoint union).
+- **`tetris_rows_pre_nine`** — each of a four-clear's rows held EXACTLY 9
+  cells before the piece: the four piece cells split one per row (each row
+  ≥ 1 by locality, total ≤ 4). The complete tetris anatomy: a vertical I
+  into a 4-deep well whose four consecutive rows are each 9/10 full.
+- Lean note: `Finset.add_sum_erase` needs the fiber function EXPLICIT
+  (higher-order unification fails against set-builder card terms).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24i) — the vertical finisher (bank 125/N)
 
 - `four_clear_piece_rows_card` — a placement completing four rows has its
