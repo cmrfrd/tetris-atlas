@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-23co) — THE LOAD-DISTRIBUTION LAW (bank 114/N) ★
+
+- `colDelivered` + `colDelivered_ledger` — the per-column trace ledger:
+  what column j holds plus what it lost to clears equals what it received
+  (clears bill every column exactly one cell per row; rides the existing
+  engine lemma `applyStep_colCount`).
+- `colCount_le_rows` — an in-field column holds ≤ 20 cells.
+- **`column_load_bracket`** — on a live trace EVERY column has received
+  between `cleared` and `cleared + 20` cells: the clearing duty is billed
+  to all ten columns EQUALLY, up to one board-height of slack. A solver
+  cannot starve or overfeed any column, asymptotically.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23cn) — the bounded necessary condition (bank 113/N)
 
 - `tetrisSolvableValid_implies_canonical_evidence_bounded` — solvability

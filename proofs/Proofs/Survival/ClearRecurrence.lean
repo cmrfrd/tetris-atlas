@@ -1,5 +1,6 @@
 import Mathlib
 import Proofs.Survival.ClearDeviation
+import Proofs.Invariants.ColumnCount
 
 /-!
 # Recurrence and period: the arithmetic skeleton of an immortal solver
@@ -1088,6 +1089,76 @@ theorem tetris_requires_thirtysix {π : Policy GameConfig.standard}
     36 ≤ (trace GameConfig.standard π GameState.init m).board.count := by
   have h := clear_requires_mass hv m
   omega
+
+/-- Cells delivered to column `j` over the first `n` placements. -/
+def colDelivered (π : Policy GameConfig.standard) (j : ℕ) : ℕ → ℕ
+  | 0 => 0
+  | n + 1 => colDelivered π j n
+      + (π (trace GameConfig.standard π GameState.init n)).colProfile j
+
+@[simp] theorem colDelivered_zero (π : Policy GameConfig.standard) (j : ℕ) :
+    colDelivered π j 0 = 0 := rfl
+
+theorem colDelivered_succ (π : Policy GameConfig.standard) (j n : ℕ) :
+    colDelivered π j (n + 1) = colDelivered π j n
+      + (π (trace GameConfig.standard π GameState.init n)).colProfile j := rfl
+
+/-- **The per-column ledger**: what column `j` holds plus what it lost to
+clears equals what it received — clears bill every column exactly one cell
+per row. -/
+theorem colDelivered_ledger {π : Policy GameConfig.standard} {j : ℕ}
+    (hj : j < 10) (n : ℕ) :
+    (trace GameConfig.standard π GameState.init n).board.colCount j
+        + cleared GameConfig.standard π GameState.init n
+      = colDelivered π j n := by
+  induction n with
+  | zero => simp [cleared, Board.colCount, GameState.init, Board.empty]
+  | succ k ih =>
+    have hstep := applyStep_colCount GameConfig.standard
+      (trace GameConfig.standard π GameState.init k).board
+      (π (trace GameConfig.standard π GameState.init k))
+      (j := j) (by rw [GameConfig.standard_cols]; omega)
+    rw [trace_succ, GameState.step_board, cleared_succ, colDelivered_succ]
+    unfold Board.linesCleared at hstep
+    omega
+
+/-- A column of an in-field board holds at most `rows` cells (its cells sit
+at distinct rows below the ceiling). -/
+theorem colCount_le_rows {cfg : GameConfig} {b : Board}
+    (hif : ∀ p ∈ b, p.2 < cfg.rows) (j : ℕ) :
+    b.colCount j ≤ cfg.rows := by
+  classical
+  unfold Board.colCount
+  calc (b.filter (fun p => p.1 = j)).card
+      ≤ (Finset.range cfg.rows).card := by
+        refine Finset.card_le_card_of_injOn (fun p => p.2) ?_ ?_
+        · intro p hp
+          simp only [Finset.mem_coe, Finset.mem_filter] at hp
+          exact Finset.mem_range.mpr (hif p hp.1)
+        · intro p hp q hq hpq
+          simp only [Finset.mem_coe, Finset.mem_filter] at hp hq
+          apply Prod.ext
+          · rw [hp.2, hq.2]
+          · exact hpq
+    _ = cfg.rows := Finset.card_range _
+
+/-- **The load-distribution law**: on a live trace, every column has received
+between `cleared` and `cleared + 20` cells — the clearing duty is billed to
+all ten columns equally, up to one board-height of slack. -/
+theorem column_load_bracket {π : Policy GameConfig.standard}
+    {j : ℕ} (hj : j < 10) {n : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init n).lost
+      GameConfig.standard) :
+    cleared GameConfig.standard π GameState.init n ≤ colDelivered π j n
+      ∧ colDelivered π j n
+        ≤ cleared GameConfig.standard π GameState.init n + 20 := by
+  have hled := colDelivered_ledger (π := π) hj n
+  have hif : ∀ p ∈ (trace GameConfig.standard π GameState.init n).board,
+      p.2 < GameConfig.standard.rows :=
+    (GameState.not_lost_iff_forall_row_lt GameConfig.standard _).mp hlive
+  have hcc := colCount_le_rows hif j
+  rw [GameConfig.standard_rows] at hcc
+  exact ⟨by omega, by omega⟩
 
 /-! ## The clear-free horizon is fifty placements -/
 
