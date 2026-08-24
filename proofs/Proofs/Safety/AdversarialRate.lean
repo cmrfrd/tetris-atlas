@@ -2401,5 +2401,58 @@ theorem not_tetrisSolvableValid_of_no_canonical_evidence
     ¬ TetrisSolvableValid :=
   fun hsolv => h (tetrisSolvableValid_implies_canonical_evidence_bounded hsolv)
 
+/-- Cells delivered to column `j` over the first `n` adversarial placements. -/
+def colDeliveredAdv (σ : Solver GameConfig.standard) (s : ℕ → Piece)
+    (j : ℕ) : ℕ → ℕ
+  | 0 => 0
+  | n + 1 => colDeliveredAdv σ s j n
+      + ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+          with piece := s n } : Placement).colProfile j
+
+theorem colDeliveredAdv_succ (σ : Solver GameConfig.standard) (s : ℕ → Piece)
+    (j n : ℕ) :
+    colDeliveredAdv σ s j (n + 1) = colDeliveredAdv σ s j n
+      + ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n) (s n)
+          with piece := s n } : Placement).colProfile j := rfl
+
+/-- The adversarial per-column ledger. -/
+theorem colDeliveredAdv_ledger {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {j : ℕ} (hj : j < 10) (n : ℕ) :
+    (adversarialTrace GameConfig.standard σ s GameState.init n).board.colCount j
+        + clearedAdv GameConfig.standard σ s GameState.init n
+      = colDeliveredAdv σ s j n := by
+  induction n with
+  | zero => simp [colDeliveredAdv, Board.colCount, GameState.init, Board.empty]
+  | succ k ih =>
+    have hstep := applyStep_colCount GameConfig.standard
+      (adversarialTrace GameConfig.standard σ s GameState.init k).board
+      ({ σ (adversarialTrace GameConfig.standard σ s GameState.init k) (s k)
+        with piece := s k })
+      (j := j) (by rw [GameConfig.standard_cols]; omega)
+    rw [adversarialTrace_succ, adversarialStep_board, clearedAdv_succ,
+      colDeliveredAdv_succ]
+    unfold Board.linesCleared at hstep
+    dsimp only at hstep ⊢
+    omega
+
+/-- **The adversarial load-distribution law**: whoever picks the pieces,
+every column of a live trace has received between `cleared` and
+`cleared + 20` cells. -/
+theorem adversary_column_load_bracket {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {j : ℕ} (hj : j < 10) {n : ℕ}
+    (hlive : ¬ (adversarialTrace GameConfig.standard σ s GameState.init
+      n).lost GameConfig.standard) :
+    clearedAdv GameConfig.standard σ s GameState.init n
+        ≤ colDeliveredAdv σ s j n
+      ∧ colDeliveredAdv σ s j n
+        ≤ clearedAdv GameConfig.standard σ s GameState.init n + 20 := by
+  have hled := colDeliveredAdv_ledger (σ := σ) (s := s) hj n
+  have hif : ∀ p ∈ (adversarialTrace GameConfig.standard σ s GameState.init
+      n).board, p.2 < GameConfig.standard.rows :=
+    (GameState.not_lost_iff_forall_row_lt GameConfig.standard _).mp hlive
+  have hcc := colCount_le_rows hif j
+  rw [GameConfig.standard_rows] at hcc
+  exact ⟨by omega, by omega⟩
+
 end ClearRate
 end Tetris

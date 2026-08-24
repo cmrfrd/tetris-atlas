@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24a) — adversarial column ledger (bank 117/N)
+
+- `colDeliveredAdv` (+`_succ`, `_ledger`) and
+  `adversary_column_load_bracket` — the load-distribution law survives
+  adversarial piece choice: whoever picks the pieces, every column of a
+  live trace has received between `cleared` and `cleared + 20` cells.
+  Column-arc parity complete.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-23cq) — the per-column frequency law (bank 116/N)
 
 - `colDelivered_mono` + `cycle_column_window_bracket` — every window of a
