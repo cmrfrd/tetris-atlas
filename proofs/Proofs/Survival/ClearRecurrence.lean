@@ -1258,6 +1258,53 @@ theorem sum_colDelivered {π : Policy GameConfig.standard}
       _ = 4 * k + 4 := by rw [ih, hsum]
       _ = 4 * (k + 1) := by ring
 
+/-- The windowed column intake is the sum of the window's profiles. -/
+theorem colDelivered_window (π : Policy GameConfig.standard) (j n : ℕ) :
+    ∀ w, colDelivered π j (n + w) - colDelivered π j n
+      = ∑ k ∈ Finset.range w,
+          (π (trace GameConfig.standard π GameState.init (n + k))).colProfile j := by
+  intro w
+  induction w with
+  | zero => simp
+  | succ w ih =>
+    have hmono := colDelivered_mono π j (Nat.le_add_right n w)
+    rw [show n + (w + 1) = (n + w) + 1 by omega, colDelivered_succ,
+      Finset.sum_range_succ, ← ih]
+    omega
+
+/-- **The tall-drop cap**: per cycle period, at most three placements pour
+their full four cells into any one fixed column — a column's 14-cell period
+budget cannot absorb a fourth vertical I. -/
+theorem cycle_tall_drop_column_cap {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {j : ℕ} (hj : j < 10) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    ((Finset.range 35).filter (fun k =>
+        (π (trace GameConfig.standard π GameState.init (n + k))).colProfile j
+          = 4)).card ≤ 3 := by
+  classical
+  have hload := cycle_column_load_exact hv hj hcyc 1
+  rw [mul_one] at hload
+  have hwin := colDelivered_window π j n 35
+  have hsum : 4 * ((Finset.range 35).filter (fun k =>
+        (π (trace GameConfig.standard π GameState.init (n + k))).colProfile j
+          = 4)).card
+      ≤ ∑ k ∈ Finset.range 35,
+          (π (trace GameConfig.standard π GameState.init (n + k))).colProfile j := by
+    calc 4 * ((Finset.range 35).filter (fun k =>
+          (π (trace GameConfig.standard π GameState.init (n + k))).colProfile j
+            = 4)).card
+        = ∑ k ∈ (Finset.range 35).filter (fun k =>
+            (π (trace GameConfig.standard π GameState.init (n + k))).colProfile
+              j = 4),
+            (π (trace GameConfig.standard π GameState.init (n + k))).colProfile
+              j := by
+          rw [Finset.sum_congr rfl (fun k hk =>
+            (Finset.mem_filter.mp hk).2)]
+          rw [Finset.sum_const, smul_eq_mul, mul_comm]
+      _ ≤ _ := Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

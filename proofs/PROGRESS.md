@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24c) — the tall-drop cap (bank 119/N)
+
+- `colDelivered_window` — window intake = sum of the window's profiles.
+- **`cycle_tall_drop_column_cap`** — per cycle period, at most THREE
+  placements pour their full four cells into any one fixed column: the
+  column's exact 14-cell period budget cannot absorb a fourth vertical I.
+  A geometric strategy constraint born from pure counting.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24b) — the column sum identity (bank 118/N)
 
 - `sum_colDelivered` — total deliveries across the ten columns equal `4n`
