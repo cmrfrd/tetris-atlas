@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24g) — clears are vertically local (bank 123/N)
+
+- `mem_fullRows_place_has_piece_cell` — on a no-full-rows board, every row
+  a placement completes contains a cell of the piece itself.
+- **`fullRows_place_span_le_three`** — any two rows completed by one
+  placement lie within three of each other: clears are vertically LOCAL.
+  A 4-clear occupies exactly four consecutive-window rows.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24f) — the localized clear mass (bank 122/N)
 
 - `rowCount_of_isFull` — a full row of a WF board holds exactly `cols`.

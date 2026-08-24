@@ -1459,6 +1459,43 @@ theorem cleared_rows_pre_mass {cfg : GameConfig} {b : Board} {pl : Placement}
   have hadd := sum_row_added_le_four b pl (Board.fullRows cfg (pl.place b))
   omega
 
+/-- On a board with no pre-existing full rows, every row a placement
+completes contains a cell of the piece itself. -/
+theorem mem_fullRows_place_has_piece_cell {cfg : GameConfig} {b : Board}
+    {pl : Placement} (hnf : ∀ r, ¬ Board.isFull cfg b r) {r : ℕ}
+    (hr : r ∈ Board.fullRows cfg (pl.place b)) :
+    ∃ q ∈ pl.dropped b, q.2 = r := by
+  classical
+  by_contra hcon
+  push Not at hcon
+  apply hnf r
+  intro c hc
+  have hfull := Board.isFull_of_mem_fullRows hr
+  have hmem := hfull c hc
+  rw [Placement.place_eq_union_dropped, Finset.mem_union] at hmem
+  rcases hmem with h | h
+  · exact h
+  · exact absurd rfl (hcon (c, r) h)
+
+/-- **Clears are vertically local**: on a board with no pre-existing full
+rows, any two rows completed by one placement lie within three of each
+other — a single piece spans at most four rows, and every completed row
+touches the piece. -/
+theorem fullRows_place_span_le_three {cfg : GameConfig} {b : Board}
+    {pl : Placement} (hnf : ∀ r, ¬ Board.isFull cfg b r) {r r' : ℕ}
+    (hr : r ∈ Board.fullRows cfg (pl.place b))
+    (hr' : r' ∈ Board.fullRows cfg (pl.place b)) (hle : r ≤ r') :
+    r' - r ≤ 3 := by
+  obtain ⟨q, hq, hqr⟩ := mem_fullRows_place_has_piece_cell hnf hr
+  obtain ⟨q', hq', hqr'⟩ := mem_fullRows_place_has_piece_cell hnf hr'
+  rw [Placement.dropped_eq_image, Finset.mem_image] at hq hq'
+  obtain ⟨cell, hcell, rfl⟩ := hq
+  obtain ⟨cell', hcell', rfl⟩ := hq'
+  have h1 := Piece.shapeUp_row_lt_four pl.piece pl.rot cell hcell
+  have h2 := Piece.shapeUp_row_lt_four pl.piece pl.rot cell' hcell'
+  dsimp only at hqr hqr'
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
