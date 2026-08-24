@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24v) — tetris wells must rotate (bank 138/N)
+
+- `well_feed_four` — a four-clear whose completed rows all take a piece
+  cell in column j feeds j exactly four (injection + card_dropped cap;
+  needs NO wf/validity hypotheses).
+- **`cycle_tetris_well_cap`** — per cycle period at most 3 tetrises sink
+  their well into any one fixed column: a fourth would demand 16 of the
+  column's exact 14-cell period budget. Solver-design law: tetris wells
+  must rotate across the board. Proof: filter-subset into
+  `cycle_tall_drop_column_cap`.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24u) — the tetris feeds one column (bank 137/N)
 
 - **`tetris_feeds_single_column`** — at a four-clear ∃ c₀ < 10 with

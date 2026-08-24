@@ -2147,6 +2147,64 @@ theorem tetris_feeds_single_column {b : Board} {pl : Placement}
   exact Finset.sum_eq_zero_iff.mp herase j
     (Finset.mem_erase.mpr ⟨hne, Finset.mem_range.mpr hj⟩)
 
+/-- A four-clear whose completed rows all take a piece cell in column `j`
+feeds column `j` its entire four-cell budget — the four rows inject into
+the dropped piece's `j`-fiber, which the piece caps at four. -/
+theorem well_feed_four {b : Board} {pl : Placement} {j : ℕ}
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4)
+    (hwell : ∀ r ∈ Board.fullRows GameConfig.standard (pl.place b),
+      (j, r) ∈ pl.dropped b) :
+    pl.colProfile j = 4 := by
+  classical
+  have hfour : 4 ≤ ((pl.dropped b).filter (fun p => p.1 = j)).card := by
+    have hinj : (Board.fullRows GameConfig.standard (pl.place b)).card
+        ≤ ((pl.dropped b).filter (fun p => p.1 = j)).card := by
+      refine Finset.card_le_card_of_injOn (fun r => (j, r)) ?_ ?_
+      · intro r hr
+        exact Finset.mem_filter.mpr ⟨hwell r hr, rfl⟩
+      · intro r _ r' _ h
+        exact congrArg Prod.snd h
+    omega
+  have hprof : ((pl.dropped b).filter (fun p => p.1 = j)).card
+      = pl.colProfile j := by
+    have h := Placement.colCount_cellsAt pl (pl.dropOffset b) j
+    unfold Board.colCount at h
+    unfold Placement.dropped
+    exact h
+  have hcap : ((pl.dropped b).filter (fun p => p.1 = j)).card ≤ 4 := by
+    calc ((pl.dropped b).filter (fun p => p.1 = j)).card
+        ≤ (pl.dropped b).card :=
+          Finset.card_le_card (Finset.filter_subset _ _)
+      _ = 4 := Placement.card_dropped b pl
+  omega
+
+/-- **The tetris-well rationing law**: per cycle period, at most three
+tetrises may sink their well into any one fixed column — a fourth would
+demand sixteen of the column's exact fourteen-cell period budget. The
+solver-design consequence: tetris wells must rotate across the board. -/
+theorem cycle_tetris_well_cap {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {j : ℕ} (hj : j < 10) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    ((Finset.range 35).filter (fun k =>
+        (Board.fullRows GameConfig.standard
+            ((π (trace GameConfig.standard π GameState.init (n + k))).place
+              (trace GameConfig.standard π GameState.init (n + k)).board)).card
+          = 4
+        ∧ ∀ r ∈ Board.fullRows GameConfig.standard
+            ((π (trace GameConfig.standard π GameState.init (n + k))).place
+              (trace GameConfig.standard π GameState.init (n + k)).board),
+          (j, r) ∈ (π (trace GameConfig.standard π GameState.init
+            (n + k))).dropped
+              (trace GameConfig.standard π GameState.init (n + k)).board)).card
+      ≤ 3 := by
+  classical
+  refine le_trans (Finset.card_le_card ?_)
+    (cycle_tall_drop_column_cap hv hj hcyc)
+  intro k hk
+  rw [Finset.mem_filter] at hk ⊢
+  exact ⟨hk.1, well_feed_four hk.2.1 hk.2.2⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
