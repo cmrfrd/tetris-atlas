@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24p) — the clearing box (bank 132/N)
+
+- `clearing_gaps_in_four_box` — every pair of gaps a single placement
+  closes lies within a 4 × 4 box (both coordinates differ ≤ 3). One move's
+  entire clearing action is confined to a tetromino-sized window: the
+  locality arc's capstone.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24o) — horizontal locality (bank 131/N)
 
 - `cleared_row_gaps_within_four_cols` — any two cells missing from a

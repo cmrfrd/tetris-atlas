@@ -1812,6 +1812,31 @@ theorem cleared_row_gaps_within_four_cols {cfg : GameConfig} {b : Board}
   have hb2 := Piece.shapeUp_col_lt_four pl.piece pl.rot cell' hcell'
   omega
 
+/-- **The clearing box**: every pair of gaps a single placement closes —
+across all its completed rows — lies within a `4 × 4` box: both
+coordinates differ by at most three. One move's entire clearing action is
+confined to one tetromino-sized window of the board. -/
+theorem clearing_gaps_in_four_box {cfg : GameConfig} {b : Board}
+    {pl : Placement} {r r' c c' : ℕ} (hc : c < cfg.cols) (hc' : c' < cfg.cols)
+    (hnotb : (c, r) ∉ b) (hnotb' : (c', r') ∉ b)
+    (hr : r ∈ Board.fullRows cfg (pl.place b))
+    (hr' : r' ∈ Board.fullRows cfg (pl.place b)) :
+    (c - c' ≤ 3 ∧ c' - c ≤ 3) ∧ (r - r' ≤ 3 ∧ r' - r ≤ 3) := by
+  have h1 := gap_filled_by_piece hc hnotb hr
+  have h2 := gap_filled_by_piece hc' hnotb' hr'
+  rw [Placement.dropped_eq_image, Finset.mem_image] at h1 h2
+  obtain ⟨cell, hcell, hEq⟩ := h1
+  obtain ⟨cell', hcell', hEq'⟩ := h2
+  have hcol : pl.col + cell.1 = c := congrArg Prod.fst hEq
+  have hcol' : pl.col + cell'.1 = c' := congrArg Prod.fst hEq'
+  have hrow : pl.dropOffset b + cell.2 = r := congrArg Prod.snd hEq
+  have hrow' : pl.dropOffset b + cell'.2 = r' := congrArg Prod.snd hEq'
+  have hb1 := Piece.shapeUp_col_lt_four pl.piece pl.rot cell hcell
+  have hb2 := Piece.shapeUp_col_lt_four pl.piece pl.rot cell' hcell'
+  have hb3 := Piece.shapeUp_row_lt_four pl.piece pl.rot cell hcell
+  have hb4 := Piece.shapeUp_row_lt_four pl.piece pl.rot cell' hcell'
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -175,6 +175,7 @@ families — the `Config` decide-facts, `bag_card_*` ladder, per-index
 | **`big_clear_frequency_cap`** | triples + tetrises ≤ `3⌊Δn/7⌋ + 6` in any window: every 3+-clear rides an I/L/J and those run at `3/7 + O(1)` — disjoint fibers, union bound, three frequency laws |
 | `iCount_frequency_law`, `tetris_frequency_cap` | the frequency law on the counters: `ΔiCount ∈ [⌊(Δn−7)/7⌋, ⌊Δn/7⌋+2]` and at most `⌊Δn/7⌋+2` tetrises at every horizon — both supersede the 35-block brackets |
 | **`window_frequency_law`**, `prefix_le_one` | THE TRUE FREQUENCY LAW: in ANY window from ANY start, every piece appears within `[⌊(w−7)/7⌋, ⌊w/7⌋+2]` — frequency 1/7 with O(1) error at every scale, superseding the `[4/35, 6/35]` sandwich for large windows; pre-refill stretches repeat no piece |
+| **`clearing_gaps_in_four_box`** | one move's entire clearing action is confined to a tetromino-sized 4×4 window: every pair of gaps closed differs by ≤ 3 in both coordinates |
 | **`cleared_row_gaps_within_four_cols`** | gaps are horizontally local: any two cells missing from a completed row lie within three columns — the horizontal dual of the vertical span law |
 | `trace_tetris_well`, `trace_cleared_row_pre_ge` | the anatomy theorems packaged at trace level: past the seed, the standing hypotheses (WF, validity, no-full) come for free |
 | **`cleared_row_pre_ge`** | the unified per-row floor: each row of a `k`-clear held ≥ `5+k` cells beforehand (k=1: ≥6 … k=4: ≥9) — the other completed rows each claim a piece cell |
