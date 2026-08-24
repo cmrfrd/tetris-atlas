@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24i) — the vertical finisher (bank 125/N)
+
+- `four_clear_piece_rows_card` — a placement completing four rows has its
+  four cells in four DISTINCT rows (shape row-image card = 4): with
+  `tetris_requires_I`, every tetris is finished by a VERTICAL I. The full
+  geometric characterization of the tetris event: an I, standing upright,
+  completing four consecutive rows each already 9/10 full.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24h) — the tetris interval (bank 124/N)
 
 - `four_clear_rows_eq_Icc` — a 4-clear's rows are exactly the interval

@@ -1520,6 +1520,37 @@ theorem four_clear_rows_eq_Icc {cfg : GameConfig} {b : Board}
   rw [h4, Nat.card_Icc]
   omega
 
+/-- **A tetris's finishing piece stands vertical**: a placement completing
+four rows must have its four cells in four distinct rows — the shape spans
+exactly four rows. With `tetris_requires_I`, the finisher is an I in its
+vertical orientation. -/
+theorem four_clear_piece_rows_card {cfg : GameConfig} {b : Board}
+    {pl : Placement} (hnf : ∀ r, ¬ Board.isFull cfg b r)
+    (h4 : (Board.fullRows cfg (pl.place b)).card = 4) :
+    (pl.shapeUp.image (fun c => c.2)).card = 4 := by
+  classical
+  have hsub : Board.fullRows cfg (pl.place b)
+      ⊆ (pl.dropped b).image (fun q => q.2) := by
+    intro r hr
+    obtain ⟨q, hq, hqr⟩ := mem_fullRows_place_has_piece_cell hnf hr
+    exact Finset.mem_image.mpr ⟨q, hq, hqr⟩
+  have h1 : 4 ≤ ((pl.dropped b).image (fun q => q.2)).card := by
+    have := Finset.card_le_card hsub
+    omega
+  have himg : (pl.dropped b).image (fun q => q.2)
+      = (pl.shapeUp.image (fun c => c.2)).image
+          (fun t => pl.dropOffset b + t) := by
+    rw [Placement.dropped_eq_image, Finset.image_image, Finset.image_image]
+    rfl
+  have h3 : ((pl.dropped b).image (fun q => q.2)).card
+      = ((pl.shapeUp).image (fun c => c.2)).card := by
+    rw [himg]
+    exact Finset.card_image_of_injective _ (fun a b hab => by omega)
+  have h2 : ((pl.shapeUp).image (fun c => c.2)).card ≤ 4 := by
+    refine le_trans Finset.card_image_le ?_
+    exact le_of_eq pl.shapeUp_card
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
