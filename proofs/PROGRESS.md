@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24l) — the well is straight (bank 128/N) ★
+
+- `gap_filled_by_piece` — a completed row's missing cell belongs to the
+  dropped piece.
+- `I_four_rows_single_col` — an I spanning four rows occupies a single
+  column offset (decide over the four rotations).
+- **`tetris_gaps_share_column`** — the four one-cell gaps of a four-clear
+  all sit in the SAME column: a tetris demands a clean 1-wide, 4-deep well.
+  The row-geometry arc completes: every tetris = vertical I into a straight
+  well of four consecutive 9/10-full rows.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24k) — the tetris well (bank 127/N)
 
 - `row_missing_unique` — a `cols−1`-full row of a WF board misses exactly

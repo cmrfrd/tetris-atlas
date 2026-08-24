@@ -1676,6 +1676,70 @@ theorem tetris_row_missing_unique {b : Board} {pl : Placement}
     (r := r) (by rw [h9, GameConfig.standard_cols])
   rwa [GameConfig.standard_cols] at this
 
+/-- A row's gap is filled by the piece: the missing cell of a completed row
+belongs to the dropped piece. -/
+theorem gap_filled_by_piece {cfg : GameConfig} {b : Board} {pl : Placement}
+    {r c : ℕ} (hc : c < cfg.cols) (hnotb : (c, r) ∉ b)
+    (hr : r ∈ Board.fullRows cfg (pl.place b)) :
+    (c, r) ∈ pl.dropped b := by
+  have hfull := Board.isFull_of_mem_fullRows hr
+  have hmem := hfull c (Finset.mem_range.mpr hc)
+  rw [Placement.place_eq_union_dropped, Finset.mem_union] at hmem
+  rcases hmem with h | h
+  · exact absurd h hnotb
+  · exact h
+
+/-- An I whose shape spans four rows occupies a single column offset. -/
+theorem I_four_rows_single_col :
+    ∀ rot : Rotation,
+      ((Piece.I.shapeUp rot).image (fun c => c.2)).card = 4 →
+      ∀ cell ∈ Piece.I.shapeUp rot, ∀ cell' ∈ Piece.I.shapeUp rot,
+        cell.1 = cell'.1 := by
+  decide
+
+/-- **The well is straight**: at a four-clear, the four one-cell gaps of the
+completed rows all sit in the *same column* — the vertical I's column. The
+tetris demands a clean 1-wide, 4-deep well, and nothing else can be true of
+the pre-board. -/
+theorem tetris_gaps_share_column {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    ∃ c₀, ∀ r ∈ Board.fullRows GameConfig.standard (pl.place b),
+      (c₀, r) ∉ b ∧ (c₀, r) ∈ pl.dropped b := by
+  classical
+  -- the finishing piece is an I spanning four rows
+  have hI : pl.piece = Piece.I :=
+    tetris_requires_I (b := b) (pl := pl) hnf (by omega)
+  have hrows := four_clear_piece_rows_card hnf h4
+  -- all shape cells share one column offset
+  have hsingle : ∀ cell ∈ pl.shapeUp, ∀ cell' ∈ pl.shapeUp,
+      cell.1 = cell'.1 := by
+    have h := I_four_rows_single_col pl.rot
+    unfold Placement.shapeUp at hrows ⊢
+    rw [hI] at hrows ⊢
+    exact h hrows
+  -- pick any shape cell to name the column
+  have hne : pl.shapeUp.Nonempty := by
+    have : pl.shapeUp.card = 4 := pl.shapeUp_card
+    exact Finset.card_pos.mp (by omega)
+  obtain ⟨cell₀, hcell₀⟩ := hne
+  refine ⟨pl.col + cell₀.1, ?_⟩
+  intro r hr
+  -- the row's unique gap is a dropped cell, whose column is the shared one
+  obtain ⟨c, ⟨hclt, hcnot⟩, -⟩ := tetris_row_missing_unique hwf hv hnf h4 hr
+  have hdrop := gap_filled_by_piece
+    (by rw [GameConfig.standard_cols]; omega) hcnot hr
+  have hcol : c = pl.col + cell₀.1 := by
+    rw [Placement.dropped_eq_image, Finset.mem_image] at hdrop
+    obtain ⟨cell, hcell, hEq⟩ := hdrop
+    have h1 : pl.col + cell.1 = c := congrArg Prod.fst hEq
+    have h2 := hsingle cell hcell cell₀ hcell₀
+    omega
+  rw [← hcol]
+  exact ⟨hcnot, hdrop⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
