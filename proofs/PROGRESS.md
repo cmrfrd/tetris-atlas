@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24m) — the unified per-row floor (bank 129/N)
+
+- `cleared_row_pre_ge` — each row of a `k`-clear held ≥ `5 + k` cells
+  before the piece: the other `k − 1` rows each claim a piece cell, leaving
+  ≤ `5 − k` for this row. One theorem subsuming the k = 1 (≥ 6) and
+  k = 4 (= 9, with the matching ceiling) special cases.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24l) — the well is straight (bank 128/N) ★
 
 - `gap_filled_by_piece` — a completed row's missing cell belongs to the

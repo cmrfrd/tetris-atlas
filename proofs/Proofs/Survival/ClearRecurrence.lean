@@ -1740,6 +1740,58 @@ theorem tetris_gaps_share_column {b : Board} {pl : Placement}
   rw [← hcol]
   exact ⟨hcnot, hdrop⟩
 
+/-- **The unified per-row floor**: each row of a `k`-clear held at least
+`5 + k` cells beforehand — the other `k − 1` completed rows each claim a
+piece cell, leaving this row at most `5 − k` of the four. Recovers the
+6-cell single-clear floor (`k = 1`) and the exact-9 tetris case (`k = 4`). -/
+theorem cleared_row_pre_ge {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    {r : ℕ} (hr : r ∈ Board.fullRows GameConfig.standard (pl.place b)) :
+    5 + (Board.fullRows GameConfig.standard (pl.place b)).card
+      ≤ b.rowCount r := by
+  classical
+  set k := (Board.fullRows GameConfig.standard (pl.place b)).card with hk
+  have hplacewf := Placement.place_wf hwf hv
+  have hten : Board.rowCount (pl.place b) r = 10 := by
+    have h := rowCount_of_isFull hplacewf (Board.isFull_of_mem_fullRows hr)
+    rwa [GameConfig.standard_cols] at h
+  have hsplit := rowCount_place_eq b pl r
+  have hone : ∀ r' ∈ Board.fullRows GameConfig.standard (pl.place b),
+      1 ≤ ((pl.dropped b).filter (fun p => p.2 = r')).card := by
+    intro r' hr'
+    obtain ⟨q, hq, hqr⟩ := mem_fullRows_place_has_piece_cell hnf hr'
+    exact Finset.card_pos.mpr ⟨q, Finset.mem_filter.mpr ⟨hq, hqr⟩⟩
+  have herase : k - 1 ≤ ∑ r' ∈ (Board.fullRows GameConfig.standard
+      (pl.place b)).erase r,
+      ((pl.dropped b).filter (fun p => p.2 = r')).card := by
+    have hcard : ((Board.fullRows GameConfig.standard (pl.place b)).erase
+        r).card = k - 1 := by
+      rw [Finset.card_erase_of_mem hr]
+    calc k - 1 = ∑ _r' ∈ (Board.fullRows GameConfig.standard
+          (pl.place b)).erase r, 1 := by
+          rw [Finset.sum_const, hcard, smul_eq_mul, mul_one]
+      _ ≤ _ := Finset.sum_le_sum (fun r' hr' =>
+          hone r' (Finset.mem_of_mem_erase hr'))
+  have hsum := sum_row_added_le_four b pl
+    (Board.fullRows GameConfig.standard (pl.place b))
+  have hkpos : 1 ≤ k := by
+    rw [hk]
+    exact Finset.card_pos.mpr ⟨r, hr⟩
+  have hchain : ((pl.dropped b).filter (fun p => p.2 = r)).card + (k - 1)
+      ≤ 4 := by
+    calc ((pl.dropped b).filter (fun p => p.2 = r)).card + (k - 1)
+        ≤ ((pl.dropped b).filter (fun p => p.2 = r)).card
+          + ∑ r' ∈ (Board.fullRows GameConfig.standard (pl.place b)).erase r,
+            ((pl.dropped b).filter (fun p => p.2 = r')).card := by omega
+      _ = ∑ r' ∈ Board.fullRows GameConfig.standard (pl.place b),
+            ((pl.dropped b).filter (fun p => p.2 = r')).card :=
+          Finset.add_sum_erase _
+            (fun r' => ((pl.dropped b).filter (fun p => p.2 = r')).card) hr
+      _ ≤ 4 := hsum
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
