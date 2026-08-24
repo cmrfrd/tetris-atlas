@@ -1988,6 +1988,63 @@ theorem tetris_piece_vanishes {b : Board} {pl : Placement}
   rw [hqr.2]
   exact hr
 
+/-- Shapes of S, Z and O put at most two cells in any one column, and no
+piece but I puts four — a shape table check. -/
+theorem shape_col_fiber_not_big_of_SZO :
+    ∀ p : Piece, p = Piece.S ∨ p = Piece.Z ∨ p = Piece.O →
+    ∀ r : Rotation, ∀ t < 4,
+      ¬ (3 ≤ ((p.shapeUp r).filter (fun cell => cell.1 = t)).card) := by
+  decide
+
+theorem shape_col_fiber_le_three_of_ne_I :
+    ∀ p : Piece, p ≠ Piece.I → ∀ r : Rotation, ∀ t < 4,
+      ((p.shapeUp r).filter (fun cell => cell.1 = t)).card ≤ 3 := by
+  decide
+
+/-- **Heavy column feeds require a tall piece**: a placement delivering
+three or more cells into one column plays I, L, J or T (vertical T carries
+a 3-cell column too) — S, Z and O cannot feed any column past two. -/
+theorem heavy_feed_requires_tall {pl : Placement} {j : ℕ}
+    (h3 : 3 ≤ pl.colProfile j) :
+    pl.piece = Piece.I ∨ pl.piece = Piece.L ∨ pl.piece = Piece.J
+      ∨ pl.piece = Piece.T := by
+  by_contra hcon
+  push Not at hcon
+  obtain ⟨hI, hL, hJ, hT⟩ := hcon
+  have hSZO : pl.piece = Piece.S ∨ pl.piece = Piece.Z ∨ pl.piece = Piece.O := by
+    cases hp : pl.piece <;> simp_all
+  unfold Placement.colProfile at h3
+  rcases Nat.lt_or_ge j pl.col with hj | hj
+  · -- the column is left of the piece: the fiber is empty
+    have hempty : (pl.shapeUp.filter (fun cell => pl.col + cell.1 = j)) = ∅ := by
+      rw [Finset.filter_eq_empty_iff]
+      intro cell _
+      omega
+    rw [hempty] at h3
+    simp at h3
+  · -- shift to shape coordinates
+    set t := j - pl.col with ht
+    have hsame : (pl.shapeUp.filter (fun cell => pl.col + cell.1 = j))
+        = (pl.shapeUp.filter (fun cell => cell.1 = t)) := by
+      apply Finset.filter_congr
+      intro cell _
+      constructor
+      · intro h
+        omega
+      · intro h
+        omega
+    rw [hsame] at h3
+    rcases Nat.lt_or_ge t 4 with ht4 | ht4
+    · unfold Placement.shapeUp at h3
+      exact shape_col_fiber_not_big_of_SZO pl.piece hSZO pl.rot t ht4 h3
+    · have hempty : (pl.shapeUp.filter (fun cell => cell.1 = t)) = ∅ := by
+        rw [Finset.filter_eq_empty_iff]
+        intro cell hcell
+        have := Piece.shapeUp_col_lt_four pl.piece pl.rot cell hcell
+        omega
+      rw [hempty] at h3
+      simp at h3
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

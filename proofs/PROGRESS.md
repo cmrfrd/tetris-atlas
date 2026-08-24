@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24s) — heavy feeds require tall pieces (bank 135/N)
+
+- `shape_col_fiber_not_big_of_SZO` / `shape_col_fiber_le_three_of_ne_I` —
+  shape-table facts (decide): S/Z/O never put 3 in a column; only I puts 4.
+- **`heavy_feed_requires_tall`** — a placement delivering 3+ cells into one
+  column plays I, L, J or T. NOTE: decide REFUTED the first conjecture
+  (I/L/J only) — vertical T carries a 3-cell column too. The feed-side twin
+  of the clear-size laws.
+- Lean note: cross-theorem filter-card facts clash on Decidable-instance
+  atoms under omega — state decide lemmas in IMPLICATION form and apply
+  them (defeq bridges instances where omega's atomizer cannot).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24r) — the I vanishes (bank 134/N)
 
 - `tetris_piece_vanishes` — every cell of a tetris's finishing piece lies
