@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24e) — clears must be prepared (bank 121/N)
+
+- `cleared_row_pre_count_ge` — a row completed by a placement held ≥
+  `cols − 4` cells beforehand (the piece brings ≤ 4 to any one row).
+- `cleared_row_was_six_tenths` — at standard width: every cleared row was
+  at least SIX-TENTHS full before the finishing piece. Clears must be
+  prepared, never improvised — the per-row refinement of the standing-
+  inventory floor.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24d) — the column rationing law (bank 120/N)
 
 - `cycle_column_profile_cap` — the general form: per period, placements

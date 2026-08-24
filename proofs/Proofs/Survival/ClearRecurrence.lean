@@ -1347,6 +1347,32 @@ theorem cycle_column_profile_cap {π : Policy GameConfig.standard}
   have hmul := hsum.trans (le_of_eq hS)
   exact (Nat.le_div_iff_mul_le hp).mpr (by rw [mul_comm]; exact hmul)
 
+/-- **A cleared row was already nearly full**: any row completed by a
+placement held at least `cols − 4` cells before the piece arrived — the
+piece brings four cells at most to one row. -/
+theorem cleared_row_pre_count_ge {cfg : GameConfig} {b : Board}
+    {pl : Placement} {r : ℕ}
+    (hr : r ∈ Board.fullRows cfg (pl.place b)) :
+    cfg.cols ≤ b.rowCount r + 4 := by
+  by_contra hcon
+  push Not at hcon
+  have hlt : Board.rowCount (pl.place b) r < cfg.cols := by
+    have := Board.rowCount_place_le b pl r
+    omega
+  exact Board.not_isFull_of_rowCount_lt cfg (pl.place b) r hlt
+    (Board.isFull_of_mem_fullRows hr)
+
+/-- At standard width: **every cleared row was at least six-tenths full**
+before the finishing piece — clears must be prepared, never improvised. -/
+theorem cleared_row_was_six_tenths {π : Policy GameConfig.standard} {m r : ℕ}
+    (hr : r ∈ Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init m)).place
+        (trace GameConfig.standard π GameState.init m).board)) :
+    6 ≤ (trace GameConfig.standard π GameState.init m).board.rowCount r := by
+  have h := cleared_row_pre_count_ge (cfg := GameConfig.standard) hr
+  rw [GameConfig.standard_cols] at h
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
