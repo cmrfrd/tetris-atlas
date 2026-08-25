@@ -2856,5 +2856,20 @@ theorem cycle_period_states_card {π : Policy GameConfig.standard}
   by_contra hne
   exact trace_ne_of_step_mod_ne hv hdraw (by omega) hab
 
+/-- **The tail lives in the period's image**: under a 35-return, every
+state from the loop point on is one of the first period's 35 states —
+the loop is closed as a set, not merely recurrent. (For a general
+survivor the return gap is a positive multiple of 35, and the tail is
+the corresponding multi-period image.) -/
+theorem cycle_tail_orbit_subset {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {n : ℕ}
+    (hcyc : trace cfg π g0 n = trace cfg π g0 (n + 35)) {m : ℕ}
+    (hnm : n ≤ m) :
+    trace cfg π g0 m
+      ∈ (Finset.range 35).image (fun k => trace cfg π g0 (n + k)) := by
+  rw [cycle_states_determined hcyc hnm]
+  exact Finset.mem_image.mpr ⟨(m - n) % 35,
+    Finset.mem_range.mpr (Nat.mod_lt _ (by omega)), rfl⟩
+
 end ClearRate
 end Tetris

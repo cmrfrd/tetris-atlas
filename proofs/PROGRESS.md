@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25z) — the loop is closed as a set (bank 179/N)
+
+- **`cycle_tail_orbit_subset`** — under a 35-return every tail state is
+  a member of the first period's 35-element image (cfg-general).
+- Wording fix in LIBRARY/PROGRESS: the exactly-35 structure holds under
+  a 35-RETURN; a general survivor's minimal loop is a positive multiple
+  of 35 (the 35-dvd law), not necessarily 35 itself.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25y) — the loop has exactly 35 states (bank 178/N)
 
 - `cycle_states_determined` — trace m = trace(n + (m−n)%35) past the
