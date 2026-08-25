@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24ah) — the bag runs on the block clock (bank 150/N)
+
+- **`bagAt_card`** — along any legal stream, |bag| = 7 − n%7 at every
+  step: cardinality is a pure function of the step index (sdiff formula +
+  injective block prefix).
+- **`bagAt_eq_full_iff`** — the bag is full iff 7 ∣ n: refill instants
+  are observable from the bag alone. The bag's card is a CLOCK.
+- Milestone: 150 bank batches.
+- Lean note: use card_sdiff_of_subset (subset-hypothesis form EXISTS in
+  this Mathlib alongside the ∩-form card_sdiff).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24ag) — untouched columns pay the full bill (bank 149/N)
 
 - **`clear_step_column_drain`** — cfg-general: at a k-clear every column

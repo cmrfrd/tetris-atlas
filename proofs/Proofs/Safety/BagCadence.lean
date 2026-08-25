@@ -1191,5 +1191,44 @@ theorem legalSequenceFrom_iff_exists_pattern_seq (s : ℕ → Piece) :
     exact pattern_seq_legal F hF
 
 
+/-- **The bag runs on the block clock**: along any legal stream, the bag
+holds exactly `7 − n % 7` pieces at step `n` — its cardinality is a pure
+function of the step index, independent of which permutations were dealt. -/
+theorem bagAt_card {s : ℕ → Piece}
+    (hl : LegalSequenceFrom Bag.full s) (n : ℕ) :
+    (bagAt Bag.full s n).card = 7 - n % 7 := by
+  classical
+  have hinj := (legalSequenceFrom_iff_block_injective s).mp hl
+  rw [bagAt_eq_sdiff_of_block_injective hinj n]
+  have hpref : ((Finset.range (n % 7)).image
+      (fun j => s (7 * (n / 7) + j))).card = n % 7 := by
+    rw [Finset.card_image_of_injOn, Finset.card_range]
+    intro j hj j' hj' heq
+    simp only [Finset.mem_coe, Finset.mem_range] at hj hj'
+    by_contra hne
+    have hlt : n % 7 < 7 := Nat.mod_lt _ (by omega)
+    exact hinj (n / 7) j (by omega) j' (by omega) hne heq
+  have hsub : ((Finset.range (n % 7)).image
+      (fun j => s (7 * (n / 7) + j))) ⊆ Bag.full :=
+    Finset.subset_univ _
+  rw [Finset.card_sdiff_of_subset hsub, hpref, Bag.full_card]
+
+/-- **The bag is full exactly at block boundaries**: along a legal stream,
+the bag returns to all seven pieces precisely when `7 ∣ n` — the refill
+instants are observable from the bag alone, with no access to the clock. -/
+theorem bagAt_eq_full_iff {s : ℕ → Piece}
+    (hl : LegalSequenceFrom Bag.full s) (n : ℕ) :
+    bagAt Bag.full s n = Bag.full ↔ n % 7 = 0 := by
+  constructor
+  · intro hfull
+    have hc := bagAt_card hl n
+    rw [hfull, Bag.full_card] at hc
+    have hlt : n % 7 < 7 := Nat.mod_lt _ (by omega)
+    omega
+  · intro hz
+    have hinj := (legalSequenceFrom_iff_block_injective s).mp hl
+    rw [bagAt_eq_sdiff_of_block_injective hinj n, hz]
+    simp
+
 end BagCadence
 end Tetris
