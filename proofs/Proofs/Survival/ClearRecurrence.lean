@@ -3201,6 +3201,30 @@ theorem tetris_pair_mass_law {π : Policy GameConfig.standard}
     (show m + 1 ≤ m' by omega)
   omega
 
+/-- **The window clearing band**: across any `w`-move window with live
+endpoints, the rows cleared sit within one boardful of the exact
+0.4-per-move line — `4w − 200 ≤ 10·Δcleared ≤ 4w + 200`. The per-window
+form of the pinch, at every position and scale. -/
+theorem cleared_window_band {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m w : ℕ}
+    (hlive_m : ¬ (trace GameConfig.standard π GameState.init m).lost
+      GameConfig.standard)
+    (hlive_mw : ¬ (trace GameConfig.standard π GameState.init (m + w)).lost
+      GameConfig.standard) :
+    4 * w ≤ 10 * (cleared GameConfig.standard π GameState.init (m + w)
+        - cleared GameConfig.standard π GameState.init m) + 200
+      ∧ 10 * (cleared GameConfig.standard π GameState.init (m + w)
+        - cleared GameConfig.standard π GameState.init m)
+        ≤ 4 * w + 200 := by
+  have hled := init_ledger (cfg := GameConfig.standard) hv m
+  have hled' := init_ledger (cfg := GameConfig.standard) hv (m + w)
+  rw [GameConfig.standard_cols] at hled hled'
+  have hcap := count_lt_two_hundred_one hv hlive_m
+  have hcap' := count_lt_two_hundred_one hv hlive_mw
+  have hclm := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right m w)
+  exact ⟨by omega, by omega⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25aq) — the window clearing band (bank 196/N)
+
+- **`cleared_window_band`** — 4w − 200 ≤ 10·Δcleared ≤ 4w + 200 for any
+  live-endpoint window: the cooperative twin of the adversarial band,
+  the pinch at every position and scale.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25ap) — the burst allowance (bank 195/N)
 
 - **`tetris_window_cap`** — from any live moment, ≤ 5 + w/10 tetrises
