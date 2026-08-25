@@ -2483,6 +2483,27 @@ theorem valid_iff_mem_enum (pl : Placement) :
   · intro hm
     exact (Finset.mem_filter.mp hm).2
 
+set_option maxRecDepth 40000 in
+/-- **The square is the most placeable piece**: the O admits 36 valid
+placements — its 2-wide footprint fits nine columns in each of the four
+(identical) rotations. -/
+theorem card_valid_placements_O :
+    (((Finset.univ : Finset Rotation) ×ˢ Finset.range 10).filter (fun t =>
+      (⟨Piece.O, t.1, t.2⟩ : Placement).Valid GameConfig.standard)).card
+      = 36 := by
+  decide
+
+set_option maxRecDepth 40000 in
+/-- Every piece other than the O admits exactly 34 valid placements: the
+240-letter alphabet splits as `36 + 6 × 34`, and the O — the piece that
+can never clear more than two rows — is, ironically, the most placeable. -/
+theorem card_valid_placements_of_ne_O :
+    ∀ p : Piece, p ≠ Piece.O →
+      (((Finset.univ : Finset Rotation) ×ˢ Finset.range 10).filter (fun t =>
+        (⟨p, t.1, t.2⟩ : Placement).Valid GameConfig.standard)).card
+        = 34 := by
+  decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

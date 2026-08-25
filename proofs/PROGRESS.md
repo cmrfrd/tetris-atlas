@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25g) — per-piece action counts (bank 160/N)
+
+- **`card_valid_placements_O`** — the O admits 36 placements.
+- **`card_valid_placements_of_ne_O`** — every other piece exactly 34:
+  240 = 36 + 6×34. The piece with the weakest clear cap (≤ 2) is the
+  most placeable.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25f) — the orbit ceiling (bank 159/N)
 
 - **`survivor_orbit_card_le`** — a surviving orbit's ncard ≤ 2^207
