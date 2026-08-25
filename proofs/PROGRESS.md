@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25al) — the skyline climbs ≤ 4 per step (bank 191/N)
+
+- `applyStep_colHeight_le` — the full move (place + clear) lifts ≤ 4
+  over some prior column (colHeight_clearLines_le composed).
+- **`trace_succ_colHeight_le`** — cfg-general, per trace step. Height
+  spikes are rate-limited by one piece's geometry.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25ak) — one move lifts ≤ 4 (bank 190/N)
 
 - **`place_colHeight_le`** — after placing, every column height ≤ some

@@ -3152,6 +3152,29 @@ theorem place_colHeight_le {b : Board} {pl : Placement} (j : ℕ) :
   · refine ⟨pl.col + cell₀.1, ?_⟩
     omega
 
+/-- The full move (place + clear) also lifts the skyline by at most four:
+clearing only lowers columns. -/
+theorem applyStep_colHeight_le {cfg : GameConfig} {b : Board}
+    {pl : Placement} (j : ℕ) :
+    ∃ j', (Placement.applyStep cfg b pl).colHeight j
+      ≤ b.colHeight j' + 4 := by
+  obtain ⟨j', h⟩ := place_colHeight_le (b := b) (pl := pl) j
+  refine ⟨j', ?_⟩
+  have hcl := colHeight_clearLines_le cfg (pl.place b) j
+  unfold Placement.applyStep
+  omega
+
+/-- **The skyline climbs at most four per step along any trace**: each
+successor board's columns stay within four rows of some column of the
+predecessor — height spikes are rate-limited by the geometry of a single
+piece. -/
+theorem trace_succ_colHeight_le {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} (n j : ℕ) :
+    ∃ j', (trace cfg π g0 (n + 1)).board.colHeight j
+      ≤ (trace cfg π g0 n).board.colHeight j' + 4 := by
+  rw [trace_succ, GameState.step_board]
+  exact applyStep_colHeight_le j
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
