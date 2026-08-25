@@ -2647,5 +2647,38 @@ theorem trace_state_reveals_step_mod_thirtyfive
   have hm2 := trace_board_count_mod_ten hv' n
   omega
 
+/-- **Every visited state is visited early**: once the trace returns
+(`trace n₁ = trace n₂`), every state it ever reaches already appears
+before index `n₂` — the pre-return prefix exhausts the orbit. -/
+theorem visited_state_early {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {n₁ n₂ : ℕ} (h12 : n₁ < n₂)
+    (hret : trace cfg π g0 n₁ = trace cfg π g0 n₂) :
+    ∀ m, ∃ m' < n₂, trace cfg π g0 m' = trace cfg π g0 m := by
+  intro m
+  induction m using Nat.strong_induction_on with
+  | _ m ih =>
+    rcases Nat.lt_or_ge m n₂ with hm | hm
+    · exact ⟨m, hm, rfl⟩
+    · have hk := trace_eq_of_state_eq π g0 hret (m - n₂)
+      rw [show n₂ + (m - n₂) = m by omega] at hk
+      obtain ⟨m', hm', heq⟩ := ih (n₁ + (m - n₂)) (by omega)
+      exact ⟨m', hm', heq.trans hk⟩
+
+/-- **A survivor's orbit is finite**: the set of states a forever-surviving
+policy visits from the empty board is a finite set — the minimal atlas of
+any solution is a finite object, exhausted by the trace's pre-return
+prefix. -/
+theorem survivor_orbit_finite {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hs : SurvivesForever GameConfig.standard π GameState.init) :
+    (Set.range (trace GameConfig.standard π GameState.init)).Finite := by
+  obtain ⟨n₁, n₂, h12, hret⟩ := survivesForever_exists_return hv hs
+  apply Set.Finite.subset
+    (Set.Finite.image (trace GameConfig.standard π GameState.init)
+      (Finset.range n₂).finite_toSet)
+  rintro g ⟨m, rfl⟩
+  obtain ⟨m', hm', heq⟩ := visited_state_early h12 hret m
+  exact ⟨m', Finset.mem_coe.mpr (Finset.mem_range.mpr hm'), heq⟩
+
 end ClearRate
 end Tetris

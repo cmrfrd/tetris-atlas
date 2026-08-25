@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25b) — a survivor's orbit is finite (bank 155/N)
+
+- **`visited_state_early`** — cfg-general: after a return at (n₁, n₂),
+  every state the trace ever reaches already appears before n₂ (strong
+  induction, step back by the period).
+- **`survivor_orbit_finite`** — the set of states any forever-surviving
+  policy visits from init is FINITE. With batch 154's policy locality:
+  the minimal atlas of any solution is a finite partial function.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25a) — policy locality (bank 154/N)
 
 - **`trace_eq_of_policy_agree`** — two policies agreeing on the first n
