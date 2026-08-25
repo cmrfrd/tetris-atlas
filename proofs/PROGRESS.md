@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25ah) — unfed columns overtop by k (bank 187/N)
+
+- **`clear_untouched_column_height_ge`** — cfg-general: a k-clear's
+  untouched columns reach ≥ dropOffset + k (the k completed rows are
+  distinct within [d, d+3], so the topmost is ≥ d + k − 1, and unfed
+  columns fill it). Sharpens batch 166's +1 to +k.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25ag) — the 35-floor is adversary-proof (bank 186/N)
 
 - `adversarialTrace_ne_of_step_mod_ne` — off-phase adversarial states

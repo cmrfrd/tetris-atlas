@@ -3008,6 +3008,51 @@ theorem no_tetris_on_flat {b : Board} {pl : Placement}
   have := hflat j hj j' hj'
   omega
 
+/-- **Unfed columns overtop the landing site by the clear count**: a
+`k`-clear's untouched columns rise at least `k` rows above the drop
+offset — they reach through all `k` completed rows, whose span pushes the
+topmost at least `k − 1` above the base. Sharpens
+`clear_untouched_column_height` from `+1` to `+k`; at `k = 4` it recovers
+the tetris well-depth geometry for the nine unfed columns. -/
+theorem clear_untouched_column_height_ge {cfg : GameConfig} {b : Board}
+    {pl : Placement} (hnf : ∀ r, ¬ Board.isFull cfg b r)
+    (hpos : 0 < (Board.fullRows cfg (pl.place b)).card) {c : ℕ}
+    (hc : c < cfg.cols) (hz : pl.colProfile c = 0) :
+    pl.dropOffset b + (Board.fullRows cfg (pl.place b)).card
+      ≤ b.colHeight c := by
+  classical
+  have hne : (Board.fullRows cfg (pl.place b)).Nonempty :=
+    Finset.card_pos.mp hpos
+  set rtop := (Board.fullRows cfg (pl.place b)).max' hne with hrtop
+  have hrmem : rtop ∈ Board.fullRows cfg (pl.place b) :=
+    Finset.max'_mem _ hne
+  have hdle : pl.dropOffset b ≤ rtop :=
+    (clear_rows_in_drop_window hnf hrmem).1
+  have hsub : Board.fullRows cfg (pl.place b)
+      ⊆ Finset.Icc (pl.dropOffset b) rtop := by
+    intro r hr
+    rw [Finset.mem_Icc]
+    exact ⟨(clear_rows_in_drop_window hnf hr).1, Finset.le_max' _ _ hr⟩
+  have hcard := Finset.card_le_card hsub
+  rw [Nat.card_Icc] at hcard
+  have hfull := Board.isFull_of_mem_fullRows hrmem
+  have hmem := hfull c (Finset.mem_range.mpr hc)
+  rw [Placement.place_eq_union_dropped, Finset.mem_union] at hmem
+  rcases hmem with h | h
+  · have := Board.lt_colHeight h
+    omega
+  · exfalso
+    have hprof : ((pl.dropped b).filter (fun p => p.1 = c)).card
+        = pl.colProfile c := by
+      have hcc := Placement.colCount_cellsAt pl (pl.dropOffset b) c
+      unfold Board.colCount at hcc
+      unfold Placement.dropped
+      exact hcc
+    have hfib : ((pl.dropped b).filter (fun p => p.1 = c)).Nonempty :=
+      ⟨(c, rtop), Finset.mem_filter.mpr ⟨h, rfl⟩⟩
+    have := Finset.card_pos.mpr hfib
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
