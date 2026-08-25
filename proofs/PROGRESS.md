@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25x) — a cycle is a 35-letter word (bank 177/N)
+
+- `cycle_placement_periodic` — the played placement is 35-periodic on
+  the tail (same state, same move).
+- **`cycle_actions_determined`** — π(trace m) = π(trace (n + (m−n)%35))
+  for all m ≥ n: the whole infinite game compresses to ONE 35-letter
+  word over the 240-letter action alphabet (batches 158 + 177 = cycle
+  certificates live in a space of at most 240^35 words).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25w) — the pinch is adversary-proof (bank 176/N)
 
 - **`adversarial_cleared_pinch`** — per-step two-sided band 4m − 200 ≤

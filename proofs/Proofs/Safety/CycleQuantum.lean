@@ -2804,5 +2804,28 @@ theorem survivor_orbit_card_le {π : Policy GameConfig.standard}
         rw [Set.ncard_univ, Nat.card_eq_fintype_card]
         exact card_infield_times_bag
 
+/-- On the tail of a cycle, the played placement is 35-periodic — the
+policy sees the same state, so it makes the same move. -/
+theorem cycle_placement_periodic {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {n : ℕ}
+    (hcyc : trace cfg π g0 n = trace cfg π g0 (n + 35)) {m : ℕ}
+    (hnm : n ≤ m) :
+    π (trace cfg π g0 (m + 35)) = π (trace cfg π g0 m) := by
+  rw [← trace_tail_periodic hcyc hnm]
+
+/-- **A cycle's play is a thirty-five-letter word**: past the loop point,
+every move ever made is one of the 35 placements of the first period —
+the entire infinite game compresses to one word over the 240-letter
+action alphabet. -/
+theorem cycle_actions_determined {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {n : ℕ}
+    (hcyc : trace cfg π g0 n = trace cfg π g0 (n + 35)) {m : ℕ}
+    (hnm : n ≤ m) :
+    π (trace cfg π g0 m) = π (trace cfg π g0 (n + (m - n) % 35)) := by
+  have hmul := trace_period_multiples π g0 hcyc ((m - n) / 35)
+  have h := trace_eq_of_state_eq π g0 hmul ((m - n) % 35)
+  rw [show n + (m - n) / 35 * 35 + (m - n) % 35 = m by omega] at h
+  rw [← h]
+
 end ClearRate
 end Tetris
