@@ -2828,6 +2828,34 @@ theorem earliest_tetris_step {π : Policy GameConfig.standard}
   rw [GameConfig.standard_cols] at hled
   omega
 
+/-- **A tetris taxes the whole opening**: a four-clear at step `m` forces
+`10·cleared(m) + 36 ≤ 4m` — the thirty-six-cell well bill and every prior
+clear's ten-cell bill are both financed by the same four-cells-a-move
+income. In particular a tetris at steps nine through eleven demands a
+perfectly clear-free opening. -/
+theorem tetris_dry_opening {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ}
+    (h4 : (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board)).card = 4) :
+    10 * cleared GameConfig.standard π GameState.init m + 36 ≤ 4 * m := by
+  have h36 := tetris_requires_thirtysix hv h4
+  have hled := init_ledger (cfg := GameConfig.standard) hv m
+  rw [GameConfig.standard_cols] at hled
+  omega
+
+/-- **The earliest tetris caps the earliest opening**: a tetris at step
+nine, ten or eleven can only follow a game that has cleared nothing at
+all. -/
+theorem earliest_tetris_needs_dry_opening {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ} (hm : m ≤ 11)
+    (h4 : (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board)).card = 4) :
+    cleared GameConfig.standard π GameState.init m = 0 := by
+  have h := tetris_dry_opening hv h4
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

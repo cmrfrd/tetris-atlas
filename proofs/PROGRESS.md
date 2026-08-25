@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25r) — a tetris taxes the opening (bank 171/N)
+
+- **`tetris_dry_opening`** — 10·cleared(m) + 36 ≤ 4m at any step-m
+  tetris: the 36-cell well bill and every prior 10-cell clear bill share
+  the same 4/move income.
+- `earliest_tetris_needs_dry_opening` — a tetris at steps 9–11 requires
+  cleared = 0: the fastest tetris rides a perfectly dry opening.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25q) — the opening schedule is adversary-proof (bank 170/N)
 
 - **`adversarial_earliest_clear_law`** — 10k ≤ 4n + 4 per drop, any
