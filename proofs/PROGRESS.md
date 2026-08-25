@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25aa) — the rho shape at any period (bank 180/N)
+
+- **`return_states_determined`** — general-p tail phase determination
+  (needed Nat.div_add_mod as an explicit hypothesis: omega can't do
+  div/mod by a SYMBOLIC modulus).
+- **`return_tail_orbit_subset`** — every survivor is a rho: transient
+  prefix + finite wheel of p states, p any positive 35-multiple.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25z) — the loop is closed as a set (bank 179/N)
 
 - **`cycle_tail_orbit_subset`** — under a 35-return every tail state is

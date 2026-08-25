@@ -2871,5 +2871,40 @@ theorem cycle_tail_orbit_subset {cfg : GameConfig} {π : Policy cfg}
   exact Finset.mem_image.mpr ⟨(m - n) % 35,
     Finset.mem_range.mpr (Nat.mod_lt _ (by omega)), rfl⟩
 
+/-- **The rho shape, general period**: after a return of any positive gap
+`p`, the state at every later index is the state at its phase within the
+first `p`-window. By the divisibility law, `p` is always a positive
+multiple of 35. -/
+theorem return_states_determined {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {n p : ℕ}
+    (hcyc : trace cfg π g0 n = trace cfg π g0 (n + p)) {m : ℕ}
+    (hnm : n ≤ m) :
+    trace cfg π g0 m = trace cfg π g0 (n + (m - n) % p) := by
+  have hmul : ∀ j, trace cfg π g0 n = trace cfg π g0 (n + p * j) := by
+    intro j
+    induction j with
+    | zero => simp
+    | succ j ih =>
+      have h := trace_eq_of_state_eq π g0 hcyc (p * j)
+      rw [show n + p + p * j = n + p * (j + 1) by ring] at h
+      exact ih.trans h
+  have hdm := Nat.div_add_mod (m - n) p
+  have h := trace_eq_of_state_eq π g0 (hmul ((m - n) / p)) ((m - n) % p)
+  rw [show n + p * ((m - n) / p) + (m - n) % p = m by omega] at h
+  exact h.symm
+
+/-- **Every survivor is a rho**: after any positive-gap return, the whole
+tail lies in the image of the first `p`-window — transient prefix plus a
+finite wheel, whatever the (35-multiple) period. -/
+theorem return_tail_orbit_subset {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {n p : ℕ} (hp : 0 < p)
+    (hcyc : trace cfg π g0 n = trace cfg π g0 (n + p)) {m : ℕ}
+    (hnm : n ≤ m) :
+    trace cfg π g0 m
+      ∈ (Finset.range p).image (fun k => trace cfg π g0 (n + k)) := by
+  rw [return_states_determined hcyc hnm]
+  exact Finset.mem_image.mpr ⟨(m - n) % p,
+    Finset.mem_range.mpr (Nat.mod_lt _ hp), rfl⟩
+
 end ClearRate
 end Tetris
