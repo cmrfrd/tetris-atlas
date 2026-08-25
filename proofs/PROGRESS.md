@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25c) — the finite invariant IS the certificate (bank 156/N)
+
+- **`survivor_finite_invariant`** — every cooperative survivor yields a
+  finite set: init ∈ S, no lost states, closed under the policy step
+  (the orbit, packaged).
+- **`survivesForever_of_invariant`** — converse, cfg-general: any
+  step-closed lost-free set containing g0 makes π a survivor from g0.
+- Cooperative survival ⟺ finite closed invariant — the exact shape of
+  the certificate the Atlas construction is chasing, both directions
+  green.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25b) — a survivor's orbit is finite (bank 155/N)
 
 - **`visited_state_early`** — cfg-general: after a return at (n₁, n₂),

@@ -2680,5 +2680,40 @@ theorem survivor_orbit_finite {π : Policy GameConfig.standard}
   obtain ⟨m', hm', heq⟩ := visited_state_early h12 hret m
   exact ⟨m', Finset.mem_coe.mpr (Finset.mem_range.mpr hm'), heq⟩
 
+/-- **Finite-invariant extraction**: every cooperative survivor yields a
+*finite* set of states containing the empty-board start, free of lost
+states, and closed under its own policy's step — the survivor's orbit,
+packaged as the finite certificate the Atlas construction is after. -/
+theorem survivor_finite_invariant {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hs : SurvivesForever GameConfig.standard π GameState.init) :
+    ∃ S : Set GameState, S.Finite ∧ GameState.init ∈ S
+      ∧ (∀ g ∈ S, ¬ g.lost GameConfig.standard)
+      ∧ ∀ g ∈ S, g.step GameConfig.standard (π g) ∈ S := by
+  refine ⟨Set.range (trace GameConfig.standard π GameState.init),
+    survivor_orbit_finite hv hs, ⟨0, rfl⟩, ?_, ?_⟩
+  · rintro g ⟨n, rfl⟩
+    exact hs n
+  · rintro g ⟨n, rfl⟩
+    exact ⟨n + 1, (trace_succ GameConfig.standard π GameState.init n).symm⟩
+
+/-- The converse: a step-closed, lost-free set containing a state makes its
+policy a survivor from that state — the finite invariant *is* the survival
+certificate, in both directions. -/
+theorem survivesForever_of_invariant {cfg : GameConfig} {π : Policy cfg}
+    {S : Set GameState} {g0 : GameState} (hg0 : g0 ∈ S)
+    (hsafe : ∀ g ∈ S, ¬ g.lost cfg)
+    (hclosed : ∀ g ∈ S, g.step cfg (π g) ∈ S) :
+    SurvivesForever cfg π g0 := by
+  have hmem : ∀ n, trace cfg π g0 n ∈ S := by
+    intro n
+    induction n with
+    | zero => exact hg0
+    | succ k ih =>
+      rw [trace_succ]
+      exact hclosed _ ih
+  intro n
+  exact hsafe _ (hmem n)
+
 end ClearRate
 end Tetris
