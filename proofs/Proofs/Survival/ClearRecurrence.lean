@@ -2413,6 +2413,42 @@ theorem placement_untouched_columns_ge_six {pl : Placement}
   rw [Finset.card_range] at hsplit
   omega
 
+/-- **The mass clock**: the board's cell count is congruent to `4n` modulo
+ten at every step — deliveries add four, clears remove exact tens. -/
+theorem trace_board_count_mod_ten {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (n : ℕ) :
+    (trace GameConfig.standard π GameState.init n).board.count % 10
+      = (4 * n) % 10 := by
+  have h := init_ledger (cfg := GameConfig.standard) hv n
+  rw [GameConfig.standard_cols] at h
+  omega
+
+/-- **Reachable boards have even mass**: every board a game can visit holds
+an even number of cells — an odd-count board is unreachable from the empty
+board, a blanket obstruction that prunes half of all board configurations
+from the Atlas before any search begins. -/
+theorem trace_board_count_even {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (n : ℕ) :
+    2 ∣ (trace GameConfig.standard π GameState.init n).board.count := by
+  have h := init_ledger (cfg := GameConfig.standard) hv n
+  rw [GameConfig.standard_cols] at h
+  omega
+
+/-- **Board mass reveals the step count mod five** — even across different
+policies: two reachable boards with the same mass residue mod ten sit at
+the same step index mod five. The mass clock is an observable shared by
+every game ever played. -/
+theorem trace_board_count_determines_step_mod_five
+    {π π' : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hv' : ∀ g, (π' g).Valid GameConfig.standard) {m n : ℕ}
+    (hcount : (trace GameConfig.standard π GameState.init m).board.count % 10
+      = (trace GameConfig.standard π' GameState.init n).board.count % 10) :
+    m % 5 = n % 5 := by
+  have h1 := trace_board_count_mod_ten hv m
+  have h2 := trace_board_count_mod_ten hv' n
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

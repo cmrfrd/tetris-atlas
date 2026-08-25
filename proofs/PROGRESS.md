@@ -41629,6 +41629,23 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24ai) — the mass clock (bank 151/N)
+
+- **`trace_board_count_mod_ten`** — count ≡ 4n (mod 10) at every step.
+- **`trace_board_count_even`** — reachable boards have EVEN mass: odd
+  boards are unreachable from init. Blanket Atlas pruning: half of all
+  2^200 configurations excluded by one congruence.
+- **`trace_board_count_determines_step_mod_five`** — mass mod 10 reveals
+  the step index mod 5, even across different policies: the mass clock
+  is policy-independent.
+- Companion of the bag clock (batch 150): bag card gives n mod 7, mass
+  gives n mod 5 ⇒ state observables give n mod 35 (CRT), the cycle
+  quantum made observable.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24ah) — the bag runs on the block clock (bank 150/N)
 
 - **`bagAt_card`** — along any legal stream, |bag| = 7 − n%7 at every
