@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24aa) — anatomy transferred to traces (bank 143/N)
+
+- **`trace_tetris_feeds_single_column`** — on any trace past the seed, a
+  four-clear step's placement has colProfile 4 at one column, 0 at nine.
+- `trace_clears_le_two_of_O` / `trace_clears_le_three_of_ne_I` — the
+  per-piece clear-cap ladder on traces.
+- All three are term-mode wrappers via trace_board_wf +
+  trace_board_no_full_of_pos, in CycleQuantum next to trace_tetris_well.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24z) — clear-free feed laws (bank 142/N)
 
 - **`clear_free_column_feed_eq`** — over a clear-free window a column's

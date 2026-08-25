@@ -2404,5 +2404,44 @@ theorem trace_cleared_row_pre_ge {π : Policy GameConfig.standard}
     (trace_board_wf hv (GameState.init_board_wf GameConfig.standard) m)
     (hv _) (fun r' => trace_board_no_full_of_pos hm r') hr
 
+/-- The single-column feed, on traces: past the seed, a four-clear step
+pours its entire four-cell feed into one column — profile `4` there, `0`
+at the other nine. -/
+theorem trace_tetris_feeds_single_column {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ} (hm : 1 ≤ m)
+    (h4 : (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init m)).place
+        (trace GameConfig.standard π GameState.init m).board)).card = 4) :
+    ∃ c₀ < 10,
+      (π (trace GameConfig.standard π GameState.init m)).colProfile c₀ = 4
+      ∧ ∀ j < 10, j ≠ c₀ →
+        (π (trace GameConfig.standard π GameState.init m)).colProfile j
+          = 0 :=
+  tetris_feeds_single_column
+    (trace_board_wf hv (GameState.init_board_wf GameConfig.standard) m)
+    (hv _) (fun r => trace_board_no_full_of_pos hm r) h4
+
+/-- The O clear cap, on traces: past the seed, a step playing the O clears
+at most two rows. -/
+theorem trace_clears_le_two_of_O {π : Policy GameConfig.standard}
+    {m : ℕ} (hm : 1 ≤ m)
+    (hO : (π (trace GameConfig.standard π GameState.init m)).piece
+      = Piece.O) :
+    (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init m)).place
+        (trace GameConfig.standard π GameState.init m).board)).card ≤ 2 :=
+  clears_le_two_of_O (fun r => trace_board_no_full_of_pos hm r) hO
+
+/-- The non-I clear cap, on traces: past the seed, a step not playing the
+I clears at most three rows. -/
+theorem trace_clears_le_three_of_ne_I {π : Policy GameConfig.standard}
+    {m : ℕ} (hm : 1 ≤ m)
+    (hI : (π (trace GameConfig.standard π GameState.init m)).piece
+      ≠ Piece.I) :
+    (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init m)).place
+        (trace GameConfig.standard π GameState.init m).board)).card ≤ 3 :=
+  clears_le_three_of_ne_I (fun r => trace_board_no_full_of_pos hm r) hI
+
 end ClearRate
 end Tetris
