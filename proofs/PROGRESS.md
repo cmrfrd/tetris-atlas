@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25m) — k-clear landing-window geometry (bank 166/N)
+
+- **`clear_rows_in_drop_window`** — cfg-general: every cleared row lies
+  within [dropOffset, dropOffset+3]; a piece only finishes rows it
+  occupies.
+- **`clear_untouched_column_height`** — any clearing placement has every
+  unfed column (≥ 6 of them, by batch 149) strictly taller than the drop
+  offset. The general-k form of the well-depth relief law.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25l) — no last-gasp tetrises (bank 165/N)
 
 - **`tetris_well_height_cap`** — on an in-field board the tetris well

@@ -2694,6 +2694,51 @@ theorem tetris_well_height_cap {b : Board} {pl : Placement}
   rw [GameConfig.standard_rows] at h2
   omega
 
+/-- **All clears happen in the landing window**: every row a placement
+completes lies within `[dropOffset, dropOffset + 3]` — a piece can only
+finish rows it physically occupies, and it occupies four rows above where
+it lands. Config-general. -/
+theorem clear_rows_in_drop_window {cfg : GameConfig} {b : Board}
+    {pl : Placement} (hnf : ∀ r, ¬ Board.isFull cfg b r) {r : ℕ}
+    (hr : r ∈ Board.fullRows cfg (pl.place b)) :
+    pl.dropOffset b ≤ r ∧ r ≤ pl.dropOffset b + 3 := by
+  obtain ⟨q, hq, hqr⟩ := mem_fullRows_place_has_piece_cell hnf hr
+  rw [Placement.dropped_eq_image, Finset.mem_image] at hq
+  obtain ⟨cell, hcell, hEq⟩ := hq
+  have hrow : pl.dropOffset b + cell.2 = q.2 := congrArg Prod.snd hEq
+  have hb := Piece.shapeUp_row_lt_four pl.piece pl.rot cell hcell
+  omega
+
+/-- **Untouched columns overtop the landing site**: whenever a placement
+clears anything, every column it does not feed rises strictly above the
+drop offset — the stack the piece lands beside must already reach through
+the row it completes. Config-general. -/
+theorem clear_untouched_column_height {cfg : GameConfig} {b : Board}
+    {pl : Placement}
+    (hnf : ∀ r, ¬ Board.isFull cfg b r)
+    (hcl : (Board.fullRows cfg (pl.place b)).Nonempty) {c : ℕ}
+    (hc : c < cfg.cols) (hz : pl.colProfile c = 0) :
+    pl.dropOffset b < b.colHeight c := by
+  obtain ⟨r, hr⟩ := hcl
+  have hwin := clear_rows_in_drop_window hnf hr
+  have hfull := Board.isFull_of_mem_fullRows hr
+  have hmem := hfull c (Finset.mem_range.mpr hc)
+  rw [Placement.place_eq_union_dropped, Finset.mem_union] at hmem
+  rcases hmem with h | h
+  · have := Board.lt_colHeight h
+    omega
+  · exfalso
+    have hfib : ((pl.dropped b).filter (fun p => p.1 = c)).Nonempty :=
+      ⟨(c, r), Finset.mem_filter.mpr ⟨h, rfl⟩⟩
+    have hprof : ((pl.dropped b).filter (fun p => p.1 = c)).card
+        = pl.colProfile c := by
+      have hcc := Placement.colCount_cellsAt pl (pl.dropOffset b) c
+      unfold Board.colCount at hcc
+      unfold Placement.dropped
+      exact hcc
+    have := Finset.card_pos.mpr hfib
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
