@@ -3306,6 +3306,29 @@ theorem place_unfed_colHeight_eq {b : Board} {pl : Placement} {c : ℕ}
   rw [Placement.place_eq_union_dropped, Finset.filter_union, hempty,
     Finset.union_empty]
 
+/-- **The drop reads only the surface**: two boards agreeing on the
+heights of the piece's columns give the same drop offset — holes, and
+everything below the skyline, are invisible to the falling piece. -/
+theorem dropOffset_eq_of_colHeight_eq {b b' : Board} {pl : Placement}
+    (h : ∀ cell ∈ pl.shapeUp,
+      b.colHeight (pl.col + cell.1) = b'.colHeight (pl.col + cell.1)) :
+    pl.dropOffset b = pl.dropOffset b' := by
+  unfold Placement.dropOffset
+  apply Finset.sup_congr rfl
+  intro cell hcell
+  rw [h cell hcell]
+
+/-- **Placement is surface-determined**: the dropped cells themselves
+depend only on the columns' heights — the same move on two boards with
+the same skyline lands identically, whatever lies buried beneath. The
+hole-independence of placement, certified in the main bank. -/
+theorem dropped_eq_of_colHeight_eq {b b' : Board} {pl : Placement}
+    (h : ∀ cell ∈ pl.shapeUp,
+      b.colHeight (pl.col + cell.1) = b'.colHeight (pl.col + cell.1)) :
+    pl.dropped b = pl.dropped b' := by
+  unfold Placement.dropped
+  rw [dropOffset_eq_of_colHeight_eq h]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

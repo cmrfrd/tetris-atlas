@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25au) — placement is surface-determined (bank 200/N)
+
+- `dropOffset_eq_of_colHeight_eq` / **`dropped_eq_of_colHeight_eq`** —
+  boards agreeing on the piece's column heights give identical drops:
+  hole-independence of placement, now in the main bank (the
+  surface-fiber insight, certified with a two-line sup_congr).
+- Milestone: 200 bank batches, 40% of the 500-iteration goal.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25at) — the skyline update, complete (bank 199/N)
 
 - **`place_unfed_colHeight_eq`** — an unfed column keeps its exact
