@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24aj) — the state wears the cycle clock (bank 152/N)
+
+- `trace_bag_card` — trace bag size = 7 − n%7 (block clock on traces).
+- **`trace_state_reveals_step_mod_thirtyfive`** — two reachable states
+  (any two policies) agreeing on bag size and board-mass-mod-10 sit at
+  the same step mod 35. CRT capstone of batches 150–151: the cycle
+  quantum is READ OFF THE STATE — a revisit is only possible a multiple
+  of 35 later, with no reference to the history. omega solved the CRT
+  combination directly.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24ai) — the mass clock (bank 151/N)
 
 - **`trace_board_count_mod_ten`** — count ≡ 4n (mod 10) at every step.

@@ -2612,5 +2612,40 @@ theorem cycle_non_O_clear_floor {π : Policy GameConfig.standard}
   have hO := cycle_O_step_clears_le hdraw hcyc
   omega
 
+/-- The bag's cardinality on a trace follows the block clock: `7 − n % 7`. -/
+theorem trace_bag_card {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) (n : ℕ) :
+    (trace GameConfig.standard π GameState.init n).bag.card = 7 - n % 7 := by
+  have hl := legalSequence_of_trace_draws hdraw
+  rw [show GameState.init.bag = Bag.full from GameState.init_bag] at hl
+  rw [trace_bag_eq_bagAt π GameState.init n,
+    show GameState.init.bag = Bag.full from GameState.init_bag]
+  exact BagCadence.bagAt_card hl n
+
+/-- **The state wears the cycle clock**: two reachable states — under any
+two policies — agreeing on bag size and on board mass mod ten sit at the
+same step index mod 35. The bag reads the block clock (mod 7), the mass
+reads the mass clock (mod 5), and the two residues CRT to the full cycle
+quantum: a state revisit can only happen a multiple of 35 steps later. -/
+theorem trace_state_reveals_step_mod_thirtyfive
+    {π π' : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hv' : ∀ g, (π' g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag)
+    (hdraw' : ∀ k, (π' (trace GameConfig.standard π' GameState.init k)).piece
+      ∈ (trace GameConfig.standard π' GameState.init k).bag) {m n : ℕ}
+    (hbag : (trace GameConfig.standard π GameState.init m).bag.card
+      = (trace GameConfig.standard π' GameState.init n).bag.card)
+    (hcount : (trace GameConfig.standard π GameState.init m).board.count % 10
+      = (trace GameConfig.standard π' GameState.init n).board.count % 10) :
+    m % 35 = n % 35 := by
+  have hb1 := trace_bag_card hdraw m
+  have hb2 := trace_bag_card hdraw' n
+  have hm1 := trace_board_count_mod_ten hv m
+  have hm2 := trace_board_count_mod_ten hv' n
+  omega
+
 end ClearRate
 end Tetris
