@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25ac) — perfect clears keep the beat (bank 182/N)
+
+- **`perfect_clear_step_mod_five`** — count = 0 ⇒ 5 ∣ n (mass clock).
+- **`init_revisit_thirtyfive_dvd`** — trace n = init ⇒ 35 ∣ n: the
+  empty-board full-bag reset lives on the five-bag grid (n₁ = 0 case of
+  thirtyfive_dvd_of_trace_eq_from).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25ab) — the return time bounds the atlas (bank 181/N)
 
 - **`survivor_orbit_eq`** — orbit = image of range n₂ exactly (set

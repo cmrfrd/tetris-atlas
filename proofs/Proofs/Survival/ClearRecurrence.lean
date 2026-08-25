@@ -2884,6 +2884,35 @@ theorem cleared_pinch {π : Policy GameConfig.standard}
   have hcap := count_lt_two_hundred_one hv hlive
   exact ⟨by omega, by omega⟩
 
+/-- **Perfect clears keep the mass clock's beat**: the board can only be
+empty at step indices divisible by five — `count = 0` forces
+`4n ≡ 0 (mod 10)`. -/
+theorem perfect_clear_step_mod_five {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hempty : (trace GameConfig.standard π GameState.init n).board.count
+      = 0) :
+    5 ∣ n := by
+  have h := trace_board_count_mod_ten hv n
+  rw [hempty] at h
+  omega
+
+/-- **Returns to the very start are quantised**: the trace revisits the
+exact initial state — empty board, full bag — only at multiples of 35.
+The empty-board reset, if a policy ever achieves one with a full bag, is
+locked to the five-bag grid. -/
+theorem init_revisit_thirtyfive_dvd {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n : ℕ}
+    (hret : trace GameConfig.standard π GameState.init n = GameState.init) :
+    35 ∣ n := by
+  have h := thirtyfive_dvd_of_trace_eq_from (π := π)
+    (g0 := GameState.init) (fun k => hv _)
+    (GameState.init_board_wf GameConfig.standard) hdraw
+    (Nat.zero_le n)
+    (by rw [trace_zero]; exact hret.symm)
+  simpa using h
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
