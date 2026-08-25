@@ -2799,5 +2799,33 @@ theorem adversarialTrace_succ_colHeight_le {cfg : GameConfig}
   rw [adversarialTrace_succ, adversarialStep_board]
   exact applyStep_colHeight_le j
 
+/-- **Headroom beats every adversary**: a solver that, against the dealt
+stream, always drops onto columns at least four rows below the ceiling
+never loses — whatever the adversary deals. The M-shaped reduction: to
+solve Tetris it suffices to always *have* a headroom move available. -/
+theorem adversarial_survives_of_headroom {cfg : GameConfig}
+    {σ : Solver cfg} {s : ℕ → Piece}
+    (hsky : ∀ n, ∀ cell ∈ ({ σ (adversarialTrace cfg σ s GameState.init n)
+        (s n) with piece := s n } : Placement).shapeUp,
+      (adversarialTrace cfg σ s GameState.init n).board.colHeight
+          (({ σ (adversarialTrace cfg σ s GameState.init n) (s n) with
+            piece := s n } : Placement).col + cell.1) + 4
+        ≤ cfg.rows) :
+    ∀ n, ¬ (adversarialTrace cfg σ s GameState.init n).lost cfg := by
+  have hif : ∀ n,
+      ∀ p ∈ (adversarialTrace cfg σ s GameState.init n).board,
+        p.2 < cfg.rows := by
+    intro n
+    induction n with
+    | zero =>
+      intro p hp
+      exact absurd hp (Finset.notMem_empty p)
+    | succ k ih =>
+      rw [adversarialTrace_succ, adversarialStep_board]
+      exact applyStep_safe_of_low_skyline ih (hsky k)
+  intro n
+  rw [GameState.not_lost_iff_forall_row_lt]
+  exact hif n
+
 end ClearRate
 end Tetris

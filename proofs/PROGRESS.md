@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25bc) — headroom beats every adversary (bank 208/N)
+
+- **`adversarial_survives_of_headroom`** — a solver that against the
+  dealt stream always drops onto columns ≥ 4 below the ceiling never
+  loses, whatever the adversary deals. The M-shaped reduction: solving
+  Tetris ⟸ always having a headroom move available. Where the crux now
+  lives: can headroom always be found under the 7-bag? (the carrier
+  question, restated as an availability invariant).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25bb) — death requires a high column (bank 207/N)
 
 - `step_live_of_headroom` — one live step under headroom stays live
