@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25v) — the first clear falls in [3, 51] (bank 175/N)
+
+- `live_clear_events_floor` — 4m ≤ 40·events + 200: one clearing moment
+  per ten moves past fifty, forced.
+- **`first_clear_by_fifty_one`** — live at 51 ⇒ cleared ≥ 1. With
+  cleared_two_eq_zero: every live game's first clear lands in moves
+  3..51, both ends certified.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25u) — the clearing pinch (bank 174/N)
 
 - **`live_clear_floor`** — 4m ≤ 10·cleared + 200 at every live step:

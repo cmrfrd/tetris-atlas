@@ -945,5 +945,33 @@ theorem clear_events_le_two_fifths {π : Policy GameConfig.standard}
   have h := cleared_le_two_fifths hv m
   omega
 
+/-- **Live games must have clearing moments**: `4m ≤ 40·events + 200` —
+each event clears at most four rows, so the pinch's clearing floor forces
+at least one clearing moment per ten moves past move fifty. -/
+theorem live_clear_events_floor {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init m).lost
+      GameConfig.standard) :
+    4 * m ≤ 40 * (sizeCount GameConfig.standard π GameState.init 1 m
+        + sizeCount GameConfig.standard π GameState.init 2 m
+        + sizeCount GameConfig.standard π GameState.init 3 m
+        + sizeCount GameConfig.standard π GameState.init 4 m)
+      + 200 := by
+  have hmix := mix_identity (cfg := GameConfig.standard) (π := π) m
+  have hfloor := live_clear_floor hv hlive
+  omega
+
+/-- **The first clear lands by move fifty-one**: a game still alive at step
+51 has cleared at least one row — with `cleared_two_eq_zero`, every live
+game's first clear falls somewhere in moves three through fifty-one, both
+ends sharp. -/
+theorem first_clear_by_fifty_one {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hlive : ¬ (trace GameConfig.standard π GameState.init 51).lost
+      GameConfig.standard) :
+    1 ≤ cleared GameConfig.standard π GameState.init 51 := by
+  have hfloor := live_clear_floor hv hlive
+  omega
+
 end ClearRate
 end Tetris
