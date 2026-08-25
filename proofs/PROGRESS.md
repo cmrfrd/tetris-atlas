@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25ba) — perpetual headroom is survival (bank 206/N)
+
+- **`survivesForever_of_headroom`** — a policy that, at every reached
+  state, drops only onto columns ≥ 4 below the ceiling never loses:
+  the per-move certificate chains into SurvivesForever by induction.
+  The M1 goal reduced to ONE O(4)-checkable invariant — the crux moves
+  entirely into "can the invariant be maintained under the 7-bag" (which
+  is exactly the carrier problem the Lean routes have been circling).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25az) — the full move is safe (bank 205/N)
 
 - `clearLines_in_field` — clearing keeps the board in the field (via

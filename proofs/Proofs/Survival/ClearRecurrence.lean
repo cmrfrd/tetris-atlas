@@ -3457,6 +3457,31 @@ theorem applyStep_safe_of_low_skyline {cfg : GameConfig} {b : Board}
   unfold Placement.applyStep at hp
   exact clearLines_in_field (place_safe_of_low_skyline hif hsky) p hp
 
+/-- **Perpetual headroom is perpetual survival**: a policy that, at every
+state it reaches, drops only onto columns standing at least four rows
+below the ceiling, never loses — the per-move safety certificate chains
+into a full `SurvivesForever` proof by induction. Reduces the M1/M4 goal
+to maintaining one O(4)-checkable invariant. -/
+theorem survivesForever_of_headroom {cfg : GameConfig} {π : Policy cfg}
+    (hsky : ∀ n, ∀ cell ∈ (π (trace cfg π GameState.init n)).shapeUp,
+      (trace cfg π GameState.init n).board.colHeight
+          ((π (trace cfg π GameState.init n)).col + cell.1) + 4
+        ≤ cfg.rows) :
+    SurvivesForever cfg π GameState.init := by
+  have hif : ∀ n, ∀ p ∈ (trace cfg π GameState.init n).board,
+      p.2 < cfg.rows := by
+    intro n
+    induction n with
+    | zero =>
+      intro p hp
+      exact absurd hp (Finset.notMem_empty p)
+    | succ k ih =>
+      rw [trace_succ, GameState.step_board]
+      exact applyStep_safe_of_low_skyline ih (hsky k)
+  intro n
+  rw [GameState.not_lost_iff_forall_row_lt]
+  exact hif n
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
