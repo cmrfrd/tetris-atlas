@@ -2359,6 +2359,60 @@ theorem tetris_step_column_flow {b : Board} {pl : Placement}
     rw [hlc, hz j hj hne] at h
     omega
 
+/-- **Untouched columns pay the full bill**: at a `k`-clear, every column
+the piece does not feed drops by exactly `k` — and so held at least `k`
+cells going in. The general-`k` form of the tetris drain. -/
+theorem clear_step_column_drain {cfg : GameConfig} {b : Board}
+    {pl : Placement} {j : ℕ} (hj : j < cfg.cols)
+    (hz : pl.colProfile j = 0) :
+    (Placement.applyStep cfg b pl).colCount j
+        + (Board.fullRows cfg (pl.place b)).card
+      = b.colCount j := by
+  have h := applyStep_colCount cfg b pl (j := j) hj
+  unfold Board.linesCleared at h
+  rw [hz] at h
+  omega
+
+/-- **A placement touches at most four columns**: the four cells cannot
+spread wider. -/
+theorem placement_touched_columns_le_four {pl : Placement}
+    (hv : pl.Valid GameConfig.standard) :
+    ((Finset.range 10).filter (fun j => ¬ (pl.colProfile j = 0))).card
+      ≤ 4 := by
+  classical
+  have hsum : ∑ j ∈ Finset.range 10, pl.colProfile j = 4 := by
+    have h := Placement.sum_colProfile hv
+    rwa [GameConfig.standard_cols] at h
+  have hbound : ((Finset.range 10).filter
+        (fun j => ¬ (pl.colProfile j = 0))).card
+      ≤ ∑ j ∈ (Finset.range 10).filter (fun j => ¬ (pl.colProfile j = 0)),
+          pl.colProfile j := by
+    calc ((Finset.range 10).filter (fun j => ¬ (pl.colProfile j = 0))).card
+        = ∑ _j ∈ (Finset.range 10).filter
+            (fun j => ¬ (pl.colProfile j = 0)), 1 := by
+          rw [Finset.sum_const, smul_eq_mul, mul_one]
+      _ ≤ _ := Finset.sum_le_sum (fun j hj => by
+          have := (Finset.mem_filter.mp hj).2
+          omega)
+  have hle : ∑ j ∈ (Finset.range 10).filter
+        (fun j => ¬ (pl.colProfile j = 0)), pl.colProfile j
+      ≤ ∑ j ∈ Finset.range 10, pl.colProfile j :=
+    Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
+  omega
+
+/-- **Six columns always go unfed**: every placement leaves at least six of
+the ten columns without a single cell — with `clear_step_column_drain`, a
+`k`-clear drains `k` cells from each of at least six columns in one move. -/
+theorem placement_untouched_columns_ge_six {pl : Placement}
+    (hv : pl.Valid GameConfig.standard) :
+    6 ≤ ((Finset.range 10).filter (fun j => pl.colProfile j = 0)).card := by
+  classical
+  have htouch := placement_touched_columns_le_four hv
+  have hsplit := Finset.card_filter_add_card_filter_not
+    (s := Finset.range 10) (fun j => pl.colProfile j = 0)
+  rw [Finset.card_range] at hsplit
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

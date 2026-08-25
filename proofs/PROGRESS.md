@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24ag) — untouched columns pay the full bill (bank 149/N)
+
+- **`clear_step_column_drain`** — cfg-general: at a k-clear every column
+  the piece doesn't feed drops by exactly k (so held ≥ k going in).
+- `placement_touched_columns_le_four` / **`placement_untouched_columns_ge_six`**
+  — four cells touch ≤ 4 columns, so ≥ 6 of the 10 go unfed every move.
+- Together: every k-clear spends ≥ 6k banked cells from unfed columns in
+  one move (tetris: the 36-cell spend localized).
+- Lean note: Mathlib's card_filter_add_card_filter_not takes (p) explicit
+  with s a SECTION VARIABLE — pass (s := ...) named.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24af) — the tetris column flow (bank 148/N)
 
 - **`tetris_step_column_flow`** — a four-clear nets ZERO on its well
