@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25h) — the tetris window is determined (bank 161/N)
+
+- **`tetris_rows_pre_shape`** — before a four-clear, the four clearing
+  rows are EXACTLY "everything but the well": (c, r) ∈ b ↔ c ≠ c₀. The
+  membership iff, both directions, from gaps-share-column +
+  row_missing_unique. The anatomical capstone: on its window the tetris
+  pre-board is unique up to one column index (10 possibilities total).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25g) — per-piece action counts (bank 160/N)
 
 - **`card_valid_placements_O`** — the O admits 36 placements.

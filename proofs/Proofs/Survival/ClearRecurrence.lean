@@ -2504,6 +2504,43 @@ theorem card_valid_placements_of_ne_O :
         = 34 := by
   decide
 
+/-- **The tetris pre-board is determined on its window**: before a
+four-clear, the four rows about to clear are *exactly* "everything but the
+well" — cell `(c, r)` is present iff `c ≠ c₀`. The anatomy is not merely
+constrained; on the cleared window it is unique up to the well's column. -/
+theorem tetris_rows_pre_shape {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    ∃ c₀ < 10, ∀ r ∈ Board.fullRows GameConfig.standard (pl.place b),
+      ∀ c < 10, ((c, r) ∈ b ↔ c ≠ c₀) := by
+  obtain ⟨c₀, hc₀⟩ := tetris_gaps_share_column hwf hv hnf h4
+  have hne : (Board.fullRows GameConfig.standard (pl.place b)).Nonempty :=
+    Finset.card_pos.mp (by omega)
+  obtain ⟨r₀, hr₀⟩ := hne
+  have hc₀lt : c₀ < 10 := by
+    have hdropmem := (hc₀ r₀ hr₀).2
+    rw [Placement.dropped_eq_image, Finset.mem_image] at hdropmem
+    obtain ⟨cell, hcell, hEq⟩ := hdropmem
+    have h1 : pl.col + cell.1 = c₀ := congrArg Prod.fst hEq
+    have h2 := hv cell hcell
+    rw [GameConfig.standard_cols] at h2
+    omega
+  refine ⟨c₀, hc₀lt, ?_⟩
+  intro r hr c hc
+  obtain ⟨c', hc', huniq⟩ := tetris_row_missing_unique hwf hv hnf h4 hr
+  have hc₀c' : c₀ = c' := huniq c₀ ⟨hc₀lt, (hc₀ r hr).1⟩
+  constructor
+  · intro hmem heq
+    rw [heq, hc₀c'] at hmem
+    exact hc'.2 hmem
+  · intro hne'
+    by_contra hnotb
+    have : c = c' := huniq c ⟨hc, hnotb⟩
+    rw [← hc₀c'] at this
+    exact hne' this
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
