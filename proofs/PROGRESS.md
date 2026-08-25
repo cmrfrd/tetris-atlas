@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25an) — the tetris pair law (bank 193/N)
+
+- **`tetris_pair_mass_law`** — 76 ≤ count(m) + 4·(m'−m) for any two
+  tetris steps m < m': the first burns its 36 + 40-cell bill, the second
+  needs its own 36 back on 4/move income. Lean-board tetrises are ≥ 10
+  apart; only a rich stack double-fires.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25am) — relief on traces, growth on adversarial (bank 192/N)
 
 - `adversarialTrace_succ_colHeight_le` — the ≤4/step skyline cap on

@@ -3175,6 +3175,32 @@ theorem trace_succ_colHeight_le {cfg : GameConfig} {π : Policy cfg}
   rw [trace_succ, GameState.step_board]
   exact applyStep_colHeight_le j
 
+/-- **The tetris pair law**: two four-clears at steps `m < m'` satisfy
+`76 ≤ count(m) + 4·(m' − m)` — the first tetris burns thirty-six banked
+cells plus its forty-cell bill, and the second needs its own thirty-six
+back. A tetris fired from a lean 36-cell board pushes the next at least
+ten moves out; only a rich board can fire twice in quick succession. -/
+theorem tetris_pair_mass_law {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m m' : ℕ} (hmm : m < m')
+    (h4 : (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board)).card = 4)
+    (h4' : (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m')).place
+          (trace GameConfig.standard π GameState.init m').board)).card
+      = 4) :
+    76 ≤ (trace GameConfig.standard π GameState.init m).board.count
+      + 4 * (m' - m) := by
+  have h36' := tetris_requires_thirtysix hv h4'
+  have hled := init_ledger (cfg := GameConfig.standard) hv m
+  have hled' := init_ledger (cfg := GameConfig.standard) hv m'
+  rw [GameConfig.standard_cols] at hled hled'
+  have hsucc := cleared_succ GameConfig.standard π GameState.init m
+  rw [h4] at hsucc
+  have hmono := cleared_mono GameConfig.standard π GameState.init
+    (show m + 1 ≤ m' by omega)
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
