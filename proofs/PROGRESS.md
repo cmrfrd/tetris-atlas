@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25be) — the availability dichotomy (bank 210/N)
+
+- **`no_low_pair_five_high`** — no adjacent low pair ⇒ ≥ 5 columns of
+  height ≥ 17 (choice function over the five disjoint pairs, injective
+  via /2). Either a safe window exists or the board is half towers.
+- Lean note: card_le_card_of_injOn goal order strikes again — sidestep
+  with explicit `have hmem`/`have hinj` then term application; lambda
+  if-then-else needs the statement written beta-reduced.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25bd) — two low neighbours suffice (bank 209/N)
 
 - `exists_narrow_rotation` — decide: every piece has a ≤ 2-wide

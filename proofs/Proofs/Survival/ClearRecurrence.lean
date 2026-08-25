@@ -3540,6 +3540,55 @@ theorem headroom_move_exists {b : Board} {j : ℕ} (hj : j + 1 < 10)
     · simpa using h1
     · exact h2
 
+/-- **No safe window means half the board is high**: a standard board with
+no adjacent pair of columns four below the ceiling has at least five
+columns of height seventeen or more — each of the five disjoint pairs
+must contribute one. The dichotomy behind headroom availability: either
+`headroom_move_exists` applies somewhere, or the board is already half
+towers. -/
+theorem no_low_pair_five_high {b : Board}
+    (h : ∀ j, j + 1 < 10 →
+      ¬ (b.colHeight j + 4 ≤ 20 ∧ b.colHeight (j + 1) + 4 ≤ 20)) :
+    5 ≤ ((Finset.range 10).filter
+      (fun j => 17 ≤ b.colHeight j)).card := by
+  classical
+  have hpair : ∀ i, i < 5 →
+      17 ≤ b.colHeight (2 * i) ∨ 17 ≤ b.colHeight (2 * i + 1) := by
+    intro i hi
+    have := h (2 * i) (by omega)
+    omega
+  have hmem : ∀ i ∈ Finset.range 5,
+      (if 17 ≤ b.colHeight (2 * i) then 2 * i else 2 * i + 1)
+        ∈ (Finset.range 10).filter (fun j => 17 ≤ b.colHeight j) := by
+    intro i hi
+    rw [Finset.mem_range] at hi
+    rw [Finset.mem_filter, Finset.mem_range]
+    by_cases hc : 17 ≤ b.colHeight (2 * i)
+    · rw [if_pos hc]
+      exact ⟨by omega, hc⟩
+    · have h1 : 17 ≤ b.colHeight (2 * i + 1) := by
+        rcases hpair i hi with h' | h'
+        · exact absurd h' hc
+        · exact h'
+      rw [if_neg hc]
+      exact ⟨by omega, h1⟩
+  have hinj : Set.InjOn
+      (fun i => if 17 ≤ b.colHeight (2 * i) then 2 * i else 2 * i + 1)
+      ↑(Finset.range 5) := by
+    intro i hi j hj hij
+    simp only [Finset.mem_coe, Finset.mem_range] at hi hj
+    simp only [] at hij
+    have h1 : (if 17 ≤ b.colHeight (2 * i) then 2 * i else 2 * i + 1) / 2
+        = i := by
+      split_ifs <;> omega
+    have h2 : (if 17 ≤ b.colHeight (2 * j) then 2 * j else 2 * j + 1) / 2
+        = j := by
+      split_ifs <;> omega
+    rw [hij] at h1
+    omega
+  calc (5 : ℕ) = (Finset.range 5).card := (Finset.card_range 5).symm
+    _ ≤ _ := Finset.card_le_card_of_injOn _ hmem hinj
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
