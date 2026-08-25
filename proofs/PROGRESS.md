@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25s) — lifetime clear-size rate caps (bank 172/N)
+
+- **`tetris_count_le_tenth`** — 10·(number of tetrises) ≤ m at EVERY
+  horizon, every game: one tetris in ten moves, max, from move one.
+- `triple_count_le` — 15·(triples) ≤ 2m likewise.
+- mix_identity + init_ledger one-liners; the cycle-polytope caps now
+  have from-the-start counterparts.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25r) — a tetris taxes the opening (bank 171/N)
 
 - **`tetris_dry_opening`** — 10·cleared(m) + 36 ≤ 4m at any step-m

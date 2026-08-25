@@ -900,5 +900,26 @@ theorem survivor_window_events_ceiling {π : Policy GameConfig.standard}
     (Nat.le_add_right n w)
   omega
 
+/-- **One tetris in ten, from the very start**: at every horizon, the
+number of tetrises is at most a tenth of the moves played — each tetris
+clears forty cells' worth of rows on a four-cells-a-move income. Not a
+cycle law: it binds every game from move one. -/
+theorem tetris_count_le_tenth {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (m : ℕ) :
+    10 * sizeCount GameConfig.standard π GameState.init 4 m ≤ m := by
+  have hmix := mix_identity (cfg := GameConfig.standard) (π := π) m
+  have hled := init_ledger (cfg := GameConfig.standard) hv m
+  rw [GameConfig.standard_cols] at hled
+  omega
+
+/-- Triples run at most two in fifteen, at every horizon. -/
+theorem triple_count_le {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (m : ℕ) :
+    15 * sizeCount GameConfig.standard π GameState.init 3 m ≤ 2 * m := by
+  have hmix := mix_identity (cfg := GameConfig.standard) (π := π) m
+  have hled := init_ledger (cfg := GameConfig.standard) hv m
+  rw [GameConfig.standard_cols] at hled
+  omega
+
 end ClearRate
 end Tetris
