@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25ax) — what IS monotone (bank 203/N)
+
+- `colHeight_mono` / **`dropOffset_mono`** — heights and the landing
+  height are monotone in the board (sup_mono / sup_mono_fun). The
+  precise boundary: geometry is monotone, the clear ledger is not.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25aw) — more material, fewer clears (bank 202/N)
 
 - **`clears_not_monotone`** — kernel witness: b ⊂ b' but the same

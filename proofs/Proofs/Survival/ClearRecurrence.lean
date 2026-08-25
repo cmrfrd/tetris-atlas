@@ -3365,6 +3365,25 @@ theorem clears_not_monotone :
   · decide
   · decide
 
+/-- Column heights are monotone in the board. -/
+theorem colHeight_mono {b b' : Board} (h : b ⊆ b') (j : ℕ) :
+    b.colHeight j ≤ b'.colHeight j := by
+  unfold Board.colHeight
+  apply Finset.sup_mono
+  unfold Board.colRows
+  exact Finset.image_subset_image (Finset.filter_subset_filter _ h)
+
+/-- **Pieces land higher on fuller boards**: the drop offset is monotone
+in the board — the one clearing-adjacent quantity that *is* monotone,
+in contrast to the clears themselves (`clears_not_monotone`). -/
+theorem dropOffset_mono {b b' : Board} {pl : Placement} (h : b ⊆ b') :
+    pl.dropOffset b ≤ pl.dropOffset b' := by
+  unfold Placement.dropOffset
+  apply Finset.sup_mono_fun
+  intro cell _
+  have := colHeight_mono h (pl.col + cell.1)
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
