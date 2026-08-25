@@ -2534,5 +2534,83 @@ theorem cycle_heavy_feed_total_cap {π : Policy GameConfig.standard}
         = Piece.T))
   omega
 
+/-- Window clears decompose as the sum of the window's per-step clear
+counts. -/
+theorem cleared_window_sum (π : Policy GameConfig.standard) (n : ℕ) :
+    ∀ w, cleared GameConfig.standard π GameState.init (n + w)
+        - cleared GameConfig.standard π GameState.init n
+      = ∑ k ∈ Finset.range w,
+          (Board.fullRows GameConfig.standard
+            ((π (trace GameConfig.standard π GameState.init (n + k))).place
+              (trace GameConfig.standard π GameState.init (n + k)).board)).card := by
+  intro w
+  induction w with
+  | zero => simp
+  | succ w ih =>
+    have hmono := cleared_mono GameConfig.standard π GameState.init
+      (Nat.le_add_right n w)
+    rw [show n + (w + 1) = (n + w) + 1 by omega, cleared_succ,
+      Finset.sum_range_succ, ← ih]
+    omega
+
+/-- **The O clears at most ten rows per period**: its five appearances can
+each complete at most two rows. -/
+theorem cycle_O_step_clears_le {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    ∑ k ∈ (Finset.range 35).filter (fun k =>
+        (π (trace GameConfig.standard π GameState.init (n + k))).piece
+          = Piece.O),
+      (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init (n + k))).place
+          (trace GameConfig.standard π GameState.init (n + k)).board)).card
+      ≤ 10 := by
+  classical
+  have hbal := trace_period_piece_balanced hdraw hcyc Piece.O
+  calc ∑ k ∈ (Finset.range 35).filter (fun k =>
+        (π (trace GameConfig.standard π GameState.init (n + k))).piece
+          = Piece.O),
+      (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init (n + k))).place
+          (trace GameConfig.standard π GameState.init (n + k)).board)).card
+      ≤ ∑ _k ∈ (Finset.range 35).filter (fun k =>
+          (π (trace GameConfig.standard π GameState.init (n + k))).piece
+            = Piece.O), 2 :=
+        Finset.sum_le_sum (fun k hk =>
+          clears_le_two_of_O (fun r => trace_board_no_full (n + k) r)
+            (Finset.mem_filter.mp hk).2)
+    _ = 10 := by
+        rw [Finset.sum_const, hbal, smul_eq_mul]
+
+/-- **Tall pieces must clear**: per cycle period, at least four of the
+fourteen cleared rows fall at steps not playing the O — square-only
+clearing cannot meet the rate law. -/
+theorem cycle_non_O_clear_floor {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    4 ≤ ∑ k ∈ (Finset.range 35).filter (fun k =>
+        ¬ ((π (trace GameConfig.standard π GameState.init (n + k))).piece
+          = Piece.O)),
+      (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init (n + k))).place
+          (trace GameConfig.standard π GameState.init (n + k)).board)).card := by
+  classical
+  have htot := multi_period_clears hv hcyc 1
+  rw [mul_one] at htot
+  have hwin := cleared_window_sum π n 35
+  have hsplit := Finset.sum_filter_add_sum_filter_not (Finset.range 35)
+    (fun k => (π (trace GameConfig.standard π GameState.init (n + k))).piece
+      = Piece.O)
+    (fun k => (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init (n + k))).place
+        (trace GameConfig.standard π GameState.init (n + k)).board)).card)
+  have hO := cycle_O_step_clears_le hdraw hcyc
+  omega
+
 end ClearRate
 end Tetris

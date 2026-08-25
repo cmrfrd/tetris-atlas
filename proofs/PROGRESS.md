@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24ae) — tall pieces must clear (bank 147/N)
+
+- `cleared_window_sum` — window clears = sum of per-step fullRows cards.
+- **`cycle_O_step_clears_le`** — per period the O's five appearances
+  complete at most ten rows (≤ 2 each).
+- **`cycle_non_O_clear_floor`** — so at least 4 of the 14 rows per period
+  are cleared at non-O steps: square-only clearing cannot meet the rate
+  law. (sum_filter_add_sum_filter_not split; omega matched the ¬-filter
+  atoms fine this time.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24ad) — the global heavy-feed cap (bank 146/N)
 
 - **`cycle_heavy_feed_total_cap`** — per cycle period at most 20
