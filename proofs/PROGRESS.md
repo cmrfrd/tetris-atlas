@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25ar) — hard drops never burrow (bank 197/N)
+
+- **`dropped_above_own_column`** — every dropped cell sits at or above
+  its column's pre-move height (le_sup on the drop supremum + change
+  for beta). The fundamental no-interleaving property: holes can only
+  form UNDER a piece's overhang into other columns, never by burrowing.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25aq) — the window clearing band (bank 196/N)
 
 - **`cleared_window_band`** — 4w − 200 ≤ 10·Δcleared ≤ 4w + 200 for any

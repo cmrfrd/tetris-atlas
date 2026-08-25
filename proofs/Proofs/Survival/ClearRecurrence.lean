@@ -3225,6 +3225,21 @@ theorem cleared_window_band {π : Policy GameConfig.standard}
     (Nat.le_add_right m w)
   exact ⟨by omega, by omega⟩
 
+/-- **Hard drops never burrow**: every cell of the dropped piece lands at
+or above its own column's stack top — the drop offset is the supremum of
+the per-cell falls, so no cell slides in beneath what already stands.
+The fundamental no-interleaving property of the hard-drop model. -/
+theorem dropped_above_own_column {b : Board} {pl : Placement} :
+    ∀ q ∈ pl.dropped b, b.colHeight q.1 ≤ q.2 := by
+  intro q hq
+  rw [Placement.dropped_eq_image, Finset.mem_image] at hq
+  obtain ⟨cell, hcell, rfl⟩ := hq
+  have h := Finset.le_sup (f := fun cell =>
+    b.colHeight (pl.col + cell.1) - cell.2) hcell
+  have hle : b.colHeight (pl.col + cell.1) - cell.2 ≤ pl.dropOffset b := h
+  change b.colHeight (pl.col + cell.1) ≤ pl.dropOffset b + cell.2
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
