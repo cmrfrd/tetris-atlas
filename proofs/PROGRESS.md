@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25ai) — fed columns sit at the landing (bank 188/N)
+
+- **`fed_column_height_le`** — colHeight(fed) ≤ dropOffset + cell.row
+  (le_sup on the drop-offset supremum).
+- `fed_column_height_le_three` — every fed column ≤ dropOffset + 3.
+- With batch 187: at a k-clear the skyline splits — fed ≤ d+3, unfed ≥
+  d+k. The complete local geometry of any clearing moment.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25ah) — unfed columns overtop by k (bank 187/N)
 
 - **`clear_untouched_column_height_ge`** — cfg-general: a k-clear's

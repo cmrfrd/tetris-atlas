@@ -3053,6 +3053,31 @@ theorem clear_untouched_column_height_ge {cfg : GameConfig} {b : Board}
     have := Finset.card_pos.mpr hfib
     omega
 
+/-- **Fed columns sit at or below the landing**: every column the piece
+occupies has height at most `dropOffset + cell-row` — the drop offset is
+the supremum of the per-cell falls, so no supporting stack can poke past
+where its cell comes to rest. -/
+theorem fed_column_height_le {b : Board} {pl : Placement} :
+    ∀ cell ∈ pl.shapeUp,
+      b.colHeight (pl.col + cell.1) ≤ pl.dropOffset b + cell.2 := by
+  intro cell hcell
+  have h := Finset.le_sup (f := fun cell =>
+    b.colHeight (pl.col + cell.1) - cell.2) hcell
+  have : b.colHeight (pl.col + cell.1) - cell.2 ≤ pl.dropOffset b := h
+  omega
+
+/-- Every fed column stops within three rows of the drop offset — the dual
+of `clear_untouched_column_height_ge`: at a `k`-clear the board splits
+into fed columns capped at `dropOffset + 3` and unfed columns reaching
+`dropOffset + k`. -/
+theorem fed_column_height_le_three {b : Board} {pl : Placement} :
+    ∀ cell ∈ pl.shapeUp,
+      b.colHeight (pl.col + cell.1) ≤ pl.dropOffset b + 3 := by
+  intro cell hcell
+  have h := fed_column_height_le (b := b) cell hcell
+  have hb := Piece.shapeUp_row_lt_four pl.piece pl.rot cell hcell
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
