@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25i) — the window sits at the drop offset (bank 162/N)
+
+- `shape_rows_eq_of_card_four` — decide: 4 distinct rows ⇒ rows {0,1,2,3}.
+- **`tetris_window_base`** — fullRows = Icc(dropOffset, dropOffset+3):
+  the abstract Icc base of four_clear_rows_eq_Icc pinned to the drop
+  geometry. The window is exactly where the I comes to rest.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25h) — the tetris window is determined (bank 161/N)
 
 - **`tetris_rows_pre_shape`** — before a four-clear, the four clearing

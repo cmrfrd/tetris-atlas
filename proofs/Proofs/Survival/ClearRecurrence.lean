@@ -2541,6 +2541,56 @@ theorem tetris_rows_pre_shape {b : Board} {pl : Placement}
     rw [← hc₀c'] at this
     exact hne' this
 
+/-- A shape occupying four distinct rows occupies exactly rows 0–3. -/
+theorem shape_rows_eq_of_card_four :
+    ∀ p : Piece, ∀ r : Rotation,
+      ((p.shapeUp r).image (fun cell => cell.2)).card = 4 →
+      (p.shapeUp r).image (fun cell => cell.2)
+        = ({0, 1, 2, 3} : Finset ℕ) := by
+  decide
+
+/-- **The tetris window sits exactly at the drop offset**: the four rows a
+four-clear completes are precisely `[dropOffset, dropOffset + 3]` — the
+vertical I lands on the well stack and the clearing window starts exactly
+where the piece comes to rest. Pins `four_clear_rows_eq_Icc`'s abstract
+base to the geometry of the drop. -/
+theorem tetris_window_base {b : Board} {pl : Placement}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    Board.fullRows GameConfig.standard (pl.place b)
+      = Finset.Icc (pl.dropOffset b) (pl.dropOffset b + 3) := by
+  classical
+  have hrows := four_clear_piece_rows_card hnf h4
+  have hshape : pl.shapeUp.image (fun c => c.2)
+      = ({0, 1, 2, 3} : Finset ℕ) := by
+    unfold Placement.shapeUp at hrows ⊢
+    exact shape_rows_eq_of_card_four pl.piece pl.rot hrows
+  have himg : (pl.dropped b).image (fun q => q.2)
+      = (pl.shapeUp.image (fun c => c.2)).image
+          (fun t => pl.dropOffset b + t) := by
+    rw [Placement.dropped_eq_image, Finset.image_image, Finset.image_image]
+    rfl
+  have hIcc : (pl.dropped b).image (fun q => q.2)
+      = Finset.Icc (pl.dropOffset b) (pl.dropOffset b + 3) := by
+    rw [himg, hshape]
+    ext x
+    simp only [Finset.mem_image, Finset.mem_insert, Finset.mem_singleton,
+      Finset.mem_Icc]
+    constructor
+    · rintro ⟨y, hy, rfl⟩
+      omega
+    · intro hx
+      exact ⟨x - pl.dropOffset b, by omega, by omega⟩
+  have hsub : Board.fullRows GameConfig.standard (pl.place b)
+      ⊆ Finset.Icc (pl.dropOffset b) (pl.dropOffset b + 3) := by
+    intro r hr
+    obtain ⟨q, hq, hqr⟩ := mem_fullRows_place_has_piece_cell hnf hr
+    rw [← hIcc]
+    exact Finset.mem_image.mpr ⟨q, hq, hqr⟩
+  apply Finset.eq_of_subset_of_card_le hsub
+  rw [h4, Nat.card_Icc]
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
