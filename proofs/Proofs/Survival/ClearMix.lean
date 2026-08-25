@@ -921,5 +921,29 @@ theorem triple_count_le {π : Policy GameConfig.standard}
   rw [GameConfig.standard_cols] at hled
   omega
 
+/-- **The lifetime clearing speed limit**: no game clears more than two
+rows per five moves, at any horizon — `5·cleared(m) ≤ 2m` always. The 2.8
+rows/bag cycle rate (`14/35 = 2/5` per move) is the universal ceiling,
+binding from move one. -/
+theorem cleared_le_two_fifths {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (m : ℕ) :
+    5 * cleared GameConfig.standard π GameState.init m ≤ 2 * m := by
+  have hled := init_ledger (cfg := GameConfig.standard) hv m
+  rw [GameConfig.standard_cols] at hled
+  omega
+
+/-- **The clearing-event speed limit**: no game has more than two clearing
+moments per five moves — each event costs at least one ten-cell row. -/
+theorem clear_events_le_two_fifths {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (m : ℕ) :
+    5 * (sizeCount GameConfig.standard π GameState.init 1 m
+        + sizeCount GameConfig.standard π GameState.init 2 m
+        + sizeCount GameConfig.standard π GameState.init 3 m
+        + sizeCount GameConfig.standard π GameState.init 4 m)
+      ≤ 2 * m := by
+  have hmix := mix_identity (cfg := GameConfig.standard) (π := π) m
+  have h := cleared_le_two_fifths hv m
+  omega
+
 end ClearRate
 end Tetris

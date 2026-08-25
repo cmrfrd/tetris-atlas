@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25t) — the universal clearing speed limit (bank 173/N)
+
+- **`cleared_le_two_fifths`** — 5·cleared(m) ≤ 2m always: 2/5 rows/move
+  (= 2.8/bag) is the ceiling from move one, not just on cycles.
+- `clear_events_le_two_fifths` — same cap for clearing MOMENTS.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25s) — lifetime clear-size rate caps (bank 172/N)
 
 - **`tetris_count_le_tenth`** — 10·(number of tetrises) ≤ m at EVERY
