@@ -3433,6 +3433,30 @@ theorem place_safe_of_low_skyline {cfg : GameConfig} {b : Board}
   have h4 := hsky cell₀ hcell₀
   omega
 
+/-- Clearing keeps the board in the field: cleared cells only move down. -/
+theorem clearLines_in_field {cfg : GameConfig} {b : Board}
+    (hif : ∀ p ∈ b, p.2 < cfg.rows) :
+    ∀ p ∈ Board.clearLines cfg b, p.2 < cfg.rows := by
+  intro p hp
+  have h1 : p.2 < (Board.clearLines cfg b).colHeight p.1 :=
+    Board.lt_colHeight hp
+  have h2 := colHeight_clearLines_le cfg b p.1
+  have h3 := Board.colHeight_le_rows_of_in_field hif p.1
+  omega
+
+/-- **The full move is safe under four rows of headroom**: place and clear
+together keep every cell below the ceiling whenever the touched columns
+stand at least four rows short of it — the per-move safety certificate a
+solver can check in O(4) height reads. -/
+theorem applyStep_safe_of_low_skyline {cfg : GameConfig} {b : Board}
+    {pl : Placement} (hif : ∀ p ∈ b, p.2 < cfg.rows)
+    (hsky : ∀ cell ∈ pl.shapeUp,
+      b.colHeight (pl.col + cell.1) + 4 ≤ cfg.rows) :
+    ∀ p ∈ Placement.applyStep cfg b pl, p.2 < cfg.rows := by
+  intro p hp
+  unfold Placement.applyStep at hp
+  exact clearLines_in_field (place_safe_of_low_skyline hif hsky) p hp
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25az) — the full move is safe (bank 205/N)
+
+- `clearLines_in_field` — clearing keeps the board in the field (via
+  colHeight_clearLines_le, no shift analysis needed).
+- **`applyStep_safe_of_low_skyline`** — place + clear stay below the
+  ceiling under 4 rows of touched-column headroom: an O(4) per-move
+  safety certificate.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25ay) — four rows of headroom (bank 204/N)
 
 - `dropOffset_le_of_heights` — the landing is bounded by any fed-column
