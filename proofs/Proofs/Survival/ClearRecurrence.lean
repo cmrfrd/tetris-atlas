@@ -2800,6 +2800,34 @@ theorem cleared_two_eq_zero {π : Policy GameConfig.standard}
   rw [show (2 : ℕ) = 1 + 1 from rfl, cleared_succ, hnone, Finset.card_empty,
     h1]
 
+/-- **The opening clear schedule**: a `k`-clear at step `m` obeys
+`10k ≤ 4m + 4` — clearing needs banked mass and mass accrues four cells a
+move. Singles from move 2, doubles from move 4, triples from move 6. -/
+theorem earliest_clear_law {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (m : ℕ) :
+    10 * (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board)).card
+      ≤ 4 * m + 4 := by
+  have hmass := clear_requires_mass hv m
+  have hled := init_ledger (cfg := GameConfig.standard) hv m
+  rw [GameConfig.standard_cols] at hled
+  omega
+
+/-- **The earliest tetris is the tenth placement**: a four-clear stands on
+thirty-six banked cells, and nine moves is the soonest the board can hold
+them — no game tetrises before step nine. -/
+theorem earliest_tetris_step {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ}
+    (h4 : (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board)).card = 4) :
+    9 ≤ m := by
+  have h36 := tetris_requires_thirtysix hv h4
+  have hled := init_ledger (cfg := GameConfig.standard) hv m
+  rw [GameConfig.standard_cols] at hled
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

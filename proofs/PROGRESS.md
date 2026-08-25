@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25p) — the opening clear schedule (bank 169/N)
+
+- **`earliest_clear_law`** — 10k ≤ 4m + 4 at every step: singles
+  earliest at move 2, doubles 4, triples 6.
+- **`earliest_tetris_step`** — no tetris before step 9 (the tenth
+  placement): a four-clear stands on 36 banked cells and mass accrues 4
+  per move. Both pure ledger corollaries of clear_requires_mass /
+  tetris_requires_thirtysix + init_ledger.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25o) — earliest clear is move three (bank 168/N)
 
 - `rowCount_le_count` — a row never beats the whole board.
