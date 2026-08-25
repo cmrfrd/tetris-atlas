@@ -2724,5 +2724,38 @@ theorem adversarial_earliest_tetris_step {σ : Solver GameConfig.standard}
   have h := adversarial_earliest_clear_law hv n
   omega
 
+/-- **The clearing pinch is adversary-proof**: at every live step of every
+adversarial game, `4m − 200 ≤ 10·clearedAdv ≤ 4m` — the twenty-row band
+around the exact 0.4-per-move line binds per step, whoever deals. -/
+theorem adversarial_cleared_pinch {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard) {m : ℕ}
+    (hlive : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init m).lost GameConfig.standard) :
+    4 * m ≤ 10 * clearedAdv GameConfig.standard σ s GameState.init m + 200
+      ∧ 10 * clearedAdv GameConfig.standard σ s GameState.init m
+        ≤ 4 * m := by
+  have hled := clearedAdv_ledger (cfg := GameConfig.standard)
+    (GameState.init_board_wf GameConfig.standard) hv m
+  rw [GameConfig.standard_cols, GameState.init_board_count] at hled
+  have hcap := BagGrowth.count_le_capacity
+    (adversarialTrace_board_wf (GameState.init_board_wf GameConfig.standard)
+      hv m)
+    ((GameState.not_lost_iff_forall_row_lt GameConfig.standard _).mp hlive)
+  rw [GameConfig.standard_cols, GameConfig.standard_rows] at hcap
+  exact ⟨by omega, by omega⟩
+
+/-- The first clear falls by move fifty-one against any stream too. -/
+theorem adversarial_first_clear_by_fifty_one {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hlive : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init 51).lost GameConfig.standard) :
+    1 ≤ clearedAdv GameConfig.standard σ s GameState.init 51 := by
+  have h := (adversarial_cleared_pinch hv hlive).1
+  omega
+
 end ClearRate
 end Tetris

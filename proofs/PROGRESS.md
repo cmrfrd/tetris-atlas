@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25w) — the pinch is adversary-proof (bank 176/N)
+
+- **`adversarial_cleared_pinch`** — per-step two-sided band 4m − 200 ≤
+  10·clearedAdv ≤ 4m at every live step (generalizes the 7m-aligned
+  adversary_forces_ge to all indices).
+- `adversarial_first_clear_by_fifty_one` — the move-51 first-clear
+  deadline holds against every stream.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25v) — the first clear falls in [3, 51] (bank 175/N)
 
 - `live_clear_events_floor` — 4m ≤ 40·events + 200: one clearing moment
