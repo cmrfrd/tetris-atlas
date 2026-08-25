@@ -2550,5 +2550,67 @@ theorem adversary_tall_drop_column_cap {σ : Solver GameConfig.standard}
       _ ≤ _ := Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
   omega
 
+/-- **The adversarial per-column frequency law**: against a 35-periodic
+stream, every window past a returning solver's loop point delivers between
+`14⌊w/35⌋` and `14⌊w/35⌋ + 14` cells to every column. -/
+theorem adversary_column_window_bracket {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {j : ℕ} (hj : j < 10) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    {m₀ : ℕ} (hm : n ≤ m₀) (w : ℕ) :
+    14 * (w / 35) ≤ colDeliveredAdv σ s j (m₀ + w) - colDeliveredAdv σ s j m₀
+      ∧ colDeliveredAdv σ s j (m₀ + w) - colDeliveredAdv σ s j m₀
+        ≤ 14 * (w / 35) + 14 := by
+  have hanchor : adversarialTrace GameConfig.standard σ s GameState.init m₀
+      = adversarialTrace GameConfig.standard σ s GameState.init (m₀ + 35) := by
+    have h := adversarialTrace_periodic hper hcyc (m₀ - n)
+    rw [show n + (m₀ - n) = m₀ by omega] at h
+    rw [show n + 35 + (m₀ - n) = m₀ + 35 by omega] at h
+    exact h
+  set q := w / 35 with hq
+  have hexq := adversary_column_load_exact hv hper hj hanchor q
+  have hexq1 := adversary_column_load_exact hv hper hj hanchor (q + 1)
+  have hm1 := colDeliveredAdv_mono σ s j (Nat.le_add_right m₀ (35 * q))
+  have hm2 := colDeliveredAdv_mono σ s j
+    (show m₀ + 35 * q ≤ m₀ + w by omega)
+  have hm3 := colDeliveredAdv_mono σ s j
+    (show m₀ + w ≤ m₀ + 35 * (q + 1) by omega)
+  exact ⟨by omega, by omega⟩
+
+/-- **A starving column caps the clears, adversarially**: over any window
+in which column `j` receives nothing, the game clears at most what `j`
+held at the window's start — the ledger argument owes nothing to who picks
+the pieces. -/
+theorem adversary_starving_column_caps_clears {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {j : ℕ} (hj : j < 10) {n w : ℕ}
+    (hstarve : colDeliveredAdv σ s j (n + w) = colDeliveredAdv σ s j n) :
+    clearedAdv GameConfig.standard σ s GameState.init (n + w)
+        - clearedAdv GameConfig.standard σ s GameState.init n
+      ≤ (adversarialTrace GameConfig.standard σ s GameState.init
+          n).board.colCount j := by
+  have hled1 := colDeliveredAdv_ledger (σ := σ) (s := s) hj n
+  have hled2 := colDeliveredAdv_ledger (σ := σ) (s := s) hj (n + w)
+  have hclm := clearedAdv_mono GameConfig.standard σ s GameState.init
+    (Nat.le_add_right n w)
+  omega
+
+/-- **No column starves, adversarially**: against a 35-periodic stream, a
+returning solver leaves no column unfed for 35 placements. -/
+theorem adversary_column_starvation_le {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hper : ∀ k, s (k + 35) = s k) {j : ℕ} (hj : j < 10) {n : ℕ}
+    (hcyc : adversarialTrace GameConfig.standard σ s GameState.init n
+        = adversarialTrace GameConfig.standard σ s GameState.init (n + 35))
+    {m₀ : ℕ} (hm : n ≤ m₀) {w : ℕ}
+    (hstarve : colDeliveredAdv σ s j (m₀ + w) = colDeliveredAdv σ s j m₀) :
+    w ≤ 34 := by
+  have hbr := (adversary_column_window_bracket hv hper hj hcyc hm w).1
+  omega
+
 end ClearRate
 end Tetris

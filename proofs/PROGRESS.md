@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24ab) — starvation laws are adversary-proof (bank 144/N)
+
+- **`adversary_column_window_bracket`** — per-column 14⌊w/35⌋ .. +14
+  bracket at every window past the loop point, adversarial stream.
+- `adversary_starving_column_caps_clears` — the two-ledger starvation cap
+  owes nothing to who picks the pieces.
+- **`adversary_column_starvation_le`** — no column goes unfed for 35
+  placements against a periodic adversary.
+- Mirrors of batches 141's laws via colDeliveredAdv; anchor shift by
+  adversarialTrace_periodic instead of trace_eq_of_state_eq.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24aa) — anatomy transferred to traces (bank 143/N)
 
 - **`trace_tetris_feeds_single_column`** — on any trace past the seed, a
