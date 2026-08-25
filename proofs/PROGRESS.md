@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25ay) — four rows of headroom (bank 204/N)
+
+- `dropOffset_le_of_heights` — the landing is bounded by any fed-column
+  height bound.
+- `place_in_field_of_low_drop` — headroom at the landing keeps the merge
+  in-field.
+- **`place_safe_of_low_skyline`** — touched columns ≥ 4 below the
+  ceiling ⇒ the move cannot top out. The safety margin, certified.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25ax) — what IS monotone (bank 203/N)
 
 - `colHeight_mono` / **`dropOffset_mono`** — heights and the landing

@@ -3384,6 +3384,55 @@ theorem dropOffset_mono {b b' : Board} {pl : Placement} (h : b ⊆ b') :
   have := colHeight_mono h (pl.col + cell.1)
   omega
 
+/-- The drop offset is bounded by any bound on the fed columns' heights. -/
+theorem dropOffset_le_of_heights {b : Board} {pl : Placement} {H : ℕ}
+    (h : ∀ cell ∈ pl.shapeUp, b.colHeight (pl.col + cell.1) ≤ H) :
+    pl.dropOffset b ≤ H := by
+  unfold Placement.dropOffset
+  apply Finset.sup_le
+  intro cell hcell
+  have := h cell hcell
+  omega
+
+/-- A low landing keeps the merge in the field: if the piece comes to rest
+with headroom, every cell of the placed board stays below the ceiling. -/
+theorem place_in_field_of_low_drop {cfg : GameConfig} {b : Board}
+    {pl : Placement} (hif : ∀ p ∈ b, p.2 < cfg.rows)
+    (hd : pl.dropOffset b + 3 < cfg.rows) :
+    ∀ p ∈ pl.place b, p.2 < cfg.rows := by
+  intro p hp
+  rw [Placement.place_eq_union_dropped, Finset.mem_union] at hp
+  rcases hp with h | h
+  · exact hif p h
+  · rw [Placement.dropped_eq_image, Finset.mem_image] at h
+    obtain ⟨cell, hcell, hEq⟩ := h
+    have hrow : pl.dropOffset b + cell.2 = p.2 := congrArg Prod.snd hEq
+    have hb := Piece.shapeUp_row_lt_four pl.piece pl.rot cell hcell
+    omega
+
+/-- **Four rows of headroom make a move top-out-free**: if every column
+the piece touches stands at least four rows below the ceiling, the merge
+stays entirely in the field — the exact safety margin a solver must
+preserve to guarantee its next placement cannot lose. -/
+theorem place_safe_of_low_skyline {cfg : GameConfig} {b : Board}
+    {pl : Placement} (hif : ∀ p ∈ b, p.2 < cfg.rows)
+    (hsky : ∀ cell ∈ pl.shapeUp,
+      b.colHeight (pl.col + cell.1) + 4 ≤ cfg.rows) :
+    ∀ p ∈ pl.place b, p.2 < cfg.rows := by
+  apply place_in_field_of_low_drop hif
+  have hd : pl.dropOffset b ≤ cfg.rows - 4 := by
+    apply dropOffset_le_of_heights
+    intro cell hcell
+    have := hsky cell hcell
+    omega
+  have hne : pl.shapeUp.Nonempty := by
+    apply Finset.card_pos.mp
+    rw [pl.shapeUp_card]
+    omega
+  obtain ⟨cell₀, hcell₀⟩ := hne
+  have h4 := hsky cell₀ hcell₀
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
