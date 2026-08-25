@@ -3506,6 +3506,40 @@ theorem lost_step_requires_high_column {cfg : GameConfig} {g : GameState}
   exact step_live_of_headroom hlive
     (fun cell hcell => hcon cell hcell) hlost
 
+/-- Every piece has a rotation at most two columns wide (the vertical
+orientations). -/
+theorem exists_narrow_rotation :
+    ∀ p : Piece, ∃ r : Rotation, ∀ cell ∈ p.shapeUp r, cell.1 < 2 := by
+  decide
+
+/-- **Two low neighbours guarantee a headroom move for every piece**: if
+some adjacent column pair stands at least four rows below the ceiling,
+then whatever piece is dealt admits a valid placement touching only those
+columns — the availability half of the headroom survival reduction. A
+solver never runs out of safe moves while it keeps one low two-column
+window anywhere on the board. -/
+theorem headroom_move_exists {b : Board} {j : ℕ} (hj : j + 1 < 10)
+    (h1 : b.colHeight j + 4 ≤ 20) (h2 : b.colHeight (j + 1) + 4 ≤ 20)
+    (p : Piece) :
+    ∃ pl : Placement, pl.piece = p
+      ∧ pl.Valid GameConfig.standard
+      ∧ ∀ cell ∈ pl.shapeUp,
+        b.colHeight (pl.col + cell.1) + 4 ≤ GameConfig.standard.rows := by
+  obtain ⟨r, hr⟩ := exists_narrow_rotation p
+  refine ⟨⟨p, r, j⟩, rfl, ?_, ?_⟩
+  · intro cell hcell
+    have hw := hr cell hcell
+    change j + cell.1 < GameConfig.standard.cols
+    rw [GameConfig.standard_cols]
+    omega
+  · intro cell hcell
+    have hw := hr cell hcell
+    change b.colHeight (j + cell.1) + 4 ≤ GameConfig.standard.rows
+    rw [GameConfig.standard_rows]
+    rcases (show cell.1 = 0 ∨ cell.1 = 1 by omega) with h | h <;> rw [h]
+    · simpa using h1
+    · exact h2
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

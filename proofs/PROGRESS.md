@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25bd) — two low neighbours suffice (bank 209/N)
+
+- `exists_narrow_rotation` — decide: every piece has a ≤ 2-wide
+  rotation.
+- **`headroom_move_exists`** — an adjacent column pair ≥ 4 below the
+  ceiling gives every dealt piece a valid headroom placement. The
+  AVAILABILITY half of the headroom reduction: survival now =
+  maintaining one low 2-window (the invariant maintenance is the
+  remaining crux — dropping there raises it, so the window must rotate
+  or clear; exactly the drain-geometry crux the routes identified).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25bc) — headroom beats every adversary (bank 208/N)
 
 - **`adversarial_survives_of_headroom`** — a solver that against the
