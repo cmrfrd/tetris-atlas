@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25k) — the well outruns the skyline (bank 164/N)
+
+- **`tetris_well_depth`** — at a four-clear, colHeight c ≥ colHeight c₀
+  + 4 for every other column c: the tetris demands a well 4 deeper than
+  the ENTIRE rest of the skyline. Window-at-height + window-determined +
+  lt_colHeight; also identifies the two well columns of batches 137/161
+  as the same c₀ (a mismatch would put a cell above its own column
+  height).
+- Ties to project_carrier_probe_route: the roughness survival demands is
+  now a THEOREM (tetris play forces ≥ 4-deep relief), not an empirical
+  observation.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25j) — the window is the well's crown (bank 163/N)
 
 - `I_shape_vertical_eq` — decide: a 4-row I is a single column

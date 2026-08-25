@@ -2640,6 +2640,36 @@ theorem tetris_window_at_well_height {b : Board} {pl : Placement}
   rw [← hoff]
   exact tetris_window_base hnf h4
 
+/-- **The well outruns the skyline by four**: a tetris demands a well
+column at least four rows deeper than *every* other column — each of the
+nine must reach through the entire clearing window while the well stops
+below it. The steepest possible local relief, forced at every four-clear. -/
+theorem tetris_well_depth {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    ∃ c₀ < 10, ∀ c < 10, c ≠ c₀ →
+      b.colHeight c₀ + 4 ≤ b.colHeight c := by
+  obtain ⟨c₀, hc₀lt, hoff, hwin⟩ := tetris_window_at_well_height hv hnf h4
+  obtain ⟨c₀', hc₀'lt, hshape⟩ := tetris_rows_pre_shape hwf hv hnf h4
+  have hr3 : b.colHeight c₀ + 3
+      ∈ Board.fullRows GameConfig.standard (pl.place b) := by
+    rw [hwin, Finset.mem_Icc]
+    omega
+  have hc0eq : c₀' = c₀ := by
+    by_contra hne
+    have hmem : (c₀, b.colHeight c₀ + 3) ∈ b :=
+      (hshape _ hr3 c₀ hc₀lt).mpr (fun heq => hne heq.symm)
+    have := Board.lt_colHeight hmem
+    omega
+  refine ⟨c₀, hc₀lt, ?_⟩
+  intro c hc hne
+  have hmem : (c, b.colHeight c₀ + 3) ∈ b :=
+    (hshape _ hr3 c hc).mpr (by rw [hc0eq]; exact hne)
+  have := Board.lt_colHeight hmem
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
