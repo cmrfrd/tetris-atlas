@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24ad) — the global heavy-feed cap (bank 146/N)
+
+- **`cycle_heavy_feed_total_cap`** — per cycle period at most 20
+  placements deliver 3+ cells into any single column: each plays a tall
+  piece (heavy_feed_requires_tall) and the bag deals five each of
+  I/L/J/T. Union-of-four-filters card bound via filter_or +
+  card_union_le chain + omega.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24ac) — the global tall-drop cap (bank 145/N)
 
 - **`cycle_tall_drop_total_cap`** — per cycle period at most FIVE

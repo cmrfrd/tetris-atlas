@@ -2465,5 +2465,74 @@ theorem cycle_tall_drop_total_cap {π : Policy GameConfig.standard}
   obtain ⟨hkr, j, -, hj4⟩ := hk
   exact ⟨hkr, full_feed_requires_I (le_of_eq hj4.symm)⟩
 
+/-- **The global heavy-feed cap**: per cycle period, at most twenty
+placements deliver three or more cells into any single column — each such
+feed plays a tall piece (I, L, J or T), and the bag deals exactly five of
+each per period. The supply-side companion of `cycle_tall_drop_total_cap`. -/
+theorem cycle_heavy_feed_total_cap {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    ((Finset.range 35).filter (fun k =>
+        ∃ j ∈ Finset.range 10, 3 ≤
+          (π (trace GameConfig.standard π GameState.init (n + k))).colProfile
+            j)).card ≤ 20 := by
+  classical
+  have hI := trace_period_piece_balanced hdraw hcyc Piece.I
+  have hL := trace_period_piece_balanced hdraw hcyc Piece.L
+  have hJ := trace_period_piece_balanced hdraw hcyc Piece.J
+  have hT := trace_period_piece_balanced hdraw hcyc Piece.T
+  have hsub : (Finset.range 35).filter (fun k =>
+        ∃ j ∈ Finset.range 10, 3 ≤
+          (π (trace GameConfig.standard π GameState.init (n + k))).colProfile
+            j)
+      ⊆ (Finset.range 35).filter (fun k =>
+        (π (trace GameConfig.standard π GameState.init (n + k))).piece
+            = Piece.I
+          ∨ (π (trace GameConfig.standard π GameState.init (n + k))).piece
+            = Piece.L
+          ∨ (π (trace GameConfig.standard π GameState.init (n + k))).piece
+            = Piece.J
+          ∨ (π (trace GameConfig.standard π GameState.init (n + k))).piece
+            = Piece.T) := by
+    intro k hk
+    rw [Finset.mem_filter] at hk ⊢
+    obtain ⟨hkr, j, -, hj3⟩ := hk
+    exact ⟨hkr, heavy_feed_requires_tall hj3⟩
+  refine le_trans (Finset.card_le_card hsub) ?_
+  rw [Finset.filter_or, Finset.filter_or, Finset.filter_or]
+  have h1 := Finset.card_union_le
+    ((Finset.range 35).filter (fun k =>
+      (π (trace GameConfig.standard π GameState.init (n + k))).piece
+        = Piece.I))
+    (((Finset.range 35).filter (fun k =>
+        (π (trace GameConfig.standard π GameState.init (n + k))).piece
+          = Piece.L))
+      ∪ (((Finset.range 35).filter (fun k =>
+          (π (trace GameConfig.standard π GameState.init (n + k))).piece
+            = Piece.J))
+        ∪ ((Finset.range 35).filter (fun k =>
+          (π (trace GameConfig.standard π GameState.init (n + k))).piece
+            = Piece.T))))
+  have h2 := Finset.card_union_le
+    ((Finset.range 35).filter (fun k =>
+      (π (trace GameConfig.standard π GameState.init (n + k))).piece
+        = Piece.L))
+    (((Finset.range 35).filter (fun k =>
+        (π (trace GameConfig.standard π GameState.init (n + k))).piece
+          = Piece.J))
+      ∪ ((Finset.range 35).filter (fun k =>
+        (π (trace GameConfig.standard π GameState.init (n + k))).piece
+          = Piece.T)))
+  have h3 := Finset.card_union_le
+    ((Finset.range 35).filter (fun k =>
+      (π (trace GameConfig.standard π GameState.init (n + k))).piece
+        = Piece.J))
+    ((Finset.range 35).filter (fun k =>
+      (π (trace GameConfig.standard π GameState.init (n + k))).piece
+        = Piece.T))
+  omega
+
 end ClearRate
 end Tetris
