@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25ab) — the return time bounds the atlas (bank 181/N)
+
+- **`survivor_orbit_eq`** — orbit = image of range n₂ exactly (set
+  equality, both inclusions).
+- **`survivor_orbit_card_le_return`** — ncard ≤ n₂: a solver that loops
+  early has a small atlas, quantitatively. Sharper than the 2^207
+  ceiling whenever the loop is found sooner.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25aa) — the rho shape at any period (bank 180/N)
 
 - **`return_states_determined`** — general-p tail phase determination

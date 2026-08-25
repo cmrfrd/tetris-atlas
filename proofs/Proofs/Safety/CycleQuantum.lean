@@ -2906,5 +2906,34 @@ theorem return_tail_orbit_subset {cfg : GameConfig} {π : Policy cfg}
   exact Finset.mem_image.mpr ⟨(m - n) % p,
     Finset.mem_range.mpr (Nat.mod_lt _ hp), rfl⟩
 
+/-- **The orbit is exactly the pre-return prefix**: after a return at
+`(n₁, n₂)`, the set of all states ever visited *equals* the image of the
+first `n₂` indices — not just an inclusion. -/
+theorem survivor_orbit_eq {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {n₁ n₂ : ℕ} (h12 : n₁ < n₂)
+    (hret : trace cfg π g0 n₁ = trace cfg π g0 n₂) :
+    Set.range (trace cfg π g0)
+      = ↑((Finset.range n₂).image (trace cfg π g0)) := by
+  ext g
+  constructor
+  · rintro ⟨m, rfl⟩
+    obtain ⟨m', hm', heq⟩ := visited_state_early h12 hret m
+    exact Finset.mem_coe.mpr
+      (Finset.mem_image.mpr ⟨m', Finset.mem_range.mpr hm', heq⟩)
+  · intro hg
+    rw [Finset.mem_coe, Finset.mem_image] at hg
+    obtain ⟨m, -, rfl⟩ := hg
+    exact ⟨m, rfl⟩
+
+/-- **The first return time bounds the atlas**: an orbit that returns by
+step `n₂` holds at most `n₂` states — a solver that loops early has a
+small atlas, quantitatively. -/
+theorem survivor_orbit_card_le_return {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {n₁ n₂ : ℕ} (h12 : n₁ < n₂)
+    (hret : trace cfg π g0 n₁ = trace cfg π g0 n₂) :
+    (Set.range (trace cfg π g0)).ncard ≤ n₂ := by
+  rw [survivor_orbit_eq h12 hret, Set.ncard_coe_finset]
+  exact le_trans Finset.card_image_le (le_of_eq (Finset.card_range n₂))
+
 end ClearRate
 end Tetris
