@@ -3104,6 +3104,54 @@ theorem place_empty_low {pl : Placement} :
     have hz := dropOffset_empty pl
     omega
 
+/-- **One move lifts the skyline by at most four**: after placing, every
+column's height is within four of some column's height *before* the move —
+a piece can bridge from a tall stack, but it cannot levitate more than its
+own four rows above what already stood. -/
+theorem place_colHeight_le {b : Board} {pl : Placement} (j : ℕ) :
+    ∃ j', (pl.place b).colHeight j ≤ b.colHeight j' + 4 := by
+  classical
+  have hup : (pl.place b).colHeight j
+      ≤ max (b.colHeight j) (pl.dropOffset b + 4) := by
+    unfold Board.colHeight
+    apply Finset.sup_le
+    intro r hr
+    unfold Board.colRows at hr
+    rw [Finset.mem_image] at hr
+    obtain ⟨q, hq, rfl⟩ := hr
+    rw [Finset.mem_filter] at hq
+    obtain ⟨hqb, hqj⟩ := hq
+    rw [Placement.place_eq_union_dropped, Finset.mem_union] at hqb
+    rcases hqb with h | h
+    · have hmem : (j, q.2) ∈ b := by
+        have hqe : q = (j, q.2) := Prod.ext hqj rfl
+        rw [← hqe]
+        exact h
+      have := Board.lt_colHeight hmem
+      refine le_trans ?_ (le_max_left _ _)
+      exact this
+    · rw [Placement.dropped_eq_image, Finset.mem_image] at h
+      obtain ⟨cell, hcell, hEq⟩ := h
+      have hrow : pl.dropOffset b + cell.2 = q.2 := congrArg Prod.snd hEq
+      have hb4 := Piece.shapeUp_row_lt_four pl.piece pl.rot cell hcell
+      refine le_trans ?_ (le_max_right _ _)
+      change q.2 + 1 ≤ pl.dropOffset b + 4
+      omega
+  have hne : pl.shapeUp.Nonempty := by
+    apply Finset.card_pos.mp
+    rw [pl.shapeUp_card]
+    omega
+  obtain ⟨cell₀, hcell₀, hsup⟩ := Finset.exists_mem_eq_sup pl.shapeUp hne
+    (fun cell => b.colHeight (pl.col + cell.1) - cell.2)
+  have hd : pl.dropOffset b
+      = b.colHeight (pl.col + cell₀.1) - cell₀.2 := by
+    unfold Placement.dropOffset
+    exact hsup
+  by_cases hc : (pl.place b).colHeight j ≤ b.colHeight j + 4
+  · exact ⟨j, hc⟩
+  · refine ⟨pl.col + cell₀.1, ?_⟩
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

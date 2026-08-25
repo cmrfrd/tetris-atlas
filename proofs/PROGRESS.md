@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25ak) — one move lifts ≤ 4 (bank 190/N)
+
+- **`place_colHeight_le`** — after placing, every column height ≤ some
+  pre-move column height + 4 (sup-achievement of the drop offset + the
+  union-height max bound).
+- Lean notes: le_trans (by omega) h₂ elaborates the omega BEFORE the
+  middle type is known — use refine le_trans ?_ h₂; the sup function
+  (· + 1) needs beta (exact this / change) before omega sees the atoms;
+  style linter wants `change`, not goal-changing `show`.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25aj) — the first piece rests on the floor (bank 189/N)
 
 - `dropOffset_empty` — the drop offset on Board.empty is zero.
