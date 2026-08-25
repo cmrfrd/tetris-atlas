@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25e) — the action alphabet is 240 (bank 158/N)
+
+- **`card_valid_placements`** — kernel decide: exactly 240 valid
+  placements on the standard board (piece × rotation × column). Note:
+  the Rust engine memory said 162 (it dedupes symmetric rotations); the
+  Lean model's 4-rotation alphabet counts 240.
+- `valid_iff_mem_enum` — faithfulness: Valid ⟺ membership in the
+  240-table (validity forces col < 10, so range 10 misses nothing).
+- Discovery workflow: scratch #eval to find the number, then kernel
+  decide to certify it (no native_decide anywhere).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25d) — the 35-state floor (bank 157/N)
 
 - **`trace_ne_of_step_mod_ne`** — indices disagreeing mod 35 give

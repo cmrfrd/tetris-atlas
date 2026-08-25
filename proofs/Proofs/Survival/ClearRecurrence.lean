@@ -2449,6 +2449,40 @@ theorem trace_board_count_determines_step_mod_five
   have h2 := trace_board_count_mod_ten hv' n
   omega
 
+set_option maxRecDepth 40000 in
+/-- **The action alphabet has exactly 240 letters**: the standard board
+admits precisely 240 valid placements — piece × rotation × column,
+in-bounds. A kernel-checked count of the game's entire move vocabulary. -/
+theorem card_valid_placements :
+    (((Finset.univ : Finset Piece) ×ˢ (Finset.univ : Finset Rotation)
+        ×ˢ Finset.range 10).filter (fun t =>
+      (⟨t.1, t.2.1, t.2.2⟩ : Placement).Valid GameConfig.standard)).card
+      = 240 := by
+  decide
+
+/-- The enumeration is faithful: a placement is valid iff its triple lands
+in the 240-element table — validity forces `col < 10`, so the `range 10`
+column window misses nothing. -/
+theorem valid_iff_mem_enum (pl : Placement) :
+    pl.Valid GameConfig.standard
+      ↔ (pl.piece, pl.rot, pl.col)
+        ∈ (((Finset.univ : Finset Piece) ×ˢ (Finset.univ : Finset Rotation)
+            ×ˢ Finset.range 10).filter (fun t =>
+          (⟨t.1, t.2.1, t.2.2⟩ : Placement).Valid GameConfig.standard)) := by
+  constructor
+  · intro hv
+    rw [Finset.mem_filter]
+    refine ⟨?_, hv⟩
+    rw [Finset.mem_product]
+    refine ⟨Finset.mem_univ _, ?_⟩
+    rw [Finset.mem_product]
+    refine ⟨Finset.mem_univ _, ?_⟩
+    rw [Finset.mem_range]
+    have h := hv.col_lt_cols
+    rwa [GameConfig.standard_cols] at h
+  · intro hm
+    exact (Finset.mem_filter.mp hm).2
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
