@@ -993,5 +993,20 @@ theorem tetris_train_law {π : Policy GameConfig.standard}
     (Nat.le_add_right m w)
   omega
 
+/-- **The window tetris cap**: from any live moment, a `w`-move window
+holds at most `5 + w/10` tetrises — the 200-cell bank buys at most five
+beyond the steady one-in-ten income rate. The burst allowance of every
+Tetris game, exactly quantified. -/
+theorem tetris_window_cap {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init m).lost
+      GameConfig.standard) (w : ℕ) :
+    sizeCount GameConfig.standard π GameState.init 4 (m + w)
+        - sizeCount GameConfig.standard π GameState.init 4 m
+      ≤ 5 + w / 10 := by
+  have h := tetris_train_law hv m w
+  have hcap := count_lt_two_hundred_one hv hlive
+  omega
+
 end ClearRate
 end Tetris

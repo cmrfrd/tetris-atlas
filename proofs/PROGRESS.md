@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25ap) — the burst allowance (bank 195/N)
+
+- **`tetris_window_cap`** — from any live moment, ≤ 5 + w/10 tetrises
+  in a w-window: the 200-cell bank buys at most five tetrises beyond
+  the steady 1-in-10 income rate. The burst allowance of every game,
+  exactly quantified.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25ao) — the tetris train law (bank 194/N)
 
 - **`tetris_train_law`** — 40·(tetrises in any w-window) ≤ count(start)
