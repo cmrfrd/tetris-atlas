@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24ak) — the clocks are adversary-proof (bank 153/N)
+
+- `adversarial_board_count_mod_ten` / `adversarial_board_count_even` —
+  mass clock + parity pruning against any adversary.
+- `adversarial_bag_card` — block clock on adversarial traces.
+- **`adversarial_state_reveals_step_mod_thirtyfive`** — cross-game CRT:
+  different solvers, different legal streams, same conclusion — bag size
+  + mass mod 10 pin the step index mod 35. The cycle quantum is stamped
+  on the state in every game anyone can play.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24aj) — the state wears the cycle clock (bank 152/N)
 
 - `trace_bag_card` — trace bag size = 7 − n%7 (block clock on traces).

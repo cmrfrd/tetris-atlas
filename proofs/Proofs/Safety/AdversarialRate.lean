@@ -2612,5 +2612,71 @@ theorem adversary_column_starvation_le {σ : Solver GameConfig.standard}
   have hbr := (adversary_column_window_bracket hv hper hj hcyc hm w).1
   omega
 
+/-- The mass clock, adversarially: board mass is `4n` mod ten whatever the
+adversary deals. -/
+theorem adversarial_board_count_mod_ten {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (n : ℕ) :
+    (adversarialTrace GameConfig.standard σ s GameState.init n).board.count
+        % 10
+      = (4 * n) % 10 := by
+  have h := clearedAdv_ledger (cfg := GameConfig.standard)
+    (GameState.init_board_wf GameConfig.standard) hv n
+  rw [GameConfig.standard_cols, GameState.init_board_count] at h
+  omega
+
+/-- Reachable boards have even mass, adversarially: the parity obstruction
+prunes the same half of configuration space in every adversarial game. -/
+theorem adversarial_board_count_even {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (n : ℕ) :
+    2 ∣ (adversarialTrace GameConfig.standard σ s
+      GameState.init n).board.count := by
+  have h := clearedAdv_ledger (cfg := GameConfig.standard)
+    (GameState.init_board_wf GameConfig.standard) hv n
+  rw [GameConfig.standard_cols, GameState.init_board_count] at h
+  omega
+
+/-- The block clock, adversarially: the bag holds `7 − n % 7` pieces along
+any legal adversarial stream. -/
+theorem adversarial_bag_card (σ : Solver GameConfig.standard)
+    {s : ℕ → Piece} (hleg : LegalSequenceFrom Bag.full s) (n : ℕ) :
+    (adversarialTrace GameConfig.standard σ s GameState.init n).bag.card
+      = 7 - n % 7 := by
+  rw [adversarialTrace_bag GameConfig.standard σ s n]
+  exact BagCadence.bagAt_card hleg n
+
+/-- **The cycle clock is adversary-proof**: any two adversarially reached
+states — different solvers, different legal streams — agreeing on bag size
+and board mass mod ten sit at the same step index mod 35. The cycle
+quantum is stamped on the state in every game anyone can play. -/
+theorem adversarial_state_reveals_step_mod_thirtyfive
+    {σ σ' : Solver GameConfig.standard} {s s' : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hv' : ∀ n, ({ σ' (adversarialTrace GameConfig.standard σ' s'
+      GameState.init n) (s' n) with piece := s' n }
+      : Placement).Valid GameConfig.standard)
+    (hleg : LegalSequenceFrom Bag.full s)
+    (hleg' : LegalSequenceFrom Bag.full s') {m n : ℕ}
+    (hbag : (adversarialTrace GameConfig.standard σ s
+        GameState.init m).bag.card
+      = (adversarialTrace GameConfig.standard σ' s'
+        GameState.init n).bag.card)
+    (hcount : (adversarialTrace GameConfig.standard σ s
+        GameState.init m).board.count % 10
+      = (adversarialTrace GameConfig.standard σ' s'
+        GameState.init n).board.count % 10) :
+    m % 35 = n % 35 := by
+  have hb1 := adversarial_bag_card σ hleg m
+  have hb2 := adversarial_bag_card σ' hleg' n
+  have hm1 := adversarial_board_count_mod_ten hv m
+  have hm2 := adversarial_board_count_mod_ten hv' n
+  omega
+
 end ClearRate
 end Tetris
