@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25n) — the first move never clears (bank 167/N)
+
+- `no_clear_on_empty` — fullRows of any placement on Board.empty is ∅
+  (cleared_row_pre_count_ge with rowCount 0).
+- **`cleared_one_eq_zero`** — cleared 1 = 0 for every policy.
+- Lean note: it's Finset.eq_empty_iff_forall_notMem (camelCase notMem)
+  in this Mathlib.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25m) — k-clear landing-window geometry (bank 166/N)
 
 - **`clear_rows_in_drop_window`** — cfg-general: every cleared row lies

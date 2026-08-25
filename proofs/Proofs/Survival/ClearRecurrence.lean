@@ -2739,6 +2739,35 @@ theorem clear_untouched_column_height {cfg : GameConfig} {b : Board}
     have := Finset.card_pos.mpr hfib
     omega
 
+/-- **No placement clears on the empty board**: four cells cannot complete
+a ten-cell row from nothing. -/
+theorem no_clear_on_empty {pl : Placement} :
+    Board.fullRows GameConfig.standard (pl.place Board.empty) = ∅ := by
+  classical
+  rw [Finset.eq_empty_iff_forall_notMem]
+  intro r hr
+  have h := cleared_row_pre_count_ge (cfg := GameConfig.standard)
+    (b := Board.empty) hr
+  rw [GameConfig.standard_cols] at h
+  have hz : Board.rowCount Board.empty r = 0 := by
+    simp [Board.rowCount, Board.empty]
+  omega
+
+/-- **The first move never clears**: every game opens with a clear-free
+placement — `cleared 1 = 0` for every policy. The base case of every
+clearing-rate induction, pinned. -/
+theorem cleared_one_eq_zero (π : Policy GameConfig.standard) :
+    cleared GameConfig.standard π GameState.init 1 = 0 := by
+  have h : (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init 0)).place
+        (trace GameConfig.standard π GameState.init 0).board)).card = 0 :=
+    congrArg Finset.card
+      (no_clear_on_empty
+        (pl := π (trace GameConfig.standard π GameState.init 0)))
+  rw [show (1 : ℕ) = 0 + 1 from rfl, cleared_succ]
+  simp only [cleared_zero]
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
