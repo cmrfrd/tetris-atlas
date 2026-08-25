@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25ae) — mass forces height (bank 184/N)
+
+- `colCount_le_colHeight` — column cells inject into range(colHeight).
+- **`exists_tall_column`** — some column reaches ≥ count/10: D cells
+  cannot lie flatter than D/10. With the standing-mass floors, cycle
+  boards carry a permanent skyline.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25ad) — the perfect ledger (bank 183/N)
 
 - **`perfect_clear_exact_rate`** — an empty board settles 10·cleared =

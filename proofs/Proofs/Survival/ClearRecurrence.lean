@@ -2935,6 +2935,51 @@ theorem perfect_clear_ge_five {π : Policy GameConfig.standard}
   have h := perfect_clear_step_mod_five hv hempty
   omega
 
+/-- A column holds at most as many cells as its height: its cells sit at
+distinct rows strictly below the height. -/
+theorem colCount_le_colHeight (b : Board) (j : ℕ) :
+    b.colCount j ≤ b.colHeight j := by
+  classical
+  unfold Board.colCount
+  calc (b.filter (fun p => p.1 = j)).card
+      ≤ (Finset.range (b.colHeight j)).card := by
+        refine Finset.card_le_card_of_injOn (fun p => p.2) ?_ ?_
+        · intro p hp
+          simp only [Finset.mem_coe, Finset.mem_filter] at hp
+          have hmem : (j, p.2) ∈ b := by
+            have hpe : p = (j, p.2) := Prod.ext hp.2 rfl
+            rw [← hpe]
+            exact hp.1
+          exact Finset.mem_range.mpr (Board.lt_colHeight hmem)
+        · intro p hp q hq hpq
+          simp only [Finset.mem_coe, Finset.mem_filter] at hp hq
+          apply Prod.ext
+          · rw [hp.2, hq.2]
+          · exact hpq
+      _ = b.colHeight j := Finset.card_range _
+
+/-- **Mass forces height**: some column of a well-formed board reaches at
+least a tenth of the total mass — `D` cells cannot lie flatter than
+`D/10`. With the mass band, cycle boards carry a *standing* skyline. -/
+theorem exists_tall_column {b : Board}
+    (hwf : Board.WF GameConfig.standard b) :
+    ∃ j < 10, b.count ≤ 10 * b.colHeight j := by
+  classical
+  obtain ⟨j, hj, hmax⟩ := Finset.exists_max_image (Finset.range 10)
+    b.colHeight ⟨0, by simp⟩
+  refine ⟨j, Finset.mem_range.mp hj, ?_⟩
+  have hsum := Board.sum_colCount (cfg := GameConfig.standard) hwf
+  rw [GameConfig.standard_cols] at hsum
+  have h1 : b.count ≤ ∑ j' ∈ Finset.range 10, b.colHeight j' := by
+    rw [← hsum]
+    exact Finset.sum_le_sum (fun j' _ => colCount_le_colHeight b j')
+  have h2 : ∑ j' ∈ Finset.range 10, b.colHeight j'
+      ≤ (Finset.range 10).card * b.colHeight j := by
+    rw [← smul_eq_mul]
+    exact Finset.sum_le_card_nsmul _ _ _ (fun j' hj' => hmax j' hj')
+  rw [Finset.card_range] at h2
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
