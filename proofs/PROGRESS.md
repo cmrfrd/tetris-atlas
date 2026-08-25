@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25ag) — the 35-floor is adversary-proof (bank 186/N)
+
+- `adversarialTrace_ne_of_step_mod_ne` — off-phase adversarial states
+  are distinct (CRT clocks, same-game instantiation).
+- **`adversarial_first_period_card`** — the 35 opening states of any
+  adversarial game are pairwise distinct: the minimal-atlas floor holds
+  against every stream.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25af) — flat boards cannot tetris (bank 185/N)
 
 - `tetris_relief_ge_four` — every four-clear exhibits a column pair with

@@ -2757,5 +2757,38 @@ theorem adversarial_first_clear_by_fifty_one {σ : Solver GameConfig.standard}
   have h := (adversarial_cleared_pinch hv hlive).1
   omega
 
+/-- Off-phase adversarial states are distinct: indices disagreeing mod 35
+give different states, whatever the stream. -/
+theorem adversarialTrace_ne_of_step_mod_ne {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hleg : LegalSequenceFrom Bag.full s) {m n : ℕ}
+    (hmn : m % 35 ≠ n % 35) :
+    adversarialTrace GameConfig.standard σ s GameState.init m
+      ≠ adversarialTrace GameConfig.standard σ s GameState.init n := by
+  intro heq
+  apply hmn
+  apply adversarial_state_reveals_step_mod_thirtyfive hv hv hleg hleg
+  · rw [heq]
+  · rw [heq]
+
+/-- **The adversarial first period never repeats**: the 35 opening states
+of any adversarial game are pairwise distinct — the 35-state floor of the
+minimal atlas holds against every stream. -/
+theorem adversarial_first_period_card {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (hleg : LegalSequenceFrom Bag.full s) :
+    ((Finset.range 35).image
+      (adversarialTrace GameConfig.standard σ s GameState.init)).card
+      = 35 := by
+  rw [Finset.card_image_of_injOn, Finset.card_range]
+  intro a ha b hb hab
+  simp only [Finset.mem_coe, Finset.mem_range] at ha hb
+  by_contra hne
+  exact adversarialTrace_ne_of_step_mod_ne hv hleg (by omega) hab
+
 end ClearRate
 end Tetris
