@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25af) — flat boards cannot tetris (bank 185/N)
+
+- `tetris_relief_ge_four` — every four-clear exhibits a column pair with
+  height gap ≥ 4.
+- **`no_tetris_on_flat`** — an all-equal skyline forbids the four-clear
+  outright. The roughness-vs-tetris tension of the carrier-probe memory,
+  now a two-line theorem: flat play forfeits tetrises; tetris play
+  forfeits flatness.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25ae) — mass forces height (bank 184/N)
 
 - `colCount_le_colHeight` — column cells inject into range(colHeight).

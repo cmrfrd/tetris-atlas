@@ -2980,6 +2980,34 @@ theorem exists_tall_column {b : Board}
   rw [Finset.card_range] at h2
   omega
 
+/-- **A tetris needs four rows of relief**: some pair of columns differs in
+height by at least four at every four-clear. -/
+theorem tetris_relief_ge_four {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    ∃ j < 10, ∃ j' < 10, b.colHeight j + 4 ≤ b.colHeight j' := by
+  obtain ⟨c₀, hc₀, hdepth⟩ := tetris_well_depth hwf hv hnf h4
+  set c := (c₀ + 1) % 10 with hc
+  have hclt : c < 10 := Nat.mod_lt _ (by omega)
+  have hcne : c ≠ c₀ := by omega
+  exact ⟨c₀, hc₀, c, hclt, hdepth c hclt hcne⟩
+
+/-- **Flat boards cannot tetris**: if all ten columns stand at one height,
+no placement clears four — the skyline must be broken before it can be
+harvested. Flat-stacking strategies structurally forfeit the tetris. -/
+theorem no_tetris_on_flat {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hflat : ∀ j < 10, ∀ j' < 10, b.colHeight j = b.colHeight j') :
+    (Board.fullRows GameConfig.standard (pl.place b)).card ≠ 4 := by
+  intro h4
+  obtain ⟨j, hj, j', hj', hrel⟩ := tetris_relief_ge_four hwf hv hnf h4
+  have := hflat j hj j' hj'
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
