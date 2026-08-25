@@ -2913,6 +2913,28 @@ theorem init_revisit_thirtyfive_dvd {π : Policy GameConfig.standard}
     (by rw [trace_zero]; exact hret.symm)
   simpa using h
 
+/-- **A perfect clear settles the ledger exactly**: with the board empty,
+`10·cleared = 4n` on the nose — a perfectly cleared game has run at
+*exactly* the 0.4-rows-per-move rate, no slack term at all. -/
+theorem perfect_clear_exact_rate {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hempty : (trace GameConfig.standard π GameState.init n).board.count
+      = 0) :
+    10 * cleared GameConfig.standard π GameState.init n = 4 * n := by
+  have hled := init_ledger (cfg := GameConfig.standard) hv n
+  rw [GameConfig.standard_cols] at hled
+  omega
+
+/-- The first possible perfect clear is move five: five pieces, two full
+rows, nothing left. -/
+theorem perfect_clear_ge_five {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ} (hn : 0 < n)
+    (hempty : (trace GameConfig.standard π GameState.init n).board.count
+      = 0) :
+    5 ≤ n := by
+  have h := perfect_clear_step_mod_five hv hempty
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

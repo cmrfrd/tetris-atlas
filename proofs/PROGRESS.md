@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25ad) — the perfect ledger (bank 183/N)
+
+- **`perfect_clear_exact_rate`** — an empty board settles 10·cleared =
+  4n exactly: perfectly cleared games run at exactly 0.4 rows/move.
+- `perfect_clear_ge_five` — no perfect clear before move five.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25ac) — perfect clears keep the beat (bank 182/N)
 
 - **`perfect_clear_step_mod_five`** — count = 0 ⇒ 5 ∣ n (mass clock).
