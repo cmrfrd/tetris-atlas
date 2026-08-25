@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25aj) — the first piece rests on the floor (bank 189/N)
+
+- `dropOffset_empty` — the drop offset on Board.empty is zero.
+- **`place_empty_low`** — placing on the empty board leaves every cell
+  strictly below row four. Concrete opening geometry for base cases.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25ai) — fed columns sit at the landing (bank 188/N)
 
 - **`fed_column_height_le`** — colHeight(fed) ≤ dropOffset + cell.row

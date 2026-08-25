@@ -3078,6 +3078,32 @@ theorem fed_column_height_le_three {b : Board} {pl : Placement} :
   have hb := Piece.shapeUp_row_lt_four pl.piece pl.rot cell hcell
   omega
 
+/-- On the empty board every piece falls to the floor: the drop offset is
+zero. -/
+theorem dropOffset_empty (pl : Placement) :
+    pl.dropOffset Board.empty = 0 := by
+  unfold Placement.dropOffset
+  refine Nat.le_antisymm ?_ (Nat.zero_le _)
+  apply Finset.sup_le
+  intro cell _
+  simp [Board.empty, Board.colHeight_empty]
+
+/-- **The first piece lies in the bottom four rows**: placing on the empty
+board leaves every cell strictly below row four. -/
+theorem place_empty_low {pl : Placement} :
+    ∀ q ∈ pl.place Board.empty, q.2 < 4 := by
+  intro q hq
+  rw [Placement.place_eq_union_dropped, Finset.mem_union] at hq
+  rcases hq with h | h
+  · exact absurd h (by simp [Board.empty])
+  · rw [Placement.dropped_eq_image, Finset.mem_image] at h
+    obtain ⟨cell, hcell, hEq⟩ := h
+    have hrow : pl.dropOffset Board.empty + cell.2 = q.2 :=
+      congrArg Prod.snd hEq
+    have hb := Piece.shapeUp_row_lt_four pl.piece pl.rot cell hcell
+    have hz := dropOffset_empty pl
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
