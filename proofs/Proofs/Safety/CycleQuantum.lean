@@ -2443,5 +2443,27 @@ theorem trace_clears_le_three_of_ne_I {π : Policy GameConfig.standard}
         (trace GameConfig.standard π GameState.init m).board)).card ≤ 3 :=
   clears_le_three_of_ne_I (fun r => trace_board_no_full_of_pos hm r) hI
 
+/-- **The global tall-drop cap**: per cycle period, at most five placements
+pour a full four-cell feed into *any* column at all — each such drop plays
+the I (`full_feed_requires_I`), and the bag deals exactly five I's per
+period. Sharper than summing the per-column caps (which would give thirty):
+the whole board hosts at most five tall drops per period. -/
+theorem cycle_tall_drop_total_cap {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) :
+    ((Finset.range 35).filter (fun k =>
+        ∃ j ∈ Finset.range 10,
+          (π (trace GameConfig.standard π GameState.init (n + k))).colProfile j
+            = 4)).card ≤ 5 := by
+  classical
+  have hbal := trace_period_piece_balanced hdraw hcyc Piece.I
+  refine le_trans (Finset.card_le_card ?_) (le_of_eq hbal)
+  intro k hk
+  rw [Finset.mem_filter] at hk ⊢
+  obtain ⟨hkr, j, -, hj4⟩ := hk
+  exact ⟨hkr, full_feed_requires_I (le_of_eq hj4.symm)⟩
+
 end ClearRate
 end Tetris

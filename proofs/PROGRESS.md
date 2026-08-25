@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24ac) — the global tall-drop cap (bank 145/N)
+
+- **`cycle_tall_drop_total_cap`** — per cycle period at most FIVE
+  placements pour a full four-cell column feed anywhere on the board:
+  each such drop plays the I (full_feed_requires_I) and the 7-bag deals
+  exactly five I's per period (trace_period_piece_balanced). Piece-supply
+  bound (5) beats budget-sum bound (30) — the two rationing mechanisms
+  are genuinely different.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24ab) — starvation laws are adversary-proof (bank 144/N)
 
 - **`adversary_column_window_bracket`** — per-column 14⌊w/35⌋ .. +14
