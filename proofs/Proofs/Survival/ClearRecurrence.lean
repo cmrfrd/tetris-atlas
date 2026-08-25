@@ -3240,6 +3240,52 @@ theorem dropped_above_own_column {b : Board} {pl : Placement} :
   change b.colHeight (pl.col + cell.1) ≤ pl.dropOffset b + cell.2
   omega
 
+/-- **The landing is exact**: after placing, a fed column's height equals
+`dropOffset + (its top piece cell) + 1` — old stack capped below the cell
+(`fed_column_height_le`), other piece cells capped by topness, the top
+cell itself delivers. The complete post-move height formula for every
+column the piece touches. -/
+theorem place_fed_colHeight_eq {b : Board} {pl : Placement} {cell : Coord}
+    (hcell : cell ∈ pl.shapeUp)
+    (htop : ∀ cell' ∈ pl.shapeUp, cell'.1 = cell.1 → cell'.2 ≤ cell.2) :
+    (pl.place b).colHeight (pl.col + cell.1)
+      = pl.dropOffset b + cell.2 + 1 := by
+  classical
+  refine Nat.le_antisymm ?_ ?_
+  · unfold Board.colHeight
+    apply Finset.sup_le
+    intro r hr
+    unfold Board.colRows at hr
+    rw [Finset.mem_image] at hr
+    obtain ⟨q, hq, rfl⟩ := hr
+    rw [Finset.mem_filter] at hq
+    obtain ⟨hqb, hqj⟩ := hq
+    rw [Placement.place_eq_union_dropped, Finset.mem_union] at hqb
+    rcases hqb with h | h
+    · have hmem : (pl.col + cell.1, q.2) ∈ b := by
+        have hqe : q = (pl.col + cell.1, q.2) := Prod.ext hqj rfl
+        rw [← hqe]
+        exact h
+      have h1 := Board.lt_colHeight hmem
+      have h2 := fed_column_height_le (b := b) cell hcell
+      change q.2 + 1 ≤ pl.dropOffset b + cell.2 + 1
+      omega
+    · rw [Placement.dropped_eq_image, Finset.mem_image] at h
+      obtain ⟨cell', hcell', hEq⟩ := h
+      have hcol : pl.col + cell'.1 = q.1 := congrArg Prod.fst hEq
+      have hrow : pl.dropOffset b + cell'.2 = q.2 := congrArg Prod.snd hEq
+      have hc1 : cell'.1 = cell.1 := by omega
+      have := htop cell' hcell' hc1
+      change q.2 + 1 ≤ pl.dropOffset b + cell.2 + 1
+      omega
+  · have hmem : (pl.col + cell.1, pl.dropOffset b + cell.2)
+        ∈ pl.place b := by
+      rw [Placement.place_eq_union_dropped, Finset.mem_union]
+      right
+      rw [Placement.dropped_eq_image, Finset.mem_image]
+      exact ⟨cell, hcell, rfl⟩
+    exact Board.lt_colHeight hmem
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

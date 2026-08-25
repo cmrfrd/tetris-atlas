@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25as) — the landing is exact (bank 198/N)
+
+- **`place_fed_colHeight_eq`** — post-place height of a fed column =
+  dropOffset + (its top piece cell) + 1, exactly: old stack capped below
+  the cell, sibling cells capped by topness, the top cell delivers.
+- With batches 190/197: the full skyline update rule of a move is now
+  determined — fed columns get the exact formula, others are unchanged
+  by place (and only clearing moves them).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25ar) — hard drops never burrow (bank 197/N)
 
 - **`dropped_above_own_column`** — every dropped cell sits at or above
