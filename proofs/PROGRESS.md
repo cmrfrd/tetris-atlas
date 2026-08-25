@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24z) — clear-free feed laws (bank 142/N)
+
+- **`clear_free_column_feed_eq`** — over a clear-free window a column's
+  delivery equals its holdings growth exactly (no outflow to hide behind).
+- **`clear_free_column_feed_le`** — and if the window ends alive, each
+  column receives ≤ 20 cells: the height ceiling becomes an intake
+  ceiling. Dual of batch 141's starvation laws; summed over columns it
+  recovers the fifty-placement clear-free horizon.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24y) — column starvation laws (bank 141/N)
 
 - **`starving_column_caps_clears`** — over any window where column j

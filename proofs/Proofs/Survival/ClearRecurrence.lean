@@ -2293,6 +2293,41 @@ theorem cycle_column_starvation_le {π : Policy GameConfig.standard}
   have hbr := (cycle_column_window_bracket hv hj hcyc hm w).1
   omega
 
+/-- **Clear-free intake is pure stacking**: over a window with no clears,
+what a column receives is exactly what it gains — the ledger has no
+clearing outflow to hide behind. -/
+theorem clear_free_column_feed_eq {π : Policy GameConfig.standard}
+    {j : ℕ} (hj : j < 10) {n w : ℕ}
+    (hdry : cleared GameConfig.standard π GameState.init (n + w)
+      = cleared GameConfig.standard π GameState.init n) :
+    colDelivered π j (n + w) - colDelivered π j n
+      = (trace GameConfig.standard π GameState.init (n + w)).board.colCount j
+        - (trace GameConfig.standard π GameState.init n).board.colCount j := by
+  have hled1 := colDelivered_ledger (π := π) hj n
+  have hled2 := colDelivered_ledger (π := π) hj (n + w)
+  have hmono := colDelivered_mono π j (Nat.le_add_right n w)
+  omega
+
+/-- **The clear-free feed cap**: over a clear-free window that ends alive,
+every column receives at most twenty cells — a starved outflow turns the
+board's height ceiling into an intake ceiling, column by column. (Summed
+over the ten columns this recovers the fifty-placement clear-free horizon:
+`4w ≤ 200`.) -/
+theorem clear_free_column_feed_le {π : Policy GameConfig.standard}
+    {j : ℕ} (hj : j < 10) {n w : ℕ}
+    (hdry : cleared GameConfig.standard π GameState.init (n + w)
+      = cleared GameConfig.standard π GameState.init n)
+    (hlive : ¬ (trace GameConfig.standard π GameState.init (n + w)).lost
+      GameConfig.standard) :
+    colDelivered π j (n + w) - colDelivered π j n ≤ 20 := by
+  have heq := clear_free_column_feed_eq (π := π) hj hdry
+  have hif : ∀ p ∈ (trace GameConfig.standard π GameState.init (n + w)).board,
+      p.2 < GameConfig.standard.rows :=
+    (GameState.not_lost_iff_forall_row_lt GameConfig.standard _).mp hlive
+  have hcc := colCount_le_rows hif j
+  rw [GameConfig.standard_rows] at hcc
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
