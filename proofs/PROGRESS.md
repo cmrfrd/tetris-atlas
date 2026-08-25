@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25j) — the window is the well's crown (bank 163/N)
+
+- `I_shape_vertical_eq` — decide: a 4-row I is a single column
+  {(t,0)..(t,3)}, t < 4.
+- **`tetris_window_at_well_height`** — dropOffset = b.colHeight c₀ (sup
+  over the vertical column collapses to the height) and fullRows =
+  Icc(colHeight c₀, +3). The tetris anatomy is now fully geometric: piece
+  (vertical I), well column (unique, straight, 9-full rows), window
+  location (atop the well stack), feed (4 into c₀, 0 elsewhere), flow
+  (well nets 0, others −4).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25i) — the window sits at the drop offset (bank 162/N)
 
 - `shape_rows_eq_of_card_four` — decide: 4 distinct rows ⇒ rows {0,1,2,3}.

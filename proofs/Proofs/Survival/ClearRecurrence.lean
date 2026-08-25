@@ -2591,6 +2591,55 @@ theorem tetris_window_base {b : Board} {pl : Placement}
   rw [h4, Nat.card_Icc]
   omega
 
+/-- An I occupying four distinct rows is the vertical I: its shape is a
+single column of four cells. -/
+theorem I_shape_vertical_eq :
+    ∀ rot : Rotation,
+      ((Piece.I.shapeUp rot).image (fun c => c.2)).card = 4 →
+      ∃ t < 4, Piece.I.shapeUp rot
+        = ({(t, 0), (t, 1), (t, 2), (t, 3)} : Finset Coord) := by
+  decide
+
+/-- **The window is the well-stack's crown**: at a four-clear, the drop
+offset equals the well column's height, and the four clearing rows are
+exactly `[colHeight c₀, colHeight c₀ + 3]` — the tetris clears the four
+rows immediately atop the well stack, no more geometry left unpinned. -/
+theorem tetris_window_at_well_height {b : Board} {pl : Placement}
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    ∃ c₀ < 10, pl.dropOffset b = b.colHeight c₀
+      ∧ Board.fullRows GameConfig.standard (pl.place b)
+        = Finset.Icc (b.colHeight c₀) (b.colHeight c₀ + 3) := by
+  classical
+  have hI : pl.piece = Piece.I :=
+    tetris_requires_I (b := b) (pl := pl) hnf (by omega)
+  have hrows := four_clear_piece_rows_card hnf h4
+  have hrows' : ((Piece.I.shapeUp pl.rot).image (fun c => c.2)).card = 4 := by
+    unfold Placement.shapeUp at hrows
+    rw [hI] at hrows
+    exact hrows
+  obtain ⟨t, ht4, hshape⟩ := I_shape_vertical_eq pl.rot hrows'
+  have hshapeUp : pl.shapeUp
+      = ({(t, 0), (t, 1), (t, 2), (t, 3)} : Finset Coord) := by
+    unfold Placement.shapeUp
+    rw [hI]
+    exact hshape
+  have hc₀lt : pl.col + t < 10 := by
+    have hmem : (t, 0) ∈ pl.shapeUp := by
+      rw [hshapeUp]
+      simp
+    have h := hv (t, 0) hmem
+    rwa [GameConfig.standard_cols] at h
+  have hoff : pl.dropOffset b = b.colHeight (pl.col + t) := by
+    unfold Placement.dropOffset
+    rw [hshapeUp]
+    simp only [Finset.sup_insert, Finset.sup_singleton]
+    omega
+  refine ⟨pl.col + t, hc₀lt, hoff, ?_⟩
+  rw [← hoff]
+  exact tetris_window_base hnf h4
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
