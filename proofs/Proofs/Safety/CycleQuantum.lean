@@ -2772,5 +2772,37 @@ theorem survivor_orbit_card_ge {π : Policy GameConfig.standard}
         := (Set.ncard_coe_finset _).symm
     _ ≤ _ := Set.ncard_le_ncard hsub hfin
 
+/-- **The orbit ceiling**: a surviving orbit holds at most `2^207` states —
+its members embed into in-field boards paired with bags. With the
+35-state floor, every solution's minimal atlas is pinned to
+`35 ≤ |orbit| ≤ 2^207`. -/
+theorem survivor_orbit_card_le {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hs : SurvivesForever GameConfig.standard π GameState.init) :
+    (Set.range (trace GameConfig.standard π GameState.init)).ncard
+      ≤ 2 ^ 207 := by
+  classical
+  set f : InFieldBoard GameConfig.standard × Bag → GameState :=
+    fun q => GameState.mk q.1.val q.2 with hf
+  have hsub : Set.range (trace GameConfig.standard π GameState.init)
+      ⊆ Set.range f := by
+    rintro g ⟨n, rfl⟩
+    have hwf := trace_board_wf hv
+      (GameState.init_board_wf GameConfig.standard) n
+    have hif : ∀ p ∈ (trace GameConfig.standard π GameState.init n).board,
+        p.2 < GameConfig.standard.rows :=
+      (GameState.not_lost_iff_forall_row_lt GameConfig.standard _).mp (hs n)
+    exact ⟨(⟨(trace GameConfig.standard π GameState.init n).board, hwf, hif⟩,
+      (trace GameConfig.standard π GameState.init n).bag), rfl⟩
+  calc (Set.range (trace GameConfig.standard π GameState.init)).ncard
+      ≤ (Set.range f).ncard :=
+        Set.ncard_le_ncard hsub (Set.finite_range f)
+    _ ≤ (Set.univ : Set (InFieldBoard GameConfig.standard × Bag)).ncard := by
+        rw [← Set.image_univ]
+        exact Set.ncard_image_le Set.finite_univ
+    _ = 2 ^ 207 := by
+        rw [Set.ncard_univ, Nat.card_eq_fintype_card]
+        exact card_infield_times_bag
+
 end ClearRate
 end Tetris

@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25f) — the orbit ceiling (bank 159/N)
+
+- **`survivor_orbit_card_le`** — a surviving orbit's ncard ≤ 2^207
+  (embed into InFieldBoard × Bag, ncard_image_le + card_infield_times_bag).
+- Squeeze complete: 35 ≤ |minimal atlas| ≤ 2^207, both ends green.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25e) — the action alphabet is 240 (bank 158/N)
 
 - **`card_valid_placements`** — kernel decide: exactly 240 valid
