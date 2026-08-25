@@ -2670,6 +2670,30 @@ theorem tetris_well_depth {b : Board} {pl : Placement}
   have := Board.lt_colHeight hmem
   omega
 
+/-- **The well height cap**: on an in-field board, a tetris can only fire
+with its well at height sixteen or lower — the other nine columns must
+still fit their four extra rows under the twenty-row ceiling. A tetris is
+a mid-board event; there are no last-gasp tetrises off a full-height
+stack. -/
+theorem tetris_well_height_cap {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4)
+    (hif : ∀ p ∈ b, p.2 < GameConfig.standard.rows) :
+    ∃ c₀ < 10,
+      (∀ c < 10, c ≠ c₀ → b.colHeight c₀ + 4 ≤ b.colHeight c)
+      ∧ b.colHeight c₀ ≤ 16 := by
+  obtain ⟨c₀, hc₀lt, hdepth⟩ := tetris_well_depth hwf hv hnf h4
+  refine ⟨c₀, hc₀lt, hdepth, ?_⟩
+  set c := (c₀ + 1) % 10 with hc
+  have hclt : c < 10 := Nat.mod_lt _ (by omega)
+  have hcne : c ≠ c₀ := by omega
+  have h1 := hdepth c hclt hcne
+  have h2 := Board.colHeight_le_rows_of_in_field hif c
+  rw [GameConfig.standard_rows] at h2
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

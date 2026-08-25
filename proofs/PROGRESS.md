@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25l) — no last-gasp tetrises (bank 165/N)
+
+- **`tetris_well_height_cap`** — on an in-field board the tetris well
+  sits at height ≤ 16: the nine non-well columns must fit h+4 under the
+  20-row ceiling. A tetris is a mid-board event; you cannot tetris your
+  way out of a near-full stack whose well has climbed past 16.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25k) — the well outruns the skyline (bank 164/N)
 
 - **`tetris_well_depth`** — at a four-clear, colHeight c ≥ colHeight c₀
