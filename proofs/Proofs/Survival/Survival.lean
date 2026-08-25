@@ -1078,4 +1078,30 @@ theorem ClosedCycle.trace_range_finite {cfg : GameConfig}
     (Set.range (trace cfg C.policy g0)).Finite :=
   (C.states.finite_toSet).subset (C.trace_range_subset_states h0)
 
+/-- **Policy locality**: two policies agreeing on the first `n` visited
+states produce identical length-`n` traces — the trace never consults the
+policy off its own orbit. -/
+theorem trace_eq_of_policy_agree {cfg : GameConfig} {π π' : Policy cfg}
+    {g0 : GameState} {n : ℕ}
+    (hagree : ∀ k < n, π (trace cfg π g0 k) = π' (trace cfg π g0 k)) :
+    trace cfg π g0 n = trace cfg π' g0 n := by
+  induction n with
+  | zero => rfl
+  | succ k ih =>
+    have hk : trace cfg π g0 k = trace cfg π' g0 k :=
+      ih (fun j hj => hagree j (by omega))
+    rw [trace_succ, trace_succ, ← hk, hagree k (by omega)]
+
+/-- **Survival is a property of the visited orbit alone**: a policy that
+survives forever can be replaced by *any* policy agreeing with it on the
+states it actually visits — everything the Atlas must record is the orbit,
+and off-orbit values are free. -/
+theorem survivesForever_of_policy_agree {cfg : GameConfig}
+    {π π' : Policy cfg} {g0 : GameState}
+    (hagree : ∀ k, π (trace cfg π g0 k) = π' (trace cfg π g0 k))
+    (hs : SurvivesForever cfg π g0) : SurvivesForever cfg π' g0 := by
+  intro n
+  have h := hs n
+  rwa [trace_eq_of_policy_agree (fun k _ => hagree k)] at h
+
 end Tetris

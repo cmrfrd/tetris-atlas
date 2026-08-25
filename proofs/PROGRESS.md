@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25a) — policy locality (bank 154/N)
+
+- **`trace_eq_of_policy_agree`** — two policies agreeing on the first n
+  visited states produce identical length-n traces (cfg-general, any
+  seed).
+- **`survivesForever_of_policy_agree`** — survival transfers to any
+  policy agreeing on the visited orbit: off-orbit values are FREE. The
+  Atlas needs to record only the orbit — the formal license for
+  partial-function atlases.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24ak) — the clocks are adversary-proof (bank 153/N)
 
 - `adversarial_board_count_mod_ten` / `adversarial_board_count_even` —
