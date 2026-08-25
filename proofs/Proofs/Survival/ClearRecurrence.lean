@@ -2328,6 +2328,37 @@ theorem clear_free_column_feed_le {π : Policy GameConfig.standard}
   rw [GameConfig.standard_rows] at hcc
   omega
 
+/-- **The tetris column flow**: a four-clear is a no-op on its well column
+and a pure four-cell drain on each of the other nine — the well gains four
+from the I and loses four to the clears, while every other column is
+billed four rows it never restocked. In particular every non-well column
+held at least four cells going in. -/
+theorem tetris_step_column_flow {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    ∃ c₀ < 10,
+      (Placement.applyStep GameConfig.standard b pl).colCount c₀
+        = b.colCount c₀
+      ∧ ∀ j < 10, j ≠ c₀ →
+        (Placement.applyStep GameConfig.standard b pl).colCount j + 4
+          = b.colCount j := by
+  obtain ⟨c₀, hc₀lt, hc4, hz⟩ := tetris_feeds_single_column hwf hv hnf h4
+  have hlc : Board.linesCleared GameConfig.standard (pl.place b) = 4 := by
+    unfold Board.linesCleared
+    exact h4
+  refine ⟨c₀, hc₀lt, ?_, ?_⟩
+  · have h := applyStep_colCount GameConfig.standard b pl
+      (j := c₀) (by rw [GameConfig.standard_cols]; omega)
+    rw [hlc, hc4] at h
+    omega
+  · intro j hj hne
+    have h := applyStep_colCount GameConfig.standard b pl
+      (j := j) (by rw [GameConfig.standard_cols]; omega)
+    rw [hlc, hz j hj hne] at h
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

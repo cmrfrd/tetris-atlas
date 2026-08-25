@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-24af) — the tetris column flow (bank 148/N)
+
+- **`tetris_step_column_flow`** — a four-clear nets ZERO on its well
+  column (the I's four cells exactly pay the four clear-bills) and drains
+  exactly four cells from each of the other nine columns; hence every
+  non-well column held ≥ 4 going in. tetris_feeds_single_column +
+  applyStep_colCount, pure ledger arithmetic.
+- The cleanest statement yet of why tetrises are expensive: one tetris
+  spends 36 banked cells across the nine non-well columns.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-24ae) — tall pieces must clear (bank 147/N)
 
 - `cleared_window_sum` — window clears = sum of per-step fullRows cards.
