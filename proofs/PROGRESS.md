@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25aw) — more material, fewer clears (bank 202/N)
+
+- **`clears_not_monotone`** — kernel witness: b ⊂ b' but the same
+  placement clears {0} on b and ∅ on b' (the extra cell lifts the
+  landing past the row). Domination arguments over board inclusion are
+  formally dead — the deep reason the WQO route needed a non-inclusion
+  order.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25av) — clears read the holes (bank 201/N)
 
 - **`clears_not_surface_determined`** — kernel witness on a 2×4 config:

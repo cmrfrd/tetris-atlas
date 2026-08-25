@@ -3349,6 +3349,22 @@ theorem clears_not_surface_determined :
   · decide
   · decide
 
+/-- **More material can mean fewer clears**: adding one cell to a board
+can destroy a clear the same placement would have made — the extra cell
+lifts the landing above the row it would have completed. Clearing is not
+monotone in the board; kernel-checked witness. Any domination argument
+of the form "a fuller board clears at least as much" is dead on arrival. -/
+theorem clears_not_monotone :
+    ∃ (cfg : GameConfig) (b b' : Board) (pl : Placement),
+      b ⊆ b'
+      ∧ ¬ (Board.fullRows cfg (pl.place b)
+        ⊆ Board.fullRows cfg (pl.place b')) := by
+  refine ⟨⟨2, 8, by omega, by omega⟩,
+    ({(0, 0)} : Finset Coord), ({(0, 0), (1, 1)} : Finset Coord),
+    ⟨Piece.I, 1, 1⟩, ?_, ?_⟩
+  · decide
+  · decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
