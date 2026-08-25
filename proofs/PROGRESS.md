@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25at) — the skyline update, complete (bank 199/N)
+
+- **`place_unfed_colHeight_eq`** — an unfed column keeps its exact
+  height through the merge (empty dropped fiber, filter_union).
+- The placement skyline update is now fully determined: fed columns =
+  dropOffset + top cell + 1 exactly (batch 198); unfed columns
+  unchanged; clearing only lowers (GameplayExtra). The abstract
+  "surface" dynamics used by the Rust heuristics are certified.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25as) — the landing is exact (bank 198/N)
 
 - **`place_fed_colHeight_eq`** — post-place height of a fed column =

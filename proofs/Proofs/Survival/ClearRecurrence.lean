@@ -3286,6 +3286,26 @@ theorem place_fed_colHeight_eq {b : Board} {pl : Placement} {cell : Coord}
       exact ⟨cell, hcell, rfl⟩
     exact Board.lt_colHeight hmem
 
+/-- **Placing leaves unfed columns untouched**: a column the piece does
+not feed keeps its exact height through the merge — with
+`place_fed_colHeight_eq`, the complete skyline update of a placement is
+now determined column by column. -/
+theorem place_unfed_colHeight_eq {b : Board} {pl : Placement} {c : ℕ}
+    (hz : pl.colProfile c = 0) :
+    (pl.place b).colHeight c = b.colHeight c := by
+  classical
+  have hprof : ((pl.dropped b).filter (fun p => p.1 = c)).card
+      = pl.colProfile c := by
+    have hcc := Placement.colCount_cellsAt pl (pl.dropOffset b) c
+    unfold Board.colCount at hcc
+    unfold Placement.dropped
+    exact hcc
+  have hempty : (pl.dropped b).filter (fun p => p.1 = c) = ∅ :=
+    Finset.card_eq_zero.mp (by omega)
+  unfold Board.colHeight Board.colRows
+  rw [Placement.place_eq_union_dropped, Finset.filter_union, hempty,
+    Finset.union_empty]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
