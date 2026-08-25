@@ -2768,6 +2768,38 @@ theorem cleared_one_eq_zero (π : Policy GameConfig.standard) :
   simp only [cleared_zero]
   omega
 
+/-- A row never holds more cells than the whole board. -/
+theorem rowCount_le_count (b : Board) (r : ℕ) :
+    b.rowCount r ≤ b.count :=
+  Finset.card_le_card (Finset.filter_subset _ _)
+
+/-- **No clears in the opening two moves**: a cleared row needs six prior
+cells in one row, but after one placement the whole board holds only four —
+`cleared 2 = 0` for every valid policy. With `cleared_one_eq_zero`, the
+earliest a game can possibly clear is its third placement. -/
+theorem cleared_two_eq_zero {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) :
+    cleared GameConfig.standard π GameState.init 2 = 0 := by
+  classical
+  have h1 := cleared_one_eq_zero π
+  have hcount : (trace GameConfig.standard π GameState.init 1).board.count
+      = 4 := by
+    have h := init_ledger (cfg := GameConfig.standard) hv 1
+    rw [GameConfig.standard_cols, h1] at h
+    omega
+  have hnone : (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init 1)).place
+        (trace GameConfig.standard π GameState.init 1).board)) = ∅ := by
+    rw [Finset.eq_empty_iff_forall_notMem]
+    intro r hr
+    have hpre := cleared_row_pre_count_ge (cfg := GameConfig.standard) hr
+    rw [GameConfig.standard_cols] at hpre
+    have hle := rowCount_le_count
+      (trace GameConfig.standard π GameState.init 1).board r
+    omega
+  rw [show (2 : ℕ) = 1 + 1 from rfl, cleared_succ, hnone, Finset.card_empty,
+    h1]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

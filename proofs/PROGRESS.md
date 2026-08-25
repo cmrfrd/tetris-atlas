@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25o) — earliest clear is move three (bank 168/N)
+
+- `rowCount_le_count` — a row never beats the whole board.
+- **`cleared_two_eq_zero`** — cleared 2 = 0 for every valid policy: a
+  cleared row needs 6 prior cells in one row, the whole board holds 4
+  after one placement. The earliest possible clear is placement three
+  (and three flat pieces can achieve it: I+I+O).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25n) — the first move never clears (bank 167/N)
 
 - `no_clear_on_empty` — fullRows of any placement on Board.empty is ∅
