@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25am) — relief on traces, growth on adversarial (bank 192/N)
+
+- `adversarialTrace_succ_colHeight_le` — the ≤4/step skyline cap on
+  adversarial traces (move property, not chooser property).
+- **`trace_tetris_relief`** — past the seed, a four-clear trace step
+  exhibits two columns ≥ 4 apart in height.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25al) — the skyline climbs ≤ 4 per step (bank 191/N)
 
 - `applyStep_colHeight_le` — the full move (place + clear) lifts ≤ 4

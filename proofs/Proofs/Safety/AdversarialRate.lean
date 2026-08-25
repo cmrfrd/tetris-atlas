@@ -2790,5 +2790,14 @@ theorem adversarial_first_period_card {σ : Solver GameConfig.standard}
   by_contra hne
   exact adversarialTrace_ne_of_step_mod_ne hv hleg (by omega) hab
 
+/-- The skyline climbs at most four per step along any adversarial trace
+too — the growth cap is a property of the move, not of who chose it. -/
+theorem adversarialTrace_succ_colHeight_le {cfg : GameConfig}
+    {σ : Solver cfg} {s : ℕ → Piece} {g0 : GameState} (n j : ℕ) :
+    ∃ j', (adversarialTrace cfg σ s g0 (n + 1)).board.colHeight j
+      ≤ (adversarialTrace cfg σ s g0 n).board.colHeight j' + 4 := by
+  rw [adversarialTrace_succ, adversarialStep_board]
+  exact applyStep_colHeight_le j
+
 end ClearRate
 end Tetris

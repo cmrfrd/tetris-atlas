@@ -2935,5 +2935,20 @@ theorem survivor_orbit_card_le_return {cfg : GameConfig} {π : Policy cfg}
   rw [survivor_orbit_eq h12 hret, Set.ncard_coe_finset]
   exact le_trans Finset.card_image_le (le_of_eq (Finset.card_range n₂))
 
+/-- The tetris relief law, on traces: past the seed, a four-clear step
+exhibits two columns of the current board differing in height by at least
+four. -/
+theorem trace_tetris_relief {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ} (hm : 1 ≤ m)
+    (h4 : (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init m)).place
+        (trace GameConfig.standard π GameState.init m).board)).card = 4) :
+    ∃ j < 10, ∃ j' < 10,
+      (trace GameConfig.standard π GameState.init m).board.colHeight j + 4
+        ≤ (trace GameConfig.standard π GameState.init m).board.colHeight j' :=
+  tetris_relief_ge_four
+    (trace_board_wf hv (GameState.init_board_wf GameConfig.standard) m)
+    (hv _) (fun r => trace_board_no_full_of_pos hm r) h4
+
 end ClearRate
 end Tetris
