@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25d) — the 35-state floor (bank 157/N)
+
+- **`trace_ne_of_step_mod_ne`** — indices disagreeing mod 35 give
+  DISTINCT states (their worn clocks disagree — contrapositive of the
+  CRT law).
+- `trace_first_period_card` — the 35 opening states of any legal trace
+  are pairwise distinct.
+- **`survivor_orbit_card_ge`** — a surviving orbit has ncard ≥ 35: with
+  batch 155, the minimal atlas is squeezed between 35 and finite.
+- Lean note: it's Set.ncard_coe_finset (lowercase f) in this Mathlib.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25c) — the finite invariant IS the certificate (bank 156/N)
 
 - **`survivor_finite_invariant`** — every cooperative survivor yields a

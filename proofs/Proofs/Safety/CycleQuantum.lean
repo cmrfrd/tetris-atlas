@@ -2715,5 +2715,62 @@ theorem survivesForever_of_invariant {cfg : GameConfig} {π : Policy cfg}
   intro n
   exact hsafe _ (hmem n)
 
+/-- **Off-phase states are distinct**: two trace states at indices that
+disagree mod 35 are different states — the clocks they wear disagree. -/
+theorem trace_ne_of_step_mod_ne {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) {m n : ℕ}
+    (hmn : m % 35 ≠ n % 35) :
+    trace GameConfig.standard π GameState.init m
+      ≠ trace GameConfig.standard π GameState.init n := by
+  intro heq
+  apply hmn
+  apply trace_state_reveals_step_mod_thirtyfive hv hv hdraw hdraw
+  · rw [heq]
+  · rw [heq]
+
+/-- **The first period never repeats a state**: the 35 opening states of
+any legal trace are pairwise distinct. -/
+theorem trace_first_period_card {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) :
+    ((Finset.range 35).image
+      (trace GameConfig.standard π GameState.init)).card = 35 := by
+  rw [Finset.card_image_of_injOn, Finset.card_range]
+  intro a ha b hb hab
+  simp only [Finset.mem_coe, Finset.mem_range] at ha hb
+  by_contra hne
+  exact trace_ne_of_step_mod_ne hv hdraw (by omega) hab
+
+/-- **Every solution carries at least thirty-five states**: a surviving
+orbit is finite (`survivor_orbit_finite`) but never smaller than one full
+period — the minimal atlas of any solution has between 35 and finitely
+many entries, floor included. -/
+theorem survivor_orbit_card_ge {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag)
+    (hs : SurvivesForever GameConfig.standard π GameState.init) :
+    35 ≤ (Set.range (trace GameConfig.standard π GameState.init)).ncard := by
+  have hfin := survivor_orbit_finite hv hs
+  have himg := trace_first_period_card hv hdraw
+  have hsub : (((Finset.range 35).image
+      (trace GameConfig.standard π GameState.init)) : Set GameState)
+      ⊆ Set.range (trace GameConfig.standard π GameState.init) := by
+    intro g hg
+    simp only [Finset.coe_image, Set.mem_image, Finset.mem_coe,
+      Finset.mem_range] at hg
+    obtain ⟨m, -, rfl⟩ := hg
+    exact ⟨m, rfl⟩
+  calc (35 : ℕ)
+      = ((Finset.range 35).image
+          (trace GameConfig.standard π GameState.init)).card := himg.symm
+    _ = (((Finset.range 35).image
+          (trace GameConfig.standard π GameState.init)) : Set GameState).ncard
+        := (Set.ncard_coe_finset _).symm
+    _ ≤ _ := Set.ncard_le_ncard hsub hfin
+
 end ClearRate
 end Tetris
