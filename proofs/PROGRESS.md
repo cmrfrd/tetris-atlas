@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25ao) — the tetris train law (bank 194/N)
+
+- **`tetris_train_law`** — 40·(tetrises in any w-window) ≤ count(start)
+  + 4w: bursts are financed by the starting bank plus per-move income.
+  Generalizes the pair law to arbitrary trains (mix_window_identity +
+  two ledgers, omega).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25an) — the tetris pair law (bank 193/N)
 
 - **`tetris_pair_mass_law`** — 76 ≤ count(m) + 4·(m'−m) for any two

@@ -973,5 +973,25 @@ theorem first_clear_by_fifty_one {π : Policy GameConfig.standard}
   have hfloor := live_clear_floor hv hlive
   omega
 
+/-- **The tetris train law**: any `t` tetrises inside a `w`-move window
+cost `40t ≤ count(start) + 4w` — a train of tetrises is financed by the
+banked mass at the window's start plus the four-cells-a-move income, so
+trains are as long as the bank is deep and no longer. Generalizes the
+pair law to arbitrary bursts. -/
+theorem tetris_train_law {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (m w : ℕ) :
+    40 * (sizeCount GameConfig.standard π GameState.init 4 (m + w)
+        - sizeCount GameConfig.standard π GameState.init 4 m)
+      ≤ (trace GameConfig.standard π GameState.init m).board.count
+        + 4 * w := by
+  have hmix := mix_window_identity (cfg := GameConfig.standard) (π := π)
+    (Nat.le_add_right m w)
+  have hled := init_ledger (cfg := GameConfig.standard) hv m
+  have hled' := init_ledger (cfg := GameConfig.standard) hv (m + w)
+  rw [GameConfig.standard_cols] at hled hled'
+  have hclm := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right m w)
+  omega
+
 end ClearRate
 end Tetris
