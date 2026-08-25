@@ -41629,6 +41629,23 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25q) — the opening schedule is adversary-proof (bank 170/N)
+
+- **`adversarial_earliest_clear_law`** — 10k ≤ 4n + 4 per drop, any
+  stream.
+- `adversarial_cleared_two_eq_zero` — ledger-only one-liner: count(2) +
+  10·cleared(2) = 8 forces zero (simpler than the step-bound route the
+  cooperative twin took).
+- **`adversarial_earliest_tetris_step`** — no tetris before step nine
+  against any stream.
+- Lean note: numeral index atoms (`clearedAdv (1+1)` vs `clearedAdv 2`)
+  don't unify under omega; prefer single-ledger proofs over chaining
+  succ equations across indices.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25p) — the opening clear schedule (bank 169/N)
 
 - **`earliest_clear_law`** — 10k ≤ 4m + 4 at every step: singles

@@ -2678,5 +2678,51 @@ theorem adversarial_state_reveals_step_mod_thirtyfive
   have hm2 := adversarial_board_count_mod_ten hv' n
   omega
 
+/-- **The opening clear schedule is adversary-proof**: whatever the stream,
+a step-`n` drop clears `k` rows only if `10k ≤ 4n + 4`. -/
+theorem adversarial_earliest_clear_law {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (n : ℕ) :
+    10 * (Board.fullRows GameConfig.standard
+        (({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+            (s n) with piece := s n } : Placement).place
+          (adversarialTrace GameConfig.standard σ s GameState.init n).board)).card
+      ≤ 4 * n + 4 := by
+  have hstep := clearAdv_step_le hv n
+  have hsucc := clearedAdv_succ GameConfig.standard σ s GameState.init n
+  have hled := clearedAdv_ledger (cfg := GameConfig.standard)
+    (GameState.init_board_wf GameConfig.standard) hv n
+  rw [GameConfig.standard_cols, GameState.init_board_count] at hled
+  omega
+
+/-- No adversary sees a clear in the opening two moves. -/
+theorem adversarial_cleared_two_eq_zero {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard) :
+    clearedAdv GameConfig.standard σ s GameState.init 2 = 0 := by
+  have hled := clearedAdv_ledger (cfg := GameConfig.standard)
+    (GameState.init_board_wf GameConfig.standard) hv 2
+  rw [GameConfig.standard_cols, GameState.init_board_count] at hled
+  omega
+
+/-- **No adversarially dealt tetris before step nine** either: the
+thirty-six-cell bill is stream-independent. -/
+theorem adversarial_earliest_tetris_step {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {n : ℕ}
+    (h4 : (Board.fullRows GameConfig.standard
+        (({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+            (s n) with piece := s n } : Placement).place
+          (adversarialTrace GameConfig.standard σ s
+            GameState.init n).board)).card = 4) :
+    9 ≤ n := by
+  have h := adversarial_earliest_clear_law hv n
+  omega
+
 end ClearRate
 end Tetris
