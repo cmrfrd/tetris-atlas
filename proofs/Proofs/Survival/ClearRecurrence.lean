@@ -2856,6 +2856,34 @@ theorem earliest_tetris_needs_dry_opening {π : Policy GameConfig.standard}
   have h := tetris_dry_opening hv h4
   omega
 
+/-- **Live games must clear**: at any live step, `4m ≤ 10·cleared + 200` —
+the delivered mass has nowhere to stand but the 200-cell board and the
+clearing ledger. The floor to `cleared ≤ 2m/5`'s ceiling, valid at every
+step (not only bag boundaries). -/
+theorem live_clear_floor {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init m).lost
+      GameConfig.standard) :
+    4 * m ≤ 10 * cleared GameConfig.standard π GameState.init m + 200 := by
+  have hled := init_ledger (cfg := GameConfig.standard) hv m
+  rw [GameConfig.standard_cols] at hled
+  have hcap := count_lt_two_hundred_one hv hlive
+  omega
+
+/-- **The clearing pinch**: every live game's cleared total is trapped in
+the band `(4m − 200)/10 ≤ cleared ≤ 4m/10` — a window of exactly twenty
+rows around the exact `0.4`-per-move line, at every horizon. -/
+theorem cleared_pinch {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init m).lost
+      GameConfig.standard) :
+    4 * m ≤ 10 * cleared GameConfig.standard π GameState.init m + 200
+      ∧ 10 * cleared GameConfig.standard π GameState.init m ≤ 4 * m := by
+  have hled := init_ledger (cfg := GameConfig.standard) hv m
+  rw [GameConfig.standard_cols] at hled
+  have hcap := count_lt_two_hundred_one hv hlive
+  exact ⟨by omega, by omega⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

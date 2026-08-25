@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25u) — the clearing pinch (bank 174/N)
+
+- **`live_clear_floor`** — 4m ≤ 10·cleared + 200 at every live step:
+  live games MUST clear (delivered mass has nowhere else to stand).
+- **`cleared_pinch`** — two-sided: cleared trapped in the 20-row window
+  around the 0.4/move line, per step (generalizes the 7m-only bounds).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25t) — the universal clearing speed limit (bank 173/N)
 
 - **`cleared_le_two_fifths`** — 5·cleared(m) ≤ 2m always: 2/5 rows/move
