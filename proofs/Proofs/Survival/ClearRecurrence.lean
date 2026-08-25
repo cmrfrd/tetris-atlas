@@ -3482,6 +3482,30 @@ theorem survivesForever_of_headroom {cfg : GameConfig} {π : Policy cfg}
   rw [GameState.not_lost_iff_forall_row_lt]
   exact hif n
 
+/-- One live step under headroom stays live. -/
+theorem step_live_of_headroom {cfg : GameConfig} {g : GameState}
+    {pl : Placement} (hlive : ¬ g.lost cfg)
+    (hsky : ∀ cell ∈ pl.shapeUp,
+      g.board.colHeight (pl.col + cell.1) + 4 ≤ cfg.rows) :
+    ¬ (g.step cfg pl).lost cfg := by
+  rw [GameState.not_lost_iff_forall_row_lt] at hlive ⊢
+  rw [GameState.step_board]
+  exact applyStep_safe_of_low_skyline hlive hsky
+
+/-- **Death requires a high column**: a live state that loses on its next
+move must have dropped onto a column within four rows of the ceiling —
+every top-out is a drop into a nearly-full column, never an accident of a
+low board. The complete diagnosis of the loss event. -/
+theorem lost_step_requires_high_column {cfg : GameConfig} {g : GameState}
+    {pl : Placement} (hlive : ¬ g.lost cfg)
+    (hlost : (g.step cfg pl).lost cfg) :
+    ∃ cell ∈ pl.shapeUp,
+      cfg.rows < g.board.colHeight (pl.col + cell.1) + 4 := by
+  by_contra hcon
+  push Not at hcon
+  exact step_live_of_headroom hlive
+    (fun cell hcell => hcon cell hcell) hlost
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

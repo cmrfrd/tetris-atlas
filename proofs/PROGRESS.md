@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25bb) — death requires a high column (bank 207/N)
+
+- `step_live_of_headroom` — one live step under headroom stays live
+  (GameState-level, any state).
+- **`lost_step_requires_high_column`** — a live state that loses on its
+  next move dropped onto a column within 4 rows of the ceiling: every
+  top-out is diagnosed.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25ba) — perpetual headroom is survival (bank 206/N)
 
 - **`survivesForever_of_headroom`** — a policy that, at every reached
