@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25av) — clears read the holes (bank 201/N)
+
+- **`clears_not_surface_determined`** — kernel witness on a 2×4 config:
+  a solid 2-stack and its holey skyline-twin land the vertical I
+  identically but clear {0,1} vs {1}. Companion negative to batch 200:
+  the drop is surface-determined, the clears are NOT. This is the
+  formal floor under the holey-carrier verdict (surface-only carriers
+  cannot track the ledger).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25au) — placement is surface-determined (bank 200/N)
 
 - `dropOffset_eq_of_colHeight_eq` / **`dropped_eq_of_colHeight_eq`** —

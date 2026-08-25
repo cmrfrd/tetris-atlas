@@ -3329,6 +3329,26 @@ theorem dropped_eq_of_colHeight_eq {b b' : Board} {pl : Placement}
   unfold Placement.dropped
   rw [dropOffset_eq_of_colHeight_eq h]
 
+/-- **Clearing is NOT surface-determined**: two boards with identical
+skylines and identical landed cells can clear *different* rows — a
+kernel-checked witness (a solid 2-stack versus the same stack with a
+buried hole; the vertical I completes two rows on one and only one on the
+other). The exact complement of `dropped_eq_of_colHeight_eq`: the piece
+reads only the surface, but the clears read the holes. Any faithful
+surface-only abstraction of Tetris must therefore lose the clear ledger. -/
+theorem clears_not_surface_determined :
+    ∃ (cfg : GameConfig) (b b' : Board) (pl : Placement),
+      (∀ j, j < cfg.cols → b.colHeight j = b'.colHeight j)
+      ∧ pl.dropped b = pl.dropped b'
+      ∧ Board.fullRows cfg (pl.place b)
+        ≠ Board.fullRows cfg (pl.place b') := by
+  refine ⟨⟨2, 4, by omega, by omega⟩,
+    ({(0, 0), (0, 1)} : Finset Coord), ({(0, 1)} : Finset Coord),
+    ⟨Piece.I, 1, 1⟩, ?_, ?_, ?_⟩
+  · decide
+  · decide
+  · decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
