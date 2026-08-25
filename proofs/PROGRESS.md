@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25y) — the loop has exactly 35 states (bank 178/N)
+
+- `cycle_states_determined` — trace m = trace(n + (m−n)%35) past the
+  loop point (cfg-general).
+- **`cycle_period_states_card`** — the period's 35 states are pairwise
+  DISTINCT (clock disagreement). Together: every survivor's tail is a
+  loop of exactly 35 states; the ≥35 orbit floor is attained by the loop
+  and everything else is transient prefix. Structure of every solution:
+  finite ramp + 35-state wheel.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25x) — a cycle is a 35-letter word (bank 177/N)
 
 - `cycle_placement_periodic` — the played placement is 35-periodic on

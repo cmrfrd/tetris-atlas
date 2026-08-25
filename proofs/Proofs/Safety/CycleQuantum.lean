@@ -2827,5 +2827,34 @@ theorem cycle_actions_determined {cfg : GameConfig} {π : Policy cfg}
   rw [show n + (m - n) / 35 * 35 + (m - n) % 35 = m by omega] at h
   rw [← h]
 
+/-- Past the loop point, the state at any index is the state at its phase
+in the first period. -/
+theorem cycle_states_determined {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState} {n : ℕ}
+    (hcyc : trace cfg π g0 n = trace cfg π g0 (n + 35)) {m : ℕ}
+    (hnm : n ≤ m) :
+    trace cfg π g0 m = trace cfg π g0 (n + (m - n) % 35) := by
+  have hmul := trace_period_multiples π g0 hcyc ((m - n) / 35)
+  have h := trace_eq_of_state_eq π g0 hmul ((m - n) % 35)
+  rw [show n + (m - n) / 35 * 35 + (m - n) % 35 = m by omega] at h
+  exact h.symm
+
+/-- **The eventual loop has exactly thirty-five states**: the 35 states of
+a cycle's period are pairwise distinct — their clocks disagree — so with
+`cycle_states_determined` every survivor's tail is a loop of *exactly* 35
+states: the orbit floor of `survivor_orbit_card_ge` is attained by the
+loop itself, and everything beyond 35 is transient prefix. -/
+theorem cycle_period_states_card {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) (n : ℕ) :
+    ((Finset.range 35).image (fun k =>
+      trace GameConfig.standard π GameState.init (n + k))).card = 35 := by
+  rw [Finset.card_image_of_injOn, Finset.card_range]
+  intro a ha b hb hab
+  simp only [Finset.mem_coe, Finset.mem_range] at ha hb
+  by_contra hne
+  exact trace_ne_of_step_mod_ne hv hdraw (by omega) hab
+
 end ClearRate
 end Tetris
