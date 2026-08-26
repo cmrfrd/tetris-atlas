@@ -5229,6 +5229,67 @@ theorem exists_jump_of_lt {f : ℕ → ℕ} {N w : ℕ} (h : f N < f (N + w)) :
   have hw := hflat w (le_refl w)
   omega
 
+/-- Clearing steps never decrease. -/
+theorem clearingSteps_mono {cfg : GameConfig} {π : Policy cfg} :
+    Monotone (clearingSteps cfg π GameState.init) := by
+  apply monotone_nat_of_le_succ
+  intro n
+  rw [clearingSteps_succ]
+  exact Nat.le_add_right _ _
+
+/-- Windowed pricing of clearing steps, upper side: over any window the
+rows cleared are at most four per clearing step of the window. -/
+theorem cleared_window_le_four_mul_clearingSteps {cfg : GameConfig}
+    {π : Policy cfg} (n : ℕ) :
+    ∀ w, cleared cfg π GameState.init (n + w)
+        - cleared cfg π GameState.init n
+      ≤ 4 * (clearingSteps cfg π GameState.init (n + w)
+          - clearingSteps cfg π GameState.init n) := by
+  intro w
+  induction w with
+  | zero => simp
+  | succ k ih =>
+    have h4 := fullRows_card_le_four (cfg := cfg) (π := π) (n + k)
+    have hc := cleared_succ cfg π GameState.init (n + k)
+    have hcs := clearingSteps_succ cfg π GameState.init (n + k)
+    have hm1 := cleared_mono cfg π GameState.init (Nat.le_add_right n k)
+    have hms := clearingSteps_mono (cfg := cfg) (π := π)
+      (Nat.le_add_right n k)
+    rw [show n + (k + 1) = (n + k) + 1 by omega]
+    by_cases hpos : 0 < (Board.fullRows cfg
+        ((π (trace cfg π GameState.init (n + k))).place
+          (trace cfg π GameState.init (n + k)).board)).card
+    · rw [if_pos hpos] at hcs
+      omega
+    · rw [if_neg hpos] at hcs
+      omega
+
+/-- Windowed pricing of clearing steps, lower side: over any window each
+clearing step clears at least one row. -/
+theorem clearingSteps_window_le_cleared {cfg : GameConfig}
+    {π : Policy cfg} (n : ℕ) :
+    ∀ w, clearingSteps cfg π GameState.init (n + w)
+        - clearingSteps cfg π GameState.init n
+      ≤ cleared cfg π GameState.init (n + w)
+        - cleared cfg π GameState.init n := by
+  intro w
+  induction w with
+  | zero => simp
+  | succ k ih =>
+    have hc := cleared_succ cfg π GameState.init (n + k)
+    have hcs := clearingSteps_succ cfg π GameState.init (n + k)
+    have hm1 := cleared_mono cfg π GameState.init (Nat.le_add_right n k)
+    have hms := clearingSteps_mono (cfg := cfg) (π := π)
+      (Nat.le_add_right n k)
+    rw [show n + (k + 1) = (n + k) + 1 by omega]
+    by_cases hpos : 0 < (Board.fullRows cfg
+        ((π (trace cfg π GameState.init (n + k))).place
+          (trace cfg π GameState.init (n + k)).board)).card
+    · rw [if_pos hpos] at hcs
+      omega
+    · rw [if_neg hpos] at hcs
+      omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

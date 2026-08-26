@@ -3022,5 +3022,25 @@ theorem cycle_full_width_moment {π : Policy GameConfig.standard}
   obtain ⟨k, hk, hjump⟩ := cycle_clear_moment hv hcyc hm
   exact ⟨k, hk, clearing_move_spans_board hjump⟩
 
+/-- **The cycle's clearing-piece census**: every 35-window of a cycle
+contains between four and fourteen clearing moments — fourteen rows at
+one-to-four per clearing step. A closed orbit spends between 11% and 40%
+of its moves clearing. -/
+theorem cycle_clearing_steps_bracket {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) :
+    4 ≤ clearingSteps GameConfig.standard π GameState.init (m₀ + 35)
+        - clearingSteps GameConfig.standard π GameState.init m₀
+      ∧ clearingSteps GameConfig.standard π GameState.init (m₀ + 35)
+        - clearingSteps GameConfig.standard π GameState.init m₀ ≤ 14 := by
+  have hex := cycle_window_clears_exact hv hcyc hm
+  have hup := cleared_window_le_four_mul_clearingSteps
+    (cfg := GameConfig.standard) (π := π) m₀ 35
+  have hlo := clearingSteps_window_le_cleared
+    (cfg := GameConfig.standard) (π := π) m₀ 35
+  omega
+
 end ClearRate
 end Tetris

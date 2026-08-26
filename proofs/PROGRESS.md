@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26as) — the cycle's clearing census (bank 264/N)
+
+- **`clearingSteps_mono`** + windowed pricing both sides:
+  `cleared_window_le_four_mul_clearingSteps`,
+  `clearingSteps_window_le_cleared` (windowed forms of the global
+  1/10–2/5 band machinery).
+- **`cycle_clearing_steps_bracket`** — every 35-window of a cycle has
+  between FOUR and FOURTEEN clearing moments: 14 rows at 1–4 per step.
+- Gotcha: `rw [hcs] at *` + `split at hcs` self-destructs (rewrites hcs
+  into triviality); use `by_cases hpos` + `rw [if_pos/if_neg] at hcs`.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26ar) — cycles show full width every period (bank 263/N)
 
 - **`exists_jump_of_lt`** — general jump extraction for ANY counter:
