@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25bl) — holes survive clear-free steps (bank 217/N)
+
+- **`hole_persists_step`** — a clear-free applyStep keeps a covered
+  empty cell both empty and covered (clearLines_eq_self_of_no_fullRows
+  + place persistence + height monotonicity). The step form of the
+  hole-debt monotone: debt cannot fall without a clear.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25bk) — a hole blocks its row (bank 216/N)
 
 - **`hole_blocks_row`** — a row with a covered empty cell can never be

@@ -3733,6 +3733,26 @@ theorem hole_blocks_row {cfg : GameConfig} {b : Board} {pl : Placement}
   have hfull := Board.isFull_of_mem_fullRows hmem
   exact hole_persists_place hempty hr (hfull c (Finset.mem_range.mpr hc))
 
+/-- **A clear-free move carries every hole forward as a hole**: if the
+step completes no rows, a covered empty cell is still empty and still
+covered afterwards — hole-count is non-decreasing along clear-free play,
+the step form of the hole-debt monotone. -/
+theorem hole_persists_step {cfg : GameConfig} {b : Board} {pl : Placement}
+    {c r : ℕ} (hempty : (c, r) ∉ b) (hr : r < b.colHeight c)
+    (hnc : Board.fullRows cfg (pl.place b) = ∅) :
+    (c, r) ∉ Placement.applyStep cfg b pl
+      ∧ r < (Placement.applyStep cfg b pl).colHeight c := by
+  have hid : Placement.applyStep cfg b pl = pl.place b := by
+    unfold Placement.applyStep
+    exact Board.clearLines_eq_self_of_no_fullRows cfg hnc
+  rw [hid]
+  refine ⟨hole_persists_place hempty hr, ?_⟩
+  have hsub : b ⊆ pl.place b := by
+    rw [Placement.place_eq_union_dropped]
+    exact Finset.subset_union_left
+  have hmono := colHeight_mono hsub c
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
