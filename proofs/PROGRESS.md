@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26a) — the bag-card clock from any seed (bank 220/N)
+
+- **`bagAt_card_clock`** — (|bag| + n) mod 7 is invariant along any
+  legal stream from any initial bag. Generalizes batch 150's full-start
+  clock; card-1 refill case + countdown case.
+- Lean note: `bagAt_card_countdown hl rfl 1 (by omega)` leaves {n}
+  unresolved when elaborating the nested omega — pin (n := k) named.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25bn) — the refill calendar (bank 219/N)
 
 - **`bagAt_refill_schedule`** — a bag of size c at step n is full at

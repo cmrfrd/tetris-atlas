@@ -1246,5 +1246,28 @@ theorem bagAt_refill_schedule {initBag : Bag} {s : ℕ → Piece}
     rw [show n + c + 7 * (k + 1) = n + c + 7 * k + 7 by ring]
     exact h7
 
+/-- **The bag-card clock, from any seed**: along any legal stream,
+`|bag| + n` is constant modulo seven — draws tick the clock down one,
+refills wind it up exactly seven. Generalizes `bagAt_card` (which pinned
+the full-bag start) to arbitrary initial bags. -/
+theorem bagAt_card_clock {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) :
+    ∀ n, ((bagAt initBag s n).card + n) % 7 = initBag.card % 7 := by
+  intro n
+  induction n with
+  | zero => simp
+  | succ k ih =>
+    have hne : (bagAt initBag s k).Nonempty := ⟨s k, hl k⟩
+    have hc1 : 1 ≤ (bagAt initBag s k).card := Finset.card_pos.mpr hne
+    by_cases hone : (bagAt initBag s k).card = 1
+    · have hfull : bagAt initBag s (k + 1) = Bag.full := by
+        have h := bagAt_add_card_eq_full hl 1 k hone
+        simpa using h
+      rw [hfull, Bag.full_card]
+      rw [hone] at ih
+      omega
+    · have hcd := bagAt_card_countdown hl (n := k) rfl 1 (by omega)
+      omega
+
 end BagCadence
 end Tetris
