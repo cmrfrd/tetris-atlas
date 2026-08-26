@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26u) — the exact hole-genesis formula (bank 240/N)
+
+- **`colHoles_place_eq`** — Δholes(fed column) = (fiber bottom m) −
+  (old height), EXACTLY: fiber = Icc m M via contiguity, disjoint union
+  cards, height' = M + 1 pinched. Batch 230's ≥ upgraded to equality.
+- Lean note: don't embed min'-with-proof terms in STATEMENTS (isDefEq
+  timeout) — parameterize the extremum with characterizing hypotheses.
+- Milestone: 240 batches, 48%.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26t) — the debt-free harvest (bank 239/N)
 
 - **`tetris_no_new_holes`** — holes(after) ≤ holes(before) at every

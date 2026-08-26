@@ -4543,6 +4543,99 @@ theorem tetris_no_new_holes {b : Board} {pl : Placement}
     exact holes_clearLines_le GameConfig.standard (pl.place b)
   omega
 
+/-- **The exact hole-genesis formula**: a fed column's hole count grows by
+precisely its landing gap — the space between the old stack top and the
+lowest landed cell. Holes are not merely bounded; every placement's hole
+bill is computed to the cell: `Δholes = (bottom of fiber) − (old height)`
+per fed column, zero for the rest. -/
+theorem colHoles_place_eq {b : Board} {pl : Placement} {j m : ℕ}
+    (hmem : (j, m) ∈ pl.dropped b)
+    (hmin : ∀ r, (j, r) ∈ pl.dropped b → m ≤ r) :
+    Board.colHoles (pl.place b) j
+      = Board.colHoles b j + (m - b.colHeight j) := by
+  classical
+  set F := ((pl.dropped b).filter (fun p => p.1 = j)).image (fun p => p.2)
+    with hF
+  have hput : ∀ r, (j, r) ∈ pl.dropped b → r ∈ F := by
+    intro r hr
+    rw [hF, Finset.mem_image]
+    exact ⟨(j, r), Finset.mem_filter.mpr ⟨hr, rfl⟩, rfl⟩
+  have hFne : F.Nonempty := ⟨m, hput m hmem⟩
+  set M := F.max' hFne with hM
+  have hget : ∀ r ∈ F, (j, r) ∈ pl.dropped b := by
+    intro r hr
+    rw [hF, Finset.mem_image] at hr
+    obtain ⟨q, hq, rfl⟩ := hr
+    rw [Finset.mem_filter] at hq
+    have hqe : q = (j, q.2) := Prod.ext hq.2 rfl
+    rw [← hqe]
+    exact hq.1
+  have h_hm : b.colHeight j ≤ m :=
+    dropped_above_own_column (j, m) hmem
+  have hmM : m ≤ M := hmin M (hget _ (Finset.max'_mem _ _))
+  -- F is the interval [m, M]
+  have hFIcc : F = Finset.Icc m M := by
+    apply Finset.Subset.antisymm
+    · intro r hr
+      rw [Finset.mem_Icc]
+      exact ⟨hmin r (hget _ hr), Finset.le_max' _ _ hr⟩
+    · intro r hr
+      rw [Finset.mem_Icc] at hr
+      apply hput
+      exact dropped_fiber_contiguous (b := b) (pl := pl)
+        hmem (hget _ (Finset.max'_mem F hFne)) rfl hr.1 hr.2
+  have hFcard : F.card = M - m + 1 := by
+    rw [hFIcc, Nat.card_Icc]
+    omega
+  -- colRows of place = colRows b ∪ F
+  have hunion : (pl.place b).colRows j = b.colRows j ∪ F := by
+    unfold Board.colRows
+    rw [Placement.place_eq_union_dropped, Finset.filter_union,
+      Finset.image_union]
+  have hdisj : Disjoint (b.colRows j) F := by
+    rw [Finset.disjoint_left]
+    intro r hr hrF
+    have h1 : r < b.colHeight j := by
+      unfold Board.colRows at hr
+      rw [Finset.mem_image] at hr
+      obtain ⟨q, hq, rfl⟩ := hr
+      rw [Finset.mem_filter] at hq
+      have hqe : q = (j, q.2) := Prod.ext hq.2 rfl
+      exact Board.lt_colHeight (by rw [← hqe] at *; exact hq.1)
+    have h2 : b.colHeight j ≤ r :=
+      dropped_above_own_column (j, r) (hget _ hrF)
+    omega
+  have hcard' : ((pl.place b).colRows j).card
+      = (b.colRows j).card + F.card := by
+    rw [hunion, Finset.card_union_of_disjoint hdisj]
+  -- height of place = M + 1
+  have hub : (pl.place b).colHeight j ≤ M + 1 := by
+    unfold Board.colHeight
+    apply Finset.sup_le
+    intro r hr
+    rw [hunion, Finset.mem_union] at hr
+    rcases hr with hr | hr
+    · have h1 : r < b.colHeight j := by
+        unfold Board.colRows at hr
+        rw [Finset.mem_image] at hr
+        obtain ⟨q, hq, rfl⟩ := hr
+        rw [Finset.mem_filter] at hq
+        have hqe : q = (j, q.2) := Prod.ext hq.2 rfl
+        exact Board.lt_colHeight (by rw [← hqe] at *; exact hq.1)
+      change r + 1 ≤ M + 1
+      omega
+    · have := Finset.le_max' _ _ hr
+      change r + 1 ≤ M + 1
+      omega
+  have hlb : M < (pl.place b).colHeight j := by
+    have hmem : (j, M) ∈ pl.place b := by
+      rw [Placement.place_eq_union_dropped, Finset.mem_union]
+      exact Or.inr (hget _ (Finset.max'_mem _ _))
+    exact Board.lt_colHeight hmem
+  have hcards := Board.colRows_card_le_colHeight b j
+  unfold Board.colHoles
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
