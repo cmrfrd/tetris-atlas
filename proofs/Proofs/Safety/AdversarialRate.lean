@@ -2891,5 +2891,120 @@ theorem adversarial_holes_ledger_cap {σ : Solver GameConfig.standard}
   rw [GameConfig.standard_cols, GameState.init_board_count] at hled
   omega
 
+/-- **The window ledger is adversary-proof**: over `w` forced drops
+confined to the adjacent pair `(j, j+1)`, the pair's cell count plus
+twice the rows cleared equals its start plus `4w` — whoever deals the
+pieces. -/
+theorem adversarial_window_feed_ledger {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {n j : ℕ} (hj : j + 1 < 10) :
+    ∀ w, (∀ k < w,
+      ∀ cell ∈ ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).shapeUp,
+        ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).col + cell.1 = j
+        ∨ ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).col + cell.1 = j + 1) →
+      (adversarialTrace GameConfig.standard σ s GameState.init
+          (n + w)).board.colCount j
+        + (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + w)).board.colCount (j + 1)
+        + 2 * (clearedAdv GameConfig.standard σ s GameState.init (n + w)
+            - clearedAdv GameConfig.standard σ s GameState.init n)
+      = (adversarialTrace GameConfig.standard σ s GameState.init
+          n).board.colCount j
+        + (adversarialTrace GameConfig.standard σ s GameState.init
+            n).board.colCount (j + 1)
+        + 4 * w := by
+  intro w
+  induction w with
+  | zero =>
+    intro _
+    simp
+  | succ k ih =>
+    intro hcells
+    have hihk := ih (fun i hi => hcells i (by omega))
+    have hm1 := clearedAdv_mono GameConfig.standard σ s GameState.init
+      (Nat.le_add_right n k)
+    have hm2 := clearedAdv_mono GameConfig.standard σ s GameState.init
+      (show n + k ≤ (n + k) + 1 by omega)
+    have hs := clearedAdv_succ GameConfig.standard σ s GameState.init (n + k)
+    have ha1 := applyStep_colCount GameConfig.standard
+      (adversarialTrace GameConfig.standard σ s GameState.init (n + k)).board
+      ({ σ (adversarialTrace GameConfig.standard σ s GameState.init (n + k))
+          (s (n + k)) with piece := s (n + k) })
+      (j := j) (by rw [GameConfig.standard_cols]; omega)
+    have ha2 := applyStep_colCount GameConfig.standard
+      (adversarialTrace GameConfig.standard σ s GameState.init (n + k)).board
+      ({ σ (adversarialTrace GameConfig.standard σ s GameState.init (n + k))
+          (s (n + k)) with piece := s (n + k) })
+      (j := j + 1) (by rw [GameConfig.standard_cols]; omega)
+    have hsplit := colProfile_pair_of_confined
+      (pl := ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+          (n + k)) (s (n + k)) with piece := s (n + k) } : Placement))
+      (hcells k (by omega))
+    unfold Board.linesCleared at ha1 ha2
+    rw [show n + (k + 1) = (n + k) + 1 by omega, adversarialTrace_succ,
+      adversarialStep_board]
+    simp only [] at hs ha1 ha2 hsplit ⊢
+    omega
+
+/-- **The window's clear-rate demand is adversary-proof**: keeping a pair
+low through `w` confined forced drops costs at least `2w − 16` cleared
+rows against any dealer. -/
+theorem adversarial_window_sustain_clear_rate {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {n j w : ℕ} (hj : j + 1 < 10)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).shapeUp,
+        ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).col + cell.1 = j
+        ∨ ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).col + cell.1 = j + 1)
+    (hlow : (adversarialTrace GameConfig.standard σ s GameState.init
+          (n + w)).board.colHeight j + 4 ≤ 20
+      ∧ (adversarialTrace GameConfig.standard σ s GameState.init
+          (n + w)).board.colHeight (j + 1) + 4 ≤ 20) :
+    2 * w ≤ 2 * (clearedAdv GameConfig.standard σ s GameState.init (n + w)
+        - clearedAdv GameConfig.standard σ s GameState.init n) + 16 := by
+  have hled := adversarial_window_feed_ledger (n := n) hj w hcells
+  have hc1 := colCount_le_colHeight
+    (adversarialTrace GameConfig.standard σ s GameState.init (n + w)).board j
+  have hc2 := colCount_le_colHeight
+    (adversarialTrace GameConfig.standard σ s GameState.init
+      (n + w)).board (j + 1)
+  omega
+
+/-- **Window burnout is adversary-proof**: nine clear-free forced drops
+confined to one adjacent pair break it past height sixteen, whoever
+deals. -/
+theorem adversarial_window_burnout {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {n j w : ℕ} (hj : j + 1 < 10)
+    (hdry : clearedAdv GameConfig.standard σ s GameState.init (n + w)
+      = clearedAdv GameConfig.standard σ s GameState.init n)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).shapeUp,
+        ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).col + cell.1 = j
+        ∨ ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).col + cell.1 = j + 1)
+    (hw : 9 ≤ w) :
+    ¬ ((adversarialTrace GameConfig.standard σ s GameState.init
+          (n + w)).board.colHeight j + 4 ≤ 20
+      ∧ (adversarialTrace GameConfig.standard σ s GameState.init
+          (n + w)).board.colHeight (j + 1) + 4 ≤ 20) := by
+  intro hlow
+  have hrate := adversarial_window_sustain_clear_rate (n := n) hj hcells hlow
+  omega
+
 end ClearRate
 end Tetris

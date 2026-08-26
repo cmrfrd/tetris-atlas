@@ -41629,6 +41629,23 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26ai) — the window laws are adversary-proof (bank 254/N)
+
+- **`adversarial_window_feed_ledger`** — pair count + 2·clearsΔ = start
+  + 4w under forced drops.
+- **`adversarial_window_sustain_clear_rate`** — 2w ≤ 2·clearsΔ + 16
+  against any dealer.
+- **`adversarial_window_burnout`** — nine dry confined forced drops
+  break any low pair (now a 3-line corollary of the rate law — the
+  ledger subsumes the batch-251 induction).
+- Gotcha: `clearedAdv`'s record update elaborated with `have __src`
+  while fresh applications produce `let __src` — DIFFERENT omega atoms.
+  Fix: `simp only [] at hs ha1 ha2 hsplit ⊢` (beta+zeta) before omega.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26ah) — the opening window closes at thirteen (bank 253/N)
 
 - **`window_confinement_cap`** — window law (2 rows/drop) vs global
