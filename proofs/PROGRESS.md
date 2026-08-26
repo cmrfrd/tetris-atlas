@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25bk) — a hole blocks its row (bank 216/N)
+
+- **`hole_blocks_row`** — a row with a covered empty cell can never be
+  completed by any placement (cfg-general one-liner off
+  hole_persists_place). Holes freeze their rows out of the clearing
+  economy entirely.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25bj) — holes are permanent until a clear (bank 215/N)
 
 - `hole_never_filled_by_drop` — the space under the skyline is

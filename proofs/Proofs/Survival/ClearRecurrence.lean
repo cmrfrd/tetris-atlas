@@ -3720,6 +3720,19 @@ theorem hole_persists_place {b : Board} {pl : Placement} {c r : ℕ}
   · exact hempty h
   · exact hole_never_filled_by_drop hr h
 
+/-- **A hole blocks its row**: a row containing a covered empty cell can
+never be completed by any placement — the hole is unfillable, so the row
+is uncloseable while the cover stands. Holes don't merely cost cells;
+they freeze their row out of the clearing economy entirely, and with
+`clear_rows_in_drop_window` only clears above can ever release them. -/
+theorem hole_blocks_row {cfg : GameConfig} {b : Board} {pl : Placement}
+    {c r : ℕ} (hc : c < cfg.cols) (hempty : (c, r) ∉ b)
+    (hr : r < b.colHeight c) :
+    r ∉ Board.fullRows cfg (pl.place b) := by
+  intro hmem
+  have hfull := Board.isFull_of_mem_fullRows hmem
+  exact hole_persists_place hempty hr (hfull c (Finset.mem_range.mpr hc))
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
