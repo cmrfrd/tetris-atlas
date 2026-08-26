@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25bn) — the refill calendar (bank 219/N)
+
+- **`bagAt_refill_schedule`** — a bag of size c at step n is full at
+  n + c + 7k for every k: the entire future block structure from one
+  observation (bagAt_add_card_eq_full iterated).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25bm) — lost is not absorbing (bank 218/N)
 
 - **`lost_not_absorbing`** — kernel witness (1×1 board): a state with a

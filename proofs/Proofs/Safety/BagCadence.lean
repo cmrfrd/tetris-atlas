@@ -1230,5 +1230,21 @@ theorem bagAt_eq_full_iff {s : ℕ → Piece}
     rw [bagAt_eq_sdiff_of_block_injective hinj n, hz]
     simp
 
+/-- **One bag reading fixes the whole refill calendar**: if the bag holds
+`c` pieces now, it is full at `now + c` and at every seventh step after —
+the entire future block structure is determined by a single observation. -/
+theorem bagAt_refill_schedule {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {n c : ℕ}
+    (hc : (bagAt initBag s n).card = c) :
+    ∀ k, bagAt initBag s (n + c + 7 * k) = Bag.full := by
+  intro k
+  induction k with
+  | zero => simpa using bagAt_add_card_eq_full hl c n hc
+  | succ k ih =>
+    have h7 := bagAt_add_card_eq_full hl 7 (n + c + 7 * k)
+      (by rw [ih]; exact Bag.full_card)
+    rw [show n + c + 7 * (k + 1) = n + c + 7 * k + 7 by ring]
+    exact h7
+
 end BagCadence
 end Tetris
