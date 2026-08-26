@@ -1213,5 +1213,21 @@ theorem clear_moment_in_window {π : Policy GameConfig.standard}
   have h51 := hflat 51 (le_refl _)
   omega
 
+/-- **Full-width play recurs on a fifty-one-move clock**: in every
+fifty-one-move live window some merged board occupies all ten columns —
+the drought bound and the span certificate composed. Column recurrence
+(`every_column_fed_within`) forces each column separately on a `9N+451`
+clock; the clearing clock forces all ten AT ONCE, every fifty-one moves. -/
+theorem full_width_moment_in_window {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {N : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init
+      (N + 51)).lost GameConfig.standard) :
+    ∃ k < 51, ∀ j < 10,
+      1 ≤ ((π (trace GameConfig.standard π GameState.init (N + k))).place
+        (trace GameConfig.standard π GameState.init (N + k)).board).colCount
+        j := by
+  obtain ⟨k, hk, hjump⟩ := clear_moment_in_window hv hlive
+  exact ⟨k, hk, clearing_move_spans_board hjump⟩
+
 end ClearRate
 end Tetris

@@ -5127,6 +5127,34 @@ theorem window_feed_ledger_set {π : Policy GameConfig.standard} {n : ℕ}
     simp only [] at hihk hsum hprof hdist ⊢
     omega
 
+/-- A board with a full row occupies every column. -/
+theorem colCount_pos_of_fullRow {cfg : GameConfig} {b : Board} {r : ℕ}
+    (hr : r ∈ Board.fullRows cfg b) {j : ℕ} (hj : j < cfg.cols) :
+    1 ≤ b.colCount j := by
+  have hfull := (Finset.mem_filter.mp hr).2
+  have hmem : (j, r) ∈ b := hfull j (Finset.mem_range.mpr hj)
+  unfold Board.colCount
+  rw [Nat.succ_le_iff, Finset.card_pos]
+  exact ⟨(j, r), Finset.mem_filter.mpr ⟨hmem, rfl⟩⟩
+
+/-- **A clearing move spans the board**: at any step where the cleared
+count jumps, the merged board occupies all ten columns — a cleared row is
+a certificate of full-width play. -/
+theorem clearing_move_spans_board {π : Policy GameConfig.standard} {m : ℕ}
+    (hjump : cleared GameConfig.standard π GameState.init m
+      < cleared GameConfig.standard π GameState.init (m + 1)) :
+    ∀ j < 10, 1 ≤ ((π (trace GameConfig.standard π GameState.init m)).place
+      (trace GameConfig.standard π GameState.init m).board).colCount j := by
+  intro j hj
+  have hs := cleared_succ GameConfig.standard π GameState.init m
+  have hpos : 0 < (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init m)).place
+        (trace GameConfig.standard π GameState.init m).board)).card := by
+    omega
+  obtain ⟨r, hr⟩ := Finset.card_pos.mp hpos
+  exact colCount_pos_of_fullRow hr
+    (by rw [GameConfig.standard_cols]; omega)
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

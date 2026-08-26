@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26ao) — full width recurs on the clearing clock (bank 260/N)
+
+- **`colCount_pos_of_fullRow`** — a board with a full row occupies every
+  column.
+- **`clearing_move_spans_board`** — at any cleared-count jump, the
+  merged board holds a cell in all ten columns.
+- **`full_width_moment_in_window`** — composed with the drought bound:
+  every 51-move live window contains a full-width moment. Column
+  recurrence forces each column separately on a 9N+451 clock; the
+  clearing clock forces all ten SIMULTANEOUSLY every 51 moves.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26an) — the drought bound is adversary-proof (bank 259/N)
 
 - **`adversarial_no_clear_drought`** — clearedAdv(N) < clearedAdv(N+51)
