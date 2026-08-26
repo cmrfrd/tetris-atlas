@@ -4409,6 +4409,44 @@ theorem tetris_step_skyline {b : Board} {pl : Placement}
     have hdrop := hothers c₁ hlt₁ he
     omega
 
+/-- **A tetris shaves thirty-six rows of skyline**: the total column
+height drops by at least 36 through the move — nine columns lose four
+each and the well loses nothing. The skyline-mass bill matching the
+36-cell mass bill of the column-flow law. -/
+theorem tetris_skyline_mass {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    (∑ j ∈ Finset.range 10,
+      (Placement.applyStep GameConfig.standard b pl).colHeight j) + 36
+      ≤ ∑ j ∈ Finset.range 10, b.colHeight j := by
+  classical
+  obtain ⟨c₀, hlt, hpres, hothers⟩ := tetris_step_skyline hwf hv hnf h4
+  have hmem : c₀ ∈ Finset.range 10 := Finset.mem_range.mpr hlt
+  have h1 := Finset.add_sum_erase (Finset.range 10)
+    (fun j => (Placement.applyStep GameConfig.standard b pl).colHeight j)
+    hmem
+  have h2 := Finset.add_sum_erase (Finset.range 10)
+    (fun j => b.colHeight j) hmem
+  have hcard : ((Finset.range 10).erase c₀).card = 9 := by
+    rw [Finset.card_erase_of_mem hmem, Finset.card_range]
+  have herase : (∑ j ∈ (Finset.range 10).erase c₀,
+      (Placement.applyStep GameConfig.standard b pl).colHeight j) + 36
+      ≤ ∑ j ∈ (Finset.range 10).erase c₀, b.colHeight j := by
+    calc (∑ j ∈ (Finset.range 10).erase c₀,
+          (Placement.applyStep GameConfig.standard b pl).colHeight j) + 36
+        = ∑ j ∈ (Finset.range 10).erase c₀,
+            ((Placement.applyStep GameConfig.standard b pl).colHeight j
+              + 4) := by
+          rw [Finset.sum_add_distrib, Finset.sum_const, hcard, smul_eq_mul]
+      _ ≤ ∑ j ∈ (Finset.range 10).erase c₀, b.colHeight j :=
+          Finset.sum_le_sum (fun j hj => by
+            rw [Finset.mem_erase] at hj
+            exact hothers j (Finset.mem_range.mp hj.2) hj.1)
+  simp only [] at h1 h2
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

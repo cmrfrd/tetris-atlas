@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26s) — thirty-six rows of skyline (bank 238/N)
+
+- **`tetris_skyline_mass`** — Σ heights drops ≥ 36 through a tetris
+  (erase-split around the well + per-column skyline law).
+- Lean note (recurring): add_sum_erase's lambda sums need
+  `simp only [] at h1 h2` before omega (beta atoms).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26r) — the tetris skyline law (bank 237/N)
 
 - **`tetris_step_skyline`** — one existential well column: height
