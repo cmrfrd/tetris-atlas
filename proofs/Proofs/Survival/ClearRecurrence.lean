@@ -5155,6 +5155,58 @@ theorem clearing_move_spans_board {π : Policy GameConfig.standard} {m : ℕ}
   exact colCount_pos_of_fullRow hr
     (by rw [GameConfig.standard_cols]; omega)
 
+/-- **Full rows are mass**: each full row banks `cols` cells, so a board
+about to clear `k` rows holds at least `cols · k` cells. -/
+theorem mass_floor_of_fullRows {cfg : GameConfig} (b : Board) :
+    cfg.cols * (Board.fullRows cfg b).card ≤ b.count := by
+  classical
+  have hsub : (Board.fullRows cfg b).biUnion
+      (fun r => (Finset.range cfg.cols).image (fun c => (c, r))) ⊆ b := by
+    intro p hp
+    obtain ⟨r, hr, hpmem⟩ := Finset.mem_biUnion.mp hp
+    obtain ⟨c, hc, rfl⟩ := Finset.mem_image.mp hpmem
+    exact (Finset.mem_filter.mp hr).2 c hc
+  have hdisj : ∀ r₁ ∈ Board.fullRows cfg b, ∀ r₂ ∈ Board.fullRows cfg b,
+      r₁ ≠ r₂ →
+        Disjoint ((Finset.range cfg.cols).image (fun c => (c, r₁)))
+          ((Finset.range cfg.cols).image (fun c => (c, r₂))) := by
+    intro r₁ _ r₂ _ hne
+    rw [Finset.disjoint_left]
+    intro p hp1 hp2
+    obtain ⟨c1, _, rfl⟩ := Finset.mem_image.mp hp1
+    obtain ⟨c2, _, heq⟩ := Finset.mem_image.mp hp2
+    have hsnd := congrArg Prod.snd heq
+    exact hne hsnd.symm
+  have hcard := Finset.card_biUnion hdisj
+  have himg : ∀ r : ℕ,
+      ((Finset.range cfg.cols).image (fun c => (c, r))).card = cfg.cols := by
+    intro r
+    rw [Finset.card_image_of_injective _
+      (fun a b h => (Prod.ext_iff.mp h).1), Finset.card_range]
+  have hsum : ((Board.fullRows cfg b).biUnion
+      (fun r => (Finset.range cfg.cols).image (fun c => (c, r)))).card
+      = cfg.cols * (Board.fullRows cfg b).card := by
+    rw [hcard, Finset.sum_congr rfl (fun r _ => himg r), Finset.sum_const,
+      smul_eq_mul, Nat.mul_comm]
+  unfold Board.count
+  rw [← hsum]
+  exact Finset.card_le_card hsub
+
+/-- **The clearing moment banks its clears**: a step that clears `k` rows
+does so from a merged board holding at least `10k` cells — the mass being
+harvested is visible on the board at the moment of harvest. -/
+theorem clearing_move_mass_floor {π : Policy GameConfig.standard} {m : ℕ} :
+    10 * (cleared GameConfig.standard π GameState.init (m + 1)
+        - cleared GameConfig.standard π GameState.init m)
+      ≤ ((π (trace GameConfig.standard π GameState.init m)).place
+        (trace GameConfig.standard π GameState.init m).board).count := by
+  have hs := cleared_succ GameConfig.standard π GameState.init m
+  have h := mass_floor_of_fullRows (cfg := GameConfig.standard)
+    ((π (trace GameConfig.standard π GameState.init m)).place
+      (trace GameConfig.standard π GameState.init m).board)
+  rw [GameConfig.standard_cols] at h
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26ap) — the clearing moment banks its clears (bank 261/N)
+
+- **`mass_floor_of_fullRows`** — cols · #fullRows ≤ count: the rows
+  about to clear are disjoint 10-cell certificates (biUnion of row
+  images, pairwise disjoint by second coordinate, card_biUnion).
+- **`clearing_move_mass_floor`** — a k-clear step's merged board holds
+  ≥ 10k cells at the moment of harvest.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26ao) — full width recurs on the clearing clock (bank 260/N)
 
 - **`colCount_pos_of_fullRow`** — a board with a full row occupies every
