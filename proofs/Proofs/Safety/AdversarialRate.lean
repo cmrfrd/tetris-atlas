@@ -3065,5 +3065,65 @@ theorem adversarial_clear_moment_in_window {σ : Solver GameConfig.standard}
   have h51 := hflat 51 (le_refl _)
   omega
 
+/-- **The span certificate is adversary-proof**: a forced step that
+clears occupies all ten columns of the merged board, whoever dealt. -/
+theorem adversarial_clearing_move_spans_board {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {m : ℕ}
+    (hjump : clearedAdv GameConfig.standard σ s GameState.init m
+      < clearedAdv GameConfig.standard σ s GameState.init (m + 1)) :
+    ∀ j < 10, 1 ≤ (({ σ (adversarialTrace GameConfig.standard σ s
+        GameState.init m) (s m) with piece := s m } : Placement).place
+      (adversarialTrace GameConfig.standard σ s
+        GameState.init m).board).colCount j := by
+  intro j hj
+  have hs := clearedAdv_succ GameConfig.standard σ s GameState.init m
+  have hpos : 0 < (Board.fullRows GameConfig.standard
+      (({ σ (adversarialTrace GameConfig.standard σ s GameState.init m)
+          (s m) with piece := s m } : Placement).place
+        (adversarialTrace GameConfig.standard σ s
+          GameState.init m).board)).card := by
+    omega
+  obtain ⟨r, hr⟩ := Finset.card_pos.mp hpos
+  exact colCount_pos_of_fullRow hr
+    (by rw [GameConfig.standard_cols]; omega)
+
+/-- **The mass floor at the clearing moment is adversary-proof**: a
+forced step clearing `k` rows does so from a merged board holding at
+least `10k` cells. -/
+theorem adversarial_clearing_move_mass_floor {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {m : ℕ} :
+    10 * (clearedAdv GameConfig.standard σ s GameState.init (m + 1)
+        - clearedAdv GameConfig.standard σ s GameState.init m)
+      ≤ (({ σ (adversarialTrace GameConfig.standard σ s GameState.init m)
+          (s m) with piece := s m } : Placement).place
+        (adversarialTrace GameConfig.standard σ s
+          GameState.init m).board).count := by
+  have hs := clearedAdv_succ GameConfig.standard σ s GameState.init m
+  have h := mass_floor_of_fullRows (cfg := GameConfig.standard)
+    (({ σ (adversarialTrace GameConfig.standard σ s GameState.init m)
+        (s m) with piece := s m } : Placement).place
+      (adversarialTrace GameConfig.standard σ s GameState.init m).board)
+  rw [GameConfig.standard_cols] at h
+  omega
+
+/-- **Full-width play recurs against any dealer**: every fifty-one-move
+live window of an adversarial game contains a forced move whose merged
+board occupies all ten columns. -/
+theorem adversarial_full_width_moment_in_window
+    {σ : Solver GameConfig.standard} {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {N : ℕ}
+    (hlive : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init (N + 51)).lost GameConfig.standard) :
+    ∃ k < 51, ∀ j < 10,
+      1 ≤ (({ σ (adversarialTrace GameConfig.standard σ s
+          GameState.init (N + k)) (s (N + k)) with piece := s (N + k) }
+        : Placement).place
+        (adversarialTrace GameConfig.standard σ s
+          GameState.init (N + k)).board).colCount j := by
+  obtain ⟨k, hk, hjump⟩ := adversarial_clear_moment_in_window hv hlive
+  exact ⟨k, hk, adversarial_clearing_move_spans_board hjump⟩
+
 end ClearRate
 end Tetris

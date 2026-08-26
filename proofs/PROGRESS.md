@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26aq) — the clearing clock is dealer-blind (bank 262/N)
+
+- **`adversarial_clearing_move_spans_board`**, **`adversarial_clearing_
+  move_mass_floor`**, **`adversarial_full_width_moment_in_window`** —
+  the batch 260/261 span + mass-floor + 51-clock laws, mirrored to
+  forced drops. Board-level lemmas shared; only the succ-identity and
+  the drought bound needed adversarial twins (already present).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26ap) — the clearing moment banks its clears (bank 261/N)
 
 - **`mass_floor_of_fullRows`** — cols · #fullRows ≤ count: the rows
