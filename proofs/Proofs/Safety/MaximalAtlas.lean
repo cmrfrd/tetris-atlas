@@ -175,5 +175,40 @@ theorem safeMoves_ncard_le {g : GameState} {p : Piece} :
         have h := card_allValidFor_standard p
         split_ifs at h <;> omega
 
+set_option maxRecDepth 40000 in
+/-- The union of all pieces' valid placements is exactly the 240-letter
+alphabet (kernel-counted; `36 + 6 × 34`). -/
+theorem card_allValid_biUnion :
+    ((Finset.univ : Finset Piece).biUnion
+      (fun p => Placement.allValidFor GameConfig.standard p)).card
+      = 240 := by
+  decide
+
+/-- **At most 240 safe answers at any state, over all pieces**: the
+maximal table's whole per-state page fits inside the action alphabet —
+one node of the Atlas-as-relation never stores more than the alphabet
+itself. -/
+theorem safeMoves_union_ncard_le (g : GameState) :
+    (⋃ p, safeMoves GameConfig.standard g p).ncard ≤ 240 := by
+  classical
+  have hsub : (⋃ p, safeMoves GameConfig.standard g p)
+      ⊆ ↑((Finset.univ : Finset Piece).biUnion
+        (fun p => Placement.allValidFor GameConfig.standard p)) := by
+    intro pl hpl
+    rw [Set.mem_iUnion] at hpl
+    obtain ⟨p, hp⟩ := hpl
+    have hm := safeMoves_subset_allValidFor GameConfig.standard g p hp
+    rw [Finset.mem_coe] at hm ⊢
+    exact Finset.mem_biUnion.mpr ⟨p, Finset.mem_univ p, hm⟩
+  calc (⋃ p, safeMoves GameConfig.standard g p).ncard
+      ≤ (↑((Finset.univ : Finset Piece).biUnion
+          (fun p => Placement.allValidFor GameConfig.standard p))
+          : Set Placement).ncard :=
+        Set.ncard_le_ncard hsub (Finset.finite_toSet _)
+    _ = ((Finset.univ : Finset Piece).biUnion
+          (fun p => Placement.allValidFor GameConfig.standard p)).card :=
+        Set.ncard_coe_finset _
+    _ ≤ 240 := le_of_eq card_allValid_biUnion
+
 end MaximalAtlas
 end Tetris

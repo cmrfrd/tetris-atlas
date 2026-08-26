@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26f) — one page per state, 240 lines (bank 225/N)
+
+- `card_allValid_biUnion` — the union of the 7 per-piece enumerations is
+  exactly the 240-letter alphabet (kernel, maxRecDepth 40000).
+- **`safeMoves_union_ncard_le`** — at any state the maximal table stores
+  ≤ 240 safe answers across all pieces.
+- Lean note (again): set_option ... in must precede the docstring.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26e) — the table is 36 wide (bank 224/N)
 
 - `card_allValidFor_standard` — kernel: allValidFor has exactly 36
