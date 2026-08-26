@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26v) — flush landings are hole-neutral (bank 241/N)
+
+- **`colHoles_place_eq_of_flush`** — one cell landing exactly on the
+  stack top zeroes the column's hole bill (the flush cell is
+  automatically the fiber bottom by no-burrow). One-line corollary of
+  the exact genesis formula.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26u) — the exact hole-genesis formula (bank 240/N)
 
 - **`colHoles_place_eq`** — Δholes(fed column) = (fiber bottom m) −

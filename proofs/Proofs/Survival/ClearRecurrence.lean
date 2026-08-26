@@ -4636,6 +4636,18 @@ theorem colHoles_place_eq {b : Board} {pl : Placement} {j m : ℕ}
   unfold Board.colHoles
   omega
 
+/-- **Flush landings are hole-neutral**: if the piece drops a cell exactly
+onto the old stack top of a column, that column gains no holes — by the
+no-burrow law every landed cell sits at or above the height, so the flush
+cell is automatically the fiber's bottom and the landing gap is zero. -/
+theorem colHoles_place_eq_of_flush {b : Board} {pl : Placement} {j : ℕ}
+    (hmem : (j, b.colHeight j) ∈ pl.dropped b) :
+    Board.colHoles (pl.place b) j = Board.colHoles b j := by
+  have hmin : ∀ r, (j, r) ∈ pl.dropped b → b.colHeight j ≤ r :=
+    fun r hr => dropped_above_own_column (j, r) hr
+  have h := colHoles_place_eq hmem hmin
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
