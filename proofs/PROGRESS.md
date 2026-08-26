@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26al) — every column fed on schedule (bank 257/N)
+
+- **`every_column_fed_within`** — a survivor touches every column within
+  9N + 451 moves of any point N (abstention = width-9 confinement, and
+  the demand lemma's horizon is explicit). Quantitative recurrence.
+- **`every_column_fed_infinitely`** — the ∀N ∃k corollary: no survivor
+  ever retires a column.
+- Gotcha: `push_neg` is deprecated in this Mathlib — use `push Not`.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26ak) — a survivor never abandons a column (bank 256/N)
 
 - **`confinement_clear_demand`** — w confined drops ending live force

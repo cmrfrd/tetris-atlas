@@ -1115,5 +1115,47 @@ theorem no_eventual_confinement {π : Policy GameConfig.standard}
   have hmul2 : 20 * S.card ≤ 180 := by omega
   omega
 
+/-- **Every column is fed on schedule**: a surviving policy touches every
+column `j` within `9N + 451` moves of any point `N` — abstaining longer
+would confine play to the other nine columns past the width-nine budget.
+The quantitative form of column non-abandonment. -/
+theorem every_column_fed_within {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hsurv : SurvivesForever GameConfig.standard π GameState.init)
+    {j : ℕ} (hj : j < 10) (N : ℕ) :
+    ∃ k < 9 * N + 451,
+      ∃ cell ∈ (π (trace GameConfig.standard π GameState.init (N + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (N + k))).col + cell.1
+          = j := by
+  by_contra hnone
+  push Not at hnone
+  have hcard : ((Finset.range 10).erase j).card = 9 := by
+    rw [Finset.card_erase_of_mem (Finset.mem_range.mpr hj),
+      Finset.card_range]
+  have hdem := confinement_clear_demand (n := N) (w := 9 * N + 451)
+    (S := (Finset.range 10).erase j)
+    (fun i hi => Finset.mem_range.mp (Finset.mem_of_mem_erase hi))
+    (fun k hk cell hcell => by
+      have hlt := (hv _).col_add_lt hcell
+      rw [GameConfig.standard_cols] at hlt
+      exact Finset.mem_erase.mpr
+        ⟨hnone k hk cell hcell, Finset.mem_range.mpr hlt⟩)
+    (hsurv (N + (9 * N + 451)))
+  rw [hcard] at hdem
+  have hglob := cleared_le_two_fifths hv (N + (9 * N + 451))
+  omega
+
+/-- **Every column is fed infinitely often**: a surviving policy returns
+to every column from every point on — no survivor ever retires a column. -/
+theorem every_column_fed_infinitely {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hsurv : SurvivesForever GameConfig.standard π GameState.init)
+    {j : ℕ} (hj : j < 10) (N : ℕ) :
+    ∃ k, ∃ cell ∈ (π (trace GameConfig.standard π GameState.init (N + k))).shapeUp,
+      (π (trace GameConfig.standard π GameState.init (N + k))).col + cell.1
+        = j := by
+  obtain ⟨k, _, hcell⟩ := every_column_fed_within hv hsurv hj N
+  exact ⟨k, hcell⟩
+
 end ClearRate
 end Tetris
