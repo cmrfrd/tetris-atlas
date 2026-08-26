@@ -4772,6 +4772,26 @@ theorem Z_flat_hole_bill :
         ((⟨Piece.Z, r, 0⟩ : Placement).place Board.empty) = 1 := by
   decide
 
+/-- **One step of stagger absorbs the S entirely**: on a board with a
+single cell forming a one-step rise to the right, the S drops with zero
+holes — the skew tax is a property of *flat* ground, not of the piece.
+Roughness is the currency that pays for skew pieces (kernel witness). -/
+theorem S_fits_stagger :
+    Board.holes GameConfig.standard
+      ((⟨Piece.S, 0, 0⟩ : Placement).place
+        ({(2, 0)} : Finset Coord)) = 0 := by
+  decide
+
+/-- The mirrored stagger absorbs the Z. Together with the exact flat
+bills: the skew pair each demand precisely one step of relief, in
+opposite directions — the formal seed of why survival needs a rough,
+alternating surface. -/
+theorem Z_fits_stagger :
+    Board.holes GameConfig.standard
+      ((⟨Piece.Z, 0, 0⟩ : Placement).place
+        ({(0, 0)} : Finset Coord)) = 0 := by
+  decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
