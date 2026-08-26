@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26an) — the drought bound is adversary-proof (bank 259/N)
+
+- **`adversarial_no_clear_drought`** — clearedAdv(N) < clearedAdv(N+51)
+  at any live adversarial point (ledger holds unconditionally at both
+  ends; only the 200-cap needs liveness — same asymmetry as the trace
+  version).
+- **`adversarial_clear_moment_in_window`** — the event form against any
+  dealer.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26am) — no drought anywhere, ever (bank 258/N)
 
 - **`no_clear_drought`** — cleared(N) < cleared(N+51) at any live point:

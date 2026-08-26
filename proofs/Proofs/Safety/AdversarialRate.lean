@@ -3006,5 +3006,64 @@ theorem adversarial_window_burnout {σ : Solver GameConfig.standard}
   have hrate := adversarial_window_sustain_clear_rate (n := n) hj hcells hlow
   omega
 
+/-- **The drought bound is adversary-proof**: between any point and
+fifty-one forced moves later, a live adversarial game must clear —
+whoever deals the pieces. -/
+theorem adversarial_no_clear_drought {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {N : ℕ}
+    (hlive : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init (N + 51)).lost GameConfig.standard) :
+    clearedAdv GameConfig.standard σ s GameState.init N
+      < clearedAdv GameConfig.standard σ s GameState.init (N + 51) := by
+  have h1 := clearedAdv_ledger (cfg := GameConfig.standard)
+    (GameState.init_board_wf GameConfig.standard) hv (N + 51)
+  have h2 := clearedAdv_ledger (cfg := GameConfig.standard)
+    (GameState.init_board_wf GameConfig.standard) hv N
+  rw [GameConfig.standard_cols, GameState.init_board_count] at h1 h2
+  have hcap := BagGrowth.count_le_capacity
+    (adversarialTrace_board_wf (GameState.init_board_wf GameConfig.standard)
+      hv (N + 51))
+    ((GameState.not_lost_iff_forall_row_lt GameConfig.standard _).mp hlive)
+  rw [GameConfig.standard_cols, GameConfig.standard_rows] at hcap
+  omega
+
+/-- **A clearing moment sits in every adversarial fifty-one-window**: some
+single forced step strictly raises the cleared count, whatever the
+stream. -/
+theorem adversarial_clear_moment_in_window {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {N : ℕ}
+    (hlive : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init (N + 51)).lost GameConfig.standard) :
+    ∃ k < 51,
+      clearedAdv GameConfig.standard σ s GameState.init (N + k)
+        < clearedAdv GameConfig.standard σ s GameState.init ((N + k) + 1) := by
+  by_contra hnone
+  push Not at hnone
+  have hflat : ∀ v, v ≤ 51 →
+      clearedAdv GameConfig.standard σ s GameState.init (N + v)
+        = clearedAdv GameConfig.standard σ s GameState.init N := by
+    intro v
+    induction v with
+    | zero =>
+      intro _
+      simp
+    | succ k ih =>
+      intro hv51
+      have hle := hnone k (by omega)
+      have hmono := clearedAdv_mono GameConfig.standard σ s GameState.init
+        (show N + k ≤ (N + k) + 1 by omega)
+      have hik := ih (by omega)
+      rw [show N + (k + 1) = (N + k) + 1 by omega]
+      omega
+  have hdr := adversarial_no_clear_drought hv hlive
+  have h51 := hflat 51 (le_refl _)
+  omega
+
 end ClearRate
 end Tetris
