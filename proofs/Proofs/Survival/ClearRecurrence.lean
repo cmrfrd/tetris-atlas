@@ -4375,6 +4375,40 @@ theorem tetris_well_height_preserved {b : Board} {pl : Placement}
     have hlb := Board.lt_colHeight hsurv
     omega
 
+/-- **The tetris skyline law**: through the full four-clear move, the well
+column's height is exactly preserved while every other column sinks by at
+least four — the complete before/after skyline of the tetris, with the
+well identified across both clauses. -/
+theorem tetris_step_skyline {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    ∃ c₀ < 10,
+      (Placement.applyStep GameConfig.standard b pl).colHeight c₀
+        = b.colHeight c₀
+      ∧ ∀ j < 10, j ≠ c₀ →
+        (Placement.applyStep GameConfig.standard b pl).colHeight j + 4
+          ≤ b.colHeight j := by
+  obtain ⟨hI, c₀, hlt, hoff, hwin, hprof4, hz, hshape, hdepth⟩ :=
+    tetris_anatomy hwf hv hnf h4
+  have hothers : ∀ j < 10, j ≠ c₀ →
+      (Placement.applyStep GameConfig.standard b pl).colHeight j + 4
+        ≤ b.colHeight j := by
+    intro j hj hne
+    have hdrop := clear_step_unfed_colHeight_le (b := b) (pl := pl)
+      (j := j) (by rw [GameConfig.standard_cols]; omega)
+      (hz j hj hne) (by omega)
+    omega
+  refine ⟨c₀, hlt, ?_, hothers⟩
+  obtain ⟨c₁, hlt₁, hpres⟩ := tetris_well_height_preserved hwf hv hnf h4
+  by_cases he : c₁ = c₀
+  · rw [← he]
+    exact hpres
+  · exfalso
+    have hdrop := hothers c₁ hlt₁ he
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

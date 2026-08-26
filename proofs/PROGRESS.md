@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26r) — the tetris skyline law (bank 237/N)
+
+- **`tetris_step_skyline`** — one existential well column: height
+  exactly preserved there, every other column sinks ≥ 4. Identification
+  trick: if the preserved column were unfed it would both keep and drop
+  its height. The full skyline before/after of the tetris move.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26q) — the well is invisible to itself (bank 236/N)
 
 - **`tetris_well_height_preserved`** — through the full tetris move the
