@@ -4259,6 +4259,22 @@ theorem holes_clearLines_le (cfg : GameConfig) (b : Board) :
   exact Finset.sum_le_sum (fun j hj =>
     colHoles_clearLines_le (Finset.mem_range.mp hj))
 
+/-- **Unfed columns sink by the clear count in height too**: a `k`-clear
+lowers every valid column the piece did not feed by at least `k` rows of
+height — the skyline drain matching the cell drain of
+`clear_step_column_drain`. Clearing planes the board down wherever the
+piece didn't build. -/
+theorem clear_step_unfed_colHeight_le {cfg : GameConfig} {b : Board}
+    {pl : Placement} {j : ℕ} (hj : j < cfg.cols)
+    (hz : pl.colProfile j = 0)
+    (hk : 0 < (Board.fullRows cfg (pl.place b)).card) :
+    (Placement.applyStep cfg b pl).colHeight j
+      + (Board.fullRows cfg (pl.place b)).card ≤ b.colHeight j := by
+  have h1 := colHeight_clearLines_add_le (b := pl.place b) hj hk
+  have h2 := place_unfed_colHeight_eq (b := b) (pl := pl) hz
+  unfold Placement.applyStep
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

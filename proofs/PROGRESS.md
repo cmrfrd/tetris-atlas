@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26p) — the skyline drain (bank 235/N)
+
+- **`clear_step_unfed_colHeight_le`** — a k-clear lowers every unfed
+  valid column's HEIGHT by ≥ k (clearLines height drop + unfed place
+  invariance). The skyline analogue of the batch-149 cell drain.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26o) — clearing never backfires (bank 234/N)
 
 - `colRows_card_eq_colCount` — extracted helper.
