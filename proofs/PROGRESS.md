@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26q) — the well is invisible to itself (bank 236/N)
+
+- **`tetris_well_height_preserved`** — through the full tetris move the
+  well column ends at exactly its starting height (upper: place ≤ h+4
+  then clear −4; lower: the old stack top at h−1 survives unshifted —
+  clearedBelow = 0 below the window). With batch 148's colCount
+  preservation: the well is a complete fixed point of the tetris in
+  both mass and height.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26p) — the skyline drain (bank 235/N)
 
 - **`clear_step_unfed_colHeight_le`** — a k-clear lowers every unfed

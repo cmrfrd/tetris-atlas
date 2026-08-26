@@ -4275,6 +4275,106 @@ theorem clear_step_unfed_colHeight_le {cfg : GameConfig} {b : Board}
   unfold Placement.applyStep
   omega
 
+/-- **The well's height survives the tetris unchanged**: through the full
+move — vertical I in, four rows out — the well column ends at exactly the
+height it started. The I fills the window, the window clears, and the
+stack beneath is untouched: a tetris is a pure harvest of the other nine
+columns, invisible in the well's own skyline. -/
+theorem tetris_well_height_preserved {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    ∃ c₀ < 10, (Placement.applyStep GameConfig.standard b pl).colHeight c₀
+      = b.colHeight c₀ := by
+  classical
+  obtain ⟨hI, c₀, hlt, hoff, hwin, hprof4, hz, hshape, hdepth⟩ :=
+    tetris_anatomy hwf hv hnf h4
+  refine ⟨c₀, hlt, ?_⟩
+  have hub : (Placement.applyStep GameConfig.standard b pl).colHeight c₀ + 4
+      ≤ (pl.place b).colHeight c₀ := by
+    have hcl := colHeight_clearLines_add_le (b := pl.place b) (j := c₀)
+      (by rw [GameConfig.standard_cols]; omega) (by omega)
+    unfold Placement.applyStep
+    omega
+  have hpl_ub : (pl.place b).colHeight c₀ ≤ b.colHeight c₀ + 4 := by
+    unfold Board.colHeight
+    apply Finset.sup_le
+    intro r hr
+    unfold Board.colRows at hr
+    rw [Finset.mem_image] at hr
+    obtain ⟨q, hq, rfl⟩ := hr
+    rw [Finset.mem_filter] at hq
+    obtain ⟨hqb, hqj⟩ := hq
+    rw [Placement.place_eq_union_dropped, Finset.mem_union] at hqb
+    rcases hqb with hmem | hmem
+    · have hcell : (c₀, q.2) ∈ b := by
+        have hqe : q = (c₀, q.2) := Prod.ext hqj rfl
+        rw [← hqe]
+        exact hmem
+      have := Board.lt_colHeight hcell
+      change q.2 + 1 ≤ b.colHeight c₀ + 4
+      omega
+    · rw [Placement.dropped_eq_image, Finset.mem_image] at hmem
+      obtain ⟨cell, hcell, hEq⟩ := hmem
+      have hrow : pl.dropOffset b + cell.2 = q.2 := by
+        have hh2 := congrArg Prod.snd hEq
+        exact hh2
+      have hb4 := Piece.shapeUp_row_lt_four pl.piece pl.rot cell hcell
+      change q.2 + 1 ≤ b.colHeight c₀ + 4
+      rw [hoff] at hrow
+      omega
+  rcases Nat.eq_zero_or_pos (b.colHeight c₀) with h0 | hpos
+  · omega
+  · have hne : (b.colRows c₀).Nonempty := by
+      by_contra hcon
+      rw [Finset.not_nonempty_iff_eq_empty] at hcon
+      have hz0 : b.colHeight c₀ = 0 := by
+        unfold Board.colHeight
+        rw [hcon]
+        simp
+      omega
+    obtain ⟨rtop, hrtopmem, hsup⟩ := Finset.exists_mem_eq_sup _ hne
+      (fun r => r + 1)
+    have hrtop : rtop + 1 = b.colHeight c₀ := by
+      have h := hsup
+      exact h.symm
+    have hcelltop : (c₀, rtop) ∈ b := by
+      unfold Board.colRows at hrtopmem
+      rw [Finset.mem_image] at hrtopmem
+      obtain ⟨q, hq, rfl⟩ := hrtopmem
+      rw [Finset.mem_filter] at hq
+      have hqe : q = (c₀, q.2) := Prod.ext hq.2 rfl
+      rw [← hqe]
+      exact hq.1
+    have hplacetop : (c₀, rtop) ∈ pl.place b := by
+      rw [Placement.place_eq_union_dropped, Finset.mem_union]
+      exact Or.inl hcelltop
+    have hnotfull : ¬ Board.isFull GameConfig.standard (pl.place b) rtop := by
+      intro hfull
+      have hmem : rtop ∈ Board.fullRows GameConfig.standard (pl.place b) := by
+        simp only [Board.fullRows, Finset.mem_filter, Finset.mem_image]
+        exact ⟨⟨(c₀, rtop), hplacetop, rfl⟩, hfull⟩
+      rw [hwin, Finset.mem_Icc] at hmem
+      omega
+    have hcb0 : Board.clearedBelow GameConfig.standard (pl.place b) rtop
+        = 0 := by
+      unfold Board.clearedBelow
+      rw [hwin, Finset.card_eq_zero, Finset.filter_eq_empty_iff]
+      intro x hx
+      rw [Finset.mem_Icc] at hx
+      omega
+    have hsurv : (c₀, rtop)
+        ∈ Placement.applyStep GameConfig.standard b pl := by
+      unfold Placement.applyStep Board.clearLines
+      rw [Finset.mem_image]
+      refine ⟨(c₀, rtop), Finset.mem_filter.mpr ⟨hplacetop, hnotfull⟩, ?_⟩
+      rw [hcb0]
+      change (c₀, rtop - 0) = (c₀, rtop)
+      rw [Nat.sub_zero]
+    have hlb := Board.lt_colHeight hsurv
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
