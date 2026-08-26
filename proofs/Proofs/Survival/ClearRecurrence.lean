@@ -4679,6 +4679,81 @@ theorem exists_flush_cell {b : Board} {pl : Placement} :
       exact hsup
     omega
 
+/-- An unfed column's hole count is unchanged by the merge. -/
+theorem colHoles_place_eq_of_unfed {b : Board} {pl : Placement} {j : ℕ}
+    (hz : pl.colProfile j = 0) :
+    Board.colHoles (pl.place b) j = Board.colHoles b j := by
+  classical
+  have hprof : ((pl.dropped b).filter (fun p => p.1 = j)).card
+      = pl.colProfile j := by
+    have hcc := Placement.colCount_cellsAt pl (pl.dropOffset b) j
+    unfold Board.colCount at hcc
+    unfold Placement.dropped
+    exact hcc
+  have hempty : (pl.dropped b).filter (fun p => p.1 = j) = ∅ :=
+    Finset.card_eq_zero.mp (by omega)
+  have hh := place_unfed_colHeight_eq (b := b) (pl := pl) hz
+  have hr : (pl.place b).colRows j = b.colRows j := by
+    unfold Board.colRows
+    rw [Placement.place_eq_union_dropped, Finset.filter_union, hempty,
+      Finset.union_empty]
+  unfold Board.colHoles
+  rw [hh, hr]
+
+/-- **At most three columns per move can gain holes**: a placement touches
+at most four columns and always lands flush in one of them, so the
+hole-gaining columns number at most three. Hole damage is narrow as well
+as priced. -/
+theorem place_hole_columns_le_three {b : Board} {pl : Placement}
+    (hv : pl.Valid GameConfig.standard) :
+    ((Finset.range 10).filter (fun j =>
+      Board.colHoles b j < Board.colHoles (pl.place b) j)).card ≤ 3 := by
+  classical
+  obtain ⟨cell₀, hcell₀, hflush⟩ := exists_flush_cell (b := b) (pl := pl)
+  set c := pl.col + cell₀.1 with hc
+  have hclt : c < 10 := by
+    have h := hv cell₀ hcell₀
+    rwa [GameConfig.standard_cols] at h
+  have hcprof : 1 ≤ pl.colProfile c := by
+    unfold Placement.colProfile
+    apply Finset.card_pos.mpr
+    exact ⟨cell₀, Finset.mem_filter.mpr ⟨hcell₀, rfl⟩⟩
+  have hcflushmem : (c, b.colHeight c) ∈ pl.dropped b := by
+    rw [Placement.dropped_eq_image, Finset.mem_image]
+    refine ⟨cell₀, hcell₀, ?_⟩
+    rw [hflush]
+  have hcnoinc : ¬ (Board.colHoles b c < Board.colHoles (pl.place b) c) := by
+    rw [colHoles_place_eq_of_flush hcflushmem]
+    omega
+  have hsub : (Finset.range 10).filter (fun j =>
+      Board.colHoles b j < Board.colHoles (pl.place b) j)
+      ⊆ ((Finset.range 10).filter
+        (fun j => ¬ (pl.colProfile j = 0))).erase c := by
+    intro j hj
+    rw [Finset.mem_filter] at hj
+    rw [Finset.mem_erase, Finset.mem_filter]
+    refine ⟨?_, hj.1, ?_⟩
+    · intro hjc
+      rw [hjc] at hj
+      exact hcnoinc hj.2
+    · intro hz
+      rw [colHoles_place_eq_of_unfed (b := b) hz] at hj
+      omega
+  have htouch := placement_touched_columns_le_four hv
+  have hcmem : c ∈ (Finset.range 10).filter
+      (fun j => ¬ (pl.colProfile j = 0)) := by
+    rw [Finset.mem_filter, Finset.mem_range]
+    exact ⟨hclt, by omega⟩
+  calc ((Finset.range 10).filter (fun j =>
+        Board.colHoles b j < Board.colHoles (pl.place b) j)).card
+      ≤ (((Finset.range 10).filter
+          (fun j => ¬ (pl.colProfile j = 0))).erase c).card :=
+        Finset.card_le_card hsub
+    _ = ((Finset.range 10).filter
+          (fun j => ¬ (pl.colProfile j = 0))).card - 1 :=
+        Finset.card_erase_of_mem hcmem
+    _ ≤ 3 := by omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

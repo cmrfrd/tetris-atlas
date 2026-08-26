@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26x) — hole damage is narrow (bank 243/N)
+
+- `colHoles_place_eq_of_unfed` — extracted: unfed columns' holes
+  unchanged by the merge.
+- **`place_hole_columns_le_three`** — the hole-gaining columns of any
+  valid placement number ≤ 3 (⊆ touched-minus-flush, erase-card). The
+  hole arc now: genesis exact per column, ≤ 3 columns per move, total
+  capped by free volume and the clear ledger, monotone in droughts,
+  repaired only by clears, tetris hole-free.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26w) — the piece must touch down (bank 242/N)
 
 - `shape_has_bottom_cell` — decide: every shape touches row 0.
