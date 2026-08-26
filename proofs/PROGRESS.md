@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25bj) — holes are permanent until a clear (bank 215/N)
+
+- `hole_never_filled_by_drop` — the space under the skyline is
+  unreachable to every future placement (one-liner off
+  dropped_above_own_column).
+- **`hole_persists_place`** — a covered empty cell stays empty through
+  any merge; only clearLines can repair it. The board-level core of the
+  hole-debt Lyapunov ("debt rises on placement, falls only on clears"),
+  now in the main bank.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25bi) — the skew classification IFF (bank 214/N)
 
 - **`grounded_rotation_iff_not_skew`** — one kernel-checked equivalence

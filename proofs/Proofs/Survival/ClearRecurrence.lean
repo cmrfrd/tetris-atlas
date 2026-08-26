@@ -3698,6 +3698,28 @@ theorem grounded_rotation_iff_not_skew :
               Board.empty := by
   decide
 
+/-- **A hole can never be filled by a drop**: no piece cell ever lands in
+a row below its column's height — the space under the skyline is
+unreachable to every future placement. -/
+theorem hole_never_filled_by_drop {b : Board} {pl : Placement} {c r : ℕ}
+    (hr : r < b.colHeight c) : (c, r) ∉ pl.dropped b := by
+  intro h
+  have h2 : b.colHeight c ≤ r := dropped_above_own_column (c, r) h
+  omega
+
+/-- **Holes persist through every placement**: a covered empty cell stays
+empty across any merge — only line clearing can ever repair it. The
+board-level core of the hole-debt principle: debt rises on placement and
+falls only on clears. -/
+theorem hole_persists_place {b : Board} {pl : Placement} {c r : ℕ}
+    (hempty : (c, r) ∉ b) (hr : r < b.colHeight c) :
+    (c, r) ∉ pl.place b := by
+  intro h
+  rw [Placement.place_eq_union_dropped, Finset.mem_union] at h
+  rcases h with h | h
+  · exact hempty h
+  · exact hole_never_filled_by_drop hr h
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
