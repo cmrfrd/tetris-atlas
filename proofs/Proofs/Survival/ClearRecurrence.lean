@@ -4447,6 +4447,102 @@ theorem tetris_skyline_mass {b : Board} {pl : Placement}
   simp only [] at h1 h2
   omega
 
+/-- **A tetris creates no holes**: the vertical I lands with zero gap on
+the well stack, so the merge leaves every column's hole count unchanged,
+and the clear can only lower it — `holes(after) ≤ holes(before)`. The
+tetris is a debt-free harvest: unlike every gap-landing placement, it
+never adds to the hole ledger it may even repay. -/
+theorem tetris_no_new_holes {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    Board.holes GameConfig.standard
+      (Placement.applyStep GameConfig.standard b pl)
+      ≤ Board.holes GameConfig.standard b := by
+  classical
+  obtain ⟨hI, c₀, hlt, hoff, hwin, hprof4, hz, hshape, hdepth⟩ :=
+    tetris_anatomy hwf hv hnf h4
+  have hcols : ∀ j < 10,
+      Board.colHoles (pl.place b) j = Board.colHoles b j := by
+    intro j hj
+    by_cases hjc : j = c₀
+    · subst hjc
+      have hrows := four_clear_piece_rows_card hnf h4
+      have hrows' : ((Piece.I.shapeUp pl.rot).image (fun c => c.2)).card
+          = 4 := by
+        unfold Placement.shapeUp at hrows
+        rw [hI] at hrows
+        exact hrows
+      obtain ⟨t, ht4, hshapeI⟩ := I_shape_vertical_eq pl.rot hrows'
+      have hshapeUp : pl.shapeUp
+          = ({(t, 0), (t, 1), (t, 2), (t, 3)} : Finset Coord) := by
+        unfold Placement.shapeUp
+        rw [hI]
+        exact hshapeI
+      have hct : pl.col + t = j := by
+        by_contra hne
+        have hclt : pl.col + t < 10 := by
+          have hmem : ((t, 0) : Coord) ∈ pl.shapeUp := by
+            rw [hshapeUp]
+            simp
+          have h := hv (t, 0) hmem
+          rwa [GameConfig.standard_cols] at h
+        have h0 := hz (pl.col + t) hclt hne
+        have h1 : 1 ≤ pl.colProfile (pl.col + t) := by
+          unfold Placement.colProfile
+          apply Finset.card_pos.mpr
+          exact ⟨(t, 0), Finset.mem_filter.mpr
+            ⟨by rw [hshapeUp]; simp, rfl⟩⟩
+        omega
+      have hfed := place_fed_colHeight_eq (b := b)
+        (cell := ((t, 3) : Coord))
+        (by rw [hshapeUp]; simp)
+        (by
+          intro cell' hc' hcc
+          rw [hshapeUp] at hc'
+          simp only [Finset.mem_insert, Finset.mem_singleton] at hc'
+          rcases hc' with h | h | h | h <;> rw [h] <;> simp)
+      have hfed' : (pl.place b).colHeight j = b.colHeight j + 4 := by
+        have h := hfed
+        rw [show pl.col + ((t, 3) : Coord).1 = j from hct] at h
+        rw [h, hoff]
+      have hcc := Placement.colCount_place b pl j
+      unfold Board.colHoles
+      rw [colRows_card_eq_colCount, colRows_card_eq_colCount, hfed', hcc,
+        hprof4]
+      have hle := Board.colCount_le_count b j
+      have hhle := colCount_le_colHeight b j
+      omega
+    · have hz0 : pl.colProfile j = 0 := hz j hj hjc
+      have hprof : ((pl.dropped b).filter (fun p => p.1 = j)).card
+          = pl.colProfile j := by
+        have hcc := Placement.colCount_cellsAt pl (pl.dropOffset b) j
+        unfold Board.colCount at hcc
+        unfold Placement.dropped
+        exact hcc
+      have hempty : (pl.dropped b).filter (fun p => p.1 = j) = ∅ :=
+        Finset.card_eq_zero.mp (by omega)
+      have hh := place_unfed_colHeight_eq (b := b) (pl := pl) hz0
+      have hr : (pl.place b).colRows j = b.colRows j := by
+        unfold Board.colRows
+        rw [Placement.place_eq_union_dropped, Finset.filter_union, hempty,
+          Finset.union_empty]
+      unfold Board.colHoles
+      rw [hh, hr]
+  have hplace : Board.holes GameConfig.standard (pl.place b)
+      = Board.holes GameConfig.standard b := by
+    unfold Board.holes
+    rw [GameConfig.standard_cols]
+    exact Finset.sum_congr rfl (fun j hj =>
+      hcols j (Finset.mem_range.mp hj))
+  have hfinal : Board.holes GameConfig.standard
+      (Placement.applyStep GameConfig.standard b pl)
+      ≤ Board.holes GameConfig.standard (pl.place b) := by
+    unfold Placement.applyStep
+    exact holes_clearLines_le GameConfig.standard (pl.place b)
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

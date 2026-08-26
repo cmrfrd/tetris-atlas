@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26t) — the debt-free harvest (bank 239/N)
+
+- **`tetris_no_new_holes`** — holes(after) ≤ holes(before) at every
+  four-clear: the I lands gap-free on the well (exact fed formula, +4
+  height +4 cells), unfed columns untouched, clearing only lowers.
+  Combined suite: the tetris is simultaneously the best clearer (4
+  rows), the only full-feed, mass-fixed and height-fixed at its well,
+  and the ONLY placement class guaranteed hole-neutral.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26s) — thirty-six rows of skyline (bank 238/N)
 
 - **`tetris_skyline_mass`** — Σ heights drops ≥ 36 through a tetris
