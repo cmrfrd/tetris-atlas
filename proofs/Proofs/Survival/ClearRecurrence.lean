@@ -3826,6 +3826,98 @@ theorem tetris_anatomy {b : Board} {pl : Placement}
     have := Board.lt_colHeight hmem
     omega
 
+/-- **The anatomy is sufficient — the constructive tetris**: on a board
+whose rows `[h, h+3]` are complete except for column `c₀` (standing at
+height exactly `h`), dropping the vertical I into `c₀` clears exactly
+those four rows. Together with `tetris_anatomy`, the four-clear is fully
+characterized: it happens *iff* the board presents this well and the I
+takes it. -/
+theorem tetris_of_well {b : Board} {c₀ h : ℕ}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hh : b.colHeight c₀ = h)
+    (hfull : ∀ r, h ≤ r → r ≤ h + 3 → ∀ c < 10, c ≠ c₀ → (c, r) ∈ b) :
+    Board.fullRows GameConfig.standard
+      ((⟨Piece.I, 1, c₀⟩ : Placement).place b)
+      = Finset.Icc h (h + 3) := by
+  classical
+  have hshapeI : Piece.I.shapeUp 1
+      = ({(0, 0), (0, 1), (0, 2), (0, 3)} : Finset Coord) := by
+    decide
+  have hshape : (⟨Piece.I, 1, c₀⟩ : Placement).shapeUp
+      = ({(0, 0), (0, 1), (0, 2), (0, 3)} : Finset Coord) := hshapeI
+  have hoff : (⟨Piece.I, 1, c₀⟩ : Placement).dropOffset b = h := by
+    refine Nat.le_antisymm ?_ ?_
+    · apply dropOffset_le_of_heights
+      intro cell hcell
+      rw [hshape] at hcell
+      simp only [Finset.mem_insert, Finset.mem_singleton] at hcell
+      rcases hcell with h1 | h1 | h1 | h1 <;> rw [h1] <;> simp [hh]
+    · have hcell : ((0, 0) : Coord)
+          ∈ (⟨Piece.I, 1, c₀⟩ : Placement).shapeUp := by
+        rw [hshape]
+        simp
+      have hle := Finset.le_sup (f := fun cell =>
+        b.colHeight ((⟨Piece.I, 1, c₀⟩ : Placement).col + cell.1) - cell.2)
+        hcell
+      have h3 : b.colHeight (c₀ + 0) - 0
+          ≤ (⟨Piece.I, 1, c₀⟩ : Placement).dropOffset b := hle
+      rw [Nat.add_zero, hh] at h3
+      omega
+  have hdropmem : ∀ k, k ≤ 3 →
+      (c₀, h + k) ∈ (⟨Piece.I, 1, c₀⟩ : Placement).dropped b := by
+    intro k hk
+    rw [Placement.dropped_eq_image, Finset.mem_image]
+    refine ⟨(0, k), ?_, ?_⟩
+    · rw [hshape]
+      interval_cases k <;> simp
+    · rw [hoff]
+      change (c₀ + 0, h + k) = (c₀, h + k)
+      rw [Nat.add_zero]
+  have hdroprows : ∀ q ∈ (⟨Piece.I, 1, c₀⟩ : Placement).dropped b,
+      h ≤ q.2 ∧ q.2 ≤ h + 3 := by
+    intro q hq
+    rw [Placement.dropped_eq_image, Finset.mem_image] at hq
+    obtain ⟨cell, hcell, hEq⟩ := hq
+    have hrow : (⟨Piece.I, 1, c₀⟩ : Placement).dropOffset b + cell.2 = q.2 :=
+      congrArg Prod.snd hEq
+    have hb := Piece.shapeUp_row_lt_four Piece.I 1 cell hcell
+    rw [hoff] at hrow
+    omega
+  ext r
+  rw [Finset.mem_Icc]
+  constructor
+  · intro hr
+    by_contra hout
+    apply hnf r
+    intro c hc
+    have hfullr := Board.isFull_of_mem_fullRows hr
+    have hmem := hfullr c hc
+    rw [Placement.place_eq_union_dropped, Finset.mem_union] at hmem
+    rcases hmem with hmem | hmem
+    · exact hmem
+    · have h5 : h ≤ r ∧ r ≤ h + 3 := hdroprows _ hmem
+      exact absurd h5 hout
+  · intro hr
+    have hcell : (c₀, r) ∈ (⟨Piece.I, 1, c₀⟩ : Placement).place b := by
+      rw [Placement.place_eq_union_dropped, Finset.mem_union]
+      right
+      have hk := hdropmem (r - h) (by omega)
+      rw [show h + (r - h) = r by omega] at hk
+      exact hk
+    have hisfull : Board.isFull GameConfig.standard
+        ((⟨Piece.I, 1, c₀⟩ : Placement).place b) r := by
+      intro c hcr
+      rw [Finset.mem_range, GameConfig.standard_cols] at hcr
+      by_cases hcc : c = c₀
+      · rw [hcc]
+        exact hcell
+      · have hb := hfull r hr.1 hr.2 c hcr hcc
+        rw [Placement.place_eq_union_dropped, Finset.mem_union]
+        left
+        exact hb
+    simp only [Board.fullRows, Finset.mem_filter, Finset.mem_image]
+    exact ⟨⟨(c₀, r), hcell, rfl⟩, hisfull⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

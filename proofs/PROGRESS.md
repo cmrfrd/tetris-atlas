@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26d) — the constructive tetris (bank 223/N)
+
+- **`tetris_of_well`** — sufficiency: a 9/10-complete window [h, h+3]
+  over a height-h well c₀ + the vertical I dropped there = fullRows
+  exactly Icc h (h+3). With the capstone: four-clear ⟺ well presented ∧
+  I takes it — the tetris is now an IFF-characterized event.
+- Lean notes: decide rejects statements with free variables — prove the
+  closed shape fact (Piece.I.shapeUp 1 = ...) and transfer by defeq;
+  interval_cases + simp for small-k memberships.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26c) — the tetris anatomy capstone (bank 222/N)
 
 - **`tetris_anatomy`** — one theorem, one existential well column
