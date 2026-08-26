@@ -134,4 +134,35 @@ theorem solvable_implies_bounded_atlas (h : TetrisSolvableValid) :
     rw [Set.Finite.mem_toFinset]
     exact solverReachable.step p hg hp
 
+/-- **The well-formed safe set fits in `2^207` states**: `safe` is
+infinite only through its junk (ill-formed boards and the empty-bag
+degeneracy) — restricted to well-formed boards it embeds into in-field
+boards paired with bags. The Atlas's true domain is astronomically finite,
+not infinite. -/
+theorem safe_wf_ncard_le :
+    ({g ∈ safe GameConfig.standard |
+      Board.WF GameConfig.standard g.board}).ncard ≤ 2 ^ 207 := by
+  classical
+  have hsub : {g ∈ safe GameConfig.standard |
+        Board.WF GameConfig.standard g.board}
+      ⊆ Set.range (fun q : InFieldBoard GameConfig.standard × Bag =>
+        GameState.mk q.1.val q.2) := by
+    rintro g ⟨hsafe, hwf⟩
+    have hnl := safe_not_lost hsafe
+    have hif := (GameState.not_lost_iff_forall_row_lt
+      GameConfig.standard g).mp hnl
+    exact ⟨(⟨g.board, hwf, hif⟩, g.bag), rfl⟩
+  calc ({g ∈ safe GameConfig.standard |
+        Board.WF GameConfig.standard g.board}).ncard
+      ≤ (Set.range (fun q : InFieldBoard GameConfig.standard × Bag =>
+          GameState.mk q.1.val q.2)).ncard :=
+        Set.ncard_le_ncard hsub (Set.finite_range _)
+    _ ≤ (Set.univ : Set (InFieldBoard GameConfig.standard × Bag)).ncard := by
+        rw [← Set.image_univ]
+        exact Set.ncard_image_le Set.finite_univ
+    _ = 2 ^ 207 := by
+        rw [Set.ncard_univ, Nat.card_eq_fintype_card, Fintype.card_prod,
+          InFieldBoard.standard_fintype_card, Bag.fintype_card]
+        norm_num [← pow_add]
+
 end Tetris

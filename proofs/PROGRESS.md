@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26g) — the safe set's true size (bank 226/N)
+
+- **`safe_wf_ncard_le`** — safe ∩ well-formed ≤ 2^207 states (embed
+  into InFieldBoard × Bag; safe ⇒ not lost ⇒ in-field). Resolves the
+  counting-barrier memory's "safe is infinite" puzzle constructively:
+  the infinity is all junk; the Atlas's domain is finite.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26f) — one page per state, 240 lines (bank 225/N)
 
 - `card_allValid_biUnion` — the union of the 7 per-piece enumerations is
