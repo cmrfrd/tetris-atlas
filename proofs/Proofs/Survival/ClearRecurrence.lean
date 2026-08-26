@@ -4963,6 +4963,82 @@ theorem window_burnout {π : Policy GameConfig.standard} {n w j : ℕ}
     (trace GameConfig.standard π GameState.init (n + w)).board (j + 1)
   omega
 
+/-- **The window ledger**: over `w` drops confined to the adjacent pair
+`(j, j+1)`, the pair's cell count plus twice the rows cleared equals its
+start plus `4w` — all four cells of every drop land in the pair, and each
+cleared row bills the pair two. -/
+theorem window_feed_ledger {π : Policy GameConfig.standard} {n j : ℕ}
+    (hj : j + 1 < 10) :
+    ∀ w, (∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          = j
+        ∨ (π (trace GameConfig.standard π GameState.init (n + k))).col
+            + cell.1 = j + 1) →
+      (trace GameConfig.standard π GameState.init (n + w)).board.colCount j
+        + (trace GameConfig.standard π GameState.init
+            (n + w)).board.colCount (j + 1)
+        + 2 * (cleared GameConfig.standard π GameState.init (n + w)
+            - cleared GameConfig.standard π GameState.init n)
+      = (trace GameConfig.standard π GameState.init n).board.colCount j
+        + (trace GameConfig.standard π GameState.init n).board.colCount
+            (j + 1)
+        + 4 * w := by
+  intro w
+  induction w with
+  | zero =>
+    intro _
+    simp
+  | succ k ih =>
+    intro hcells
+    have hihk := ih (fun i hi => hcells i (by omega))
+    have hm1 := cleared_mono GameConfig.standard π GameState.init
+      (Nat.le_add_right n k)
+    have hm2 := cleared_mono GameConfig.standard π GameState.init
+      (show n + k ≤ (n + k) + 1 by omega)
+    have hs := cleared_succ GameConfig.standard π GameState.init (n + k)
+    have ha1 := applyStep_colCount GameConfig.standard
+      (trace GameConfig.standard π GameState.init (n + k)).board
+      (π (trace GameConfig.standard π GameState.init (n + k)))
+      (j := j) (by rw [GameConfig.standard_cols]; omega)
+    have ha2 := applyStep_colCount GameConfig.standard
+      (trace GameConfig.standard π GameState.init (n + k)).board
+      (π (trace GameConfig.standard π GameState.init (n + k)))
+      (j := j + 1) (by rw [GameConfig.standard_cols]; omega)
+    have hsplit := colProfile_pair_of_confined
+      (pl := π (trace GameConfig.standard π GameState.init (n + k)))
+      (hcells k (by omega))
+    unfold Board.linesCleared at ha1 ha2
+    rw [show n + (k + 1) = (n + k) + 1 by omega, trace_succ,
+      GameState.step_board]
+    omega
+
+/-- **A sustained window clears two rows per drop**: keeping the pair low
+through `w` confined drops forces at least `2w − 16` cleared rows — five
+times the global 0.4-per-move speed limit. Fixed-window play is possible
+only in short bursts; a survivor's window must migrate, and this is the
+exact price of staying. -/
+theorem window_sustain_clear_rate {π : Policy GameConfig.standard}
+    {n j w : ℕ} (hj : j + 1 < 10)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          = j
+        ∨ (π (trace GameConfig.standard π GameState.init (n + k))).col
+            + cell.1 = j + 1)
+    (hlow : (trace GameConfig.standard π GameState.init
+          (n + w)).board.colHeight j + 4 ≤ 20
+      ∧ (trace GameConfig.standard π GameState.init
+          (n + w)).board.colHeight (j + 1) + 4 ≤ 20) :
+    2 * w ≤ 2 * (cleared GameConfig.standard π GameState.init (n + w)
+        - cleared GameConfig.standard π GameState.init n) + 16 := by
+  have hled := window_feed_ledger (n := n) hj w hcells
+  have hc1 := colCount_le_colHeight
+    (trace GameConfig.standard π GameState.init (n + w)).board j
+  have hc2 := colCount_le_colHeight
+    (trace GameConfig.standard π GameState.init (n + w)).board (j + 1)
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26ag) — staying costs two rows per drop (bank 252/N)
+
+- **`window_feed_ledger`** — pair count + 2·clearsΔ = start + 4w over
+  confined drops (applyStep_colCount summed; each cleared row bills the
+  pair two).
+- **`window_sustain_clear_rate`** — a low-sustained window forces
+  clearsΔ ≥ 2w − 16: FIVE TIMES the global 0.4/move ceiling. Fixed
+  windows are short bursts; with cleared_le_two_fifths, at most ~1/5 of
+  a survivor's long-run play can sit in any one window ⇒ migration is
+  forced by arithmetic. The crux sharpened: not whether to migrate, but
+  whether migration can always find a low landing.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26af) — the window's wall (bank 251/N)
 
 - `colProfile_pair_of_confined` — a two-column-confined placement splits
