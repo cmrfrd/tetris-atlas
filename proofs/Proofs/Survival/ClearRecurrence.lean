@@ -3661,6 +3661,29 @@ theorem Z_creates_hole_on_empty :
   refine ⟨⟨Piece.Z, 0, 0⟩, rfl, by decide, 0, 0, 1, by omega,
     by decide, by decide⟩
 
+/-- **The I never buries a cell on virgin ground**: in every rotation and
+column, an I dropped on the empty board is fully grounded — the column
+below each placed cell is solid. The clean complement to the S/Z hole
+factories. -/
+theorem I_grounded_on_empty :
+    ∀ rot : Rotation, ∀ col : Fin 10,
+      ∀ q ∈ (⟨Piece.I, rot, (col : ℕ)⟩ : Placement).place Board.empty,
+        ∀ r < q.2,
+          (q.1, r) ∈ (⟨Piece.I, rot, (col : ℕ)⟩ : Placement).place
+            Board.empty := by
+  decide
+
+/-- The O too: every flat-bottomed drop on empty ground is grounded. Of
+the seven pieces, only the skew pair is forced to bury cells on a flat
+floor. -/
+theorem O_grounded_on_empty :
+    ∀ rot : Rotation, ∀ col : Fin 10,
+      ∀ q ∈ (⟨Piece.O, rot, (col : ℕ)⟩ : Placement).place Board.empty,
+        ∀ r < q.2,
+          (q.1, r) ∈ (⟨Piece.O, rot, (col : ℕ)⟩ : Placement).place
+            Board.empty := by
+  decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

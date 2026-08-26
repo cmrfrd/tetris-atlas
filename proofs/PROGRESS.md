@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25bh) — I and O land grounded (bank 213/N)
+
+- **`I_grounded_on_empty`** / **`O_grounded_on_empty`** — in every
+  rotation and column, dropped on the empty board the I and O are fully
+  grounded (membership-bounded decide over the ≤ 4 placed cells — cheap
+  quantifier design vs the naive 6400-case sweep).
+- The hole dichotomy on virgin ground: S/Z force holes, I/O never do.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25bg) — S and Z are hole factories (bank 212/N)
 
 - **`S_creates_hole_on_empty`** / **`Z_creates_hole_on_empty`** —
