@@ -1008,5 +1008,49 @@ theorem tetris_window_cap {π : Policy GameConfig.standard}
   have hcap := count_lt_two_hundred_one hv hlive
   omega
 
+/-- **The confinement cap**: even WITH clears, a burst of `w` drops
+confined to one adjacent pair that ends low obeys `3w ≤ 2n + 40` — the
+window demands two rows per drop but the whole game can only mint 0.4, so
+confined bursts are capped by the clearing credit banked before they
+start. -/
+theorem window_confinement_cap {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n j w : ℕ}
+    (hj : j + 1 < 10)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          = j
+        ∨ (π (trace GameConfig.standard π GameState.init (n + k))).col
+            + cell.1 = j + 1)
+    (hlow : (trace GameConfig.standard π GameState.init
+          (n + w)).board.colHeight j + 4 ≤ 20
+      ∧ (trace GameConfig.standard π GameState.init
+          (n + w)).board.colHeight (j + 1) + 4 ≤ 20) :
+    3 * w ≤ 2 * n + 40 := by
+  have hrate := window_sustain_clear_rate (n := n) hj hcells hlow
+  have hcap := cleared_le_two_fifths hv (n + w)
+  omega
+
+/-- **The opening window closes at thirteen**: from the empty board, play
+confined to a single adjacent pair can stay low for at most thirteen
+drops — clears included. There is no banked credit at move zero, so the
+opening forces the window to migrate almost immediately. -/
+theorem opening_window_cap {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {j w : ℕ}
+    (hj : j + 1 < 10)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init k)).shapeUp,
+        (π (trace GameConfig.standard π GameState.init k)).col + cell.1 = j
+        ∨ (π (trace GameConfig.standard π GameState.init k)).col + cell.1
+            = j + 1)
+    (hlow : (trace GameConfig.standard π GameState.init
+          w).board.colHeight j + 4 ≤ 20
+      ∧ (trace GameConfig.standard π GameState.init
+          w).board.colHeight (j + 1) + 4 ≤ 20) :
+    w ≤ 13 := by
+  have h := window_confinement_cap hv (n := 0) hj
+    (by simpa using hcells) (by simpa using hlow)
+  omega
+
 end ClearRate
 end Tetris

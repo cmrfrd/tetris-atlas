@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26ah) — the opening window closes at thirteen (bank 253/N)
+
+- **`window_confinement_cap`** — window law (2 rows/drop) vs global
+  ceiling (0.4/move): a confined burst ending low obeys 3w ≤ 2n + 40.
+  Confined play runs on clearing credit banked BEFORE the burst.
+- **`opening_window_cap`** — n = 0 ⇒ w ≤ 13: from the empty board,
+  single-pair play lasts at most thirteen drops, clears included. The
+  opening forces migration almost immediately — no policy can camp.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26ag) — staying costs two rows per drop (bank 252/N)
 
 - **`window_feed_ledger`** — pair count + 2·clearsΔ = start + 4w over
