@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26au) — the clearing-piece band at every window (bank 266/N)
+
+- **`clearingSteps_window_band`** — 4w ≤ 40·Δsteps + 200 ∧ 10·Δsteps ≤
+  4w + 200 across any live window: the lifetime 1/10–2/5 law localized
+  (window clearing band × windowed 1–4 pricing, pure omega).
+- **`survivor_clearingSteps_window_band`** — instantiation over a
+  survivor's whole play.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26at) — the cycle's full-width census (bank 265/N)
 
 - **`clearingSteps_window_card`** — the windowed counter equals the

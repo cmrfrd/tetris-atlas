@@ -5318,6 +5318,42 @@ theorem clearingSteps_window_card {cfg : GameConfig} {π : Policy cfg}
     · rw [if_neg hpos, if_neg hpos]
       omega
 
+/-- **The clearing-piece band holds on every window**: across any live
+`w`-move window, the clearing moments number at least `w/10 − 5` and at
+most `2w/5 + 20` — the lifetime 1/10–2/5 law, localized to every position
+and scale. No stretch of play, anywhere, can clear much rarer than one
+piece in ten or much oftener than two in five. -/
+theorem clearingSteps_window_band {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m w : ℕ}
+    (hlive_m : ¬ (trace GameConfig.standard π GameState.init m).lost
+      GameConfig.standard)
+    (hlive_mw : ¬ (trace GameConfig.standard π GameState.init (m + w)).lost
+      GameConfig.standard) :
+    4 * w ≤ 40 * (clearingSteps GameConfig.standard π GameState.init (m + w)
+        - clearingSteps GameConfig.standard π GameState.init m) + 200
+      ∧ 10 * (clearingSteps GameConfig.standard π GameState.init (m + w)
+        - clearingSteps GameConfig.standard π GameState.init m)
+        ≤ 4 * w + 200 := by
+  have hband := cleared_window_band hv hlive_m hlive_mw
+  have hup := cleared_window_le_four_mul_clearingSteps
+    (cfg := GameConfig.standard) (π := π) m w
+  have hlo := clearingSteps_window_le_cleared
+    (cfg := GameConfig.standard) (π := π) m w
+  exact ⟨by omega, by omega⟩
+
+/-- A survivor's clearing-piece fraction obeys the 1/10–2/5 band on every
+window of its play. -/
+theorem survivor_clearingSteps_window_band {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hsurv : SurvivesForever GameConfig.standard π GameState.init)
+    (m w : ℕ) :
+    4 * w ≤ 40 * (clearingSteps GameConfig.standard π GameState.init (m + w)
+        - clearingSteps GameConfig.standard π GameState.init m) + 200
+      ∧ 10 * (clearingSteps GameConfig.standard π GameState.init (m + w)
+        - clearingSteps GameConfig.standard π GameState.init m)
+        ≤ 4 * w + 200 :=
+  clearingSteps_window_band hv (hsurv m) (hsurv (m + w))
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
