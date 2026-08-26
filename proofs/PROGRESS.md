@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26af) — the window's wall (bank 251/N)
+
+- `colProfile_pair_of_confined` — a two-column-confined placement splits
+  its 4 cells between them (filter_congr on members).
+- **`window_burnout`** — nine confined clear-free drops break the low
+  pair (pair cell-count grows exactly 4/step; counts ≤ heights). The
+  low-window reduction's maintenance crux, quantified: clear or migrate
+  within eight.
+- Lean note: `∀ v ≤ w` + induction needs intro v THEN induct with the
+  bound intro'd per-case; monos must be stated at (n+k)+1 (not
+  n+(k+1)) for omega atom identity.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26ae) — HALFWAY: the window reduction (bank 250/N)
 
 - **`survivesForever_of_low_pair_play`** — a policy playing entirely

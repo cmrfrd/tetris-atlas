@@ -4864,6 +4864,105 @@ theorem survivesForever_of_low_pair_play {π : Policy GameConfig.standard}
   · exact h1
   · exact h2
 
+/-- A placement confined to two adjacent columns splits its four cells
+between them. -/
+theorem colProfile_pair_of_confined {pl : Placement} {j : ℕ}
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1) :
+    pl.colProfile j + pl.colProfile (j + 1) = 4 := by
+  classical
+  unfold Placement.colProfile
+  have hcong : pl.shapeUp.filter (fun cell => pl.col + cell.1 = j + 1)
+      = pl.shapeUp.filter (fun cell => ¬ (pl.col + cell.1 = j)) := by
+    apply Finset.filter_congr
+    intro cell hmem
+    constructor
+    · intro h
+      omega
+    · intro h
+      rcases hcells cell hmem with h1 | h1
+      · exact absurd h1 h
+      · exact h1
+  rw [hcong, Finset.card_filter_add_card_filter_not
+    (s := pl.shapeUp) (fun cell => pl.col + cell.1 = j), pl.shapeUp_card]
+
+/-- **A window burns out in eight**: confining nine consecutive clear-free
+drops to one adjacent column pair pushes some column of the pair past
+height sixteen — a low two-column window absorbs at most eight pieces
+before it must clear or move. The quantitative wall of the low-window
+reduction: window maintenance forces clears (or migration) at least once
+per eight drops. -/
+theorem window_burnout {π : Policy GameConfig.standard} {n w j : ℕ}
+    (hdry : cleared GameConfig.standard π GameState.init (n + w)
+      = cleared GameConfig.standard π GameState.init n)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          = j
+        ∨ (π (trace GameConfig.standard π GameState.init (n + k))).col
+            + cell.1 = j + 1)
+    (hw : 9 ≤ w) :
+    ¬ ((trace GameConfig.standard π GameState.init (n + w)).board.colHeight j
+          + 4 ≤ 20
+      ∧ (trace GameConfig.standard π GameState.init (n + w)).board.colHeight
+          (j + 1) + 4 ≤ 20) := by
+  classical
+  -- pair cell-count grows by exactly 4 per confined dry step
+  have hgrow : ∀ v, v ≤ w →
+      (trace GameConfig.standard π GameState.init n).board.colCount j
+        + (trace GameConfig.standard π GameState.init n).board.colCount
+          (j + 1) + 4 * v
+      ≤ (trace GameConfig.standard π GameState.init (n + v)).board.colCount j
+        + (trace GameConfig.standard π GameState.init
+            (n + v)).board.colCount (j + 1) := by
+    intro v
+    induction v with
+    | zero =>
+      intro _
+      simp
+    | succ k ih =>
+      intro hv
+      have hm1 := cleared_mono GameConfig.standard π GameState.init
+        (Nat.le_add_right n k)
+      have hm2 := cleared_mono GameConfig.standard π GameState.init
+        (show n + k ≤ (n + k) + 1 by omega)
+      have hm3 := cleared_mono GameConfig.standard π GameState.init
+        (show (n + k) + 1 ≤ n + w by omega)
+      have hs := cleared_succ GameConfig.standard π GameState.init (n + k)
+      have hcard0 : (Board.fullRows GameConfig.standard
+          ((π (trace GameConfig.standard π GameState.init (n + k))).place
+            (trace GameConfig.standard π GameState.init (n + k)).board)).card
+          = 0 := by
+        omega
+      have hnc := Finset.card_eq_zero.mp hcard0
+      have hid : Placement.applyStep GameConfig.standard
+          (trace GameConfig.standard π GameState.init (n + k)).board
+          (π (trace GameConfig.standard π GameState.init (n + k)))
+          = (π (trace GameConfig.standard π GameState.init (n + k))).place
+            (trace GameConfig.standard π GameState.init (n + k)).board := by
+        unfold Placement.applyStep
+        exact Board.clearLines_eq_self_of_no_fullRows GameConfig.standard hnc
+      have hcp1 := Placement.colCount_place
+        (trace GameConfig.standard π GameState.init (n + k)).board
+        (π (trace GameConfig.standard π GameState.init (n + k))) j
+      have hcp2 := Placement.colCount_place
+        (trace GameConfig.standard π GameState.init (n + k)).board
+        (π (trace GameConfig.standard π GameState.init (n + k))) (j + 1)
+      have hsplit := colProfile_pair_of_confined
+        (pl := π (trace GameConfig.standard π GameState.init (n + k)))
+        (hcells k (by omega))
+      have hihk := ih (by omega)
+      rw [show n + (k + 1) = (n + k) + 1 by omega, trace_succ,
+        GameState.step_board, hid]
+      omega
+  have hg := hgrow w (le_refl w)
+  intro hcon
+  have hc1 := colCount_le_colHeight
+    (trace GameConfig.standard π GameState.init (n + w)).board j
+  have hc2 := colCount_le_colHeight
+    (trace GameConfig.standard π GameState.init (n + w)).board (j + 1)
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
