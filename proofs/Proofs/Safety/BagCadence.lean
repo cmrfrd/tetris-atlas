@@ -1269,5 +1269,20 @@ theorem bagAt_card_clock {initBag : Bag} {s : ℕ → Piece}
     · have hcd := bagAt_card_countdown hl (n := k) rfl 1 (by omega)
       omega
 
+/-- **The forced draw**: when the bag is down to one piece, the stream has
+no choice — the bag *is* the singleton of the next draw. The seventh draw
+of every block is fully determined by the previous six; of each block's
+`7! = 5040` orderings, the adversary really chooses only among `6! = 720`
+free prefixes per final letter. -/
+theorem bag_singleton_forced {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {n : ℕ}
+    (h1 : (bagAt initBag s n).card = 1) :
+    bagAt initBag s n = {s n} := by
+  obtain ⟨a, ha⟩ := Finset.card_eq_one.mp h1
+  have hmem : s n ∈ bagAt initBag s n := hl n
+  rw [ha] at hmem ⊢
+  rw [Finset.mem_singleton] at hmem
+  rw [hmem]
+
 end BagCadence
 end Tetris

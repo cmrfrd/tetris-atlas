@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26b) — the forced draw (bank 221/N)
+
+- **`bag_singleton_forced`** — bag of size one = {next draw}: the
+  seventh letter of every block is determined by the first six.
+- Lean note: `hl n` is canDraw, DEFEQ to ∈ but not syntactically —
+  ascribe `have hmem : s n ∈ bagAt ... := hl n` before rw-ing.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26a) — the bag-card clock from any seed (bank 220/N)
 
 - **`bagAt_card_clock`** — (|bag| + n) mod 7 is invariant along any
