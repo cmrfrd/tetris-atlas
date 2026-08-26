@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26j) — block coverage, stream level (bank 229/N)
+
+- **`block_contains`** / `first_block_contains` — from any full-bag
+  instant every piece appears within the next seven draws (existence
+  form of refill_block_balanced).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26i) — the skew pressure starts by move 8 (bank 228/N)
 
 - **`trace_first_block_all_pieces`** — the opening block faces every

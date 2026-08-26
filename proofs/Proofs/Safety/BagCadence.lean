@@ -1284,5 +1284,27 @@ theorem bag_singleton_forced {initBag : Bag} {s : ℕ → Piece}
   rw [Finset.mem_singleton] at hmem
   rw [hmem]
 
+/-- **Every refill block contains every piece exactly once — existence
+form**: from any full-bag instant, each piece appears within the next
+seven draws. The stream-level source of the trace fact that the S/Z
+pressure arrives inside the very first bag. -/
+theorem block_contains {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {r : ℕ}
+    (hfull : bagAt initBag s r = Bag.full) (p : Piece) :
+    ∃ k < 7, s (r + k) = p := by
+  have hcard := refill_block_balanced hl hfull p
+  have hne : ((Finset.range 7).filter (fun k => s (r + k) = p)).Nonempty :=
+    Finset.card_pos.mp (by omega)
+  obtain ⟨k, hk⟩ := hne
+  rw [Finset.mem_filter, Finset.mem_range] at hk
+  exact ⟨k, hk.1, hk.2⟩
+
+/-- The first block of any full-bag stream contains every piece. -/
+theorem first_block_contains {s : ℕ → Piece}
+    (hl : LegalSequenceFrom Bag.full s) (p : Piece) :
+    ∃ k < 7, s k = p := by
+  obtain ⟨k, hk, hks⟩ := block_contains hl (r := 0) rfl p
+  exact ⟨k, hk, by simpa using hks⟩
+
 end BagCadence
 end Tetris
