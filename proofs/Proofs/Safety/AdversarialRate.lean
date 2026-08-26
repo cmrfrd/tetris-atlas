@@ -2867,5 +2867,29 @@ theorem adversarial_holes_mono_of_dry {σ : Solver GameConfig.standard}
       adversarialStep_board]
     exact le_trans (ih h1) hstep
 
+/-- **The hole-debt ledger cap is adversary-proof**: at any live step of
+any adversarial game, `holes + 4m ≤ 200 + 10·clearedAdv` — hole debt is
+a claim against clears already made, whoever deals the pieces. -/
+theorem adversarial_holes_ledger_cap {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {m : ℕ}
+    (hlive : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init m).lost GameConfig.standard) :
+    Board.holes GameConfig.standard
+        (adversarialTrace GameConfig.standard σ s GameState.init m).board
+      + 4 * m
+      ≤ 200 + 10 * clearedAdv GameConfig.standard σ s GameState.init m := by
+  have hwf := adversarialTrace_board_wf
+    (GameState.init_board_wf GameConfig.standard) hv m
+  have hif := (GameState.not_lost_iff_forall_row_lt
+    GameConfig.standard _).mp hlive
+  have hcap := holes_add_count_le_two_hundred hwf hif
+  have hled := clearedAdv_ledger (cfg := GameConfig.standard)
+    (GameState.init_board_wf GameConfig.standard) hv m
+  rw [GameConfig.standard_cols, GameState.init_board_count] at hled
+  omega
+
 end ClearRate
 end Tetris

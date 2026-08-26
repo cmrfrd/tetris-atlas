@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26z) — the hole ledger, adversarially (bank 245/N)
+
+- **`adversarial_holes_ledger_cap`** — holes + 4m ≤ 200 + 10·clearedAdv
+  at every live adversarial step. The hole economy is now fully
+  adversary-proof (genesis, monotone, price).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26y) — the drought monotone, adversarially (bank 244/N)
 
 - **`adversarial_holes_mono_of_dry`** — clear-free adversarial windows
