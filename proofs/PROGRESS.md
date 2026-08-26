@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26w) — the piece must touch down (bank 242/N)
+
+- `shape_has_bottom_cell` — decide: every shape touches row 0.
+- **`exists_flush_cell`** — some cell of every drop rests exactly on
+  its column's old top (sup-achievement for d > 0; the bottom cell on
+  a floor-rest). With the flush law: every placement has ≥ 1 hole-free
+  fed column.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26v) — flush landings are hole-neutral (bank 241/N)
 
 - **`colHoles_place_eq_of_flush`** — one cell landing exactly on the

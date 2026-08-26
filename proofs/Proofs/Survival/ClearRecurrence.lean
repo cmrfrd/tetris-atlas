@@ -4648,6 +4648,37 @@ theorem colHoles_place_eq_of_flush {b : Board} {pl : Placement} {j : ℕ}
   have h := colHoles_place_eq hmem hmin
   omega
 
+/-- Every shape touches row zero (28-case check). -/
+theorem shape_has_bottom_cell :
+    ∀ p : Piece, ∀ r : Rotation, ∃ cell ∈ p.shapeUp r, cell.2 = 0 := by
+  decide
+
+/-- **Every placement lands flush somewhere**: some cell of every drop
+comes to rest exactly on its column's old stack top (or the floor) — the
+piece must touch down. With `colHoles_place_eq_of_flush`: every move has
+at least one fed column that gains no holes; gap damage is never total. -/
+theorem exists_flush_cell {b : Board} {pl : Placement} :
+    ∃ cell ∈ pl.shapeUp,
+      pl.dropOffset b + cell.2 = b.colHeight (pl.col + cell.1) := by
+  classical
+  rcases Nat.eq_zero_or_pos (pl.dropOffset b) with h0 | hpos
+  · obtain ⟨cell, hcell, hc2⟩ := shape_has_bottom_cell pl.piece pl.rot
+    refine ⟨cell, hcell, ?_⟩
+    have hle := fed_column_height_le (b := b) cell hcell
+    omega
+  · have hne : pl.shapeUp.Nonempty := by
+      apply Finset.card_pos.mp
+      rw [pl.shapeUp_card]
+      omega
+    obtain ⟨cell, hcell, hsup⟩ := Finset.exists_mem_eq_sup pl.shapeUp hne
+      (fun cell => b.colHeight (pl.col + cell.1) - cell.2)
+    refine ⟨cell, hcell, ?_⟩
+    have hd : pl.dropOffset b
+        = b.colHeight (pl.col + cell.1) - cell.2 := by
+      unfold Placement.dropOffset
+      exact hsup
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
