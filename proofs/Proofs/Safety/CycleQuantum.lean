@@ -2990,5 +2990,37 @@ theorem trace_first_block_all_pieces {π : Policy GameConfig.standard}
   obtain ⟨k, hk, hkp⟩ := hp
   exact ⟨k, Finset.mem_range.mp hk, hkp⟩
 
+/-- **A clearing moment sits in every cycle window**: from any point of a
+35-cycle, some single step within the next thirty-five strictly clears —
+the exact-fourteen window law localized to an event. -/
+theorem cycle_clear_moment {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) :
+    ∃ k < 35,
+      cleared GameConfig.standard π GameState.init (m₀ + k)
+        < cleared GameConfig.standard π GameState.init ((m₀ + k) + 1) := by
+  have hex := cycle_window_clears_exact hv hcyc hm
+  have hmono := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right m₀ 35)
+  exact exists_jump_of_lt (by omega)
+
+/-- **Full-width play recurs on every cycle, every thirty-five moves**:
+from any point of a 35-cycle, within one period some merged board occupies
+all ten columns. A closed orbit cannot avoid simultaneous full-width play
+for even a single period. -/
+theorem cycle_full_width_moment {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) :
+    ∃ k < 35, ∀ j < 10,
+      1 ≤ ((π (trace GameConfig.standard π GameState.init (m₀ + k))).place
+        (trace GameConfig.standard π GameState.init (m₀ + k)).board).colCount
+        j := by
+  obtain ⟨k, hk, hjump⟩ := cycle_clear_moment hv hcyc hm
+  exact ⟨k, hk, clearing_move_spans_board hjump⟩
+
 end ClearRate
 end Tetris

@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26ar) — cycles show full width every period (bank 263/N)
+
+- **`exists_jump_of_lt`** — general jump extraction for ANY counter:
+  f N < f (N+w) ⇒ some single step grows. No monotonicity needed.
+  Axioms: [propext, Quot.sound] — Classical.choice-free.
+- **`cycle_clear_moment`** — exact-14-per-window localized: from any
+  point of a 35-cycle a clearing moment sits within 35 steps.
+- **`cycle_full_width_moment`** — composed with the span certificate: a
+  closed orbit occupies all ten columns simultaneously at least once
+  per period.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26aq) — the clearing clock is dealer-blind (bank 262/N)
 
 - **`adversarial_clearing_move_spans_board`**, **`adversarial_clearing_

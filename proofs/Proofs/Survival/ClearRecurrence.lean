@@ -5207,6 +5207,28 @@ theorem clearing_move_mass_floor {π : Policy GameConfig.standard} {m : ℕ} :
   rw [GameConfig.standard_cols] at h
   omega
 
+/-- **Growth localizes to a step**: any function of the step counter that
+grows over a window grows at some single step of it. The bridge from
+window-level clear counts to clearing *moments*, for any counter. -/
+theorem exists_jump_of_lt {f : ℕ → ℕ} {N w : ℕ} (h : f N < f (N + w)) :
+    ∃ k < w, f (N + k) < f ((N + k) + 1) := by
+  by_contra hnone
+  push Not at hnone
+  have hflat : ∀ v, v ≤ w → f (N + v) ≤ f N := by
+    intro v
+    induction v with
+    | zero =>
+      intro _
+      simp
+    | succ k ih =>
+      intro hvw
+      have hle := hnone k (by omega)
+      have hik := ih (by omega)
+      rw [show N + (k + 1) = (N + k) + 1 by omega]
+      omega
+  have hw := hflat w (le_refl w)
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
