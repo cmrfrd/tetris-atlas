@@ -2827,5 +2827,45 @@ theorem adversarial_survives_of_headroom {cfg : GameConfig}
   rw [GameState.not_lost_iff_forall_row_lt]
   exact hif n
 
+/-- **Hole debt is monotone along dry adversarial play too**: over any
+clear-free window of an adversarial trace, the total hole count never
+decreases — the drought monotone owes nothing to who deals. -/
+theorem adversarial_holes_mono_of_dry {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {n w : ℕ}
+    (hdry : clearedAdv GameConfig.standard σ s GameState.init (n + w)
+      = clearedAdv GameConfig.standard σ s GameState.init n) :
+    Board.holes GameConfig.standard
+        (adversarialTrace GameConfig.standard σ s GameState.init n).board
+      ≤ Board.holes GameConfig.standard
+        (adversarialTrace GameConfig.standard σ s
+          GameState.init (n + w)).board := by
+  induction w with
+  | zero => exact le_refl _
+  | succ k ih =>
+    have hm1 := clearedAdv_mono GameConfig.standard σ s GameState.init
+      (Nat.le_add_right n k)
+    have hm2 := clearedAdv_mono GameConfig.standard σ s GameState.init
+      (show n + k ≤ n + (k + 1) by omega)
+    have hs := clearedAdv_succ GameConfig.standard σ s GameState.init
+      (n + k)
+    have h1 : clearedAdv GameConfig.standard σ s GameState.init (n + k)
+        = clearedAdv GameConfig.standard σ s GameState.init n := by
+      rw [show n + (k + 1) = (n + k) + 1 by omega] at hdry
+      omega
+    have hcard0 : (Board.fullRows GameConfig.standard
+        (({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).place
+          (adversarialTrace GameConfig.standard σ s
+            GameState.init (n + k)).board)).card = 0 := by
+      rw [show n + (k + 1) = (n + k) + 1 by omega] at hdry
+      omega
+    have hnc := Finset.card_eq_zero.mp hcard0
+    have hstep := holes_step_ge_of_no_clear (cfg := GameConfig.standard)
+      hnc
+    rw [show n + (k + 1) = (n + k) + 1 by omega, adversarialTrace_succ,
+      adversarialStep_board]
+    exact le_trans (ih h1) hstep
+
 end ClearRate
 end Tetris

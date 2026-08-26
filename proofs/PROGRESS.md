@@ -41629,6 +41629,15 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26y) — the drought monotone, adversarially (bank 244/N)
+
+- **`adversarial_holes_mono_of_dry`** — clear-free adversarial windows
+  never lower holes (same induction, adversarial step).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26x) — hole damage is narrow (bank 243/N)
 
 - `colHoles_place_eq_of_unfed` — extracted: unfed columns' holes
