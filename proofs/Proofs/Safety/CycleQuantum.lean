@@ -2950,5 +2950,23 @@ theorem trace_tetris_relief {π : Policy GameConfig.standard}
     (trace_board_wf hv (GameState.init_board_wf GameConfig.standard) m)
     (hv _) (fun r => trace_board_no_full_of_pos hm r) h4
 
+/-- **The opening seven are all different**: any legal game's first block
+plays each of the seven pieces exactly once — the image of the first
+seven moves' pieces is the whole alphabet of tetrominoes. -/
+theorem trace_first_block_pieces_card {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) :
+    ((Finset.range 7).image (fun k =>
+      (π (trace GameConfig.standard π GameState.init k)).piece)).card
+      = 7 := by
+  have hl := legalSequence_of_trace_draws hdraw
+  rw [show GameState.init.bag = Bag.full from GameState.init_bag] at hl
+  have hinj := (BagCadence.legalSequenceFrom_iff_block_injective _).mp hl
+  rw [Finset.card_image_of_injOn, Finset.card_range]
+  intro a ha b hb hab
+  simp only [Finset.mem_coe, Finset.mem_range] at ha hb
+  by_contra hne
+  exact hinj 0 a (by omega) b (by omega) hne (by simpa using hab)
+
 end ClearRate
 end Tetris

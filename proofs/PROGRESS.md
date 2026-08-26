@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26h) — the opening seven (bank 227/N)
+
+- **`trace_first_block_pieces_card`** — the first block of any legal
+  game plays the whole tetromino alphabet, one of each (block
+  injectivity at b = 0 through the trace bridge).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26g) — the safe set's true size (bank 226/N)
 
 - **`safe_wf_ncard_le`** — safe ∩ well-formed ≤ 2^207 states (embed
