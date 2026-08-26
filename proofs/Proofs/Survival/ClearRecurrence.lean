@@ -4792,6 +4792,35 @@ theorem Z_fits_stagger :
         ({(0, 0)} : Finset Coord)) = 0 := by
   decide
 
+/-- **Total hole-neutrality is pointwise**: a merge preserves the total
+hole count iff it preserves every column's — since no column can lose,
+one column's gain shows in the sum. Reduces global hole-neutrality
+questions to per-column landing-gap checks. -/
+theorem holes_place_eq_iff {b : Board} {pl : Placement} :
+    Board.holes GameConfig.standard (pl.place b)
+      = Board.holes GameConfig.standard b
+    ↔ ∀ j < 10,
+        Board.colHoles (pl.place b) j = Board.colHoles b j := by
+  constructor
+  · intro h j hj
+    by_contra hne
+    have hge := colHoles_place_ge (b := b) (pl := pl) j
+    have hgt : Board.colHoles b j < Board.colHoles (pl.place b) j := by
+      omega
+    have hlt := Finset.sum_lt_sum (s := Finset.range 10)
+      (f := fun j => Board.colHoles b j)
+      (g := fun j => Board.colHoles (pl.place b) j)
+      (fun i _ => colHoles_place_ge i)
+      ⟨j, Finset.mem_range.mpr hj, hgt⟩
+    unfold Board.holes at h
+    rw [GameConfig.standard_cols] at h
+    simp only [] at hlt
+    omega
+  · intro h
+    unfold Board.holes
+    rw [GameConfig.standard_cols]
+    exact Finset.sum_congr rfl (fun j hj => h j (Finset.mem_range.mp hj))
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

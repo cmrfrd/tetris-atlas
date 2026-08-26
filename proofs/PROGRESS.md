@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26ac) — neutrality is pointwise (bank 248/N)
+
+- **`holes_place_eq_iff`** — sum-preserved ⟺ each column preserved
+  (monotone + sum_lt_sum). Global hole-neutrality now reduces to
+  per-column landing-gap checks.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26ab) — stagger absorbs the skew (bank 247/N)
 
 - **`S_fits_stagger`** / **`Z_fits_stagger`** — one-step rises (in
