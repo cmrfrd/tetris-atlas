@@ -1,6 +1,7 @@
 import Mathlib
 import Proofs.Survival.ClearDeviation
 import Proofs.Invariants.ColumnCount
+import Proofs.Invariants.Holes
 
 /-!
 # Recurrence and period: the arithmetic skeleton of an immortal solver
@@ -3917,6 +3918,77 @@ theorem tetris_of_well {b : Board} {c₀ h : ℕ}
         exact hb
     simp only [Board.fullRows, Finset.mem_filter, Finset.mem_image]
     exact ⟨⟨(c₀, r), hcell, rfl⟩, hisfull⟩
+
+/-- **Placing never repairs a hole, counted**: each column's hole count is
+non-decreasing through the merge — the fed columns gain exactly their
+landing gap and the rest are untouched. The quantitative face of
+`hole_persists_place`. -/
+theorem colHoles_place_ge {b : Board} {pl : Placement} (j : ℕ) :
+    Board.colHoles b j ≤ Board.colHoles (pl.place b) j := by
+  classical
+  by_cases hfib : ((pl.dropped b).filter (fun p => p.1 = j)).Nonempty
+  · set F := ((pl.dropped b).filter (fun p => p.1 = j)).image
+      (fun p => p.2) with hF
+    have hFne : F.Nonempty := hfib.image _
+    have hmmem := Finset.min'_mem F hFne
+    have hMmem := Finset.max'_mem F hFne
+    have hget : ∀ r ∈ F, (j, r) ∈ pl.dropped b := by
+      intro r hr
+      rw [hF, Finset.mem_image] at hr
+      obtain ⟨q, hq, rfl⟩ := hr
+      rw [Finset.mem_filter] at hq
+      have hqe : q = (j, q.2) := Prod.ext hq.2 rfl
+      rw [← hqe]
+      exact hq.1
+    have h_hm : b.colHeight j ≤ F.min' hFne :=
+      dropped_above_own_column (j, F.min' hFne) (hget _ hmmem)
+    have h_hM : F.max' hFne < (pl.place b).colHeight j := by
+      have hmem : (j, F.max' hFne) ∈ pl.place b := by
+        rw [Placement.place_eq_union_dropped, Finset.mem_union]
+        exact Or.inr (hget _ hMmem)
+      exact Board.lt_colHeight hmem
+    have hsub : (pl.place b).colRows j ⊆ b.colRows j ∪ F := by
+      unfold Board.colRows
+      rw [Placement.place_eq_union_dropped, Finset.filter_union,
+        Finset.image_union]
+    have hcard' : ((pl.place b).colRows j).card
+        ≤ (b.colRows j).card + F.card :=
+      le_trans (Finset.card_le_card hsub) (Finset.card_union_le _ _)
+    have hFcard : F.card ≤ F.max' hFne - F.min' hFne + 1 := by
+      calc F.card ≤ (Finset.Icc (F.min' hFne) (F.max' hFne)).card :=
+          Finset.card_le_card (fun x hx => Finset.mem_Icc.mpr
+            ⟨Finset.min'_le _ _ hx, Finset.le_max' _ _ hx⟩)
+        _ ≤ F.max' hFne - F.min' hFne + 1 := by
+          rw [Nat.card_Icc]
+          omega
+    have hcards := Board.colRows_card_le_colHeight b j
+    have hcards' := Board.colRows_card_le_colHeight (pl.place b) j
+    have hmM : F.min' hFne ≤ F.max' hFne := Finset.min'_le _ _ hMmem
+    unfold Board.colHoles
+    omega
+  · have hprof : ((pl.dropped b).filter (fun p => p.1 = j)).card
+        = pl.colProfile j := by
+      have hcc := Placement.colCount_cellsAt pl (pl.dropOffset b) j
+      unfold Board.colCount at hcc
+      unfold Placement.dropped
+      exact hcc
+    rw [Finset.not_nonempty_iff_eq_empty] at hfib
+    have hz : pl.colProfile j = 0 := by
+      rw [← hprof, hfib, Finset.card_empty]
+    have hh := place_unfed_colHeight_eq (b := b) (pl := pl) hz
+    have hr : (pl.place b).colRows j = b.colRows j := by
+      unfold Board.colRows
+      rw [Placement.place_eq_union_dropped, Finset.filter_union, hfib,
+        Finset.union_empty]
+    unfold Board.colHoles
+    rw [hh, hr]
+
+/-- Total holes are non-decreasing through the merge: only clearing can
+lower the debt. -/
+theorem holes_place_ge {cfg : GameConfig} {b : Board} {pl : Placement} :
+    Board.holes cfg b ≤ Board.holes cfg (pl.place b) := by
+  unfold Board.holes
+  exact Finset.sum_le_sum (fun j _ => colHoles_place_ge j)
 
 /-! ## The clear-free horizon is fifty placements -/
 

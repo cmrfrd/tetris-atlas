@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26k) — the counted hole monotone (bank 230/N)
+
+- **`colHoles_place_ge`** — per column, holes never decrease through
+  place: fed columns' height gain (≥ M+1 from ≤ m) beats the fiber's
+  card (≤ M − m + 1); unfed columns are untouched. No contiguity or
+  exact landing needed for the ≤ direction.
+- **`holes_place_ge`** — total holes non-decreasing (cfg-general).
+- ClearRecurrence now imports Invariants.Holes. The hole-debt Lyapunov's
+  "rises only on placement" half, quantitatively, in the main bank.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26j) — block coverage, stream level (bank 229/N)
 
 - **`block_contains`** / `first_block_contains` — from any full-bag
