@@ -2968,5 +2968,27 @@ theorem trace_first_block_pieces_card {π : Policy GameConfig.standard}
   by_contra hne
   exact hinj 0 a (by omega) b (by omega) hne (by simpa using hab)
 
+/-- **Every piece shows up in the opening seven**: whatever the deal,
+each tetromino — the skew pair included — is faced within the first
+block. The S/Z pressure starts before move eight in every game ever
+played. -/
+theorem trace_first_block_all_pieces {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag) (p : Piece) :
+    ∃ k < 7,
+      (π (trace GameConfig.standard π GameState.init k)).piece = p := by
+  have hcard := trace_first_block_pieces_card hdraw
+  have huniv : ((Finset.range 7).image (fun k =>
+      (π (trace GameConfig.standard π GameState.init k)).piece))
+      = Finset.univ :=
+    Finset.eq_univ_of_card _
+      (hcard.trans (show (7 : ℕ) = Fintype.card Piece by decide))
+  have hp : p ∈ (Finset.range 7).image (fun k =>
+      (π (trace GameConfig.standard π GameState.init k)).piece) :=
+    huniv ▸ Finset.mem_univ p
+  rw [Finset.mem_image] at hp
+  obtain ⟨k, hk, hkp⟩ := hp
+  exact ⟨k, Finset.mem_range.mp hk, hkp⟩
+
 end ClearRate
 end Tetris

@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26i) — the skew pressure starts by move 8 (bank 228/N)
+
+- **`trace_first_block_all_pieces`** — the opening block faces every
+  tetromino (image card 7 = univ via eq_univ_of_card). With the S/Z
+  hole-factory witnesses: hole pressure is present from the very first
+  bag of every game.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26h) — the opening seven (bank 227/N)
 
 - **`trace_first_block_pieces_card`** — the first block of any legal
