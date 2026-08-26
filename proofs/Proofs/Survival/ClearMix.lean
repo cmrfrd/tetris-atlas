@@ -1052,5 +1052,68 @@ theorem opening_window_cap {π : Policy GameConfig.standard}
     (by simpa using hcells) (by simpa using hlow)
   omega
 
+/-- **The width-`k` clear demand**: `w` drops confined to a column set
+`S` ending at a live board force `4w ≤ |S|·clearsΔ + 20|S|` — the set
+must absorb four cells per drop and can bank at most twenty per column. -/
+theorem confinement_clear_demand {π : Policy GameConfig.standard}
+    {n w : ℕ} {S : Finset ℕ} (hS : ∀ j ∈ S, j < 10)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          ∈ S)
+    (hlive : ¬ (trace GameConfig.standard π GameState.init
+      (n + w)).lost GameConfig.standard) :
+    4 * w ≤ S.card * (cleared GameConfig.standard π GameState.init (n + w)
+        - cleared GameConfig.standard π GameState.init n) + 20 * S.card := by
+  have hled := window_feed_ledger_set (n := n) hS w hcells
+  have hif := (GameState.not_lost_iff_forall_row_lt
+    GameConfig.standard _).mp hlive
+  have hcolbound : ∀ j ∈ S,
+      (trace GameConfig.standard π GameState.init
+        (n + w)).board.colCount j ≤ 20 := by
+    intro j hj
+    have h1 := colCount_le_colHeight
+      (trace GameConfig.standard π GameState.init (n + w)).board j
+    have h2 := Board.colHeight_le_rows_of_in_field
+      (cfg := GameConfig.standard) hif j
+    rw [GameConfig.standard_rows] at h2
+    omega
+  have hsum : (∑ j ∈ S, (trace GameConfig.standard π GameState.init
+        (n + w)).board.colCount j) ≤ 20 * S.card := by
+    calc (∑ j ∈ S, (trace GameConfig.standard π GameState.init
+            (n + w)).board.colCount j)
+        ≤ ∑ _j ∈ S, 20 := Finset.sum_le_sum hcolbound
+      _ = 20 * S.card := by
+          rw [Finset.sum_const, smul_eq_mul, Nat.mul_comm]
+  omega
+
+/-- **A survivor never abandons a column**: no surviving policy can
+eventually confine its drops to nine or fewer columns. Width-nine play
+demands 4/9 of a cleared row per move forever, but the whole game can
+only mint 2/5 — and 4/9 > 2/5. Every survivor keeps using all ten
+columns, from every point on. The migration crux is now two-sided:
+windows must move (burnout), and the board's full width must stay in
+play (this theorem). -/
+theorem no_eventual_confinement {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hsurv : SurvivesForever GameConfig.standard π GameState.init)
+    {S : Finset ℕ} (hS : ∀ j ∈ S, j < 10) (hcard : S.card ≤ 9) {N : ℕ}
+    (hconf : ∀ k,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (N + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (N + k))).col + cell.1
+          ∈ S) :
+    False := by
+  set w := 9 * N + 451 with hw
+  have hdem := confinement_clear_demand (n := N) (w := w) hS
+    (fun k _ => hconf k) (hsurv (N + w))
+  have hglob := cleared_le_two_fifths hv (N + w)
+  have hmul : S.card * (cleared GameConfig.standard π GameState.init (N + w)
+        - cleared GameConfig.standard π GameState.init N)
+      ≤ 9 * (cleared GameConfig.standard π GameState.init (N + w)
+        - cleared GameConfig.standard π GameState.init N) :=
+    Nat.mul_le_mul hcard (le_refl _)
+  have hmul2 : 20 * S.card ≤ 180 := by omega
+  omega
+
 end ClearRate
 end Tetris

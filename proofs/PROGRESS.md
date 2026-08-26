@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26ak) — a survivor never abandons a column (bank 256/N)
+
+- **`confinement_clear_demand`** — w confined drops ending live force
+  4w ≤ |S|·clearsΔ + 20|S| (set ledger + live boards bank ≤ 20/column).
+- **`no_eventual_confinement`** — CAPSTONE: no surviving policy can
+  eventually confine its drops to ≤ 9 columns. The margin is razor thin:
+  width-9 demands 4/9 of a row per move forever, the game mints at most
+  2/5, and 4/9 > 2/5. Witness horizon w = 9N + 451 closes it by omega.
+- The migration crux is now two-sided: windows must move (burnout) AND
+  the full ten-column width must stay in play forever (this).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26aj) — the confinement ledger at every width (bank 255/N)
 
 - **`colProfile_sum_of_confined`** — a drop confined to a column set S
