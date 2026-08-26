@@ -41629,6 +41629,24 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26o) — clearing never backfires (bank 234/N)
+
+- `colRows_card_eq_colCount` — extracted helper.
+- **`colHeight_clearLines_add_le`** — a k-clear drops every valid
+  column ≥ k in height (the surviving top's slide is dominated by the
+  cleared rows stacked above it — max'-of-A argument).
+- **`colHoles_clearLines_le`** / **`holes_clearLines_le`** — clearing
+  never increases holes, per column and total. With holes_place_ge:
+  the hole-debt Lyapunov structure fully certified (place ↑ by landing
+  gaps, clear ↓, nothing else moves).
+- Lean notes: keep colHeight ABSTRACT in omega chains (unfold only
+  inside sub-goals, `change` back after sup_le); implicit {b} + inline
+  (by omega) needs (b := b) pinned.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26n) — the hole debt, priced (bank 233/N)
 
 - `trace_holes_add_count_le` — holes + count ≤ 200 on live traces.

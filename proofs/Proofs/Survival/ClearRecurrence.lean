@@ -4099,6 +4099,166 @@ theorem trace_holes_ledger_cap {π : Policy GameConfig.standard}
   rw [GameConfig.standard_cols] at hled
   omega
 
+/-- A column's visible rows count exactly its cells. -/
+theorem colRows_card_eq_colCount (b : Board) (j : ℕ) :
+    (b.colRows j).card = b.colCount j := by
+  classical
+  unfold Board.colRows Board.colCount
+  apply Finset.card_image_of_injOn
+  intro p hp q hq hpq
+  simp only [Finset.mem_coe, Finset.mem_filter] at hp hq
+  exact Prod.ext (by rw [hp.2, hq.2]) hpq
+
+/-- **Clearing drops a column's height by at least the clear count**: with
+`k` full rows cleared, every valid column ends at least `k` lower — each
+surviving cell slides down by its cleared-below count, and the cleared
+rows above it push the old height even higher. -/
+theorem colHeight_clearLines_add_le {cfg : GameConfig} {b : Board} {j : ℕ}
+    (hj : j < cfg.cols) (hk : 0 < (Board.fullRows cfg b).card) :
+    (Board.clearLines cfg b).colHeight j + (Board.fullRows cfg b).card
+      ≤ b.colHeight j := by
+  classical
+  set k := (Board.fullRows cfg b).card with hkdef
+  have hkey : ∀ r' ∈ (Board.clearLines cfg b).colRows j,
+      r' + 1 + k ≤ b.colHeight j := by
+    intro r' hr'
+    unfold Board.colRows at hr'
+    rw [Finset.mem_image] at hr'
+    obtain ⟨q, hq, rfl⟩ := hr'
+    rw [Finset.mem_filter] at hq
+    obtain ⟨hqmem, hqj⟩ := hq
+    unfold Board.clearLines at hqmem
+    rw [Finset.mem_image] at hqmem
+    obtain ⟨c, hc, hEq⟩ := hqmem
+    rw [Finset.mem_filter] at hc
+    obtain ⟨hcb, hcnf⟩ := hc
+    have hcol : c.1 = q.1 := by
+      have h := congrArg Prod.fst hEq
+      exact h
+    have hrow : c.2 - Board.clearedBelow cfg b c.2 = q.2 := by
+      have h := congrArg Prod.snd hEq
+      exact h
+    set r := c.2 with hrdef
+    -- (j, r) ∈ b
+    have hjr : (j, r) ∈ b := by
+      have hce : c = (j, r) := Prod.ext (by rw [hcol, hqj]) rfl
+      rw [← hce]
+      exact hcb
+    have hrh := Board.lt_colHeight hjr
+    -- clearedBelow ≤ k and ≤ r
+    have hcble : Board.clearedBelow cfg b r ≤ k := by
+      unfold Board.clearedBelow
+      exact Finset.card_le_card (Finset.filter_subset _ _)
+    have hcbler : Board.clearedBelow cfg b r ≤ r := by
+      unfold Board.clearedBelow
+      calc ((Board.fullRows cfg b).filter (· < r)).card
+          ≤ (Finset.range r).card := Finset.card_le_card (by
+            intro x hx
+            rw [Finset.mem_filter] at hx
+            exact Finset.mem_range.mpr hx.2)
+        _ = r := Finset.card_range r
+    -- r is not a full row
+    have hrnotC : r ∉ Board.fullRows cfg b := by
+      intro hmem
+      exact hcnf (Board.isFull_of_mem_fullRows hmem)
+    -- the cleared rows not below r
+    set A := (Board.fullRows cfg b).filter (fun t => ¬ t < r) with hA
+    have hAcard : A.card + Board.clearedBelow cfg b r = k := by
+      unfold Board.clearedBelow
+      rw [hA, hkdef]
+      have := Finset.card_filter_add_card_filter_not
+        (s := Board.fullRows cfg b) (fun t => t < r)
+      omega
+    by_cases hAne : A.Nonempty
+    · set t := A.max' hAne with ht
+      have htmem : t ∈ A := Finset.max'_mem _ _
+      have htC : t ∈ Board.fullRows cfg b := (Finset.mem_filter.mp htmem).1
+      have htgt : r < t := by
+        have h1 : ¬ t < r := (Finset.mem_filter.mp htmem).2
+        rcases Nat.lt_or_ge r t with h | h
+        · exact h
+        · exfalso
+          have : t = r := by omega
+          rw [this] at htC
+          exact hrnotC htC
+      -- A ⊆ Icc (r+1) t so card A ≤ t − r
+      have hAsub : A ⊆ Finset.Icc (r + 1) t := by
+        intro x hx
+        rw [Finset.mem_Icc]
+        have h1 : ¬ x < r := (Finset.mem_filter.mp hx).2
+        have h2 : x ≤ t := Finset.le_max' _ _ hx
+        have h3 : x ≠ r := by
+          intro hxr
+          rw [hxr] at hx
+          exact hrnotC (Finset.mem_filter.mp hx).1
+        omega
+      have hAle : A.card ≤ t - r := by
+        calc A.card ≤ (Finset.Icc (r + 1) t).card :=
+            Finset.card_le_card hAsub
+          _ ≤ t - r := by
+            rw [Nat.card_Icc]
+            omega
+      -- t < height
+      have hth : t < b.colHeight j := by
+        have hjt : (j, t) ∈ b := Board.isFull_of_mem_fullRows htC j
+          (Finset.mem_range.mpr hj)
+        exact Board.lt_colHeight hjt
+      omega
+    · rw [Finset.not_nonempty_iff_eq_empty] at hAne
+      have hA0 : A.card = 0 := by rw [hAne]; exact Finset.card_empty
+      omega
+  -- conclude via sup
+  have hcnt : k ≤ b.colHeight j := by
+    -- column j holds a cell of some full row
+    obtain ⟨r₀, hr₀⟩ := Finset.card_pos.mp hk
+    have hjr₀ : (j, r₀) ∈ b := Board.isFull_of_mem_fullRows hr₀ j
+      (Finset.mem_range.mpr hj)
+    -- every full row contributes a distinct cell to column j
+    have hsub : Board.fullRows cfg b ⊆ b.colRows j := by
+      intro r hr
+      unfold Board.colRows
+      rw [Finset.mem_image]
+      exact ⟨(j, r), Finset.mem_filter.mpr
+        ⟨Board.isFull_of_mem_fullRows hr j (Finset.mem_range.mpr hj), rfl⟩,
+        rfl⟩
+    calc k ≤ (b.colRows j).card := Finset.card_le_card hsub
+      _ ≤ b.colHeight j := Board.colRows_card_le_colHeight b j
+  have hsup : (Board.clearLines cfg b).colHeight j
+      ≤ b.colHeight j - k := by
+    unfold Board.colHeight
+    apply Finset.sup_le
+    intro r' hr'
+    change r' + 1 ≤ b.colHeight j - k
+    have h2 := hkey r' hr'
+    omega
+  omega
+
+/-- **Clearing never increases a column's holes**: line clears are the
+sole repair mechanism, and they never backfire — the falling half of the
+hole-debt Lyapunov. -/
+theorem colHoles_clearLines_le {cfg : GameConfig} {b : Board} {j : ℕ}
+    (hj : j < cfg.cols) :
+    Board.colHoles (Board.clearLines cfg b) j ≤ Board.colHoles b j := by
+  classical
+  by_cases hk : (Board.fullRows cfg b).card = 0
+  · have hempty := Finset.card_eq_zero.mp hk
+    rw [Board.clearLines_eq_self_of_no_fullRows cfg hempty]
+  · have h1 := colHeight_clearLines_add_le (b := b) hj (by omega)
+    have h2 := Board.colCount_clearLines_add cfg b hj
+    have h3 := colRows_card_eq_colCount b j
+    have h4 := colRows_card_eq_colCount (Board.clearLines cfg b) j
+    have h5 := Board.colRows_card_le_colHeight b j
+    have h6 := Board.colRows_card_le_colHeight (Board.clearLines cfg b) j
+    unfold Board.colHoles
+    omega
+
+/-- Total holes never increase under clearing. -/
+theorem holes_clearLines_le (cfg : GameConfig) (b : Board) :
+    Board.holes cfg (Board.clearLines cfg b) ≤ Board.holes cfg b := by
+  unfold Board.holes
+  exact Finset.sum_le_sum (fun j hj =>
+    colHoles_clearLines_le (Finset.mem_range.mp hj))
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
