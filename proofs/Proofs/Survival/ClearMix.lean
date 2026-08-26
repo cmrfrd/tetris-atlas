@@ -1157,5 +1157,61 @@ theorem every_column_fed_infinitely {π : Policy GameConfig.standard}
   obtain ⟨k, _, hcell⟩ := every_column_fed_within hv hsurv hj N
   exact ⟨k, hcell⟩
 
+/-- **No fifty-one-move drought, ever**: between any point and fifty-one
+moves later, a live game must clear — the ledger banks four cells per
+move and a live board holds at most two hundred. The opening bound
+`first_clear_by_fifty_one`, promoted to every point of the game. -/
+theorem no_clear_drought {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {N : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init
+      (N + 51)).lost GameConfig.standard) :
+    cleared GameConfig.standard π GameState.init N
+      < cleared GameConfig.standard π GameState.init (N + 51) := by
+  have h1 := init_ledger hv (N + 51)
+  have h2 := init_ledger hv N
+  rw [GameConfig.standard_cols] at h1 h2
+  have hcap := count_lt_two_hundred_one hv hlive
+  omega
+
+/-- A surviving policy is never fifty-one moves from its last clear. -/
+theorem survivor_no_clear_drought {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hsurv : SurvivesForever GameConfig.standard π GameState.init) (N : ℕ) :
+    cleared GameConfig.standard π GameState.init N
+      < cleared GameConfig.standard π GameState.init (N + 51) :=
+  no_clear_drought hv (hsurv (N + 51))
+
+/-- **A clearing moment sits in every fifty-one-move window**: some single
+step within the window strictly raises the cleared count. The drought
+bound, localized to an event. -/
+theorem clear_moment_in_window {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {N : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init
+      (N + 51)).lost GameConfig.standard) :
+    ∃ k < 51,
+      cleared GameConfig.standard π GameState.init (N + k)
+        < cleared GameConfig.standard π GameState.init ((N + k) + 1) := by
+  by_contra hnone
+  push Not at hnone
+  have hflat : ∀ v, v ≤ 51 →
+      cleared GameConfig.standard π GameState.init (N + v)
+        = cleared GameConfig.standard π GameState.init N := by
+    intro v
+    induction v with
+    | zero =>
+      intro _
+      simp
+    | succ k ih =>
+      intro hv51
+      have hle := hnone k (by omega)
+      have hmono := cleared_mono GameConfig.standard π GameState.init
+        (show N + k ≤ (N + k) + 1 by omega)
+      have hik := ih (by omega)
+      rw [show N + (k + 1) = (N + k) + 1 by omega]
+      omega
+  have hdr := no_clear_drought hv hlive
+  have h51 := hflat 51 (le_refl _)
+  omega
+
 end ClearRate
 end Tetris

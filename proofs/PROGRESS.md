@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26am) — no drought anywhere, ever (bank 258/N)
+
+- **`no_clear_drought`** — cleared(N) < cleared(N+51) at any live point:
+  first_clear_by_fifty_one promoted from the opening to the whole game
+  (ledger + 200-cap, four lines).
+- **`survivor_no_clear_drought`** — survivors are never 51 moves from
+  their last clear.
+- **`clear_moment_in_window`** — the drought bound localized to an
+  event: some single step in every 51-window strictly clears.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26al) — every column fed on schedule (bank 257/N)
 
 - **`every_column_fed_within`** — a survivor touches every column within
