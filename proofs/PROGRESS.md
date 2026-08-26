@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25bi) — the skew classification IFF (bank 214/N)
+
+- **`grounded_rotation_iff_not_skew`** — one kernel-checked equivalence
+  over all 7 pieces: an always-grounded rotation on virgin ground exists
+  ⟺ the piece is not S/Z. Completes batches 212–213 into a single
+  classification theorem.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25bh) — I and O land grounded (bank 213/N)
 
 - **`I_grounded_on_empty`** / **`O_grounded_on_empty`** — in every

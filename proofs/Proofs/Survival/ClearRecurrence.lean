@@ -3684,6 +3684,20 @@ theorem O_grounded_on_empty :
             Board.empty := by
   decide
 
+/-- **Clean flat landings exist exactly for the non-skew pieces**: a piece
+has a rotation that lands fully grounded at *every* column of the empty
+board if and only if it is not S and not Z — the complete classification
+of who can keep virgin ground hole-free, as one kernel-checked
+equivalence. -/
+theorem grounded_rotation_iff_not_skew :
+    ∀ p : Piece, (p ≠ Piece.S ∧ p ≠ Piece.Z) ↔
+      ∃ rot : Rotation, ∀ col : Fin 10,
+        ∀ q ∈ (⟨p, rot, (col : ℕ)⟩ : Placement).place Board.empty,
+          ∀ r < q.2,
+            (q.1, r) ∈ (⟨p, rot, (col : ℕ)⟩ : Placement).place
+              Board.empty := by
+  decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
