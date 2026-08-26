@@ -4068,6 +4068,37 @@ theorem holes_add_count_le_two_hundred {b : Board}
     Finset.sum_congr rfl (fun j _ => hcc j)
   omega
 
+/-- The debt-plus-mass cap, on live traces. -/
+theorem trace_holes_add_count_le {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init m).lost
+      GameConfig.standard) :
+    Board.holes GameConfig.standard
+        (trace GameConfig.standard π GameState.init m).board
+      + (trace GameConfig.standard π GameState.init m).board.count
+      ≤ 200 :=
+  holes_add_count_le_two_hundred
+    (trace_board_wf hv (GameState.init_board_wf GameConfig.standard) m)
+    ((GameState.not_lost_iff_forall_row_lt GameConfig.standard _).mp hlive)
+
+/-- **The hole-debt ledger cap**: at any live step,
+`holes + 4m ≤ 200 + 10·cleared` — the game can only afford holes out of
+whatever clearing has already freed. A slow-clearing game is forced
+nearly hole-free; a hole-heavy board is a debt against future clears,
+priced exactly. -/
+theorem trace_holes_ledger_cap {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ}
+    (hlive : ¬ (trace GameConfig.standard π GameState.init m).lost
+      GameConfig.standard) :
+    Board.holes GameConfig.standard
+        (trace GameConfig.standard π GameState.init m).board
+      + 4 * m
+      ≤ 200 + 10 * cleared GameConfig.standard π GameState.init m := by
+  have hcap := trace_holes_add_count_le hv hlive
+  have hled := init_ledger (cfg := GameConfig.standard) hv m
+  rw [GameConfig.standard_cols] at hled
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

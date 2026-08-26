@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26n) — the hole debt, priced (bank 233/N)
+
+- `trace_holes_add_count_le` — holes + count ≤ 200 on live traces.
+- **`trace_holes_ledger_cap`** — holes + 4m ≤ 200 + 10·cleared at
+  every live step: the hole ledger meets the mass ledger. Hole debt is
+  a claim against clears already made — a game that hasn't cleared
+  can carry at most 200 − 4m holes.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26m) — debt plus mass fits the board (bank 232/N)
 
 - **`holes_add_count_le_two_hundred`** — holes + count ≤ 200 on
