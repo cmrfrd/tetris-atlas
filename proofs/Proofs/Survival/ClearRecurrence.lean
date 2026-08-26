@@ -3990,6 +3990,53 @@ theorem holes_place_ge {cfg : GameConfig} {b : Board} {pl : Placement} :
   unfold Board.holes
   exact Finset.sum_le_sum (fun j _ => colHoles_place_ge j)
 
+/-- A clear-free full move keeps the hole count non-decreasing. -/
+theorem holes_step_ge_of_no_clear {cfg : GameConfig} {b : Board}
+    {pl : Placement}
+    (hnc : Board.fullRows cfg (pl.place b) = ∅) :
+    Board.holes cfg b ≤ Board.holes cfg (Placement.applyStep cfg b pl) := by
+  have hid : Placement.applyStep cfg b pl = pl.place b := by
+    unfold Placement.applyStep
+    exact Board.clearLines_eq_self_of_no_fullRows cfg hnc
+  rw [hid]
+  exact holes_place_ge
+
+/-- **The hole debt is monotone along dry play**: over any clear-free
+window of a trace, the board's total hole count never decreases — the
+trace form of the hole-debt Lyapunov's rising half. Debt accumulated in
+a drought is debt owed until a clear. -/
+theorem trace_holes_mono_of_dry {π : Policy GameConfig.standard} {n w : ℕ}
+    (hdry : cleared GameConfig.standard π GameState.init (n + w)
+      = cleared GameConfig.standard π GameState.init n) :
+    Board.holes GameConfig.standard
+        (trace GameConfig.standard π GameState.init n).board
+      ≤ Board.holes GameConfig.standard
+        (trace GameConfig.standard π GameState.init (n + w)).board := by
+  induction w with
+  | zero => exact le_refl _
+  | succ k ih =>
+    have hm1 := cleared_mono GameConfig.standard π GameState.init
+      (Nat.le_add_right n k)
+    have hm2 := cleared_mono GameConfig.standard π GameState.init
+      (show n + k ≤ n + (k + 1) by omega)
+    have hs := cleared_succ GameConfig.standard π GameState.init (n + k)
+    have h1 : cleared GameConfig.standard π GameState.init (n + k)
+        = cleared GameConfig.standard π GameState.init n := by
+      rw [show n + (k + 1) = (n + k) + 1 by omega] at hdry
+      omega
+    have hcard0 : (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init (n + k))).place
+          (trace GameConfig.standard π GameState.init (n + k)).board)).card
+        = 0 := by
+      rw [show n + (k + 1) = (n + k) + 1 by omega] at hdry
+      omega
+    have hnc := Finset.card_eq_zero.mp hcard0
+    have hstep := holes_step_ge_of_no_clear (cfg := GameConfig.standard)
+      hnc
+    rw [show n + (k + 1) = (n + k) + 1 by omega, trace_succ,
+      GameState.step_board]
+    exact le_trans (ih h1) hstep
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

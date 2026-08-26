@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26l) — hole debt monotone along dry play (bank 231/N)
+
+- `holes_step_ge_of_no_clear` — a clear-free full move keeps holes
+  non-decreasing (clearLines identity).
+- **`trace_holes_mono_of_dry`** — over any clear-free trace window the
+  total hole count never decreases (induction; dryness pins every
+  intermediate step's clears to zero). The rising half of the hole-debt
+  Lyapunov now lives at trace level in the main bank.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26k) — the counted hole monotone (bank 230/N)
 
 - **`colHoles_place_ge`** — per column, holes never decrease through
