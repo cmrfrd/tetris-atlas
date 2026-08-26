@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26at) — the cycle's full-width census (bank 265/N)
+
+- **`clearingSteps_window_card`** — the windowed counter equals the
+  cardinality of the clearing-moment set (range/filter_insert
+  induction; it's `Finset.range_add_one` in this Mathlib, not
+  range_succ).
+- **`cycle_full_width_census`** — ≥ 4 DISTINCT full-width moments per
+  35-window of a cycle (clearing set ⊆ span set, card mono). Statement
+  predicate uses `∀ j ∈ Finset.range 10` — the `∀ j < 10` form fails
+  DecidablePred synthesis inside Finset.filter at statement elaboration.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26as) — the cycle's clearing census (bank 264/N)
 
 - **`clearingSteps_mono`** + windowed pricing both sides:

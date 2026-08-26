@@ -3042,5 +3042,41 @@ theorem cycle_clearing_steps_bracket {π : Policy GameConfig.standard}
     (cfg := GameConfig.standard) (π := π) m₀ 35
   omega
 
+/-- **The cycle's full-width census**: every 35-window of a closed orbit
+contains at least FOUR distinct moments of simultaneous full-width play —
+each of the window's ≥ 4 clearing moments spans the board. -/
+theorem cycle_full_width_census {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) :
+    4 ≤ ((Finset.range 35).filter (fun k => ∀ j ∈ Finset.range 10,
+      1 ≤ ((π (trace GameConfig.standard π GameState.init (m₀ + k))).place
+        (trace GameConfig.standard π GameState.init
+          (m₀ + k)).board).colCount j)).card := by
+  classical
+  have hbr := (cycle_clearing_steps_bracket hv hcyc hm).1
+  have hcard := clearingSteps_window_card
+    (cfg := GameConfig.standard) (π := π) m₀ 35
+  have hsub : ((Finset.range 35).filter (fun k =>
+      0 < (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init (m₀ + k))).place
+          (trace GameConfig.standard π GameState.init
+            (m₀ + k)).board)).card))
+      ⊆ ((Finset.range 35).filter (fun k => ∀ j ∈ Finset.range 10,
+        1 ≤ ((π (trace GameConfig.standard π GameState.init (m₀ + k))).place
+          (trace GameConfig.standard π GameState.init
+            (m₀ + k)).board).colCount j)) := by
+    intro k hk
+    rw [Finset.mem_filter] at hk ⊢
+    refine ⟨hk.1, ?_⟩
+    obtain ⟨r, hr⟩ := Finset.card_pos.mp hk.2
+    intro j hj
+    have hj10 := Finset.mem_range.mp hj
+    exact colCount_pos_of_fullRow hr
+      (by rw [GameConfig.standard_cols]; omega)
+  have hle := Finset.card_le_card hsub
+  omega
+
 end ClearRate
 end Tetris

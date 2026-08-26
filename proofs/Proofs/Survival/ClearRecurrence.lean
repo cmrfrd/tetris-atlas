@@ -5290,6 +5290,34 @@ theorem clearingSteps_window_le_cleared {cfg : GameConfig}
     · rw [if_neg hpos] at hcs
       omega
 
+/-- The clearing-step counter over a window is exactly the number of
+clearing moments in it. -/
+theorem clearingSteps_window_card {cfg : GameConfig} {π : Policy cfg}
+    (n : ℕ) :
+    ∀ w, clearingSteps cfg π GameState.init (n + w)
+        - clearingSteps cfg π GameState.init n
+      = ((Finset.range w).filter (fun k =>
+          0 < (Board.fullRows cfg
+            ((π (trace cfg π GameState.init (n + k))).place
+              (trace cfg π GameState.init (n + k)).board)).card)).card := by
+  classical
+  intro w
+  induction w with
+  | zero => simp
+  | succ k ih =>
+    rw [show n + (k + 1) = (n + k) + 1 by omega, clearingSteps_succ,
+      Finset.range_add_one, Finset.filter_insert]
+    have hms := clearingSteps_mono (cfg := cfg) (π := π)
+      (Nat.le_add_right n k)
+    by_cases hpos : 0 < (Board.fullRows cfg
+        ((π (trace cfg π GameState.init (n + k))).place
+          (trace cfg π GameState.init (n + k)).board)).card
+    · rw [if_pos hpos, if_pos hpos,
+        Finset.card_insert_of_notMem (by simp)]
+      omega
+    · rw [if_neg hpos, if_neg hpos]
+      omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
