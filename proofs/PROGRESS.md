@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26c) — the tetris anatomy capstone (bank 222/N)
+
+- **`tetris_anatomy`** — one theorem, one existential well column
+  carrying ALL the laws: piece = I; dropOffset = colHeight c₀; window =
+  Icc(c₀-height, +3); colProfile c₀ = 4, zero elsewhere; window rows ⟺
+  "everything but c₀"; every other column ≥ 4 above c₀. The separate
+  well columns of batches 137/161/163/164 identified (feed-well = window
+  well via the untouched-height contradiction; shape-well via
+  lt_colHeight).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26b) — the forced draw (bank 221/N)
 
 - **`bag_singleton_forced`** — bag of size one = {next draw}: the

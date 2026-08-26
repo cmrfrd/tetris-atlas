@@ -3768,6 +3768,64 @@ theorem lost_not_absorbing :
   · decide
   · decide
 
+/-- **The complete tetris anatomy, one theorem**: at any four-clear the
+finisher is the I, and there is a single well column `c₀` carrying every
+law at once — the drop lands at its height, the window is exactly the
+four rows above it, the piece feeds it all four cells and no other
+column, the window rows are exactly "everything but the well", and every
+other column overtops it by at least four. The whole anatomical suite,
+with all its well columns identified. -/
+theorem tetris_anatomy {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    pl.piece = Piece.I
+    ∧ ∃ c₀ < 10,
+        pl.dropOffset b = b.colHeight c₀
+        ∧ Board.fullRows GameConfig.standard (pl.place b)
+          = Finset.Icc (b.colHeight c₀) (b.colHeight c₀ + 3)
+        ∧ pl.colProfile c₀ = 4
+        ∧ (∀ j < 10, j ≠ c₀ → pl.colProfile j = 0)
+        ∧ (∀ r ∈ Board.fullRows GameConfig.standard (pl.place b),
+            ∀ c < 10, ((c, r) ∈ b ↔ c ≠ c₀))
+        ∧ (∀ c < 10, c ≠ c₀ → b.colHeight c₀ + 4 ≤ b.colHeight c) := by
+  refine ⟨tetris_requires_I (b := b) (pl := pl) hnf (by omega), ?_⟩
+  obtain ⟨c₀, hlt, hoff, hwin⟩ := tetris_window_at_well_height hv hnf h4
+  obtain ⟨c₁, hlt₁, hprof4, hz⟩ := tetris_feeds_single_column hwf hv hnf h4
+  obtain ⟨c₂, hlt₂, hshape⟩ := tetris_rows_pre_shape hwf hv hnf h4
+  have h10 : c₁ = c₀ := by
+    by_contra hne
+    have hz0 := hz c₀ hlt (fun h => hne h.symm)
+    have hpos : 0 < (Board.fullRows GameConfig.standard (pl.place b)).card :=
+      by omega
+    have hgt := clear_untouched_column_height (cfg := GameConfig.standard)
+      hnf (Finset.card_pos.mp hpos)
+      (by rw [GameConfig.standard_cols]; omega) hz0
+    omega
+  have hr3 : b.colHeight c₀ + 3
+      ∈ Board.fullRows GameConfig.standard (pl.place b) := by
+    rw [hwin, Finset.mem_Icc]
+    omega
+  have h20 : c₂ = c₀ := by
+    by_contra hne
+    have hmem : (c₀, b.colHeight c₀ + 3) ∈ b :=
+      (hshape _ hr3 c₀ hlt).mpr (fun h => hne h.symm)
+    have := Board.lt_colHeight hmem
+    omega
+  refine ⟨c₀, hlt, hoff, hwin, h10 ▸ hprof4, ?_, ?_, ?_⟩
+  · intro j hj hne
+    exact hz j hj (by rw [h10]; exact hne)
+  · intro r hr c hc
+    have h := hshape r hr c hc
+    rw [h20] at h
+    exact h
+  · intro c hc hne
+    have hmem : (c, b.colHeight c₀ + 3) ∈ b :=
+      (hshape _ hr3 c hc).mpr (by rw [h20]; exact hne)
+    have := Board.lt_colHeight hmem
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
