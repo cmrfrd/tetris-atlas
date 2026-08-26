@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25bg) — S and Z are hole factories (bank 212/N)
+
+- **`S_creates_hole_on_empty`** / **`Z_creates_hole_on_empty`** —
+  kernel witnesses: flat S/Z drops bury a cell even on the empty board
+  (hole at (2,0) resp. (0,0)). The geometric seed of the S/Z pressure
+  (cooperative-lasso memory: the T1 witness REQUIRES transient holes —
+  here is the mechanism, certified at the smallest scale).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25bf) — the piece is solid (bank 211/N)
 
 - `shape_col_fiber_contiguous(')` — every tetromino column-fiber is

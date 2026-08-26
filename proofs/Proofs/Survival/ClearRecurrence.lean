@@ -3636,6 +3636,31 @@ theorem dropped_fiber_contiguous {b : Board} {pl : Placement}
     have h2' : pl.dropOffset b + (r - pl.dropOffset b) = r := by omega
     rw [h2']
 
+/-- **The S makes a hole on virgin ground**: dropped flat on the empty
+board, the S leaves a covered empty cell — its staggered bottom hangs one
+cell over nothing. Kernel-checked witness. -/
+theorem S_creates_hole_on_empty :
+    ∃ pl : Placement, pl.piece = Piece.S
+      ∧ pl.Valid GameConfig.standard
+      ∧ ∃ c r r', r < r'
+        ∧ (c, r) ∉ pl.place Board.empty
+        ∧ (c, r') ∈ pl.place Board.empty := by
+  refine ⟨⟨Piece.S, 0, 0⟩, rfl, by decide, 2, 0, 1, by omega,
+    by decide, by decide⟩
+
+/-- The Z too, mirrored: even the empty board cannot receive a flat Z
+without burying a cell. With `S_creates_hole_on_empty`: the two skew
+pieces are hole factories on any flat ground — the geometric seed of the
+S/Z pressure every survival argument must absorb. -/
+theorem Z_creates_hole_on_empty :
+    ∃ pl : Placement, pl.piece = Piece.Z
+      ∧ pl.Valid GameConfig.standard
+      ∧ ∃ c r r', r < r'
+        ∧ (c, r) ∉ pl.place Board.empty
+        ∧ (c, r') ∈ pl.place Board.empty := by
+  refine ⟨⟨Piece.Z, 0, 0⟩, rfl, by decide, 0, 0, 1, by omega,
+    by decide, by decide⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
