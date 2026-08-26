@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26e) — the table is 36 wide (bank 224/N)
+
+- `card_allValidFor_standard` — kernel: allValidFor has exactly 36
+  entries for O, 34 for every other piece (matches the batch-160
+  triple-product counts through a different enumeration).
+- **`safeMoves_ncard_le`** — the maximal atlas's safe-move fibers hold
+  ≤ 36 answers at every (state, piece) node.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26d) — the constructive tetris (bank 223/N)
 
 - **`tetris_of_well`** — sufficiency: a 9/10-complete window [h, h+3]

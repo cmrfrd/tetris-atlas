@@ -152,5 +152,28 @@ theorem safeMoves_finite (cfg : GameConfig) (g : GameState) (p : Piece) :
   Set.Finite.subset (Placement.allValidFor cfg p).finite_toSet
     (safeMoves_subset_allValidFor cfg g p)
 
+/-- The standard enumeration's exact fiber sizes: 36 placements for the O,
+34 for every other piece (kernel-counted). -/
+theorem card_allValidFor_standard :
+    ∀ p : Piece, (Placement.allValidFor GameConfig.standard p).card
+      = if p = Piece.O then 36 else 34 := by
+  decide
+
+/-- **The maximal table is at most 36 wide**: at any state and piece, the
+set of safe answers has at most 36 elements — the Atlas-as-relation
+branches within a hard three-dozen bound at every node. -/
+theorem safeMoves_ncard_le {g : GameState} {p : Piece} :
+    (safeMoves GameConfig.standard g p).ncard ≤ 36 := by
+  have hsub := safeMoves_subset_allValidFor GameConfig.standard g p
+  calc (safeMoves GameConfig.standard g p).ncard
+      ≤ (↑(Placement.allValidFor GameConfig.standard p) : Set Placement).ncard
+        := Set.ncard_le_ncard hsub
+          (Placement.allValidFor GameConfig.standard p).finite_toSet
+    _ = (Placement.allValidFor GameConfig.standard p).card :=
+        Set.ncard_coe_finset _
+    _ ≤ 36 := by
+        have h := card_allValidFor_standard p
+        split_ifs at h <;> omega
+
 end MaximalAtlas
 end Tetris
