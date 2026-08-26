@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25bf) — the piece is solid (bank 211/N)
+
+- `shape_col_fiber_contiguous(')` — every tetromino column-fiber is
+  vertically contiguous (Fin 4 decide + implication wrapper).
+- **`dropped_fiber_contiguous`** — between two landed cells of one
+  column every row is landed: holes are born only UNDER the piece
+  (overhang), never inside it. With dropped_above_own_column: the
+  complete hole-genesis law of the hard-drop model.
+- Lean note: deep towers of `∀ x < 4` bounded quantifiers fail Decidable
+  synthesis — quantify over Fin 4 instead (Fintype instances chain);
+  also state decide bodies as ¬(∧-chain) and wrap.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25be) — the availability dichotomy (bank 210/N)
 
 - **`no_low_pair_five_high`** — no adjacent low pair ⇒ ≥ 5 columns of

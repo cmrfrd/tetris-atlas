@@ -3589,6 +3589,53 @@ theorem no_low_pair_five_high {b : Board}
   calc (5 : ℕ) = (Finset.range 5).card := (Finset.card_range 5).symm
     _ ≤ _ := Finset.card_le_card_of_injOn _ hmem hinj
 
+/-- Every tetromino's column fiber is vertically contiguous — no piece has
+a gap inside one of its own columns (28-case check). -/
+theorem shape_col_fiber_contiguous :
+    ∀ p : Piece, ∀ r : Rotation, ∀ t y₁ y₂ y : Fin 4,
+      ¬ (((t : ℕ), (y₁ : ℕ)) ∈ p.shapeUp r
+        ∧ ((t : ℕ), (y₂ : ℕ)) ∈ p.shapeUp r
+        ∧ (y₁ : ℕ) ≤ (y : ℕ) ∧ (y : ℕ) ≤ (y₂ : ℕ)
+        ∧ ((t : ℕ), (y : ℕ)) ∉ p.shapeUp r) := by
+  decide
+
+/-- Implication form of `shape_col_fiber_contiguous`. -/
+theorem shape_col_fiber_contiguous' (p : Piece) (r : Rotation)
+    {t y₁ y₂ y : ℕ} (ht : t < 4) (h₁ : y₁ < 4) (h₂ : y₂ < 4) (hy : y < 4)
+    (m1 : (t, y₁) ∈ p.shapeUp r) (m2 : (t, y₂) ∈ p.shapeUp r)
+    (l1 : y₁ ≤ y) (l2 : y ≤ y₂) : (t, y) ∈ p.shapeUp r := by
+  by_contra hnot
+  exact shape_col_fiber_contiguous p r ⟨t, ht⟩ ⟨y₁, h₁⟩ ⟨y₂, h₂⟩ ⟨y, hy⟩
+    ⟨m1, m2, l1, l2, hnot⟩
+
+/-- **The dropped piece is solid in every column**: between two landed
+cells of the same column, every row is landed too — a placement never
+sandwiches a fresh gap between its own cells; holes are born only in the
+space *under* the piece, never inside it. -/
+theorem dropped_fiber_contiguous {b : Board} {pl : Placement}
+    {q q' : Coord} (hq : q ∈ pl.dropped b) (hq' : q' ∈ pl.dropped b)
+    (hcol : q.1 = q'.1) {r : ℕ} (h1 : q.2 ≤ r) (h2 : r ≤ q'.2) :
+    (q.1, r) ∈ pl.dropped b := by
+  rw [Placement.dropped_eq_image, Finset.mem_image] at hq hq' ⊢
+  obtain ⟨cell, hcell, hEq⟩ := hq
+  obtain ⟨cell', hcell', hEq'⟩ := hq'
+  have hc1 : pl.col + cell.1 = q.1 := congrArg Prod.fst hEq
+  have hr1 : pl.dropOffset b + cell.2 = q.2 := congrArg Prod.snd hEq
+  have hc1' : pl.col + cell'.1 = q'.1 := congrArg Prod.fst hEq'
+  have hr1' : pl.dropOffset b + cell'.2 = q'.2 := congrArg Prod.snd hEq'
+  have ht : cell.1 = cell'.1 := by omega
+  have hb1 := Piece.shapeUp_col_lt_four pl.piece pl.rot cell hcell
+  have hb2 := Piece.shapeUp_row_lt_four pl.piece pl.rot cell hcell
+  have hb2' := Piece.shapeUp_row_lt_four pl.piece pl.rot cell' hcell'
+  refine ⟨(cell.1, r - pl.dropOffset b), ?_, ?_⟩
+  · exact shape_col_fiber_contiguous' pl.piece pl.rot hb1 hb2 hb2'
+      (by omega) hcell (by rw [ht]; exact hcell') (by omega) (by omega)
+  · change (pl.col + cell.1, pl.dropOffset b + (r - pl.dropOffset b))
+      = (q.1, r)
+    rw [hc1]
+    have h2' : pl.dropOffset b + (r - pl.dropOffset b) = r := by omega
+    rw [h2']
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
