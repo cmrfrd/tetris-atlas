@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26av) — the windowed band against any dealer (bank 267/N)
+
+- **`clearingStepsAdv_mono`** + adversarial windowed pricing both sides
+  + **`adversarial_cleared_window_band`** (two pinches) +
+  **`adversarial_clearingSteps_window_band`** — the batch-266 localized
+  1/10–2/5 law, mirrored to forced play. Five theorems, all mechanical
+  given adversary_fullRows_card_le_four and adversarial_cleared_pinch.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26au) — the clearing-piece band at every window (bank 266/N)
 
 - **`clearingSteps_window_band`** — 4w ≤ 40·Δsteps + 200 ∧ 10·Δsteps ≤

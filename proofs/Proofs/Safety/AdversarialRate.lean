@@ -3125,5 +3125,116 @@ theorem adversarial_full_width_moment_in_window
   obtain ⟨k, hk, hjump⟩ := adversarial_clear_moment_in_window hv hlive
   exact ⟨k, hk, adversarial_clearing_move_spans_board hjump⟩
 
+/-- Adversarial clearing steps never decrease. -/
+theorem clearingStepsAdv_mono {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} : Monotone (clearingStepsAdv σ s) := by
+  apply monotone_nat_of_le_succ
+  intro n
+  rw [clearingStepsAdv_succ]
+  exact Nat.le_add_right _ _
+
+/-- Windowed pricing, upper side, adversarially: rows cleared over any
+window are at most four per clearing moment of the window. -/
+theorem clearedAdv_window_le_four_mul_clearingStepsAdv
+    {σ : Solver GameConfig.standard} {s : ℕ → Piece} (n : ℕ) :
+    ∀ w, clearedAdv GameConfig.standard σ s GameState.init (n + w)
+        - clearedAdv GameConfig.standard σ s GameState.init n
+      ≤ 4 * (clearingStepsAdv σ s (n + w) - clearingStepsAdv σ s n) := by
+  intro w
+  induction w with
+  | zero => simp
+  | succ k ih =>
+    have h4 := adversary_fullRows_card_le_four
+      (cfg := GameConfig.standard) (σ := σ) (s := s) (n + k)
+    have hc := clearedAdv_succ GameConfig.standard σ s GameState.init (n + k)
+    have hcs := clearingStepsAdv_succ σ s (n + k)
+    have hm1 := clearedAdv_mono GameConfig.standard σ s GameState.init
+      (Nat.le_add_right n k)
+    have hms := clearingStepsAdv_mono (σ := σ) (s := s)
+      (Nat.le_add_right n k)
+    rw [show n + (k + 1) = (n + k) + 1 by omega]
+    by_cases hpos : 0 < (Board.fullRows GameConfig.standard
+        (({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) } : Placement).place
+          (adversarialTrace GameConfig.standard σ s
+            GameState.init (n + k)).board)).card
+    · rw [if_pos hpos] at hcs
+      omega
+    · rw [if_neg hpos] at hcs
+      omega
+
+/-- Windowed pricing, lower side, adversarially: each clearing moment of
+a window clears at least one row. -/
+theorem clearingStepsAdv_window_le_clearedAdv
+    {σ : Solver GameConfig.standard} {s : ℕ → Piece} (n : ℕ) :
+    ∀ w, clearingStepsAdv σ s (n + w) - clearingStepsAdv σ s n
+      ≤ clearedAdv GameConfig.standard σ s GameState.init (n + w)
+        - clearedAdv GameConfig.standard σ s GameState.init n := by
+  intro w
+  induction w with
+  | zero => simp
+  | succ k ih =>
+    have hc := clearedAdv_succ GameConfig.standard σ s GameState.init (n + k)
+    have hcs := clearingStepsAdv_succ σ s (n + k)
+    have hm1 := clearedAdv_mono GameConfig.standard σ s GameState.init
+      (Nat.le_add_right n k)
+    have hms := clearingStepsAdv_mono (σ := σ) (s := s)
+      (Nat.le_add_right n k)
+    rw [show n + (k + 1) = (n + k) + 1 by omega]
+    by_cases hpos : 0 < (Board.fullRows GameConfig.standard
+        (({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) } : Placement).place
+          (adversarialTrace GameConfig.standard σ s
+            GameState.init (n + k)).board)).card
+    · rw [if_pos hpos] at hcs
+      omega
+    · rw [if_neg hpos] at hcs
+      omega
+
+/-- **The window clearing band is adversary-proof**: across any live
+window, the rows cleared sit within one boardful of the 0.4-per-move
+line, whoever deals. -/
+theorem adversarial_cleared_window_band {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {m w : ℕ}
+    (hlive_m : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init m).lost GameConfig.standard)
+    (hlive_mw : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init (m + w)).lost GameConfig.standard) :
+    4 * w ≤ 10 * (clearedAdv GameConfig.standard σ s GameState.init (m + w)
+        - clearedAdv GameConfig.standard σ s GameState.init m) + 200
+      ∧ 10 * (clearedAdv GameConfig.standard σ s GameState.init (m + w)
+        - clearedAdv GameConfig.standard σ s GameState.init m)
+        ≤ 4 * w + 200 := by
+  have hp1 := adversarial_cleared_pinch hv hlive_m
+  have hp2 := adversarial_cleared_pinch hv hlive_mw
+  have hclm := clearedAdv_mono GameConfig.standard σ s GameState.init
+    (Nat.le_add_right m w)
+  exact ⟨by omega, by omega⟩
+
+/-- **The clearing-piece band holds on every adversarial window**: the
+1/10–2/5 clearing-frequency law localizes to every stretch of forced
+play. -/
+theorem adversarial_clearingSteps_window_band
+    {σ : Solver GameConfig.standard} {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {m w : ℕ}
+    (hlive_m : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init m).lost GameConfig.standard)
+    (hlive_mw : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init (m + w)).lost GameConfig.standard) :
+    4 * w ≤ 40 * (clearingStepsAdv σ s (m + w) - clearingStepsAdv σ s m)
+        + 200
+      ∧ 10 * (clearingStepsAdv σ s (m + w) - clearingStepsAdv σ s m)
+        ≤ 4 * w + 200 := by
+  have hband := adversarial_cleared_window_band hv hlive_m hlive_mw
+  have hup := clearedAdv_window_le_four_mul_clearingStepsAdv
+    (σ := σ) (s := s) m w
+  have hlo := clearingStepsAdv_window_le_clearedAdv (σ := σ) (s := s) m w
+  exact ⟨by omega, by omega⟩
+
 end ClearRate
 end Tetris
