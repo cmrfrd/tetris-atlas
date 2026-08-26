@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26aa) — the skew tax, exactly (bank 246/N)
+
+- **`S_flat_hole_bill`** / **`Z_flat_hole_bill`** — exactly 1 hole in
+  EVERY rotation on flat ground (kernel). Discovery eval also mapped
+  the full table: I/O always 0; T {2,1,0,1}; L {0,0,2,2}; J {0,2,2,0}
+  by rotation.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26z) — the hole ledger, adversarially (bank 245/N)
 
 - **`adversarial_holes_ledger_cap`** — holes + 4m ≤ 200 + 10·clearedAdv

@@ -4754,6 +4754,24 @@ theorem place_hole_columns_le_three {b : Board} {pl : Placement}
         Finset.card_erase_of_mem hcmem
     _ ≤ 3 := by omega
 
+/-- **The skew tax is exactly one buried cell**: an S dropped on virgin
+ground pays exactly one hole in *every* rotation — there is no
+orientation that avoids the bill, and none that doubles it. -/
+theorem S_flat_hole_bill :
+    ∀ r : Rotation,
+      Board.holes GameConfig.standard
+        ((⟨Piece.S, r, 0⟩ : Placement).place Board.empty) = 1 := by
+  decide
+
+/-- The Z pays the same one-hole tax in every rotation. Together with the
+grounded-rotation classification: on flat ground the skew pair costs
+exactly one hole each, and every other piece has a free orientation. -/
+theorem Z_flat_hole_bill :
+    ∀ r : Rotation,
+      Board.holes GameConfig.standard
+        ((⟨Piece.Z, r, 0⟩ : Placement).place Board.empty) = 1 := by
+  decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
