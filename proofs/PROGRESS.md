@@ -41629,6 +41629,23 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26aj) — the confinement ledger at every width (bank 255/N)
+
+- **`colProfile_sum_of_confined`** — a drop confined to a column set S
+  splits its 4 cells among S (Finset.card_eq_sum_card_fiberwise; the
+  Mathlib signature now wants Set.MapsTo — wrap the ∀-form pointwise
+  with Finset.mem_coe.mp).
+- **`window_feed_ledger_set`** — ΣS colCount + |S|·clearsΔ = start + 4w
+  over confined drops. omega nonlinearity (|S|·x products) handled by
+  proving the distribution step |S|·(D+L) = |S|·D + |S|·L separately
+  with Nat.mul_add, leaving omega only linear atom relations.
+- Road to: "a survivor can never abandon a column" — width-k confinement
+  demands 4/k clears per drop, and 4/9 > 2/5 already at k = 9.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26ai) — the window laws are adversary-proof (bank 254/N)
 
 - **`adversarial_window_feed_ledger`** — pair count + 2·clearsΔ = start

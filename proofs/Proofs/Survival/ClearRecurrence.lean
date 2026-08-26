@@ -5039,6 +5039,94 @@ theorem window_sustain_clear_rate {π : Policy GameConfig.standard}
     (trace GameConfig.standard π GameState.init (n + w)).board (j + 1)
   omega
 
+/-- A placement confined to a column set splits its four cells among the
+set's columns. Generalizes `colProfile_pair_of_confined` to any width. -/
+theorem colProfile_sum_of_confined {pl : Placement} {S : Finset ℕ}
+    (hcells : ∀ cell ∈ pl.shapeUp, pl.col + cell.1 ∈ S) :
+    ∑ j ∈ S, pl.colProfile j = 4 := by
+  classical
+  have h := Finset.card_eq_sum_card_fiberwise
+    (f := fun cell => pl.col + cell.1) (s := pl.shapeUp) (t := S)
+    (fun cell hcell => hcells cell (Finset.mem_coe.mp hcell))
+  rw [pl.shapeUp_card] at h
+  unfold Placement.colProfile
+  exact h.symm
+
+/-- **The width-`k` confinement ledger**: over `w` drops confined to any
+column set `S`, the set's cell count plus `|S|` per cleared row equals its
+start plus `4w` — every drop feeds the set four, every cleared row bills
+it `|S|`. The pair ledger at every width. -/
+theorem window_feed_ledger_set {π : Policy GameConfig.standard} {n : ℕ}
+    {S : Finset ℕ} (hS : ∀ j ∈ S, j < 10) :
+    ∀ w, (∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          ∈ S) →
+      (∑ j ∈ S, (trace GameConfig.standard π GameState.init
+          (n + w)).board.colCount j)
+        + S.card * (cleared GameConfig.standard π GameState.init (n + w)
+            - cleared GameConfig.standard π GameState.init n)
+      = (∑ j ∈ S, (trace GameConfig.standard π GameState.init
+          n).board.colCount j)
+        + 4 * w := by
+  intro w
+  induction w with
+  | zero =>
+    intro _
+    simp
+  | succ k ih =>
+    intro hcells
+    have hihk := ih (fun i hi => hcells i (by omega))
+    have hm1 := cleared_mono GameConfig.standard π GameState.init
+      (Nat.le_add_right n k)
+    have hm2 := cleared_mono GameConfig.standard π GameState.init
+      (show n + k ≤ (n + k) + 1 by omega)
+    have hs := cleared_succ GameConfig.standard π GameState.init (n + k)
+    have hstep : ∀ j ∈ S,
+        (Placement.applyStep GameConfig.standard
+            (trace GameConfig.standard π GameState.init (n + k)).board
+            (π (trace GameConfig.standard π GameState.init (n + k)))).colCount
+            j
+          + Board.linesCleared GameConfig.standard
+              ((π (trace GameConfig.standard π GameState.init (n + k))).place
+                (trace GameConfig.standard π GameState.init (n + k)).board)
+        = (trace GameConfig.standard π GameState.init (n + k)).board.colCount
+            j
+          + (π (trace GameConfig.standard π GameState.init
+              (n + k))).colProfile j :=
+      fun j hj => applyStep_colCount GameConfig.standard _ _
+        (by rw [GameConfig.standard_cols]; exact hS j hj)
+    have hsum := Finset.sum_congr rfl hstep
+    simp only [Finset.sum_add_distrib, Finset.sum_const, smul_eq_mul]
+      at hsum
+    have hprof := colProfile_sum_of_confined
+      (pl := π (trace GameConfig.standard π GameState.init (n + k)))
+      (hcells k (by omega))
+    have hdiff : cleared GameConfig.standard π GameState.init ((n + k) + 1)
+        - cleared GameConfig.standard π GameState.init n
+      = (cleared GameConfig.standard π GameState.init (n + k)
+          - cleared GameConfig.standard π GameState.init n)
+        + (Board.fullRows GameConfig.standard
+            ((π (trace GameConfig.standard π GameState.init (n + k))).place
+              (trace GameConfig.standard π GameState.init
+                (n + k)).board)).card := by
+      omega
+    have hdist : S.card
+          * (cleared GameConfig.standard π GameState.init ((n + k) + 1)
+            - cleared GameConfig.standard π GameState.init n)
+        = S.card * (cleared GameConfig.standard π GameState.init (n + k)
+            - cleared GameConfig.standard π GameState.init n)
+          + S.card * (Board.fullRows GameConfig.standard
+              ((π (trace GameConfig.standard π GameState.init (n + k))).place
+                (trace GameConfig.standard π GameState.init
+                  (n + k)).board)).card := by
+      rw [hdiff, Nat.mul_add]
+    unfold Board.linesCleared at hsum
+    rw [show n + (k + 1) = (n + k) + 1 by omega, trace_succ,
+      GameState.step_board]
+    simp only [] at hihk hsum hprof hdist ⊢
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
