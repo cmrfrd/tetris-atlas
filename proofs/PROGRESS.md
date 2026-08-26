@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-25bm) — lost is not absorbing (bank 218/N)
+
+- **`lost_not_absorbing`** — kernel witness (1×1 board): a state with a
+  cell above the ceiling can return to life by clearing the overflow.
+  Model documentation: `lost` is an event to avoid at every step, not a
+  trap — which is exactly why SurvivesForever is ∀-n and why the
+  characterization theorems demanded live PREFIXES, not just a live
+  endpoint.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-25bl) — holes survive clear-free steps (bank 217/N)
 
 - **`hole_persists_step`** — a clear-free applyStep keeps a covered

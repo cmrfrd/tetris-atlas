@@ -3753,6 +3753,21 @@ theorem hole_persists_step {cfg : GameConfig} {b : Board} {pl : Placement}
   have hmono := colHeight_mono hsub c
   omega
 
+/-- **`lost` is not absorbing** (model documentation, kernel witness): a
+state with a cell above the ceiling can *return to life* — piling the
+overflow into full rows clears them away. This is exactly why the
+survival predicate quantifies over *all* times (`SurvivesForever`:
+`∀ n, ¬ lost`) rather than asking for a single final verdict: in this
+model losing is an event you must avoid at every step, not a trap you
+fall into once. -/
+theorem lost_not_absorbing :
+    ∃ (cfg : GameConfig) (g : GameState) (pl : Placement),
+      g.lost cfg ∧ ¬ (g.step cfg pl).lost cfg := by
+  refine ⟨⟨1, 1, by omega, by omega⟩,
+    ⟨({(0, 1)} : Finset Coord), Bag.full⟩, ⟨Piece.I, 1, 0⟩, ?_, ?_⟩
+  · decide
+  · decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
