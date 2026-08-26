@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26ae) — HALFWAY: the window reduction (bank 250/N)
+
+- **`survivesForever_of_low_pair_play`** — a policy playing entirely
+  inside some ≤16-high adjacent column pair at every step survives
+  forever. With headroom_move_exists (availability) and the dichotomy:
+  SOLVING TETRIS = MAINTAINING ONE LOW 2-WINDOW under the 7-bag.
+  Everything else about survival is settled in the bank.
+- Milestone: 250/500 batches — halfway.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26ad) — the harvest on traces (bank 249/N)
 
 - **`trace_tetris_no_new_holes`** — a four-clear trace step never raises

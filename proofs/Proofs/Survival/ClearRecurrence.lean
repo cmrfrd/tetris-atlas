@@ -4837,6 +4837,33 @@ theorem trace_tetris_no_new_holes {π : Policy GameConfig.standard}
     (trace_board_wf hv (GameState.init_board_wf GameConfig.standard) m)
     (hv _) (fun r => trace_board_no_full m r) h4
 
+/-- **The low-window survival scaffold**: a policy that at every step
+plays entirely inside some adjacent column pair standing at least four
+rows below the ceiling survives forever. Together with
+`headroom_move_exists` (such a move exists for every piece whenever such
+a pair exists), solving Tetris reduces to one question: *can a low
+two-column window always be maintained under the 7-bag?* Everything else
+about survival is settled. -/
+theorem survivesForever_of_low_pair_play {π : Policy GameConfig.standard}
+    (h : ∀ n, ∃ j, j + 1 < 10
+      ∧ (trace GameConfig.standard π GameState.init n).board.colHeight j
+          + 4 ≤ 20
+      ∧ (trace GameConfig.standard π GameState.init n).board.colHeight
+          (j + 1) + 4 ≤ 20
+      ∧ ∀ cell ∈ (π (trace GameConfig.standard π GameState.init n)).shapeUp,
+          (π (trace GameConfig.standard π GameState.init n)).col + cell.1
+            = j
+          ∨ (π (trace GameConfig.standard π GameState.init n)).col + cell.1
+            = j + 1) :
+    SurvivesForever GameConfig.standard π GameState.init := by
+  apply survivesForever_of_headroom
+  intro n cell hcell
+  obtain ⟨j, hj, h1, h2, hcells⟩ := h n
+  rw [GameConfig.standard_rows]
+  rcases hcells cell hcell with hc | hc <;> rw [hc]
+  · exact h1
+  · exact h2
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
