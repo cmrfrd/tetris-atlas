@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26ad) — the harvest on traces (bank 249/N)
+
+- **`trace_tetris_no_new_holes`** — a four-clear trace step never raises
+  holes (wrapper over the board law, no positivity hypothesis needed via
+  trace_board_no_full).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26ac) — neutrality is pointwise (bank 248/N)
 
 - **`holes_place_eq_iff`** — sum-preserved ⟺ each column preserved

@@ -4821,6 +4821,22 @@ theorem holes_place_eq_iff {b : Board} {pl : Placement} :
     rw [GameConfig.standard_cols]
     exact Finset.sum_congr rfl (fun j hj => h j (Finset.mem_range.mp hj))
 
+/-- The debt-free harvest, on traces: a four-clear step never raises the
+board's hole count. -/
+theorem trace_tetris_no_new_holes {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ}
+    (h4 : (Board.fullRows GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board)).card = 4) :
+    Board.holes GameConfig.standard
+        (trace GameConfig.standard π GameState.init (m + 1)).board
+      ≤ Board.holes GameConfig.standard
+        (trace GameConfig.standard π GameState.init m).board := by
+  rw [trace_succ, GameState.step_board]
+  exact tetris_no_new_holes
+    (trace_board_wf hv (GameState.init_board_wf GameConfig.standard) m)
+    (hv _) (fun r => trace_board_no_full m r) h4
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
