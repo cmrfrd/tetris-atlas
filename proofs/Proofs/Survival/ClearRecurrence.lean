@@ -4037,6 +4037,37 @@ theorem trace_holes_mono_of_dry {π : Policy GameConfig.standard} {n w : ℕ}
       GameState.step_board]
     exact le_trans (ih h1) hstep
 
+/-- **Debt plus mass fits the board**: on an in-field well-formed board,
+total holes plus total cells never exceed the 200-cell volume — holes
+live inside the stack envelope, so hole debt is capped by the free
+volume the mass leaves behind. -/
+theorem holes_add_count_le_two_hundred {b : Board}
+    (hwf : Board.WF GameConfig.standard b)
+    (hif : ∀ p ∈ b, p.2 < GameConfig.standard.rows) :
+    Board.holes GameConfig.standard b + b.count ≤ 200 := by
+  classical
+  have hsum := Board.sum_colRows_card_add_holes GameConfig.standard b
+  have hcc : ∀ j, (b.colRows j).card = b.colCount j := by
+    intro j
+    unfold Board.colRows Board.colCount
+    apply Finset.card_image_of_injOn
+    intro p hp q hq hpq
+    simp only [Finset.mem_coe, Finset.mem_filter] at hp hq
+    exact Prod.ext (by rw [hp.2, hq.2]) hpq
+  have hcnt := Board.sum_colCount (cfg := GameConfig.standard) hwf
+  have hheights : ∑ j ∈ Finset.range 10, b.colHeight j ≤ 200 := by
+    calc ∑ j ∈ Finset.range 10, b.colHeight j
+        ≤ ∑ _j ∈ Finset.range 10, 20 :=
+          Finset.sum_le_sum (fun j _ => by
+            have h := Board.colHeight_le_rows_of_in_field hif j
+            rwa [GameConfig.standard_rows] at h)
+      _ = 200 := by simp
+  rw [GameConfig.standard_cols] at hsum hcnt
+  have hrw : ∑ j ∈ Finset.range 10, (b.colRows j).card
+      = ∑ j ∈ Finset.range 10, b.colCount j :=
+    Finset.sum_congr rfl (fun j _ => hcc j)
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

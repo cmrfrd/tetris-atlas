@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26m) — debt plus mass fits the board (bank 232/N)
+
+- **`holes_add_count_le_two_hundred`** — holes + count ≤ 200 on
+  in-field WF boards (fill/hole/height conservation + colRows card =
+  colCount + heights ≤ 20 each). The hole ledger now has a hard
+  capacity: with the mass pinch, hole debt on a live trace is ≤ 200 −
+  count ≤ 200 − (4m − 10·cleared).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26l) — hole debt monotone along dry play (bank 231/N)
 
 - `holes_step_ge_of_no_clear` — a clear-free full move keeps holes
