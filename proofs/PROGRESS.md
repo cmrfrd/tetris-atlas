@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cj) — every column eats at the global rate (bank 307/N)
+
+- **`column_delivery_window_band`** — 4w − 400 ≤ 10·Δdelivered ≤ 4w +
+  400 per column, per live window (two per-column ledgers + the window
+  clearing band + 20-cell colCount caps).
+- **`survivor_column_delivery_band`** — the survivor instantiation.
+  Refines the 901-spread (∃ one feed) to an exact rate law.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27ci) — the spread law against any dealer (bank 306/N)
 
 - **`adversarial_window_feeds_all_columns`** — every column receives a

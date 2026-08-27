@@ -5861,6 +5861,59 @@ theorem colDelivered_window_sum (π : Policy GameConfig.standard)
       Finset.sum_range_succ, ih]
     omega
 
+/-- **Every column eats at the global rate**: across any live window,
+each column's deliveries sit within two boardfuls of the exact
+0.4-cells-per-move line — `4w − 400 ≤ 10·Δdelivered ≤ 4w + 400`. The
+global clearing pinch descends to every single column: no column can be
+starved or force-fed for long, anywhere in the game. -/
+theorem column_delivery_window_band {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m w j : ℕ} (hj : j < 10)
+    (hlive_m : ¬ (trace GameConfig.standard π GameState.init m).lost
+      GameConfig.standard)
+    (hlive_mw : ¬ (trace GameConfig.standard π GameState.init (m + w)).lost
+      GameConfig.standard) :
+    4 * w ≤ 10 * (colDelivered π j (m + w) - colDelivered π j m) + 400
+    ∧ 10 * (colDelivered π j (m + w) - colDelivered π j m)
+      ≤ 4 * w + 400 := by
+  have hled1 := colDelivered_ledger (π := π) hj m
+  have hled2 := colDelivered_ledger (π := π) hj (m + w)
+  have hband := cleared_window_band hv hlive_m hlive_mw
+  have hif1 := (GameState.not_lost_iff_forall_row_lt
+    GameConfig.standard _).mp hlive_m
+  have hif2 := (GameState.not_lost_iff_forall_row_lt
+    GameConfig.standard _).mp hlive_mw
+  have hc1 : (trace GameConfig.standard π GameState.init m).board.colCount j
+      ≤ 20 := by
+    have h1 := colCount_le_colHeight
+      (trace GameConfig.standard π GameState.init m).board j
+    have h2 := Board.colHeight_le_rows_of_in_field
+      (cfg := GameConfig.standard) hif1 j
+    rw [GameConfig.standard_rows] at h2
+    omega
+  have hc2 : (trace GameConfig.standard π
+      GameState.init (m + w)).board.colCount j ≤ 20 := by
+    have h1 := colCount_le_colHeight
+      (trace GameConfig.standard π GameState.init (m + w)).board j
+    have h2 := Board.colHeight_le_rows_of_in_field
+      (cfg := GameConfig.standard) hif2 j
+    rw [GameConfig.standard_rows] at h2
+    omega
+  have hdm := colDelivered_mono π j (Nat.le_add_right m w)
+  have hcm := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right m w)
+  exact ⟨by omega, by omega⟩
+
+/-- A survivor feeds every column at the 0.4 rate on every window of its
+play. -/
+theorem survivor_column_delivery_band {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hsurv : SurvivesForever GameConfig.standard π GameState.init)
+    {j : ℕ} (hj : j < 10) (m w : ℕ) :
+    4 * w ≤ 10 * (colDelivered π j (m + w) - colDelivered π j m) + 400
+    ∧ 10 * (colDelivered π j (m + w) - colDelivered π j m)
+      ≤ 4 * w + 400 :=
+  column_delivery_window_band hv hj (hsurv m) (hsurv (m + w))
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
