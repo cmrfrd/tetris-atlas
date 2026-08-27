@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bx) — the window cannot wait the I out (bank 295/N)
+
+- **`confined_run_tower_event`** — any confined run of ≥ 13 legal draws
+  contains a forced +4 tower on one window column (13-syndetic I ×
+  pair-confined-I-is-vertical). Dwells past 13 pay a tower; the dwell
+  caps (15/22) mean the tower is nearly unavoidable per dwell.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bw) — the pair parity invariant (bank 294/N)
 
 - **`confined_pair_count_parity`** — the window's cell-count parity is

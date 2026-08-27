@@ -3169,5 +3169,27 @@ theorem cycle_low_pair_selection_migrates {π : Policy GameConfig.standard}
       exact h2)
   omega
 
+/-- **Every long dwell suffers a tower event**: a confined run of
+thirteen or more legal draws contains an I — and a pair-confined I is
+vertical, pouring four cells into one window column. The bag's
+thirteen-syndetic I-cadence turns every dwell into a forced +4 tower on
+one of the window's two columns; the burnout and parity ledgers then
+price it. The window cannot wait the I out. -/
+theorem confined_run_tower_event {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag)
+    {n j w : ℕ} (hw : 13 ≤ w)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          = j
+        ∨ (π (trace GameConfig.standard π GameState.init (n + k))).col
+            + cell.1 = j + 1) :
+    ∃ k < 13, ∃ c, (c = j ∨ c = j + 1)
+      ∧ (π (trace GameConfig.standard π
+          GameState.init (n + k))).colProfile c = 4 := by
+  obtain ⟨k, hk, hI⟩ := trace_exists_I_within_thirteen hdraw n
+  exact ⟨k, hk, I_pair_confined_full_feed hI (hcells k (by omega))⟩
+
 end ClearRate
 end Tetris
