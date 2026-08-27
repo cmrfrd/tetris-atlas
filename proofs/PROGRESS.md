@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bl) — sink and reserve at every width (bank 283/N)
+
+- **`confined_run_off_set_heights_sink`** — set-width sink: columns
+  outside the confining set are non-increasing over the run.
+- **`confined_reserve_stays_ready`** — a low pair wholly outside the
+  confining set is still low when the run ends (any width).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bk) — the reserve never spoils (bank 282/N)
 
 - **`dwell_reserve_stays_ready`** — a second low pair disjoint from the

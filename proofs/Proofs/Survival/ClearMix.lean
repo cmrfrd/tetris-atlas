@@ -1760,5 +1760,63 @@ theorem dwell_reserve_stays_ready {π : Policy GameConfig.standard}
     (c := j' + 1) (by omega) hd3 hd4 w hcells
   exact ⟨by omega, by omega⟩
 
+/-- Set-width sink: over a run confined to a column set `S`, every
+column outside `S` is non-increasing in height. -/
+theorem confined_run_off_set_heights_sink {π : Policy GameConfig.standard}
+    {n c : ℕ} {S : Finset ℕ} (hc : c < 10) (hcS : c ∉ S) :
+    ∀ w, (∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          ∈ S) →
+      (trace GameConfig.standard π GameState.init (n + w)).board.colHeight c
+        ≤ (trace GameConfig.standard π GameState.init n).board.colHeight c := by
+  intro w
+  induction w with
+  | zero =>
+    intro _
+    exact le_refl _
+  | succ k ih =>
+    intro hcells
+    have hihk := ih (fun i hi => hcells i (by omega))
+    have hz : (π (trace GameConfig.standard π
+        GameState.init (n + k))).colProfile c = 0 := by
+      unfold Placement.colProfile
+      rw [Finset.card_eq_zero, Finset.eq_empty_iff_forall_notMem]
+      intro cell hmem
+      rw [Finset.mem_filter] at hmem
+      have hin := hcells k (by omega) cell hmem.1
+      rw [hmem.2] at hin
+      exact hcS hin
+    have hstep := applyStep_unfed_colHeight_le (cfg := GameConfig.standard)
+      (b := (trace GameConfig.standard π GameState.init (n + k)).board)
+      (pl := π (trace GameConfig.standard π GameState.init (n + k)))
+      (by rw [GameConfig.standard_cols]; omega) hz
+    rw [show n + (k + 1) = (n + k) + 1 by omega, trace_succ,
+      GameState.step_board]
+    exact le_trans hstep hihk
+
+/-- **Reserves survive any confinement width**: a low pair wholly outside
+the confining set is still low when the confined run ends. -/
+theorem confined_reserve_stays_ready {π : Policy GameConfig.standard}
+    {n j' w : ℕ} {S : Finset ℕ} (hj' : j' + 1 < 10)
+    (hd1 : j' ∉ S) (hd2 : j' + 1 ∉ S)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          ∈ S)
+    (hlow : (trace GameConfig.standard π GameState.init n).board.colHeight j'
+        + 4 ≤ 20
+      ∧ (trace GameConfig.standard π GameState.init n).board.colHeight
+          (j' + 1) + 4 ≤ 20) :
+    (trace GameConfig.standard π GameState.init (n + w)).board.colHeight j'
+        + 4 ≤ 20
+      ∧ (trace GameConfig.standard π GameState.init (n + w)).board.colHeight
+          (j' + 1) + 4 ≤ 20 := by
+  have hs1 := confined_run_off_set_heights_sink (π := π) (n := n)
+    (c := j') (S := S) (by omega) hd1 w hcells
+  have hs2 := confined_run_off_set_heights_sink (π := π) (n := n)
+    (c := j' + 1) (S := S) (by omega) hd2 w hcells
+  exact ⟨by omega, by omega⟩
+
 end ClearRate
 end Tetris
