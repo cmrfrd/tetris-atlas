@@ -3388,5 +3388,64 @@ theorem adversarial_no_death_before_six {σ : Solver GameConfig.standard}
     (by rw [Nat.zero_add]; exact hlost)
   omega
 
+/-- **Height relief certifies a clear, adversarially**: any column-height
+drop across a forced step certifies that the step cleared. -/
+theorem adversarial_height_drop_certifies_clear
+    {σ : Solver GameConfig.standard} {s : ℕ → Piece} {m j : ℕ}
+    (hdrop : (adversarialTrace GameConfig.standard σ s
+        GameState.init (m + 1)).board.colHeight j
+      < (adversarialTrace GameConfig.standard σ s
+          GameState.init m).board.colHeight j) :
+    clearedAdv GameConfig.standard σ s GameState.init m
+      < clearedAdv GameConfig.standard σ s GameState.init (m + 1) := by
+  have hs := clearedAdv_succ GameConfig.standard σ s GameState.init m
+  by_contra hnone
+  have hcard0 : (Board.fullRows GameConfig.standard
+      (({ σ (adversarialTrace GameConfig.standard σ s GameState.init m)
+          (s m) with piece := s m } : Placement).place
+        (adversarialTrace GameConfig.standard σ s
+          GameState.init m).board)).card = 0 := by
+    simp only [] at hs ⊢
+    omega
+  have hge := dry_step_colHeight_ge (cfg := GameConfig.standard)
+    (b := (adversarialTrace GameConfig.standard σ s GameState.init m).board)
+    (pl := { σ (adversarialTrace GameConfig.standard σ s GameState.init m)
+        (s m) with piece := s m }) j hcard0
+  rw [adversarialTrace_succ, adversarialStep_board] at hdrop
+  simp only [] at hge hdrop
+  omega
+
+/-- **The peak falls only at clearing moments, adversarially.** -/
+theorem adversarial_peak_drop_certifies_clear
+    {σ : Solver GameConfig.standard} {s : ℕ → Piece} {m : ℕ}
+    (hdrop : Board.maxHeight GameConfig.standard
+        (adversarialTrace GameConfig.standard σ s
+          GameState.init (m + 1)).board
+      < Board.maxHeight GameConfig.standard
+          (adversarialTrace GameConfig.standard σ s
+            GameState.init m).board) :
+    clearedAdv GameConfig.standard σ s GameState.init m
+      < clearedAdv GameConfig.standard σ s GameState.init (m + 1) := by
+  classical
+  obtain ⟨j, hj, hmax⟩ := Finset.exists_max_image (Finset.range 10)
+    (adversarialTrace GameConfig.standard σ s
+      GameState.init m).board.colHeight ⟨0, by simp⟩
+  have hsup : Board.maxHeight GameConfig.standard
+      (adversarialTrace GameConfig.standard σ s GameState.init m).board
+      ≤ (adversarialTrace GameConfig.standard σ s
+          GameState.init m).board.colHeight j := by
+    unfold Board.maxHeight
+    rw [GameConfig.standard_cols]
+    exact Finset.sup_le (fun j' hj' => hmax j' hj')
+  have hle : (adversarialTrace GameConfig.standard σ s
+      GameState.init (m + 1)).board.colHeight j
+      ≤ Board.maxHeight GameConfig.standard
+        (adversarialTrace GameConfig.standard σ s
+          GameState.init (m + 1)).board :=
+    Board.colHeight_le_maxHeight
+      (by rw [GameConfig.standard_cols]; exact Finset.mem_range.mp hj)
+  apply adversarial_height_drop_certifies_clear (j := j)
+  omega
+
 end ClearRate
 end Tetris

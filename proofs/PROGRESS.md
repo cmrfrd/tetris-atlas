@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bs) — drop certificates against any dealer (bank 290/N)
+
+- **`adversarial_height_drop_certifies_clear`**, **`adversarial_peak_
+  drop_certifies_clear`** — mirrors of the batch 284/288 certificates
+  to forced play (goal AND hypothesis both need `simp only []` when the
+  clearedAdv-def card term must match a freshly-written one).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27br) — confinement never spreads debt (bank 289/N)
 
 - **`applyStep_unfed_colHoles_le`** — an unfed column's holes never
