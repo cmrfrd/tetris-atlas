@@ -3630,5 +3630,50 @@ theorem adversarial_window_feeds_all_columns
   have hband := (adversarial_cleared_window_band hv hlive_n hlive_nw).2
   omega
 
+/-- **Every column eats at the global rate, adversarially**: per-column
+deliveries are pinned to the 0.4-per-move line within two boardfuls on
+every live window of forced play — whoever deals. -/
+theorem adversarial_column_delivery_window_band
+    {σ : Solver GameConfig.standard} {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {m w j : ℕ} (hj : j < 10)
+    (hlive_m : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init m).lost GameConfig.standard)
+    (hlive_mw : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init (m + w)).lost GameConfig.standard) :
+    4 * w ≤ 10 * (colDeliveredAdv σ s j (m + w) - colDeliveredAdv σ s j m)
+        + 400
+    ∧ 10 * (colDeliveredAdv σ s j (m + w) - colDeliveredAdv σ s j m)
+      ≤ 4 * w + 400 := by
+  have hled1 := colDeliveredAdv_ledger (σ := σ) (s := s) hj m
+  have hled2 := colDeliveredAdv_ledger (σ := σ) (s := s) hj (m + w)
+  have hband := adversarial_cleared_window_band hv hlive_m hlive_mw
+  have hif1 := (GameState.not_lost_iff_forall_row_lt
+    GameConfig.standard _).mp hlive_m
+  have hif2 := (GameState.not_lost_iff_forall_row_lt
+    GameConfig.standard _).mp hlive_mw
+  have hc1 : (adversarialTrace GameConfig.standard σ s
+      GameState.init m).board.colCount j ≤ 20 := by
+    have h1 := colCount_le_colHeight
+      (adversarialTrace GameConfig.standard σ s GameState.init m).board j
+    have h2 := Board.colHeight_le_rows_of_in_field
+      (cfg := GameConfig.standard) hif1 j
+    rw [GameConfig.standard_rows] at h2
+    omega
+  have hc2 : (adversarialTrace GameConfig.standard σ s
+      GameState.init (m + w)).board.colCount j ≤ 20 := by
+    have h1 := colCount_le_colHeight
+      (adversarialTrace GameConfig.standard σ s
+        GameState.init (m + w)).board j
+    have h2 := Board.colHeight_le_rows_of_in_field
+      (cfg := GameConfig.standard) hif2 j
+    rw [GameConfig.standard_rows] at h2
+    omega
+  have hdm := colDeliveredAdv_mono σ s j (Nat.le_add_right m w)
+  have hcm := clearedAdv_mono GameConfig.standard σ s GameState.init
+    (Nat.le_add_right m w)
+  exact ⟨by omega, by omega⟩
+
 end ClearRate
 end Tetris

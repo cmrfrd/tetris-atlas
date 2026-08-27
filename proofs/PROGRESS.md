@@ -41629,6 +41629,15 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27ck) — the column rate pinch against any dealer (bank 308/N)
+
+- **`adversarial_column_delivery_window_band`** — per-column deliveries
+  pinned to 0.4/move ± 2 boardfuls on every live window of forced play.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cj) — every column eats at the global rate (bank 307/N)
 
 - **`column_delivery_window_band`** — 4w − 400 ≤ 10·Δdelivered ≤ 4w +
