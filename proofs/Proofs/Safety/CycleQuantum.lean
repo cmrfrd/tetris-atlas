@@ -3078,5 +3078,61 @@ theorem cycle_full_width_census {π : Policy GameConfig.standard}
   have hle := Finset.card_le_card hsub
   omega
 
+/-- Multi-period clearing on a cycle: `q` periods from any anchor clear
+exactly `14q` rows. -/
+theorem cycle_window_clears_multi {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) :
+    ∀ q, cleared GameConfig.standard π GameState.init (m₀ + 35 * q)
+        - cleared GameConfig.standard π GameState.init m₀ = 14 * q := by
+  intro q
+  induction q with
+  | zero => simp
+  | succ t ih =>
+    have hstep := cycle_window_clears_exact hv hcyc
+      (show n ≤ m₀ + 35 * t by omega)
+    have hmono1 := cleared_mono GameConfig.standard π GameState.init
+      (show m₀ ≤ m₀ + 35 * t by omega)
+    have hmono2 := cleared_mono GameConfig.standard π GameState.init
+      (show m₀ + 35 * t ≤ (m₀ + 35 * t) + 35 by omega)
+    rw [show m₀ + 35 * (t + 1) = (m₀ + 35 * t) + 35 by ring]
+    omega
+
+/-- **On a cycle the dwell cap is fifteen**: play confined to one
+adjacent pair, ending low, lasts at most fifteen moves on any closed
+orbit — the cycle's exact fourteen-per-period clearing ration is
+stingier than the general window band, so the migration clock beats
+even the twenty-two of free play. No liveness hypothesis needed: the
+ration is exact. -/
+theorem cycle_dwell_cap {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35))
+    {m₀ j w : ℕ} (hm : n ≤ m₀) (hj : j + 1 < 10)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (m₀ + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (m₀ + k))).col + cell.1
+          = j
+        ∨ (π (trace GameConfig.standard π GameState.init (m₀ + k))).col
+            + cell.1 = j + 1)
+    (hlow : (trace GameConfig.standard π GameState.init
+          (m₀ + w)).board.colHeight j + 4 ≤ 20
+      ∧ (trace GameConfig.standard π GameState.init
+          (m₀ + w)).board.colHeight (j + 1) + 4 ≤ 20) :
+    w ≤ 15 := by
+  have hled := window_feed_ledger (n := m₀) hj w hcells
+  have hc1 := colCount_le_colHeight
+    (trace GameConfig.standard π GameState.init (m₀ + w)).board j
+  have hc2 := colCount_le_colHeight
+    (trace GameConfig.standard π GameState.init (m₀ + w)).board (j + 1)
+  have hmulti := cycle_window_clears_multi hv hcyc hm (w / 35 + 1)
+  have hmono := cleared_mono GameConfig.standard π GameState.init
+    (show m₀ + w ≤ m₀ + 35 * (w / 35 + 1) by omega)
+  have hmono0 := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right m₀ w)
+  omega
+
 end ClearRate
 end Tetris

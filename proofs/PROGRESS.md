@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bh) — cycles migrate every fifteen (bank 279/N)
+
+- **`cycle_window_clears_multi`** — q periods from any anchor clear
+  exactly 14q rows (anchored induction).
+- **`cycle_dwell_cap`** — on a cycle, confined pair-play ending low
+  lasts ≤ 15 moves: 112·(w/35) + 4·(w%35) ≤ 60. No liveness needed;
+  omega handles /35 and %35 with literal modulus. Migration-clock
+  hierarchy: cycle 15 < free 22 < weak 46.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bg) — the dwell clock is dealer-blind (bank 278/N)
 
 - **`adversarial_window_dwell_cap`** — w ≤ 22 for forced confined
