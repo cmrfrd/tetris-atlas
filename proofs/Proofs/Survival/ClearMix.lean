@@ -1899,5 +1899,77 @@ theorem confined_cannot_empty_odd_pair {π : Policy GameConfig.standard}
   have hpar := confined_pair_count_parity (n := n) hj hcells
   omega
 
+section DwellHierarchy
+
+variable {π : Policy GameConfig.standard}
+
+/-- **The four-column dwell cap is sixty**: play confined to any four
+columns (two disjoint pairs, say) between live moments, ending low on
+all of them, lasts at most sixty moves. Ping-pong between two windows
+buys time but not immortality. -/
+theorem four_column_dwell_cap
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n w : ℕ} {S : Finset ℕ}
+    (hS : ∀ j ∈ S, j < 10) (hcard : S.card = 4)
+    (hlive_n : ¬ (trace GameConfig.standard π GameState.init n).lost
+      GameConfig.standard)
+    (hlive_nw : ¬ (trace GameConfig.standard π GameState.init (n + w)).lost
+      GameConfig.standard)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          ∈ S)
+    (hlow : ∀ j ∈ S, (trace GameConfig.standard π GameState.init
+      (n + w)).board.colHeight j + 4 ≤ 20) :
+    w ≤ 60 := by
+  have hrate := confinement_sustain_clear_rate (n := n) hS hcells hlow
+  rw [hcard] at hrate
+  have hband := (cleared_window_band hv hlive_n hlive_nw).2
+  omega
+
+/-- The six-column dwell cap: one hundred thirty-five moves. -/
+theorem six_column_dwell_cap
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n w : ℕ} {S : Finset ℕ}
+    (hS : ∀ j ∈ S, j < 10) (hcard : S.card = 6)
+    (hlive_n : ¬ (trace GameConfig.standard π GameState.init n).lost
+      GameConfig.standard)
+    (hlive_nw : ¬ (trace GameConfig.standard π GameState.init (n + w)).lost
+      GameConfig.standard)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          ∈ S)
+    (hlow : ∀ j ∈ S, (trace GameConfig.standard π GameState.init
+      (n + w)).board.colHeight j + 4 ≤ 20) :
+    w ≤ 135 := by
+  have hrate := confinement_sustain_clear_rate (n := n) hS hcells hlow
+  rw [hcard] at hrate
+  have hband := (cleared_window_band hv hlive_n hlive_nw).2
+  omega
+
+/-- The eight-column dwell cap: three hundred sixty moves. The full
+hierarchy — 22 at width two, 60 at four, 135 at six, 360 at eight —
+diverges as width approaches ten: only full-board play is sustainable,
+exactly as `no_eventual_confinement` demands. -/
+theorem eight_column_dwell_cap
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n w : ℕ} {S : Finset ℕ}
+    (hS : ∀ j ∈ S, j < 10) (hcard : S.card = 8)
+    (hlive_n : ¬ (trace GameConfig.standard π GameState.init n).lost
+      GameConfig.standard)
+    (hlive_nw : ¬ (trace GameConfig.standard π GameState.init (n + w)).lost
+      GameConfig.standard)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          ∈ S)
+    (hlow : ∀ j ∈ S, (trace GameConfig.standard π GameState.init
+      (n + w)).board.colHeight j + 4 ≤ 20) :
+    w ≤ 360 := by
+  have hrate := confinement_sustain_clear_rate (n := n) hS hcells hlow
+  rw [hcard] at hrate
+  have hband := (cleared_window_band hv hlive_n hlive_nw).2
+  omega
+
+end DwellHierarchy
+
 end ClearRate
 end Tetris

@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27by) — the dwell hierarchy (bank 296/N)
+
+- **`four_column_dwell_cap`** (≤ 60), **`six_column_dwell_cap`**
+  (≤ 135), **`eight_column_dwell_cap`** (≤ 360) — set sustain rate ×
+  window band at literal widths. Ping-pong between windows buys time on
+  the 90k/(10−k) curve, never immortality; the divergence at k = 10 is
+  no_eventual_confinement's asymptote made quantitative.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bx) — the window cannot wait the I out (bank 295/N)
 
 - **`confined_run_tower_event`** — any confined run of ≥ 13 legal draws
