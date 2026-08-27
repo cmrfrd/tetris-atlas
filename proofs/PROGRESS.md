@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27br) — confinement never spreads debt (bank 289/N)
+
+- **`applyStep_unfed_colHoles_le`** — an unfed column's holes never
+  grow through a full move (merge leaves it, clears only repair).
+- **`confined_run_off_set_holes_sink`** — over any confined run, every
+  outside column ends with ≤ its starting holes. With the height sink:
+  dwells improve the spectators in both skyline and debt.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bq) — the peak falls only at clears (bank 288/N)
 
 - **`dry_step_maxHeight_ge`** — clear-free moves never lower the peak

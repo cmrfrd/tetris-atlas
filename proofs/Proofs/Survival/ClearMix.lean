@@ -1818,5 +1818,45 @@ theorem confined_reserve_stays_ready {π : Policy GameConfig.standard}
     (c := j' + 1) (S := S) (by omega) hd2 w hcells
   exact ⟨by omega, by omega⟩
 
+/-- **Confinement never spreads debt**: over a run confined to a column
+set `S`, every column outside `S` ends with no more holes than it began
+— spectator columns neither rise nor rot. With the height sink, a dwell
+leaves the rest of the board strictly better or unchanged in both
+skyline and debt. -/
+theorem confined_run_off_set_holes_sink {π : Policy GameConfig.standard}
+    {n c : ℕ} {S : Finset ℕ} (hc : c < 10) (hcS : c ∉ S) :
+    ∀ w, (∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          ∈ S) →
+      Board.colHoles
+          (trace GameConfig.standard π GameState.init (n + w)).board c
+        ≤ Board.colHoles
+            (trace GameConfig.standard π GameState.init n).board c := by
+  intro w
+  induction w with
+  | zero =>
+    intro _
+    exact le_refl _
+  | succ k ih =>
+    intro hcells
+    have hihk := ih (fun i hi => hcells i (by omega))
+    have hz : (π (trace GameConfig.standard π
+        GameState.init (n + k))).colProfile c = 0 := by
+      unfold Placement.colProfile
+      rw [Finset.card_eq_zero, Finset.eq_empty_iff_forall_notMem]
+      intro cell hmem
+      rw [Finset.mem_filter] at hmem
+      have hin := hcells k (by omega) cell hmem.1
+      rw [hmem.2] at hin
+      exact hcS hin
+    have hstep := applyStep_unfed_colHoles_le (cfg := GameConfig.standard)
+      (b := (trace GameConfig.standard π GameState.init (n + k)).board)
+      (pl := π (trace GameConfig.standard π GameState.init (n + k)))
+      (by rw [GameConfig.standard_cols]; omega) hz
+    rw [show n + (k + 1) = (n + k) + 1 by omega, trace_succ,
+      GameState.step_board]
+    exact le_trans hstep hihk
+
 end ClearRate
 end Tetris

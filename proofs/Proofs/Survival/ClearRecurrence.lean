@@ -5552,6 +5552,18 @@ theorem peak_drop_certifies_clear {π : Policy GameConfig.standard} {m : ℕ}
   apply height_drop_certifies_clear (j := j)
   omega
 
+/-- An unfed column's hole debt never grows through a full move: the
+merge leaves its cells untouched and the clear phase only repairs. -/
+theorem applyStep_unfed_colHoles_le {cfg : GameConfig} {b : Board}
+    {pl : Placement} {j : ℕ} (hj : j < cfg.cols)
+    (hz : pl.colProfile j = 0) :
+    Board.colHoles (Placement.applyStep cfg b pl) j
+      ≤ Board.colHoles b j := by
+  have hcl := colHoles_clearLines_le (cfg := cfg) (b := pl.place b) hj
+  have hpl := colHoles_place_eq_of_unfed (b := b) (pl := pl) hz
+  unfold Placement.applyStep
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
