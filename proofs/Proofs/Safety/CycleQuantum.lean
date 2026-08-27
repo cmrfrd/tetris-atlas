@@ -3240,5 +3240,98 @@ theorem cycle_six_column_dwell_cap {π : Policy GameConfig.standard}
     (Nat.le_add_right m₀ w)
   omega
 
+/-- **A cycle's window moves at least twice per period**: over any
+thirty-five consecutive steps of a capstone-driven closed orbit, the
+selected pair changes at least twice — with at most one change the
+window would sit still for seventeen steps, past the cycle's
+fifteen-move dwell cap. -/
+theorem cycle_selection_two_changes_per_period
+    {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {jf : ℕ → ℕ}
+    (hsel : ∀ m, jf m + 1 < 10
+      ∧ ((trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m) + 4 ≤ 20
+        ∧ (trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m + 1) + 4 ≤ 20)
+      ∧ ∀ cell ∈ (π (trace GameConfig.standard π GameState.init m)).shapeUp,
+          (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m
+          ∨ (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m + 1)
+    {N : ℕ} (hN : n ≤ N) :
+    2 ≤ ((Finset.range 34).filter
+      (fun k => jf (N + k + 1) ≠ jf (N + k))).card := by
+  classical
+  by_contra hcon
+  push Not at hcon
+  have hrun : ∀ a d : ℕ,
+      (∀ i < d, jf (N + (a + i) + 1) = jf (N + (a + i))) →
+      jf (N + (a + d)) = jf (N + a) := by
+    intro a d
+    induction d with
+    | zero =>
+      intro _
+      rfl
+    | succ t ih =>
+      intro hno
+      have h1 := hno t (by omega)
+      have h2 := ih (fun i hi => hno i (by omega))
+      rw [show N + (a + (t + 1)) = N + (a + t) + 1 by omega]
+      rw [h1]
+      exact h2
+  rcases Nat.lt_or_ge ((Finset.range 34).filter
+      (fun k => jf (N + k + 1) ≠ jf (N + k))).card 1 with hc0 | hc1
+  · -- no changes at all: constant through the window
+    have hempty : ((Finset.range 34).filter
+        (fun k => jf (N + k + 1) ≠ jf (N + k))) = ∅ :=
+      Finset.card_eq_zero.mp (by omega)
+    have hnochange : ∀ k < 34, jf (N + k + 1) = jf (N + k) := by
+      intro k hk
+      by_contra hne
+      have hmem : k ∈ (Finset.range 34).filter
+          (fun k => jf (N + k + 1) ≠ jf (N + k)) :=
+        Finset.mem_filter.mpr ⟨Finset.mem_range.mpr hk, hne⟩
+      rw [hempty] at hmem
+      exact Finset.notMem_empty _ hmem
+    apply cycle_low_pair_selection_migrates hv hcyc hsel (N := N) hN
+    intro k hk
+    have := hrun 0 k (fun i hi => by
+      have := hnochange i (by omega)
+      simpa using this)
+    simpa using this
+  · -- exactly one change point c
+    have hcard1 : ((Finset.range 34).filter
+        (fun k => jf (N + k + 1) ≠ jf (N + k))).card = 1 := by omega
+    obtain ⟨c, hc⟩ := Finset.card_eq_one.mp hcard1
+    have hnochange : ∀ k < 34, k ≠ c → jf (N + k + 1) = jf (N + k) := by
+      intro k hk hne
+      by_contra hchg
+      have hmem : k ∈ (Finset.range 34).filter
+          (fun k => jf (N + k + 1) ≠ jf (N + k)) :=
+        Finset.mem_filter.mpr ⟨Finset.mem_range.mpr hk, hchg⟩
+      rw [hc, Finset.mem_singleton] at hmem
+      exact hne hmem
+    rcases Nat.lt_or_ge c 16 with hclt | hcge
+    · -- change early: the tail segment is a ≥ 17-run
+      apply cycle_low_pair_selection_migrates hv hcyc hsel
+        (N := N + c + 1) (by omega)
+      intro k hk
+      have hr := hrun (c + 1) k (fun i hi => by
+        have := hnochange (c + 1 + i) (by omega) (by omega)
+        rw [show N + (c + 1 + i) + 1 = N + (c + 1 + i) + 1 by rfl] at this
+        exact this)
+      rw [show N + c + 1 + k = N + (c + 1 + k) by omega,
+        show N + c + 1 = N + (c + 1) by omega]
+      exact hr
+    · -- change late: the head segment is a ≥ 17-run
+      apply cycle_low_pair_selection_migrates hv hcyc hsel (N := N) hN
+      intro k hk
+      have := hrun 0 k (fun i hi => by
+        have := hnochange i (by omega) (by omega)
+        simpa using this)
+      simpa using this
+
 end ClearRate
 end Tetris

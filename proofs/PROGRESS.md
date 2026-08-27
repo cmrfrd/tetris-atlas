@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cb) — the cycle window moves twice a period (bank 299/N)
+
+- **`cycle_selection_two_changes_per_period`** — over any 35-step
+  window of a capstone-driven cycle, the selected pair changes ≥ twice:
+  with ≤ 1 change point, one of the two segments spans ≥ 17 steps,
+  breaking the cycle dwell cap. (Run-constancy helper hrun + card 0/1
+  case split + segment pigeonhole; index juggling via rw [show ... by
+  omega] on the ℕ arguments inside jf.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27ca) — the uniform spread law (bank 298/N)
 
 - **`window_feeds_all_columns`** — every column receives a cell in
