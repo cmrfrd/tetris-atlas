@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cl) — the feeding frequency is pinned (bank 309/N)
+
+- **`colProfile_le_four`** — a placement puts ≤ 4 cells in any column.
+- **`column_fed_events_band`** — 4w ≤ 40·#fed + 400 ∧ 10·#fed ≤ 4w +
+  400: every column is fed between once-per-ten and two-in-five on
+  every live window (delivery band ÷ per-feeding 1–4 pricing;
+  sum_le_card_nsmul / card_nsmul_le_sum with the smul → mul simp).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27ck) — the column rate pinch against any dealer (bank 308/N)
 
 - **`adversarial_column_delivery_window_band`** — per-column deliveries

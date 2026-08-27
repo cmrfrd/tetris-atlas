@@ -5914,6 +5914,73 @@ theorem survivor_column_delivery_band {π : Policy GameConfig.standard}
       ≤ 4 * w + 400 :=
   column_delivery_window_band hv hj (hsurv m) (hsurv (m + w))
 
+/-- A placement puts at most four cells in any one column. -/
+theorem colProfile_le_four (pl : Placement) (c : ℕ) :
+    pl.colProfile c ≤ 4 := by
+  unfold Placement.colProfile
+  calc (pl.shapeUp.filter (fun cell => pl.col + cell.1 = c)).card
+      ≤ pl.shapeUp.card := Finset.card_filter_le _ _
+    _ = 4 := pl.shapeUp_card
+
+/-- **The per-column feeding-event band**: on any live window, the
+number of moves that feed column `j` lies between `w/10 − 10` and
+`2w/5 + 40` — deliveries are pinned at 0.4 per move and each feeding
+carries one to four cells. Every column is not merely fed on schedule:
+it is fed at a pinned *frequency*, everywhere in the game. -/
+theorem column_fed_events_band {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m w j : ℕ} (hj : j < 10)
+    (hlive_m : ¬ (trace GameConfig.standard π GameState.init m).lost
+      GameConfig.standard)
+    (hlive_mw : ¬ (trace GameConfig.standard π GameState.init (m + w)).lost
+      GameConfig.standard) :
+    4 * w ≤ 40 * ((Finset.range w).filter (fun k =>
+        0 < (π (trace GameConfig.standard π
+          GameState.init (m + k))).colProfile j)).card + 400
+    ∧ 10 * ((Finset.range w).filter (fun k =>
+        0 < (π (trace GameConfig.standard π
+          GameState.init (m + k))).colProfile j)).card ≤ 4 * w + 400 := by
+  classical
+  have hband := column_delivery_window_band hv hj hlive_m hlive_mw
+  have hsum := colDelivered_window_sum π j m w
+  have hsplit := Finset.sum_filter_add_sum_filter_not (Finset.range w)
+    (fun k => 0 < (π (trace GameConfig.standard π
+      GameState.init (m + k))).colProfile j)
+    (fun k => (π (trace GameConfig.standard π
+      GameState.init (m + k))).colProfile j)
+  have hoff : (∑ k ∈ (Finset.range w).filter (fun k =>
+      ¬ 0 < (π (trace GameConfig.standard π
+        GameState.init (m + k))).colProfile j),
+      (π (trace GameConfig.standard π
+        GameState.init (m + k))).colProfile j) = 0 := by
+    apply Finset.sum_eq_zero
+    intro k hk
+    rw [Finset.mem_filter] at hk
+    omega
+  have hup : (∑ k ∈ (Finset.range w).filter (fun k =>
+      0 < (π (trace GameConfig.standard π
+        GameState.init (m + k))).colProfile j),
+      (π (trace GameConfig.standard π
+        GameState.init (m + k))).colProfile j)
+      ≤ ((Finset.range w).filter (fun k =>
+        0 < (π (trace GameConfig.standard π
+          GameState.init (m + k))).colProfile j)).card • 4 :=
+    Finset.sum_le_card_nsmul _ _ 4
+      (fun k _ => colProfile_le_four _ j)
+  have hlow : ((Finset.range w).filter (fun k =>
+      0 < (π (trace GameConfig.standard π
+        GameState.init (m + k))).colProfile j)).card • 1
+      ≤ (∑ k ∈ (Finset.range w).filter (fun k =>
+        0 < (π (trace GameConfig.standard π
+          GameState.init (m + k))).colProfile j),
+        (π (trace GameConfig.standard π
+          GameState.init (m + k))).colProfile j) :=
+    Finset.card_nsmul_le_sum _ _ 1 (fun k hk => by
+      rw [Finset.mem_filter] at hk
+      omega)
+  simp only [smul_eq_mul] at hup hlow
+  simp only [] at hsplit hoff hup hlow hsum ⊢
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
