@@ -2200,5 +2200,27 @@ theorem light_play_clear_moment {π : Policy GameConfig.standard}
     (f := cleared GameConfig.standard π GameState.init) (N := N) (w := 22)
     (light_play_no_drought hv hlight N)
 
+/-- **The lightness reduction, on traces**: a game whose boards stay
+sixty-four-light offers an I-ready capstone move at every single step —
+for every dealt piece, a valid placement confined to a twelve-low pair.
+Together with the moving-window theorem this reduces solving Tetris to
+one invariant: `count + holes ≤ 64`, forever. -/
+theorem light_trace_capstone_move_exists {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hlight : ∀ m, (trace GameConfig.standard π GameState.init m).board.count
+      + Board.holes GameConfig.standard
+          (trace GameConfig.standard π GameState.init m).board ≤ 64)
+    (n : ℕ) (p : Piece) :
+    ∃ j, j + 1 < 10
+      ∧ (trace GameConfig.standard π GameState.init n).board.colHeight j ≤ 12
+      ∧ (trace GameConfig.standard π
+          GameState.init n).board.colHeight (j + 1) ≤ 12
+      ∧ ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard
+        ∧ ∀ cell ∈ pl.shapeUp,
+            pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1 :=
+  I_ready_window_move_exists
+    (trace_board_wf hv (GameState.init_board_wf GameConfig.standard) n)
+    (hlight n) p
+
 end ClearRate
 end Tetris

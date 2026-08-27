@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cw) — the lightness reduction on traces (bank 320/N)
+
+- **`light_trace_capstone_move_exists`** — a 64-light trace offers an
+  I-ready capstone move at every step, for every dealt piece. The full
+  reduction chain: capstone play survives (250) → the driver's shape is
+  forced (270–310) → existence needs only lightness (312–319) → keep
+  count + holes ≤ 64 and Tetris is solved.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cv) — the I-ready one-step driver (bank 319/N)
 
 - **`I_ready_window_move_exists`** — 64-light boards give every piece a
