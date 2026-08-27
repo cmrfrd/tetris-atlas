@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cq) — lightness pins the clock at fifteen (bank 314/N)
+
+- **`light_play_clear_pinch`** — count + holes ≤ 84 at both ends ⇒
+  |10Δc − 4w| ≤ 84 (the ±200 band shrinks to ±84).
+- **`light_play_dwell_cap`** — under lightness the confined dwell caps
+  at 15 — same as a closed orbit's exact ration. The lightness
+  invariant is a precision commitment: clearing 0.4±0.24/move and
+  migrating every ≤ 15.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cp) — the one-step driver on light boards (bank 313/N)
 
 - **`light_board_window_move_exists`** — count + holes ≤ 84 ⇒ every

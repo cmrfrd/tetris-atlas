@@ -2109,5 +2109,64 @@ theorem low_pair_selection_occupancy_floor {π : Policy GameConfig.standard}
   have hcard := Finset.card_le_card hsub
   omega
 
+/-- **Lightness pins the clear rate to ±8.4**: a policy holding
+`count + holes ≤ 84` at two moments clears within eighty-four cells of
+the exact 0.4-per-move line across the window between them — far
+tighter than the general ±200 band. Keeping the board light is a
+clearing-precision commitment. -/
+theorem light_play_clear_pinch {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n w : ℕ}
+    (hlight_n : (trace GameConfig.standard π GameState.init n).board.count
+      + Board.holes GameConfig.standard
+          (trace GameConfig.standard π GameState.init n).board ≤ 84)
+    (hlight_nw : (trace GameConfig.standard π
+        GameState.init (n + w)).board.count
+      + Board.holes GameConfig.standard
+          (trace GameConfig.standard π GameState.init (n + w)).board ≤ 84) :
+    4 * w ≤ 10 * (cleared GameConfig.standard π GameState.init (n + w)
+        - cleared GameConfig.standard π GameState.init n) + 84
+    ∧ 10 * (cleared GameConfig.standard π GameState.init (n + w)
+        - cleared GameConfig.standard π GameState.init n)
+      ≤ 4 * w + 84 := by
+  have hled1 := init_ledger (cfg := GameConfig.standard) hv n
+  have hled2 := init_ledger (cfg := GameConfig.standard) hv (n + w)
+  rw [GameConfig.standard_cols] at hled1 hled2
+  have hcm := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right n w)
+  exact ⟨by omega, by omega⟩
+
+/-- **Light play's dwell cap equals the cycle's fifteen**: under the
+lightness invariant, confined pair-play ending low lasts at most fifteen
+moves — the ±8.4 clearing pinch is as stingy as a closed orbit's exact
+ration. The lightness reduction inherits the fastest migration clock. -/
+theorem light_play_dwell_cap {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n j w : ℕ}
+    (hj : j + 1 < 10)
+    (hlight_n : (trace GameConfig.standard π GameState.init n).board.count
+      + Board.holes GameConfig.standard
+          (trace GameConfig.standard π GameState.init n).board ≤ 84)
+    (hlight_nw : (trace GameConfig.standard π
+        GameState.init (n + w)).board.count
+      + Board.holes GameConfig.standard
+          (trace GameConfig.standard π GameState.init (n + w)).board ≤ 84)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          = j
+        ∨ (π (trace GameConfig.standard π GameState.init (n + k))).col
+            + cell.1 = j + 1)
+    (hlow : (trace GameConfig.standard π GameState.init
+          (n + w)).board.colHeight j + 4 ≤ 20
+      ∧ (trace GameConfig.standard π GameState.init
+          (n + w)).board.colHeight (j + 1) + 4 ≤ 20) :
+    w ≤ 15 := by
+  have hled := window_feed_ledger (n := n) hj w hcells
+  have hc1 := colCount_le_colHeight
+    (trace GameConfig.standard π GameState.init (n + w)).board j
+  have hc2 := colCount_le_colHeight
+    (trace GameConfig.standard π GameState.init (n + w)).board (j + 1)
+  have hpinch := (light_play_clear_pinch hv hlight_n hlight_nw).2
+  omega
+
 end ClearRate
 end Tetris
