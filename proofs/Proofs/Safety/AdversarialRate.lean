@@ -3286,5 +3286,42 @@ theorem adversarial_tetris_requires_tower {σ : Solver GameConfig.standard}
     (m := m)
   exact ⟨j, hj, by omega⟩
 
+/-- **The twenty-two-move dwell cap is adversary-proof**: forced play
+confined to one adjacent pair between two live moments, ending low,
+lasts at most twenty-two moves whoever deals — the pair ledger against
+the adversarial window band. -/
+theorem adversarial_window_dwell_cap {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {n j w : ℕ} (hj : j + 1 < 10)
+    (hlive_n : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init n).lost GameConfig.standard)
+    (hlive_nw : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init (n + w)).lost GameConfig.standard)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).shapeUp,
+        ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).col + cell.1 = j
+        ∨ ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).col + cell.1 = j + 1)
+    (hlow : (adversarialTrace GameConfig.standard σ s GameState.init
+          (n + w)).board.colHeight j + 4 ≤ 20
+      ∧ (adversarialTrace GameConfig.standard σ s GameState.init
+          (n + w)).board.colHeight (j + 1) + 4 ≤ 20) :
+    w ≤ 22 := by
+  have hled := adversarial_window_feed_ledger (n := n) hj w hcells
+  have hc1 := colCount_le_colHeight
+    (adversarialTrace GameConfig.standard σ s GameState.init (n + w)).board j
+  have hc2 := colCount_le_colHeight
+    (adversarialTrace GameConfig.standard σ s GameState.init
+      (n + w)).board (j + 1)
+  have hband := (adversarial_cleared_window_band hv hlive_n hlive_nw).2
+  omega
+
 end ClearRate
 end Tetris

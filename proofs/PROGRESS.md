@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bg) — the dwell clock is dealer-blind (bank 278/N)
+
+- **`adversarial_window_dwell_cap`** — w ≤ 22 for forced confined
+  pair-play between live moments ending low (adversarial pair ledger ×
+  adversarial window band).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bf) — the tower requirement is dealer-blind (bank 277/N)
 
 - **`fullRows_place_card_le_count`** — the board-level inventory price
