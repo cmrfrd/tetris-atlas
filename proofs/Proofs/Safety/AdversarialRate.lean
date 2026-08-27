@@ -3236,5 +3236,55 @@ theorem adversarial_clearingSteps_window_band
   have hlo := clearingStepsAdv_window_le_clearedAdv (σ := σ) (s := s) m w
   exact ⟨by omega, by omega⟩
 
+/-- **The inventory price of clears is adversary-proof**: a forced step
+clearing `k` rows starts from a board holding at least `10k − 4` cells. -/
+theorem adversarial_clearing_move_count_floor {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {m : ℕ} :
+    10 * (clearedAdv GameConfig.standard σ s GameState.init (m + 1)
+        - clearedAdv GameConfig.standard σ s GameState.init m)
+      ≤ (adversarialTrace GameConfig.standard σ s
+          GameState.init m).board.count + 4 := by
+  have hs := clearedAdv_succ GameConfig.standard σ s GameState.init m
+  have h := fullRows_place_card_le_count (cfg := GameConfig.standard)
+    (adversarialTrace GameConfig.standard σ s GameState.init m).board
+    ({ σ (adversarialTrace GameConfig.standard σ s GameState.init m)
+        (s m) with piece := s m })
+  rw [GameConfig.standard_cols] at h
+  omega
+
+/-- **Every adversarial harvest needs a tower**: a forced `k`-clear
+starts from a board with some column already `k` high. -/
+theorem adversarial_clearing_move_requires_tower
+    {σ : Solver GameConfig.standard} {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {m : ℕ} :
+    ∃ j < 10,
+      clearedAdv GameConfig.standard σ s GameState.init (m + 1)
+        - clearedAdv GameConfig.standard σ s GameState.init m
+      ≤ (adversarialTrace GameConfig.standard σ s
+          GameState.init m).board.colHeight j := by
+  have hfloor := adversarial_clearing_move_count_floor
+    (σ := σ) (s := s) (m := m)
+  have hwf := adversarialTrace_board_wf
+    (GameState.init_board_wf GameConfig.standard) hv m
+  obtain ⟨j, hj, htall⟩ := exists_tall_column hwf
+  exact ⟨j, hj, by omega⟩
+
+/-- **An adversarial tetris needs a four-high tower**, whoever deals. -/
+theorem adversarial_tetris_requires_tower {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {m : ℕ}
+    (h4 : clearedAdv GameConfig.standard σ s GameState.init (m + 1)
+      = clearedAdv GameConfig.standard σ s GameState.init m + 4) :
+    ∃ j < 10,
+      4 ≤ (adversarialTrace GameConfig.standard σ s
+        GameState.init m).board.colHeight j := by
+  obtain ⟨j, hj, htower⟩ := adversarial_clearing_move_requires_tower hv
+    (m := m)
+  exact ⟨j, hj, by omega⟩
+
 end ClearRate
 end Tetris

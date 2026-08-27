@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bf) — the tower requirement is dealer-blind (bank 277/N)
+
+- **`fullRows_place_card_le_count`** — the board-level inventory price
+  (cols·k ≤ count + 4, two lines from mass_floor + exact count_place).
+- **`adversarial_clearing_move_count_floor`**, **`adversarial_clearing_
+  move_requires_tower`**, **`adversarial_tetris_requires_tower`** —
+  the batch 275/276 laws mirrored to forced play.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26be) — every harvest needs a tower (bank 276/N)
 
 - **`clearing_move_requires_tower`** — a k-clear starts from a board

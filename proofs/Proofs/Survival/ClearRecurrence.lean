@@ -5354,6 +5354,16 @@ theorem survivor_clearingSteps_window_band {π : Policy GameConfig.standard}
         ≤ 4 * w + 200 :=
   clearingSteps_window_band hv (hsurv m) (hsurv (m + w))
 
+/-- **The board-level inventory price**: a drop that completes `k` rows
+lands on a board holding at least `cols·k − 4` cells — full rows carry
+`cols` cells each and the piece brings four. -/
+theorem fullRows_place_card_le_count {cfg : GameConfig} (b : Board)
+    (pl : Placement) :
+    cfg.cols * (Board.fullRows cfg (pl.place b)).card ≤ b.count + 4 := by
+  have h := mass_floor_of_fullRows (cfg := cfg) (pl.place b)
+  rw [Placement.count_place] at h
+  exact h
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
