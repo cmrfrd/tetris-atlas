@@ -5671,6 +5671,106 @@ theorem O_pair_confined_even_split {pl : Placement} {j : ℕ}
   · rw [show j + 1 = pl.col + 1 by omega, colProfile_eq_fiber pl 1, hsh]
     exact h1
 
+/-- S and Z rotations either sit in columns 0–1 with a 2 + 2 split or
+reach column 2. -/
+theorem SZ_shape_window_split :
+    ∀ p : Piece, p = Piece.S ∨ p = Piece.Z → ∀ r : Rotation,
+      (((p.shapeUp r).filter (fun c => c.1 = 0)).card = 2
+        ∧ ((p.shapeUp r).filter (fun c => c.1 = 1)).card = 2
+        ∧ ∀ cell ∈ p.shapeUp r, cell.1 ≤ 1)
+      ∨ (∃ cell ∈ p.shapeUp r, cell.1 = 2) := by
+  decide
+
+/-- L, J and T rotations either sit in columns 0–1 with a 3 + 1 split
+(one way or the other) or reach column 2. -/
+theorem LJT_shape_window_split :
+    ∀ p : Piece, p = Piece.L ∨ p = Piece.J ∨ p = Piece.T →
+    ∀ r : Rotation,
+      (((((p.shapeUp r).filter (fun c => c.1 = 0)).card = 3
+          ∧ ((p.shapeUp r).filter (fun c => c.1 = 1)).card = 1)
+        ∨ (((p.shapeUp r).filter (fun c => c.1 = 0)).card = 1
+          ∧ ((p.shapeUp r).filter (fun c => c.1 = 1)).card = 3))
+        ∧ ∀ cell ∈ p.shapeUp r, cell.1 ≤ 1)
+      ∨ (∃ cell ∈ p.shapeUp r, cell.1 = 2) := by
+  decide
+
+/-- **Window S and Z split evenly**: an S or Z confined to an adjacent
+pair stands vertical and feeds each column exactly two cells. -/
+theorem SZ_pair_confined_even_split {pl : Placement} {j : ℕ}
+    (hSZ : pl.piece = Piece.S ∨ pl.piece = Piece.Z)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1) :
+    pl.colProfile j = 2 ∧ pl.colProfile (j + 1) = 2 := by
+  classical
+  rcases SZ_shape_window_split pl.piece hSZ pl.rot with
+    ⟨h0, h1, hnarrow⟩ | ⟨cw, hcw, hc2⟩
+  · obtain ⟨c0, hc0⟩ := Finset.card_pos.mp
+      (show 0 < ((pl.piece.shapeUp pl.rot).filter
+          (fun c => c.1 = 0)).card by rw [h0]; omega)
+    obtain ⟨c1, hc1⟩ := Finset.card_pos.mp
+      (show 0 < ((pl.piece.shapeUp pl.rot).filter
+          (fun c => c.1 = 1)).card by rw [h1]; omega)
+    rw [Finset.mem_filter] at hc0 hc1
+    have hj0 := hcells c0 (by unfold Placement.shapeUp; exact hc0.1)
+    have hj1 := hcells c1 (by unfold Placement.shapeUp; exact hc1.1)
+    have hcol : pl.col = j := by omega
+    constructor
+    · rw [show j = pl.col + 0 by omega, colProfile_eq_fiber pl 0]
+      unfold Placement.shapeUp
+      exact h0
+    · rw [show j + 1 = pl.col + 1 by omega, colProfile_eq_fiber pl 1]
+      unfold Placement.shapeUp
+      exact h1
+  · exfalso
+    obtain ⟨cz, hczmem, hcz0⟩ := Piece.shapeUp_zero_mem pl.piece pl.rot
+    have hA := hcells cz (by unfold Placement.shapeUp; exact hczmem)
+    have hB := hcells cw (by unfold Placement.shapeUp; exact hcw)
+    omega
+
+/-- **Window L, J and T split three-and-one**: confined to an adjacent
+pair they stand vertical, pouring three cells into one column and one
+into the other. -/
+theorem LJT_pair_confined_split {pl : Placement} {j : ℕ}
+    (hLJT : pl.piece = Piece.L ∨ pl.piece = Piece.J ∨ pl.piece = Piece.T)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1) :
+    (pl.colProfile j = 3 ∧ pl.colProfile (j + 1) = 1)
+    ∨ (pl.colProfile j = 1 ∧ pl.colProfile (j + 1) = 3) := by
+  classical
+  rcases LJT_shape_window_split pl.piece hLJT pl.rot with
+    ⟨hsplit, hnarrow⟩ | ⟨cw, hcw, hc2⟩
+  · have hget : ∀ a b : ℕ,
+        ((pl.piece.shapeUp pl.rot).filter (fun c => c.1 = 0)).card = a →
+        ((pl.piece.shapeUp pl.rot).filter (fun c => c.1 = 1)).card = b →
+        0 < a → 0 < b →
+        pl.colProfile j = a ∧ pl.colProfile (j + 1) = b := by
+      intro a b h0 h1 ha hb
+      obtain ⟨c0, hc0⟩ := Finset.card_pos.mp
+        (show 0 < ((pl.piece.shapeUp pl.rot).filter
+            (fun c => c.1 = 0)).card by rw [h0]; omega)
+      obtain ⟨c1, hc1⟩ := Finset.card_pos.mp
+        (show 0 < ((pl.piece.shapeUp pl.rot).filter
+            (fun c => c.1 = 1)).card by rw [h1]; omega)
+      rw [Finset.mem_filter] at hc0 hc1
+      have hj0 := hcells c0 (by unfold Placement.shapeUp; exact hc0.1)
+      have hj1 := hcells c1 (by unfold Placement.shapeUp; exact hc1.1)
+      have hcol : pl.col = j := by omega
+      constructor
+      · rw [show j = pl.col + 0 by omega, colProfile_eq_fiber pl 0]
+        unfold Placement.shapeUp
+        exact h0
+      · rw [show j + 1 = pl.col + 1 by omega, colProfile_eq_fiber pl 1]
+        unfold Placement.shapeUp
+        exact h1
+    rcases hsplit with ⟨h0, h1⟩ | ⟨h0, h1⟩
+    · exact Or.inl (hget 3 1 h0 h1 (by omega) (by omega))
+    · exact Or.inr (hget 1 3 h0 h1 (by omega) (by omega))
+  · exfalso
+    obtain ⟨cz, hczmem, hcz0⟩ := Piece.shapeUp_zero_mem pl.piece pl.rot
+    have hA := hcells cz (by unfold Placement.shapeUp; exact hczmem)
+    have hB := hcells cw (by unfold Placement.shapeUp; exact hcw)
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

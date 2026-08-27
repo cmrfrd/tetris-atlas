@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bv) — the window piece catalog complete (bank 293/N)
+
+- **`SZ_shape_window_split`**, **`LJT_shape_window_split`** — kernel
+  decides: every rotation is either columns-0/1-narrow with the stated
+  split or reaches column 2.
+- **`SZ_pair_confined_even_split`** (2+2),
+  **`LJT_pair_confined_split`** ((3,1) ∨ (1,3)) — confined pieces stand
+  vertical. FULL in-window profile catalog: I (4,0)|(0,4); O,S,Z (2,2);
+  L,J,T (3,1)|(1,3). The moving window's arithmetic is now piece-exact.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bu) — the window O is the balanced brick (bank 292/N)
 
 - **`colProfile_eq_fiber`** — the offset bridge colProfile(col+t) =
