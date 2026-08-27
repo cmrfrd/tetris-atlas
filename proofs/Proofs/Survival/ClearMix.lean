@@ -1858,5 +1858,46 @@ theorem confined_run_off_set_holes_sink {π : Policy GameConfig.standard}
       GameState.step_board]
     exact le_trans hstep hihk
 
+/-- **The pair parity invariant**: over any confined run the window's
+total cell-count parity never changes — every drop adds four and every
+cleared row removes two. -/
+theorem confined_pair_count_parity {π : Policy GameConfig.standard}
+    {n j w : ℕ} (hj : j + 1 < 10)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          = j
+        ∨ (π (trace GameConfig.standard π GameState.init (n + k))).col
+            + cell.1 = j + 1) :
+    ((trace GameConfig.standard π GameState.init (n + w)).board.colCount j
+        + (trace GameConfig.standard π GameState.init
+            (n + w)).board.colCount (j + 1)) % 2
+      = ((trace GameConfig.standard π GameState.init n).board.colCount j
+        + (trace GameConfig.standard π GameState.init n).board.colCount
+            (j + 1)) % 2 := by
+  have hled := window_feed_ledger (n := n) hj w hcells
+  omega
+
+/-- **An odd window can never be emptied in place**: if the pair holds an
+odd number of cells, no amount of confined play — clears included — can
+leave it empty. Emptying the window requires playing outside it. -/
+theorem confined_cannot_empty_odd_pair {π : Policy GameConfig.standard}
+    {n j w : ℕ} (hj : j + 1 < 10)
+    (hodd : ((trace GameConfig.standard π GameState.init n).board.colCount j
+        + (trace GameConfig.standard π GameState.init n).board.colCount
+            (j + 1)) % 2 = 1)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          = j
+        ∨ (π (trace GameConfig.standard π GameState.init (n + k))).col
+            + cell.1 = j + 1) :
+    ¬ ((trace GameConfig.standard π GameState.init (n + w)).board.colCount j
+        + (trace GameConfig.standard π GameState.init
+            (n + w)).board.colCount (j + 1) = 0) := by
+  intro hzero
+  have hpar := confined_pair_count_parity (n := n) hj hcells
+  omega
+
 end ClearRate
 end Tetris

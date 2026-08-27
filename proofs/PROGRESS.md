@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bw) — the pair parity invariant (bank 294/N)
+
+- **`confined_pair_count_parity`** — the window's cell-count parity is
+  invariant under confined play (one line from the pair ledger).
+- **`confined_cannot_empty_odd_pair`** — an odd window can never be
+  emptied in place: reset-to-flat requires playing OUTSIDE the window.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bv) — the window piece catalog complete (bank 293/N)
 
 - **`SZ_shape_window_split`**, **`LJT_shape_window_split`** — kernel
