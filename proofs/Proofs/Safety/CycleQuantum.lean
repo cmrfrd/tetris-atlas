@@ -3134,5 +3134,40 @@ theorem cycle_dwell_cap {π : Policy GameConfig.standard}
     (Nat.le_add_right m₀ w)
   omega
 
+/-- **On a cycle the low-pair selection steps every fifteen**: a
+halfway-capstone selection driving a closed orbit can never hold the
+same pair for sixteen consecutive steps — the cycle's fourteen-per-period
+ration forces the window onward even faster than free play does. -/
+theorem cycle_low_pair_selection_migrates {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {jf : ℕ → ℕ}
+    (hsel : ∀ m, jf m + 1 < 10
+      ∧ ((trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m) + 4 ≤ 20
+        ∧ (trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m + 1) + 4 ≤ 20)
+      ∧ ∀ cell ∈ (π (trace GameConfig.standard π GameState.init m)).shapeUp,
+          (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m
+          ∨ (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m + 1)
+    {N : ℕ} (hN : n ≤ N) :
+    ¬ (∀ k ≤ 16, jf (N + k) = jf N) := by
+  intro hconst
+  have hcap := cycle_dwell_cap hv hcyc (m₀ := N) (j := jf N) (w := 16) hN
+    (hsel N).1
+    (fun k hk => by
+      have h3 := (hsel (N + k)).2.2
+      have hje := hconst k (by omega)
+      rw [hje] at h3
+      exact h3)
+    (by
+      have h2 := (hsel (N + 16)).2.1
+      have hje := hconst 16 (le_refl _)
+      rw [hje] at h2
+      exact h2)
+  omega
+
 end ClearRate
 end Tetris

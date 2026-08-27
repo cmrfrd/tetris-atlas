@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bi) — cycle selections step every fifteen (bank 280/N)
+
+- **`cycle_low_pair_selection_migrates`** — a halfway-capstone selection
+  driving a 35-cycle can't hold one pair for 17 consecutive steps
+  (cycle dwell cap 15 applied at w = 16).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bh) — cycles migrate every fifteen (bank 279/N)
 
 - **`cycle_window_clears_multi`** — q periods from any anchor clear
