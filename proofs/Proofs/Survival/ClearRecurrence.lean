@@ -6047,6 +6047,35 @@ theorem low_pair_exists_of_light {b : Board}
   simp only [smul_eq_mul] at hsum2
   omega
 
+/-- **The one-step driver exists on light boards**: whenever mass plus
+debt is at most eighty-four, every piece admits a valid placement
+confined to some low adjacent pair — the window is there
+(`low_pair_exists_of_light`) and every piece has a two-wide rotation to
+enter it. The moving-window crux is now PURELY the lightness invariant:
+a policy that keeps `count + holes ≤ 84` forever can always make a
+capstone move, and capstone play survives. -/
+theorem light_board_window_move_exists {b : Board}
+    (hwf : Board.WF GameConfig.standard b)
+    (hlight : b.count + Board.holes GameConfig.standard b ≤ 84)
+    (p : Piece) :
+    ∃ j, j + 1 < 10
+      ∧ b.colHeight j + 4 ≤ 20 ∧ b.colHeight (j + 1) + 4 ≤ 20
+      ∧ ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard
+        ∧ ∀ cell ∈ pl.shapeUp,
+            pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1 := by
+  obtain ⟨j, hj, h1, h2⟩ := low_pair_exists_of_light hwf hlight
+  obtain ⟨r, hr⟩ := exists_narrow_rotation p
+  refine ⟨j, hj, h1, h2, ⟨p, r, j⟩, rfl, ?_, ?_⟩
+  · intro cell hcell
+    have hw := hr cell hcell
+    change j + cell.1 < GameConfig.standard.cols
+    rw [GameConfig.standard_cols]
+    omega
+  · intro cell hcell
+    have hw := hr cell hcell
+    change j + cell.1 = j ∨ j + cell.1 = j + 1
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

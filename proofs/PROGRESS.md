@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cp) — the one-step driver on light boards (bank 313/N)
+
+- **`light_board_window_move_exists`** — count + holes ≤ 84 ⇒ every
+  piece admits a valid placement confined to a low pair (window
+  existence × narrow rotations). The moving-window crux is now purely
+  the LIGHTNESS INVARIANT: keep count + holes ≤ 84 forever, and
+  survival follows by construction.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27co) — a light board always offers a window (bank 312/N)
 
 - **`low_pair_exists_of_light`** — count + holes ≤ 84 ⇒ a low adjacent
