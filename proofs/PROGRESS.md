@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bu) — the window O is the balanced brick (bank 292/N)
+
+- **`colProfile_eq_fiber`** — the offset bridge colProfile(col+t) =
+  shape fiber t (filter_congr on member-wise iff).
+- **`O_shape_columns`** — kernel decide: O occupies columns 0/1 with
+  2+2, every rotation.
+- **`O_pair_confined_even_split`** — a window O feeds each pair column
+  exactly two. In-window piece profiles so far: I = (4,0)|(0,4),
+  O = (2,2).
+- Gotcha: `rw [hEq]` bridges the filter-instance atom gap that omega
+  can't; a post-rw `0 < 2` still needs omega (not closed by rfl).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bt) — the confined I is a tower brick (bank 291/N)
 
 - **`I_shape_single_or_wide`** — kernel decide: every I rotation is

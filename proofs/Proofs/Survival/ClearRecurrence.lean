@@ -5617,6 +5617,60 @@ theorem I_pair_confined_full_feed {pl : Placement} {j : ℕ}
     omega
   rw [hall, pl.shapeUp_card]
 
+/-- A placement's column profile at offset `t` is its shape's column-`t`
+fiber. -/
+theorem colProfile_eq_fiber (pl : Placement) (t : ℕ) :
+    pl.colProfile (pl.col + t)
+      = (pl.shapeUp.filter (fun c => c.1 = t)).card := by
+  unfold Placement.colProfile
+  congr 1
+  apply Finset.filter_congr
+  intro c _
+  constructor
+  · intro h
+    omega
+  · intro h
+    omega
+
+/-- The O occupies columns 0 and 1 with two cells each, in every
+rotation. -/
+theorem O_shape_columns : ∀ r : Rotation,
+    ((Piece.O.shapeUp r).filter (fun c => c.1 = 0)).card = 2
+    ∧ ((Piece.O.shapeUp r).filter (fun c => c.1 = 1)).card = 2
+    ∧ ∀ cell ∈ Piece.O.shapeUp r, cell.1 ≤ 1 := by
+  decide
+
+/-- **A window O splits evenly**: an O confined to an adjacent pair
+feeds each of the two columns exactly two cells — the square is the
+window's only perfectly balanced brick. -/
+theorem O_pair_confined_even_split {pl : Placement} {j : ℕ}
+    (hO : pl.piece = Piece.O)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1) :
+    pl.colProfile j = 2 ∧ pl.colProfile (j + 1) = 2 := by
+  classical
+  obtain ⟨h0, h1, hnarrow⟩ := O_shape_columns pl.rot
+  have hsh : pl.shapeUp = Piece.O.shapeUp pl.rot := by
+    unfold Placement.shapeUp
+    rw [hO]
+  obtain ⟨c0, hc0⟩ := Finset.card_pos.mp
+    (show 0 < ((Piece.O.shapeUp pl.rot).filter (fun c => c.1 = 0)).card by
+      rw [h0]
+      omega)
+  obtain ⟨c1, hc1⟩ := Finset.card_pos.mp
+    (show 0 < ((Piece.O.shapeUp pl.rot).filter (fun c => c.1 = 1)).card by
+      rw [h1]
+      omega)
+  rw [Finset.mem_filter] at hc0 hc1
+  have hj0 := hcells c0 (by rw [hsh]; exact hc0.1)
+  have hj1 := hcells c1 (by rw [hsh]; exact hc1.1)
+  have hcol : pl.col = j := by omega
+  constructor
+  · rw [show j = pl.col + 0 by omega, colProfile_eq_fiber pl 0, hsh]
+    exact h0
+  · rw [show j + 1 = pl.col + 1 by omega, colProfile_eq_fiber pl 1, hsh]
+    exact h1
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
