@@ -5381,6 +5381,40 @@ theorem applyStep_unfed_colHeight_le {cfg : GameConfig} {b : Board}
     rw [hid]
     exact le_of_eq (place_unfed_colHeight_eq hz)
 
+/-- A clear-free move never lowers any column: the merge only adds
+cells, and without a full row the clear phase is the identity. -/
+theorem dry_step_colHeight_ge {cfg : GameConfig} {b : Board}
+    {pl : Placement} (j : ℕ)
+    (hnc : (Board.fullRows cfg (pl.place b)).card = 0) :
+    b.colHeight j ≤ (Placement.applyStep cfg b pl).colHeight j := by
+  have hid : Placement.applyStep cfg b pl = pl.place b := by
+    unfold Placement.applyStep
+    exact Board.clearLines_eq_self_of_no_fullRows cfg
+      (Finset.card_eq_zero.mp hnc)
+  rw [hid, Placement.place_eq_union_dropped]
+  exact colHeight_mono Finset.subset_union_left j
+
+/-- **The skyline sinks only at clearing moments**: any drop in any
+column's height across a step certifies that the step cleared. Height
+relief is never free — it is always bought with a full row. -/
+theorem height_drop_certifies_clear {π : Policy GameConfig.standard}
+    {m j : ℕ}
+    (hdrop : (trace GameConfig.standard π GameState.init (m + 1)).board.colHeight j
+      < (trace GameConfig.standard π GameState.init m).board.colHeight j) :
+    cleared GameConfig.standard π GameState.init m
+      < cleared GameConfig.standard π GameState.init (m + 1) := by
+  have hs := cleared_succ GameConfig.standard π GameState.init m
+  by_contra hnone
+  have hcard0 : (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init m)).place
+        (trace GameConfig.standard π GameState.init m).board)).card = 0 := by
+    omega
+  have hge := dry_step_colHeight_ge (cfg := GameConfig.standard)
+    (b := (trace GameConfig.standard π GameState.init m).board)
+    (pl := π (trace GameConfig.standard π GameState.init m)) j hcard0
+  rw [trace_succ, GameState.step_board] at hdrop
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

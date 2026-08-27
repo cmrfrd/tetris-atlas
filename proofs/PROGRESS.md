@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bm) — height relief is never free (bank 284/N)
+
+- **`dry_step_colHeight_ge`** — a clear-free move never lowers any
+  column (merge is a union; without a full row the clear phase is the
+  identity).
+- **`height_drop_certifies_clear`** — any per-step height drop
+  certifies a cleared-count jump: relief is always bought with a full
+  row. Reserve PREPARATION therefore runs through the clearing clock.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bl) — sink and reserve at every width (bank 283/N)
 
 - **`confined_run_off_set_heights_sink`** — set-width sink: columns
