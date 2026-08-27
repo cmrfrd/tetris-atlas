@@ -1663,5 +1663,32 @@ theorem tetris_requires_thirty_six_banked {π : Policy GameConfig.standard}
   have hfloor := clearing_move_count_floor (π := π) (m := m)
   omega
 
+/-- **Every harvest needs a tower**: a step clearing `k` rows starts from
+a board with some column already standing at least `k` high — the
+`10k − 4` banked cells cannot lie flatter than a tenth of their mass. -/
+theorem clearing_move_requires_tower {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ} :
+    ∃ j < 10,
+      cleared GameConfig.standard π GameState.init (m + 1)
+        - cleared GameConfig.standard π GameState.init m
+      ≤ (trace GameConfig.standard π GameState.init m).board.colHeight j := by
+  have hfloor := clearing_move_count_floor (π := π) (m := m)
+  have hwf := trace_board_wf hv
+    (GameState.init_board_wf GameConfig.standard) m
+  obtain ⟨j, hj, htall⟩ := exists_tall_column hwf
+  exact ⟨j, hj, by omega⟩
+
+/-- **A tetris needs a four-high tower**: any four-clear starts from a
+board with some column at least four high — the well's neighbour was
+standing before the I arrived. -/
+theorem tetris_requires_tower {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ}
+    (h4 : cleared GameConfig.standard π GameState.init (m + 1)
+      = cleared GameConfig.standard π GameState.init m + 4) :
+    ∃ j < 10,
+      4 ≤ (trace GameConfig.standard π GameState.init m).board.colHeight j := by
+  obtain ⟨j, hj, htower⟩ := clearing_move_requires_tower hv (m := m)
+  exact ⟨j, hj, by omega⟩
+
 end ClearRate
 end Tetris

@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26be) — every harvest needs a tower (bank 276/N)
+
+- **`clearing_move_requires_tower`** — a k-clear starts from a board
+  with some column ≥ k high (count floor 10k − 4 + mass-forces-height).
+- **`tetris_requires_tower`** — a four-clear starts with a standing
+  four-high column: the well's neighbour predates the I.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26bd) — the inventory price of harvests (bank 275/N)
 
 - **`clearing_move_count_floor`** — 10·Δcleared ≤ count(m) + 4: clears
