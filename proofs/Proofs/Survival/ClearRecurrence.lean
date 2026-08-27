@@ -5564,6 +5564,59 @@ theorem applyStep_unfed_colHoles_le {cfg : GameConfig} {b : Board}
   unfold Placement.applyStep
   omega
 
+/-- Every I rotation is single-column or four wide — nothing between. -/
+theorem I_shape_single_or_wide :
+    ∀ r : Rotation,
+      (∀ cell ∈ Piece.I.shapeUp r, ∀ cell' ∈ Piece.I.shapeUp r,
+        cell.1 = cell'.1)
+      ∨ (∃ cell ∈ Piece.I.shapeUp r, ∃ cell' ∈ Piece.I.shapeUp r,
+          cell'.1 + 3 ≤ cell.1) := by
+  decide
+
+/-- **A pair-confined I is vertical**: an I whose cells all land in two
+adjacent columns stands in a single column — its horizontal rotations
+span four. -/
+theorem I_pair_confined_single_column {pl : Placement} {j : ℕ}
+    (hI : pl.piece = Piece.I)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1) :
+    ∀ cell ∈ pl.shapeUp, ∀ cell' ∈ pl.shapeUp, cell.1 = cell'.1 := by
+  rcases I_shape_single_or_wide pl.rot with h | h
+  · intro cell hcell cell' hcell'
+    unfold Placement.shapeUp at hcell hcell'
+    rw [hI] at hcell hcell'
+    exact h cell hcell cell' hcell'
+  · exfalso
+    obtain ⟨cell, hcell, cell', hcell', hw⟩ := h
+    have h1 := hcells cell (by unfold Placement.shapeUp; rw [hI]; exact hcell)
+    have h2 := hcells cell'
+      (by unfold Placement.shapeUp; rw [hI]; exact hcell')
+    omega
+
+/-- **A pair-confined I is a full feed**: it pours all four cells into
+one of the window's two columns — inside a low window, the I can only
+arrive as a tower brick. -/
+theorem I_pair_confined_full_feed {pl : Placement} {j : ℕ}
+    (hI : pl.piece = Piece.I)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1) :
+    ∃ c, (c = j ∨ c = j + 1) ∧ pl.colProfile c = 4 := by
+  classical
+  have hsingle := I_pair_confined_single_column hI hcells
+  have hne : pl.shapeUp.Nonempty := by
+    rw [← Finset.card_pos, pl.shapeUp_card]
+    omega
+  obtain ⟨cell0, hcell0⟩ := hne
+  refine ⟨pl.col + cell0.1, hcells cell0 hcell0, ?_⟩
+  unfold Placement.colProfile
+  have hall : pl.shapeUp.filter
+      (fun cell => pl.col + cell.1 = pl.col + cell0.1) = pl.shapeUp := by
+    rw [Finset.filter_eq_self]
+    intro cell hcell
+    have := hsingle cell hcell cell0 hcell0
+    omega
+  rw [hall, pl.shapeUp_card]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

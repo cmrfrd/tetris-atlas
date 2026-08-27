@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bt) — the confined I is a tower brick (bank 291/N)
+
+- **`I_shape_single_or_wide`** — kernel decide: every I rotation is
+  single-column or spans four.
+- **`I_pair_confined_single_column`** — an I confined to an adjacent
+  pair is vertical.
+- **`I_pair_confined_full_feed`** — and pours 4 cells into one window
+  column. Inside a dwell the dealer's I (guaranteed ≤ every 13 by the
+  bag) forces a +4 tower on one of the two columns — the window's
+  worst enemy is quantified.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bs) — drop certificates against any dealer (bank 290/N)
 
 - **`adversarial_height_drop_certifies_clear`**, **`adversarial_peak_
