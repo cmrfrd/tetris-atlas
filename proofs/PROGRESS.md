@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cy) — five doubles per period (bank 322/N)
+
+- **`doubles_per_window_le_five`** — any 35 consecutive draws contain
+  ≤ 5 adjacent repeats (doubles ⊆ residue-6 positions; k ↦ k/7
+  injects those into range 5).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cx) — the bag's repeats are clocked (bank 321/N)
 
 - **`no_triple_run`** — no piece three times consecutively (three

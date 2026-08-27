@@ -1338,5 +1338,40 @@ theorem double_position {s : ℕ → Piece}
   have := (bagAt_eq_full_iff hl (n + 1)).mp hfull
   omega
 
+/-- **At most five doubles per period**: any thirty-five consecutive
+draws contain at most five adjacent repeats — doubles live only on the
+five bag boundaries the window spans. -/
+theorem doubles_per_window_le_five {s : ℕ → Piece}
+    (hl : LegalSequenceFrom Bag.full s) (N : ℕ) :
+    ((Finset.range 35).filter
+      (fun k => s (N + k) = s (N + k + 1))).card ≤ 5 := by
+  classical
+  have hsub : (Finset.range 35).filter
+      (fun k => s (N + k) = s (N + k + 1))
+      ⊆ (Finset.range 35).filter (fun k => (N + k) % 7 = 6) := by
+    intro k hk
+    rw [Finset.mem_filter] at hk ⊢
+    exact ⟨hk.1, double_position hl hk.2⟩
+  have hcard : ((Finset.range 35).filter
+      (fun k => (N + k) % 7 = 6)).card ≤ 5 := by
+    have hmem : ∀ k ∈ (Finset.range 35).filter
+        (fun k => (N + k) % 7 = 6), k / 7 ∈ Finset.range 5 := by
+      intro k hk
+      rw [Finset.mem_filter, Finset.mem_range] at hk
+      rw [Finset.mem_range]
+      omega
+    have hinj : Set.InjOn (fun k => k / 7)
+        ↑((Finset.range 35).filter (fun k => (N + k) % 7 = 6)) := by
+      intro a ha b hb hab
+      simp only [Finset.mem_coe, Finset.mem_filter, Finset.mem_range]
+        at ha hb
+      simp only [] at hab
+      omega
+    calc ((Finset.range 35).filter (fun k => (N + k) % 7 = 6)).card
+        ≤ (Finset.range 5).card :=
+          Finset.card_le_card_of_injOn _ hmem hinj
+      _ = 5 := Finset.card_range 5
+  exact le_trans (Finset.card_le_card hsub) hcard
+
 end BagCadence
 end Tetris
