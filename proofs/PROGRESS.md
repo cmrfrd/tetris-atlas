@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bo) — death needs time (bank 286/N)
+
+- **`lost_maxHeight_ge`** — a lost WF board's peak reaches ≥ 21.
+- **`death_needs_time`** — 21 ≤ h + 4w: from a peak-h live point, death
+  is at least (21 − h)/4 moves away.
+- **`no_death_before_six`** — no game dies before its sixth move.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bn) — the peak's speed limit (bank 285/N)
 
 - **`colHeight_le_maxHeight_of_wf`** — any column (in range or out) is

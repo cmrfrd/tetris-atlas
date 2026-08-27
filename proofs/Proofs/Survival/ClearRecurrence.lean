@@ -5470,6 +5470,50 @@ theorem trace_maxHeight_window_climb {π : Policy GameConfig.standard}
       GameState.step_board]
     omega
 
+/-- A lost well-formed board's peak reaches at least twenty-one: some
+cell sits at or above row twenty. -/
+theorem lost_maxHeight_ge {cfg : GameConfig} {b : Board}
+    (hwf : Board.WF cfg b) (hlost : Board.isLost cfg b)
+    (hrows : cfg.rows = 20) :
+    21 ≤ Board.maxHeight cfg b := by
+  obtain ⟨p, hp, hr⟩ := hlost
+  have hlt := Board.lt_colHeight hp
+  have hcol := hwf p hp
+  have hle := Board.colHeight_le_maxHeight (b := b) hcol
+  omega
+
+/-- **Death needs time**: a game live with peak height `h` at step `n`
+cannot be lost before `4w` moves have raised the peak past twenty — the
+climb budget prices the survival horizon. -/
+theorem death_needs_time {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n w h : ℕ}
+    (hh : Board.maxHeight GameConfig.standard
+      (trace GameConfig.standard π GameState.init n).board ≤ h)
+    (hlost : (trace GameConfig.standard π GameState.init (n + w)).lost
+      GameConfig.standard) :
+    21 ≤ h + 4 * w := by
+  have hclimb := trace_maxHeight_window_climb hv n w
+  have hwf := trace_board_wf hv
+    (GameState.init_board_wf GameConfig.standard) (n + w)
+  have hge := lost_maxHeight_ge hwf
+    ((GameState.lost_iff_board_isLost GameConfig.standard _).mp hlost)
+    GameConfig.standard_rows
+  omega
+
+/-- **No game dies before its sixth move**: from the empty board the peak
+climbs at most four per move, and death needs a peak past twenty. -/
+theorem no_death_before_six {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {w : ℕ}
+    (hlost : (trace GameConfig.standard π GameState.init w).lost
+      GameConfig.standard) :
+    6 ≤ w := by
+  have h := death_needs_time hv (n := 0) (w := w) (h := 0)
+    (by
+      rw [trace_zero, GameState.init_board_eq_emptyset,
+        Board.maxHeight_empty])
+    (by rw [Nat.zero_add]; exact hlost)
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
