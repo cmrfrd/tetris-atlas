@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cf) — the minimal tour is the even tiling (bank 303/N)
+
+- **`five_pair_cover_is_even_tiling`** — kernel decide over the 512
+  subsets of range 9: five adjacent pairs covering ten columns are
+  exactly {0,2,4,6,8} (maxRecDepth 40000).
+- **`cycle_minimal_tour_even_tiling`** — a capstone cycle using exactly
+  five pairs per period uses the disjoint even tiling: minimal touring
+  is maximally rigid.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27ce) — four changes per period (bank 302/N)
 
 - **`seq_image_subset_changes`** / **`seq_image_card_le_changes`** —

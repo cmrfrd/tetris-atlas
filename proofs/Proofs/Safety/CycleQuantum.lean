@@ -3444,5 +3444,65 @@ theorem cycle_selection_four_changes_per_period
   rw [show (35 : ℕ) - 1 = 34 from rfl] at hle
   omega
 
+set_option maxRecDepth 40000 in
+/-- Five adjacent pairs covering all ten columns tile them evenly: the
+only five-element pair-base is `{0, 2, 4, 6, 8}`. -/
+theorem five_pair_cover_is_even_tiling :
+    ∀ P ∈ (Finset.range 9).powerset, P.card = 5 →
+      (∀ j ∈ Finset.range 10, ∃ v ∈ P, j = v ∨ j = v + 1) →
+      P = {0, 2, 4, 6, 8} := by
+  decide
+
+/-- **The minimal tour is the even tiling**: a capstone cycle whose
+selection uses exactly five pairs in a period uses precisely the pairs
+based at columns 0, 2, 4, 6 and 8 — five disjoint windows tiling the
+board. Minimal touring is maximally rigid. -/
+theorem cycle_minimal_tour_even_tiling {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {jf : ℕ → ℕ}
+    (hsel : ∀ m, jf m + 1 < 10
+      ∧ ((trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m) + 4 ≤ 20
+        ∧ (trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m + 1) + 4 ≤ 20)
+      ∧ ∀ cell ∈ (π (trace GameConfig.standard π GameState.init m)).shapeUp,
+          (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m
+          ∨ (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m + 1)
+    {m₀ : ℕ} (hm : n ≤ m₀)
+    (hcard5 : ((Finset.range 35).image (fun k => jf (m₀ + k))).card = 5) :
+    (Finset.range 35).image (fun k => jf (m₀ + k))
+      = ({0, 2, 4, 6, 8} : Finset ℕ) := by
+  classical
+  apply five_pair_cover_is_even_tiling
+  · rw [Finset.mem_powerset]
+    intro v hvm
+    obtain ⟨k, _, rfl⟩ := Finset.mem_image.mp hvm
+    have := (hsel (m₀ + k)).1
+    exact Finset.mem_range.mpr (by omega)
+  · exact hcard5
+  · intro j hj
+    obtain ⟨k, hk, hfed⟩ := cycle_window_column_fed hv hcyc hm
+      (Finset.mem_range.mp hj)
+    have hex : ∃ cell ∈ (π (trace GameConfig.standard π
+        GameState.init (m₀ + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (m₀ + k))).col
+          + cell.1 = j := by
+      unfold Placement.colProfile at hfed
+      obtain ⟨cell, hcell⟩ := Finset.card_pos.mp hfed
+      rw [Finset.mem_filter] at hcell
+      exact ⟨cell, hcell.1, hcell.2⟩
+    obtain ⟨cell, hcell, hcol⟩ := hex
+    have hpair := (hsel (m₀ + k)).2.2 cell hcell
+    refine ⟨jf (m₀ + k),
+      Finset.mem_image.mpr ⟨k, Finset.mem_range.mpr hk, rfl⟩, ?_⟩
+    rcases hpair with h | h
+    · left
+      omega
+    · right
+      omega
+
 end ClearRate
 end Tetris
