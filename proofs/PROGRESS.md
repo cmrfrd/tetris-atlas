@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27da) — the tower brick is debt-free (bank 324/N)
+
+- **`vertical_I_hole_free`** — a pair-confined I creates no holes: its
+  foot sits at offset zero so the drop seats exactly on the surface
+  (bottom dropped cell at dropOffset = own column height ⇒ landing gap
+  zero; unfed columns by profile-zero; total via holes_place_eq_iff).
+  The forced I-event's full price: +4 height, +4 mass, 0 debt.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cz) — the double laws on traces (bank 323/N)
 
 - **`trace_no_triple_run`**, **`trace_double_position`** — the bag's

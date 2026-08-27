@@ -6303,6 +6303,71 @@ theorem I_ready_window_move_exists {b : Board}
     change j + cell.1 = j ∨ j + cell.1 = j + 1
     omega
 
+/-- **The tower brick is debt-free**: an I confined to an adjacent pair
+lands flush on its column's stack and creates no holes anywhere — its
+foot sits at offset zero, so the drop seats exactly on the surface. The
+window's forced I-event costs four height but zero debt. -/
+theorem vertical_I_hole_free {b : Board} {pl : Placement} {j : ℕ}
+    (hI : pl.piece = Piece.I)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1) :
+    Board.holes GameConfig.standard (pl.place b)
+      = Board.holes GameConfig.standard b := by
+  classical
+  have hsingle := I_pair_confined_single_column hI hcells
+  have hsh : pl.shapeUp = Piece.I.shapeUp pl.rot := by
+    unfold Placement.shapeUp
+    rw [hI]
+  obtain ⟨t, _, ht⟩ := I_vertical_shape pl.rot (by
+    intro cell hcell cell' hcell'
+    exact hsingle cell (by rw [hsh]; exact hcell) cell'
+      (by rw [hsh]; exact hcell'))
+  have htsh : pl.shapeUp = ({(t, 0), (t, 1), (t, 2), (t, 3)}
+      : Finset PieceCell) := by
+    rw [hsh, ht]
+  have hmem0 : ((t, 0) : PieceCell) ∈ pl.shapeUp := by
+    rw [htsh]
+    simp
+  have hdrop : pl.dropOffset b = b.colHeight (pl.col + t) := by
+    apply Nat.le_antisymm
+    · unfold Placement.dropOffset
+      apply Finset.sup_le
+      intro cell hcell
+      rw [htsh] at hcell
+      simp only [Finset.mem_insert, Finset.mem_singleton] at hcell
+      rcases hcell with h | h | h | h <;> subst h <;> simp
+    · have hle := Finset.le_sup
+        (f := fun cell : PieceCell =>
+          b.colHeight (pl.col + cell.1) - cell.2) hmem0
+      unfold Placement.dropOffset
+      simpa using hle
+  apply holes_place_eq_iff.mpr
+  intro c hc
+  by_cases hfed : c = pl.col + t
+  · subst hfed
+    have hbot : (pl.col + t, pl.dropOffset b) ∈ pl.dropped b := by
+      unfold Placement.dropped Placement.cellsAt
+      rw [Finset.mem_image]
+      exact ⟨(t, 0), hmem0, by simp⟩
+    have hmin : ∀ r, (pl.col + t, r) ∈ pl.dropped b →
+        pl.dropOffset b ≤ r := by
+      intro r hr
+      unfold Placement.dropped Placement.cellsAt at hr
+      rw [Finset.mem_image] at hr
+      obtain ⟨cell, hcell, heq⟩ := hr
+      have hrow := congrArg Prod.snd heq
+      simp only [] at hrow
+      omega
+    have heq := colHoles_place_eq (b := b) hbot hmin
+    rw [heq, hdrop]
+    omega
+  · apply colHoles_place_eq_of_unfed
+    apply colProfile_eq_zero_of_not_touched
+    intro cell hcell hceq
+    apply hfed
+    have := hsingle cell hcell (t, 0) hmem0
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
