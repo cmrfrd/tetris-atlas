@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cx) — the bag's repeats are clocked (bank 321/N)
+
+- **`no_triple_run`** — no piece three times consecutively (three
+  copies need a seven-span).
+- **`double_forces_refill`** — a double forces the refill exactly
+  between its two draws.
+- **`double_position`** — from the full bag, doubles land only at
+  n ≡ 6 (mod 7): repeats are boundary events, on the clock.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cw) — the lightness reduction on traces (bank 320/N)
 
 - **`light_trace_capstone_move_exists`** — a 64-light trace offers an

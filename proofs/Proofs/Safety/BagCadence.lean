@@ -1306,5 +1306,37 @@ theorem first_block_contains {s : ℕ → Piece}
   obtain ⟨k, hk, hks⟩ := block_contains hl (r := 0) rfl p
   exact ⟨k, hk, by simpa using hks⟩
 
+/-- **No piece three times in a row**: a triple run would put three
+copies within a two-step span, but three copies need a full seven. -/
+theorem no_triple_run {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) (n : ℕ) :
+    ¬ (s n = s (n + 1) ∧ s (n + 1) = s (n + 2)) := by
+  rintro ⟨h1, h2⟩
+  have hspan := same_piece_three_apart hl (p := s n) rfl h1.symm
+    (h1.trans h2).symm (by omega) (by omega)
+  omega
+
+/-- **A double straddles a refill**: the same piece twice in a row forces
+the bag to refill exactly between the two draws. -/
+theorem double_forces_refill {initBag : Bag} {s : ℕ → Piece}
+    (hl : LegalSequenceFrom initBag s) {n : ℕ} (h : s n = s (n + 1)) :
+    bagAt initBag s (n + 1) = Bag.full := by
+  obtain ⟨r, hrt, hrt', hrfull⟩ := exists_refill_between hl
+    (p := s n) rfl h.symm (by omega)
+  have hr : r = n + 1 := by omega
+  rw [← hr]
+  exact hrfull
+
+/-- **Doubles land only on bag boundaries**: from the full bag, the same
+piece twice in a row happens only at positions `n ≡ 6 (mod 7)` — the
+last draw of one bag and the first of the next. The 7-bag's repeats are
+clocked. -/
+theorem double_position {s : ℕ → Piece}
+    (hl : LegalSequenceFrom Bag.full s) {n : ℕ} (h : s n = s (n + 1)) :
+    n % 7 = 6 := by
+  have hfull := double_forces_refill hl h
+  have := (bagAt_eq_full_iff hl (n + 1)).mp hfull
+  omega
+
 end BagCadence
 end Tetris
