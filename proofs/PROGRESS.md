@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27ca) — the uniform spread law (bank 298/N)
+
+- **`window_feeds_all_columns`** — every column receives a cell in
+  every 901-move live window, independent of position: abstention =
+  width-9 confinement, and the width-9 demand meets the windowed band
+  at w = 900. Strictly sharpens the survivor's 9N + 451 schedule to a
+  position-free constant.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bz) — the cycle dwell hierarchy (bank 297/N)
 
 - **`cycle_four_column_dwell_cap`** (≤ 44), **`cycle_six_column_dwell_

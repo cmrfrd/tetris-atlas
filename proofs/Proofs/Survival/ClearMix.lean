@@ -1971,5 +1971,54 @@ theorem eight_column_dwell_cap
 
 end DwellHierarchy
 
+/-- **Every column is fed in every nine-hundred-one-move live window**:
+between any two live moments nine hundred one moves apart, every column
+receives a cell — a uniform spread law, independent of position.
+Sharpens `every_column_fed_within` (whose bound grows with `N`) by using
+the windowed clearing band in place of the global cap: abstaining from
+one column confines play to nine, and width-nine demand meets the band
+at `w = 900`. -/
+theorem window_feeds_all_columns {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n w : ℕ} (hw : 901 ≤ w)
+    (hlive_n : ¬ (trace GameConfig.standard π GameState.init n).lost
+      GameConfig.standard)
+    (hlive_nw : ¬ (trace GameConfig.standard π GameState.init (n + w)).lost
+      GameConfig.standard)
+    {j : ℕ} (hj : j < 10) :
+    ∃ k < w, 0 < (π (trace GameConfig.standard π
+      GameState.init (n + k))).colProfile j := by
+  by_contra hnone
+  push Not at hnone
+  have hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          ∈ (Finset.range 10).erase j := by
+    intro k hk cell hcell
+    have hlt := (hv _).col_add_lt hcell
+    rw [GameConfig.standard_cols] at hlt
+    refine Finset.mem_erase.mpr ⟨?_, Finset.mem_range.mpr hlt⟩
+    intro heq
+    have h0 : (π (trace GameConfig.standard π
+        GameState.init (n + k))).colProfile j = 0 := by
+      have := hnone k hk
+      omega
+    have hmem : cell ∈ (π (trace GameConfig.standard π
+        GameState.init (n + k))).shapeUp.filter
+        (fun c => (π (trace GameConfig.standard π
+          GameState.init (n + k))).col + c.1 = j) :=
+      Finset.mem_filter.mpr ⟨hcell, heq⟩
+    unfold Placement.colProfile at h0
+    rw [Finset.card_eq_zero] at h0
+    rw [h0] at hmem
+    exact Finset.notMem_empty _ hmem
+  have hdem := confinement_clear_demand (n := n) (w := w)
+    (S := (Finset.range 10).erase j)
+    (fun i hi => Finset.mem_range.mp (Finset.mem_of_mem_erase hi))
+    hcells hlive_nw
+  rw [Finset.card_erase_of_mem (Finset.mem_range.mpr hj),
+    Finset.card_range] at hdem
+  have hband := (cleared_window_band hv hlive_n hlive_nw).2
+  omega
+
 end ClearRate
 end Tetris
