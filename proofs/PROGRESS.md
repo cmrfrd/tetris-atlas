@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bp) — even the worst dealer needs six (bank 287/N)
+
+- **`adversarial_maxHeight_window_climb`**, **`adversarial_death_needs_
+  time`**, **`adversarial_no_death_before_six`** — the peak speed limit
+  and its survival-horizon pricing mirrored to forced play (the usual
+  `simp only []` beta/zeta before the climb omega).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bo) — death needs time (bank 286/N)
 
 - **`lost_maxHeight_ge`** — a lost WF board's peak reaches ≥ 21.

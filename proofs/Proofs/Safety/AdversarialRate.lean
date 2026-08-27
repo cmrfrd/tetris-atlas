@@ -3323,5 +3323,70 @@ theorem adversarial_window_dwell_cap {σ : Solver GameConfig.standard}
   have hband := (adversarial_cleared_window_band hv hlive_n hlive_nw).2
   omega
 
+/-- The adversarial climb budget: the peak rises at most `4w` over any
+`w` forced moves. -/
+theorem adversarial_maxHeight_window_climb {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    (n : ℕ) :
+    ∀ w, Board.maxHeight GameConfig.standard
+        (adversarialTrace GameConfig.standard σ s GameState.init (n + w)).board
+      ≤ Board.maxHeight GameConfig.standard
+          (adversarialTrace GameConfig.standard σ s GameState.init n).board
+        + 4 * w := by
+  intro w
+  induction w with
+  | zero => simp
+  | succ k ih =>
+    have hwf := adversarialTrace_board_wf
+      (GameState.init_board_wf GameConfig.standard) hv (n + k)
+    have hstep := applyStep_maxHeight_le (cfg := GameConfig.standard)
+      (b := (adversarialTrace GameConfig.standard σ s
+        GameState.init (n + k)).board)
+      (pl := { σ (adversarialTrace GameConfig.standard σ s GameState.init
+          (n + k)) (s (n + k)) with piece := s (n + k) }) hwf
+    rw [show n + (k + 1) = (n + k) + 1 by omega, adversarialTrace_succ,
+      adversarialStep_board]
+    simp only [] at hstep ih ⊢
+    omega
+
+/-- **Death needs time against any dealer**: from a peak-`h` point of an
+adversarial game, loss is at least `(21 − h)/4` forced moves away. -/
+theorem adversarial_death_needs_time {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {n w h : ℕ}
+    (hh : Board.maxHeight GameConfig.standard
+      (adversarialTrace GameConfig.standard σ s GameState.init n).board ≤ h)
+    (hlost : (adversarialTrace GameConfig.standard σ s GameState.init
+      (n + w)).lost GameConfig.standard) :
+    21 ≤ h + 4 * w := by
+  have hclimb := adversarial_maxHeight_window_climb hv n w
+  have hwf := adversarialTrace_board_wf
+    (GameState.init_board_wf GameConfig.standard) hv (n + w)
+  have hge := lost_maxHeight_ge hwf
+    ((GameState.lost_iff_board_isLost GameConfig.standard _).mp hlost)
+    GameConfig.standard_rows
+  omega
+
+/-- **No adversarial game dies before its sixth move**: even the worst
+dealer cannot kill a game in five. -/
+theorem adversarial_no_death_before_six {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {w : ℕ}
+    (hlost : (adversarialTrace GameConfig.standard σ s GameState.init w).lost
+      GameConfig.standard) :
+    6 ≤ w := by
+  have h := adversarial_death_needs_time hv (n := 0) (w := w) (h := 0)
+    (by
+      rw [adversarialTrace_zero, GameState.init_board_eq_emptyset,
+        Board.maxHeight_empty])
+    (by rw [Nat.zero_add]; exact hlost)
+  omega
+
 end ClearRate
 end Tetris
