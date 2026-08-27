@@ -3596,5 +3596,28 @@ theorem even_tiling_cycle_seven_moves_per_window
     Finset.sum_const, smul_eq_mul] at h28
   omega
 
+/-- **A policy never plays one piece three times running** (legal
+draws): the bag forbids triple runs on any trace. -/
+theorem trace_no_triple_run {cfg : GameConfig} {π : Policy cfg}
+    {g0 : GameState}
+    (hdraw : ∀ k, (π (trace cfg π g0 k)).piece ∈ (trace cfg π g0 k).bag)
+    (n : ℕ) :
+    ¬ ((π (trace cfg π g0 n)).piece = (π (trace cfg π g0 (n + 1))).piece
+      ∧ (π (trace cfg π g0 (n + 1))).piece
+          = (π (trace cfg π g0 (n + 2))).piece) :=
+  BagCadence.no_triple_run (legalSequence_of_trace_draws hdraw) n
+
+/-- **A trace's doubled piece marks the bag boundary**: playing the same
+piece twice in a row happens only at steps `n ≡ 6 (mod 7)` when the
+game starts from the full bag. -/
+theorem trace_double_position {π : Policy GameConfig.standard}
+    (hdraw : ∀ k, (π (trace GameConfig.standard π GameState.init k)).piece
+      ∈ (trace GameConfig.standard π GameState.init k).bag)
+    {n : ℕ}
+    (h : (π (trace GameConfig.standard π GameState.init n)).piece
+      = (π (trace GameConfig.standard π GameState.init (n + 1))).piece) :
+    n % 7 = 6 :=
+  BagCadence.double_position (legalSequence_of_trace_draws hdraw) h
+
 end ClearRate
 end Tetris

@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cz) — the double laws on traces (bank 323/N)
+
+- **`trace_no_triple_run`**, **`trace_double_position`** — the bag's
+  repeat laws transferred to policy traces via
+  legalSequence_of_trace_draws.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cy) — five doubles per period (bank 322/N)
 
 - **`doubles_per_window_le_five`** — any 35 consecutive draws contain
