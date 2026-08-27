@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26ay) — the crux is a MOVING window (bank 270/N)
+
+- **`low_pair_selection_migrates`** — any policy solving Tetris through
+  the halfway capstone (per-step low-pair selection jf) can never hold
+  jf constant for 24 consecutive steps: survival follows from the
+  selection itself, and the sharp dwell cap kills every constant run.
+  The crux is now: maintain a low pair that MOVES every ≤ 23 steps.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26ax) — the dwell cap sharpened to twenty-two (bank 269/N)
 
 - **`confinement_sustain_clear_rate`** — sharp set-width demand:

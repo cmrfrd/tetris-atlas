@@ -1339,5 +1339,48 @@ theorem window_dwell_cap_sharp {π : Policy GameConfig.standard}
   have hband := (cleared_window_band hv hlive_n hlive_nw).2
   omega
 
+/-- **The low-pair crux migrates on a twenty-three clock**: any policy
+solving Tetris through the halfway capstone — a selection `jf` of one low
+adjacent pair per step, always played into — can never hold the same pair
+for twenty-four consecutive steps. Survival itself follows from the
+selection (`survivesForever_of_low_pair_play`), and the sharp dwell cap
+then bounds every constant run. The remaining crux is not just
+maintaining a low window but maintaining a *moving* one: the window must
+step to a fresh low pair at least once every twenty-three moves,
+forever. -/
+theorem low_pair_selection_migrates {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {jf : ℕ → ℕ}
+    (hsel : ∀ n, jf n + 1 < 10
+      ∧ ((trace GameConfig.standard π GameState.init n).board.colHeight
+            (jf n) + 4 ≤ 20
+        ∧ (trace GameConfig.standard π GameState.init n).board.colHeight
+            (jf n + 1) + 4 ≤ 20)
+      ∧ ∀ cell ∈ (π (trace GameConfig.standard π GameState.init n)).shapeUp,
+          (π (trace GameConfig.standard π GameState.init n)).col + cell.1
+            = jf n
+          ∨ (π (trace GameConfig.standard π GameState.init n)).col + cell.1
+            = jf n + 1)
+    {N : ℕ} :
+    ¬ (∀ k ≤ 23, jf (N + k) = jf N) := by
+  intro hconst
+  have hsurv : SurvivesForever GameConfig.standard π GameState.init := by
+    apply survivesForever_of_low_pair_play
+    intro n
+    obtain ⟨h1, h2, h3⟩ := hsel n
+    exact ⟨jf n, h1, h2.1, h2.2, h3⟩
+  have hcap := window_dwell_cap_sharp hv (n := N) (j := jf N) (w := 23)
+    (hsel N).1 (hsurv N) (hsurv (N + 23))
+    (fun k hk => by
+      have h3 := (hsel (N + k)).2.2
+      have hje := hconst k (by omega)
+      rw [hje] at h3
+      exact h3)
+    (by
+      have h2 := (hsel (N + 23)).2.1
+      have hje := hconst 23 (le_refl _)
+      rw [hje] at h2
+      exact h2)
+  omega
+
 end ClearRate
 end Tetris
