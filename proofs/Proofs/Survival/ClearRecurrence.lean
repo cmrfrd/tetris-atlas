@@ -6276,6 +6276,33 @@ theorem twelve_low_pair_exists_of_light {b : Board}
   simp only [smul_eq_mul] at hsum2
   omega
 
+/-- **The I-ready one-step driver**: on a sixty-four-light board every
+piece admits a valid placement confined to some twelve-low pair — a
+window that will absorb even the forced vertical I and remain a window
+(`tower_event_absorbed_of_low`). The lightness ladder closes: keeping
+`count + holes ≤ 64` maintains not just a window but an I-proof one,
+move after move. -/
+theorem I_ready_window_move_exists {b : Board}
+    (hwf : Board.WF GameConfig.standard b)
+    (hlight : b.count + Board.holes GameConfig.standard b ≤ 64)
+    (p : Piece) :
+    ∃ j, j + 1 < 10 ∧ b.colHeight j ≤ 12 ∧ b.colHeight (j + 1) ≤ 12
+      ∧ ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard
+        ∧ ∀ cell ∈ pl.shapeUp,
+            pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1 := by
+  obtain ⟨j, hj, h1, h2⟩ := twelve_low_pair_exists_of_light hwf hlight
+  obtain ⟨r, hr⟩ := exists_narrow_rotation p
+  refine ⟨j, hj, h1, h2, ⟨p, r, j⟩, rfl, ?_, ?_⟩
+  · intro cell hcell
+    have hw := hr cell hcell
+    change j + cell.1 < GameConfig.standard.cols
+    rw [GameConfig.standard_cols]
+    omega
+  · intro cell hcell
+    have hw := hr cell hcell
+    change j + cell.1 = j ∨ j + cell.1 = j + 1
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

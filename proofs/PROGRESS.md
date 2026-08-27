@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cv) — the I-ready one-step driver (bank 319/N)
+
+- **`I_ready_window_move_exists`** — 64-light boards give every piece a
+  valid confined placement into a twelve-low pair, which absorbs even
+  the forced I. The lightness reduction is fully assembled: maintain
+  count + holes ≤ 64 and the capstone driver exists move by move.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cu) — a 64-light board offers an I-ready window (bank 318/N)
 
 - **`no_h_low_pair_five_high`** — the threshold-general tower count
