@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cr) — light play clears on a 22-clock (bank 315/N)
+
+- **`light_play_no_drought`** — always-light policies clear within
+  every 22 moves (4·22 = 88 > 84).
+- **`light_play_clear_moment`** — the event form via jump extraction.
+  The lightness profile so far: window always available, migrate ≤ 15,
+  clear every ≤ 22, rate 0.4 ± 0.24.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cq) — lightness pins the clock at fifteen (bank 314/N)
 
 - **`light_play_clear_pinch`** — count + holes ≤ 84 at both ends ⇒

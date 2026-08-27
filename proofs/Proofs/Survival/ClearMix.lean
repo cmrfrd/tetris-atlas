@@ -2168,5 +2168,37 @@ theorem light_play_dwell_cap {π : Policy GameConfig.standard}
   have hpinch := (light_play_clear_pinch hv hlight_n hlight_nw).2
   omega
 
+/-- **Light play clears every twenty-two moves**: a policy holding the
+lightness invariant at all times is never twenty-two moves from its
+last clear — the ±84 pinch more than halves the general fifty-one-move
+drought bound. -/
+theorem light_play_no_drought {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hlight : ∀ m, (trace GameConfig.standard π GameState.init m).board.count
+      + Board.holes GameConfig.standard
+          (trace GameConfig.standard π GameState.init m).board ≤ 84)
+    (N : ℕ) :
+    cleared GameConfig.standard π GameState.init N
+      < cleared GameConfig.standard π GameState.init (N + 22) := by
+  have hpinch := (light_play_clear_pinch hv (hlight N) (hlight (N + 22))).1
+  have hcm := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right N 22)
+  omega
+
+/-- A clearing moment sits in every twenty-two-move window of light
+play. -/
+theorem light_play_clear_moment {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hlight : ∀ m, (trace GameConfig.standard π GameState.init m).board.count
+      + Board.holes GameConfig.standard
+          (trace GameConfig.standard π GameState.init m).board ≤ 84)
+    (N : ℕ) :
+    ∃ k < 22,
+      cleared GameConfig.standard π GameState.init (N + k)
+        < cleared GameConfig.standard π GameState.init ((N + k) + 1) :=
+  exists_jump_of_lt
+    (f := cleared GameConfig.standard π GameState.init) (N := N) (w := 22)
+    (light_play_no_drought hv hlight N)
+
 end ClearRate
 end Tetris
