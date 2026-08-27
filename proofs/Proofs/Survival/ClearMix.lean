@@ -1555,5 +1555,86 @@ theorem clear_row_six_banked {π : Policy GameConfig.standard}
   unfold Board.rowCount
   exact le_trans (le_trans huntouch hcardim.symm.le) hle
 
+/-- **The sharp inventory law**: a step clearing `k` rows reaps at least
+`10k − 4` cells that were banked on the board before the drop — the
+cleared rows hold exactly ten cells each and the piece contributed at
+most four in total. Sharpens the per-row six-banked bound to the whole
+harvest. -/
+theorem cleared_rows_prior_inventory {π : Policy GameConfig.standard}
+    {m : ℕ} :
+    10 * (cleared GameConfig.standard π GameState.init (m + 1)
+        - cleared GameConfig.standard π GameState.init m)
+      ≤ ((trace GameConfig.standard π GameState.init m).board.filter
+          (fun p => p.2 ∈ Board.fullRows GameConfig.standard
+            ((π (trace GameConfig.standard π GameState.init m)).place
+              (trace GameConfig.standard π GameState.init m).board))).card
+        + 4 := by
+  classical
+  set pl := π (trace GameConfig.standard π GameState.init m) with hpl
+  set b := (trace GameConfig.standard π GameState.init m).board with hb
+  set F := Board.fullRows GameConfig.standard (pl.place b) with hF
+  have hs := cleared_succ GameConfig.standard π GameState.init m
+  rw [← hpl, ← hb, ← hF] at hs
+  -- the cleared rows' cells inside the merged board: at least 10·|F|
+  have hsub : F.biUnion
+      (fun r => (Finset.range 10).image (fun c => (c, r)))
+      ⊆ (pl.place b).filter (fun p => p.2 ∈ F) := by
+    intro p hp
+    obtain ⟨r, hr, hpmem⟩ := Finset.mem_biUnion.mp hp
+    obtain ⟨c, hc, rfl⟩ := Finset.mem_image.mp hpmem
+    rw [Finset.mem_filter]
+    have hfull := (Finset.mem_filter.mp hr).2
+    refine ⟨?_, hr⟩
+    apply hfull
+    rw [GameConfig.standard_cols]
+    exact hc
+  have hdisj : ∀ r₁ ∈ F, ∀ r₂ ∈ F, r₁ ≠ r₂ →
+      Disjoint ((Finset.range 10).image (fun c => (c, r₁)))
+        ((Finset.range 10).image (fun c => (c, r₂))) := by
+    intro r₁ _ r₂ _ hne
+    rw [Finset.disjoint_left]
+    intro p hp1 hp2
+    obtain ⟨c1, _, rfl⟩ := Finset.mem_image.mp hp1
+    obtain ⟨c2, _, heq⟩ := Finset.mem_image.mp hp2
+    have hsnd := congrArg Prod.snd heq
+    exact hne hsnd.symm
+  have hbicard : (F.biUnion
+      (fun r => (Finset.range 10).image (fun c => (c, r)))).card
+      = 10 * F.card := by
+    rw [Finset.card_biUnion hdisj]
+    have himg : ∀ r : ℕ,
+        ((Finset.range 10).image (fun c => (c, r))).card = 10 := by
+      intro r
+      rw [Finset.card_image_of_injective _
+        (fun a b h => (Prod.ext_iff.mp h).1), Finset.card_range]
+    rw [Finset.sum_congr rfl (fun r _ => himg r), Finset.sum_const,
+      smul_eq_mul, Nat.mul_comm]
+  have hlow := Finset.card_le_card hsub
+  -- merged cells split into pre-board cells and the (≤ 4) dropped cells
+  have hsplit : (pl.place b).filter (fun p => p.2 ∈ F)
+      ⊆ (b.filter (fun p => p.2 ∈ F)) ∪ pl.dropped b := by
+    intro p hp
+    rw [Finset.mem_filter] at hp
+    have hpm := hp.1
+    rw [Placement.place_eq_union_dropped] at hpm
+    rcases Finset.mem_union.mp hpm with h | h
+    · exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨h, hp.2⟩)
+    · exact Finset.mem_union_right _ h
+  have hdropcard : (pl.dropped b).card ≤ 4 := by
+    unfold Placement.dropped Placement.cellsAt
+    calc (pl.shapeUp.image
+          (fun cell => (pl.col + cell.1, pl.dropOffset b + cell.2))).card
+        ≤ pl.shapeUp.card := Finset.card_image_le
+      _ = 4 := pl.shapeUp_card
+  have hup := Finset.card_le_card hsplit
+  have hunion := Finset.card_union_le (b.filter (fun p => p.2 ∈ F))
+    (pl.dropped b)
+  have hdelta : cleared GameConfig.standard π GameState.init (m + 1)
+      - cleared GameConfig.standard π GameState.init m = F.card := by
+    omega
+  rw [hdelta, ← hbicard]
+  exact le_trans hlow (le_trans hup (le_trans hunion
+    (Nat.add_le_add_left hdropcard _)))
+
 end ClearRate
 end Tetris

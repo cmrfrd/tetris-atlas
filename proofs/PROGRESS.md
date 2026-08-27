@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26bc) — the sharp inventory law (bank 274/N)
+
+- **`cleared_rows_prior_inventory`** — 10·Δcleared ≤ (pre-board cells
+  in the cleared rows) + 4: a k-clear reaps ≥ 10k − 4 banked cells
+  (biUnion 10-per-row count vs place = b ∪ dropped, |dropped| ≤ 4).
+  Sharpens six-per-row to the whole harvest (k=4: 36 banked).
+- Gotcha (recurring): omega dies on visually-identical filter card
+  atoms whose Decidable instances differ; endgame must be a le_trans /
+  Nat.add_le_add_left term chain after isolating the pure-cleared-atom
+  step (hdelta by omega) and rw [hdelta, ← hbicard].
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26bb) — six banked cells in every cleared row (bank 273/N)
 
 - **`clear_row_prepared_outside_touched`** — the harvest law for ALL
