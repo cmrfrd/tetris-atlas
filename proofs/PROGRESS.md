@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cg) — seven moves per window (bank 304/N)
+
+- **`colProfile_eq_zero_of_not_touched`**, **`colDelivered_window_sum`**
+  — small reusable bricks.
+- **`even_tiling_cycle_seven_moves_per_window`** — an even-tiling
+  capstone cycle plays each window EXACTLY seven times per period: the
+  28-cell pair ration at 4 per confined move, with the disjoint tiling
+  forbidding cross-feeding (5×5 evenness omega blast; sum_filter to
+  turn the if-sum into 4·card). The cycle quantum 35 = 5 windows × 7
+  moves is realized at the level of individual placements.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cf) — the minimal tour is the even tiling (bank 303/N)
 
 - **`five_pair_cover_is_even_tiling`** — kernel decide over the 512

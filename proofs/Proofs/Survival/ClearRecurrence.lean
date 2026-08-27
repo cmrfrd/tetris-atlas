@@ -5834,6 +5834,33 @@ theorem seq_image_card_le_changes {f : ℕ → ℕ} {N w : ℕ} :
     (f := fun k => f (N + k + 1))
   omega
 
+/-- A column no cell lands in has zero profile. -/
+theorem colProfile_eq_zero_of_not_touched {pl : Placement} {c : ℕ}
+    (h : ∀ cell ∈ pl.shapeUp, pl.col + cell.1 ≠ c) :
+    pl.colProfile c = 0 := by
+  classical
+  unfold Placement.colProfile
+  rw [Finset.card_eq_zero, Finset.eq_empty_iff_forall_notMem]
+  intro cell hmem
+  rw [Finset.mem_filter] at hmem
+  exact h cell hmem.1 hmem.2
+
+/-- Deliveries over a window are the sum of the window's profiles. -/
+theorem colDelivered_window_sum (π : Policy GameConfig.standard)
+    (j n : ℕ) :
+    ∀ w, colDelivered π j (n + w)
+      = colDelivered π j n
+        + ∑ k ∈ Finset.range w,
+            (π (trace GameConfig.standard π
+              GameState.init (n + k))).colProfile j := by
+  intro w
+  induction w with
+  | zero => simp
+  | succ k ih =>
+    rw [show n + (k + 1) = (n + k) + 1 by omega, colDelivered_succ,
+      Finset.sum_range_succ, ih]
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

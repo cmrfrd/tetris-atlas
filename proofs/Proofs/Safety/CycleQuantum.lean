@@ -3504,5 +3504,97 @@ theorem cycle_minimal_tour_even_tiling {π : Policy GameConfig.standard}
     · right
       omega
 
+/-- **Seven moves per window**: an even-tiling capstone cycle plays each
+of its five windows exactly seven times per period — each window's two
+columns must eat their twenty-eight-cell ration, every confined move
+delivers four to its own window, and the disjoint tiling lets no window
+feed another. The numerology 35 = 5 × 7 is realized move by move. -/
+theorem even_tiling_cycle_seven_moves_per_window
+    {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {jf : ℕ → ℕ}
+    (hsel : ∀ m, jf m + 1 < 10
+      ∧ ((trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m) + 4 ≤ 20
+        ∧ (trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m + 1) + 4 ≤ 20)
+      ∧ ∀ cell ∈ (π (trace GameConfig.standard π GameState.init m)).shapeUp,
+          (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m
+          ∨ (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m + 1)
+    {m₀ : ℕ} (hm : n ≤ m₀)
+    (htile : (Finset.range 35).image (fun k => jf (m₀ + k))
+      = ({0, 2, 4, 6, 8} : Finset ℕ))
+    {v : ℕ} (hvmem : v ∈ ({0, 2, 4, 6, 8} : Finset ℕ)) :
+    ((Finset.range 35).filter (fun k => jf (m₀ + k) = v)).card = 7 := by
+  classical
+  have hv5 : v = 0 ∨ v = 2 ∨ v = 4 ∨ v = 6 ∨ v = 8 := by
+    simpa using hvmem
+  have hration : ∀ c, c < 10 →
+      colDelivered π c (m₀ + 35) = colDelivered π c m₀ + 14 := by
+    intro c hc
+    have hled1 := colDelivered_ledger (π := π) hc m₀
+    have hled2 := colDelivered_ledger (π := π) hc (m₀ + 35)
+    have hstate := trace_tail_periodic hcyc hm
+    have hcol : (trace GameConfig.standard π GameState.init
+          (m₀ + 35)).board.colCount c
+        = (trace GameConfig.standard π GameState.init
+            m₀).board.colCount c := by
+      rw [← hstate]
+    have hcl := cycle_window_clears_exact hv hcyc hm
+    have hclm := cleared_mono GameConfig.standard π GameState.init
+      (Nat.le_add_right m₀ 35)
+    omega
+  have hsum1 := colDelivered_window_sum π v m₀ 35
+  have hsum2 := colDelivered_window_sum π (v + 1) m₀ 35
+  have h28 : (∑ k ∈ Finset.range 35,
+      ((π (trace GameConfig.standard π
+          GameState.init (m₀ + k))).colProfile v
+        + (π (trace GameConfig.standard π
+            GameState.init (m₀ + k))).colProfile (v + 1))) = 28 := by
+    have e1 := hration v (by omega)
+    have e2 := hration (v + 1) (by omega)
+    rw [Finset.sum_add_distrib]
+    omega
+  have hpoint : ∀ k ∈ Finset.range 35,
+      (π (trace GameConfig.standard π
+          GameState.init (m₀ + k))).colProfile v
+        + (π (trace GameConfig.standard π
+            GameState.init (m₀ + k))).colProfile (v + 1)
+      = if jf (m₀ + k) = v then 4 else 0 := by
+    intro k hk
+    by_cases hjf : jf (m₀ + k) = v
+    · rw [if_pos hjf]
+      have hconf := (hsel (m₀ + k)).2.2
+      rw [hjf] at hconf
+      exact colProfile_pair_of_confined hconf
+    · rw [if_neg hjf]
+      have hmemj : jf (m₀ + k) ∈ ({0, 2, 4, 6, 8} : Finset ℕ) := by
+        rw [← htile]
+        exact Finset.mem_image.mpr ⟨k, hk, rfl⟩
+      have hj5 : jf (m₀ + k) = 0 ∨ jf (m₀ + k) = 2 ∨ jf (m₀ + k) = 4
+          ∨ jf (m₀ + k) = 6 ∨ jf (m₀ + k) = 8 := by
+        simpa using hmemj
+      have hz1 : (π (trace GameConfig.standard π
+          GameState.init (m₀ + k))).colProfile v = 0 := by
+        apply colProfile_eq_zero_of_not_touched
+        intro cell hcell heq
+        rcases (hsel (m₀ + k)).2.2 cell hcell with h | h <;>
+          rcases hj5 with h5 | h5 | h5 | h5 | h5 <;>
+          rcases hv5 with hv' | hv' | hv' | hv' | hv' <;> omega
+      have hz2 : (π (trace GameConfig.standard π
+          GameState.init (m₀ + k))).colProfile (v + 1) = 0 := by
+        apply colProfile_eq_zero_of_not_touched
+        intro cell hcell heq
+        rcases (hsel (m₀ + k)).2.2 cell hcell with h | h <;>
+          rcases hj5 with h5 | h5 | h5 | h5 | h5 <;>
+          rcases hv5 with hv' | hv' | hv' | hv' | hv' <;> omega
+      omega
+  rw [Finset.sum_congr rfl hpoint, ← Finset.sum_filter,
+    Finset.sum_const, smul_eq_mul] at h28
+  omega
+
 end ClearRate
 end Tetris
