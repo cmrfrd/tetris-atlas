@@ -1415,5 +1415,66 @@ theorem low_pair_selection_covers {π : Policy GameConfig.standard}
   · right
     omega
 
+/-- A cell of a placed board lying outside the drop's columns was already
+on the pre-drop board. -/
+theorem place_mem_of_col_notin {b : Board} {pl : Placement} {p : ℕ × ℕ}
+    (hp : p ∈ pl.place b)
+    (hout : ∀ cell ∈ pl.shapeUp, pl.col + cell.1 ≠ p.1) : p ∈ b := by
+  rw [Placement.place_eq_union_dropped] at hp
+  rcases Finset.mem_union.mp hp with h | h
+  · exact h
+  · exfalso
+    unfold Placement.dropped Placement.cellsAt at h
+    obtain ⟨cell, hcell, heq⟩ := Finset.mem_image.mp h
+    have h1 := congrArg Prod.fst heq
+    exact hout cell hcell h1
+
+/-- **The moving window harvests prepared rows**: when a capstone
+selection clears, the cleared row's cells in the eight columns outside
+the selected pair were already standing before the drop — the window
+only reaps what earlier sweeps sowed. The inventory story of the moving
+window, made pointwise. -/
+theorem capstone_clear_harvests_prepared_rows {π : Policy GameConfig.standard}
+    {jf : ℕ → ℕ}
+    (hsel : ∀ n, jf n + 1 < 10
+      ∧ ((trace GameConfig.standard π GameState.init n).board.colHeight
+            (jf n) + 4 ≤ 20
+        ∧ (trace GameConfig.standard π GameState.init n).board.colHeight
+            (jf n + 1) + 4 ≤ 20)
+      ∧ ∀ cell ∈ (π (trace GameConfig.standard π GameState.init n)).shapeUp,
+          (π (trace GameConfig.standard π GameState.init n)).col + cell.1
+            = jf n
+          ∨ (π (trace GameConfig.standard π GameState.init n)).col + cell.1
+            = jf n + 1)
+    {m : ℕ}
+    (hjump : cleared GameConfig.standard π GameState.init m
+      < cleared GameConfig.standard π GameState.init (m + 1)) :
+    ∃ r, Board.isFull GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board) r
+      ∧ ∀ c < 10, c ≠ jf m → c ≠ jf m + 1 →
+          (c, r) ∈ (trace GameConfig.standard π GameState.init m).board := by
+  have hs := cleared_succ GameConfig.standard π GameState.init m
+  have hpos : 0 < (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init m)).place
+        (trace GameConfig.standard π GameState.init m).board)).card := by
+    omega
+  obtain ⟨r, hr⟩ := Finset.card_pos.mp hpos
+  have hfull := (Finset.mem_filter.mp hr).2
+  refine ⟨r, hfull, ?_⟩
+  intro c hc hne1 hne2
+  have hmem : (c, r) ∈ (π (trace GameConfig.standard π GameState.init m)).place
+      (trace GameConfig.standard π GameState.init m).board := by
+    apply hfull
+    rw [GameConfig.standard_cols]
+    exact Finset.mem_range.mpr hc
+  apply place_mem_of_col_notin hmem
+  intro cell hcell hceq
+  have hceq' : (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+      = c := hceq
+  rcases (hsel m).2.2 cell hcell with h | h
+  · exact hne1 (by omega)
+  · exact hne2 (by omega)
+
 end ClearRate
 end Tetris

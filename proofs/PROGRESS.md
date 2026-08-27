@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26ba) — the window reaps what it sowed (bank 272/N)
+
+- **`place_mem_of_col_notin`** — placed cells outside the drop's columns
+  come from the pre-board (place = b ∪ dropped, dropped columns are the
+  shape's).
+- **`capstone_clear_harvests_prepared_rows`** — at a capstone clearing
+  moment, the cleared row's cells in all eight off-pair columns were
+  already standing before the drop: the moving window only harvests
+  inventory its earlier sweeps banked. The maintenance problem is
+  really a PIPELINE: sweep to prepare, return to reap.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26az) — the moving window sweeps the board (bank 271/N)
 
 - **`low_pair_selection_covers`** — the capstone selection reaches every
