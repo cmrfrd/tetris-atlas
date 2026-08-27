@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27ct) — the I-ready window is twelve-low (bank 317/N)
+
+- **`tower_event_absorbed_of_low`** — a ≤12 pair absorbs the forced
+  vertical I and stays low (fed column ends ≤ 16; the other untouched
+  via profile-zero).
+- **`tower_event_breaks_high_window`** — a ≥13 pair breaks on it.
+  The effective working height of a window that must survive the bag's
+  I-clock is 12, not 16 — the crux's height budget tightens by four.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cs) — the tower brick costs exactly four (bank 316/N)
 
 - **`I_vertical_shape`** — kernel decide: a single-column I rotation is

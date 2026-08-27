@@ -6138,6 +6138,68 @@ theorem vertical_I_raises_exactly_four {b : Board} {pl : Placement}
   rw [show pl.col + ((t, 3) : PieceCell).1 = pl.col + t from rfl] at hfed
   rw [hfed, hdrop]
 
+/-- **A twelve-low window absorbs the tower**: if both window columns
+stand at most twelve, the forced vertical I leaves the pair still low —
+the fed column ends at sixteen at worst and the other is untouched. -/
+theorem tower_event_absorbed_of_low {b : Board} {pl : Placement} {j : ℕ}
+    (hI : pl.piece = Piece.I)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1)
+    (h1 : b.colHeight j ≤ 12) (h2 : b.colHeight (j + 1) ≤ 12) :
+    (pl.place b).colHeight j + 4 ≤ 20
+      ∧ (pl.place b).colHeight (j + 1) + 4 ≤ 20 := by
+  classical
+  obtain ⟨c, hc, hraise⟩ := vertical_I_raises_exactly_four (b := b) hI hcells
+  have hsingle := I_pair_confined_single_column hI hcells
+  have hcell0 : ∃ cell₀ ∈ pl.shapeUp, pl.col + cell₀.1 = c := by
+    by_contra hno
+    push Not at hno
+    have hz := colProfile_eq_zero_of_not_touched (pl := pl) (c := c) hno
+    have := place_unfed_colHeight_eq (b := b) (pl := pl) hz
+    omega
+  obtain ⟨cell₀, hc0m, hc0⟩ := hcell0
+  have hunfed : ∀ d, d ≠ c →
+      Board.colHeight (pl.place b) d = b.colHeight d := by
+    intro d hd
+    apply place_unfed_colHeight_eq
+    apply colProfile_eq_zero_of_not_touched
+    intro cell hcell heq
+    have := hsingle cell hcell cell₀ hc0m
+    omega
+  constructor
+  · rcases eq_or_ne j c with h | h
+    · rw [h]
+      rw [h] at h1
+      omega
+    · have := hunfed j h
+      omega
+  · rcases eq_or_ne (j + 1) c with h | h
+    · rw [h]
+      rw [h] at h2
+      omega
+    · have := hunfed (j + 1) h
+      omega
+
+/-- **A thirteen-high window breaks on the tower**: if both window
+columns stand at least thirteen, the forced vertical I ends the window —
+whichever column it feeds passes sixteen. The I-ready window is
+twelve-low, not sixteen-low: the bag's thirteen-clock effectively
+tightens the working height by four rows. -/
+theorem tower_event_breaks_high_window {b : Board} {pl : Placement}
+    {j : ℕ} (hI : pl.piece = Piece.I)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1)
+    (h1 : 13 ≤ b.colHeight j) (h2 : 13 ≤ b.colHeight (j + 1)) :
+    ¬ ((pl.place b).colHeight j + 4 ≤ 20
+      ∧ (pl.place b).colHeight (j + 1) + 4 ≤ 20) := by
+  obtain ⟨c, hc, hraise⟩ := vertical_I_raises_exactly_four (b := b) hI hcells
+  intro hcon
+  rcases hc with h | h
+  · rw [h] at hraise
+    omega
+  · rw [h] at hraise
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
