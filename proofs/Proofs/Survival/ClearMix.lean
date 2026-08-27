@@ -2020,5 +2020,44 @@ theorem window_feeds_all_columns {π : Policy GameConfig.standard}
   have hband := (cleared_window_band hv hlive_n hlive_nw).2
   omega
 
+/-- **THE MOVING WINDOW THEOREM** — the assembled shape of any solution
+through the halfway capstone. A policy with a per-step selection of one
+low adjacent pair, always played into, satisfies all at once:
+
+1. it survives forever;
+2. its window can never hold one pair twenty-four consecutive steps —
+   migration on a twenty-three-move clock;
+3. its window sweeps every column of the board on a linear schedule.
+
+Solving Tetris this way *is* driving a low two-column window that steps
+at least every twenty-three moves and visits all ten columns forever;
+conversely the capstone says any such drive solves Tetris. The one open
+question left by this theorem is the existence of the driver. -/
+theorem moving_window_theorem {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {jf : ℕ → ℕ}
+    (hsel : ∀ m, jf m + 1 < 10
+      ∧ ((trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m) + 4 ≤ 20
+        ∧ (trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m + 1) + 4 ≤ 20)
+      ∧ ∀ cell ∈ (π (trace GameConfig.standard π GameState.init m)).shapeUp,
+          (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m
+          ∨ (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m + 1) :
+    SurvivesForever GameConfig.standard π GameState.init
+    ∧ (∀ N, ¬ (∀ k ≤ 23, jf (N + k) = jf N))
+    ∧ (∀ j < 10, ∀ N, ∃ k < 9 * N + 451,
+        jf (N + k) = j ∨ jf (N + k) + 1 = j) := by
+  refine ⟨?_, ?_, ?_⟩
+  · apply survivesForever_of_low_pair_play
+    intro m
+    obtain ⟨h1, h2, h3⟩ := hsel m
+    exact ⟨jf m, h1, h2.1, h2.2, h3⟩
+  · intro N
+    exact low_pair_selection_migrates hv hsel
+  · intro j hj N
+    exact low_pair_selection_covers hv hsel hj N
+
 end ClearRate
 end Tetris

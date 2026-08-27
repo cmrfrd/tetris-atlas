@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cc) — THE MOVING WINDOW THEOREM (bank 300/N, 60%)
+
+- **`moving_window_theorem`** — the 300-batch capstone assembling the
+  program: a per-step low-pair selection simultaneously survives
+  forever, migrates on the 23-clock, and sweeps every column on the
+  9N + 451 schedule. Solving Tetris through the halfway capstone IS
+  driving such a window; the single open question is the driver's
+  existence.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cb) — the cycle window moves twice a period (bank 299/N)
 
 - **`cycle_selection_two_changes_per_period`** — over any 35-step
