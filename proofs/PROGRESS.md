@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26bb) — six banked cells in every cleared row (bank 273/N)
+
+- **`clear_row_prepared_outside_touched`** — the harvest law for ALL
+  policies: cleared-row cells in untouched columns (colProfile = 0)
+  stood pre-drop.
+- **`clear_row_six_banked`** — a piece touches ≤ 4 columns, so every
+  cleared row was at least 6/10 prior inventory (untouched-column
+  injection c ↦ (c, r) into the pre-board's row).
+- Gotcha: omega failed on pretty-identical card atoms (filter
+  Decidable instances differ under `classical`) — chain with le_trans
+  (defeq-tolerant) instead.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26ba) — the window reaps what it sowed (bank 272/N)
 
 - **`place_mem_of_col_notin`** — placed cells outside the drop's columns

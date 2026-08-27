@@ -1476,5 +1476,84 @@ theorem capstone_clear_harvests_prepared_rows {π : Policy GameConfig.standard}
   · exact hne1 (by omega)
   · exact hne2 (by omega)
 
+/-- **Cleared rows are prepared rows**: at any clearing moment, the
+cleared row's cells in every column the drop does not touch were already
+standing on the pre-drop board. -/
+theorem clear_row_prepared_outside_touched {π : Policy GameConfig.standard}
+    {m : ℕ}
+    (hjump : cleared GameConfig.standard π GameState.init m
+      < cleared GameConfig.standard π GameState.init (m + 1)) :
+    ∃ r, Board.isFull GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board) r
+      ∧ ∀ c < 10,
+          (π (trace GameConfig.standard π GameState.init m)).colProfile c = 0 →
+          (c, r) ∈ (trace GameConfig.standard π GameState.init m).board := by
+  have hs := cleared_succ GameConfig.standard π GameState.init m
+  have hpos : 0 < (Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init m)).place
+        (trace GameConfig.standard π GameState.init m).board)).card := by
+    omega
+  obtain ⟨r, hr⟩ := Finset.card_pos.mp hpos
+  have hfull := (Finset.mem_filter.mp hr).2
+  refine ⟨r, hfull, ?_⟩
+  intro c hc hprof0
+  have hmem : (c, r) ∈ (π (trace GameConfig.standard π GameState.init m)).place
+      (trace GameConfig.standard π GameState.init m).board := by
+    apply hfull
+    rw [GameConfig.standard_cols]
+    exact Finset.mem_range.mpr hc
+  apply place_mem_of_col_notin hmem
+  intro cell hcell hceq
+  have hceq' : (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+      = c := hceq
+  have hmemf : cell ∈ (π (trace GameConfig.standard π
+      GameState.init m)).shapeUp.filter
+      (fun cell => (π (trace GameConfig.standard π GameState.init m)).col
+        + cell.1 = c) :=
+    Finset.mem_filter.mpr ⟨hcell, hceq'⟩
+  unfold Placement.colProfile at hprof0
+  rw [Finset.card_eq_zero] at hprof0
+  rw [hprof0] at hmemf
+  exact absurd hmemf (Finset.notMem_empty cell)
+
+/-- **Six cells banked in every cleared row**: any clearing moment reaps
+a row at least six of whose ten cells were standing before the drop — a
+piece touches at most four columns, so at least six columns' worth of
+the row is prior inventory. -/
+theorem clear_row_six_banked {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {m : ℕ}
+    (hjump : cleared GameConfig.standard π GameState.init m
+      < cleared GameConfig.standard π GameState.init (m + 1)) :
+    ∃ r, Board.isFull GameConfig.standard
+        ((π (trace GameConfig.standard π GameState.init m)).place
+          (trace GameConfig.standard π GameState.init m).board) r
+      ∧ 6 ≤ Board.rowCount
+          (trace GameConfig.standard π GameState.init m).board r := by
+  classical
+  obtain ⟨r, hfull, hprep⟩ := clear_row_prepared_outside_touched hjump
+  refine ⟨r, hfull, ?_⟩
+  have huntouch := placement_untouched_columns_ge_six
+    (hv (trace GameConfig.standard π GameState.init m))
+  have hsub : ((Finset.range 10).filter (fun j =>
+        (π (trace GameConfig.standard π GameState.init m)).colProfile j
+          = 0)).image (fun c => (c, r))
+      ⊆ (trace GameConfig.standard π GameState.init m).board.filter
+          (fun p => p.2 = r) := by
+    intro p hp
+    obtain ⟨c, hc, rfl⟩ := Finset.mem_image.mp hp
+    rw [Finset.mem_filter] at hc ⊢
+    exact ⟨hprep c (Finset.mem_range.mp hc.1) hc.2, rfl⟩
+  have hcardim : (((Finset.range 10).filter (fun j =>
+        (π (trace GameConfig.standard π GameState.init m)).colProfile j
+          = 0)).image (fun c => (c, r))).card
+      = ((Finset.range 10).filter (fun j =>
+        (π (trace GameConfig.standard π GameState.init m)).colProfile j
+          = 0)).card :=
+    Finset.card_image_of_injective _ (fun a b h => (Prod.ext_iff.mp h).1)
+  have hle := Finset.card_le_card hsub
+  unfold Board.rowCount
+  exact le_trans (le_trans huntouch hcardim.symm.le) hle
+
 end ClearRate
 end Tetris
