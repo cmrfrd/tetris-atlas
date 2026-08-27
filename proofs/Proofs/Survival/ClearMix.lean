@@ -1229,5 +1229,54 @@ theorem full_width_moment_in_window {π : Policy GameConfig.standard}
   obtain ⟨k, hk, hjump⟩ := clear_moment_in_window hv hlive
   exact ⟨k, hk, clearing_move_spans_board hjump⟩
 
+/-- **The uniform dwell cap**: play confined to one adjacent pair between
+two live moments, ending low, lasts at most forty-six moves — anywhere in
+the game. The window demands a clear per drop less eight
+(`window_sustain_clear_rate`) while the window band allows at most
+0.4-per-move plus one boardful (`cleared_window_band`); the two rates
+cross at `w = 46`. Upgrades the opening cap (13, credit-free) to a bound
+independent of the starting position: windows must migrate on a
+forty-six-move clock, forever. -/
+theorem window_dwell_cap {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n j w : ℕ}
+    (hj : j + 1 < 10)
+    (hlive_n : ¬ (trace GameConfig.standard π GameState.init n).lost
+      GameConfig.standard)
+    (hlive_nw : ¬ (trace GameConfig.standard π GameState.init (n + w)).lost
+      GameConfig.standard)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          = j
+        ∨ (π (trace GameConfig.standard π GameState.init (n + k))).col
+            + cell.1 = j + 1)
+    (hlow : (trace GameConfig.standard π GameState.init
+          (n + w)).board.colHeight j + 4 ≤ 20
+      ∧ (trace GameConfig.standard π GameState.init
+          (n + w)).board.colHeight (j + 1) + 4 ≤ 20) :
+    w ≤ 46 := by
+  have hrate := window_sustain_clear_rate (n := n) hj hcells hlow
+  have hband := (cleared_window_band hv hlive_n hlive_nw).2
+  omega
+
+/-- A survivor's window migrates at least every forty-seven moves: no
+adjacent pair hosts forty-seven consecutive confined drops ending low. -/
+theorem survivor_window_dwell_cap {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard)
+    (hsurv : SurvivesForever GameConfig.standard π GameState.init)
+    {n j w : ℕ} (hj : j + 1 < 10)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          = j
+        ∨ (π (trace GameConfig.standard π GameState.init (n + k))).col
+            + cell.1 = j + 1)
+    (hlow : (trace GameConfig.standard π GameState.init
+          (n + w)).board.colHeight j + 4 ≤ 20
+      ∧ (trace GameConfig.standard π GameState.init
+          (n + w)).board.colHeight (j + 1) + 4 ≤ 20) :
+    w ≤ 46 :=
+  window_dwell_cap hv hj (hsurv n) (hsurv (n + w)) hcells hlow
+
 end ClearRate
 end Tetris

@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26aw) — the uniform dwell cap (bank 268/N)
+
+- **`window_dwell_cap`** — confined pair-play between two live moments
+  ending low lasts ≤ 46 moves, INDEPENDENT of position: sustain demands
+  Δc ≥ w − 8, the window band allows 10Δc ≤ 4w + 200, crossing at 46.
+  Upgrades the opening cap (13, credit-free) to a uniform migration
+  clock: banked credit buys nothing beyond one boardful.
+- **`survivor_window_dwell_cap`** — survivors migrate every ≤ 46 moves.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26av) — the windowed band against any dealer (bank 267/N)
 
 - **`clearingStepsAdv_mono`** + adversarial windowed pricing both sides
