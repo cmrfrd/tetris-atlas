@@ -5981,6 +5981,40 @@ theorem column_fed_events_band {π : Policy GameConfig.standard}
   simp only [] at hsplit hoff hup hlow hsum ⊢
   omega
 
+/-- **Height is cells plus holes, exactly**: every column's height splits
+into its filled cells and its buried gaps. -/
+theorem colHeight_eq_colCount_add_colHoles (b : Board) (j : ℕ) :
+    b.colHeight j = b.colCount j + Board.colHoles b j := by
+  unfold Board.colHoles
+  have hcc := colRows_card_eq_colCount b j
+  have hle := colCount_le_colHeight b j
+  omega
+
+/-- **The skyline mass identity**: the sum of the ten column heights is
+exactly the board's cell count plus its hole debt — the skyline is mass
+plus rot, nothing else. -/
+theorem skyline_eq_count_add_holes {b : Board}
+    (hwf : Board.WF GameConfig.standard b) :
+    (∑ j ∈ Finset.range 10, b.colHeight j)
+      = b.count + Board.holes GameConfig.standard b := by
+  have hsum := Board.sum_colCount (cfg := GameConfig.standard) hwf
+  rw [GameConfig.standard_cols] at hsum
+  unfold Board.holes
+  rw [GameConfig.standard_cols, ← hsum, ← Finset.sum_add_distrib]
+  exact Finset.sum_congr rfl
+    (fun j _ => colHeight_eq_colCount_add_colHoles b j)
+
+/-- **The skyline sums to at most two hundred**: on any live board the
+ten column heights total no more than one boardful — mass plus debt
+never exceeds capacity, so neither does the skyline. -/
+theorem skyline_sum_le_two_hundred {b : Board}
+    (hwf : Board.WF GameConfig.standard b)
+    (hif : ∀ p ∈ b, p.2 < GameConfig.standard.rows) :
+    (∑ j ∈ Finset.range 10, b.colHeight j) ≤ 200 := by
+  have hid := skyline_eq_count_add_holes hwf
+  have hcap := holes_add_count_le_two_hundred hwf hif
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cn) — the skyline mass identity (bank 311/N)
+
+- **`colHeight_eq_colCount_add_colHoles`** — height = cells + holes,
+  per column, exactly (colHoles is definitionally height − rows.card).
+- **`skyline_eq_count_add_holes`** — Σ heights = count + holes on WF
+  boards.
+- **`skyline_sum_le_two_hundred`** — the live skyline totals ≤ 200:
+  the capacity cap governs mass, debt, and silhouette all at once.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cm) — the driver's occupancy floor (bank 310/N)
 
 - **`low_pair_selection_occupancy_floor`** — a capstone selection
