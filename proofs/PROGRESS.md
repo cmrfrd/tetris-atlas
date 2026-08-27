@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bn) — the peak's speed limit (bank 285/N)
+
+- **`colHeight_le_maxHeight_of_wf`** — any column (in range or out) is
+  bounded by maxHeight on WF boards.
+- **`applyStep_maxHeight_le`** — the skyline's peak rises ≤ 4 per move.
+- **`trace_maxHeight_window_climb`** — ≤ 4w per window.
+- NOTE: the per-COLUMN +4 climb is FALSE — place_colHeight_le is
+  inherently ∃j' (a bridging piece rests on a neighbour and teleports
+  a short column up to that height). Only the PEAK has a speed limit.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bm) — height relief is never free (bank 284/N)
 
 - **`dry_step_colHeight_ge`** — a clear-free move never lowers any

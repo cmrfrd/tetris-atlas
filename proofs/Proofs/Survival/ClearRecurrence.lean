@@ -5415,6 +5415,61 @@ theorem height_drop_certifies_clear {π : Policy GameConfig.standard}
   rw [trace_succ, GameState.step_board] at hdrop
   omega
 
+/-- On a well-formed board every column — in range or not — is bounded
+by the board max-height: out-of-range columns are empty. -/
+theorem colHeight_le_maxHeight_of_wf {cfg : GameConfig} {b : Board}
+    (hwf : Board.WF cfg b) (j : ℕ) :
+    b.colHeight j ≤ Board.maxHeight cfg b := by
+  by_cases hj : j < cfg.cols
+  · exact Board.colHeight_le_maxHeight hj
+  · have hfilter : b.filter (fun p => p.1 = j) = ∅ := by
+      rw [Finset.eq_empty_iff_forall_notMem]
+      intro p hp
+      rw [Finset.mem_filter] at hp
+      have := hwf p hp.1
+      omega
+    unfold Board.colHeight Board.colRows
+    rw [hfilter]
+    simp
+
+/-- **The board top climbs at most four per move**: the merge can raise
+the skyline's peak by at most one piece height (the drop rests on some
+existing column) and the clear phase only lowers it. -/
+theorem applyStep_maxHeight_le {cfg : GameConfig} {b : Board}
+    {pl : Placement} (hwf : Board.WF cfg b) :
+    Board.maxHeight cfg (Placement.applyStep cfg b pl)
+      ≤ Board.maxHeight cfg b + 4 := by
+  unfold Board.maxHeight
+  apply Finset.sup_le
+  intro j _
+  have hcl := colHeight_clearLines_le cfg (pl.place b) j
+  obtain ⟨j', h⟩ := place_colHeight_le (b := b) (pl := pl) j
+  have hb := colHeight_le_maxHeight_of_wf hwf j'
+  unfold Placement.applyStep
+  unfold Board.maxHeight at hb
+  omega
+
+/-- **The window climb budget for the whole board**: over any `w`-move
+window the skyline's peak rises at most `4w`. -/
+theorem trace_maxHeight_window_climb {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) (n : ℕ) :
+    ∀ w, Board.maxHeight GameConfig.standard
+        (trace GameConfig.standard π GameState.init (n + w)).board
+      ≤ Board.maxHeight GameConfig.standard
+          (trace GameConfig.standard π GameState.init n).board + 4 * w := by
+  intro w
+  induction w with
+  | zero => simp
+  | succ k ih =>
+    have hwf := trace_board_wf hv
+      (GameState.init_board_wf GameConfig.standard) (n + k)
+    have hstep := applyStep_maxHeight_le (cfg := GameConfig.standard)
+      (b := (trace GameConfig.standard π GameState.init (n + k)).board)
+      (pl := π (trace GameConfig.standard π GameState.init (n + k))) hwf
+    rw [show n + (k + 1) = (n + k) + 1 by omega, trace_succ,
+      GameState.step_board]
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
