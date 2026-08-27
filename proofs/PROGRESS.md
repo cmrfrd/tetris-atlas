@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bk) — the reserve never spoils (bank 282/N)
+
+- **`dwell_reserve_stays_ready`** — a second low pair disjoint from the
+  active window, standing at dwell start, is still low at dwell end
+  (spectators only sink, applied to both reserve columns). The
+  migration step is SAFE given a reserve; the moving-window crux
+  shrinks to reserve MAINTENANCE.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bj) — dwelling flattens the spectators (bank 281/N)
 
 - **`applyStep_unfed_colHeight_le`** — an unfed column never rises

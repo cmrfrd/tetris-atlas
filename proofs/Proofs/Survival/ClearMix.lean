@@ -1730,5 +1730,35 @@ theorem dwell_off_pair_heights_sink {π : Policy GameConfig.standard}
       GameState.step_board]
     exact le_trans hstep hihk
 
+/-- **The reserve pair never spoils**: if a second low pair `(j', j'+1)`
+disjoint from the active window stands ready when a dwell begins, it is
+still low when the dwell ends — spectator columns only sink. The
+migration step of the moving-window crux is safe whenever a reserve
+exists: the open question shrinks to *keeping a reserve*, not to landing
+on one. -/
+theorem dwell_reserve_stays_ready {π : Policy GameConfig.standard}
+    {n j j' w : ℕ} (hj' : j' + 1 < 10)
+    (hd1 : j' ≠ j) (hd2 : j' ≠ j + 1) (hd3 : j' + 1 ≠ j)
+    (hd4 : j' + 1 ≠ j + 1)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          = j
+        ∨ (π (trace GameConfig.standard π GameState.init (n + k))).col
+            + cell.1 = j + 1)
+    (hlow : (trace GameConfig.standard π GameState.init n).board.colHeight j'
+        + 4 ≤ 20
+      ∧ (trace GameConfig.standard π GameState.init n).board.colHeight
+          (j' + 1) + 4 ≤ 20) :
+    (trace GameConfig.standard π GameState.init (n + w)).board.colHeight j'
+        + 4 ≤ 20
+      ∧ (trace GameConfig.standard π GameState.init (n + w)).board.colHeight
+          (j' + 1) + 4 ≤ 20 := by
+  have hs1 := dwell_off_pair_heights_sink (π := π) (n := n) (j := j)
+    (c := j') (by omega) hd1 hd2 w hcells
+  have hs2 := dwell_off_pair_heights_sink (π := π) (n := n) (j := j)
+    (c := j' + 1) (by omega) hd3 hd4 w hcells
+  exact ⟨by omega, by omega⟩
+
 end ClearRate
 end Tetris
