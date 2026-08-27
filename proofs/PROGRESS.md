@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bq) — the peak falls only at clears (bank 288/N)
+
+- **`dry_step_maxHeight_ge`** — clear-free moves never lower the peak
+  (per-column dry bound + sup_mono_fun).
+- **`peak_drop_certifies_clear`** — a falling skyline maximum certifies
+  a clearing moment (argmax column via exists_max_image, then the
+  per-column certificate).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bp) — even the worst dealer needs six (bank 287/N)
 
 - **`adversarial_maxHeight_window_climb`**, **`adversarial_death_needs_

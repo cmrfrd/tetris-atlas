@@ -5514,6 +5514,44 @@ theorem no_death_before_six {π : Policy GameConfig.standard}
     (by rw [Nat.zero_add]; exact hlost)
   omega
 
+/-- A clear-free move never lowers the skyline's peak. -/
+theorem dry_step_maxHeight_ge {cfg : GameConfig} {b : Board}
+    {pl : Placement}
+    (hnc : (Board.fullRows cfg (pl.place b)).card = 0) :
+    Board.maxHeight cfg b
+      ≤ Board.maxHeight cfg (Placement.applyStep cfg b pl) := by
+  unfold Board.maxHeight
+  exact Finset.sup_mono_fun (fun j _ => dry_step_colHeight_ge j hnc)
+
+/-- **The peak falls only at clearing moments**: any drop in the board's
+maximum height across a step certifies a clear — the tallest column can
+only be relieved by a full row. -/
+theorem peak_drop_certifies_clear {π : Policy GameConfig.standard} {m : ℕ}
+    (hdrop : Board.maxHeight GameConfig.standard
+        (trace GameConfig.standard π GameState.init (m + 1)).board
+      < Board.maxHeight GameConfig.standard
+          (trace GameConfig.standard π GameState.init m).board) :
+    cleared GameConfig.standard π GameState.init m
+      < cleared GameConfig.standard π GameState.init (m + 1) := by
+  classical
+  obtain ⟨j, hj, hmax⟩ := Finset.exists_max_image (Finset.range 10)
+    (trace GameConfig.standard π GameState.init m).board.colHeight
+    ⟨0, by simp⟩
+  have hsup : Board.maxHeight GameConfig.standard
+      (trace GameConfig.standard π GameState.init m).board
+      ≤ (trace GameConfig.standard π GameState.init m).board.colHeight j := by
+    unfold Board.maxHeight
+    rw [GameConfig.standard_cols]
+    exact Finset.sup_le (fun j' hj' => hmax j' hj')
+  have hle : (trace GameConfig.standard π
+      GameState.init (m + 1)).board.colHeight j
+      ≤ Board.maxHeight GameConfig.standard
+        (trace GameConfig.standard π GameState.init (m + 1)).board :=
+    Board.colHeight_le_maxHeight
+      (by rw [GameConfig.standard_cols]; exact Finset.mem_range.mp hj)
+  apply height_drop_certifies_clear (j := j)
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
