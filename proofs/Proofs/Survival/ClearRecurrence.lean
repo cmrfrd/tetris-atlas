@@ -5771,6 +5771,69 @@ theorem LJT_pair_confined_split {pl : Placement} {j : ℕ}
     have hB := hcells cw (by unfold Placement.shapeUp; exact hcw)
     omega
 
+/-- Every value a sequence takes on a window is its initial value or the
+value just after a change point. -/
+theorem seq_image_subset_changes {f : ℕ → ℕ} {N w : ℕ} :
+    (Finset.range w).image (fun k => f (N + k))
+      ⊆ insert (f N) (((Finset.range (w - 1)).filter
+          (fun k => f (N + k + 1) ≠ f (N + k))).image
+            (fun k => f (N + k + 1))) := by
+  classical
+  intro v hv
+  obtain ⟨k₀, hk₀, rfl⟩ := Finset.mem_image.mp hv
+  have hne : ((Finset.range w).filter
+      (fun k => f (N + k) = f (N + k₀))).Nonempty :=
+    ⟨k₀, Finset.mem_filter.mpr ⟨hk₀, rfl⟩⟩
+  set k := ((Finset.range w).filter
+    (fun k => f (N + k) = f (N + k₀))).min' hne with hkdef
+  have hkmem := Finset.min'_mem _ hne
+  rw [Finset.mem_filter] at hkmem
+  obtain ⟨hkr, hkv⟩ := hkmem
+  rw [← hkdef] at hkr hkv
+  have hkw := Finset.mem_range.mp hkr
+  by_cases hk0 : k = 0
+  · rw [Finset.mem_insert]
+    left
+    rw [← hkv, hk0, Nat.add_zero]
+  · rw [Finset.mem_insert]
+    right
+    have hkpos : 0 < k := Nat.pos_of_ne_zero hk0
+    have hprev : f (N + (k - 1)) ≠ f (N + k₀) := by
+      intro heq
+      have hmem : (k - 1) ∈ (Finset.range w).filter
+          (fun k => f (N + k) = f (N + k₀)) :=
+        Finset.mem_filter.mpr ⟨Finset.mem_range.mpr (by omega), heq⟩
+      have hmle := Finset.min'_le _ _ hmem
+      rw [← hkdef] at hmle
+      omega
+    apply Finset.mem_image.mpr
+    refine ⟨k - 1, ?_, ?_⟩
+    · rw [Finset.mem_filter]
+      refine ⟨Finset.mem_range.mpr (by omega), ?_⟩
+      rw [show N + (k - 1) + 1 = N + k by omega]
+      intro heq
+      exact hprev (heq ▸ hkv)
+    · rw [show N + (k - 1) + 1 = N + k by omega]
+      exact hkv
+
+/-- A sequence shows at most one more distinct value on a window than it
+has change points. -/
+theorem seq_image_card_le_changes {f : ℕ → ℕ} {N w : ℕ} :
+    ((Finset.range w).image (fun k => f (N + k))).card
+      ≤ ((Finset.range (w - 1)).filter
+          (fun k => f (N + k + 1) ≠ f (N + k))).card + 1 := by
+  classical
+  have hle := Finset.card_le_card
+    (seq_image_subset_changes (f := f) (N := N) (w := w))
+  have hins := Finset.card_insert_le (f N)
+    (((Finset.range (w - 1)).filter
+      (fun k => f (N + k + 1) ≠ f (N + k))).image (fun k => f (N + k + 1)))
+  have him := Finset.card_image_le
+    (s := (Finset.range (w - 1)).filter
+      (fun k => f (N + k + 1) ≠ f (N + k)))
+    (f := fun k => f (N + k + 1))
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27ce) — four changes per period (bank 302/N)
+
+- **`seq_image_subset_changes`** / **`seq_image_card_le_changes`** —
+  generic: a sequence's window image ⊆ {initial} ∪ {post-change
+  values}; card ≤ changes + 1 (min'-index extraction; note min'_mem
+  yields the RAW min' term — fold with `rw [← hkdef]` before touching
+  the set variable, and beware `N + k + 1` associativity in rw
+  patterns).
+- **`cycle_selection_four_changes_per_period`** — five windows need
+  four changes: the tour, not the dwell clock, drives the migration
+  count (4 > the clock's 2).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cd) — a cycle needs five windows (bank 301/N)
 
 - **`cycle_window_column_fed`** — every column is fed within every

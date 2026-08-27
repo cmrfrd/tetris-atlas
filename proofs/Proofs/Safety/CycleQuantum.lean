@@ -3417,5 +3417,32 @@ theorem cycle_selection_five_windows_per_period
   have him := Finset.card_image_le (s := P) (f := fun v => v + 1)
   omega
 
+/-- **A cycle's window changes at least four times per period**: five
+distinct pairs need four changes. Sharpens the dwell-cap count of two —
+the tour, not the clock, is what really drives the window. -/
+theorem cycle_selection_four_changes_per_period
+    {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {jf : ℕ → ℕ}
+    (hsel : ∀ m, jf m + 1 < 10
+      ∧ ((trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m) + 4 ≤ 20
+        ∧ (trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m + 1) + 4 ≤ 20)
+      ∧ ∀ cell ∈ (π (trace GameConfig.standard π GameState.init m)).shapeUp,
+          (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m
+          ∨ (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m + 1)
+    {N : ℕ} (hN : n ≤ N) :
+    4 ≤ ((Finset.range 34).filter
+      (fun k => jf (N + k + 1) ≠ jf (N + k))).card := by
+  have h5 := cycle_selection_five_windows_per_period hv hcyc hsel
+    (m₀ := N) hN
+  have hle := seq_image_card_le_changes (f := jf) (N := N) (w := 35)
+  rw [show (35 : ℕ) - 1 = 34 from rfl] at hle
+  omega
+
 end ClearRate
 end Tetris
