@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cd) — a cycle needs five windows (bank 301/N)
+
+- **`cycle_window_column_fed`** — every column is fed within every
+  period from any anchor (per-column ledger + exact-14 + jump
+  extraction; pin exists_jump_of_lt's (f :=) explicitly — the
+  higher-order unification otherwise whnf-loops).
+- **`cycle_selection_five_windows_per_period`** — ≥ 5 distinct pairs
+  per 35-window: range 10 ⊆ P ∪ (P+1), so 10 ≤ 2|P|. (biUnion-based
+  counting whnf-looped even at 1M heartbeats; the union/image cover
+  compiles instantly.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cc) — THE MOVING WINDOW THEOREM (bank 300/N, 60%)
 
 - **`moving_window_theorem`** — the 300-batch capstone assembling the

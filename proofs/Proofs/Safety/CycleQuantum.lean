@@ -3333,5 +3333,89 @@ theorem cycle_selection_two_changes_per_period
         simpa using this)
       simpa using this
 
+/-- Every column is fed within every period of a cycle, from any anchor:
+the per-column ration of fourteen rows must be delivered. -/
+theorem cycle_window_column_fed {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {m₀ : ℕ}
+    (hm : n ≤ m₀) {j : ℕ} (hj : j < 10) :
+    ∃ k < 35, 0 < (π (trace GameConfig.standard π
+      GameState.init (m₀ + k))).colProfile j := by
+  have hled1 := colDelivered_ledger (π := π) hj m₀
+  have hled2 := colDelivered_ledger (π := π) hj (m₀ + 35)
+  have hstate := trace_tail_periodic hcyc hm
+  have hcol : (trace GameConfig.standard π GameState.init
+        (m₀ + 35)).board.colCount j
+      = (trace GameConfig.standard π GameState.init m₀).board.colCount j := by
+    rw [← hstate]
+  have hcl := cycle_window_clears_exact hv hcyc hm
+  have hclm := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right m₀ 35)
+  have hlt : colDelivered π j m₀ < colDelivered π j (m₀ + 35) := by
+    omega
+  obtain ⟨k, hk, hjump⟩ := exists_jump_of_lt
+    (f := colDelivered π j) (N := m₀) (w := 35) hlt
+  refine ⟨k, hk, ?_⟩
+  have hs := colDelivered_succ π j (m₀ + k)
+  omega
+
+/-- **A cycle needs five windows**: a capstone selection driving a
+closed orbit uses at least five distinct pairs within every period —
+each pair covers two columns, and every one of the ten columns must
+receive its fourteen-row ration. The moving window on a cycle is not a
+shuttle between a few spots: it is a genuine tour of the board. -/
+theorem cycle_selection_five_windows_per_period
+    {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35)) {jf : ℕ → ℕ}
+    (hsel : ∀ m, jf m + 1 < 10
+      ∧ ((trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m) + 4 ≤ 20
+        ∧ (trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m + 1) + 4 ≤ 20)
+      ∧ ∀ cell ∈ (π (trace GameConfig.standard π GameState.init m)).shapeUp,
+          (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m
+          ∨ (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m + 1)
+    {m₀ : ℕ} (hm : n ≤ m₀) :
+    5 ≤ ((Finset.range 35).image (fun k => jf (m₀ + k))).card := by
+  classical
+  set P := (Finset.range 35).image (fun k => jf (m₀ + k)) with hP
+  have hcover : Finset.range 10 ⊆ P ∪ P.image (fun v => v + 1) := by
+    intro j hj
+    obtain ⟨k, hk, hfed⟩ := cycle_window_column_fed hv hcyc hm
+      (Finset.mem_range.mp hj)
+    have hex : ∃ cell ∈ (π (trace GameConfig.standard π
+        GameState.init (m₀ + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (m₀ + k))).col
+          + cell.1 = j := by
+      unfold Placement.colProfile at hfed
+      obtain ⟨cell, hcell⟩ := Finset.card_pos.mp hfed
+      rw [Finset.mem_filter] at hcell
+      exact ⟨cell, hcell.1, hcell.2⟩
+    obtain ⟨cell, hcell, hcol⟩ := hex
+    have hpair := (hsel (m₀ + k)).2.2 cell hcell
+    have hmemP : jf (m₀ + k) ∈ P := by
+      rw [hP]
+      exact Finset.mem_image.mpr ⟨k, Finset.mem_range.mpr hk, rfl⟩
+    rw [Finset.mem_union]
+    rcases hpair with h | h
+    · left
+      have hje : j = jf (m₀ + k) := by omega
+      rw [hje]
+      exact hmemP
+    · right
+      have hje : j = jf (m₀ + k) + 1 := by omega
+      rw [hje]
+      exact Finset.mem_image.mpr ⟨jf (m₀ + k), hmemP, rfl⟩
+  have h10 := Finset.card_le_card hcover
+  rw [Finset.card_range] at h10
+  have hu := Finset.card_union_le P (P.image (fun v => v + 1))
+  have him := Finset.card_image_le (s := P) (f := fun v => v + 1)
+  omega
+
 end ClearRate
 end Tetris
