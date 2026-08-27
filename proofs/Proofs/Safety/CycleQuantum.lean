@@ -3191,5 +3191,54 @@ theorem confined_run_tower_event {π : Policy GameConfig.standard}
   obtain ⟨k, hk, hI⟩ := trace_exists_I_within_thirteen hdraw n
   exact ⟨k, hk, I_pair_confined_full_feed hI (hcells k (by omega))⟩
 
+/-- **On a cycle the four-column dwell cap is forty-four**: the exact
+fourteen-per-period ration tightens the free-play sixty. -/
+theorem cycle_four_column_dwell_cap {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35))
+    {m₀ w : ℕ} {S : Finset ℕ} (hm : n ≤ m₀)
+    (hS : ∀ j ∈ S, j < 10) (hcard : S.card = 4)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (m₀ + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (m₀ + k))).col + cell.1
+          ∈ S)
+    (hlow : ∀ j ∈ S, (trace GameConfig.standard π GameState.init
+      (m₀ + w)).board.colHeight j + 4 ≤ 20) :
+    w ≤ 44 := by
+  have hrate := confinement_sustain_clear_rate (n := m₀) hS hcells hlow
+  rw [hcard] at hrate
+  have hmulti := cycle_window_clears_multi hv hcyc hm (w / 35 + 1)
+  have hmono := cleared_mono GameConfig.standard π GameState.init
+    (show m₀ + w ≤ m₀ + 35 * (w / 35 + 1) by omega)
+  have hmono0 := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right m₀ w)
+  omega
+
+/-- **On a cycle the six-column dwell cap is one hundred eight**: even
+rotating among three windows, a closed orbit must widen out within
+three periods and a bit. -/
+theorem cycle_six_column_dwell_cap {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n : ℕ}
+    (hcyc : trace GameConfig.standard π GameState.init n
+        = trace GameConfig.standard π GameState.init (n + 35))
+    {m₀ w : ℕ} {S : Finset ℕ} (hm : n ≤ m₀)
+    (hS : ∀ j ∈ S, j < 10) (hcard : S.card = 6)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (m₀ + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (m₀ + k))).col + cell.1
+          ∈ S)
+    (hlow : ∀ j ∈ S, (trace GameConfig.standard π GameState.init
+      (m₀ + w)).board.colHeight j + 4 ≤ 20) :
+    w ≤ 108 := by
+  have hrate := confinement_sustain_clear_rate (n := m₀) hS hcells hlow
+  rw [hcard] at hrate
+  have hmulti := cycle_window_clears_multi hv hcyc hm (w / 35 + 1)
+  have hmono := cleared_mono GameConfig.standard π GameState.init
+    (show m₀ + w ≤ m₀ + 35 * (w / 35 + 1) by omega)
+  have hmono0 := cleared_mono GameConfig.standard π GameState.init
+    (Nat.le_add_right m₀ w)
+  omega
+
 end ClearRate
 end Tetris

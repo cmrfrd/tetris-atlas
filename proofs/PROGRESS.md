@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bz) — the cycle dwell hierarchy (bank 297/N)
+
+- **`cycle_four_column_dwell_cap`** (≤ 44), **`cycle_six_column_dwell_
+  cap`** (≤ 108) — set sustain × the cycle's exact multi-period ration.
+  Full table: width 2/4/6 caps — cycles 15/44/108, free 22/60/135.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27by) — the dwell hierarchy (bank 296/N)
 
 - **`four_column_dwell_cap`** (≤ 60), **`six_column_dwell_cap`**
