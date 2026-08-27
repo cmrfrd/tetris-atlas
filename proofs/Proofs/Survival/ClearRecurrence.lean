@@ -6015,6 +6015,38 @@ theorem skyline_sum_le_two_hundred {b : Board}
   have hcap := holes_add_count_le_two_hundred hwf hif
   omega
 
+/-- **A light board always offers a window**: whenever mass plus hole
+debt is at most eighty-four, some adjacent low pair exists — refusing
+every window requires five seventeen-high towers, and five towers cost
+eighty-five skyline. The EXISTENCE side of the moving-window crux, under
+a weight condition: the driver can always find a window as long as the
+board is kept light. -/
+theorem low_pair_exists_of_light {b : Board}
+    (hwf : Board.WF GameConfig.standard b)
+    (hlight : b.count + Board.holes GameConfig.standard b ≤ 84) :
+    ∃ j, j + 1 < 10 ∧ b.colHeight j + 4 ≤ 20
+      ∧ b.colHeight (j + 1) + 4 ≤ 20 := by
+  classical
+  by_contra hnone
+  have h : ∀ j, j + 1 < 10 →
+      ¬ (b.colHeight j + 4 ≤ 20 ∧ b.colHeight (j + 1) + 4 ≤ 20) := by
+    intro j hj hcon
+    exact hnone ⟨j, hj, hcon.1, hcon.2⟩
+  have h5 := no_low_pair_five_high h
+  have hsum1 : (∑ j ∈ (Finset.range 10).filter
+        (fun j => 17 ≤ b.colHeight j), b.colHeight j)
+      ≤ ∑ j ∈ Finset.range 10, b.colHeight j :=
+    Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
+  have hsum2 : ((Finset.range 10).filter
+        (fun j => 17 ≤ b.colHeight j)).card • 17
+      ≤ (∑ j ∈ (Finset.range 10).filter
+          (fun j => 17 ≤ b.colHeight j), b.colHeight j) :=
+    Finset.card_nsmul_le_sum _ _ 17
+      (fun j hj => (Finset.mem_filter.mp hj).2)
+  have hid := skyline_eq_count_add_holes hwf
+  simp only [smul_eq_mul] at hsum2
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27co) — a light board always offers a window (bank 312/N)
+
+- **`low_pair_exists_of_light`** — count + holes ≤ 84 ⇒ a low adjacent
+  pair exists (no-window boards carry five 17-towers = 85 skyline; the
+  skyline identity converts that to mass + debt). THE EXISTENCE SIDE of
+  the moving-window crux under a weight condition: the driver always
+  finds a window while the board stays light. The remaining question:
+  can the driver KEEP the board light?
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cn) — the skyline mass identity (bank 311/N)
 
 - **`colHeight_eq_colCount_add_colHoles`** — height = cells + holes,
