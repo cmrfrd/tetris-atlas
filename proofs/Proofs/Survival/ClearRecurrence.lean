@@ -5364,6 +5364,23 @@ theorem fullRows_place_card_le_count {cfg : GameConfig} (b : Board)
   rw [Placement.count_place] at h
   exact h
 
+/-- An unfed column never rises through a full move: unchanged by the
+merge, lowered (or untouched) by the clear. -/
+theorem applyStep_unfed_colHeight_le {cfg : GameConfig} {b : Board}
+    {pl : Placement} {j : ℕ} (hj : j < cfg.cols)
+    (hz : pl.colProfile j = 0) :
+    (Placement.applyStep cfg b pl).colHeight j ≤ b.colHeight j := by
+  by_cases hk : 0 < (Board.fullRows cfg (pl.place b)).card
+  · have h := clear_step_unfed_colHeight_le hj hz hk
+    omega
+  · have hcard0 : (Board.fullRows cfg (pl.place b)).card = 0 := by omega
+    have hnc := Finset.card_eq_zero.mp hcard0
+    have hid : Placement.applyStep cfg b pl = pl.place b := by
+      unfold Placement.applyStep
+      exact Board.clearLines_eq_self_of_no_fullRows cfg hnc
+    rw [hid]
+    exact le_of_eq (place_unfed_colHeight_eq hz)
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

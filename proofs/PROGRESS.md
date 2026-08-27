@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27bj) — dwelling flattens the spectators (bank 281/N)
+
+- **`applyStep_unfed_colHeight_le`** — an unfed column never rises
+  through a full move (merge leaves it, clears lower it; case split on
+  whether the step clears).
+- **`dwell_off_pair_heights_sink`** — over any confined run, every
+  off-pair column's height is non-increasing. Dwelling is productive
+  for the migration: the destination pairs only get lower while the
+  window sits still.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27bi) — cycle selections step every fifteen (bank 280/N)
 
 - **`cycle_low_pair_selection_migrates`** — a halfway-capstone selection

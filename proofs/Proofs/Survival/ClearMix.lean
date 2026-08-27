@@ -1690,5 +1690,45 @@ theorem tetris_requires_tower {π : Policy GameConfig.standard}
   obtain ⟨j, hj, htower⟩ := clearing_move_requires_tower hv (m := m)
   exact ⟨j, hj, by omega⟩
 
+/-- **While the window dwells, the rest of the board only sinks**: over
+any run of drops confined to the pair `(j, j+1)`, every other column's
+height is non-increasing — off-pair columns are never fed, so merges
+leave them alone and clears can only lower them. Dwelling is not idle
+elsewhere: the eight spectator columns flatten (or hold) throughout. -/
+theorem dwell_off_pair_heights_sink {π : Policy GameConfig.standard}
+    {n j c : ℕ} (hc : c < 10) (hcj : c ≠ j) (hcj1 : c ≠ j + 1) :
+    ∀ w, (∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          = j
+        ∨ (π (trace GameConfig.standard π GameState.init (n + k))).col
+            + cell.1 = j + 1) →
+      (trace GameConfig.standard π GameState.init (n + w)).board.colHeight c
+        ≤ (trace GameConfig.standard π GameState.init n).board.colHeight c := by
+  intro w
+  induction w with
+  | zero =>
+    intro _
+    exact le_refl _
+  | succ k ih =>
+    intro hcells
+    have hihk := ih (fun i hi => hcells i (by omega))
+    have hz : (π (trace GameConfig.standard π
+        GameState.init (n + k))).colProfile c = 0 := by
+      unfold Placement.colProfile
+      rw [Finset.card_eq_zero, Finset.eq_empty_iff_forall_notMem]
+      intro cell hmem
+      rw [Finset.mem_filter] at hmem
+      rcases hcells k (by omega) cell hmem.1 with h | h
+      · omega
+      · omega
+    have hstep := applyStep_unfed_colHeight_le (cfg := GameConfig.standard)
+      (b := (trace GameConfig.standard π GameState.init (n + k)).board)
+      (pl := π (trace GameConfig.standard π GameState.init (n + k)))
+      (by rw [GameConfig.standard_cols]; omega) hz
+    rw [show n + (k + 1) = (n + k) + 1 by omega, trace_succ,
+      GameState.step_board]
+    exact le_trans hstep hihk
+
 end ClearRate
 end Tetris
