@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26az) — the moving window sweeps the board (bank 271/N)
+
+- **`low_pair_selection_covers`** — the capstone selection reaches every
+  column within 9N + 451 steps of any point (column recurrence composed
+  through the confinement of drops to the selected pair). With
+  batch 270: the crux's shape is fully constrained — migrate every ≤ 23,
+  sweep all ten on a linear schedule, forever.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26ay) — the crux is a MOVING window (bank 270/N)
 
 - **`low_pair_selection_migrates`** — any policy solving Tetris through

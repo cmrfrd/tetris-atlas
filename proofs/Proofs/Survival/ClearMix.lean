@@ -1382,5 +1382,38 @@ theorem low_pair_selection_migrates {π : Policy GameConfig.standard}
       exact h2)
   omega
 
+/-- **The moving window sweeps the whole board**: a halfway-capstone
+selection reaches every column from every point on — within `9N + 451`
+steps of any moment `N`, the selected pair touches column `j`. Combined
+with `low_pair_selection_migrates`, the crux's shape is now fully
+constrained: a low pair that steps at least every twenty-three moves and
+sweeps all ten columns on a linear schedule, forever. -/
+theorem low_pair_selection_covers {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {jf : ℕ → ℕ}
+    (hsel : ∀ n, jf n + 1 < 10
+      ∧ ((trace GameConfig.standard π GameState.init n).board.colHeight
+            (jf n) + 4 ≤ 20
+        ∧ (trace GameConfig.standard π GameState.init n).board.colHeight
+            (jf n + 1) + 4 ≤ 20)
+      ∧ ∀ cell ∈ (π (trace GameConfig.standard π GameState.init n)).shapeUp,
+          (π (trace GameConfig.standard π GameState.init n)).col + cell.1
+            = jf n
+          ∨ (π (trace GameConfig.standard π GameState.init n)).col + cell.1
+            = jf n + 1)
+    {j : ℕ} (hj : j < 10) (N : ℕ) :
+    ∃ k < 9 * N + 451, jf (N + k) = j ∨ jf (N + k) + 1 = j := by
+  have hsurv : SurvivesForever GameConfig.standard π GameState.init := by
+    apply survivesForever_of_low_pair_play
+    intro n
+    obtain ⟨h1, h2, h3⟩ := hsel n
+    exact ⟨jf n, h1, h2.1, h2.2, h3⟩
+  obtain ⟨k, hk, cell, hcell, hcol⟩ := every_column_fed_within hv hsurv hj N
+  refine ⟨k, hk, ?_⟩
+  rcases (hsel (N + k)).2.2 cell hcell with h | h
+  · left
+    omega
+  · right
+    omega
+
 end ClearRate
 end Tetris
