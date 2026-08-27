@@ -6200,6 +6200,82 @@ theorem tower_event_breaks_high_window {b : Board} {pl : Placement}
   · rw [h] at hraise
     omega
 
+/-- Refusing every `h`-low adjacent pair costs five columns above `h`:
+the threshold-general tower count. -/
+theorem no_h_low_pair_five_high {b : Board} {h : ℕ}
+    (hno : ∀ j, j + 1 < 10 →
+      ¬ (b.colHeight j ≤ h ∧ b.colHeight (j + 1) ≤ h)) :
+    5 ≤ ((Finset.range 10).filter
+      (fun j => h + 1 ≤ b.colHeight j)).card := by
+  classical
+  have hpair : ∀ i, i < 5 →
+      h + 1 ≤ b.colHeight (2 * i) ∨ h + 1 ≤ b.colHeight (2 * i + 1) := by
+    intro i hi
+    have := hno (2 * i) (by omega)
+    omega
+  have hmem : ∀ i ∈ Finset.range 5,
+      (if h + 1 ≤ b.colHeight (2 * i) then 2 * i else 2 * i + 1)
+        ∈ (Finset.range 10).filter (fun j => h + 1 ≤ b.colHeight j) := by
+    intro i hi
+    rw [Finset.mem_range] at hi
+    rw [Finset.mem_filter, Finset.mem_range]
+    by_cases hc : h + 1 ≤ b.colHeight (2 * i)
+    · rw [if_pos hc]
+      exact ⟨by omega, hc⟩
+    · have h1 : h + 1 ≤ b.colHeight (2 * i + 1) := by
+        rcases hpair i hi with h' | h'
+        · exact absurd h' hc
+        · exact h'
+      rw [if_neg hc]
+      exact ⟨by omega, h1⟩
+  have hinj : Set.InjOn
+      (fun i => if h + 1 ≤ b.colHeight (2 * i) then 2 * i else 2 * i + 1)
+      ↑(Finset.range 5) := by
+    intro i hi j hj hij
+    simp only [Finset.mem_coe, Finset.mem_range] at hi hj
+    simp only [] at hij
+    have h1 : (if h + 1 ≤ b.colHeight (2 * i) then 2 * i else 2 * i + 1) / 2
+        = i := by
+      split_ifs <;> omega
+    have h2 : (if h + 1 ≤ b.colHeight (2 * j) then 2 * j else 2 * j + 1) / 2
+        = j := by
+      split_ifs <;> omega
+    rw [hij] at h1
+    omega
+  calc (5 : ℕ) = (Finset.range 5).card := (Finset.card_range 5).symm
+    _ ≤ _ := Finset.card_le_card_of_injOn _ hmem hinj
+
+/-- **A sixty-four-light board offers an I-ready window**: whenever mass
+plus debt is at most sixty-four, some adjacent pair stands twelve-low —
+low enough to absorb the bag's forced vertical I and remain a window.
+Refusing every twelve-low pair costs five thirteen-columns, and five
+thirteens are sixty-five skyline. -/
+theorem twelve_low_pair_exists_of_light {b : Board}
+    (hwf : Board.WF GameConfig.standard b)
+    (hlight : b.count + Board.holes GameConfig.standard b ≤ 64) :
+    ∃ j, j + 1 < 10 ∧ b.colHeight j ≤ 12 ∧ b.colHeight (j + 1) ≤ 12 := by
+  classical
+  by_contra hnone
+  have hno : ∀ j, j + 1 < 10 →
+      ¬ (b.colHeight j ≤ 12 ∧ b.colHeight (j + 1) ≤ 12) := by
+    intro j hj hcon
+    exact hnone ⟨j, hj, hcon.1, hcon.2⟩
+  have h5 := no_h_low_pair_five_high (h := 12) hno
+  simp only [show (12 : ℕ) + 1 = 13 from rfl] at h5
+  have hsum1 : (∑ j ∈ (Finset.range 10).filter
+        (fun j => 13 ≤ b.colHeight j), b.colHeight j)
+      ≤ ∑ j ∈ Finset.range 10, b.colHeight j :=
+    Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
+  have hsum2 : ((Finset.range 10).filter
+        (fun j => 13 ≤ b.colHeight j)).card • 13
+      ≤ (∑ j ∈ (Finset.range 10).filter
+          (fun j => 13 ≤ b.colHeight j), b.colHeight j) :=
+    Finset.card_nsmul_le_sum _ _ 13
+      (fun j hj => (Finset.mem_filter.mp hj).2)
+  have hid := skyline_eq_count_add_holes hwf
+  simp only [smul_eq_mul] at hsum2
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

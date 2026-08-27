@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cu) — a 64-light board offers an I-ready window (bank 318/N)
+
+- **`no_h_low_pair_five_high`** — the threshold-general tower count
+  (parameterizes batch 209's h = 16 lemma).
+- **`twelve_low_pair_exists_of_light`** — count + holes ≤ 64 ⇒ a
+  twelve-low pair exists: light enough boards always offer windows that
+  survive the forced I. The lightness ladder: ≤ 84 gives a window,
+  ≤ 64 gives an I-ready one. Gotcha: instantiated `h + 1` ≠ numeral 13
+  for omega — normalize with simp only [show 12+1 = 13 from rfl].
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27ct) — the I-ready window is twelve-low (bank 317/N)
 
 - **`tower_event_absorbed_of_low`** — a ≤12 pair absorbs the forced
