@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27ch) — the adversarial set ledger (bank 305/N)
+
+- **`adversarial_window_feed_ledger_set`**, **`adversarial_confinement_
+  clear_demand`** — the width-k ledger and live demand mirrored to
+  forced drops (Nat.mul_add distribution + the have/let simp guard).
+  Sets up the adversarial no-abandonment theorem.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cg) — seven moves per window (bank 304/N)
 
 - **`colProfile_eq_zero_of_not_touched`**, **`colDelivered_window_sum`**

@@ -3447,5 +3447,132 @@ theorem adversarial_peak_drop_certifies_clear
   apply adversarial_height_drop_certifies_clear (j := j)
   omega
 
+/-- **The width-`k` confinement ledger is adversary-proof**: over `w`
+forced drops confined to a column set `S`, the set's cells plus `|S|`
+per cleared row equal its start plus `4w`. -/
+theorem adversarial_window_feed_ledger_set {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {n : ℕ} {S : Finset ℕ} (hS : ∀ j ∈ S, j < 10) :
+    ∀ w, (∀ k < w,
+      ∀ cell ∈ ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).shapeUp,
+        ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).col + cell.1 ∈ S) →
+      (∑ j ∈ S, (adversarialTrace GameConfig.standard σ s GameState.init
+          (n + w)).board.colCount j)
+        + S.card * (clearedAdv GameConfig.standard σ s GameState.init (n + w)
+            - clearedAdv GameConfig.standard σ s GameState.init n)
+      = (∑ j ∈ S, (adversarialTrace GameConfig.standard σ s GameState.init
+          n).board.colCount j)
+        + 4 * w := by
+  intro w
+  induction w with
+  | zero =>
+    intro _
+    simp
+  | succ k ih =>
+    intro hcells
+    have hihk := ih (fun i hi => hcells i (by omega))
+    have hm1 := clearedAdv_mono GameConfig.standard σ s GameState.init
+      (Nat.le_add_right n k)
+    have hm2 := clearedAdv_mono GameConfig.standard σ s GameState.init
+      (show n + k ≤ (n + k) + 1 by omega)
+    have hs := clearedAdv_succ GameConfig.standard σ s GameState.init (n + k)
+    have hstep : ∀ j ∈ S,
+        (Placement.applyStep GameConfig.standard
+            (adversarialTrace GameConfig.standard σ s
+              GameState.init (n + k)).board
+            ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+                (n + k)) (s (n + k)) with piece := s (n + k) })).colCount j
+          + Board.linesCleared GameConfig.standard
+              (({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+                  (n + k)) (s (n + k)) with piece := s (n + k) }
+                : Placement).place
+                (adversarialTrace GameConfig.standard σ s
+                  GameState.init (n + k)).board)
+        = (adversarialTrace GameConfig.standard σ s
+            GameState.init (n + k)).board.colCount j
+          + ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+              (n + k)) (s (n + k)) with piece := s (n + k) }
+            : Placement).colProfile j :=
+      fun j hj => applyStep_colCount GameConfig.standard _ _
+        (by rw [GameConfig.standard_cols]; exact hS j hj)
+    have hsum := Finset.sum_congr rfl hstep
+    simp only [Finset.sum_add_distrib, Finset.sum_const, smul_eq_mul]
+      at hsum
+    have hprof := colProfile_sum_of_confined
+      (pl := ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+          (n + k)) (s (n + k)) with piece := s (n + k) } : Placement))
+      (hcells k (by omega))
+    have hdiff : clearedAdv GameConfig.standard σ s GameState.init
+          ((n + k) + 1)
+        - clearedAdv GameConfig.standard σ s GameState.init n
+      = (clearedAdv GameConfig.standard σ s GameState.init (n + k)
+          - clearedAdv GameConfig.standard σ s GameState.init n)
+        + (Board.fullRows GameConfig.standard
+            (({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+                (n + k)) (s (n + k)) with piece := s (n + k) }
+              : Placement).place
+              (adversarialTrace GameConfig.standard σ s
+                GameState.init (n + k)).board)).card := by
+      simp only [] at hs ⊢
+      omega
+    have hdist : S.card
+          * (clearedAdv GameConfig.standard σ s GameState.init ((n + k) + 1)
+            - clearedAdv GameConfig.standard σ s GameState.init n)
+        = S.card * (clearedAdv GameConfig.standard σ s GameState.init (n + k)
+            - clearedAdv GameConfig.standard σ s GameState.init n)
+          + S.card * (Board.fullRows GameConfig.standard
+              (({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+                  (n + k)) (s (n + k)) with piece := s (n + k) }
+                : Placement).place
+                (adversarialTrace GameConfig.standard σ s
+                  GameState.init (n + k)).board)).card := by
+      rw [hdiff, Nat.mul_add]
+    unfold Board.linesCleared at hsum
+    rw [show n + (k + 1) = (n + k) + 1 by omega, adversarialTrace_succ,
+      adversarialStep_board]
+    simp only [] at hihk hsum hprof hdist ⊢
+    omega
+
+/-- **The width-`k` clear demand is adversary-proof**: `w` forced drops
+confined to `S` ending live force `4w ≤ |S|·clearsΔ + 20|S|`. -/
+theorem adversarial_confinement_clear_demand {σ : Solver GameConfig.standard}
+    {s : ℕ → Piece} {n w : ℕ} {S : Finset ℕ} (hS : ∀ j ∈ S, j < 10)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).shapeUp,
+        ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).col + cell.1 ∈ S)
+    (hlive : ¬ (adversarialTrace GameConfig.standard σ s GameState.init
+      (n + w)).lost GameConfig.standard) :
+    4 * w ≤ S.card * (clearedAdv GameConfig.standard σ s GameState.init
+        (n + w) - clearedAdv GameConfig.standard σ s GameState.init n)
+      + 20 * S.card := by
+  have hled := adversarial_window_feed_ledger_set (n := n) hS w hcells
+  have hif := (GameState.not_lost_iff_forall_row_lt
+    GameConfig.standard _).mp hlive
+  have hcolbound : ∀ j ∈ S,
+      (adversarialTrace GameConfig.standard σ s GameState.init
+        (n + w)).board.colCount j ≤ 20 := by
+    intro j hj
+    have h1 := colCount_le_colHeight
+      (adversarialTrace GameConfig.standard σ s GameState.init (n + w)).board j
+    have h2 := Board.colHeight_le_rows_of_in_field
+      (cfg := GameConfig.standard) hif j
+    rw [GameConfig.standard_rows] at h2
+    omega
+  have hsum : (∑ j ∈ S, (adversarialTrace GameConfig.standard σ s
+        GameState.init (n + w)).board.colCount j) ≤ 20 * S.card := by
+    calc (∑ j ∈ S, (adversarialTrace GameConfig.standard σ s
+            GameState.init (n + w)).board.colCount j)
+        ≤ ∑ _j ∈ S, 20 := Finset.sum_le_sum hcolbound
+      _ = 20 * S.card := by
+          rw [Finset.sum_const, smul_eq_mul, Nat.mul_comm]
+  omega
+
 end ClearRate
 end Tetris
