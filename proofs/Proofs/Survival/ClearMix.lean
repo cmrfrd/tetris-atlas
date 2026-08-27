@@ -2059,5 +2059,55 @@ theorem moving_window_theorem {π : Policy GameConfig.standard}
   · intro j hj N
     exact low_pair_selection_covers hv hsel hj N
 
+/-- **The driver's occupancy floor**: a capstone selection stations its
+window at (or next to) each column at least `w/10 − 10` times per
+`w`-move window — the pinned feeding frequency lifts to the selection
+itself. The driver is not free to neglect any part of the board for
+long: its itinerary is rate-constrained everywhere. -/
+theorem low_pair_selection_occupancy_floor {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {jf : ℕ → ℕ}
+    (hsel : ∀ m, jf m + 1 < 10
+      ∧ ((trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m) + 4 ≤ 20
+        ∧ (trace GameConfig.standard π GameState.init m).board.colHeight
+            (jf m + 1) + 4 ≤ 20)
+      ∧ ∀ cell ∈ (π (trace GameConfig.standard π GameState.init m)).shapeUp,
+          (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m
+          ∨ (π (trace GameConfig.standard π GameState.init m)).col + cell.1
+            = jf m + 1)
+    {j : ℕ} (hj : j < 10) (m w : ℕ) :
+    4 * w ≤ 40 * ((Finset.range w).filter (fun k =>
+        jf (m + k) = j ∨ jf (m + k) + 1 = j)).card + 400 := by
+  classical
+  have hsurv : SurvivesForever GameConfig.standard π GameState.init := by
+    apply survivesForever_of_low_pair_play
+    intro n
+    obtain ⟨h1, h2, h3⟩ := hsel n
+    exact ⟨jf n, h1, h2.1, h2.2, h3⟩
+  have hband := (column_fed_events_band hv hj (hsurv m)
+    (hsurv (m + w))).1
+  have hsub : (Finset.range w).filter (fun k =>
+      0 < (π (trace GameConfig.standard π
+        GameState.init (m + k))).colProfile j)
+      ⊆ (Finset.range w).filter (fun k =>
+        jf (m + k) = j ∨ jf (m + k) + 1 = j) := by
+    intro k hk
+    rw [Finset.mem_filter] at hk ⊢
+    refine ⟨hk.1, ?_⟩
+    have hfed := hk.2
+    unfold Placement.colProfile at hfed
+    obtain ⟨cell, hcell⟩ := Finset.card_pos.mp hfed
+    rw [Finset.mem_filter] at hcell
+    rcases (hsel (m + k)).2.2 cell hcell.1 with h | h
+    · left
+      have := hcell.2
+      omega
+    · right
+      have := hcell.2
+      omega
+  have hcard := Finset.card_le_card hsub
+  omega
+
 end ClearRate
 end Tetris

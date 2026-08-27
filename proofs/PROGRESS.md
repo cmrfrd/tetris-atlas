@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cm) — the driver's occupancy floor (bank 310/N)
+
+- **`low_pair_selection_occupancy_floor`** — a capstone selection
+  stations its window at/next to each column ≥ w/10 − 10 times per
+  window (fed steps ⊆ pair-adjacent steps; band floor transfers). The
+  driver's itinerary is rate-pinned at every column, everywhere.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cl) — the feeding frequency is pinned (bank 309/N)
 
 - **`colProfile_le_four`** — a placement puts ≤ 4 cells in any column.
