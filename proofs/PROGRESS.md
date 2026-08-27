@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26bd) — the inventory price of harvests (bank 275/N)
+
+- **`clearing_move_count_floor`** — 10·Δcleared ≤ count(m) + 4: clears
+  draw on standing stock (prior-inventory law + card_filter_le).
+- **`tetris_requires_thirty_six_banked`** — a four-clear starts from a
+  board holding ≥ 36 cells; consistent with earliest_tetris_step ≥ 9
+  (36 cells need nine pieces).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26bc) — the sharp inventory law (bank 274/N)
 
 - **`cleared_rows_prior_inventory`** — 10·Δcleared ≤ (pre-board cells

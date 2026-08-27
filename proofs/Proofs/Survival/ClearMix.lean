@@ -1636,5 +1636,32 @@ theorem cleared_rows_prior_inventory {π : Policy GameConfig.standard}
   exact le_trans hlow (le_trans hup (le_trans hunion
     (Nat.add_le_add_left hdropcard _)))
 
+/-- **Clears draw on standing stock**: a step clearing `k` rows starts
+from a board holding at least `10k − 4` cells — the harvest minus the
+piece's own contribution must already be on the table. -/
+theorem clearing_move_count_floor {π : Policy GameConfig.standard} {m : ℕ} :
+    10 * (cleared GameConfig.standard π GameState.init (m + 1)
+        - cleared GameConfig.standard π GameState.init m)
+      ≤ (trace GameConfig.standard π GameState.init m).board.count + 4 := by
+  have hinv := cleared_rows_prior_inventory (π := π) (m := m)
+  have hsub := Finset.card_filter_le
+    (trace GameConfig.standard π GameState.init m).board
+    (fun p => p.2 ∈ Board.fullRows GameConfig.standard
+      ((π (trace GameConfig.standard π GameState.init m)).place
+        (trace GameConfig.standard π GameState.init m).board))
+  unfold Board.count
+  omega
+
+/-- **A tetris needs thirty-six on the table**: any four-clear starts
+from a board holding at least thirty-six cells. The inventory price of
+the biggest harvest, as a pure counting fact. -/
+theorem tetris_requires_thirty_six_banked {π : Policy GameConfig.standard}
+    {m : ℕ}
+    (h4 : cleared GameConfig.standard π GameState.init (m + 1)
+      = cleared GameConfig.standard π GameState.init m + 4) :
+    36 ≤ (trace GameConfig.standard π GameState.init m).board.count := by
+  have hfloor := clearing_move_count_floor (π := π) (m := m)
+  omega
+
 end ClearRate
 end Tetris
