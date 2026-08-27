@@ -6076,6 +6076,68 @@ theorem light_board_window_move_exists {b : Board}
     change j + cell.1 = j ∨ j + cell.1 = j + 1
     omega
 
+/-- A single-column I rotation is the four-cell tower `{(t,0)…(t,3)}`. -/
+theorem I_vertical_shape :
+    ∀ r : Rotation,
+      (∀ cell ∈ Piece.I.shapeUp r, ∀ cell' ∈ Piece.I.shapeUp r,
+        cell.1 = cell'.1) →
+      ∃ t < 4, Piece.I.shapeUp r
+        = ({(t, 0), (t, 1), (t, 2), (t, 3)} : Finset PieceCell) := by
+  decide
+
+/-- **The tower brick costs exactly four**: an I confined to an adjacent
+pair lands vertically on one of the two columns and raises that column's
+height by exactly four — no more, no less, whatever stood there. The
+window's forced I-event (`confined_run_tower_event`) has an exact
+price in height as well as in mass. -/
+theorem vertical_I_raises_exactly_four {b : Board} {pl : Placement}
+    {j : ℕ} (hI : pl.piece = Piece.I)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1) :
+    ∃ c, (c = j ∨ c = j + 1)
+      ∧ (pl.place b).colHeight c = b.colHeight c + 4 := by
+  classical
+  have hsingle := I_pair_confined_single_column hI hcells
+  have hsh : pl.shapeUp = Piece.I.shapeUp pl.rot := by
+    unfold Placement.shapeUp
+    rw [hI]
+  obtain ⟨t, _, ht⟩ := I_vertical_shape pl.rot (by
+    intro cell hcell cell' hcell'
+    exact hsingle cell (by rw [hsh]; exact hcell) cell'
+      (by rw [hsh]; exact hcell'))
+  have htsh : pl.shapeUp = ({(t, 0), (t, 1), (t, 2), (t, 3)}
+      : Finset PieceCell) := by
+    rw [hsh, ht]
+  have hmem0 : ((t, 0) : PieceCell) ∈ pl.shapeUp := by
+    rw [htsh]
+    simp
+  have hmem3 : ((t, 3) : PieceCell) ∈ pl.shapeUp := by
+    rw [htsh]
+    simp
+  have hdrop : pl.dropOffset b = b.colHeight (pl.col + t) := by
+    apply Nat.le_antisymm
+    · unfold Placement.dropOffset
+      apply Finset.sup_le
+      intro cell hcell
+      rw [htsh] at hcell
+      simp only [Finset.mem_insert, Finset.mem_singleton] at hcell
+      rcases hcell with h | h | h | h <;> subst h <;> simp
+    · have hle := Finset.le_sup
+        (f := fun cell : PieceCell =>
+          b.colHeight (pl.col + cell.1) - cell.2) hmem0
+      unfold Placement.dropOffset
+      simpa using hle
+  have htop : ∀ cell' ∈ pl.shapeUp, cell'.1 = ((t, 3) : PieceCell).1 →
+      cell'.2 ≤ ((t, 3) : PieceCell).2 := by
+    intro cell' hcell' _
+    rw [htsh] at hcell'
+    simp only [Finset.mem_insert, Finset.mem_singleton] at hcell'
+    rcases hcell' with h | h | h | h <;> subst h <;> simp
+  have hfed := place_fed_colHeight_eq (b := b) hmem3 htop
+  refine ⟨pl.col + t, hcells (t, 0) hmem0, ?_⟩
+  rw [show pl.col + ((t, 3) : PieceCell).1 = pl.col + t from rfl] at hfed
+  rw [hfed, hdrop]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

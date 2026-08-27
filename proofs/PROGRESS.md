@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27cs) — the tower brick costs exactly four (bank 316/N)
+
+- **`I_vertical_shape`** — kernel decide: a single-column I rotation is
+  {(t,0),(t,1),(t,2),(t,3)} (bound the ∃ as `∃ t < 4` — the unbounded
+  form fails Decidable synthesis).
+- **`vertical_I_raises_exactly_four`** — the confined I raises its
+  column by EXACTLY 4: dropOffset computes to the column's own height
+  (sup of H−0..H−3), and the top cell lands at H+3. The tower event now
+  has an exact height price to go with its mass price.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27cr) — light play clears on a 22-clock (bank 315/N)
 
 - **`light_play_no_drought`** — always-light policies clear within
