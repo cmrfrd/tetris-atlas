@@ -3574,5 +3574,61 @@ theorem adversarial_confinement_clear_demand {σ : Solver GameConfig.standard}
           rw [Finset.sum_const, smul_eq_mul, Nat.mul_comm]
   omega
 
+/-- **The uniform spread law is adversary-proof**: between any two live
+moments nine hundred one forced moves apart, every column receives a
+cell — whoever deals, abstention from one column is width-nine
+confinement past the windowed band. -/
+theorem adversarial_window_feeds_all_columns
+    {σ : Solver GameConfig.standard} {s : ℕ → Piece}
+    (hv : ∀ n, ({ σ (adversarialTrace GameConfig.standard σ s GameState.init n)
+      (s n) with piece := s n } : Placement).Valid GameConfig.standard)
+    {n w : ℕ} (hw : 901 ≤ w)
+    (hlive_n : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init n).lost GameConfig.standard)
+    (hlive_nw : ¬ (adversarialTrace GameConfig.standard σ s
+      GameState.init (n + w)).lost GameConfig.standard)
+    {j : ℕ} (hj : j < 10) :
+    ∃ k < w, 0 < ({ σ (adversarialTrace GameConfig.standard σ s
+        GameState.init (n + k)) (s (n + k)) with piece := s (n + k) }
+      : Placement).colProfile j := by
+  by_contra hnone
+  push Not at hnone
+  have hcells : ∀ k < w,
+      ∀ cell ∈ ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+          (n + k)) (s (n + k)) with piece := s (n + k) }
+        : Placement).shapeUp,
+        ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+            (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).col + cell.1 ∈ (Finset.range 10).erase j := by
+    intro k hk cell hcell
+    have hlt := (hv (n + k)).col_add_lt hcell
+    rw [GameConfig.standard_cols] at hlt
+    refine Finset.mem_erase.mpr ⟨?_, Finset.mem_range.mpr hlt⟩
+    intro heq
+    have h0 : ({ σ (adversarialTrace GameConfig.standard σ s GameState.init
+        (n + k)) (s (n + k)) with piece := s (n + k) }
+      : Placement).colProfile j = 0 := by
+      have := hnone k hk
+      omega
+    have hmem : cell ∈ ({ σ (adversarialTrace GameConfig.standard σ s
+        GameState.init (n + k)) (s (n + k)) with piece := s (n + k) }
+      : Placement).shapeUp.filter
+        (fun c => ({ σ (adversarialTrace GameConfig.standard σ s
+          GameState.init (n + k)) (s (n + k)) with piece := s (n + k) }
+          : Placement).col + c.1 = j) :=
+      Finset.mem_filter.mpr ⟨hcell, heq⟩
+    unfold Placement.colProfile at h0
+    rw [Finset.card_eq_zero] at h0
+    rw [h0] at hmem
+    exact Finset.notMem_empty _ hmem
+  have hdem := adversarial_confinement_clear_demand (n := n) (w := w)
+    (S := (Finset.range 10).erase j)
+    (fun i hi => Finset.mem_range.mp (Finset.mem_of_mem_erase hi))
+    hcells hlive_nw
+  rw [Finset.card_erase_of_mem (Finset.mem_range.mpr hj),
+    Finset.card_range] at hdem
+  have hband := (adversarial_cleared_window_band hv hlive_n hlive_nw).2
+  omega
+
 end ClearRate
 end Tetris

@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-27ci) — the spread law against any dealer (bank 306/N)
+
+- **`adversarial_window_feeds_all_columns`** — every column receives a
+  cell in every 901-move live window of forced play (adversarial set
+  demand × adversarial window band).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27ch) — the adversarial set ledger (bank 305/N)
 
 - **`adversarial_window_feed_ledger_set`**, **`adversarial_confinement_
