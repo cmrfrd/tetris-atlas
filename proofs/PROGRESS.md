@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-26ax) — the dwell cap sharpened to twenty-two (bank 269/N)
+
+- **`confinement_sustain_clear_rate`** — sharp set-width demand:
+  4w ≤ |S|·clearsΔ + 16|S| (batch 252's pair statement halved its own
+  strength; the ledger gives a clear per TWO cells beyond capacity).
+- **`window_dwell_cap_sharp`** — w ≤ 22: full-strength pair ledger
+  (4w ≤ 2Δc + 32) against the window band (10Δc ≤ 4w + 200) crosses at
+  16w ≤ 360. The migration clock: 46 → 22 moves.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-26aw) — the uniform dwell cap (bank 268/N)
 
 - **`window_dwell_cap`** — confined pair-play between two live moments

@@ -1278,5 +1278,66 @@ theorem survivor_window_dwell_cap {π : Policy GameConfig.standard}
     w ≤ 46 :=
   window_dwell_cap hv hj (hsurv n) (hsurv (n + w)) hcells hlow
 
+/-- **The set-width sustain rate**: keeping a column set `S` low through
+`w` confined drops costs `S.card` clears per four cells beyond the set's
+sixteen-per-column capacity: `4w ≤ |S|·clearsΔ + 16|S|`. The sharp form
+of the width-`k` demand (each column banks at most sixteen when it ends
+four below the ceiling). -/
+theorem confinement_sustain_clear_rate {π : Policy GameConfig.standard}
+    {n w : ℕ} {S : Finset ℕ} (hS : ∀ j ∈ S, j < 10)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          ∈ S)
+    (hlow : ∀ j ∈ S, (trace GameConfig.standard π GameState.init
+      (n + w)).board.colHeight j + 4 ≤ 20) :
+    4 * w ≤ S.card * (cleared GameConfig.standard π GameState.init (n + w)
+        - cleared GameConfig.standard π GameState.init n) + 16 * S.card := by
+  have hled := window_feed_ledger_set (n := n) hS w hcells
+  have hsum : (∑ j ∈ S, (trace GameConfig.standard π GameState.init
+        (n + w)).board.colCount j) ≤ 16 * S.card := by
+    calc (∑ j ∈ S, (trace GameConfig.standard π GameState.init
+            (n + w)).board.colCount j)
+        ≤ ∑ _j ∈ S, 16 := by
+          apply Finset.sum_le_sum
+          intro j hj
+          have h1 := colCount_le_colHeight
+            (trace GameConfig.standard π GameState.init (n + w)).board j
+          have h2 := hlow j hj
+          omega
+      _ = 16 * S.card := by
+          rw [Finset.sum_const, smul_eq_mul, Nat.mul_comm]
+  omega
+
+/-- **The sharp dwell cap is twenty-two**: play confined to one adjacent
+pair between two live moments, ending low, lasts at most twenty-two moves
+— the full-strength pair ledger (a clear per two cells beyond capacity)
+against the window band. The migration clock, sharpened from forty-six. -/
+theorem window_dwell_cap_sharp {π : Policy GameConfig.standard}
+    (hv : ∀ g, (π g).Valid GameConfig.standard) {n j w : ℕ}
+    (hj : j + 1 < 10)
+    (hlive_n : ¬ (trace GameConfig.standard π GameState.init n).lost
+      GameConfig.standard)
+    (hlive_nw : ¬ (trace GameConfig.standard π GameState.init (n + w)).lost
+      GameConfig.standard)
+    (hcells : ∀ k < w,
+      ∀ cell ∈ (π (trace GameConfig.standard π GameState.init (n + k))).shapeUp,
+        (π (trace GameConfig.standard π GameState.init (n + k))).col + cell.1
+          = j
+        ∨ (π (trace GameConfig.standard π GameState.init (n + k))).col
+            + cell.1 = j + 1)
+    (hlow : (trace GameConfig.standard π GameState.init
+          (n + w)).board.colHeight j + 4 ≤ 20
+      ∧ (trace GameConfig.standard π GameState.init
+          (n + w)).board.colHeight (j + 1) + 4 ≤ 20) :
+    w ≤ 22 := by
+  have hled := window_feed_ledger (n := n) hj w hcells
+  have hc1 := colCount_le_colHeight
+    (trace GameConfig.standard π GameState.init (n + w)).board j
+  have hc2 := colCount_le_colHeight
+    (trace GameConfig.standard π GameState.init (n + w)).board (j + 1)
+  have hband := (cleared_window_band hv hlive_n hlive_nw).2
+  omega
+
 end ClearRate
 end Tetris
