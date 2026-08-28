@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28di) — the S-staircase (bank 332/N)
+
+- **`S_narrow_tops`** — tops at offsets (2, 1), kernel decide.
+- **`window_S_staircase`** — on a step-down-1 pair the S lands FREE
+  and reproduces step-down-1 at +2: a self-sustaining shape. The real
+  Tetris "S-stack" technique, proven: one setup hole, then free
+  forever.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dh) — the square preserves flatness (bank 331/N)
 
 - **`O_shape_tops`** — both O tops at offset one, every rotation.

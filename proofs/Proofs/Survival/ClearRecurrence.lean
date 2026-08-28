@@ -7235,6 +7235,111 @@ theorem window_O_keeps_flat {b : Board} {pl : Placement} {j h : ℕ}
   · rw [show j + 1 = j + ((1 : ℕ), (1 : ℕ)).1 from rfl] at hflat1 ⊢
     rw [hfed1, hD]
 
+/-- A narrow S's tops: offset 2 in its left column, 1 in its right. -/
+theorem S_narrow_tops : ∀ r : Rotation,
+    (∀ cell ∈ Piece.S.shapeUp r, cell.1 ≤ 1) →
+    (((0 : ℕ), (2 : ℕ)) ∈ Piece.S.shapeUp r
+      ∧ ((1 : ℕ), (1 : ℕ)) ∈ Piece.S.shapeUp r
+      ∧ ∀ cell ∈ Piece.S.shapeUp r,
+          (cell.1 = 0 → cell.2 ≤ 2) ∧ (cell.1 = 1 → cell.2 ≤ 1)) := by
+  decide
+
+/-- **The S-staircase**: on a pair stepping down by one, a confined S
+lands free of debt AND reproduces the one-step-down profile two rows
+higher. After a single setup hole on flat ground, S-chains are
+debt-free forever — the staircase is a self-sustaining shape. -/
+theorem window_S_staircase {b : Board} {pl : Placement} {j h : ℕ}
+    (hj : j + 1 < 10) (hS : pl.piece = Piece.S)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1)
+    (h0 : b.colHeight j = h + 1) (h1 : b.colHeight (j + 1) = h) :
+    Board.holes GameConfig.standard (pl.place b)
+      = Board.holes GameConfig.standard b
+    ∧ (pl.place b).colHeight j = h + 3
+    ∧ (pl.place b).colHeight (j + 1) = h + 2 := by
+  classical
+  have hsh : pl.shapeUp = Piece.S.shapeUp pl.rot := by
+    unfold Placement.shapeUp
+    rw [hS]
+  have hnarrow : ∀ cell ∈ pl.shapeUp, cell.1 ≤ 1 := by
+    rcases SZ_shape_window_split pl.piece (Or.inl hS) pl.rot with
+      ⟨_, _, hn⟩ | ⟨cw, hcw, hc2⟩
+    · intro cell hcell
+      apply hn
+      exact hcell
+    · exfalso
+      obtain ⟨cz, hczmem, hcz0⟩ := Piece.shapeUp_zero_mem pl.piece pl.rot
+      have hA := hcells cz (by unfold Placement.shapeUp; exact hczmem)
+      have hB := hcells cw (by unfold Placement.shapeUp; exact hcw)
+      omega
+  obtain ⟨hf0, hf1, hfmin⟩ := S_narrow_feet pl.rot (by
+    intro cell hcell
+    apply hnarrow
+    rw [hsh]
+    exact hcell)
+  obtain ⟨ht0, ht1, htops⟩ := S_narrow_tops pl.rot (by
+    intro cell hcell
+    apply hnarrow
+    rw [hsh]
+    exact hcell)
+  have hm10 : ((1 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+    rw [hsh]
+    exact hf1
+  have hmt0 : ((0 : ℕ), (2 : ℕ)) ∈ pl.shapeUp := by
+    rw [hsh]
+    exact ht0
+  have hmt1 : ((1 : ℕ), (1 : ℕ)) ∈ pl.shapeUp := by
+    rw [hsh]
+    exact ht1
+  have hj0 := hcells _ hmt0
+  have hj1 := hcells _ hm10
+  have e0 : pl.col + ((0 : ℕ), (2 : ℕ)).1 = pl.col := by simp
+  have e1 : pl.col + ((1 : ℕ), (0 : ℕ)).1 = pl.col + 1 := by simp
+  rw [e0] at hj0
+  rw [e1] at hj1
+  have hcol : pl.col = j := by omega
+  have hD : pl.dropOffset b = h := by
+    apply Nat.le_antisymm
+    · unfold Placement.dropOffset
+      apply Finset.sup_le
+      intro cell hcell
+      have hle1 := hnarrow cell hcell
+      have hfm := hfmin cell (by rw [← hsh]; exact hcell)
+      rcases hcells cell hcell with hc | hc <;> rw [hc]
+      · have hc0 : cell.1 = 0 := by omega
+        have := hfm hc0
+        omega
+      · omega
+    · have hle := Finset.le_sup
+        (f := fun cell : PieceCell =>
+          b.colHeight (pl.col + cell.1) - cell.2) hm10
+      unfold Placement.dropOffset
+      rw [hcol]
+      rw [hcol] at hle
+      simp only [] at hle
+      rw [show j + ((1 : ℕ), (0 : ℕ)).1 = j + 1 from rfl, h1] at hle
+      simpa using hle
+  refine ⟨?_, ?_, ?_⟩
+  · have hbill := window_S_hole_bill (b := b) hj hS hcells
+    rw [h0, h1, hD] at hbill
+    omega
+  · have htop0 : ∀ cell' ∈ pl.shapeUp,
+        cell'.1 = ((0 : ℕ), (2 : ℕ)).1 → cell'.2 ≤ ((0 : ℕ), (2 : ℕ)).2 := by
+      intro cell' hcell' hc
+      exact (htops cell' (by rw [← hsh]; exact hcell')).1 hc
+    have hfed := place_fed_colHeight_eq (b := b) hmt0 htop0
+    rw [hcol] at hfed
+    rw [show j + ((0 : ℕ), (2 : ℕ)).1 = j from by simp] at hfed
+    rw [hfed, hD]
+  · have htop1 : ∀ cell' ∈ pl.shapeUp,
+        cell'.1 = ((1 : ℕ), (1 : ℕ)).1 → cell'.2 ≤ ((1 : ℕ), (1 : ℕ)).2 := by
+      intro cell' hcell' hc
+      exact (htops cell' (by rw [← hsh]; exact hcell')).2 hc
+    have hfed := place_fed_colHeight_eq (b := b) hmt1 htop1
+    rw [hcol] at hfed
+    rw [show j + ((1 : ℕ), (1 : ℕ)).1 = j + 1 from rfl] at hfed
+    rw [hfed, hD]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
