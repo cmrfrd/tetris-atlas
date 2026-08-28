@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dh) — the square preserves flatness (bank 331/N)
+
+- **`O_shape_tops`** — both O tops at offset one, every rotation.
+- **`window_O_keeps_flat`** — an O confined to a flat pair leaves both
+  heights at h + 2: flat windows are a fixed point of O-play (and the
+  O is free there). The window's shape dynamics begin: which moves
+  preserve the cheap regime.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dg) — best response on a flat window: one hole (bank 330/N)
 
 - **`cheap_rotations`** — the seven cheap standing rotations (I:1, O:0,

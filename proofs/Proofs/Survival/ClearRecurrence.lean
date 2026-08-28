@@ -7162,6 +7162,79 @@ theorem flat_window_cheap_move_exists {b : Board} {j h : ℕ}
       rw [hflat0, hflat1] at hbill
       omega
 
+/-- The O's tops sit at offset one in both its columns, every
+rotation. -/
+theorem O_shape_tops : ∀ r : Rotation,
+    ((0 : ℕ), (1 : ℕ)) ∈ Piece.O.shapeUp r
+    ∧ ((1 : ℕ), (1 : ℕ)) ∈ Piece.O.shapeUp r
+    ∧ ∀ cell ∈ Piece.O.shapeUp r, cell.2 ≤ 1 := by
+  decide
+
+/-- **The square preserves flatness**: an O confined to a flat pair
+leaves the pair flat, two rows higher — the one window piece whose
+cheap move needs no repair at all. Flat windows are a fixed point of
+O-play. -/
+theorem window_O_keeps_flat {b : Board} {pl : Placement} {j h : ℕ}
+    (hO : pl.piece = Piece.O)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1)
+    (hflat0 : b.colHeight j = h) (hflat1 : b.colHeight (j + 1) = h) :
+    (pl.place b).colHeight j = h + 2
+      ∧ (pl.place b).colHeight (j + 1) = h + 2 := by
+  classical
+  obtain ⟨ht0, ht1, htop⟩ := O_shape_tops pl.rot
+  obtain ⟨hf0, hf1, _⟩ := O_shape_columns pl.rot
+  have hsh : pl.shapeUp = Piece.O.shapeUp pl.rot := by
+    unfold Placement.shapeUp
+    rw [hO]
+  obtain ⟨c0, hc0⟩ := Finset.card_pos.mp
+    (show 0 < ((Piece.O.shapeUp pl.rot).filter (fun c => c.1 = 0)).card by
+      rw [hf0]
+      omega)
+  obtain ⟨c1, hc1⟩ := Finset.card_pos.mp
+    (show 0 < ((Piece.O.shapeUp pl.rot).filter (fun c => c.1 = 1)).card by
+      rw [hf1]
+      omega)
+  rw [Finset.mem_filter] at hc0 hc1
+  have hj0 := hcells c0 (by rw [hsh]; exact hc0.1)
+  have hj1 := hcells c1 (by rw [hsh]; exact hc1.1)
+  have hcol : pl.col = j := by omega
+  have hD : pl.dropOffset b = h := by
+    apply Nat.le_antisymm
+    · exact confined_dropOffset_le_of_flat hcells hflat0 hflat1
+    · have hm00 : ((0 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+        rw [hsh]
+        exact (O_shape_feet pl.rot).1
+      have hle := Finset.le_sup
+        (f := fun cell : PieceCell =>
+          b.colHeight (pl.col + cell.1) - cell.2) hm00
+      unfold Placement.dropOffset
+      rw [hcol] at hle
+      rw [hcol]
+      simpa [hflat0] using hle
+  have hm01 : ((0 : ℕ), (1 : ℕ)) ∈ pl.shapeUp := by
+    rw [hsh]
+    exact ht0
+  have hm11 : ((1 : ℕ), (1 : ℕ)) ∈ pl.shapeUp := by
+    rw [hsh]
+    exact ht1
+  have htop0 : ∀ cell' ∈ pl.shapeUp,
+      cell'.1 = ((0 : ℕ), (1 : ℕ)).1 → cell'.2 ≤ ((0 : ℕ), (1 : ℕ)).2 := by
+    intro cell' hcell' _
+    exact htop cell' (by rw [← hsh]; exact hcell')
+  have htop1 : ∀ cell' ∈ pl.shapeUp,
+      cell'.1 = ((1 : ℕ), (1 : ℕ)).1 → cell'.2 ≤ ((1 : ℕ), (1 : ℕ)).2 := by
+    intro cell' hcell' _
+    exact htop cell' (by rw [← hsh]; exact hcell')
+  have hfed0 := place_fed_colHeight_eq (b := b) hm01 htop0
+  have hfed1 := place_fed_colHeight_eq (b := b) hm11 htop1
+  rw [hcol] at hfed0 hfed1
+  constructor
+  · rw [show j = j + ((0 : ℕ), (1 : ℕ)).1 by simp] at hflat0 ⊢
+    rw [hfed0, hD]
+  · rw [show j + 1 = j + ((1 : ℕ), (1 : ℕ)).1 from rfl] at hflat1 ⊢
+    rw [hfed1, hD]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
