@@ -10073,6 +10073,75 @@ theorem board_on_cycle_clear_free {b : Board} {n : ℕ}
     rw [← hfold]
     exact applyStep_clear_free _ _
 
+/-- **Cycles rotate**: every mid-cycle board is itself on a closed
+cycle — ride the rest of the word, then the prefix. The set of cycling
+boards is closed under cycle steps. -/
+theorem board_on_cycle_shift {b : Board} {w1 w2 : List Placement}
+    (hpos : 0 < w1.length + w2.length)
+    (hv : ∀ pl ∈ w1 ++ w2, pl.Valid GameConfig.standard)
+    (hfold : (w1 ++ w2).foldl
+      (Placement.applyStep GameConfig.standard) b = b) :
+    BoardOnCycle
+      (w1.foldl (Placement.applyStep GameConfig.standard) b)
+      (w1.length + w2.length) := by
+  refine ⟨w2 ++ w1, by simp [Nat.add_comm], hpos, ?_, ?_⟩
+  · intro pl hpl
+    rw [List.mem_append] at hpl
+    apply hv
+    rw [List.mem_append]
+    tauto
+  · rw [List.foldl_append]
+    rw [List.foldl_append] at hfold
+    rw [hfold]
+
+/-- Cycles iterate: riding a closed cycle `k + 1` times is a closed
+cycle. -/
+theorem BoardOnCycle.iterate {b : Board} {n : ℕ}
+    (hn : BoardOnCycle b n) (k : ℕ) :
+    BoardOnCycle b ((k + 1) * n) := by
+  induction k with
+  | zero => simpa using hn
+  | succ j ihj =>
+    have := ihj.add hn
+    rwa [show (j + 1) * n + n = (j + 1 + 1) * n from by ring] at this
+
+/-- **A non-level board on a closed cycle**: the two-column plinth
+`{0,1} × {rows 0,1}` — columns 0 and 1 standing at height two, the
+rest empty — rides the rotated five-O word back to itself. Closed
+cycles are NOT confined to the level stratum. -/
+theorem two_col_band_on_cycle :
+    BoardOnCycle
+      ((Finset.range 2) ×ˢ ({0, 1} : Finset ℕ) : Board) 5 := by
+  have hnf : ∀ r, ¬ Board.isFull GameConfig.standard (∅ : Board) r := by
+    intro r hfull
+    have h0 := hfull 0 (by rw [GameConfig.standard_cols]; simp)
+    exact absurd h0 (Finset.notMem_empty _)
+  have hlow : ∀ p ∈ (∅ : Board), p.2 < 0 := by
+    intro p hp
+    exact absurd hp (Finset.notMem_empty _)
+  have hH : ∀ c < 10, (∅ : Board).colHeight c = 0 := fun c _ =>
+    Board.colHeight_empty c
+  obtain ⟨e0, -, -, -⟩ := five_O_intermediate_boards hnf hlow hH
+  have h1 : ([⟨Piece.O, 0, 0⟩] : List Placement).foldl
+      (Placement.applyStep GameConfig.standard) (∅ : Board)
+      = (Finset.range 2) ×ˢ ({0, 1} : Finset ℕ) := by
+    simp only [List.foldl]
+    rw [e0, Finset.empty_union]
+  have hfold5 : ([⟨Piece.O, 0, 0⟩, ⟨Piece.O, 0, 2⟩, ⟨Piece.O, 0, 4⟩,
+      ⟨Piece.O, 0, 6⟩, ⟨Piece.O, 0, 8⟩] : List Placement).foldl
+      (Placement.applyStep GameConfig.standard) (∅ : Board) = ∅ := by
+    simp only [List.foldl]
+    exact five_O_cycle_empty
+  have hshift := board_on_cycle_shift
+    (b := (∅ : Board))
+    (w1 := [⟨Piece.O, 0, 0⟩])
+    (w2 := [⟨Piece.O, 0, 2⟩, ⟨Piece.O, 0, 4⟩, ⟨Piece.O, 0, 6⟩,
+      ⟨Piece.O, 0, 8⟩])
+    (by simp) (by decide)
+    (by simp only [List.cons_append, List.nil_append]; exact hfold5)
+  rw [h1] at hshift
+  simpa using hshift
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

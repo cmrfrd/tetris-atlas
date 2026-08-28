@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ej) — cycles rotate, iterate, and leave the level stratum (bank 359/N)
+
+- **`board_on_cycle_shift`** — cycles rotate: every mid-cycle board is
+  itself on a closed cycle (ride the suffix, then the prefix). The set
+  of cycling boards is closed under cycle steps.
+- **`BoardOnCycle.iterate`** — riding a cycle k+1 times is a cycle.
+- **`two_col_band_on_cycle`** — a concrete NON-LEVEL board on a closed
+  five-cycle: the two-column plinth (columns 0,1 at height two, rest
+  empty) rides the rotated five-O word back to itself.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ei) — cycling boards are clear-free (bank 358/N)
 
 - **`clearedBelow_le`** / **`clearedBelow_shift_strictMono`** — gravity
