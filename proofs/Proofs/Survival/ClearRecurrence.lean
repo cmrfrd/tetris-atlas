@@ -6368,6 +6368,133 @@ theorem vertical_I_hole_free {b : Board} {pl : Placement} {j : ℕ}
     have := hsingle cell hcell (t, 0) hmem0
     omega
 
+/-- The O's feet sit at offset zero in both its columns, every
+rotation. -/
+theorem O_shape_feet : ∀ r : Rotation,
+    ((0 : ℕ), (0 : ℕ)) ∈ Piece.O.shapeUp r
+    ∧ ((1 : ℕ), (0 : ℕ)) ∈ Piece.O.shapeUp r := by
+  decide
+
+/-- **The window O's exact hole bill**: an O confined to an adjacent
+pair bridges the pair at its taller column's height and buries exactly
+the height difference — `Δholes = (max − h_j) + (max − h_{j+1})`, which
+is `|h_j − h_{j+1}|`. On a flat window the square is debt-free; on a
+staggered one it pays the stagger, exactly. -/
+theorem window_O_hole_bill {b : Board} {pl : Placement} {j : ℕ}
+    (hj : j + 1 < 10) (hO : pl.piece = Piece.O)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1) :
+    Board.holes GameConfig.standard (pl.place b)
+      = Board.holes GameConfig.standard b
+        + (max (b.colHeight j) (b.colHeight (j + 1)) - b.colHeight j)
+        + (max (b.colHeight j) (b.colHeight (j + 1))
+            - b.colHeight (j + 1)) := by
+  classical
+  obtain ⟨hf0, hf1⟩ := O_shape_feet pl.rot
+  have hsh : pl.shapeUp = Piece.O.shapeUp pl.rot := by
+    unfold Placement.shapeUp
+    rw [hO]
+  have hm0 : ((0 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+    rw [hsh]
+    exact hf0
+  have hm1 : ((1 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+    rw [hsh]
+    exact hf1
+  have hj0 := hcells _ hm0
+  have hj1 := hcells _ hm1
+  have hcol : pl.col = j := by omega
+  have hnarrow := (O_shape_columns pl.rot).2.2
+  have hdrop : pl.dropOffset b
+      = max (b.colHeight j) (b.colHeight (j + 1)) := by
+    apply Nat.le_antisymm
+    · unfold Placement.dropOffset
+      apply Finset.sup_le
+      intro cell hcell
+      have hw : cell.1 ≤ 1 := by
+        have := hnarrow cell (by rw [← hsh]; exact hcell)
+        omega
+      rcases hcells cell hcell with h | h
+      · rw [h]
+        have : b.colHeight j ≤ max (b.colHeight j) (b.colHeight (j + 1)) :=
+          le_max_left _ _
+        omega
+      · rw [h]
+        have : b.colHeight (j + 1)
+            ≤ max (b.colHeight j) (b.colHeight (j + 1)) := le_max_right _ _
+        omega
+    · apply max_le
+      · have hle := Finset.le_sup
+          (f := fun cell : PieceCell =>
+            b.colHeight (pl.col + cell.1) - cell.2) hm0
+        unfold Placement.dropOffset
+        rw [hcol]
+        rw [hcol] at hle
+        simpa using hle
+      · have hle := Finset.le_sup
+          (f := fun cell : PieceCell =>
+            b.colHeight (pl.col + cell.1) - cell.2) hm1
+        unfold Placement.dropOffset
+        rw [hcol]
+        rw [hcol] at hle
+        simpa using hle
+  have hbot : ∀ c, c = 0 ∨ c = 1 →
+      (j + c, pl.dropOffset b) ∈ pl.dropped b
+      ∧ ∀ r, (j + c, r) ∈ pl.dropped b → pl.dropOffset b ≤ r := by
+    intro c hc
+    constructor
+    · unfold Placement.dropped Placement.cellsAt
+      rw [Finset.mem_image]
+      rcases hc with h | h
+      · exact ⟨(0, 0), hm0, by subst h; rw [hcol]; simp⟩
+      · exact ⟨(1, 0), hm1, by subst h; rw [hcol]; simp⟩
+    · intro r hr
+      unfold Placement.dropped Placement.cellsAt at hr
+      rw [Finset.mem_image] at hr
+      obtain ⟨cell, hcell, heq⟩ := hr
+      have hrow := congrArg Prod.snd heq
+      simp only [] at hrow
+      omega
+  obtain ⟨hbot0, hmin0⟩ := hbot 0 (Or.inl rfl)
+  obtain ⟨hbot1, hmin1⟩ := hbot 1 (Or.inr rfl)
+  rw [show j + 0 = j by omega] at hbot0 hmin0
+  have hg0 := colHoles_place_eq (b := b) hbot0 hmin0
+  have hg1 := colHoles_place_eq (b := b) hbot1 hmin1
+  have hpoint : ∀ c ∈ Finset.range 10,
+      Board.colHoles (pl.place b) c
+      = Board.colHoles b c
+        + (if c = j then pl.dropOffset b - b.colHeight j else 0)
+        + (if c = j + 1 then pl.dropOffset b - b.colHeight (j + 1)
+            else 0) := by
+    intro c _
+    by_cases h0 : c = j
+    · subst h0
+      rw [if_pos rfl, if_neg (by omega)]
+      omega
+    · by_cases h1 : c = j + 1
+      · subst h1
+        rw [if_neg h0, if_pos rfl]
+        omega
+      · rw [if_neg h0, if_neg h1]
+        have hz : pl.colProfile c = 0 := by
+          apply colProfile_eq_zero_of_not_touched
+          intro cell hcell hceq
+          rcases hcells cell hcell with h | h
+          · exact h0 (by omega)
+          · exact h1 (by omega)
+        have := colHoles_place_eq_of_unfed (b := b) (pl := pl) hz
+        omega
+  unfold Board.holes
+  rw [GameConfig.standard_cols]
+  rw [Finset.sum_congr rfl hpoint]
+  rw [Finset.sum_add_distrib, Finset.sum_add_distrib]
+  rw [Finset.sum_ite_eq' (Finset.range 10) j
+      (fun _ => pl.dropOffset b - b.colHeight j),
+    Finset.sum_ite_eq' (Finset.range 10) (j + 1)
+      (fun _ => pl.dropOffset b - b.colHeight (j + 1))]
+  have hjr : j ∈ Finset.range 10 := Finset.mem_range.mpr (by omega)
+  have hj1r : j + 1 ∈ Finset.range 10 := Finset.mem_range.mpr (by omega)
+  rw [if_pos hjr, if_pos hj1r, hdrop]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

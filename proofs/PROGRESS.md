@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28db) — the window O's exact bill (bank 325/N)
+
+- **`O_shape_feet`** — both O feet at offset zero, every rotation.
+- **`window_O_hole_bill`** — Δholes = (max − h_j) + (max − h_{j+1})
+  exactly: the O bridges at the taller column and buries the stagger.
+  In-window debt pricing so far: I free, O = |Δh|.
+- Gotcha: `rw [hcol] at hle` rewrites inside hle's sup-lambda but NOT
+  the goal's — rw the goal too before simpa; and don't forget in-range
+  hypotheses when converting Σ-of-ifs via sum_ite_eq'.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-27da) — the tower brick is debt-free (bank 324/N)
 
 - **`vertical_I_hole_free`** — a pair-confined I creates no holes: its
