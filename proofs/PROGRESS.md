@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dv) — the services are in-game (bank 345/N)
+
+- **`trace_window_O_perfect_service`** / **`trace_window_I_tetris_
+  service`** — trace boards are clear-free, so both perfect services
+  are legal moves at any step where their preparation stands. The
+  service arc (337–345) closes: exact harvests, full resets, lightness
+  income, all reachable in play.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28du) — the tetris buys thirty-six (bank 344/N)
 
 - **`window_I_tetris_lightens`** — the window tetris drops count by

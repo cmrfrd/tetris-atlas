@@ -8680,6 +8680,53 @@ theorem window_I_tetris_lightens {b : Board} {j h : ℕ} (hj : j < 10)
     unfold Placement.applyStep
     omega
 
+/-- **Perfect services are available in-game**: every trace board is
+clear-free, so whenever a flat pair sits before two prepared rows at
+any step of any game, the O double service — exact two-clear, full
+height reset — is a legal move right there. -/
+theorem trace_window_O_perfect_service {π : Policy GameConfig.standard}
+    (n : ℕ) {j h : ℕ} (hj : j + 1 < 10)
+    (h0 : (trace GameConfig.standard π GameState.init n).board.colHeight j
+      = h)
+    (h1 : (trace GameConfig.standard π
+      GameState.init n).board.colHeight (j + 1) = h)
+    (hprep : ∀ c < 10, c ≠ j → c ≠ j + 1 →
+      (c, h) ∈ (trace GameConfig.standard π GameState.init n).board
+      ∧ (c, h + 1) ∈ (trace GameConfig.standard π GameState.init n).board) :
+    ∃ pl : Placement, pl.piece = Piece.O ∧ pl.Valid GameConfig.standard
+      ∧ (∀ cell ∈ pl.shapeUp,
+          pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1)
+      ∧ Board.linesCleared GameConfig.standard
+          (pl.place (trace GameConfig.standard π GameState.init n).board)
+          = 2
+      ∧ (Placement.applyStep GameConfig.standard
+          (trace GameConfig.standard π GameState.init n).board pl).colHeight
+          j = h
+      ∧ (Placement.applyStep GameConfig.standard
+          (trace GameConfig.standard π GameState.init n).board pl).colHeight
+          (j + 1) = h :=
+  window_O_perfect_service hj
+    (fun r => trace_board_no_full n r) h0 h1 hprep
+
+/-- **The window tetris is available in-game**: at any step where a
+column sits at `h` with its four-row band prepared elsewhere, the
+vertical I's exact four-clear with reset is a legal move. -/
+theorem trace_window_I_tetris_service {π : Policy GameConfig.standard}
+    (n : ℕ) {j h : ℕ} (hj : j < 10)
+    (h0 : (trace GameConfig.standard π GameState.init n).board.colHeight j
+      = h)
+    (hprep : ∀ c < 10, c ≠ j → ∀ k < 4,
+      (c, h + k) ∈ (trace GameConfig.standard π GameState.init n).board) :
+    ∃ pl : Placement, pl.piece = Piece.I ∧ pl.Valid GameConfig.standard
+      ∧ (∀ cell ∈ pl.shapeUp, pl.col + cell.1 = j)
+      ∧ Board.linesCleared GameConfig.standard
+          (pl.place (trace GameConfig.standard π GameState.init n).board)
+          = 4
+      ∧ (Placement.applyStep GameConfig.standard
+          (trace GameConfig.standard π GameState.init n).board pl).colHeight
+          j = h :=
+  window_I_tetris_service hj (fun r => trace_board_no_full n r) h0 hprep
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
