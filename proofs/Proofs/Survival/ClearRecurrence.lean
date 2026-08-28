@@ -14354,6 +14354,122 @@ theorem legal_safe_word_survives {b : Board} {w : List Placement}
     hlen hsafe
   exact ⟨C, closed_cycle_survives C hC⟩
 
+/-! ### The profile of an M2 witness
+
+Everything proved about legal 35-cycles, collected. Any word that could
+serve as the M2 certificate must satisfy every clause below — and, if it
+is also safe, `legal_safe_word_survives` turns it into the certificate.
+Necessary conditions on one side, sufficient on the other. -/
+
+/-- Moves of a word that clear nothing. -/
+def wordDryMoves (b : Board) : List Placement → ℕ
+  | [] => 0
+  | pl :: rest =>
+      (if (Board.fullRows GameConfig.standard (pl.place b)).card = 0
+        then 1 else 0)
+      + wordDryMoves (Placement.applyStep GameConfig.standard b pl) rest
+
+@[simp] theorem wordDryMoves_nil (b : Board) : wordDryMoves b [] = 0 := rfl
+
+theorem wordDryMoves_cons (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    wordDryMoves b (pl :: rest)
+      = (if (Board.fullRows GameConfig.standard (pl.place b)).card = 0
+          then 1 else 0)
+        + wordDryMoves (Placement.applyStep GameConfig.standard b pl)
+            rest := rfl
+
+/-- Every move either clears or is dry. -/
+theorem wordClearMoves_add_dry (b : Board) (pls : List Placement) :
+    wordClearMoves b pls + wordDryMoves b pls = pls.length := by
+  induction pls generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordClearMoves_cons, wordDryMoves_cons, List.length_cons]
+    have hrec := ih (Placement.applyStep GameConfig.standard b pl)
+    by_cases hc : 0 < (Board.fullRows GameConfig.standard
+        (pl.place b)).card
+    · rw [if_pos hc, if_neg (by omega)]
+      omega
+    · rw [if_neg hc, if_pos (by omega)]
+      omega
+
+/-- **A legal 35-cycle is mostly quiet**: at least twenty-one of its
+thirty-five moves clear nothing at all. -/
+theorem legal_cycle_dry_moves_ge {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    21 ≤ wordDryMoves b w := by
+  have hsum := wordClearMoves_add_dry b w
+  have hbr := legal_cycle_word_clearing_moves_bracket hwf hne hv hbag
+    hfold hlen
+  rw [hlen] at hsum
+  omega
+
+/-- **THE M2 WITNESS PROFILE.** Every clause is forced. A bag-legal
+35-cycle word on a well-formed board:
+
+1. lives on a clear-free base board;
+2. delivers exactly fourteen cells to each of the ten columns;
+3. clears exactly fourteen rows, on between four and fourteen moves,
+   leaving at least twenty-one moves dry;
+4. plays at most five tetrises, one per bag;
+5. satisfies the exact drop-column equation `∑(4·col + shapeMoment) = 630`;
+6. balances its potential exactly: the height its drops deliver is the
+   height its clears give back;
+7. makes at least one PARTIAL clear — one that removes a row and leaves
+   a cell standing — so it is neither all-dry nor a chain of perfect
+   clears;
+8. cannot be built from doubles and tetrises alone;
+9. lays at least one T flat.
+
+Clauses 7 to 9 come from the checkerboard charge surviving the passage
+through clears, which is what lifts this list beyond pure counting. -/
+theorem legal_cycle_profile {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    (∀ r, ¬ Board.isFull GameConfig.standard b r)
+    ∧ (∀ c, c < 10 → wordColProfile c w = 14)
+    ∧ (wordClears b w = 14
+        ∧ 4 ≤ wordClearMoves b w ∧ wordClearMoves b w ≤ 14
+        ∧ 21 ≤ wordDryMoves b w)
+    ∧ wordTetrises b w ≤ 5
+    ∧ (w.map (fun pl => 4 * pl.col + shapeMoment pl)).sum = 630
+    ∧ wordLift b w = wordRelease b w
+    ∧ (∃ (c : Board) (pl : Placement),
+        Board.fullRows GameConfig.standard (pl.place c) ≠ ∅
+        ∧ ∃ p ∈ pl.place c,
+            ¬ Board.isFull GameConfig.standard (pl.place c) p.2)
+    ∧ (∃ (c : Board) (pl : Placement), ∀ t k : ℕ, Even k →
+        Board.fullRows GameConfig.standard (pl.place c)
+          ≠ Finset.Ico t (t + k))
+    ∧ (∃ pl ∈ w, pl.piece = Piece.T ∧ (pl.rot = 0 ∨ pl.rot = 2)) := by
+  have hpos : 0 < w.length := List.length_pos_iff.mpr hne
+  refine ⟨board_on_cycle_clear_free ⟨w, rfl, hpos, hv, hfold⟩, ?_, ?_, ?_,
+    ?_, ?_, ?_, ?_, ?_⟩
+  · intro c hc
+    exact legal_cycle_column_fourteen hwf hne hv hbag hfold hlen hc
+  · refine ⟨legal_cycle_word_clears_fourteen hwf hne hv hbag hfold hlen,
+      ?_, ?_, legal_cycle_dry_moves_ge hwf hne hv hbag hfold hlen⟩
+    · exact (legal_cycle_word_clearing_moves_bracket hwf hne hv hbag
+        hfold hlen).1
+    · exact (legal_cycle_word_clearing_moves_bracket hwf hne hv hbag
+        hfold hlen).2
+  · have h := legal_cycle_word_tetris_cap hwf hne hv hbag hfold
+    rw [hlen] at h
+    omega
+  · exact legal_cycle_moment_630 hwf hne hv hbag hfold hlen
+  · exact cycle_potential_balance hwf hv hfold
+  · exact legal_cycle_has_partial_clear hwf hne hv hbag hfold hlen
+  · exact legal_cycle_has_odd_or_split_clear hwf hne hv hbag hfold hlen
+  · exact legal_cycle_has_flat_T hwf hne hv hbag hfold hlen
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

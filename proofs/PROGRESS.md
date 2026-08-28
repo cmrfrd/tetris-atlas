@@ -41629,6 +41629,35 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fx) — THE M2 WITNESS PROFILE (bank 399/N)
+
+- **`wordDryMoves`**, **`wordClearMoves_add_dry`**,
+  **`legal_cycle_dry_moves_ge`** — every move either clears or is dry,
+  so a legal 35-cycle is mostly quiet: at least twenty-one of its
+  thirty-five moves clear nothing.
+- **`legal_cycle_profile`** — everything proved about legal 35-cycles,
+  collected into one theorem. Nine forced clauses:
+  (1) clear-free base board;
+  (2) exactly fourteen cells delivered to each of the ten columns;
+  (3) exactly fourteen rows cleared, on 4–14 moves, ≥ 21 dry;
+  (4) at most five tetrises, one per bag;
+  (5) the exact drop-column equation ∑(4·col + shapeMoment) = 630;
+  (6) exact potential balance — the height the drops deliver is the
+      height the clears give back;
+  (7) at least one PARTIAL clear, so neither all-dry nor a chain of
+      perfect clears;
+  (8) not buildable from doubles and tetrises alone;
+  (9) at least one T laid flat.
+
+Clauses 7–9 come from the checkerboard charge surviving the passage
+through clears — the part that reaches beyond pure counting. With
+`legal_safe_word_survives` on the other side, necessary and sufficient
+now sit next to each other.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fw) — THE CERTIFIED CLOSED CYCLE (bank 398/N)
 
 Everything the word theory needed is in place — the orbit's 35 states
