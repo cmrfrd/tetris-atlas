@@ -9336,6 +9336,99 @@ theorem fiveOPolicy_survives_init :
     rw [GameState.init_board_eq_emptyset]
     exact Board.colHeight_empty c
 
+/-- Drawing an absent piece from a nonempty bag changes nothing: the
+erase is a no-op and the refill guard never fires. -/
+theorem bag_draw_absent_fixed {bag : Bag} {p : Piece}
+    (hp : p ∉ bag) (hne : bag ≠ ∅) : bag.draw p = bag := by
+  unfold Bag.draw
+  rw [Finset.erase_eq_of_notMem hp, if_neg hne]
+
+/-- Every branch of the five-O policy plays the square. -/
+theorem fiveOPolicy_piece (h : ℕ) (g : GameState) :
+    (fiveOPolicy h g).piece = Piece.O := by
+  rw [fiveOPolicy_eval]
+  split_ifs <;> rfl
+
+/-- **The waltz's bag freezes after one step**: from `init`, the first
+O leaves the six-piece bag `full.erase O`, and every later O-draw is a
+no-op — the bag component is CONSTANT from step one on. -/
+theorem fiveOPolicy_trace_bag_init {h : ℕ} (n : ℕ) (hn : 1 ≤ n) :
+    (trace GameConfig.standard (fiveOPolicy h) GameState.init n).bag
+      = Bag.full.erase Piece.O := by
+  induction n with
+  | zero => omega
+  | succ k ih =>
+    rw [trace_succ, GameState.step_bag, fiveOPolicy_piece]
+    rcases Nat.eq_or_lt_of_le hn with h1 | h1
+    · have hk : k = 0 := by omega
+      subst hk
+      rw [trace_zero, GameState.init_bag, Bag.draw_full_eq_erase]
+    · rw [ih (by omega)]
+      exact bag_draw_absent_fixed (Finset.notMem_erase _ _)
+        (fun hemp => by
+          have : (6 : ℕ) = 0 := by
+            rw [← Bag.draw_full_card Piece.O, Bag.draw_full_eq_erase,
+              hemp, Finset.card_empty]
+          omega)
+
+/-- Two game states with equal boards and equal bags are equal. -/
+theorem GameState.eq_of_board_bag {g g' : GameState}
+    (hb : g.board = g'.board) (hs : g.bag = g'.bag) : g = g' := by
+  cases g
+  cases g'
+  rw [GameState.mk.injEq]
+  exact ⟨hb, hs⟩
+
+/-- **THE WALTZ'S STATE CYCLE**: from step one on, the FULL game state
+(board and bag together) under the five-O policy from `init` repeats
+with period five. Not just the board: the entire state graph orbit is
+closed — a genuine five-state cycle reachable from the initial state in
+one move. (Free-piece world.) -/
+theorem fiveOPolicy_state_cycle_init (n : ℕ) (hn : 1 ≤ n) :
+    trace GameConfig.standard (fiveOPolicy 0) GameState.init (n + 5)
+      = trace GameConfig.standard (fiveOPolicy 0) GameState.init n := by
+  have hnf : ∀ r, ¬ Board.isFull GameConfig.standard
+      GameState.init.board r := by
+    intro r hfull
+    have h0 := hfull 0 (by rw [GameConfig.standard_cols]; simp)
+    rw [GameState.init_board_eq_emptyset] at h0
+    exact absurd h0 (Finset.notMem_empty _)
+  have hlow : ∀ p ∈ GameState.init.board, p.2 < 0 := by
+    intro p hp
+    rw [GameState.init_board_eq_emptyset] at hp
+    exact absurd hp (Finset.notMem_empty _)
+  have hH : ∀ c < 10, GameState.init.board.colHeight c = 0 := by
+    intro c _
+    rw [GameState.init_board_eq_emptyset]
+    exact Board.colHeight_empty c
+  apply GameState.eq_of_board_bag
+  · rw [fiveOPolicy_trace_board hnf hlow hH,
+      fiveOPolicy_trace_board hnf hlow hH,
+      show (n + 5) % 5 = n % 5 from by omega]
+  · rw [fiveOPolicy_trace_bag_init (n + 5) (by omega),
+      fiveOPolicy_trace_bag_init n hn]
+
+/-- **The waltz's orbit is FIVE STATES**: every trace state from step
+one on equals one of the first five. The five-O policy realizes a
+finite closed orbit in the full state graph — the free-piece world's
+M2 object, explicitly. -/
+theorem fiveOPolicy_orbit_five_states (n : ℕ) (hn : 1 ≤ n) :
+    ∃ m, 1 ≤ m ∧ m ≤ 5 ∧
+      trace GameConfig.standard (fiveOPolicy 0) GameState.init n
+        = trace GameConfig.standard (fiveOPolicy 0) GameState.init m := by
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    by_cases hle : n ≤ 5
+    · exact ⟨n, hn, hle, rfl⟩
+    · have hrec : trace GameConfig.standard (fiveOPolicy 0)
+          GameState.init n
+          = trace GameConfig.standard (fiveOPolicy 0)
+              GameState.init (n - 5) := by
+        have := fiveOPolicy_state_cycle_init (n - 5) (by omega)
+        rwa [show n - 5 + 5 = n from by omega] at this
+      obtain ⟨m, hm1, hm5, hme⟩ := ih (n - 5) (by omega) (by omega)
+      exact ⟨m, hm1, hm5, hrec.trans hme⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,25 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ed) — THE WALTZ'S STATE CYCLE (bank 353/N)
+
+- **`bag_draw_absent_fixed`** — drawing an absent piece from a
+  nonempty bag is a no-op (erase misses, refill guard never fires).
+- **`fiveOPolicy_piece`** — every branch of the waltz plays the square.
+- **`fiveOPolicy_trace_bag_init`** — the bag FREEZES after one step:
+  from init, the first O leaves `full.erase O` and every later O-draw
+  changes nothing. The bag component is constant from step one on.
+- **`fiveOPolicy_state_cycle_init`** — THE FULL STATE (board and bag
+  together) repeats with period five from step one on. Not just the
+  board: a genuine five-state closed cycle in the state graph,
+  reachable from the initial state in one move (free-piece world).
+- **`fiveOPolicy_orbit_five_states`** — the orbit IS five states:
+  every trace state from step one equals one of the first five.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ec) — THE FIVE-O WALTZ (bank 352/N)
 
 - **`fiveOPolicy`** / **`fiveOPolicy_eval`** — the closed-form policy:
