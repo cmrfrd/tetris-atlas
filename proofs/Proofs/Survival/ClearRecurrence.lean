@@ -12833,6 +12833,171 @@ theorem cycle_through_empty_clears_bottom {pl : Placement}
   unfold bottomCells at hne
   simp at hne
 
+/-! ### The checkerboard charge across a clear
+
+The checkerboard charge is the sharpest near-geometric tool in the
+library: only the T tetromino is charged, so a clear-free stack's charge
+counts its T's. It is normally abandoned the moment a line clears,
+because gravity RECOLOURS the board — every cell above a cleared row
+changes colour as it falls.
+
+Abandoning it is unnecessary. The recolouring is not arbitrary: a
+surviving cell flips exactly when an odd number of rows below it were
+cleared. Naming that total — the *gravity work* — turns a destroyed
+invariant into an exact law, and one that finally couples the piece
+census to WHERE the clears happen. -/
+
+/-- The gravity work of a clear: the cells whose colour it flips, namely
+those with an odd number of cleared rows beneath them, counted mod two. -/
+def gravityWork (b : Board) : ZMod 2 :=
+  ∑ p ∈ b.filter (fun p => ¬ Board.isFull GameConfig.standard b p.2),
+    ((Board.clearedBelow GameConfig.standard b p.2 : ℕ) : ZMod 2)
+
+/-- Falling by `d` flips a cell's colour exactly when `d` is odd. -/
+theorem cast_sub_two {a d : ℕ} (h : d ≤ a) :
+    ((a - d : ℕ) : ZMod 2) = (a : ZMod 2) + (d : ZMod 2) := by
+  have hneg : ∀ x : ZMod 2, -x = x := by decide
+  rw [Nat.cast_sub h, sub_eq_add_neg, hneg]
+
+/-- The cells a clear removes, taken row by row, are the full rows
+themselves. -/
+theorem cleared_fiber_eq {b : Board} (hwf : Board.WF GameConfig.standard b)
+    {t : ℕ} (ht : t ∈ Board.fullRows GameConfig.standard b) :
+    (b.filter (fun p => Board.isFull GameConfig.standard b p.2)).filter
+        (fun p => p.2 = t)
+      = (Finset.range 10).image (fun c => ((c, t) : Coord)) := by
+  have hfull := Board.isFull_of_mem_fullRows ht
+  ext p
+  simp only [Finset.mem_filter, Finset.mem_image, Finset.mem_range]
+  constructor
+  · rintro ⟨⟨hpb, _⟩, hp2⟩
+    refine ⟨p.1, ?_, ?_⟩
+    · have hlt := hwf p hpb
+      rwa [GameConfig.standard_cols] at hlt
+    · exact Prod.ext_iff.mpr ⟨rfl, hp2.symm⟩
+  · rintro ⟨c, hc, rfl⟩
+    have hcr : c ∈ Finset.range GameConfig.standard.cols := by
+      rw [GameConfig.standard_cols]
+      exact Finset.mem_range.mpr hc
+    exact ⟨⟨hfull c hcr, hfull⟩, rfl⟩
+
+/-- **The charge a clear removes is its row count**: each full row of the
+ten-wide board carries checkerboard charge one, so removing `k` rows
+removes charge `k`. -/
+theorem charge_cleared_cells {b : Board}
+    (hwf : Board.WF GameConfig.standard b) :
+    BagGrowth.charge
+        (b.filter (fun p => Board.isFull GameConfig.standard b p.2))
+      = ((Board.fullRows GameConfig.standard b).card : ZMod 2) := by
+  classical
+  have hmaps : ∀ p ∈ b.filter
+      (fun p => Board.isFull GameConfig.standard b p.2),
+      p.2 ∈ Board.fullRows GameConfig.standard b := by
+    intro p hp
+    obtain ⟨hpb, hpf⟩ := Finset.mem_filter.mp hp
+    unfold Board.fullRows
+    rw [Finset.mem_filter]
+    exact ⟨Finset.mem_image.mpr ⟨p, hpb, rfl⟩, hpf⟩
+  have hfib := Finset.sum_fiberwise_of_maps_to hmaps
+    (fun p : Coord => ((p.1 + p.2 : ℕ) : ZMod 2))
+  have hrow : ∀ t ∈ Board.fullRows GameConfig.standard b,
+      (∑ p ∈ (b.filter
+          (fun p => Board.isFull GameConfig.standard b p.2)).filter
+          (fun p => p.2 = t), ((p.1 + p.2 : ℕ) : ZMod 2)) = 1 := by
+    intro t ht
+    rw [cleared_fiber_eq hwf ht]
+    exact BagGrowth.charge_row t
+  unfold BagGrowth.charge
+  rw [← hfib, Finset.sum_congr rfl hrow, Finset.sum_const, nsmul_eq_mul,
+    mul_one]
+
+/-- **THE CHARGE LAW ACROSS A CLEAR**: clearing changes the checkerboard
+charge by the number of rows removed plus the gravity work. The
+invariant is not destroyed by a clear — it is corrected by one. -/
+theorem charge_clearLines {b : Board}
+    (hwf : Board.WF GameConfig.standard b) :
+    BagGrowth.charge (Board.clearLines GameConfig.standard b)
+      = BagGrowth.charge b
+        + ((Board.fullRows GameConfig.standard b).card : ZMod 2)
+        + gravityWork b := by
+  classical
+  have hinj : ∀ x ∈ b.filter
+      (fun p => ¬ Board.isFull GameConfig.standard b p.2),
+      ∀ y ∈ b.filter
+      (fun p => ¬ Board.isFull GameConfig.standard b p.2),
+      ((x.1, x.2 - Board.clearedBelow GameConfig.standard b x.2) : Coord)
+        = ((y.1, y.2 - Board.clearedBelow GameConfig.standard b y.2)
+            : Coord) → x = y := by
+    intro x hx y hy hxy
+    rw [Finset.mem_filter] at hx hy
+    have hpair := Prod.ext_iff.mp hxy
+    have h1 : x.1 = y.1 := hpair.1
+    have h2 : x.2 - Board.clearedBelow GameConfig.standard b x.2
+        = y.2 - Board.clearedBelow GameConfig.standard b y.2 := hpair.2
+    have h3 : x.2 = y.2 := by
+      rcases lt_trichotomy x.2 y.2 with hlt | heq | hgt
+      · have := clearedBelow_shift_strictMono
+          (cfg := GameConfig.standard) (b := b) hlt hx.2
+        omega
+      · exact heq
+      · have := clearedBelow_shift_strictMono
+          (cfg := GameConfig.standard) (b := b) hgt hy.2
+        omega
+    exact Prod.ext_iff.mpr ⟨h1, h3⟩
+  have hcl : Board.clearLines GameConfig.standard b
+      = (b.filter
+          (fun p => ¬ Board.isFull GameConfig.standard b p.2)).image
+        (fun p => ((p.1, p.2 - Board.clearedBelow GameConfig.standard b p.2)
+          : Coord)) := rfl
+  have hstep :
+      (∑ p ∈ b.filter
+          (fun p => ¬ Board.isFull GameConfig.standard b p.2),
+        ((((p.1, p.2 - Board.clearedBelow GameConfig.standard b p.2)
+            : Coord).1
+          + ((p.1, p.2 - Board.clearedBelow GameConfig.standard b p.2)
+              : Coord).2 : ℕ) : ZMod 2))
+      = (∑ p ∈ b.filter
+            (fun p => ¬ Board.isFull GameConfig.standard b p.2),
+          ((p.1 + p.2 : ℕ) : ZMod 2))
+        + ∑ p ∈ b.filter
+            (fun p => ¬ Board.isFull GameConfig.standard b p.2),
+          ((Board.clearedBelow GameConfig.standard b p.2 : ℕ)
+            : ZMod 2) := by
+    rw [← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl (fun p _ => ?_)
+    have hle := clearedBelow_le GameConfig.standard b p.2
+    show ((p.1 + (p.2 - Board.clearedBelow GameConfig.standard b p.2) : ℕ)
+        : ZMod 2) = _
+    rw [Nat.cast_add, cast_sub_two hle, Nat.cast_add]
+    ring
+  have hsplit := Finset.sum_filter_add_sum_filter_not b
+    (fun p => Board.isFull GameConfig.standard b p.2)
+    (fun p => ((p.1 + p.2 : ℕ) : ZMod 2))
+  have hcl2 := charge_cleared_cells hwf
+  unfold BagGrowth.charge at hcl2 ⊢
+  unfold gravityWork
+  have hchar : ∀ x : ZMod 2, x + x = 0 := by decide
+  rw [hcl, Finset.sum_image hinj, hstep, ← hsplit, hcl2]
+  have key := hchar ((Board.fullRows GameConfig.standard b).card : ZMod 2)
+  first
+    | linear_combination -key
+    | linear_combination key
+
+/-- **The charge law for a whole move**: a drop adds the piece's charge
+(one for T, zero otherwise) and the ensuing clear adds its row count plus
+its gravity work. Every term is explicit. -/
+theorem charge_applyStep {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard) :
+    BagGrowth.charge (Placement.applyStep GameConfig.standard b pl)
+      = BagGrowth.charge b
+        + (if pl.piece = Piece.T then 1 else 0)
+        + ((Board.fullRows GameConfig.standard (pl.place b)).card : ZMod 2)
+        + gravityWork (pl.place b) := by
+  rw [Placement.applyStep_eq_clearLines_place,
+    charge_clearLines (Placement.place_wf hwf hv),
+    BagGrowth.charge_place, BagGrowth.charge_shapeUp_pl]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,36 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fm) — THE CHARGE LAW ACROSS A CLEAR (bank 388/N)
+
+The checkerboard charge is the library's sharpest near-geometric tool
+(only T is charged, so a clear-free stack's charge counts its T's) —
+and it has always been abandoned the moment a line clears, because
+gravity RECOLOURS the board: every cell above a cleared row changes
+colour as it falls. That abandonment was unnecessary.
+
+- **`gravityWork`** — the recolouring is not arbitrary: a surviving
+  cell flips exactly when an odd number of rows below it were cleared.
+  Name that total.
+- **`cast_sub_two`** — falling by d flips a cell's colour iff d is odd.
+- **`cleared_fiber_eq`** / **`charge_cleared_cells`** — the charge a
+  clear REMOVES is exactly its row count, since each full ten-wide row
+  carries charge one (fiberwise over `fullRows`, using `charge_row`).
+- **`charge_clearLines`** — THE LAW: Δcharge = (rows removed) +
+  (gravity work). The invariant is not destroyed by a clear; it is
+  corrected by one. (Injectivity of the gravity map comes from
+  `clearedBelow_shift_strictMono`; the char-two cancellation needs an
+  explicit `∀ x : ZMod 2, x + x = 0` — `ring` does not know it.)
+- **`charge_applyStep`** — the whole move: drop adds one for T and zero
+  otherwise, the clear adds its row count plus its gravity work.
+
+This is the first tool in the bank that couples piece TYPE to clear
+GEOMETRY — the direction the counting barrier says we must go.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fl) — the frozen foundation, and the empty board (bank 387/N)
 
 - **`lowCells`** / **`lowCells_clearLines`** — THE FROZEN FOUNDATION at
