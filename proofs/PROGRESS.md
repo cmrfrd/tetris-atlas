@@ -41629,6 +41629,28 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28gf) — the certificate, as one object (bank 407/N)
+
+- **`LegalCycleWitness`** — everything the M2 argument consumes,
+  packaged into a single structure: base board, thirty-five placements,
+  well-formedness, length, validity, the five-block bag test, closure
+  of the loop, and safety of the thirty-five states.
+- **`.isBagStream`**, **`.closedCycle`**, **`.survives`** — an
+  inhabitant is a `ClosedCycle` and yields `SurvivesForever`.
+- **`.profile`**, **`.T_split`** — and automatically satisfies the
+  nine-clause profile, an odd flat-T count and an even upright-T count.
+
+Four of the six fields are finite decidable checks (length, validity,
+the five-block test, and safety of a concrete board's thirty-five
+states). The two that are not are exactly the ones carrying the
+mathematics: that the word CLOSES the loop, and that it never tops out.
+That is now the whole of the remaining M2 problem, in one statement.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean. Compiled first
+try.
+
+---
+
 ### Tick (manual, 2026-08-28ge) — bag-legality is a finite check (bank 406/N)
 
 `IsBagStream` quantifies over infinitely many blocks, which makes it

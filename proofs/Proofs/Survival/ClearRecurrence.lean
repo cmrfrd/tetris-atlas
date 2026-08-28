@@ -15242,6 +15242,100 @@ theorem sampleWord_has_flat_T :
   refine ⟨⟨Piece.T, 0, 0⟩, ?_, rfl, Or.inl rfl⟩
   decide
 
+/-! ### The certificate, as one object
+
+Everything the M2 argument consumes, packaged. Four of the six fields
+are finite decidable checks — length, validity, the five-block test,
+and (for a concrete board) the safety of thirty-five states. The two
+that are not are the ones that carry the mathematics: that the word
+CLOSES the loop, and that it never tops out. -/
+
+/-- A complete M2 certificate: a board, a bag-legal 35-word that folds
+it back to itself, and safety along the way. -/
+structure LegalCycleWitness where
+  /-- The board the loop is anchored at. -/
+  base : Board
+  /-- The thirty-five placements of one period. -/
+  word : List Placement
+  /-- The board is well formed. -/
+  wf : Board.WF GameConfig.standard base
+  /-- One period is thirty-five moves. -/
+  len : word.length = 35
+  /-- Every placement is in-bounds. -/
+  valid : ∀ pl ∈ word, pl.Valid GameConfig.standard
+  /-- Each of the five seven-blocks deals every piece. -/
+  blocks : ∀ jj, jj < 5 → ∀ p : Piece, ∃ i, i < 7 ∧
+    (word.getD (7 * jj + i) ⟨Piece.O, 0, 0⟩).piece = p
+  /-- The word returns the board exactly. -/
+  cycles : word.foldl (Placement.applyStep GameConfig.standard) base = base
+  /-- No state of the period is lost. -/
+  safe : ∀ i, i < 35 →
+    ¬ (wordPlay ⟨base, Bag.full⟩ word i).lost GameConfig.standard
+
+namespace LegalCycleWitness
+
+theorem word_ne_nil (W : LegalCycleWitness) : W.word ≠ [] := by
+  intro hnil
+  have := W.len
+  rw [hnil] at this
+  simp at this
+
+theorem isBagStream (W : LegalCycleWitness) :
+    IsBagStream (wordStream W.word) :=
+  isBagStream_of_blocks W.len W.blocks
+
+/-- **A WITNESS IS A CLOSED CYCLE.** -/
+theorem closedCycle (W : LegalCycleWitness) :
+    ∃ C : ClosedCycle GameConfig.standard,
+      (⟨W.base, Bag.full⟩ : GameState) ∈ C.states :=
+  legal_safe_word_closedCycle W.wf W.word_ne_nil W.valid W.isBagStream
+    W.cycles W.len W.safe
+
+/-- **…AND THEREFORE INFINITE PLAY.** Producing one inhabitant of this
+structure settles M2 for the game entered at its base board. -/
+theorem survives (W : LegalCycleWitness) :
+    ∃ (C : ClosedCycle GameConfig.standard),
+      SurvivesForever GameConfig.standard C.policy ⟨W.base, Bag.full⟩ :=
+  legal_safe_word_survives W.wf W.word_ne_nil W.valid W.isBagStream
+    W.cycles W.len W.safe
+
+/-- Every witness carries the forced profile: the nine clauses hold of
+it automatically. -/
+theorem profile (W : LegalCycleWitness) :
+    (∀ r, ¬ Board.isFull GameConfig.standard W.base r)
+    ∧ (∀ c, c < 10 → wordColProfile c W.word = 14)
+    ∧ (wordClears W.base W.word = 14
+        ∧ 4 ≤ wordClearMoves W.base W.word
+        ∧ wordClearMoves W.base W.word ≤ 14
+        ∧ 21 ≤ wordDryMoves W.base W.word)
+    ∧ wordTetrises W.base W.word ≤ 5
+    ∧ (W.word.map (fun pl => 4 * pl.col + shapeMoment pl)).sum = 630
+    ∧ wordLift W.base W.word = wordRelease W.base W.word
+    ∧ (∃ (c : Board) (pl : Placement),
+        Board.fullRows GameConfig.standard (pl.place c) ≠ ∅
+        ∧ ∃ p ∈ pl.place c,
+            ¬ Board.isFull GameConfig.standard (pl.place c) p.2)
+    ∧ (∃ (c : Board) (pl : Placement), ∀ t k : ℕ, Even k →
+        Board.fullRows GameConfig.standard (pl.place c)
+          ≠ Finset.Ico t (t + k))
+    ∧ (∃ pl ∈ W.word, pl.piece = Piece.T ∧ (pl.rot = 0 ∨ pl.rot = 2)) :=
+  legal_cycle_profile W.wf W.word_ne_nil W.valid W.isBagStream W.cycles
+    W.len
+
+/-- A witness lays an odd number of its T's flat and stands an even
+number upright. -/
+theorem T_split (W : LegalCycleWitness) :
+    (wordFlatTCount W.word = 1 ∨ wordFlatTCount W.word = 3
+      ∨ wordFlatTCount W.word = 5)
+    ∧ (wordUprightTCount W.word = 0 ∨ wordUprightTCount W.word = 2
+      ∨ wordUprightTCount W.word = 4) :=
+  ⟨legal_cycle_flatT_one_three_or_five W.wf W.word_ne_nil W.valid
+      W.isBagStream W.cycles W.len,
+    legal_cycle_uprightT_even W.wf W.word_ne_nil W.valid W.isBagStream
+      W.cycles W.len⟩
+
+end LegalCycleWitness
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
