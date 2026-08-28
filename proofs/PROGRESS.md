@@ -41629,6 +41629,28 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28el) — the bag's heartbeat cannot be compressed (bank 361/N)
+
+- **`IsBagStream`** — a piece stream deals full bags: every
+  seven-block contains every piece.
+- **`piece_univ_card`** / **`bag_block_count`** — seven slots, seven
+  pieces, each present: pigeonhole forces each block to deal each
+  piece EXACTLY once.
+- **`bag_stream_range_count`** — a bag stream deals each piece n times
+  in 7n moves.
+- **`periodic_add_mul`** / **`periodic_count_mul`** — periodic streams
+  count by blocks: m periods = m times the per-period count.
+- **`bag_stream_period_seven_dvd`** — ANY periodic piece stream that
+  deals full bags has period divisible by seven: count one piece two
+  ways over seven periods.
+
+(Toward the 35-quantum for repeatable LEGAL board cycles: 5 from mass,
+7 from the bag heartbeat.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ek) — the plinth tour (bank 360/N)
 
 - **`five_O_ritual_boards_on_cycle`** — every intermediate board of

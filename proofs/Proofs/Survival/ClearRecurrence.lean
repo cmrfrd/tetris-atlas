@@ -10225,6 +10225,153 @@ theorem five_O_ritual_boards_on_cycle (k : ℕ) (hk : k ≤ 4) :
     rw [h1] at hshift
     simpa using hshift
 
+/-- A piece stream deals full bags: every seven-block contains every
+piece. -/
+def IsBagStream (s : ℕ → Piece) : Prop :=
+  ∀ j : ℕ, ∀ p : Piece, ∃ i < 7, s (7 * j + i) = p
+
+/-- There are exactly seven pieces. -/
+theorem piece_univ_card : (Finset.univ : Finset Piece).card = 7 := by
+  decide
+
+/-- **Each block deals each piece exactly once**: seven slots, seven
+pieces, each present — pigeonhole forces multiplicity one. -/
+theorem bag_block_count {s : ℕ → Piece} (hs : IsBagStream s) (j : ℕ)
+    (p : Piece) :
+    ((Finset.Ico (7 * j) (7 * j + 7)).filter (fun i => s i = p)).card
+      = 1 := by
+  classical
+  have hsum : ∑ q : Piece, ((Finset.Ico (7 * j) (7 * j + 7)).filter
+      (fun i => s i = q)).card = 7 := by
+    rw [← Finset.card_eq_sum_card_fiberwise (f := s)
+      (s := Finset.Ico (7 * j) (7 * j + 7)) (t := Finset.univ)
+      (fun x _ => Finset.mem_univ (s x))]
+    rw [Nat.card_Ico]
+    omega
+  have hpos : ∀ q : Piece,
+      1 ≤ ((Finset.Ico (7 * j) (7 * j + 7)).filter
+        (fun i => s i = q)).card := by
+    intro q
+    obtain ⟨i, hi, hsi⟩ := hs j q
+    apply Finset.card_pos.mpr
+    exact ⟨7 * j + i, Finset.mem_filter.mpr
+      ⟨Finset.mem_Ico.mpr ⟨by omega, by omega⟩, hsi⟩⟩
+  by_contra hne
+  have h2 : 2 ≤ ((Finset.Ico (7 * j) (7 * j + 7)).filter
+      (fun i => s i = p)).card := by
+    have := hpos p
+    omega
+  have hsplit : ∑ q : Piece, ((Finset.Ico (7 * j) (7 * j + 7)).filter
+      (fun i => s i = q)).card
+      = (∑ q ∈ Finset.univ.erase p,
+          ((Finset.Ico (7 * j) (7 * j + 7)).filter
+            (fun i => s i = q)).card)
+        + ((Finset.Ico (7 * j) (7 * j + 7)).filter
+            (fun i => s i = p)).card :=
+    (Finset.sum_eq_sum_diff_singleton_add (Finset.mem_univ p) _).trans
+      (by rw [Finset.sdiff_singleton_eq_erase])
+  have hrest : 6 ≤ ∑ q ∈ Finset.univ.erase p,
+      ((Finset.Ico (7 * j) (7 * j + 7)).filter
+        (fun i => s i = q)).card := by
+    calc (6 : ℕ)
+        = ∑ _q ∈ Finset.univ.erase p, 1 := by
+          rw [Finset.sum_const, smul_eq_mul, mul_one,
+            Finset.card_erase_of_mem (Finset.mem_univ p),
+            piece_univ_card]
+      _ ≤ _ := Finset.sum_le_sum (fun q _ => hpos q)
+  omega
+
+/-- **A bag stream deals each piece `n` times in `7n` moves.** -/
+theorem bag_stream_range_count {s : ℕ → Piece} (hs : IsBagStream s)
+    (p : Piece) (n : ℕ) :
+    ((Finset.range (7 * n)).filter (fun i => s i = p)).card = n := by
+  classical
+  induction n with
+  | zero => simp
+  | succ k ih =>
+    have hsplit : Finset.range (7 * (k + 1))
+        = Finset.range (7 * k) ∪ Finset.Ico (7 * k) (7 * k + 7) := by
+      rw [Finset.range_eq_Ico,
+        Finset.Ico_union_Ico_eq_Ico (by omega) (by omega)]
+      congr 1
+    have hdisj : Disjoint
+        ((Finset.range (7 * k)).filter (fun i => s i = p))
+        ((Finset.Ico (7 * k) (7 * k + 7)).filter (fun i => s i = p)) := by
+      apply Finset.disjoint_left.mpr
+      intro a ha hb
+      rw [Finset.mem_filter, Finset.mem_range] at ha
+      rw [Finset.mem_filter, Finset.mem_Ico] at hb
+      omega
+    rw [hsplit, Finset.filter_union,
+      Finset.card_union_of_disjoint hdisj, ih, bag_block_count hs]
+
+/-- Iterated periodicity. -/
+theorem periodic_add_mul {s : ℕ → Piece} {n : ℕ}
+    (hper : ∀ i, s (i + n) = s i) :
+    ∀ k i, s (i + k * n) = s i := by
+  intro k
+  induction k with
+  | zero => intro i; simp
+  | succ j ih =>
+    intro i
+    rw [show i + (j + 1) * n = (i + j * n) + n from by ring, hper, ih]
+
+/-- **Periodic streams count by blocks**: over `m` periods, each piece
+appears `m` times its per-period count. -/
+theorem periodic_count_mul {s : ℕ → Piece} {n : ℕ} (hn : 0 < n)
+    (hper : ∀ i, s (i + n) = s i) (p : Piece) (m : ℕ) :
+    ((Finset.range (m * n)).filter (fun i => s i = p)).card
+      = m * ((Finset.range n).filter (fun i => s i = p)).card := by
+  classical
+  induction m with
+  | zero => simp
+  | succ k ih =>
+    have hsplit : Finset.range ((k + 1) * n)
+        = Finset.range (k * n) ∪ Finset.Ico (k * n) (k * n + n) := by
+      rw [Finset.range_eq_Ico,
+        Finset.Ico_union_Ico_eq_Ico (by omega) (by omega)]
+      congr 1
+      ring
+    have hdisj : Disjoint
+        ((Finset.range (k * n)).filter (fun i => s i = p))
+        ((Finset.Ico (k * n) (k * n + n)).filter (fun i => s i = p)) := by
+      apply Finset.disjoint_left.mpr
+      intro a ha hb
+      rw [Finset.mem_filter, Finset.mem_range] at ha
+      rw [Finset.mem_filter, Finset.mem_Ico] at hb
+      omega
+    have hblock : (Finset.Ico (k * n) (k * n + n)).filter
+        (fun i => s i = p)
+        = ((Finset.range n).filter (fun i => s i = p)).image
+            (· + k * n) := by
+      ext x
+      simp only [Finset.mem_filter, Finset.mem_Ico, Finset.mem_image,
+        Finset.mem_range]
+      constructor
+      · rintro ⟨⟨h1, h2⟩, h3⟩
+        refine ⟨x - k * n, ⟨by omega, ?_⟩, by omega⟩
+        have hx : x - k * n + k * n = x := by omega
+        rw [← hx] at h3
+        rwa [periodic_add_mul hper] at h3
+      · rintro ⟨y, ⟨hy, hsy⟩, rfl⟩
+        refine ⟨⟨by omega, by omega⟩, ?_⟩
+        rwa [periodic_add_mul hper]
+    rw [hsplit, Finset.filter_union,
+      Finset.card_union_of_disjoint hdisj, ih, hblock,
+      Finset.card_image_of_injective _ (add_left_injective (k * n))]
+    ring
+
+/-- **THE BAG'S HEARTBEAT CANNOT BE COMPRESSED**: any periodic piece
+stream that deals full bags has period divisible by seven. Count one
+piece two ways over seven periods: the bags say `n` occurrences, the
+periodicity says `7` per-period counts — so `n = 7c`. -/
+theorem bag_stream_period_seven_dvd {s : ℕ → Piece} {n : ℕ}
+    (hn : 0 < n) (hper : ∀ i, s (i + n) = s i)
+    (hs : IsBagStream s) : 7 ∣ n := by
+  have hA := bag_stream_range_count hs Piece.O n
+  have hB := periodic_count_mul hn hper Piece.O 7
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
