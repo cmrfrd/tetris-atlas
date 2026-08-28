@@ -6992,6 +6992,176 @@ theorem flat_window_bill_le_two {b : Board} {pl : Placement} {j h : ℕ}
     rcases window_J_hole_bill (b := b) hj hp hcells with hbill | hbill <;>
       rw [hflat0, hflat1] at hbill <;> omega
 
+/-- The cheap standing rotation of each piece: narrow, and for L and J
+seated with both feet down. -/
+theorem cheap_rotations :
+    (∀ cell ∈ Piece.I.shapeUp (1 : Rotation), cell.1 ≤ 1)
+    ∧ (∀ cell ∈ Piece.O.shapeUp (0 : Rotation), cell.1 ≤ 1)
+    ∧ (∀ cell ∈ Piece.S.shapeUp (1 : Rotation), cell.1 ≤ 1)
+    ∧ (∀ cell ∈ Piece.Z.shapeUp (1 : Rotation), cell.1 ≤ 1)
+    ∧ (∀ cell ∈ Piece.T.shapeUp (1 : Rotation), cell.1 ≤ 1)
+    ∧ ((∀ cell ∈ Piece.L.shapeUp (1 : Rotation), cell.1 ≤ 1)
+      ∧ ((0 : ℕ), (0 : ℕ)) ∈ Piece.L.shapeUp (1 : Rotation)
+      ∧ ((1 : ℕ), (0 : ℕ)) ∈ Piece.L.shapeUp (1 : Rotation))
+    ∧ ((∀ cell ∈ Piece.J.shapeUp (3 : Rotation), cell.1 ≤ 1)
+      ∧ ((0 : ℕ), (0 : ℕ)) ∈ Piece.J.shapeUp (3 : Rotation)
+      ∧ ((1 : ℕ), (0 : ℕ)) ∈ Piece.J.shapeUp (3 : Rotation)) := by
+  decide
+
+/-- **The flat window's best-response bill is one**: on a flat pair,
+every piece admits a valid confined placement creating at most ONE hole
+— I, O and seated L/J land free; S, Z and T pay their unavoidable
+single notch. Combined with the clearing machinery this is the
+lightness ledger's income statement: flat-window play accrues debt at
+most one hole per move, and only on three pieces in seven. -/
+theorem flat_window_cheap_move_exists {b : Board} {j h : ℕ}
+    (hj : j + 1 < 10)
+    (hflat0 : b.colHeight j = h) (hflat1 : b.colHeight (j + 1) = h)
+    (p : Piece) :
+    ∃ pl : Placement, pl.piece = p ∧ pl.Valid GameConfig.standard
+      ∧ (∀ cell ∈ pl.shapeUp,
+          pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1)
+      ∧ Board.holes GameConfig.standard (pl.place b)
+          ≤ Board.holes GameConfig.standard b + 1 := by
+  obtain ⟨hI, hO, hS, hZ, hT, ⟨hL, hL0, hL1⟩, ⟨hJ, hJ0, hJ1⟩⟩ :=
+    cheap_rotations
+  cases p with
+  | I =>
+    refine ⟨⟨Piece.I, 1, j⟩, rfl, ?_, ?_, ?_⟩
+    · intro cell hcell
+      have := hI cell hcell
+      change j + cell.1 < GameConfig.standard.cols
+      rw [GameConfig.standard_cols]
+      omega
+    · intro cell hcell
+      have := hI cell hcell
+      change j + cell.1 = j ∨ j + cell.1 = j + 1
+      omega
+    · have hfree := vertical_I_hole_free (b := b)
+        (pl := ⟨Piece.I, 1, j⟩) rfl (by
+          intro cell hcell
+          have := hI cell hcell
+          change j + cell.1 = j ∨ j + cell.1 = j + 1
+          omega)
+      omega
+  | O =>
+    have hcells : ∀ cell ∈ (⟨Piece.O, 0, j⟩ : Placement).shapeUp,
+        (⟨Piece.O, 0, j⟩ : Placement).col + cell.1 = j
+        ∨ (⟨Piece.O, 0, j⟩ : Placement).col + cell.1 = j + 1 := by
+      intro cell hcell
+      have := hO cell hcell
+      change j + cell.1 = j ∨ j + cell.1 = j + 1
+      omega
+    refine ⟨⟨Piece.O, 0, j⟩, rfl, ?_, hcells, ?_⟩
+    · intro cell hcell
+      have := hO cell hcell
+      change j + cell.1 < GameConfig.standard.cols
+      rw [GameConfig.standard_cols]
+      omega
+    · have hbill := window_O_hole_bill (b := b) hj rfl hcells
+      rw [hflat0, hflat1] at hbill
+      simp only [max_self] at hbill
+      omega
+  | S =>
+    have hcells : ∀ cell ∈ (⟨Piece.S, 1, j⟩ : Placement).shapeUp,
+        (⟨Piece.S, 1, j⟩ : Placement).col + cell.1 = j
+        ∨ (⟨Piece.S, 1, j⟩ : Placement).col + cell.1 = j + 1 := by
+      intro cell hcell
+      have := hS cell hcell
+      change j + cell.1 = j ∨ j + cell.1 = j + 1
+      omega
+    refine ⟨⟨Piece.S, 1, j⟩, rfl, ?_, hcells, ?_⟩
+    · intro cell hcell
+      have := hS cell hcell
+      change j + cell.1 < GameConfig.standard.cols
+      rw [GameConfig.standard_cols]
+      omega
+    · have hbill := window_S_hole_bill (b := b) hj rfl hcells
+      have hD := confined_dropOffset_le_of_flat (b := b) hcells hflat0 hflat1
+      rw [hflat0, hflat1] at hbill
+      omega
+  | Z =>
+    have hcells : ∀ cell ∈ (⟨Piece.Z, 1, j⟩ : Placement).shapeUp,
+        (⟨Piece.Z, 1, j⟩ : Placement).col + cell.1 = j
+        ∨ (⟨Piece.Z, 1, j⟩ : Placement).col + cell.1 = j + 1 := by
+      intro cell hcell
+      have := hZ cell hcell
+      change j + cell.1 = j ∨ j + cell.1 = j + 1
+      omega
+    refine ⟨⟨Piece.Z, 1, j⟩, rfl, ?_, hcells, ?_⟩
+    · intro cell hcell
+      have := hZ cell hcell
+      change j + cell.1 < GameConfig.standard.cols
+      rw [GameConfig.standard_cols]
+      omega
+    · have hbill := window_Z_hole_bill (b := b) hj rfl hcells
+      have hD := confined_dropOffset_le_of_flat (b := b) hcells hflat0 hflat1
+      rw [hflat0, hflat1] at hbill
+      omega
+  | T =>
+    have hcells : ∀ cell ∈ (⟨Piece.T, 1, j⟩ : Placement).shapeUp,
+        (⟨Piece.T, 1, j⟩ : Placement).col + cell.1 = j
+        ∨ (⟨Piece.T, 1, j⟩ : Placement).col + cell.1 = j + 1 := by
+      intro cell hcell
+      have := hT cell hcell
+      change j + cell.1 = j ∨ j + cell.1 = j + 1
+      omega
+    refine ⟨⟨Piece.T, 1, j⟩, rfl, ?_, hcells, ?_⟩
+    · intro cell hcell
+      have := hT cell hcell
+      change j + cell.1 < GameConfig.standard.cols
+      rw [GameConfig.standard_cols]
+      omega
+    · have hD := confined_dropOffset_le_of_flat (b := b) hcells hflat0 hflat1
+      rcases window_T_hole_bill (b := b) hj rfl hcells with hbill | hbill <;>
+        rw [hflat0, hflat1] at hbill <;> omega
+  | L =>
+    have hn : ∀ cell ∈ (⟨Piece.L, 1, j⟩ : Placement).shapeUp,
+        cell.1 ≤ 1 := hL
+    have hcells : ∀ cell ∈ (⟨Piece.L, 1, j⟩ : Placement).shapeUp,
+        (⟨Piece.L, 1, j⟩ : Placement).col + cell.1 = j
+        ∨ (⟨Piece.L, 1, j⟩ : Placement).col + cell.1 = j + 1 := by
+      intro cell hcell
+      have := hn cell hcell
+      change j + cell.1 = j ∨ j + cell.1 = j + 1
+      omega
+    refine ⟨⟨Piece.L, 1, j⟩, rfl, ?_, hcells, ?_⟩
+    · intro cell hcell
+      have := hn cell hcell
+      change j + cell.1 < GameConfig.standard.cols
+      rw [GameConfig.standard_cols]
+      omega
+    · have hD := confined_dropOffset_le_of_flat (b := b) hcells hflat0 hflat1
+      have hbill := window_two_col_hole_bill (b := b)
+        (pl := ⟨Piece.L, 1, j⟩) (f₀ := 0) (f₁ := 0) hj hn rfl hL0
+        (fun cell _ _ => Nat.zero_le _) hL1
+        (fun cell _ _ => Nat.zero_le _)
+      rw [hflat0, hflat1] at hbill
+      omega
+  | J =>
+    have hn : ∀ cell ∈ (⟨Piece.J, 3, j⟩ : Placement).shapeUp,
+        cell.1 ≤ 1 := hJ
+    have hcells : ∀ cell ∈ (⟨Piece.J, 3, j⟩ : Placement).shapeUp,
+        (⟨Piece.J, 3, j⟩ : Placement).col + cell.1 = j
+        ∨ (⟨Piece.J, 3, j⟩ : Placement).col + cell.1 = j + 1 := by
+      intro cell hcell
+      have := hn cell hcell
+      change j + cell.1 = j ∨ j + cell.1 = j + 1
+      omega
+    refine ⟨⟨Piece.J, 3, j⟩, rfl, ?_, hcells, ?_⟩
+    · intro cell hcell
+      have := hn cell hcell
+      change j + cell.1 < GameConfig.standard.cols
+      rw [GameConfig.standard_cols]
+      omega
+    · have hD := confined_dropOffset_le_of_flat (b := b) hcells hflat0 hflat1
+      have hbill := window_two_col_hole_bill (b := b)
+        (pl := ⟨Piece.J, 3, j⟩) (f₀ := 0) (f₁ := 0) hj hn rfl hJ0
+        (fun cell _ _ => Nat.zero_le _) hJ1
+        (fun cell _ _ => Nat.zero_le _)
+      rw [hflat0, hflat1] at hbill
+      omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

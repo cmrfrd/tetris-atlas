@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dg) — best response on a flat window: one hole (bank 330/N)
+
+- **`cheap_rotations`** — the seven cheap standing rotations (I:1, O:0,
+  S:1, Z:1, T:1, L:1 seated, J:3 seated), kernel-checked.
+- **`flat_window_cheap_move_exists`** — on a flat pair every piece has
+  a valid confined placement creating ≤ 1 hole. The lightness ledger's
+  income statement: flat-window play accrues ≤ 1 debt/move, only on
+  S/Z/T (3 pieces in 7 ⇒ long-run ≤ 3 holes per bag with flat play).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28df) — a flat window never pays more than two (bank 329/N)
 
 - **`confined_dropOffset_le_of_flat`** — D ≤ h on flat pairs.
