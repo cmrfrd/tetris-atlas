@@ -10947,6 +10947,101 @@ theorem legal_cycle_word_survives_forever {b : Board}
       rw [hsplit, wordPlay_periodic hne hcyc]
       exact ih (n - w.length) (by omega)
 
+/-- Number of tetrises (four-clear moves) while playing a word. -/
+def wordTetrises (b : Board) : List Placement → ℕ
+  | [] => 0
+  | pl :: rest =>
+      (if 4 ≤ (Board.fullRows GameConfig.standard (pl.place b)).card
+        then 1 else 0)
+        + wordTetrises (Placement.applyStep GameConfig.standard b pl)
+            rest
+
+@[simp] theorem wordTetrises_nil (b : Board) : wordTetrises b [] = 0 :=
+  rfl
+
+theorem wordTetrises_cons (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    wordTetrises b (pl :: rest)
+      = (if 4 ≤ (Board.fullRows GameConfig.standard (pl.place b)).card
+          then 1 else 0)
+        + wordTetrises (Placement.applyStep GameConfig.standard b pl)
+            rest := rfl
+
+/-- **Every tetris is an I**: along any word from a clear-free board,
+the four-clear moves are at most the I-moves. -/
+theorem wordTetrises_le_I_count {b : Board} {w : List Placement}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r) :
+    wordTetrises b w ≤ (w.map (·.piece)).count Piece.I := by
+  induction w generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordTetrises_cons, List.map_cons, List.count_cons]
+    have hrec := ih (applyStep_clear_free b pl)
+    by_cases h4 : 4 ≤ (Board.fullRows GameConfig.standard
+        (pl.place b)).card
+    · have hI : pl.piece = Piece.I := tetris_requires_I hnf h4
+      rw [if_pos h4]
+      split
+      · omega
+      · next hcond => simp [hI] at hcond
+    · rw [if_neg h4]
+      split <;> omega
+
+/-- The index census of a word equals the value count of its pieces. -/
+theorem census_eq_count (p : Piece) : ∀ (w : List Placement),
+    ((Finset.range w.length).filter
+      (fun i => (w.getD i ⟨Piece.O, 0, 0⟩).piece = p)).card
+    = (w.map (·.piece)).count p := by
+  intro w
+  induction w using List.reverseRecOn with
+  | nil => simp
+  | append_singleton t a ih =>
+    classical
+    rw [List.length_append, List.length_singleton,
+      Finset.range_add_one, Finset.filter_insert]
+    have hlast : (t ++ [a]).getD t.length ⟨Piece.O, 0, 0⟩ = a := by
+      simp
+    have hfeq : (Finset.range t.length).filter
+        (fun i => ((t ++ [a]).getD i ⟨Piece.O, 0, 0⟩).piece = p)
+        = (Finset.range t.length).filter
+            (fun i => (t.getD i ⟨Piece.O, 0, 0⟩).piece = p) := by
+      apply Finset.filter_congr
+      intro i hi
+      rw [Finset.mem_range] at hi
+      rw [List.getD_append _ _ _ _ hi]
+    have hnotmem : t.length ∉ (Finset.range t.length).filter
+        (fun i => ((t ++ [a]).getD i ⟨Piece.O, 0, 0⟩).piece = p) := by
+      intro hmem
+      have := (Finset.mem_filter.mp hmem).1
+      rw [Finset.mem_range] at this
+      omega
+    rw [List.map_append, List.count_append]
+    simp only [List.map_cons, List.map_nil, List.count_cons,
+      List.count_nil]
+    by_cases hap : a.piece = p
+    · rw [if_pos (by rw [hlast]; exact hap),
+        Finset.card_insert_of_notMem hnotmem, hfeq, ih]
+      simp [hap]
+    · rw [if_neg (by rw [hlast]; exact hap), hfeq, ih]
+      simp [hap]
+
+/-- **THE TETRIS CAP**: a bag-legal cycle word plays at most
+`length / 7` tetrises — one per bag, the bag's single I. A legal
+35-cycle holds at most five tetrises against its fourteen rows. -/
+theorem legal_cycle_word_tetris_cap {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    wordTetrises b w ≤ w.length / 7 := by
+  have hpos : 0 < w.length := List.length_pos_iff.mpr hne
+  have hnfb : ∀ r, ¬ Board.isFull GameConfig.standard b r :=
+    board_on_cycle_clear_free ⟨w, rfl, hpos, hv, hfold⟩
+  have h1 := wordTetrises_le_I_count (w := w) hnfb
+  have h2 := legal_cycle_word_piece_census hwf hne hv hbag hfold Piece.I
+  rw [census_eq_count] at h2
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,25 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ev) — the tetris cap for words (bank 371/N)
+
+- **`wordTetrises`** — the four-clear moves of a word, counted.
+- **`wordTetrises_le_I_count`** — every tetris is an I: along any word
+  from a clear-free board, four-clear moves ≤ I-moves.
+- **`census_eq_count`** — the index census equals the value count
+  (reverse induction with getD over concat).
+- **`legal_cycle_word_tetris_cap`** — a bag-legal cycle word plays at
+  most length/7 tetrises: one per bag, the bag's single I. A legal
+  35-cycle holds ≤ 5 tetrises against its 14 rows.
+
+Gotcha: after `List.count_cons` the head sits as a beta-unreduced
+`(fun x => x.piece) pl`, so `rw` misses — use `split` + `simp [hI] at
+hcond` instead of `if_pos`.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28eu) — THE INFINITE MILL (bank 370/N)
 
 - **`wordPlay`** — the infinite play repeating a word forever; move n
