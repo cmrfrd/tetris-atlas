@@ -11495,6 +11495,115 @@ theorem bag_stream_take_val : ∀ (n : ℕ) (l : List Piece),
         | rw [show 7 * ((n - 7) / 7) + 7 = 7 * (n / 7) from by omega]
         | rw [show 7 + 7 * ((n - 7) / 7) = 7 * (n / 7) from by omega]
 
+/-- `getD` through `drop`. -/
+theorem getD_drop_add (l : List Piece) (m i : ℕ)
+    (h : m + i < l.length) :
+    (l.drop m).getD i Piece.O = l.getD (m + i) Piece.O := by
+  rw [List.getD_eq_getElem _ _ (by rw [List.length_drop]; omega),
+    List.getD_eq_getElem _ _ h]
+  rw [List.getElem_drop]
+
+/-- **Every draw of a legal word is legal**: at each step, the piece
+the word plays is present in the current bag — it is the next fresh
+piece of the current block, and the bag holds exactly the block's
+undrawn remainder. -/
+theorem legal_word_draw_legal {b : Board} {w : List Placement}
+    (hbag : IsBagStream (wordStream w)) (h7 : 7 ∣ w.length)
+    {n : ℕ} (hn : n < w.length) :
+    (w.getD n ⟨Piece.O, 0, 0⟩).piece
+      ∈ (wordPlay ⟨b, Bag.full⟩ w n).bag := by
+  classical
+  have hlen : (w.map (·.piece)).length = w.length := List.length_map ..
+  have hbag_val := bag_stream_take_val n (w.map (·.piece))
+    (by rw [hlen]; exact h7) (by rw [hlen]; omega)
+    (map_piece_blocks hbag)
+  have hbagn : (wordPlay ⟨b, Bag.full⟩ w n).bag
+      = Bag.full \ (((w.map (·.piece)).drop (7 * (n / 7))).take
+          (n % 7)).toFinset := by
+    rw [wordPlay_eq_stepWord_take (by omega), stepWord_bag,
+      show (⟨b, Bag.full⟩ : GameState).bag = Bag.full from rfl,
+      List.map_take]
+    exact hbag_val
+  rw [hbagn, Finset.mem_sdiff]
+  refine ⟨Bag.mem_full _, ?_⟩
+  have hpiece : (w.getD n ⟨Piece.O, 0, 0⟩).piece
+      = (w.map (·.piece)).getD n Piece.O := by
+    rw [List.getD_eq_getElem w _ hn,
+      List.getD_eq_getElem _ _ (by rw [hlen]; exact hn),
+      List.getElem_map]
+  rw [hpiece]
+  intro hmem
+  rw [List.mem_toFinset] at hmem
+  -- block data
+  have hq7 : 7 * (n / 7) + 7 ≤ w.length := by
+    obtain ⟨k, hk⟩ := h7
+    omega
+  have hdlen : ((w.map (·.piece)).drop (7 * (n / 7))).length
+      = w.length - 7 * (n / 7) := by
+    rw [List.length_drop, hlen]
+  have hblk_len : (((w.map (·.piece)).drop (7 * (n / 7))).take
+      7).length = 7 := by
+    rw [List.length_take, hdlen]
+    omega
+  have hblk_all : ∀ p : Piece,
+      p ∈ ((w.map (·.piece)).drop (7 * (n / 7))).take 7 := by
+    intro p
+    obtain ⟨i, hi, hget⟩ := map_piece_blocks hbag (n / 7)
+      (by rw [hlen]; exact hq7) p
+    have hdi : ((w.map (·.piece)).drop (7 * (n / 7))).getD i Piece.O
+        = p := by
+      rw [getD_drop_add _ _ _ (by rw [hlen]; omega)]
+      exact hget
+    have hilt : i < ((w.map (·.piece)).drop (7 * (n / 7))).length := by
+      rw [hdlen]
+      omega
+    rw [List.getD_eq_getElem _ _ hilt] at hdi
+    have hit : (((w.map (·.piece)).drop (7 * (n / 7))).take 7)[i]'(by
+        rw [hblk_len]; omega)
+        = ((w.map (·.piece)).drop (7 * (n / 7)))[i] := by
+      rw [List.getElem_take]
+    rw [← hdi, ← hit]
+    exact List.getElem_mem _
+  have hblk_nodup := full_block_nodup hblk_len hblk_all
+  -- the played piece is the block's element at index n % 7
+  have hplayed : (w.map (·.piece)).getD n Piece.O
+      = ((w.map (·.piece)).drop (7 * (n / 7)))[n % 7]'(by
+          rw [hdlen]; omega) := by
+    rw [← List.getD_eq_getElem _ Piece.O]
+    rw [getD_drop_add _ _ _ (by rw [hlen]; omega)]
+    congr 1
+    omega
+  -- membership in the prefix yields a smaller index with equal value
+  obtain ⟨i, hilt, hgeti⟩ := List.getElem_of_mem hmem
+  have hir : i < n % 7 := by
+    have := hilt
+    rw [List.length_take, hdlen] at this
+    omega
+  have htake_i : (((w.map (·.piece)).drop (7 * (n / 7))).take
+      (n % 7))[i]'hilt
+      = ((w.map (·.piece)).drop (7 * (n / 7)))[i]'(by
+          rw [hdlen]; omega) := by
+    rw [List.getElem_take]
+  -- lift both to the seven-block and contradict nodup
+  have hbi : (((w.map (·.piece)).drop (7 * (n / 7))).take 7)[i]'(by
+      rw [hblk_len]; omega)
+      = ((w.map (·.piece)).drop (7 * (n / 7)))[i]'(by
+          rw [hdlen]; omega) := by
+    rw [List.getElem_take]
+  have hbr : (((w.map (·.piece)).drop (7 * (n / 7))).take 7)[n % 7]'(by
+      rw [hblk_len]; omega)
+      = ((w.map (·.piece)).drop (7 * (n / 7)))[n % 7]'(by
+          rw [hdlen]; omega) := by
+    rw [List.getElem_take]
+  have heq2 : (((w.map (·.piece)).drop (7 * (n / 7))).take 7)[i]'(by
+      rw [hblk_len]; omega)
+      = (((w.map (·.piece)).drop (7 * (n / 7))).take 7)[n % 7]'(by
+          rw [hblk_len]; omega) := by
+    rw [hbi, hbr]
+    rw [← htake_i, hgeti, hplayed]
+  have := (List.Nodup.getElem_inj_iff hblk_nodup).mp heq2
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

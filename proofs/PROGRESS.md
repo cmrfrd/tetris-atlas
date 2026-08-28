@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fd) — every draw of a legal word is legal (bank 379/N)
+
+- **`getD_drop_add`** — getD through drop.
+- **`legal_word_draw_legal`** — at each step of a legal word play, the
+  played piece IS in the current bag: it is the block's element at
+  index n mod 7, distinct from the already-drawn prefix (block nodup),
+  and the bag is exactly full minus that prefix. Draw-legality of the
+  whole play, pointwise.
+
+(Next: the table policy realizing a legal 35-word and the conditional
+M2 realization theorem.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fc) — the bag's exact value (bank 378/N)
 
 - **`bag_stream_take_val`** — after n draws from full along full
