@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ek) — the plinth tour (bank 360/N)
+
+- **`five_O_ritual_boards_on_cycle`** — every intermediate board of
+  the five-O ritual (the partial bands of width 0, 2, 4, 6, 8 over
+  rows 0–1) sits on a closed five-cycle, by riding the rotated word.
+  The ritual's whole orbit is cyclic, not just its level anchor.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ej) — cycles rotate, iterate, and leave the level stratum (bank 359/N)
 
 - **`board_on_cycle_shift`** — cycles rotate: every mid-cycle board is
