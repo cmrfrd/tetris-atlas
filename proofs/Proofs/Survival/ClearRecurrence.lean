@@ -11209,6 +11209,92 @@ theorem foldl_draw_prefix_card {l : List Piece} {B : Bag}
   rw [Finset.card_sdiff, Finset.inter_eq_left.mpr hsubset,
     List.card_toFinset, List.dedup_eq_self.mpr hnodup]
 
+/-- **The bag-card signature of block-structured play**: along a piece
+list of full seven-blocks, the bag after `n` draws from full holds
+exactly `7 - n % 7` pieces — full at every block boundary, draining one
+per draw between. -/
+theorem bag_stream_take_card : ∀ (n : ℕ) (l : List Piece),
+    7 ∣ l.length → n ≤ l.length →
+    (∀ j, 7 * j + 7 ≤ l.length → ∀ p : Piece,
+      ∃ i < 7, l.getD (7 * j + i) Piece.O = p) →
+    ((l.take n).foldl Bag.draw Bag.full).card = 7 - n % 7 := by
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    intro l h7 hn hblock
+    by_cases hlt : n < 7
+    · by_cases hn0 : n = 0
+      · subst hn0
+        simp [Bag.full_card]
+      · have hlen7 : 7 ≤ l.length := by
+          obtain ⟨k, hk⟩ := h7
+          omega
+        have hblk_len : (l.take 7).length = 7 := by
+          rw [List.length_take]
+          omega
+        have hblk_all : ∀ p : Piece, p ∈ l.take 7 := by
+          intro p
+          obtain ⟨i, hi, hget⟩ := hblock 0 (by omega) p
+          rw [Nat.mul_zero, Nat.zero_add] at hget
+          have hilen : i < l.length := by omega
+          rw [List.getD_eq_getElem l Piece.O hilen] at hget
+          have hit : (l.take 7)[i]'(by omega) = l[i] := by
+            rw [List.getElem_take]
+          rw [← hget, ← hit]
+          exact List.getElem_mem _
+        have hblk_nodup := full_block_nodup hblk_len hblk_all
+        have htn : l.take n = (l.take 7).take n := by
+          rw [List.take_take]
+          congr 1
+          omega
+        have hpre_nodup : ((l.take 7).take n).Nodup :=
+          hblk_nodup.sublist (List.take_sublist _ _)
+        have hlen_take : ((l.take 7).take n).length = n := by
+          rw [List.length_take]
+          omega
+        rw [htn, foldl_draw_prefix_card hpre_nodup
+          (fun q _ => Bag.mem_full q)
+          (by rw [hlen_take, Bag.full_card]; omega)]
+        rw [hlen_take, Bag.full_card, Nat.mod_eq_of_lt hlt]
+    · have hlen7 : 7 ≤ l.length := by omega
+      have htlen : (l.take 7).length = 7 := by
+        rw [List.length_take]
+        omega
+      have hall : ∀ p : Piece, p ∈ l.take 7 := by
+        intro p
+        obtain ⟨i, hi, hget⟩ := hblock 0 (by omega) p
+        rw [Nat.mul_zero, Nat.zero_add] at hget
+        have hilen : i < l.length := by omega
+        rw [List.getD_eq_getElem l Piece.O hilen] at hget
+        have hit : (l.take 7)[i]'(by omega) = l[i] := by
+          rw [List.getElem_take]
+        rw [← hget, ← hit]
+        exact List.getElem_mem _
+      have hsplit : l.take n = l.take 7 ++ (l.drop 7).take (n - 7) := by
+        conv_lhs => rw [show n = 7 + (n - 7) from by omega]
+        rw [List.take_add]
+      have hgd : ∀ m, m < (l.drop 7).length →
+          (l.drop 7).getD m Piece.O = l.getD (7 + m) Piece.O := by
+        intro m hm
+        rw [List.getD_eq_getElem _ _ hm,
+          List.getD_eq_getElem _ _
+            (by rw [List.length_drop] at hm; omega)]
+        rw [List.getElem_drop]
+      have hrec := ih (n - 7) (by omega) (l.drop 7)
+        (by rw [List.length_drop]; omega)
+        (by rw [List.length_drop]; omega)
+        (by
+          intro j hj p
+          rw [List.length_drop] at hj
+          obtain ⟨i, hi, hget⟩ := hblock (j + 1) (by omega) p
+          refine ⟨i, hi, ?_⟩
+          rw [hgd (7 * j + i) (by rw [List.length_drop]; omega)]
+          rw [show 7 + (7 * j + i) = 7 * (j + 1) + i from by ring]
+          exact hget)
+      rw [hsplit, List.foldl_append,
+        bag_refills_after_full_block htlen hall, hrec]
+      omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

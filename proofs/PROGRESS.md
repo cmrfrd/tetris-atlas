@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ez) — the bag-card signature (bank 375/N)
+
+- **`bag_stream_take_card`** — along a piece list of full
+  seven-blocks, the bag after n draws from full holds EXACTLY
+  7 − n mod 7 pieces: full at every block boundary, draining one per
+  draw in between. Strong induction peeling one block per step,
+  with the mid-block prefix handled by foldl_draw_prefix_card.
+
+(Next: the wordPlay bag/count signatures, then the 35-state orbit
+distinctness of any legal cycle.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ey) — mid-block bag arithmetic (bank 374/N)
 
 - **`foldl_draw_prefix`** — drawing distinct present pieces, strictly
