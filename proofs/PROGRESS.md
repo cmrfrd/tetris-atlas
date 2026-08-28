@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28do) — the double is surgical (bank 338/N)
+
+- **`window_O_harvest_exact`** — fullRows(merged) = {h, h+1} exactly:
+  the O's dropped rows are only h and h+1, so any other full row would
+  have been full in the pre-board (excluded). The harvest clears
+  precisely its two prepared rows: linesCleared = 2 on the nose.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dn) — the window harvests (bank 337/N)
 
 - **`confined_move_completes_row`** — a confined drop covering the

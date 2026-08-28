@@ -8083,6 +8083,110 @@ theorem window_O_completes_two_rows {b : Board} {j h : ℕ}
           rw [Finset.card_insert_of_notMem (by simp), Finset.card_singleton]
       _ ≤ _ := Finset.card_le_card hsub
 
+/-- **The O harvest is exact**: on a clear-free board with a flat
+prepared pair, the confined O completes precisely the two prepared rows
+— no more, no fewer. The double is surgical. -/
+theorem window_O_harvest_exact {b : Board} {j h : ℕ}
+    (hj : j + 1 < 10)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h0 : b.colHeight j = h) (h1 : b.colHeight (j + 1) = h)
+    (hprep : ∀ c < 10, c ≠ j → c ≠ j + 1 →
+      (c, h) ∈ b ∧ (c, h + 1) ∈ b) :
+    ∃ pl : Placement, pl.piece = Piece.O ∧ pl.Valid GameConfig.standard
+      ∧ (∀ cell ∈ pl.shapeUp,
+          pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1)
+      ∧ Board.fullRows GameConfig.standard (pl.place b)
+          = ({h, h + 1} : Finset ℕ) := by
+  classical
+  obtain ⟨hf0, hf1⟩ := O_shape_feet (0 : Rotation)
+  obtain ⟨ht0, ht1, htops⟩ := O_shape_tops (0 : Rotation)
+  have hnarrow := (O_shape_columns (0 : Rotation)).2.2
+  have hcells : ∀ cell ∈ (⟨Piece.O, 0, j⟩ : Placement).shapeUp,
+      (⟨Piece.O, 0, j⟩ : Placement).col + cell.1 = j
+      ∨ (⟨Piece.O, 0, j⟩ : Placement).col + cell.1 = j + 1 := by
+    intro cell hcell
+    have := hnarrow cell hcell
+    change j + cell.1 = j ∨ j + cell.1 = j + 1
+    omega
+  have hD : (⟨Piece.O, 0, j⟩ : Placement).dropOffset b = h := by
+    apply Nat.le_antisymm
+    · exact confined_dropOffset_le_of_flat hcells h0 h1
+    · have hle := Finset.le_sup
+        (f := fun cell : PieceCell =>
+          b.colHeight ((⟨Piece.O, 0, j⟩ : Placement).col + cell.1)
+            - cell.2) hf0
+      unfold Placement.dropOffset
+      simp only [] at hle ⊢
+      rw [show (⟨Piece.O, 0, j⟩ : Placement).col + ((0 : ℕ), (0 : ℕ)).1
+          = j from by simp, h0] at hle
+      simpa using hle
+  have hdrows : ∀ p ∈ (⟨Piece.O, 0, j⟩ : Placement).dropped b,
+      p.2 = h ∨ p.2 = h + 1 := by
+    intro p hp
+    unfold Placement.dropped Placement.cellsAt at hp
+    rw [Finset.mem_image] at hp
+    obtain ⟨cell, hcell, heq⟩ := hp
+    have hrow := congrArg Prod.snd heq
+    simp only [] at hrow
+    have := htops cell hcell
+    omega
+  have hdmem : ∀ cell ∈ (⟨Piece.O, 0, j⟩ : Placement).shapeUp,
+      (j + cell.1, h + cell.2)
+        ∈ (⟨Piece.O, 0, j⟩ : Placement).dropped b := by
+    intro cell hcell
+    unfold Placement.dropped Placement.cellsAt
+    rw [Finset.mem_image]
+    exact ⟨cell, hcell, by rw [hD]⟩
+  refine ⟨⟨Piece.O, 0, j⟩, rfl, ?_, hcells, ?_⟩
+  · intro cell hcell
+    have := hnarrow cell hcell
+    change j + cell.1 < GameConfig.standard.cols
+    rw [GameConfig.standard_cols]
+    omega
+  · apply Finset.Subset.antisymm
+    · intro r hr
+      have hfull := (Finset.mem_filter.mp hr).2
+      simp only [Finset.mem_insert, Finset.mem_singleton]
+      by_contra hne
+      push Not at hne
+      have hmemj : (j, r) ∈ (⟨Piece.O, 0, j⟩ : Placement).place b :=
+        hfull j (by
+          rw [GameConfig.standard_cols]
+          exact Finset.mem_range.mpr (by omega))
+      rw [Placement.place_eq_union_dropped, Finset.mem_union] at hmemj
+      have hrlt : r < h := by
+        rcases hmemj with hb | hd
+        · have := Board.lt_colHeight hb
+          omega
+        · have := hdrows _ hd
+          simp only [] at this
+          omega
+      apply hnf r
+      intro c hcr
+      have hmemc := hfull c hcr
+      rw [Placement.place_eq_union_dropped, Finset.mem_union] at hmemc
+      rcases hmemc with hb | hd
+      · exact hb
+      · exfalso
+        have := hdrows _ hd
+        simp only [] at this
+        omega
+    · intro r hr
+      simp only [Finset.mem_insert, Finset.mem_singleton] at hr
+      rcases hr with h' | h' <;> subst h'
+      · apply confined_move_completes_row hj
+          (fun c hc hn0 hn1 => (hprep c hc hn0 hn1).1)
+        · have := hdmem _ hf0
+          simpa using this
+        · have := hdmem _ hf1
+          simpa using this
+      · apply confined_move_completes_row hj
+          (fun c hc hn0 hn1 => (hprep c hc hn0 hn1).2)
+        · have := hdmem _ ht0
+          simpa using this
+        · have := hdmem _ ht1
+          simpa using this
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
