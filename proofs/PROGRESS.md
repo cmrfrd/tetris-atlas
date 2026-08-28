@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dr) — the general reset lemma (bank 341/N)
+
+- **`applyStep_colHeight_reset_general`** — the two-row reset
+  generalized to any clearing band F with F ≥ the column's height:
+  the fed column exits at its original height. Sets up the
+  window-tetris perfect service (four-row band).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dq) — THE PERFECT SERVICE (bank 340/N)
 
 - **`window_O_perfect_service`** — exact harvest × the reset lemma: one

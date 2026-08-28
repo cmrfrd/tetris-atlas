@@ -8356,6 +8356,104 @@ theorem window_O_perfect_service {b : Board} {j h : ℕ}
     applyStep_colHeight_reset h0 hfr hdrows,
     applyStep_colHeight_reset h1 hfr hdrows⟩
 
+/-- **The general reset lemma**: a column whose drop lands only in the
+clearing band — all of it at or above the column's height — exits the
+full move at exactly its original height, whatever the band. -/
+theorem applyStep_colHeight_reset_general {b : Board} {pl : Placement}
+    {c h : ℕ} {F : Finset ℕ} (hcH : b.colHeight c = h)
+    (hfr : Board.fullRows GameConfig.standard (pl.place b) = F)
+    (hF : ∀ x ∈ F, h ≤ x)
+    (hdc : ∀ p ∈ pl.dropped b, p.2 ∈ F) :
+    (Placement.applyStep GameConfig.standard b pl).colHeight c = h := by
+  classical
+  have hrows : (Placement.applyStep GameConfig.standard b pl).colRows c
+      = b.colRows c := by
+    unfold Placement.applyStep
+    ext r
+    unfold Board.colRows
+    simp only [Finset.mem_image, Finset.mem_filter]
+    constructor
+    · rintro ⟨q, ⟨hq, hqc⟩, rfl⟩
+      rw [Board.mem_clearLines_iff] at hq
+      obtain ⟨p, hpm, hpnf, hpq⟩ := hq
+      have hpc := congrArg Prod.fst hpq
+      have hpr := congrArg Prod.snd hpq
+      simp only [] at hpc hpr
+      rw [Placement.place_eq_union_dropped, Finset.mem_union] at hpm
+      rcases hpm with hb | hd
+      · have hp1c : p.1 = c := by
+          have := hpc
+          omega
+        have hlt : p.2 < h := by
+          have hl := Board.lt_colHeight (b := b) (j := p.1) (r := p.2)
+            (by exact hb)
+          rw [hp1c, hcH] at hl
+          exact hl
+        have hcb : Board.clearedBelow GameConfig.standard (pl.place b) p.2
+            = 0 := by
+          unfold Board.clearedBelow
+          rw [hfr]
+          rw [Finset.card_eq_zero, Finset.eq_empty_iff_forall_notMem]
+          intro x hx
+          rw [Finset.mem_filter] at hx
+          have := hF x hx.1
+          omega
+        refine ⟨p, ⟨?_, ?_⟩, ?_⟩
+        · exact hb
+        · omega
+        · omega
+      · exfalso
+        have hpF := hdc p hd
+        have hfull : Board.isFull GameConfig.standard (pl.place b) p.2 := by
+          have hmem : p.2 ∈ Board.fullRows GameConfig.standard
+              (pl.place b) := by
+            rw [hfr]
+            exact hpF
+          exact (Finset.mem_filter.mp hmem).2
+        exact hpnf hfull
+    · rintro ⟨p, ⟨hpb, hpc⟩, rfl⟩
+      have hlt : p.2 < h := by
+        have hl := Board.lt_colHeight (b := b) (j := p.1) (r := p.2) hpb
+        rw [hpc, hcH] at hl
+        exact hl
+      have hnf : ¬ Board.isFull GameConfig.standard (pl.place b) p.2 := by
+        intro hfull
+        have hmem : p.2 ∈ Board.fullRows GameConfig.standard
+            (pl.place b) := by
+          rw [Board.fullRows, Finset.mem_filter]
+          refine ⟨?_, hfull⟩
+          rw [Finset.mem_image]
+          refine ⟨p, ?_, rfl⟩
+          rw [Placement.place_eq_union_dropped, Finset.mem_union]
+          left
+          exact hpb
+        rw [hfr] at hmem
+        have := hF _ hmem
+        omega
+      have hcb : Board.clearedBelow GameConfig.standard (pl.place b) p.2
+          = 0 := by
+        unfold Board.clearedBelow
+        rw [hfr]
+        rw [Finset.card_eq_zero, Finset.eq_empty_iff_forall_notMem]
+        intro x hx
+        rw [Finset.mem_filter] at hx
+        have := hF x hx.1
+        omega
+      refine ⟨p, ⟨?_, hpc⟩, ?_⟩
+      · rw [Board.mem_clearLines_iff]
+        refine ⟨p, ?_, hnf, ?_⟩
+        · rw [Placement.place_eq_union_dropped, Finset.mem_union]
+          left
+          exact hpb
+        · rw [hcb]
+          simp
+      · rfl
+  unfold Board.colHeight
+  rw [hrows]
+  have := hcH
+  unfold Board.colHeight at this
+  exact this
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
