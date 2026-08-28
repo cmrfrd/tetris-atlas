@@ -13566,6 +13566,122 @@ theorem legal_cycle_rowCharge_odd {b : Board} {w : List Placement}
   rw [← cycle_rowCharge_law hwf hv hfold]
   exact legal_cycle_gravity_odd hwf hne hv hbag hfold hlen
 
+/-! ### Which shapes carry an odd row moment, and what that forces
+
+The row-moment table is remarkably clean: I, O, S and Z are even in
+every rotation; L and J are odd in every rotation; and T is odd exactly
+in its two FLAT rotations. So the rotation census reduces to a single
+question — how many of the cycle's T's are laid flat. -/
+
+/-- **The row-moment table**: only L, J, and the flat T carry an odd row
+moment. Verified by the kernel across all seven pieces and four
+rotations. -/
+theorem shapeRowCharge_eq_one_iff :
+    ∀ (p : Piece) (r : Rotation),
+      (∑ cell ∈ p.shapeUp r, ((cell.2 : ℕ) : ZMod 2)) = 1
+        ↔ (p = Piece.L ∨ p = Piece.J
+            ∨ (p = Piece.T ∧ (r = 0 ∨ r = 2))) := by
+  decide
+
+/-- Away from the flat T, the row moment is just the L/J indicator. -/
+theorem shapeRowCharge_of_not_flat_T {pl : Placement}
+    (h : ¬ (pl.piece = Piece.T ∧ (pl.rot = 0 ∨ pl.rot = 2))) :
+    shapeRowCharge pl
+      = if pl.piece = Piece.L ∨ pl.piece = Piece.J then 1 else 0 := by
+  have hiff := shapeRowCharge_eq_one_iff pl.piece pl.rot
+  have hval : ∀ x : ZMod 2, x = 0 ∨ x = 1 := by decide
+  by_cases hLJ : pl.piece = Piece.L ∨ pl.piece = Piece.J
+  · rw [if_pos hLJ]
+    exact hiff.mpr (by tauto)
+  · rw [if_neg hLJ]
+    rcases hval (shapeRowCharge pl) with h0 | h1
+    · exact h0
+    · exact absurd (hiff.mp h1) (by tauto)
+
+/-- The word's tally of one particular piece, mod two. -/
+def wordPieceCharge (q : Piece) : List Placement → ZMod 2
+  | [] => 0
+  | pl :: rest => (if pl.piece = q then 1 else 0) + wordPieceCharge q rest
+
+@[simp] theorem wordPieceCharge_nil (q : Piece) :
+    wordPieceCharge q [] = 0 := rfl
+
+theorem wordPieceCharge_cons (q : Piece) (pl : Placement)
+    (rest : List Placement) :
+    wordPieceCharge q (pl :: rest)
+      = (if pl.piece = q then 1 else 0)
+        + wordPieceCharge q rest := rfl
+
+theorem wordPieceCharge_eq_count (q : Piece) (pls : List Placement) :
+    wordPieceCharge q pls
+      = (((pls.map (·.piece)).count q : ℕ) : ZMod 2) := by
+  induction pls with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordPieceCharge_cons, ih, List.map_cons, List.count_cons]
+    by_cases hp : pl.piece = q
+    · rw [if_pos hp, if_pos (show
+        (((fun x : Placement => x.piece) pl) == q) = true from by
+          simp [hp])]
+      push_cast
+      ring
+    · rw [if_neg hp, if_neg (show
+        ¬ ((((fun x : Placement => x.piece) pl) == q) = true) from by
+          simp [hp])]
+      push_cast
+      ring
+
+/-- A word with no flat T carries exactly the L and J tallies. -/
+theorem wordRowCharge_of_no_flat_T {pls : List Placement}
+    (h : ∀ pl ∈ pls,
+      ¬ (pl.piece = Piece.T ∧ (pl.rot = 0 ∨ pl.rot = 2))) :
+    wordRowCharge pls
+      = wordPieceCharge Piece.L pls + wordPieceCharge Piece.J pls := by
+  induction pls with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordRowCharge_cons, ih (fun q hq => h q (by simp [hq])),
+      wordPieceCharge_cons, wordPieceCharge_cons,
+      shapeRowCharge_of_not_flat_T (h pl (by simp))]
+    by_cases hL : pl.piece = Piece.L
+    · rw [if_pos (Or.inl hL), if_pos hL,
+        if_neg (show ¬ (pl.piece = Piece.J) from by rw [hL]; decide)]
+      ring
+    · by_cases hJ : pl.piece = Piece.J
+      · rw [if_pos (Or.inr hJ), if_neg hL, if_pos hJ]
+        ring
+      · rw [if_neg (by tauto), if_neg hL, if_neg hJ]
+        ring
+
+/-- **EVERY LEGAL 35-CYCLE LAYS A T FLAT.** L and J contribute five
+apiece — an even total — so the whole odd row moment must come from the
+T's, and only a T in one of its two flat rotations carries any. An odd
+number of the cycle's five T's are therefore laid flat; in particular at
+least one is. A concrete, checkable demand on the M2 witness, obtained
+from parity alone. -/
+theorem legal_cycle_has_flat_T {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    ∃ pl ∈ w, pl.piece = Piece.T ∧ (pl.rot = 0 ∨ pl.rot = 2) := by
+  by_contra hcon
+  have hcon' : ∀ pl ∈ w,
+      ¬ (pl.piece = Piece.T ∧ (pl.rot = 0 ∨ pl.rot = 2)) := by
+    intro pl hpl hbad
+    exact hcon ⟨pl, hpl, hbad⟩
+  have h1 := wordRowCharge_of_no_flat_T hcon'
+  have hL := legal_cycle_word_piece_census hwf hne hv hbag hfold Piece.L
+  have hJ := legal_cycle_word_piece_census hwf hne hv hbag hfold Piece.J
+  rw [census_eq_count, hlen] at hL hJ
+  norm_num at hL hJ
+  rw [wordPieceCharge_eq_count, wordPieceCharge_eq_count, hL, hJ] at h1
+  have hodd := legal_cycle_rowCharge_odd hwf hne hv hbag hfold hlen
+  rw [h1] at hodd
+  revert hodd
+  decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

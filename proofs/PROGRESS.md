@@ -41629,6 +41629,32 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fr) — EVERY LEGAL 35-CYCLE LAYS A T FLAT (bank 393/N)
+
+The row-moment table turns out remarkably clean (eval-first, then
+kernel `decide` over all 7 pieces × 4 rotations):
+
+- I, O, S, Z — even in EVERY rotation.
+- L, J — odd in EVERY rotation.
+- T — odd exactly in its two FLAT rotations (0 and 2).
+
+- **`shapeRowCharge_eq_one_iff`** — that table, certified.
+- **`shapeRowCharge_of_not_flat_T`** — away from the flat T the row
+  moment is just the L/J indicator.
+- **`wordPieceCharge`** (+ `_eq_count`), **`wordRowCharge_of_no_flat_T`**
+  — a word with no flat T carries exactly the L and J tallies.
+- **`legal_cycle_has_flat_T`** — THE CAPSTONE: L and J contribute five
+  apiece, an EVEN total, so the entire odd row moment must come from
+  the T's — and only a flat T carries any. An odd number of the cycle's
+  five T's are laid flat; in particular AT LEAST ONE IS.
+
+A concrete, checkable demand on the M2 witness, obtained from parity
+alone: you cannot build a legal 35-cycle playing every T upright.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fq) — the row charge, and a rotation census (bank 392/N)
 
 Splitting the checkerboard colour (c + r) into its coordinates gives
