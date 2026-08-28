@@ -12584,6 +12584,145 @@ theorem cycle_first_move_flush {b : Board} {pl : Placement}
   rw [hnorecycle] at hcons
   exact (wordBuried_eq_zero_cons.mp hcons).1
 
+/-! ### The bottom row: a geometric application of the obstruction
+
+The bottom row is special. Placements can only ADD to it, and a clear
+that does not take row zero leaves it exactly alone — nothing can fall
+into the bottom row unless the bottom row itself is removed. So the
+bottom row is a monotone quantity along any word that never fills it,
+and the obstruction principle freezes it. -/
+
+/-- The cells sitting in the bottom row. -/
+def bottomCells (b : Board) : Finset Coord := b.filter (fun p => p.2 = 0)
+
+/-- Placements only ever add to the bottom row. -/
+theorem bottomCells_subset_place (b : Board) (pl : Placement) :
+    bottomCells b ⊆ bottomCells (pl.place b) := by
+  unfold bottomCells
+  apply Finset.filter_subset_filter
+  rw [Placement.place_eq_union_dropped]
+  exact Finset.subset_union_left
+
+/-- **A clear that spares the bottom row leaves it untouched**: nothing
+can fall into row zero unless row zero itself is cleared, because a cell
+reaching row zero from above would need every row beneath it full. -/
+theorem bottomCells_clearLines {b : Board}
+    (hnf : ¬ Board.isFull GameConfig.standard b 0) :
+    bottomCells (Board.clearLines GameConfig.standard b) = bottomCells b := by
+  classical
+  have hcb0 : Board.clearedBelow GameConfig.standard b 0 = 0 := by
+    unfold Board.clearedBelow
+    rw [Finset.card_eq_zero, Finset.eq_empty_iff_forall_notMem]
+    intro x hx
+    have := (Finset.mem_filter.mp hx).2
+    omega
+  ext p
+  unfold bottomCells
+  simp only [Finset.mem_filter]
+  constructor
+  · rintro ⟨hp, hp0⟩
+    rw [Board.mem_clearLines_iff] at hp
+    obtain ⟨q, hq, hqnf, hqp⟩ := hp
+    have h2 : q.2 - Board.clearedBelow GameConfig.standard b q.2 = p.2 :=
+      congrArg Prod.snd hqp
+    have hle := clearedBelow_le GameConfig.standard b q.2
+    have hq0 : q.2 = 0 := by
+      by_contra hne
+      have heq : Board.clearedBelow GameConfig.standard b q.2 = q.2 := by
+        omega
+      have hsub : (Board.fullRows GameConfig.standard b).filter (· < q.2)
+          ⊆ Finset.range q.2 := by
+        intro x hx
+        exact Finset.mem_range.mpr (Finset.mem_filter.mp hx).2
+      have hcard : (Finset.range q.2).card
+          ≤ ((Board.fullRows GameConfig.standard b).filter (· < q.2)).card := by
+        rw [Finset.card_range]
+        unfold Board.clearedBelow at heq
+        omega
+      have hfe := Finset.eq_of_subset_of_card_le hsub hcard
+      have h0mem : (0 : ℕ) ∈ (Board.fullRows GameConfig.standard b).filter
+          (· < q.2) := by
+        rw [hfe]
+        exact Finset.mem_range.mpr (by omega)
+      have := (Finset.mem_filter.mp h0mem).1
+      exact hnf (Board.isFull_of_mem_fullRows this)
+    have hpq : p = q := by
+      rw [← hqp, hq0, hcb0]
+      exact Prod.ext_iff.mpr ⟨rfl, by omega⟩
+    rw [hpq]
+    exact ⟨hq, by rw [← hq0]⟩
+  · rintro ⟨hp, hp0⟩
+    refine ⟨?_, hp0⟩
+    rw [Board.mem_clearLines_iff]
+    refine ⟨p, hp, ?_, ?_⟩
+    · rw [hp0]
+      exact hnf
+    · rw [hp0, hcb0]
+      exact Prod.ext_iff.mpr ⟨rfl, by omega⟩
+
+/-- One move never shrinks the bottom row, provided it does not clear
+it. -/
+theorem bottomCells_card_applyStep_ge {b : Board} {pl : Placement}
+    (hnf : ¬ Board.isFull GameConfig.standard (pl.place b) 0) :
+    (bottomCells b).card
+      ≤ (bottomCells (Placement.applyStep GameConfig.standard b pl)).card := by
+  rw [Placement.applyStep_eq_clearLines_place, bottomCells_clearLines hnf]
+  exact Finset.card_le_card (bottomCells_subset_place b pl)
+
+/-- The word fills its bottom row at some point. -/
+def wordBottomClear (b : Board) : List Placement → Prop
+  | [] => False
+  | pl :: rest =>
+      Board.isFull GameConfig.standard (pl.place b) 0
+      ∨ wordBottomClear (Placement.applyStep GameConfig.standard b pl) rest
+
+theorem wordBottomClear_cons {b : Board} {pl : Placement}
+    {rest : List Placement} :
+    wordBottomClear b (pl :: rest)
+      ↔ Board.isFull GameConfig.standard (pl.place b) 0
+        ∨ wordBottomClear (Placement.applyStep GameConfig.standard b pl)
+            rest := Iff.rfl
+
+/-- A word that never fills the bottom row never shrinks it. -/
+theorem bottomCells_card_word_ge {b : Board} {pls : List Placement}
+    (hnb : ¬ wordBottomClear b pls) :
+    (bottomCells b).card
+      ≤ (bottomCells (pls.foldl
+          (Placement.applyStep GameConfig.standard) b)).card := by
+  induction pls generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordBottomClear_cons] at hnb
+    push Not at hnb
+    rw [List.foldl_cons]
+    exact le_trans (bottomCells_card_applyStep_ge hnb.1) (ih hnb.2)
+
+/-- **THE BOTTOM-ROW DICHOTOMY**: a cycle either fills its bottom row at
+some point, or its pieces never put a single cell there. There is no
+middle course — a loop cannot deposit cells in the bottom row and get
+them back without ever completing it. (Cycle rotation carries the
+statement from the first move to every move.) -/
+theorem cycle_bottom_row_frozen {b : Board} {pl : Placement}
+    {rest : List Placement}
+    (hnb : ¬ wordBottomClear b (pl :: rest))
+    (hfold : (pl :: rest).foldl
+      (Placement.applyStep GameConfig.standard) b = b) :
+    bottomCells (pl.place b) = bottomCells b := by
+  rw [wordBottomClear_cons] at hnb
+  push Not at hnb
+  have hstep := bottomCells_card_applyStep_ge (b := b) (pl := pl) hnb.1
+  have htail := bottomCells_card_word_ge hnb.2
+  rw [List.foldl_cons] at hfold
+  rw [hfold] at htail
+  have hplace : bottomCells
+      (Placement.applyStep GameConfig.standard b pl)
+      = bottomCells (pl.place b) := by
+    rw [Placement.applyStep_eq_clearLines_place]
+    exact bottomCells_clearLines hnb.1
+  rw [hplace] at hstep htail
+  exact (Finset.eq_of_subset_of_card_le (bottomCells_subset_place b pl)
+    (by omega)).symm
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

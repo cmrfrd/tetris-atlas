@@ -41629,6 +41629,31 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fk) — THE BOTTOM-ROW DICHOTOMY (bank 386/N)
+
+The first geometric application of the obstruction principle. The
+bottom row is special: placements can only ADD to it, and a clear that
+spares row zero leaves it EXACTLY alone — a cell falling into row zero
+from above would need every row beneath it full, which would mean row
+zero was full and cleared.
+
+- **`bottomCells`** / **`bottomCells_subset_place`** — placements only
+  add to the bottom row.
+- **`bottomCells_clearLines`** — a clear sparing row zero fixes it
+  pointwise (set equality, not just cardinality).
+- **`bottomCells_card_applyStep_ge`**, **`wordBottomClear`**,
+  **`bottomCells_card_word_ge`** — so the bottom row is monotone along
+  any word that never fills it.
+- **`cycle_bottom_row_frozen`** — THE DICHOTOMY: a cycle either fills
+  its bottom row at some point, or its pieces never put a single cell
+  there. A loop cannot deposit cells in the bottom row and get them
+  back without ever completing it. Cycle rotation carries the
+  statement from the first move to every move.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fj) — the obstruction sharpened, and two things it catches (bank 385/N)
 
 The monotone obstruction demanded a quantity monotone on ALL boards —
