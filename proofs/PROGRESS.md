@@ -41629,6 +41629,35 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fi) — schedule, obstruction, coordinates (bank 384/N)
+
+Every law so far is a TOTAL over the whole cycle. Three orthogonal
+refinements, one run.
+
+1. **The schedule.** `prefix_clear_bound`: at EVERY prefix, ten times
+   the rows cleared so far is at most the base mass plus four per move
+   — you cannot clear faster than you deliver. `prefix_mass_bound`:
+   nor fall more than one boardful behind while in-field. The clears
+   are pinned into a band around the 0.4 line at every prefix, not
+   merely on average.
+2. **The obstruction.** `foldl_monotone` / `cycle_monotone_const`: a
+   quantity that never falls under a move is FROZEN on a cycle —
+   nothing that only ever grows can grow inside a loop.
+   `no_cycle_of_strict_increase`: hence ONE strict increase anywhere
+   refutes the entire cycle. A general recipe for proving cycles do
+   not exist, rather than another property of cycles that do.
+3. **The coordinates.** `crt_five_seven` (+ uniqueness by omega) and
+   `legal_cycle_orbit_torus`: the mass clock reads the orbit position
+   mod five and the bag clock reads it mod seven, so the two clocks
+   are a COORDINATE SYSTEM on the orbit — every (mass residue, bag
+   size) pair occurs, exactly once, among the thirty-five states.
+   `legal_cycle_coordinates_faithful`: the coordinates separate
+   positions.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fh) — the burial ledger: what a cycle does with its holes (bank 383/N)
 
 A third orthogonal conserved quantity, and the least trivial: hole debt

@@ -12300,6 +12300,175 @@ theorem cycle_flush_iff_no_recycling {b : Board} {pls : List Placement}
   have h := cycle_burial_conservation hwf hv hfold
   omega
 
+/-! ### Three more angles: schedule, obstruction, coordinates
+
+The laws so far are all TOTALS over the whole cycle. Three orthogonal
+refinements: a constraint on every PREFIX (when the clears may happen),
+a general principle for REFUTING cycles, and the coordinate structure
+the two clocks impose on the orbit. -/
+
+/-! #### Angle one: the clear schedule -/
+
+/-- **You cannot clear faster than you deliver**: at every prefix of a
+word, ten times the rows cleared so far is at most the starting mass
+plus four per move played. A constraint on the SCHEDULE of clears, not
+merely on their total. -/
+theorem prefix_clear_bound {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard) (i : ℕ) :
+    10 * wordClears b (pls.take i) ≤ b.count + 4 * i := by
+  have hvt : ∀ pl ∈ pls.take i, pl.Valid GameConfig.standard :=
+    fun pl hpl => hv pl (List.mem_of_mem_take hpl)
+  have h := foldl_count_ledger_exact (b := b) (pls := pls.take i) hwf hvt
+  have hlen : (pls.take i).length ≤ i := by
+    rw [List.length_take]
+    omega
+  omega
+
+/-- **…and you cannot fall more than a boardful behind**: while the
+board stays inside the field, the mass delivered so far exceeds the mass
+cleared by at most one full board. The clears are pinned into a band
+around the `0.4`-per-move line at every prefix. -/
+theorem prefix_mass_bound {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard) {i : ℕ}
+    (hi : i ≤ pls.length)
+    (hcap : ((pls.take i).foldl
+      (Placement.applyStep GameConfig.standard) b).count ≤ 200) :
+    b.count + 4 * i ≤ 200 + 10 * wordClears b (pls.take i) := by
+  have hvt : ∀ pl ∈ pls.take i, pl.Valid GameConfig.standard :=
+    fun pl hpl => hv pl (List.mem_of_mem_take hpl)
+  have h := foldl_count_ledger_exact (b := b) (pls := pls.take i) hwf hvt
+  have hlen : (pls.take i).length = i := by
+    rw [List.length_take]
+    omega
+  rw [hlen] at h
+  omega
+
+/-- A legal 35-cycle's opening cannot be clear-heavy: after `i` moves it
+has cleared at most `(base mass + 4i)/10` rows. -/
+theorem legal_cycle_prefix_clears {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) (i : ℕ) :
+    10 * wordClears b (w.take i) ≤ b.count + 4 * i :=
+  prefix_clear_bound hwf hv i
+
+/-! #### Angle two: refuting cycles with a monotone quantity -/
+
+/-- A quantity that never falls under a move never falls along a word. -/
+theorem foldl_monotone {Φ : Board → ℕ}
+    (hmono : ∀ b pl, Φ b
+      ≤ Φ (Placement.applyStep GameConfig.standard b pl))
+    (b : Board) (pls : List Placement) :
+    Φ b ≤ Φ (pls.foldl (Placement.applyStep GameConfig.standard) b) := by
+  induction pls generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [List.foldl_cons]
+    exact le_trans (hmono b pl) (ih _)
+
+/-- **Monotone quantities are FROZEN on a cycle**: if `Φ` never falls
+under a move, then every board a cycle visits carries the same `Φ`.
+Nothing that only ever grows can actually grow inside a loop. -/
+theorem cycle_monotone_const {Φ : Board → ℕ}
+    (hmono : ∀ b pl, Φ b
+      ≤ Φ (Placement.applyStep GameConfig.standard b pl))
+    {b : Board} {pls : List Placement}
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (i : ℕ) :
+    Φ ((pls.take i).foldl (Placement.applyStep GameConfig.standard) b)
+      = Φ b := by
+  have h1 := foldl_monotone hmono b (pls.take i)
+  have h2 := foldl_monotone hmono
+    ((pls.take i).foldl (Placement.applyStep GameConfig.standard) b)
+    (pls.drop i)
+  have h3 : (pls.drop i).foldl (Placement.applyStep GameConfig.standard)
+      ((pls.take i).foldl (Placement.applyStep GameConfig.standard) b)
+      = pls.foldl (Placement.applyStep GameConfig.standard) b := by
+    rw [← List.foldl_append, List.take_append_drop]
+  rw [h3, hfold] at h2
+  omega
+
+/-- **THE MONOTONE OBSTRUCTION**: a single strict increase of a
+monotone quantity anywhere along a word refutes the whole cycle. To
+prove no cycle passes through a board it therefore suffices to exhibit
+one never-falling measure that genuinely rises at one move — a general
+recipe for cycle non-existence proofs. -/
+theorem no_cycle_of_strict_increase {Φ : Board → ℕ}
+    (hmono : ∀ b pl, Φ b
+      ≤ Φ (Placement.applyStep GameConfig.standard b pl))
+    {b : Board} {pls : List Placement} {i : ℕ}
+    (hstrict :
+      Φ ((pls.take i).foldl (Placement.applyStep GameConfig.standard) b)
+        < Φ ((pls.take (i + 1)).foldl
+              (Placement.applyStep GameConfig.standard) b)) :
+    pls.foldl (Placement.applyStep GameConfig.standard) b ≠ b := by
+  intro hfold
+  have h1 := cycle_monotone_const hmono hfold i
+  have h2 := cycle_monotone_const hmono hfold (i + 1)
+  omega
+
+/-! #### Angle three: the orbit's coordinates -/
+
+/-- Every residue pair modulo five and seven is realized below 35. -/
+theorem crt_five_seven :
+    ∀ a < 5, ∀ b < 7, ∃ i < 35, i % 5 = a ∧ i % 7 = b := by decide
+
+/-- …and realized only once. -/
+theorem crt_five_seven_unique {i j : ℕ} (hi : i < 35) (hj : j < 35)
+    (h5 : i % 5 = j % 5) (h7 : i % 7 = j % 7) : i = j := by omega
+
+/-- **THE ORBIT IS A FIVE-BY-SEVEN TORUS**: the mass clock reads the
+position modulo five and the bag clock reads it modulo seven, so the
+pair of clocks is a COORDINATE SYSTEM on a legal cycle's orbit — every
+combination of a mass residue and a bag size occurs, and occurs exactly
+once, among the thirty-five states. -/
+theorem legal_cycle_orbit_torus {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    ∀ a < 5, ∀ c < 7, ∃ i < 35,
+      (wordPlay ⟨b, Bag.full⟩ w i).bag.card = 7 - c
+      ∧ (wordPlay ⟨b, Bag.full⟩ w i).board.count % 10
+          = (b.count + 4 * a) % 10 := by
+  have hpos : 0 < w.length := List.length_pos_iff.mpr hne
+  have h35 := legal_cycle_word_thirty_five_dvd hwf hne hv hbag hfold
+  have h7 : 7 ∣ w.length := by omega
+  intro a ha c hc
+  obtain ⟨i, hi, h5i, h7i⟩ := crt_five_seven a ha c hc
+  refine ⟨i, hi, ?_, ?_⟩
+  · rw [wordPlay_bag_card (b := b) hbag h7 (by omega), h7i]
+  · rw [wordPlay_count_mod (b := b) (w := w) hwf hv (by omega)]
+    omega
+
+/-- The coordinates separate: two orbit positions agreeing on both
+clocks are the same position. -/
+theorem legal_cycle_coordinates_faithful {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    {i j : ℕ} (hi : i < 35) (hj : j < 35)
+    (hbagcard : (wordPlay ⟨b, Bag.full⟩ w i).bag.card
+      = (wordPlay ⟨b, Bag.full⟩ w j).bag.card)
+    (hcount : (wordPlay ⟨b, Bag.full⟩ w i).board.count % 10
+      = (wordPlay ⟨b, Bag.full⟩ w j).board.count % 10) :
+    i = j := by
+  have hpos : 0 < w.length := List.length_pos_iff.mpr hne
+  have h35 := legal_cycle_word_thirty_five_dvd hwf hne hv hbag hfold
+  have h7 : 7 ∣ w.length := by omega
+  have hbi := wordPlay_bag_card (b := b) hbag h7 (show i ≤ w.length by omega)
+  have hbj := wordPlay_bag_card (b := b) hbag h7 (show j ≤ w.length by omega)
+  have hci := wordPlay_count_mod (b := b) (w := w) hwf hv
+    (show i ≤ w.length by omega)
+  have hcj := wordPlay_count_mod (b := b) (w := w) hwf hv
+    (show j ≤ w.length by omega)
+  rw [hbi, hbj] at hbagcard
+  rw [hci, hcj] at hcount
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
