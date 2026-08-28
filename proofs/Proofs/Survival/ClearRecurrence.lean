@@ -11604,6 +11604,90 @@ theorem legal_word_draw_legal {b : Board} {w : List Placement}
   have := (List.Nodup.getElem_inj_iff hblk_nodup).mp heq2
   omega
 
+/-- The orbit of a word play, as a lookup table of states. -/
+def wordOrbit (b : Board) (w : List Placement) : List GameState :=
+  (List.range w.length).map (wordPlay ⟨b, Bag.full⟩ w)
+
+/-- The table policy that realizes a word: look the state up in the
+orbit and play the word's letter at that position. -/
+def wordPolicy (b : Board) (w : List Placement) :
+    Policy GameConfig.standard :=
+  fun g => w.getD ((wordOrbit b w).idxOf g) ⟨Piece.O, 0, 0⟩
+
+/-- The play reduces to its first period. -/
+theorem wordPlay_mod {b : Board} {w : List Placement} (hne : w ≠ [])
+    (hcyc : stepWord ⟨b, Bag.full⟩ w = ⟨b, Bag.full⟩) :
+    ∀ n, wordPlay ⟨b, Bag.full⟩ w n
+      = wordPlay ⟨b, Bag.full⟩ w (n % w.length) := by
+  have hpos : 0 < w.length := List.length_pos_iff.mpr hne
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    by_cases hlt : n < w.length
+    · rw [Nat.mod_eq_of_lt hlt]
+    · have hge : w.length ≤ n := by omega
+      have hsplit : n = w.length + (n - w.length) := by omega
+      rw [hsplit, wordPlay_periodic hne hcyc,
+        ih (n - w.length) (by omega), Nat.add_mod_left]
+
+/-- A legal 35-word's orbit table has no repeated states. -/
+theorem wordOrbit_nodup {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    (wordOrbit b w).Nodup := by
+  have hdis := legal_cycle_thirty_five_distinct_states hwf hne hv
+    hbag hfold
+  unfold wordOrbit
+  apply List.Nodup.map_on
+  · intro x hx y hy hxy
+    rw [List.mem_range, hlen] at hx hy
+    by_contra hne'
+    exact hdis x hx y hy hne' hxy
+  · exact List.nodup_range ..
+
+/-- **The table policy reads the word**: at the orbit's `i`-th state,
+the policy plays exactly the word's `i`-th letter. -/
+theorem wordPolicy_eval {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) {i : ℕ} (hi : i < 35) :
+    wordPolicy b w (wordPlay ⟨b, Bag.full⟩ w i)
+      = w.getD i ⟨Piece.O, 0, 0⟩ := by
+  have hnodup := wordOrbit_nodup hwf hne hv hbag hfold hlen
+  have hdis := legal_cycle_thirty_five_distinct_states hwf hne hv
+    hbag hfold
+  have hmem : wordPlay ⟨b, Bag.full⟩ w i ∈ wordOrbit b w := by
+    unfold wordOrbit
+    rw [List.mem_map]
+    exact ⟨i, by rw [List.mem_range, hlen]; exact hi, rfl⟩
+  have hjlt : (wordOrbit b w).idxOf (wordPlay ⟨b, Bag.full⟩ w i)
+      < (wordOrbit b w).length := List.idxOf_lt_length_of_mem hmem
+  have hjget : (wordOrbit b w)[(wordOrbit b w).idxOf
+      (wordPlay ⟨b, Bag.full⟩ w i)]'hjlt
+      = wordPlay ⟨b, Bag.full⟩ w i := List.getElem_idxOf hjlt
+  have hlen_orbit : (wordOrbit b w).length = 35 := by
+    unfold wordOrbit
+    rw [List.length_map, List.length_range, hlen]
+  have hjw : ∀ (j : ℕ) (hj : j < (wordOrbit b w).length),
+      (wordOrbit b w)[j]'hj = wordPlay ⟨b, Bag.full⟩ w j := by
+    intro j hj
+    unfold wordOrbit
+    simp only [List.getElem_map, List.getElem_range]
+  have hji : (wordOrbit b w).idxOf (wordPlay ⟨b, Bag.full⟩ w i)
+      = i := by
+    by_contra hne'
+    apply hdis ((wordOrbit b w).idxOf (wordPlay ⟨b, Bag.full⟩ w i))
+      (by have h := hjlt; rw [hlen_orbit] at h; omega) i hi hne'
+    rw [← hjw _ hjlt]
+    exact hjget
+  unfold wordPolicy
+  rw [hji]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

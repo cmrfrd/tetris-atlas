@@ -41629,6 +41629,26 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fe) — the realizing table policy (bank 380/N)
+
+- **`wordOrbit`** / **`wordPolicy`** — the orbit of a word play as a
+  lookup table, and the policy that finds the current state in it and
+  plays the corresponding letter.
+- **`wordPlay_mod`** — the infinite play reduces to its first period.
+- **`wordOrbit_nodup`** — a legal 35-word's orbit table has no
+  repeated states (from the 35-distinctness).
+- **`wordPolicy_eval`** — at the orbit's i-th state the policy plays
+  EXACTLY the word's i-th letter: the table policy realizes the word.
+
+Gotchas: `rw` on an `idxOf` index inside a dependent `getElem` fails
+(motive not type correct) — keep the index un-`set` and phrase the
+helper as `∀ j hj, orbit[j] = play j`; and `Nat.mod_eq_sub_mod` runs
+the wrong way here, use `Nat.add_mod_left`.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fd) — every draw of a legal word is legal (bank 379/N)
 
 - **`getD_drop_add`** — getD through drop.
