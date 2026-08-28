@@ -12998,6 +12998,157 @@ theorem charge_applyStep {b : Board} {pl : Placement}
     charge_clearLines (Placement.place_wf hwf hv),
     BagGrowth.charge_place, BagGrowth.charge_shapeUp_pl]
 
+/-! ### What the charge law says about a cycle
+
+Folding the charge law along a word gives, for a loop, a single
+equation in `ZMod 2` tying three things together: how many T's were
+played, how many rows were cleared, and how much gravity work the
+clears did. On a legal 35-cycle the first two are pinned (five T's,
+fourteen rows), so the third is FORCED — and forced to be odd, hence
+nonzero. -/
+
+/-- The T-charge of a word: one per T played, mod two. -/
+def wordTCharge : List Placement → ZMod 2
+  | [] => 0
+  | pl :: rest => (if pl.piece = Piece.T then 1 else 0) + wordTCharge rest
+
+@[simp] theorem wordTCharge_nil : wordTCharge [] = 0 := rfl
+
+theorem wordTCharge_cons (pl : Placement) (rest : List Placement) :
+    wordTCharge (pl :: rest)
+      = (if pl.piece = Piece.T then 1 else 0) + wordTCharge rest := rfl
+
+/-- The total gravity work of a word's clears. -/
+def wordGravity (b : Board) : List Placement → ZMod 2
+  | [] => 0
+  | pl :: rest =>
+      gravityWork (pl.place b)
+      + wordGravity (Placement.applyStep GameConfig.standard b pl) rest
+
+@[simp] theorem wordGravity_nil (b : Board) : wordGravity b [] = 0 := rfl
+
+theorem wordGravity_cons (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    wordGravity b (pl :: rest)
+      = gravityWork (pl.place b)
+        + wordGravity (Placement.applyStep GameConfig.standard b pl)
+            rest := rfl
+
+/-- The T-charge counts the T's. -/
+theorem wordTCharge_eq_count (pls : List Placement) :
+    wordTCharge pls = (((pls.map (·.piece)).count Piece.T : ℕ) : ZMod 2) := by
+  induction pls with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordTCharge_cons, ih, List.map_cons, List.count_cons]
+    by_cases hp : pl.piece = Piece.T
+    · rw [if_pos hp, if_pos (show
+        (((fun x : Placement => x.piece) pl) == Piece.T) = true from by
+          simp [hp])]
+      push_cast
+      ring
+    · rw [if_neg hp, if_neg (show
+        ¬ ((((fun x : Placement => x.piece) pl) == Piece.T) = true) from by
+          simp [hp])]
+      push_cast
+      ring
+
+/-- **The charge ledger along a word**: the final charge is the initial
+charge plus one per T, plus the rows cleared, plus the gravity work. -/
+theorem charge_word {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard) :
+    BagGrowth.charge
+        (pls.foldl (Placement.applyStep GameConfig.standard) b)
+      = BagGrowth.charge b + wordTCharge pls
+        + ((wordClears b pls : ℕ) : ZMod 2) + wordGravity b pls := by
+  induction pls generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    have hvpl := hv pl (by simp)
+    have hstep := charge_applyStep hwf hvpl
+    have hrec := ih (Placement.applyStep_wf hwf hvpl)
+      (fun q hq => hv q (by simp [hq]))
+    rw [List.foldl_cons, hrec, hstep, wordClears_cons, wordTCharge_cons,
+      wordGravity_cons]
+    push_cast
+    ring
+
+/-- **THE CYCLE CHARGE EQUATION**: around a loop the charge returns, so
+the gravity work is exactly the T-count plus the cleared-row count,
+modulo two. Piece census on one side, clear geometry on the other. -/
+theorem cycle_charge_law {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard)
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    wordGravity b pls
+      = wordTCharge pls + ((wordClears b pls : ℕ) : ZMod 2) := by
+  have h := charge_word hwf hv
+  rw [hfold] at h
+  have hchar : ∀ x : ZMod 2, x + x = 0 := by decide
+  have key := hchar (BagGrowth.charge b)
+  have key2 := hchar (wordTCharge pls)
+  have key3 := hchar (((wordClears b pls : ℕ) : ZMod 2))
+  first
+    | linear_combination -h - key2 - key3
+    | linear_combination h - key2 - key3
+    | linear_combination -h - key - key2 - key3
+
+/-- **A LEGAL 35-CYCLE DOES ODD GRAVITY WORK.** Five T's are played
+(odd) against fourteen rows cleared (even), so the gravity work must be
+one. In particular it is NOT zero: the loop cannot do all its clearing
+at the very top of the stack. -/
+theorem legal_cycle_gravity_odd {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    wordGravity b w = 1 := by
+  have hcensus := legal_cycle_word_piece_census hwf hne hv hbag hfold
+    Piece.T
+  rw [census_eq_count, hlen] at hcensus
+  have hclears := legal_cycle_word_clears_fourteen hwf hne hv hbag hfold
+    hlen
+  rw [cycle_charge_law hwf hv hfold, wordTCharge_eq_count, hcensus,
+    hclears]
+  decide
+
+/-- Odd gravity work means some clear happened with material above it:
+there is a surviving cell sitting over a cleared row. -/
+theorem exists_cell_above_clear {B : Board} (h : gravityWork B ≠ 0) :
+    ∃ p ∈ B, ¬ Board.isFull GameConfig.standard B p.2
+      ∧ 0 < Board.clearedBelow GameConfig.standard B p.2 := by
+  classical
+  by_contra hcon
+  push Not at hcon
+  apply h
+  unfold gravityWork
+  apply Finset.sum_eq_zero
+  intro p hp
+  obtain ⟨hpb, hpnf⟩ := Finset.mem_filter.mp hp
+  have := hcon p hpb hpnf
+  rw [show Board.clearedBelow GameConfig.standard B p.2 = 0 from by omega]
+  simp
+
+/-- **SOME CLEAR OF A LEGAL CYCLE CARRIES A LOAD**: not every clear can
+be a clean sweep off the top — at least one of them happens with
+surviving cells stacked above it. A structural fact about the geometry
+of the loop, derived from the piece census alone. -/
+theorem exists_loaded_clear {b : Board} {pls : List Placement}
+    (h : wordGravity b pls ≠ 0) :
+    ∃ (c : Board) (pl : Placement),
+      ∃ p ∈ pl.place c, ¬ Board.isFull GameConfig.standard (pl.place c) p.2
+        ∧ 0 < Board.clearedBelow GameConfig.standard (pl.place c) p.2 := by
+  induction pls generalizing b with
+  | nil => exact absurd rfl h
+  | cons pl rest ih =>
+    rw [wordGravity_cons] at h
+    by_cases hhead : gravityWork (pl.place b) = 0
+    · rw [hhead, zero_add] at h
+      exact ih h
+    · exact ⟨b, pl, exists_cell_above_clear hhead⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

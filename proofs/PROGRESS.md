@@ -41629,6 +41629,37 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fn) — what the charge law says about a cycle (bank 389/N)
+
+Folding yesterday's charge law along a word ties three things together
+in ZMod 2: T's played, rows cleared, gravity work done.
+
+- **`wordTCharge`** (+ `_eq_count`), **`wordGravity`**,
+  **`charge_word`** — the charge ledger along a word: final charge =
+  initial + one per T + rows cleared + gravity work.
+- **`cycle_charge_law`** — around a loop the charge returns, so the
+  gravity work IS the T-count plus the cleared-row count, mod two.
+  Piece census on one side, clear geometry on the other.
+- **`legal_cycle_gravity_odd`** — on a legal 35-cycle the census is
+  pinned: five T's (odd) against fourteen rows (even), so the gravity
+  work is forced to ONE. In particular nonzero.
+- **`exists_cell_above_clear`** / **`exists_loaded_clear`** — nonzero
+  gravity work means a surviving cell sat above a cleared row, so SOME
+  CLEAR OF A LEGAL CYCLE CARRIES A LOAD. Not every clear can be a
+  clean sweep off the top of the stack.
+
+A geometric conclusion derived from the piece census alone — precisely
+the kind of statement `CountingBarrier` says pure counting cannot
+reach.
+
+Gotchas: `List.count_cons` fires on `(b == a) = true`, not `b = a`;
+and `ring`/`linear_combination` do NOT know char two — supply
+`∀ x : ZMod 2, x + x = 0` by `decide` and pick the sign.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fm) — THE CHARGE LAW ACROSS A CLEAR (bank 388/N)
 
 The checkerboard charge is the library's sharpest near-geometric tool
