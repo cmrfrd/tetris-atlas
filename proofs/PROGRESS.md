@@ -41629,6 +41629,41 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fh) — the burial ledger: what a cycle does with its holes (bank 383/N)
+
+A third orthogonal conserved quantity, and the least trivial: hole debt
+enters and leaves by two DIFFERENT mechanisms. Placements bury cells (a
+piece bridging a gap leaves empties underneath); clears unbury them
+(removing a column's top cells can lift its holes above the new
+skyline). Around a cycle the two must balance exactly.
+
+- **`sup_ge_add_card`** — card distinct values all above h force the
+  supremum up to h + card.
+- **`colHeight_place_ge_add_colProfile`** — a column's skyline rises by
+  at least the number of cells it receives: the dropped cells in that
+  column sit at distinct rows, all at or above the old height.
+  HYPOTHESIS-FREE (no validity, no in-field assumption).
+- **`debt_le_debt_place`** — hence placements never discharge debt,
+  proved without the in-field hypotheses the library's geometric route
+  requires. A strictly better lemma than the existing one.
+- **`debt_applyStep_le`**, **`wordBuried`**, **`wordUnburied`**,
+  **`debt_word`** — the burial ledger along a word: starting debt plus
+  everything buried equals ending debt plus everything unburied.
+- **`cycle_burial_conservation`** — around ANY cycle, holes buried by
+  placements = holes freed by clears. A cycle cannot bury on credit:
+  every cell it covers must be uncovered again before the loop closes.
+- **`cycle_flush_iff_no_recycling`** — flush play and hole recycling
+  stand or fall together. Either the loop is played perfectly clean or
+  it both digs and recovers; there is no cycle that only digs and none
+  that only recovers.
+
+Two imports added to ClearRecurrence (HoleDebt, SurfaceCalculus); the
+Invariants layer never imports Survival, so no cycle.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fg) — the family collapses; the drop coordinates do not (bank 382/N)
 
 A self-audit of yesterday's engine, plus the payoff it actually hides.

@@ -2,6 +2,8 @@ import Mathlib
 import Proofs.Survival.ClearDeviation
 import Proofs.Invariants.ColumnCount
 import Proofs.Invariants.Holes
+import Proofs.Invariants.HoleDebt
+import Proofs.Invariants.SurfaceCalculus
 
 /-!
 # Recurrence and period: the arithmetic skeleton of an immortal solver
@@ -12098,6 +12100,205 @@ theorem legal_cycle_quad_3990 {b : Board} {w : List Placement}
       + 2 * pl.col * shapeMoment pl + shapeQuad pl)).sum = 3990 := by
   rw [cycle_quad_moment_exact hv hfold,
     legal_cycle_word_clears_fourteen hwf hne hv hbag hfold hlen]
+
+/-! ### The burial ledger: what a cycle does with its holes
+
+Mass and column-delivery are conserved around a cycle; so is the hole
+debt, but far less trivially, because holes enter and leave by two
+different mechanisms. Placements BURY cells (a piece bridging a gap
+leaves empties underneath) and clears UNBURY them (removing a column's
+top cells can lift its holes above the new skyline). Around a cycle the
+two must balance exactly.
+
+The missing ingredient is that a placement never *reduces* the debt.
+The library proves this via the geometric hole set, at the price of
+in-field hypotheses on every board. The route below is hypothesis-free:
+a column's height rises by at least the number of cells it receives,
+because the dropped cells in that column sit at distinct rows, all at
+or above the old skyline. -/
+
+/-- **A sup lower bound from injectivity**: `card` distinct values, all
+above `h`, force the supremum up to `h + card`. -/
+theorem sup_ge_add_card {α : Type*} {S : Finset α} {f : α → ℕ} {h : ℕ}
+    (hne : S.Nonempty) (hinj : Set.InjOn f S)
+    (hlow : ∀ x ∈ S, h + 1 ≤ f x) :
+    h + S.card ≤ S.sup f := by
+  classical
+  have hsub : S.image f ⊆ Finset.Icc (h + 1) (S.sup f) := by
+    intro y hy
+    rw [Finset.mem_image] at hy
+    obtain ⟨x, hx, rfl⟩ := hy
+    rw [Finset.mem_Icc]
+    exact ⟨hlow x hx, Finset.le_sup hx⟩
+  have hcard : (S.image f).card = S.card :=
+    Finset.card_image_of_injOn hinj
+  have hle := Finset.card_le_card hsub
+  rw [Nat.card_Icc, hcard] at hle
+  obtain ⟨x0, hx0⟩ := hne
+  have h1 := hlow x0 hx0
+  have h2 : f x0 ≤ S.sup f := Finset.le_sup hx0
+  omega
+
+/-- **A column's skyline rises by at least what it receives**: the
+dropped cells of column `j` occupy distinct rows, all at or above the
+old height, so the new height clears the old by at least the column
+profile. Hypothesis-free — no validity, no in-field assumption. -/
+theorem colHeight_place_ge_add_colProfile (b : Board) (pl : Placement)
+    (j : ℕ) :
+    b.colHeight j + pl.colProfile j ≤ (pl.place b).colHeight j := by
+  classical
+  rw [SurfaceCalculus.colHeight_place_eq]
+  have hprof : pl.colProfile j = (SurfaceCalculus.cellsInCol pl j).card :=
+    rfl
+  by_cases hne : (SurfaceCalculus.cellsInCol pl j).Nonempty
+  · have hlow : ∀ cell ∈ SurfaceCalculus.cellsInCol pl j,
+        b.colHeight j + 1 ≤ pl.dropOffset b + cell.2 + 1 := by
+      intro cell hcell
+      rw [SurfaceCalculus.cellsInCol, Finset.mem_filter] at hcell
+      have hle := Finset.le_sup
+        (f := fun c : PieceCell => b.colHeight (pl.col + c.1) - c.2)
+        hcell.1
+      have hD : b.colHeight (pl.col + cell.1) - cell.2
+          ≤ pl.dropOffset b := by
+        rw [Placement.dropOffset_eq_sup]
+        simpa using hle
+      rw [hcell.2] at hD
+      omega
+    have hinj : Set.InjOn
+        (fun cell : PieceCell => pl.dropOffset b + cell.2 + 1)
+        (SurfaceCalculus.cellsInCol pl j) := by
+      intro x hx y hy hxy
+      have hx2 : pl.col + x.1 = j := by
+        have hx' := Finset.mem_coe.mp hx
+        rw [SurfaceCalculus.cellsInCol, Finset.mem_filter] at hx'
+        exact hx'.2
+      have hy2 : pl.col + y.1 = j := by
+        have hy' := Finset.mem_coe.mp hy
+        rw [SurfaceCalculus.cellsInCol, Finset.mem_filter] at hy'
+        exact hy'.2
+      have hxy' : pl.dropOffset b + x.2 + 1 = pl.dropOffset b + y.2 + 1 :=
+        hxy
+      exact Prod.ext_iff.mpr ⟨by omega, by omega⟩
+    have hsup := sup_ge_add_card (S := SurfaceCalculus.cellsInCol pl j)
+      (f := fun cell => pl.dropOffset b + cell.2 + 1) hne hinj hlow
+    rw [hprof]
+    exact le_trans hsup (le_max_right _ _)
+  · rw [Finset.not_nonempty_iff_eq_empty] at hne
+    rw [hprof, hne]
+    simp
+
+/-- **Placements never discharge debt** — hypothesis-free. Each column
+gains exactly its profile in cells and at least its profile in height,
+so no column's hole count can fall. -/
+theorem debt_le_debt_place (b : Board) (pl : Placement) :
+    HoleDebt.debt GameConfig.standard b
+      ≤ HoleDebt.debt GameConfig.standard (pl.place b) := by
+  unfold HoleDebt.debt
+  apply Finset.sum_le_sum
+  intro j _
+  unfold HoleDebt.colHoles
+  have hh := colHeight_place_ge_add_colProfile b pl j
+  have hc : ((pl.place b).colRows j).card
+      = (b.colRows j).card + pl.colProfile j := by
+    rw [HoleDebt.card_colRows_eq_card_filter,
+      HoleDebt.card_colRows_eq_card_filter]
+    have h := Placement.colCount_place b pl j
+    unfold Board.colCount at h
+    exact h
+  omega
+
+/-- Clears never raise debt (the mirror fact, from the library). -/
+theorem debt_applyStep_le (b : Board) (pl : Placement)
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard) :
+    HoleDebt.debt GameConfig.standard
+        (Placement.applyStep GameConfig.standard b pl)
+      ≤ HoleDebt.debt GameConfig.standard (pl.place b) := by
+  rw [Placement.applyStep_eq_clearLines_place]
+  exact HoleDebt.clearLines_debt_le (Placement.place_wf hwf hv)
+
+/-- Holes buried by the placements of a word. -/
+def wordBuried (b : Board) : List Placement → ℕ
+  | [] => 0
+  | pl :: rest =>
+      (HoleDebt.debt GameConfig.standard (pl.place b)
+        - HoleDebt.debt GameConfig.standard b)
+      + wordBuried (Placement.applyStep GameConfig.standard b pl) rest
+
+/-- Holes unburied by the clears of a word. -/
+def wordUnburied (b : Board) : List Placement → ℕ
+  | [] => 0
+  | pl :: rest =>
+      (HoleDebt.debt GameConfig.standard (pl.place b)
+        - HoleDebt.debt GameConfig.standard
+            (Placement.applyStep GameConfig.standard b pl))
+      + wordUnburied (Placement.applyStep GameConfig.standard b pl) rest
+
+@[simp] theorem wordBuried_nil (b : Board) : wordBuried b [] = 0 := rfl
+
+@[simp] theorem wordUnburied_nil (b : Board) : wordUnburied b [] = 0 := rfl
+
+theorem wordBuried_cons (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    wordBuried b (pl :: rest)
+      = (HoleDebt.debt GameConfig.standard (pl.place b)
+          - HoleDebt.debt GameConfig.standard b)
+        + wordBuried (Placement.applyStep GameConfig.standard b pl)
+            rest := rfl
+
+theorem wordUnburied_cons (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    wordUnburied b (pl :: rest)
+      = (HoleDebt.debt GameConfig.standard (pl.place b)
+          - HoleDebt.debt GameConfig.standard
+              (Placement.applyStep GameConfig.standard b pl))
+        + wordUnburied (Placement.applyStep GameConfig.standard b pl)
+            rest := rfl
+
+/-- **The burial ledger along a word**: starting debt plus everything
+buried equals ending debt plus everything unburied. -/
+theorem debt_word {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard) :
+    HoleDebt.debt GameConfig.standard b + wordBuried b pls
+      = HoleDebt.debt GameConfig.standard
+          (pls.foldl (Placement.applyStep GameConfig.standard) b)
+        + wordUnburied b pls := by
+  induction pls generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    have hvpl := hv pl (by simp)
+    have h1 := debt_le_debt_place b pl
+    have h2 := debt_applyStep_le b pl hwf hvpl
+    have hrec := ih (Placement.applyStep_wf hwf hvpl)
+      (fun q hq => hv q (by simp [hq]))
+    rw [List.foldl_cons, wordBuried_cons, wordUnburied_cons]
+    omega
+
+/-- **THE BURIAL CONSERVATION LAW**: around any cycle, the holes the
+placements bury are exactly the holes the clears set free. A cycle
+cannot bury on credit — every cell it covers must be uncovered again
+before the loop closes. -/
+theorem cycle_burial_conservation {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard)
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    wordBuried b pls = wordUnburied b pls := by
+  have h := debt_word hwf hv
+  rw [hfold] at h
+  omega
+
+/-- **Flush play and hole recycling stand or fall together**: a cycle
+buries nothing exactly when its clears free nothing. Either the loop is
+played perfectly clean, or it both digs and recovers — there is no
+half-way cycle that only digs, and none that only recovers. -/
+theorem cycle_flush_iff_no_recycling {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard)
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    wordBuried b pls = 0 ↔ wordUnburied b pls = 0 := by
+  have h := cycle_burial_conservation hwf hv hfold
+  omega
 
 /-! ## The clear-free horizon is fifty placements -/
 
