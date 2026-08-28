@@ -41629,6 +41629,28 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28eh) — THE COMPLETE CYCLE-LENGTH SPECTRUM (bank 357/N)
+
+- `BoardOnCycle` upgraded: the witnessing word must be VALID (each
+  placement in-bounds); both mill witnesses re-certified `by decide`.
+- **`foldl_applyStep_wf`** — well-formedness survives any valid word.
+- **`foldl_applyStep_count_ledger`** — the word ledger: final count
+  + 10·(rows cleared) = initial count + 4·(word length), folded from
+  the per-step mass law.
+- **`board_cycle_length_quantum`** — EVERY closed board cycle has
+  length divisible by five: returning to the same count forces
+  10C = 4n. Pure mass arithmetic.
+- **`BoardOnCycle.add`** — cycles through the same board concatenate.
+- **`level_board_cycle_lengths`** / **`empty_board_cycle_lengths`** —
+  the capstone iff: on any well-formed clear-free level board (and on
+  the empty board), closed cycles exist in EXACTLY the lengths
+  5, 10, 15, 20, … The cycle structure of the level stratum is
+  completely characterized.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28eg) — cycles are everywhere on the level stratum (bank 356/N)
 
 - **`low_of_level_wf`** — on a well-formed board, level at h already

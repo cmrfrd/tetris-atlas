@@ -9816,6 +9816,7 @@ theorem ten_I_cycle_of_level {b : Board} {h : ℕ}
 placement word of that length folds back to it. -/
 def BoardOnCycle (b : Board) (n : ℕ) : Prop :=
   ∃ pls : List Placement, pls.length = n ∧ 0 < n ∧
+    (∀ pl ∈ pls, pl.Valid GameConfig.standard) ∧
     pls.foldl (Placement.applyStep GameConfig.standard) b = b
 
 /-- **Every clear-free level board sits on a five-cycle**: the five-O
@@ -9828,7 +9829,7 @@ theorem level_board_on_five_cycle {b : Board} {h : ℕ}
     (hH : ∀ c < 10, b.colHeight c = h) :
     BoardOnCycle b 5 := by
   refine ⟨[⟨Piece.O, 0, 0⟩, ⟨Piece.O, 0, 2⟩, ⟨Piece.O, 0, 4⟩,
-    ⟨Piece.O, 0, 6⟩, ⟨Piece.O, 0, 8⟩], rfl, by omega, ?_⟩
+    ⟨Piece.O, 0, 6⟩, ⟨Piece.O, 0, 8⟩], rfl, by omega, by decide, ?_⟩
   simp only [List.foldl]
   exact five_O_cycle_of_level hwf hnf hH
 
@@ -9842,7 +9843,7 @@ theorem level_board_on_ten_cycle {b : Board} {h : ℕ}
   refine ⟨[⟨Piece.I, 1, 0⟩, ⟨Piece.I, 1, 1⟩, ⟨Piece.I, 1, 2⟩,
     ⟨Piece.I, 1, 3⟩, ⟨Piece.I, 1, 4⟩, ⟨Piece.I, 1, 5⟩,
     ⟨Piece.I, 1, 6⟩, ⟨Piece.I, 1, 7⟩, ⟨Piece.I, 1, 8⟩,
-    ⟨Piece.I, 1, 9⟩], rfl, by omega, ?_⟩
+    ⟨Piece.I, 1, 9⟩], rfl, by omega, by decide, ?_⟩
   simp only [List.foldl]
   exact ten_I_cycle_of_level hwf hnf hH
 
@@ -9861,6 +9862,109 @@ theorem empty_board_on_two_cycles :
     Board.colHeight_empty c
   exact ⟨level_board_on_five_cycle hwf hnf hH,
     level_board_on_ten_cycle hwf hnf hH⟩
+
+/-- Well-formedness survives any valid placement word. -/
+theorem foldl_applyStep_wf {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard) :
+    Board.WF GameConfig.standard
+      (pls.foldl (Placement.applyStep GameConfig.standard) b) := by
+  induction pls generalizing b with
+  | nil => exact hwf
+  | cons pl rest ih =>
+    rw [List.foldl_cons]
+    exact ih (Placement.applyStep_wf hwf (hv pl (by simp)))
+      (fun q hq => hv q (by simp [hq]))
+
+/-- **The word ledger**: along any valid placement word, the final count
+plus ten per cleared row equals the initial count plus four per move.
+The per-step mass law, folded. -/
+theorem foldl_applyStep_count_ledger {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard) :
+    ∃ C, (pls.foldl (Placement.applyStep GameConfig.standard) b).count
+        + 10 * C = b.count + 4 * pls.length := by
+  induction pls generalizing b with
+  | nil => exact ⟨0, by simp⟩
+  | cons pl rest ih =>
+    have hstep := BagGrowth.count_applyStep_add
+      (cfg := GameConfig.standard) hwf (hv pl (by simp))
+    rw [GameConfig.standard_cols] at hstep
+    obtain ⟨C, hC⟩ := ih (Placement.applyStep_wf hwf (hv pl (by simp)))
+      (fun q hq => hv q (by simp [hq]))
+    refine ⟨(Board.fullRows GameConfig.standard (pl.place b)).card
+      + C, ?_⟩
+    rw [List.foldl_cons]
+    simp only [List.length_cons]
+    omega
+
+/-- **THE BOARD-CYCLE QUANTUM**: every closed board cycle has length
+divisible by five. Four cells in per move, ten out per cleared row, and
+a return to the same count forces `10 C = 4 n` — pure mass arithmetic,
+no geometry needed. -/
+theorem board_cycle_length_quantum {b : Board} {n : ℕ}
+    (hwf : Board.WF GameConfig.standard b)
+    (hcyc : BoardOnCycle b n) : 5 ∣ n := by
+  obtain ⟨pls, hlen, hpos, hv, hfold⟩ := hcyc
+  obtain ⟨C, hC⟩ := foldl_applyStep_count_ledger hwf hv
+  rw [hfold, hlen] at hC
+  omega
+
+/-- Cycles through the same board concatenate. -/
+theorem BoardOnCycle.add {b : Board} {n m : ℕ}
+    (hn : BoardOnCycle b n) (hm : BoardOnCycle b m) :
+    BoardOnCycle b (n + m) := by
+  obtain ⟨p1, hl1, hp1, hv1, hf1⟩ := hn
+  obtain ⟨p2, hl2, hp2, hv2, hf2⟩ := hm
+  refine ⟨p1 ++ p2, by simp [hl1, hl2], by omega, ?_, ?_⟩
+  · intro pl hpl
+    rw [List.mem_append] at hpl
+    rcases hpl with hh | hh
+    · exact hv1 pl hh
+    · exact hv2 pl hh
+  · rw [List.foldl_append, hf1, hf2]
+
+/-- **THE COMPLETE CYCLE-LENGTH SPECTRUM**: on any well-formed,
+clear-free, level board, closed cycles exist in EXACTLY the lengths
+`5, 10, 15, 20, …` — the positive multiples of five. Existence from
+iterating the five-O mill; exclusion from the mass quantum. The cycle
+structure of the level stratum is completely characterized. -/
+theorem level_board_cycle_lengths {b : Board} {h n : ℕ}
+    (hwf : Board.WF GameConfig.standard b)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hH : ∀ c < 10, b.colHeight c = h) :
+    BoardOnCycle b n ↔ (0 < n ∧ 5 ∣ n) := by
+  have haux : ∀ k : ℕ, BoardOnCycle b (5 * (k + 1)) := by
+    intro k
+    induction k with
+    | zero =>
+      rw [show 5 * (0 + 1) = 5 from by norm_num]
+      exact level_board_on_five_cycle hwf hnf hH
+    | succ j ihj =>
+      have hcomp := BoardOnCycle.add ihj
+        (level_board_on_five_cycle hwf hnf hH)
+      rwa [show 5 * (j + 1) + 5 = 5 * (j + 1 + 1) from by ring] at hcomp
+  constructor
+  · intro hcyc
+    obtain ⟨pls, hlen, hpos, hv, hfold⟩ := hcyc
+    exact ⟨hpos, board_cycle_length_quantum hwf
+      ⟨pls, hlen, hpos, hv, hfold⟩⟩
+  · rintro ⟨hpos, ⟨k, rfl⟩⟩
+    rcases k with _ | k'
+    · omega
+    · exact haux k'
+
+/-- The empty board's cycle spectrum: exactly the positive multiples of
+five. -/
+theorem empty_board_cycle_lengths (n : ℕ) :
+    BoardOnCycle (∅ : Board) n ↔ (0 < n ∧ 5 ∣ n) := by
+  apply level_board_cycle_lengths (h := 0)
+  · exact Board.empty_wf GameConfig.standard
+  · intro r hfull
+    have h0 := hfull 0 (by rw [GameConfig.standard_cols]; simp)
+    exact absurd h0 (Finset.notMem_empty _)
+  · intro c _
+    exact Board.colHeight_empty c
 
 /-! ## The clear-free horizon is fifty placements -/
 
