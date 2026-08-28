@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dt) — the service buys sixteen (bank 343/N)
+
+- **`window_O_perfect_service_lightens`** — the O double drops count by
+  exactly 16 and never adds a hole. One double per five moves balances
+  the +4/move tax exactly: the lightness invariant (count + holes ≤ 64)
+  has a PROVEN income source; what remains is scheduling preparation.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ds) — THE WINDOW TETRIS (bank 342/N)
 
 - **`I_r1_shape`**, **`single_col_move_completes_row`** — bricks.

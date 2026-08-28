@@ -8621,6 +8621,37 @@ theorem window_I_tetris_service {b : Board} {j h : ℕ} (hj : j < 10)
       omega
     · exact hdrows
 
+/-- **Each perfect service buys sixteen lightness**: the O double drops
+the cell count by exactly sixteen (four in, twenty out) and never adds
+a hole — perfect services are the lightness invariant's income. One
+double per five moves exactly balances the +4-per-move mass tax. -/
+theorem window_O_perfect_service_lightens {b : Board} {j h : ℕ}
+    (hj : j + 1 < 10) (hwf : Board.WF GameConfig.standard b)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h0 : b.colHeight j = h) (h1 : b.colHeight (j + 1) = h)
+    (hprep : ∀ c < 10, c ≠ j → c ≠ j + 1 →
+      (c, h) ∈ b ∧ (c, h + 1) ∈ b) :
+    ∃ pl : Placement, pl.piece = Piece.O ∧ pl.Valid GameConfig.standard
+      ∧ (∀ cell ∈ pl.shapeUp,
+          pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1)
+      ∧ (Placement.applyStep GameConfig.standard b pl).count + 16
+          = b.count
+      ∧ Board.holes GameConfig.standard
+          (Placement.applyStep GameConfig.standard b pl)
+        ≤ Board.holes GameConfig.standard b := by
+  obtain ⟨pl, hpiece, hvalid, hcells, hlines, _, _⟩ :=
+    window_O_perfect_service (b := b) hj hnf h0 h1 hprep
+  refine ⟨pl, hpiece, hvalid, hcells, ?_, ?_⟩
+  · have hcnt := applyStep_count GameConfig.standard b pl hwf hvalid
+    rw [GameConfig.standard_cols, hlines] at hcnt
+    omega
+  · have hbill := window_O_hole_bill (b := b) hj hpiece hcells
+    rw [h0, h1] at hbill
+    simp only [max_self] at hbill
+    have hcl := holes_clearLines_le GameConfig.standard (pl.place b)
+    unfold Placement.applyStep
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
