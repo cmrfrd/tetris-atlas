@@ -15488,6 +15488,132 @@ theorem clearedRowSum_le_mul {b : Board} {pl : Placement}
           * (pl.dropOffset b + 3) := by
         rw [Finset.sum_const, smul_eq_mul]
 
+/-! ### What a clear must already own
+
+A piece brings four cells. A completed row needs ten. So a row cleared
+by a move was already holding at least six, and a `k`-clear was holding
+at least `10k − 4` across its rows — thirty-six for a tetris. Harvests
+are collected, not created. -/
+
+/-- A full row of a well-formed board holds exactly ten cells. -/
+theorem rowCount_of_mem_fullRows {B : Board}
+    (hwf : Board.WF GameConfig.standard B) {t : ℕ}
+    (ht : t ∈ Board.fullRows GameConfig.standard B) :
+    Board.rowCount B t = 10 := by
+  classical
+  have hfib : (B.filter
+      (fun p => Board.isFull GameConfig.standard B p.2)).filter
+      (fun p => p.2 = t)
+      = (Finset.range 10).image (fun c => ((c, t) : Coord)) :=
+    cleared_fiber_eq hwf ht
+  have heq : B.filter (fun p => p.2 = t)
+      = (Finset.range 10).image (fun c => ((c, t) : Coord)) := by
+    rw [← hfib]
+    ext p
+    simp only [Finset.mem_filter]
+    constructor
+    · rintro ⟨hpb, hpt⟩
+      exact ⟨⟨hpb, by rw [hpt]; exact Board.isFull_of_mem_fullRows ht⟩,
+        hpt⟩
+    · rintro ⟨⟨hpb, -⟩, hpt⟩
+      exact ⟨hpb, hpt⟩
+  unfold Board.rowCount
+  rw [heq, Finset.card_image_of_injective _ (fun x y hxy => by
+    simpa using congrArg Prod.fst hxy), Finset.card_range]
+
+/-- Placing a piece adds its own cells to each row. -/
+theorem rowCount_place (b : Board) (pl : Placement) (r : ℕ) :
+    Board.rowCount (pl.place b) r
+      = Board.rowCount b r + Board.rowCount (pl.dropped b) r := by
+  classical
+  unfold Board.rowCount
+  rw [Placement.place_eq_union_dropped, Finset.filter_union,
+    Finset.card_union_of_disjoint
+      (Finset.disjoint_filter_filter (pl.dropped_disjoint b).symm)]
+
+/-- **A CLEARED ROW WAS ALREADY SIX-TENTHS FULL**: the piece brings at
+most four cells, so any row it completes held at least six before. -/
+theorem cleared_row_prior_six {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard) {r : ℕ}
+    (hr : r ∈ Board.fullRows GameConfig.standard (pl.place b)) :
+    6 ≤ Board.rowCount b r := by
+  classical
+  have hten := rowCount_of_mem_fullRows (Placement.place_wf hwf hv) hr
+  have hsplit := rowCount_place b pl r
+  have hle : Board.rowCount (pl.dropped b) r ≤ 4 := by
+    unfold Board.rowCount
+    calc ((pl.dropped b).filter (fun p => p.2 = r)).card
+        ≤ (pl.dropped b).card := Finset.card_filter_le _ _
+      _ = 4 := Placement.card_dropped b pl
+  omega
+
+/-- **A `k`-CLEAR HAD `10k − 4` BANKED**: the four cells of one piece
+cannot supply more than four of the `10k` needed. -/
+theorem cleared_rows_prior_inventory_board {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard) :
+    10 * (Board.fullRows GameConfig.standard (pl.place b)).card
+      ≤ (∑ r ∈ Board.fullRows GameConfig.standard (pl.place b),
+          Board.rowCount b r) + 4 := by
+  classical
+  have hten : ∀ t ∈ Board.fullRows GameConfig.standard (pl.place b),
+      Board.rowCount (pl.place b) t = 10 :=
+    fun t ht => rowCount_of_mem_fullRows (Placement.place_wf hwf hv) ht
+  have hsum : ∑ t ∈ Board.fullRows GameConfig.standard (pl.place b),
+      Board.rowCount (pl.place b) t
+      = 10 * (Board.fullRows GameConfig.standard (pl.place b)).card := by
+    rw [Finset.sum_congr rfl hten, Finset.sum_const, smul_eq_mul,
+      mul_comm]
+  have hsplit : ∀ t ∈ Board.fullRows GameConfig.standard (pl.place b),
+      Board.rowCount (pl.place b) t
+        = Board.rowCount b t + Board.rowCount (pl.dropped b) t :=
+    fun t _ => rowCount_place b pl t
+  rw [Finset.sum_congr rfl hsplit, Finset.sum_add_distrib] at hsum
+  have hdrop : ∑ t ∈ Board.fullRows GameConfig.standard (pl.place b),
+      Board.rowCount (pl.dropped b) t ≤ 4 := by
+    unfold Board.rowCount
+    have hmaps : ∀ p ∈ (pl.dropped b).filter
+        (fun p => p.2 ∈ Board.fullRows GameConfig.standard (pl.place b)),
+        p.2 ∈ Board.fullRows GameConfig.standard (pl.place b) :=
+      fun p hp => (Finset.mem_filter.mp hp).2
+    have hfib := Finset.sum_fiberwise_of_maps_to hmaps (fun _ => 1)
+    have hcongr : ∀ t ∈ Board.fullRows GameConfig.standard (pl.place b),
+        ((pl.dropped b).filter (fun p => p.2 = t)).card
+          = ∑ _p ∈ ((pl.dropped b).filter
+              (fun p => p.2 ∈ Board.fullRows GameConfig.standard
+                (pl.place b))).filter (fun p => p.2 = t), 1 := by
+      intro t ht
+      rw [Finset.sum_const, smul_eq_mul, mul_one]
+      congr 1
+      ext p
+      simp only [Finset.mem_filter]
+      constructor
+      · rintro ⟨hpd, hpt⟩
+        exact ⟨⟨hpd, by rw [hpt]; exact ht⟩, hpt⟩
+      · rintro ⟨⟨hpd, -⟩, hpt⟩
+        exact ⟨hpd, hpt⟩
+    rw [Finset.sum_congr rfl hcongr, hfib, Finset.sum_const, smul_eq_mul,
+      mul_one]
+    calc ((pl.dropped b).filter
+          (fun p => p.2 ∈ Board.fullRows GameConfig.standard
+            (pl.place b))).card
+        ≤ (pl.dropped b).card := Finset.card_filter_le _ _
+      _ = 4 := Placement.card_dropped b pl
+  omega
+
+/-- **A TETRIS NEEDS THIRTY-SIX BANKED**: four rows at ten cells apiece,
+less the four the piece itself supplies. -/
+theorem tetris_prior_thirtysix {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    36 ≤ ∑ r ∈ Board.fullRows GameConfig.standard (pl.place b),
+      Board.rowCount b r := by
+  have h := cleared_rows_prior_inventory_board hwf hv
+  rw [h4] at h
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

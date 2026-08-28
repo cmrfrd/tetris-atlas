@@ -41629,6 +41629,29 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28gi) — what a clear must already own (bank 410/N)
+
+A piece brings four cells; a completed row needs ten.
+
+- **`rowCount_of_mem_fullRows`** — a full row of a well-formed board
+  holds exactly ten cells.
+- **`rowCount_place`** — placing adds the piece's own cells per row.
+- **`cleared_row_prior_six`** — so any row a move completes was already
+  holding at least six.
+- **`cleared_rows_prior_inventory_board`** — and a k-clear was holding
+  at least 10k − 4 across its rows, the piece supplying at most four in
+  total.
+- **`tetris_prior_thirtysix`** — thirty-six banked for a tetris.
+  Harvests are collected, not created.
+
+Gotcha caught by the full build: `cleared_rows_prior_inventory` already
+existed in ClearMix under the same namespace — the module build passes
+but the LIBRARY build catches the clash. Always run the full build.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28gh) — a clear happens where the piece landed (bank 409/N)
 
 On a clear-free board every completed row owes its last cell to the
