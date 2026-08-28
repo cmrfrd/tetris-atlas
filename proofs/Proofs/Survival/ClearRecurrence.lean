@@ -15904,6 +15904,121 @@ theorem consecutive_clears_mass {b : Board} {pl q : Placement}
     count_ge_of_clear (Placement.applyStep_wf hwf hv) hvq
   omega
 
+/-! ### Which columns are standing
+
+The set of occupied columns only ever grows under placement; only a
+clear can empty one. So a cycle that never empties a column keeps the
+same columns standing throughout — and since a completed row occupies
+all ten at once, such a cycle stands on all ten from the start. -/
+
+/-- The columns currently carrying at least one cell. -/
+def occupiedCols (b : Board) : Finset ℕ :=
+  (Finset.range 10).filter (fun c => 0 < b.colHeight c)
+
+/-- Placement never empties a column. -/
+theorem occupiedCols_subset_place (b : Board) (pl : Placement) :
+    occupiedCols b ⊆ occupiedCols (pl.place b) := by
+  intro c hc
+  simp only [occupiedCols, Finset.mem_filter] at hc ⊢
+  refine ⟨hc.1, ?_⟩
+  have hmono := colHeight_mono
+    (show b ⊆ pl.place b from by
+      rw [Placement.place_eq_union_dropped]
+      exact Finset.subset_union_left) c
+  omega
+
+/-- **A COMPLETED ROW STANDS ON EVERY COLUMN**: if any row of a board is
+full then all ten columns carry cells. -/
+theorem occupiedCols_eq_range_of_full {B : Board} {t : ℕ}
+    (hfull : Board.isFull GameConfig.standard B t) :
+    occupiedCols B = Finset.range 10 := by
+  apply Finset.Subset.antisymm (Finset.filter_subset _ _)
+  intro c hc
+  simp only [occupiedCols, Finset.mem_filter]
+  refine ⟨hc, ?_⟩
+  have hmem := hfull c (by rw [GameConfig.standard_cols]; exact hc)
+  have := Board.lt_colHeight hmem
+  omega
+
+/-- The word empties a column at some clear. -/
+def wordColEmptied (b : Board) : List Placement → Prop
+  | [] => False
+  | pl :: rest =>
+      (¬ occupiedCols (pl.place b)
+        ⊆ occupiedCols (Placement.applyStep GameConfig.standard b pl))
+      ∨ wordColEmptied (Placement.applyStep GameConfig.standard b pl) rest
+
+theorem wordColEmptied_cons (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    wordColEmptied b (pl :: rest)
+      ↔ (¬ occupiedCols (pl.place b)
+            ⊆ occupiedCols (Placement.applyStep GameConfig.standard b pl))
+        ∨ wordColEmptied
+            (Placement.applyStep GameConfig.standard b pl) rest := Iff.rfl
+
+/-- A word that never empties a column only ever adds standing
+columns. -/
+theorem occupiedCols_word_subset {b : Board} {pls : List Placement}
+    (hne : ¬ wordColEmptied b pls) :
+    occupiedCols b
+      ⊆ occupiedCols (pls.foldl
+          (Placement.applyStep GameConfig.standard) b) := by
+  induction pls generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordColEmptied_cons] at hne
+    push Not at hne
+    rw [List.foldl_cons]
+    exact subset_trans
+      (subset_trans (occupiedCols_subset_place b pl) hne.1) (ih hne.2)
+
+/-- Emptying splits along concatenation. -/
+theorem wordColEmptied_append (b : Board) (w1 w2 : List Placement) :
+    wordColEmptied b (w1 ++ w2)
+      ↔ wordColEmptied b w1
+        ∨ wordColEmptied
+            (w1.foldl (Placement.applyStep GameConfig.standard) b) w2 := by
+  induction w1 generalizing b with
+  | nil => simp [wordColEmptied]
+  | cons pl rest ih =>
+    rw [List.cons_append, wordColEmptied_cons, wordColEmptied_cons,
+      List.foldl_cons, ih, or_assoc]
+
+/-- **THE STANDING COLUMNS ARE FROZEN**: a cycle that never empties a
+column shows exactly the same standing columns at every moment. -/
+theorem cycle_occupiedCols_frozen_split {b : Board}
+    {w1 w2 : List Placement}
+    (hne : ¬ wordColEmptied b (w1 ++ w2))
+    (hfold : (w1 ++ w2).foldl
+      (Placement.applyStep GameConfig.standard) b = b) :
+    occupiedCols (w1.foldl (Placement.applyStep GameConfig.standard) b)
+      = occupiedCols b := by
+  have hsplit := wordColEmptied_append b w1 w2
+  have hn1 : ¬ wordColEmptied b w1 := fun h => hne (hsplit.mpr (Or.inl h))
+  have hn2 : ¬ wordColEmptied
+      (w1.foldl (Placement.applyStep GameConfig.standard) b) w2 :=
+    fun h => hne (hsplit.mpr (Or.inr h))
+  have hsub1 := occupiedCols_word_subset hn1
+  have hsub2 := occupiedCols_word_subset hn2
+  rw [← List.foldl_append, hfold] at hsub2
+  exact Finset.Subset.antisymm hsub2 hsub1
+
+/-- **A CYCLE THAT NEVER EMPTIES A COLUMN STANDS ON ALL TEN**: it must
+complete a row somewhere, which occupies every column at once, and the
+standing set never changes — so all ten columns carry cells from the
+very start. -/
+theorem cycle_no_emptying_all_occupied {b : Board}
+    {w1 w2 : List Placement}
+    (hne : ¬ wordColEmptied b (w1 ++ w2))
+    (hfold : (w1 ++ w2).foldl
+      (Placement.applyStep GameConfig.standard) b = b)
+    {t : ℕ}
+    (hfull : Board.isFull GameConfig.standard
+      (w1.foldl (Placement.applyStep GameConfig.standard) b) t) :
+    occupiedCols b = Finset.range 10 := by
+  rw [← cycle_occupiedCols_frozen_split hne hfold]
+  exact occupiedCols_eq_range_of_full hfull
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

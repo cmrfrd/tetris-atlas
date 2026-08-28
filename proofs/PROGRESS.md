@@ -41629,6 +41629,30 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28gm) — which columns are standing (bank 414/N)
+
+A fourth quantity for the split/obstruction technique.
+
+- **`occupiedCols`**, **`occupiedCols_subset_place`** — the set of
+  columns carrying cells only ever grows under placement; only a clear
+  can empty one.
+- **`occupiedCols_eq_range_of_full`** — a completed row stands on every
+  column at once.
+- **`wordColEmptied`**, **`occupiedCols_word_subset`**,
+  **`wordColEmptied_append`**, **`cycle_occupiedCols_frozen_split`** —
+  so a cycle that never empties a column shows exactly the same
+  standing columns at every moment.
+- **`cycle_no_emptying_all_occupied`** — and because it must complete a
+  row somewhere, such a cycle stands on ALL TEN columns from the very
+  start.
+
+Gotcha: `rw [someDef]` fails on a plain `def` ("failed to rewrite using
+equation theorems") — use `simp only [someDef]` or `unfold`.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28gl) — back-to-back harvests (bank 413/N)
 
 - **`count_of_dry_move`** — a dry move adds exactly four cells.
