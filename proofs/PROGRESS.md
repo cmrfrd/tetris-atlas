@@ -41629,6 +41629,24 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ey) — mid-block bag arithmetic (bank 374/N)
+
+- **`foldl_draw_prefix`** — drawing distinct present pieces, strictly
+  fewer than the bag holds, is an exact set difference: the refill
+  guard never fires mid-block.
+- **`foldl_draw_prefix_card`** — the bag loses exactly one per draw.
+
+(Toward the bag-card signature 7 - n mod 7 along legal word plays,
+and from there the 35-state orbit distinctness.)
+
+Gotcha: this Mathlib's `Finset.card_sdiff` is the hypothesis-free
+form (s minus t).card = s.card - (t inter s).card — pair with
+`Finset.inter_eq_left.mpr`.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ex) — the word mix bound (bank 373/N)
 
 - **`word_clear_mix_bound`** — the clear dichotomy folded along a

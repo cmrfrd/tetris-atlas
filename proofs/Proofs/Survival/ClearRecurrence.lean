@@ -11160,6 +11160,55 @@ theorem legal_cycle_word_tetris_free_moves {b : Board}
   have hcensus := cycle_word_clear_census hwf hv hfold
   omega
 
+/-- **Mid-block draws are exact set differences**: drawing distinct
+present pieces, strictly fewer than the bag holds, removes exactly
+those pieces — the refill guard never fires. -/
+theorem foldl_draw_prefix : ∀ (l : List Piece) (B : Bag), l.Nodup →
+    (∀ p ∈ l, p ∈ B) → l.length < B.card →
+    l.foldl Bag.draw B = B \ l.toFinset := by
+  intro l
+  induction l with
+  | nil =>
+    intro B _ _ _
+    simp
+  | cons p rest ih =>
+    intro B hnodup hmem hlen
+    have hpB : p ∈ B := hmem p (by simp)
+    have hdraw : B.draw p = B.erase p := by
+      unfold Bag.draw
+      rw [if_neg]
+      intro hemp
+      have hce := Finset.card_erase_of_mem hpB
+      rw [hemp, Finset.card_empty] at hce
+      rw [List.length_cons] at hlen
+      omega
+    rw [List.foldl_cons, hdraw]
+    have hrec := ih (B.erase p) (List.Nodup.of_cons hnodup)
+      (fun q hq => Finset.mem_erase.mpr
+        ⟨fun hqp => (List.nodup_cons.mp hnodup).1 (hqp ▸ hq),
+          hmem q (by simp [hq])⟩)
+      (by
+        rw [Finset.card_erase_of_mem hpB]
+        rw [List.length_cons] at hlen
+        omega)
+    rw [hrec]
+    ext q
+    simp only [Finset.mem_sdiff, Finset.mem_erase, List.toFinset_cons,
+      Finset.mem_insert]
+    tauto
+
+/-- The card of a mid-block draw: the bag loses exactly one per
+draw. -/
+theorem foldl_draw_prefix_card {l : List Piece} {B : Bag}
+    (hnodup : l.Nodup) (hmem : ∀ p ∈ l, p ∈ B)
+    (hlen : l.length < B.card) :
+    (l.foldl Bag.draw B).card = B.card - l.length := by
+  rw [foldl_draw_prefix l B hnodup hmem hlen]
+  have hsubset : l.toFinset ⊆ B := fun q hq =>
+    hmem q (List.mem_toFinset.mp hq)
+  rw [Finset.card_sdiff, Finset.inter_eq_left.mpr hsubset,
+    List.card_toFinset, List.dedup_eq_self.mpr hnodup]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
