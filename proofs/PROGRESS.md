@@ -41629,6 +41629,24 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ee) — the ten-I machinery: general band reset + column towers (bank 354/N)
+
+- **`clearLines_band_reset`** — the general k-row band reset: filling k
+  complete rows above a clear-free board and clearing returns EXACTLY
+  the original board, whatever k. (The two-row reset generalized.)
+- **`I_r1_shape_eq`** / **`I_column_dropped_eq`** — the vertical I's
+  drop is the exact four-cell column tower; the merge is plain union.
+- **`column_band_extend`** / **`no_full_of_partial_band_Ico`** — band
+  algebra for four-row column bands.
+- **`ten_I_dry_step`** / **`ten_I_final_step`** — the ten-I ritual:
+  each vertical I extends the four-row band by one column with no
+  clears; the tenth completes it and the QUADRUPLE clears back to the
+  original board.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ed) — THE WALTZ'S STATE CYCLE (bank 353/N)
 
 - **`bag_draw_absent_fixed`** — drawing an absent piece from a

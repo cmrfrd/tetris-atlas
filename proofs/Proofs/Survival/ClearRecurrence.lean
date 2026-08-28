@@ -9429,6 +9429,247 @@ theorem fiveOPolicy_orbit_five_states (n : ℕ) (hn : 1 ≤ n) :
       obtain ⟨m, hm1, hm5, hme⟩ := ih (n - 5) (by omega) (by omega)
       exact ⟨m, hm1, hm5, hrec.trans hme⟩
 
+/-- The vertical I's base shape: four cells stacked in one column. -/
+theorem I_r1_shape_eq :
+    Piece.I.shapeUp (1 : Rotation)
+      = ({(0, 0), (0, 1), (0, 2), (0, 3)} : Finset PieceCell) := by
+  decide
+
+/-- **The general band reset**: filling `k` complete rows above a
+clear-free board and clearing returns exactly the original board,
+whatever `k`. The two-row reset generalized to any band height. -/
+theorem clearLines_band_reset {b : Board} {h k : ℕ}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hlow : ∀ p ∈ b, p.2 < h) :
+    Board.clearLines GameConfig.standard
+      (b ∪ (Finset.range 10) ×ˢ (Finset.Ico h (h + k))) = b := by
+  classical
+  have hXfull : ∀ r, h ≤ r → r < h + k →
+      Board.isFull GameConfig.standard
+        (b ∪ (Finset.range 10) ×ˢ (Finset.Ico h (h + k))) r := by
+    intro r hr1 hr2 c hc
+    rw [GameConfig.standard_cols] at hc
+    rw [Finset.mem_union]
+    right
+    rw [Finset.mem_product, Finset.mem_Ico]
+    exact ⟨hc, hr1, hr2⟩
+  have hlowfull : ∀ r, ¬ (h ≤ r ∧ r < h + k) →
+      ¬ Board.isFull GameConfig.standard
+        (b ∪ (Finset.range 10) ×ˢ (Finset.Ico h (h + k))) r := by
+    intro r hr hfull
+    apply hnf r
+    intro c hc
+    have := hfull c hc
+    rw [Finset.mem_union] at this
+    rcases this with hb | hX
+    · exact hb
+    · exfalso
+      rw [Finset.mem_product, Finset.mem_Ico] at hX
+      exact hr ⟨hX.2.1, hX.2.2⟩
+  have hcb : ∀ r, r < h →
+      Board.clearedBelow GameConfig.standard
+        (b ∪ (Finset.range 10) ×ˢ (Finset.Ico h (h + k))) r = 0 := by
+    intro r hr
+    unfold Board.clearedBelow
+    rw [Finset.card_eq_zero, Finset.eq_empty_iff_forall_notMem]
+    intro x hx
+    rw [Finset.mem_filter] at hx
+    obtain ⟨hxf, hxlt⟩ := hx
+    have hxfull := (Finset.mem_filter.mp hxf).2
+    exact hlowfull x (by omega) hxfull
+  ext p
+  rw [Board.mem_clearLines_iff]
+  constructor
+  · rintro ⟨q, hq, hqnf, hqp⟩
+    rw [Finset.mem_union] at hq
+    rcases hq with hb | hX
+    · have hlt := hlow q hb
+      have := hcb q.2 hlt
+      rw [this] at hqp
+      have : (q.1, q.2 - 0) = q := by simp
+      rw [this] at hqp
+      rw [← hqp]
+      exact hb
+    · exfalso
+      rw [Finset.mem_product, Finset.mem_Ico] at hX
+      exact hqnf (hXfull q.2 hX.2.1 hX.2.2)
+  · intro hp
+    have hlt := hlow p hp
+    refine ⟨p, ?_, ?_, ?_⟩
+    · rw [Finset.mem_union]
+      left
+      exact hp
+    · intro hfull
+      exact hlowfull p.2 (by omega) hfull
+    · rw [hcb p.2 hlt]
+      simp
+
+/-- **The vertical I's drop is the column tower**: on a board whose
+column `c` stands at height `h`, the vertical I placed at `c` occupies
+exactly the four cells of rows `h..h+3` in that column, and the merge
+is the plain union with them. -/
+theorem I_column_dropped_eq {b : Board} {c h : ℕ}
+    (hH : b.colHeight c = h) :
+    (⟨Piece.I, 1, c⟩ : Placement).dropped b
+      = ({(c, h), (c, h + 1), (c, h + 2), (c, h + 3)} : Finset Coord)
+    ∧ (⟨Piece.I, 1, c⟩ : Placement).place b
+      = b ∪ ({(c, h), (c, h + 1), (c, h + 2), (c, h + 3)}
+          : Finset Coord) := by
+  classical
+  have hshape : (⟨Piece.I, 1, c⟩ : Placement).shapeUp
+      = ({(0, 0), (0, 1), (0, 2), (0, 3)} : Finset Coord) := I_r1_shape_eq
+  have hD : (⟨Piece.I, 1, c⟩ : Placement).dropOffset b = h := by
+    refine Nat.le_antisymm ?_ ?_
+    · apply dropOffset_le_of_heights
+      intro cell hcell
+      rw [hshape] at hcell
+      simp only [Finset.mem_insert, Finset.mem_singleton] at hcell
+      rcases hcell with h1 | h1 | h1 | h1 <;> rw [h1] <;> simp [hH]
+    · have hcell : ((0, 0) : Coord)
+          ∈ (⟨Piece.I, 1, c⟩ : Placement).shapeUp := by
+        rw [hshape]
+        simp
+      have hle := Finset.le_sup (f := fun cell =>
+        b.colHeight ((⟨Piece.I, 1, c⟩ : Placement).col + cell.1) - cell.2)
+        hcell
+      have h3 : b.colHeight (c + 0) - 0
+          ≤ (⟨Piece.I, 1, c⟩ : Placement).dropOffset b := hle
+      rw [Nat.add_zero, hH] at h3
+      omega
+  have hdrop : (⟨Piece.I, 1, c⟩ : Placement).dropped b
+      = ({(c, h), (c, h + 1), (c, h + 2), (c, h + 3)}
+          : Finset Coord) := by
+    unfold Placement.dropped Placement.cellsAt
+    rw [hD]
+    change (Piece.I.shapeUp (1 : Rotation)).image
+        (fun cell => (c + cell.1, h + cell.2)) = _
+    rw [I_r1_shape_eq]
+    ext p
+    simp only [Finset.mem_image, Finset.mem_insert, Finset.mem_singleton]
+    constructor
+    · rintro ⟨cell, hcell, rfl⟩
+      rcases hcell with h' | h' | h' | h' <;> subst h' <;> simp
+    · intro hp
+      rcases hp with h' | h' | h' | h' <;> subst h'
+      · exact ⟨(0, 0), by simp⟩
+      · exact ⟨(0, 1), by simp⟩
+      · exact ⟨(0, 2), by simp⟩
+      · exact ⟨(0, 3), by simp⟩
+  refine ⟨hdrop, ?_⟩
+  rw [Placement.place_eq_union_dropped, hdrop]
+
+/-- Extending a four-row column band by its next column. -/
+theorem column_band_extend {m h : ℕ} :
+    (Finset.range m) ×ˢ (Finset.Ico h (h + 4))
+      ∪ ({(m, h), (m, h + 1), (m, h + 2), (m, h + 3)} : Finset Coord)
+    = (Finset.range (m + 1)) ×ˢ (Finset.Ico h (h + 4)) := by
+  ext p
+  simp only [Finset.mem_union, Finset.mem_product, Finset.mem_range,
+    Finset.mem_Ico, Finset.mem_insert, Finset.mem_singleton,
+    Prod.ext_iff]
+  constructor
+  · rintro (⟨h1, h2⟩ | h' | h' | h' | h')
+    · exact ⟨by omega, h2⟩
+    all_goals (obtain ⟨h1, h2⟩ := h'; exact ⟨by omega, by omega, by omega⟩)
+  · rintro ⟨h1, h2⟩
+    by_cases hlt : p.1 < m
+    · exact Or.inl ⟨hlt, h2⟩
+    · have hm : p.1 = m := by omega
+      have hp : p.2 = h ∨ p.2 = h + 1 ∨ p.2 = h + 2 ∨ p.2 = h + 3 := by
+        omega
+      rcases hp with hp | hp | hp | hp
+      · exact Or.inr (Or.inl ⟨hm, hp⟩)
+      · exact Or.inr (Or.inr (Or.inl ⟨hm, hp⟩))
+      · exact Or.inr (Or.inr (Or.inr (Or.inl ⟨hm, hp⟩)))
+      · exact Or.inr (Or.inr (Or.inr (Or.inr ⟨hm, hp⟩)))
+
+/-- A clear-free below-`h` board stays clear-free after any partial
+`k`-row band over fewer than ten columns. -/
+theorem no_full_of_partial_band_Ico {b : Board} {h m k : ℕ}
+    (hm : m < 10)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hlow : ∀ p ∈ b, p.2 < h) :
+    ∀ r, ¬ Board.isFull GameConfig.standard
+      (b ∪ (Finset.range m) ×ˢ (Finset.Ico h (h + k))) r := by
+  intro r hfull
+  have h9 := hfull 9 (by rw [GameConfig.standard_cols]; simp)
+  rw [Finset.mem_union] at h9
+  rcases h9 with hb | hX
+  · have hrlt := hlow _ hb
+    apply hnf r
+    intro c hc
+    have := hfull c hc
+    rw [Finset.mem_union] at this
+    rcases this with h' | h'
+    · exact h'
+    · exfalso
+      rw [Finset.mem_product, Finset.mem_Ico] at h'
+      omega
+  · rw [Finset.mem_product, Finset.mem_range] at hX
+    omega
+
+/-- A dry step of the ten-I ritual: the vertical I at column `m`
+extends the four-row band by one column, clearing nothing. -/
+theorem ten_I_dry_step {b : Board} {h m : ℕ} (hm : m + 1 < 10)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hlow : ∀ p ∈ b, p.2 < h)
+    (hHm : b.colHeight m = h) :
+    Placement.applyStep GameConfig.standard
+      (b ∪ (Finset.range m) ×ˢ (Finset.Ico h (h + 4)))
+      ⟨Piece.I, 1, m⟩
+    = b ∪ (Finset.range (m + 1)) ×ˢ (Finset.Ico h (h + 4)) := by
+  classical
+  have hband : ∀ p ∈ (Finset.range m) ×ˢ (Finset.Ico h (h + 4)),
+      p.1 < m := fun p hp =>
+    Finset.mem_range.mp (Finset.mem_product.mp hp).1
+  have h0 : (b ∪ (Finset.range m) ×ˢ
+      (Finset.Ico h (h + 4))).colHeight m = h := by
+    rw [colHeight_union_high_cols hband (le_refl m)]
+    exact hHm
+  obtain ⟨_, hplace⟩ := I_column_dropped_eq
+    (b := b ∪ (Finset.range m) ×ˢ (Finset.Ico h (h + 4))) h0
+  have hplace' : (⟨Piece.I, 1, m⟩ : Placement).place
+      (b ∪ (Finset.range m) ×ˢ (Finset.Ico h (h + 4)))
+      = b ∪ (Finset.range (m + 1)) ×ˢ (Finset.Ico h (h + 4)) := by
+    rw [hplace, Finset.union_assoc, column_band_extend]
+  have hnofull := no_full_of_partial_band_Ico (m := m + 1) (k := 4)
+    (by omega) hnf hlow
+  have hempty : Board.fullRows GameConfig.standard
+      (b ∪ (Finset.range (m + 1)) ×ˢ (Finset.Ico h (h + 4))) = ∅ :=
+    Finset.eq_empty_iff_forall_notMem.mpr (fun r hr =>
+      hnofull r (Finset.mem_filter.mp hr).2)
+  unfold Placement.applyStep
+  rw [hplace']
+  exact Board.clearLines_eq_self_of_no_fullRows GameConfig.standard hempty
+
+/-- The final step of the ten-I ritual: the tenth vertical I completes
+the four-row band, the quadruple clears, and the original board
+returns. -/
+theorem ten_I_final_step {b : Board} {h : ℕ}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hlow : ∀ p ∈ b, p.2 < h)
+    (hH9 : b.colHeight 9 = h) :
+    Placement.applyStep GameConfig.standard
+      (b ∪ (Finset.range 9) ×ˢ (Finset.Ico h (h + 4)))
+      ⟨Piece.I, 1, 9⟩ = b := by
+  classical
+  have hband : ∀ p ∈ (Finset.range 9) ×ˢ (Finset.Ico h (h + 4)),
+      p.1 < 9 := fun p hp =>
+    Finset.mem_range.mp (Finset.mem_product.mp hp).1
+  have h0 : (b ∪ (Finset.range 9) ×ˢ
+      (Finset.Ico h (h + 4))).colHeight 9 = h := by
+    rw [colHeight_union_high_cols hband (le_refl 9)]
+    exact hH9
+  obtain ⟨_, hplace⟩ := I_column_dropped_eq
+    (b := b ∪ (Finset.range 9) ×ˢ (Finset.Ico h (h + 4))) h0
+  have hplace' : (⟨Piece.I, 1, 9⟩ : Placement).place
+      (b ∪ (Finset.range 9) ×ˢ (Finset.Ico h (h + 4)))
+      = b ∪ (Finset.range 10) ×ˢ (Finset.Ico h (h + 4)) := by
+    rw [hplace, Finset.union_assoc, column_band_extend]
+  unfold Placement.applyStep
+  rw [hplace']
+  exact clearLines_band_reset hnf hlow
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
