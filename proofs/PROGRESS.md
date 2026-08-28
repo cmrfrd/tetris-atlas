@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28en) — the legal cycle's piece census (bank 363/N)
+
+- **`wordStream_eq_of_lt`** — inside the first period the repeated
+  stream reads the word itself.
+- **`bag_word_piece_census`** — a word whose repetition deals full
+  bags, of length 7k, contains each piece exactly k times.
+- **`legal_cycle_word_piece_census`** — any bag-legal repeatable cycle
+  word on a well-formed board deals each of the seven pieces exactly
+  length/7 times: a 35-word plays each piece EXACTLY FIVE TIMES. The
+  five-services-per-period mill structure is forced by arithmetic
+  before any geometry enters.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28em) — THE 35-QUANTUM FOR LEGAL CYCLES (bank 362/N)
 
 - **`wordStream`** / **`wordStream_periodic`** — the piece stream of a

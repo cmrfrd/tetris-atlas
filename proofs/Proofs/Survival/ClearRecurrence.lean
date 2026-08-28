@@ -10417,6 +10417,54 @@ theorem legal_cycle_word_min_length {b : Board} {w : List Placement}
   have hpos : 0 < w.length := List.length_pos_iff.mpr hne
   omega
 
+/-- Inside the first period, the repeated stream reads the word
+itself. -/
+theorem wordStream_eq_of_lt {w : List Placement} {i : ℕ}
+    (hi : i < w.length) :
+    wordStream w i = (w.getD i ⟨Piece.O, 0, 0⟩).piece := by
+  unfold wordStream
+  rw [Nat.mod_eq_of_lt hi]
+
+/-- **The bag census of a word**: if a word's infinite repetition deals
+full bags and its length is a multiple of seven, then the word contains
+each piece EXACTLY one seventh of its length many times. -/
+theorem bag_word_piece_census {w : List Placement}
+    (hbag : IsBagStream (wordStream w)) (h7 : 7 ∣ w.length)
+    (p : Piece) :
+    ((Finset.range w.length).filter
+      (fun i => (w.getD i ⟨Piece.O, 0, 0⟩).piece = p)).card
+      = w.length / 7 := by
+  classical
+  obtain ⟨k, hk⟩ := h7
+  have hcount := bag_stream_range_count hbag p k
+  rw [← hk] at hcount
+  have hconv : (Finset.range w.length).filter
+      (fun i => (w.getD i ⟨Piece.O, 0, 0⟩).piece = p)
+      = (Finset.range w.length).filter (fun i => wordStream w i = p) := by
+    apply Finset.filter_congr
+    intro i hi
+    rw [Finset.mem_range] at hi
+    rw [wordStream_eq_of_lt hi]
+  rw [hconv, hcount, hk]
+  omega
+
+/-- **THE LEGAL CYCLE'S PIECE CENSUS**: any bag-legal repeatable cycle
+word on a well-formed board contains each of the seven pieces exactly
+`length / 7` times — a 35-word deals each piece exactly five times.
+The mill structure (five services per period) is forced by arithmetic
+before any geometry is considered. -/
+theorem legal_cycle_word_piece_census {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (p : Piece) :
+    ((Finset.range w.length).filter
+      (fun i => (w.getD i ⟨Piece.O, 0, 0⟩).piece = p)).card
+      = w.length / 7 := by
+  have h35 := legal_cycle_word_thirty_five_dvd hwf hne hv hbag hfold
+  exact bag_word_piece_census hbag (by omega) p
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
