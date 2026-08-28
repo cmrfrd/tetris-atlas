@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fc) — the bag's exact value (bank 378/N)
+
+- **`bag_stream_take_val`** — after n draws from full along full
+  seven-blocks, the bag equals full minus PRECISELY the first n mod 7
+  pieces of block n/7. The set-valued sharpening of
+  bag_stream_take_card, giving the exact bag at every mid-block
+  position. (Next: draw-legality of the table policy realizing a
+  legal 35-word, toward the conditional M2 realization.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fb) — the orbit is a true 35-cycle (bank 377/N)
 
 - **`legal_cycle_orbit_distinct`** — two first-period states less than
