@@ -11042,6 +11042,76 @@ theorem legal_cycle_word_tetris_cap {b : Board} {w : List Placement}
   rw [census_eq_count] at h2
   omega
 
+/-- **Clears fit the piece's row span**: on a clear-free board, a move
+clears at most as many rows as its piece's shape occupies — every
+cleared row must contain a fresh cell. -/
+theorem clears_le_row_span {cfg : GameConfig} {b : Board}
+    {pl : Placement} (hnf : ∀ r, ¬ Board.isFull cfg b r) :
+    (Board.fullRows cfg (pl.place b)).card
+      ≤ ((pl.shapeUp).image (·.2)).card := by
+  classical
+  have hsub : Board.fullRows cfg (pl.place b)
+      ⊆ (pl.dropped b).image Prod.snd := by
+    intro r hr
+    simp only [Board.fullRows, Finset.mem_filter] at hr
+    obtain ⟨c, hc, hcb⟩ : ∃ c ∈ Finset.range cfg.cols, (c, r) ∉ b := by
+      by_contra hcon
+      push Not at hcon
+      exact hnf r hcon
+    have hcplace : (c, r) ∈ pl.place b := hr.2 c hc
+    have hcdrop : (c, r) ∈ pl.dropped b := by
+      simp only [Placement.place, Finset.mem_union] at hcplace
+      rcases hcplace with h | h
+      · exact absurd h hcb
+      · exact h
+    rw [Finset.mem_image]
+    exact ⟨(c, r), hcdrop, rfl⟩
+  have himg : (pl.dropped b).image Prod.snd
+      = ((pl.shapeUp).image (·.2)).image (pl.dropOffset b + ·) := by
+    rw [Placement.dropped_eq_image, Finset.image_image,
+      Finset.image_image]
+    rfl
+  calc (Board.fullRows cfg (pl.place b)).card
+      ≤ ((pl.dropped b).image Prod.snd).card := Finset.card_le_card hsub
+    _ = (((pl.shapeUp).image (·.2)).image (pl.dropOffset b + ·)).card :=
+        by rw [himg]
+    _ = ((pl.shapeUp).image (·.2)).card :=
+        Finset.card_image_of_injective _ (add_right_injective _)
+
+/-- Every non-I shape spans at most three rows, in every rotation. -/
+theorem non_I_row_span_le_three :
+    ∀ (p : Piece) (r : Rotation), p ≠ Piece.I →
+      ((p.shapeUp r).image (·.2)).card ≤ 3 := by
+  decide
+
+/-- **Non-I moves clear at most three rows** on a clear-free board:
+only the I spans four rows, so only the I can take four. -/
+theorem non_I_move_clears_le_three {cfg : GameConfig} {b : Board}
+    {pl : Placement} (hnf : ∀ r, ¬ Board.isFull cfg b r)
+    (hpI : pl.piece ≠ Piece.I) :
+    (Board.fullRows cfg (pl.place b)).card ≤ 3 := by
+  have h1 := clears_le_row_span (b := b) (pl := pl) hnf
+  have h2 := non_I_row_span_le_three pl.piece pl.rot hpI
+  have h3 : (pl.shapeUp).image (·.2)
+      = (pl.piece.shapeUp pl.rot).image (·.2) := rfl
+  rw [h3] at h1
+  omega
+
+/-- **THE CLEAR DICHOTOMY**: on a clear-free board, every move either
+clears at most three rows, or clears exactly four and is the vertical
+I — there is nothing in between the ordinary harvest and the tetris. -/
+theorem move_clear_dichotomy {b : Board} {pl : Placement}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r) :
+    (Board.fullRows GameConfig.standard (pl.place b)).card ≤ 3
+    ∨ ((Board.fullRows GameConfig.standard (pl.place b)).card = 4
+        ∧ pl.piece = Piece.I) := by
+  have hle := linesCleared_place_le_four GameConfig.standard b pl hnf
+  rw [Board.linesCleared] at hle
+  by_cases h4 : 4 ≤ (Board.fullRows GameConfig.standard
+      (pl.place b)).card
+  · exact Or.inr ⟨by omega, tetris_requires_I hnf h4⟩
+  · exact Or.inl (by omega)
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

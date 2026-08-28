@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ew) — the clear dichotomy (bank 372/N)
+
+- **`clears_le_row_span`** — on a clear-free board a move clears at
+  most as many rows as its piece's shape occupies: every cleared row
+  must contain a fresh cell, and the drop shifts rows injectively.
+- **`non_I_row_span_le_three`** — every non-I shape spans ≤ 3 rows in
+  every rotation (kernel decide over 6 pieces × 4 rotations).
+- **`non_I_move_clears_le_three`** — so non-I moves clear ≤ 3.
+- **`move_clear_dichotomy`** — every move clears ≤ 3 rows, or clears
+  EXACTLY four as the I: nothing between the ordinary harvest and the
+  tetris.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ev) — the tetris cap for words (bank 371/N)
 
 - **`wordTetrises`** — the four-clear moves of a word, counted.
