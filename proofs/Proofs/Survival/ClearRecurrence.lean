@@ -11966,6 +11966,139 @@ theorem cycle_drop_column_moment {b : Board} {pls : List Placement}
   rw [hmap]
   omega
 
+/-! ### How much the weighted family really knows
+
+The weighted ledger produced one equation per weight function, which
+looks like an infinite supply of constraints. It is not: because the
+per-column delivery is *exactly* the clear count for every column, the
+word's weighted profile is forced for every `w` at once. The family
+collapses to its first instance.
+
+What does NOT collapse is the DECOMPOSITION of each weighted profile
+into drop coordinates. Reading the same equations in terms of where the
+pieces were dropped turns two of them from congruences into exact
+Diophantine equations on the drop-column multiset — one linear, one
+quadratic. -/
+
+/-- **The word's weighted profile is the weighted sum of the per-column
+deliveries.** -/
+theorem wordWeightedProfile_eq_sum (w : ℕ → ℕ) (pls : List Placement) :
+    wordWeightedProfile w pls
+      = ∑ j ∈ Finset.range 10, w j * wordColProfile j pls := by
+  induction pls with
+  | nil => simp [wordWeightedProfile, wordColProfile]
+  | cons pl rest ih =>
+    unfold wordWeightedProfile at ih ⊢
+    rw [List.map_cons, List.sum_cons, ih]
+    unfold weightedProfile
+    rw [← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl (fun j _ => ?_)
+    rw [← Nat.mul_add]
+    rfl
+
+/-- **THE WEIGHTED FAMILY COLLAPSES**: every weighted cycle law is a
+consequence of the single per-column delivery law. Mining further weight
+functions cannot produce new information — the boundary of the method,
+stated as a theorem rather than guessed at. -/
+theorem cycle_weighted_of_delivery (w : ℕ → ℕ) {b : Board}
+    {pls : List Placement}
+    (hdel : ∀ c, c < 10 → wordColProfile c pls = wordClears b pls) :
+    wordWeightedProfile w pls
+      = (∑ j ∈ Finset.range 10, w j) * wordClears b pls := by
+  rw [wordWeightedProfile_eq_sum, Finset.sum_mul]
+  refine Finset.sum_congr rfl (fun j hj => ?_)
+  rw [hdel j (Finset.mem_range.mp hj)]
+
+/-! #### The exact drop-column equations -/
+
+/-- A piece's quadratic column moment: the sum of the squares of its
+cells' column offsets. -/
+def shapeQuad (pl : Placement) : ℕ := ∑ cell ∈ pl.shapeUp, cell.1 * cell.1
+
+theorem sum_sqW : ∑ j ∈ Finset.range 10, j * j = 285 := by decide
+
+/-- **The quadratic moment of a drop**, in drop coordinates. -/
+theorem weightedProfile_sq {pl : Placement}
+    (hv : pl.Valid GameConfig.standard) :
+    weightedProfile (fun j => j * j) pl
+      = 4 * (pl.col * pl.col) + 2 * pl.col * shapeMoment pl
+        + shapeQuad pl := by
+  rw [weightedProfile_eq_cell_sum hv]
+  unfold shapeMoment shapeQuad
+  have hexp : ∀ cell ∈ pl.shapeUp,
+      (pl.col + cell.1) * (pl.col + cell.1)
+        = pl.col * pl.col + 2 * pl.col * cell.1 + cell.1 * cell.1 := by
+    intro cell _
+    ring
+  rw [Finset.sum_congr rfl hexp, Finset.sum_add_distrib,
+    Finset.sum_add_distrib, Finset.sum_const, smul_eq_mul,
+    pl.shapeUp_card, ← Finset.mul_sum]
+
+/-- **THE EXACT MOMENT EQUATION**: around any cycle, four times the sum
+of the drop columns plus the sum of the shape moments equals forty-five
+per cleared row — an exact equation, not a congruence. -/
+theorem cycle_moment_exact {b : Board} {pls : List Placement}
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard)
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    (pls.map (fun pl => 4 * pl.col + shapeMoment pl)).sum
+      = 45 * wordClears b pls := by
+  have h := cycle_weighted_law (fun j => j) hfold
+  rw [sum_idW] at h
+  have hmap : (pls.map (fun pl => 4 * pl.col + shapeMoment pl)).sum
+      = wordWeightedProfile (fun j => j) pls := by
+    unfold wordWeightedProfile
+    congr 1
+    apply List.map_congr_left
+    intro pl hpl
+    exact (weightedProfile_id (hv pl hpl)).symm
+  rw [hmap, ← h]
+
+/-- A legal 35-cycle's drop columns satisfy an exact linear equation:
+`∑ (4·col + shapeMoment) = 630`. -/
+theorem legal_cycle_moment_630 {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    (w.map (fun pl => 4 * pl.col + shapeMoment pl)).sum = 630 := by
+  rw [cycle_moment_exact hv hfold,
+    legal_cycle_word_clears_fourteen hwf hne hv hbag hfold hlen]
+
+/-- **THE EXACT QUADRATIC MOMENT EQUATION**: the drop columns satisfy a
+second, independent equation — quadratic this time — at two hundred
+eighty-five per cleared row. -/
+theorem cycle_quad_moment_exact {b : Board} {pls : List Placement}
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard)
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    (pls.map (fun pl => 4 * (pl.col * pl.col)
+        + 2 * pl.col * shapeMoment pl + shapeQuad pl)).sum
+      = 285 * wordClears b pls := by
+  have h := cycle_weighted_law (fun j => j * j) hfold
+  rw [sum_sqW] at h
+  have hmap : (pls.map (fun pl => 4 * (pl.col * pl.col)
+        + 2 * pl.col * shapeMoment pl + shapeQuad pl)).sum
+      = wordWeightedProfile (fun j => j * j) pls := by
+    unfold wordWeightedProfile
+    congr 1
+    apply List.map_congr_left
+    intro pl hpl
+    exact (weightedProfile_sq (hv pl hpl)).symm
+  rw [hmap, ← h]
+
+/-- A legal 35-cycle's drop columns satisfy the exact quadratic equation
+`∑ (4·col² + 2·col·shapeMoment + shapeQuad) = 3990`. -/
+theorem legal_cycle_quad_3990 {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    (w.map (fun pl => 4 * (pl.col * pl.col)
+      + 2 * pl.col * shapeMoment pl + shapeQuad pl)).sum = 3990 := by
+  rw [cycle_quad_moment_exact hv hfold,
+    legal_cycle_word_clears_fourteen hwf hne hv hbag hfold hlen]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

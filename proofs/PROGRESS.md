@@ -41629,6 +41629,37 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fg) — the family collapses; the drop coordinates do not (bank 382/N)
+
+A self-audit of yesterday's engine, plus the payoff it actually hides.
+
+- **`wordWeightedProfile_eq_sum`** — the word's weighted profile is the
+  weighted sum of the per-column deliveries.
+- **`cycle_weighted_of_delivery`** — THE COLLAPSE: since per-column
+  delivery equals the clear count for EVERY column, every weighted
+  cycle law follows from that one instance. The infinite family of
+  weights carries no information beyond it. Mining more weight
+  functions is provably futile — the boundary of the method, stated as
+  a theorem instead of guessed at.
+
+What does not collapse is reading the same equations in DROP
+coordinates, where they sharpen from congruences to exact equations:
+
+- **`cycle_moment_exact`** / **`legal_cycle_moment_630`** — a legal
+  35-cycle satisfies ∑(4·col + shapeMoment) = 630 exactly (yesterday's
+  mod-five statement was strictly weaker).
+- **`shapeQuad`**, **`weightedProfile_sq`**, **`cycle_quad_moment_exact`**,
+  **`legal_cycle_quad_3990`** — and a second, independent QUADRATIC
+  equation: ∑(4·col² + 2·col·shapeMoment + shapeQuad) = 3990.
+
+Two exact Diophantine constraints, one linear and one quadratic, on the
+multiset of drop columns of any legal 35-cycle.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean. Compiled first
+try.
+
+---
+
 ### Tick (manual, 2026-08-28ff) — THE WEIGHTED-COLUMN LEDGER: one engine, three orthogonal laws (bank 381/N)
 
 New angle: every cycle law so far weights all ten columns equally.
