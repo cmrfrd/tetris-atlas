@@ -8286,6 +8286,76 @@ theorem applyStep_colHeight_reset {b : Board} {pl : Placement}
   unfold Board.colHeight at this
   exact this
 
+/-- **THE PERFECT SERVICE**: on a clear-free board whose flat pair sits
+before two prepared rows, one confined O clears exactly two rows and
+returns both pair columns to precisely their starting height — a
+complete deposit-harvest-reset cycle in a single move, debt-free. The
+moving window's ideal visit, realized: arrive, drop the square, clear
+the double, leave the window exactly as found. -/
+theorem window_O_perfect_service {b : Board} {j h : ℕ}
+    (hj : j + 1 < 10)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h0 : b.colHeight j = h) (h1 : b.colHeight (j + 1) = h)
+    (hprep : ∀ c < 10, c ≠ j → c ≠ j + 1 →
+      (c, h) ∈ b ∧ (c, h + 1) ∈ b) :
+    ∃ pl : Placement, pl.piece = Piece.O ∧ pl.Valid GameConfig.standard
+      ∧ (∀ cell ∈ pl.shapeUp,
+          pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1)
+      ∧ Board.linesCleared GameConfig.standard (pl.place b) = 2
+      ∧ (Placement.applyStep GameConfig.standard b pl).colHeight j = h
+      ∧ (Placement.applyStep GameConfig.standard b pl).colHeight (j + 1)
+          = h := by
+  classical
+  obtain ⟨pl, hpiece, hvalid, hcells, hfr⟩ :=
+    window_O_harvest_exact (b := b) hj hnf h0 h1 hprep
+  have hsh : pl.shapeUp = Piece.O.shapeUp pl.rot := by
+    unfold Placement.shapeUp
+    rw [hpiece]
+  obtain ⟨hf0, hf1⟩ := O_shape_feet pl.rot
+  obtain ⟨_, _, htops⟩ := O_shape_tops pl.rot
+  have hm00 : ((0 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+    rw [hsh]
+    exact hf0
+  have hm10 : ((1 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+    rw [hsh]
+    exact hf1
+  have hj0 := hcells _ hm00
+  have hj1 := hcells _ hm10
+  have e0 : pl.col + ((0 : ℕ), (0 : ℕ)).1 = pl.col := by simp
+  have e1 : pl.col + ((1 : ℕ), (0 : ℕ)).1 = pl.col + 1 := by simp
+  rw [e0] at hj0
+  rw [e1] at hj1
+  have hcol : pl.col = j := by omega
+  have hD : pl.dropOffset b = h := by
+    apply Nat.le_antisymm
+    · exact confined_dropOffset_le_of_flat hcells h0 h1
+    · have hle := Finset.le_sup
+        (f := fun cell : PieceCell =>
+          b.colHeight (pl.col + cell.1) - cell.2) hm00
+      unfold Placement.dropOffset
+      rw [hcol]
+      rw [hcol] at hle
+      simp only [] at hle ⊢
+      rw [show j + ((0 : ℕ), (0 : ℕ)).1 = j from by simp, h0] at hle
+      simpa using hle
+  have hdrows : ∀ p ∈ pl.dropped b, p.2 = h ∨ p.2 = h + 1 := by
+    intro p hp
+    unfold Placement.dropped Placement.cellsAt at hp
+    rw [Finset.mem_image] at hp
+    obtain ⟨cell, hcell, heq⟩ := hp
+    have hrow := congrArg Prod.snd heq
+    simp only [] at hrow
+    have := htops cell (by rw [← hsh]; exact hcell)
+    omega
+  have hlines : Board.linesCleared GameConfig.standard (pl.place b)
+      = 2 := by
+    unfold Board.linesCleared
+    rw [hfr, Finset.card_insert_of_notMem (by simp),
+      Finset.card_singleton]
+  exact ⟨pl, hpiece, hvalid, hcells, hlines,
+    applyStep_colHeight_reset h0 hfr hdrows,
+    applyStep_colHeight_reset h1 hfr hdrows⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dq) — THE PERFECT SERVICE (bank 340/N)
+
+- **`window_O_perfect_service`** — exact harvest × the reset lemma: one
+  confined O on a flat prepared pair clears exactly two rows and leaves
+  the window exactly as found. The window economy's ideal visit is a
+  proven single-move cycle: arrive, drop, double, depart unchanged.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dp) — the reset lemma (bank 339/N)
 
 - **`applyStep_colHeight_reset`** — a column whose drop lands only in
