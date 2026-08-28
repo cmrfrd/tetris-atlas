@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dp) — the reset lemma (bank 339/N)
+
+- **`applyStep_colHeight_reset`** — a column whose drop lands only in
+  the two rows about to clear comes out of the FULL move at exactly its
+  original height (colRows set equality: dropped cells filtered out as
+  full-row cells; survivors below shift by clearedBelow = 0). The
+  window's O-harvest full cycle is one composition away.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28do) — the double is surgical (bank 338/N)
 
 - **`window_O_harvest_exact`** — fullRows(merged) = {h, h+1} exactly:
