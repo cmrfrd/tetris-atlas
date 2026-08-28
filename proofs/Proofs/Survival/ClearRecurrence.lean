@@ -13887,6 +13887,119 @@ theorem cycle_potential_balance {b : Board} {pls : List Placement}
   rw [hfold] at h
   omega
 
+/-! ### Reading the potential balance
+
+Three consequences: the survivors' fall is bounded by the potential
+itself; the shapes' own moments are small and computable; and the total
+landing height of a cycle is capped by what its clears release. -/
+
+/-- **A survivor never falls further than it stood**: the total fall is
+bounded by the board's own potential. -/
+theorem gravityInt_le_rowMoment (B : Board) :
+    gravityInt B ≤ rowMoment B := by
+  classical
+  unfold gravityInt rowMoment
+  calc ∑ p ∈ B.filter
+        (fun p => ¬ Board.isFull GameConfig.standard B p.2),
+        Board.clearedBelow GameConfig.standard B p.2
+      ≤ ∑ p ∈ B.filter
+          (fun p => ¬ Board.isFull GameConfig.standard B p.2), p.2 :=
+        Finset.sum_le_sum (fun p _ => clearedBelow_le GameConfig.standard B p.2)
+    _ ≤ ∑ p ∈ B, p.2 :=
+        Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
+
+/-- Every shape's own row moment is at most six. -/
+theorem shapeRowMoment_le_six :
+    ∀ (p : Piece) (r : Rotation), (∑ cell ∈ p.shapeUp r, cell.2) ≤ 6 := by
+  decide
+
+/-- The square's row moment is two, whichever way you turn it. -/
+theorem shapeRowMoment_O :
+    ∀ (r : Rotation), (∑ cell ∈ Piece.O.shapeUp r, cell.2) = 2 := by
+  decide
+
+/-- Only the vertical I reaches the maximum moment six. -/
+theorem shapeRowMoment_eq_six_iff :
+    ∀ (p : Piece) (r : Rotation),
+      (∑ cell ∈ p.shapeUp r, cell.2) = 6 ↔ (p = Piece.I ∧ (r = 1 ∨ r = 3)) := by
+  decide
+
+/-- The total landing height of a word. -/
+def wordDropSum (b : Board) : List Placement → ℕ
+  | [] => 0
+  | pl :: rest =>
+      pl.dropOffset b
+      + wordDropSum (Placement.applyStep GameConfig.standard b pl) rest
+
+theorem wordDropSum_cons (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    wordDropSum b (pl :: rest)
+      = pl.dropOffset b
+        + wordDropSum (Placement.applyStep GameConfig.standard b pl)
+            rest := rfl
+
+/-- The lift is at least four times the total landing height. -/
+theorem wordLift_ge_drops (b : Board) (pls : List Placement) :
+    4 * wordDropSum b pls ≤ wordLift b pls := by
+  induction pls generalizing b with
+  | nil => simp [wordLift, wordDropSum]
+  | cons pl rest ih =>
+    rw [wordLift_cons, wordDropSum_cons, Nat.mul_add]
+    have := ih (Placement.applyStep GameConfig.standard b pl)
+    omega
+
+/-- The lift is also at most four times the landing height plus six per
+move — the shapes contribute at most six apiece. -/
+theorem wordLift_le_drops (b : Board) (pls : List Placement) :
+    wordLift b pls ≤ 4 * wordDropSum b pls + 6 * pls.length := by
+  induction pls generalizing b with
+  | nil => simp [wordLift, wordDropSum]
+  | cons pl rest ih =>
+    rw [wordLift_cons, wordDropSum_cons, List.length_cons]
+    have hsh : shapeRowMoment pl ≤ 6 :=
+      shapeRowMoment_le_six pl.piece pl.rot
+    have := ih (Placement.applyStep GameConfig.standard b pl)
+    omega
+
+/-- **THE LANDING-HEIGHT CAP**: around a cycle, four times the total
+height at which the pieces land is at most what the clears give back.
+Playing high costs exactly as much as the clears can repay. -/
+theorem cycle_drop_height_cap {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard)
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    4 * wordDropSum b pls ≤ wordRelease b pls := by
+  have hbal := cycle_potential_balance hwf hv hfold
+  have hge := wordLift_ge_drops b pls
+  omega
+
+/-- **…and the release is bounded by the play**: what the clears give
+back is at most four times the landing height plus six per move. The
+two sides of the potential are pinned to each other within a fixed
+budget. -/
+theorem cycle_release_cap {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard)
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    wordRelease b pls ≤ 4 * wordDropSum b pls + 6 * pls.length := by
+  have hbal := cycle_potential_balance hwf hv hfold
+  have hle := wordLift_le_drops b pls
+  omega
+
+/-- For a legal 35-cycle the release sits within `210` of four times the
+landing height. -/
+theorem legal_cycle_release_window {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    4 * wordDropSum b w ≤ wordRelease b w
+      ∧ wordRelease b w ≤ 4 * wordDropSum b w + 210 := by
+  refine ⟨cycle_drop_height_cap hwf hv hfold, ?_⟩
+  have h := cycle_release_cap hwf hv hfold
+  rw [hlen] at h
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

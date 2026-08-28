@@ -41629,6 +41629,27 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ft) — reading the potential balance (bank 395/N)
+
+- **`gravityInt_le_rowMoment`** — a survivor never falls further than
+  it stood: the total fall is bounded by the board's own potential.
+- **`shapeRowMoment_le_six`**, **`shapeRowMoment_O`**,
+  **`shapeRowMoment_eq_six_iff`** — the shapes' own moments are small
+  and pinned: at most six, exactly two for the square in every
+  rotation, and six only for the vertical I.
+- **`wordDropSum`**, **`wordLift_ge_drops`**, **`wordLift_le_drops`** —
+  the lift is four times the total landing height, up to six per move.
+- **`cycle_drop_height_cap`** / **`cycle_release_cap`** — hence around
+  a cycle four times the total landing height is at most what the
+  clears release, and the release is at most that plus six per move.
+  Playing high costs exactly what the clears can repay.
+- **`legal_cycle_release_window`** — for a legal 35-cycle the release
+  sits in a 210-wide window above four times the landing height.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fs) — THE POTENTIAL BALANCE (bank 394/N)
 
 Every law so far is blind to HEIGHT. Summing the row indices of the
