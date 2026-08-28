@@ -14470,6 +14470,94 @@ theorem legal_cycle_profile {b : Board} {w : List Placement}
   · exact legal_cycle_has_odd_or_split_clear hwf hne hv hbag hfold hlen
   · exact legal_cycle_has_flat_T hwf hne hv hbag hfold hlen
 
+/-! ### What an empty floor costs
+
+Suppose a cycle never completes its bottom row and starts with that row
+empty. The freeze then keeps row zero empty for the entire loop — so
+every occupied column stands over a hole. At any clearing moment a full
+row touches all ten columns at once, so all ten are occupied, and the
+board is carrying ten holes simultaneously. An empty floor is not free;
+it is a standing debt of ten. -/
+
+/-- A column with a gap at the floor and anything above it holds a hole. -/
+theorem colHoles_pos_of_floor_gap {b : Board} {c : ℕ}
+    (hgap : ((c, 0) : Coord) ∉ b) (hpos : 0 < b.colHeight c) :
+    1 ≤ HoleDebt.colHoles b c := by
+  classical
+  have hsub : b.colRows c ⊆ (Finset.range (b.colHeight c)).erase 0 := by
+    intro x hx
+    rw [Finset.mem_erase, Finset.mem_range]
+    constructor
+    · intro hx0
+      apply hgap
+      unfold Board.colRows at hx
+      rw [Finset.mem_image] at hx
+      obtain ⟨q, hq, hq2⟩ := hx
+      obtain ⟨hqb, hq1⟩ := Finset.mem_filter.mp hq
+      have : q = (c, 0) := Prod.ext_iff.mpr ⟨hq1, by omega⟩
+      rw [← this]
+      exact hqb
+    · have hle : x + 1 ≤ b.colHeight c := by
+        unfold Board.colHeight
+        exact Finset.le_sup (f := (· + 1)) hx
+      omega
+  have hcard := Finset.card_le_card hsub
+  rw [Finset.card_erase_of_mem (Finset.mem_range.mpr hpos),
+    Finset.card_range] at hcard
+  unfold HoleDebt.colHoles
+  omega
+
+/-- **AN EMPTY FLOOR UNDER A FULL ROW COSTS TEN HOLES**: if the bottom
+row is empty while some row is complete, every one of the ten columns
+stands over a gap. -/
+theorem debt_ge_ten_of_empty_floor {B : Board}
+    (hempty : ∀ c, ((c, 0) : Coord) ∉ B)
+    {t : ℕ} (hfull : Board.isFull GameConfig.standard B t) :
+    10 ≤ HoleDebt.debt GameConfig.standard B := by
+  classical
+  have hcol : ∀ c ∈ Finset.range 10, 1 ≤ HoleDebt.colHoles B c := by
+    intro c hc
+    have hmem := hfull c (by rw [GameConfig.standard_cols]; exact hc)
+    have hpos : 0 < B.colHeight c := by
+      have := Board.lt_colHeight hmem
+      omega
+    exact colHoles_pos_of_floor_gap (hempty c) hpos
+  have hsum : ∑ _c ∈ Finset.range 10, 1
+      ≤ ∑ c ∈ Finset.range 10, HoleDebt.colHoles B c :=
+    Finset.sum_le_sum hcol
+  rw [Finset.sum_const, Finset.card_range, smul_eq_mul, mul_one] at hsum
+  unfold HoleDebt.debt
+  rw [GameConfig.standard_cols]
+  exact hsum
+
+/-- The frozen floor of an empty-floor cycle stays empty at every
+moment. -/
+theorem cycle_floor_stays_empty {b : Board} {w1 w2 : List Placement}
+    (hnb : ¬ wordBottomClear b (w1 ++ w2))
+    (hfold : (w1 ++ w2).foldl
+      (Placement.applyStep GameConfig.standard) b = b)
+    (hempty : ∀ c, ((c, 0) : Coord) ∉ b) :
+    ∀ c, ((c, 0) : Coord)
+      ∉ w1.foldl (Placement.applyStep GameConfig.standard) b :=
+  fun c => cycle_bottom_gap_permanent hnb hfold (hempty c)
+
+/-- **THE STANDING DEBT OF TEN**: a cycle that begins with an empty
+bottom row and never completes it carries ten holes at every clearing
+moment — one under each column. Playing above an empty floor is paid
+for continuously, not once. -/
+theorem cycle_empty_floor_debt {b : Board} {w1 w2 : List Placement}
+    (hnb : ¬ wordBottomClear b (w1 ++ w2))
+    (hfold : (w1 ++ w2).foldl
+      (Placement.applyStep GameConfig.standard) b = b)
+    (hempty : ∀ c, ((c, 0) : Coord) ∉ b)
+    {t : ℕ}
+    (hfull : Board.isFull GameConfig.standard
+      (w1.foldl (Placement.applyStep GameConfig.standard) b) t) :
+    10 ≤ HoleDebt.debt GameConfig.standard
+      (w1.foldl (Placement.applyStep GameConfig.standard) b) :=
+  debt_ge_ten_of_empty_floor (cycle_floor_stays_empty hnb hfold hempty)
+    hfull
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

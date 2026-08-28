@@ -41629,6 +41629,24 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fy) — what an empty floor costs (bank 400/N)
+
+- **`colHoles_pos_of_floor_gap`** — a column with a gap at the floor
+  and anything above it holds a hole (colRows sits inside
+  `range colHeight` with zero erased).
+- **`debt_ge_ten_of_empty_floor`** — an empty bottom row under a
+  complete row costs TEN holes: the full row occupies all ten columns
+  at once, so every one of them stands over a gap.
+- **`cycle_floor_stays_empty`** / **`cycle_empty_floor_debt`** — a
+  cycle that begins with an empty bottom row and never completes it
+  keeps row zero empty for the whole loop, and so carries ten holes at
+  every clearing moment. Playing above an empty floor is paid for
+  continuously, not once.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fx) — THE M2 WITNESS PROFILE (bank 399/N)
 
 - **`wordDryMoves`**, **`wordClearMoves_add_dry`**,
