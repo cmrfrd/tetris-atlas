@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dx) — the O's drop identified (bank 347/N)
+
+- **`O_r0_shape_eq`** — the base square as an explicit 4-set.
+- **`O_pair_dropped_eq`** — on an equal-height pair, dropped =
+  {(c,h),(c,h+1),(c+1,h),(c+1,h+1)} and place = union with it. The
+  five-O cycle's per-step identity is in hand; next: intermediate
+  no-full + height-preservation, then the composition.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dw) — the band reset (bank 346/N)
 
 - **`clearLines_two_band_reset`** — b ∪ (two complete rows above b),

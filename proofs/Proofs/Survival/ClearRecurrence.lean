@@ -8804,6 +8804,66 @@ theorem clearLines_two_band_reset {b : Board} {h : ℕ}
     · rw [hcb p.2 hlt]
       simp
 
+/-- The O's base rotation is exactly the four-cell square. -/
+theorem O_r0_shape_eq :
+    Piece.O.shapeUp (0 : Rotation)
+      = ({(0, 0), (0, 1), (1, 0), (1, 1)} : Finset PieceCell) := by
+  decide
+
+/-- **The O's drop is the pair band**: on a board whose columns `c` and
+`c + 1` both stand at height `h`, the square placed at `c` occupies
+exactly the four cells of rows `h, h+1` in those two columns, and the
+merge is the plain union with them. -/
+theorem O_pair_dropped_eq {b : Board} {c h : ℕ}
+    (h0 : b.colHeight c = h) (h1 : b.colHeight (c + 1) = h) :
+    (⟨Piece.O, 0, c⟩ : Placement).dropped b
+      = ({(c, h), (c, h + 1), (c + 1, h), (c + 1, h + 1)} : Finset Coord)
+    ∧ (⟨Piece.O, 0, c⟩ : Placement).place b
+      = b ∪ ({(c, h), (c, h + 1), (c + 1, h), (c + 1, h + 1)}
+          : Finset Coord) := by
+  classical
+  have hnarrow := (O_shape_columns (0 : Rotation)).2.2
+  have hcells : ∀ cell ∈ (⟨Piece.O, 0, c⟩ : Placement).shapeUp,
+      (⟨Piece.O, 0, c⟩ : Placement).col + cell.1 = c
+      ∨ (⟨Piece.O, 0, c⟩ : Placement).col + cell.1 = c + 1 := by
+    intro cell hcell
+    have := hnarrow cell hcell
+    change c + cell.1 = c ∨ c + cell.1 = c + 1
+    omega
+  have hD : (⟨Piece.O, 0, c⟩ : Placement).dropOffset b = h := by
+    apply Nat.le_antisymm
+    · exact confined_dropOffset_le_of_flat hcells h0 h1
+    · have hle := Finset.le_sup
+        (f := fun cell : PieceCell =>
+          b.colHeight ((⟨Piece.O, 0, c⟩ : Placement).col + cell.1)
+            - cell.2) (O_shape_feet (0 : Rotation)).1
+      unfold Placement.dropOffset
+      simp only [] at hle ⊢
+      rw [show (⟨Piece.O, 0, c⟩ : Placement).col + ((0 : ℕ), (0 : ℕ)).1
+          = c from by simp, h0] at hle
+      simpa using hle
+  have hdrop : (⟨Piece.O, 0, c⟩ : Placement).dropped b
+      = ({(c, h), (c, h + 1), (c + 1, h), (c + 1, h + 1)}
+          : Finset Coord) := by
+    unfold Placement.dropped Placement.cellsAt
+    rw [hD]
+    change (Piece.O.shapeUp (0 : Rotation)).image
+        (fun cell => (c + cell.1, h + cell.2)) = _
+    rw [O_r0_shape_eq]
+    ext p
+    simp only [Finset.mem_image, Finset.mem_insert, Finset.mem_singleton]
+    constructor
+    · rintro ⟨cell, hcell, rfl⟩
+      rcases hcell with h' | h' | h' | h' <;> subst h' <;> simp
+    · intro hp
+      rcases hp with h' | h' | h' | h' <;> subst h'
+      · exact ⟨(0, 0), by simp⟩
+      · exact ⟨(0, 1), by simp⟩
+      · exact ⟨(1, 0), by simp⟩
+      · exact ⟨(1, 1), by simp⟩
+  refine ⟨hdrop, ?_⟩
+  rw [Placement.place_eq_union_dropped, hdrop]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
