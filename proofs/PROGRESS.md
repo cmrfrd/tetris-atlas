@@ -41629,6 +41629,45 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ff) — THE WEIGHTED-COLUMN LEDGER: one engine, three orthogonal laws (bank 381/N)
+
+New angle: every cycle law so far weights all ten columns equally.
+Weight column j by w j instead and you get a conserved quantity for
+EVERY weight function, because a cleared row surrenders exactly one
+cell from each column — a clear always costs exactly Σw, whatever the
+geometry.
+
+- **`colWeight`** / **`weightedProfile`** / **`weightedProfile_eq_cell_sum`**
+  / **`colWeight_applyStep`** / **`colWeight_word`** /
+  **`cycle_weighted_law`** — the engine, with the profile identified as
+  a cell sum (each of the four cells weighted by the column it lands in).
+
+Three unrelated instances, all validated in the same run:
+
+1. **Weight = one column's indicator.** `cycle_column_delivery`:
+   around ANY cycle each of the ten columns receives exactly as many
+   cells as the cycle clears rows. `legal_cycle_column_fourteen`: a
+   legal 35-cycle delivers exactly FOURTEEN cells to every column —
+   140 cells split ten ways with no remainder, no column favoured.
+   `legal_cycle_column_feed_moves`: hence each column is fed on at
+   least four of the 35 moves.
+2. **Weight = odd-column indicator.** `cycle_odd_parity`: odd-column
+   delivery ≡ cleared rows (mod 2). This parity SURVIVES line clears,
+   unlike the checkerboard charge that dies on recolouring — gravity
+   never moves a cell between columns. `oddProfile_col_free`: the
+   per-piece odd charge is independent of the drop column mod two
+   (shifting by one swaps odd cells for even, and 4 − k ≡ k).
+3. **Weight = the column index.** `cycle_moment_mod_five`: a full row
+   carries moment 0+1+…+9 = 45 ≡ 0 (mod 5), so clears are INVISIBLE to
+   the column moment mod five, and any cycle satisfies
+   5 ∣ Σ(4·col + shapeMoment). The first cycle law that constrains
+   WHERE pieces are dropped rather than which pieces are played.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean. Compiled first
+try — all twelve theorems green in one run.
+
+---
+
 ### Tick (manual, 2026-08-28fe) — the realizing table policy (bank 380/N)
 
 - **`wordOrbit`** / **`wordPolicy`** — the orbit of a word play as a

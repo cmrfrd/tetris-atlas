@@ -11688,6 +11688,284 @@ theorem wordPolicy_eval {b : Board} {w : List Placement}
   unfold wordPolicy
   rw [hji]
 
+/-! ### The weighted-column ledger
+
+Every cycle law proved so far weights all ten columns equally. Weighting
+column `j` by `w j` instead produces a whole FAMILY of conserved
+quantities, because a cleared row takes exactly one cell out of every
+column — so a clear always costs exactly `∑ w`, whatever the geometry.
+Three choices of `w` give three unrelated laws: the indicator of one
+column (exact per-column delivery), the odd-column indicator (a parity
+law), and the column index itself (a moment law mod five, the first
+cycle law that constrains WHERE pieces are dropped). -/
+
+/-- A weighted count of the board's cells: column `j` contributes its cell
+count `w j` times. -/
+def colWeight (w : ℕ → ℕ) (b : Board) : ℕ :=
+  ∑ j ∈ Finset.range 10, w j * b.colCount j
+
+/-- The same weighting applied to a placement's column profile. -/
+def weightedProfile (w : ℕ → ℕ) (pl : Placement) : ℕ :=
+  ∑ j ∈ Finset.range 10, w j * pl.colProfile j
+
+/-- **The weighted profile is a cell sum**: weighting columns and summing
+against the profile is the same as weighting each of the piece's four
+cells by the column it lands in. -/
+theorem weightedProfile_eq_cell_sum {w : ℕ → ℕ} {pl : Placement}
+    (hv : pl.Valid GameConfig.standard) :
+    weightedProfile w pl = ∑ cell ∈ pl.shapeUp, w (pl.col + cell.1) := by
+  classical
+  have hmaps : ∀ cell ∈ pl.shapeUp, pl.col + cell.1 ∈ Finset.range 10 := by
+    intro cell hcell
+    have := hv cell hcell
+    rw [GameConfig.standard_cols] at this
+    exact Finset.mem_range.mpr this
+  unfold weightedProfile
+  rw [← Finset.sum_fiberwise_of_maps_to hmaps
+    (fun cell => w (pl.col + cell.1))]
+  refine Finset.sum_congr rfl (fun j _ => ?_)
+  have hval : ∀ cell ∈ pl.shapeUp.filter (fun cell => pl.col + cell.1 = j),
+      w (pl.col + cell.1) = w j := by
+    intro cell hcell
+    rw [(Finset.mem_filter.mp hcell).2]
+  rw [Finset.sum_congr rfl hval, Finset.sum_const, smul_eq_mul, mul_comm]
+  rfl
+
+/-- **The weighted ledger for one move**: the weighted count grows by the
+piece's weighted profile and falls by the total weight per cleared row —
+a cleared row surrenders exactly one cell from each column. -/
+theorem colWeight_applyStep (w : ℕ → ℕ) (b : Board) (pl : Placement) :
+    colWeight w (Placement.applyStep GameConfig.standard b pl)
+      + (∑ j ∈ Finset.range 10, w j)
+        * (Board.fullRows GameConfig.standard (pl.place b)).card
+      = colWeight w b + weightedProfile w pl := by
+  unfold colWeight weightedProfile
+  rw [Finset.sum_mul, ← Finset.sum_add_distrib, ← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl (fun j hj => ?_)
+  have h := applyStep_colCount GameConfig.standard b pl
+    (j := j) (by rw [GameConfig.standard_cols]; exact Finset.mem_range.mp hj)
+  rw [Board.linesCleared] at h
+  rw [← Nat.mul_add, ← Nat.mul_add, h]
+
+/-- The word's total weighted profile. -/
+def wordWeightedProfile (w : ℕ → ℕ) (pls : List Placement) : ℕ :=
+  (pls.map (weightedProfile w)).sum
+
+/-- **The weighted ledger along a word.** -/
+theorem colWeight_word (w : ℕ → ℕ) {b : Board} {pls : List Placement} :
+    colWeight w (pls.foldl (Placement.applyStep GameConfig.standard) b)
+      + (∑ j ∈ Finset.range 10, w j) * wordClears b pls
+      = colWeight w b + wordWeightedProfile w pls := by
+  induction pls generalizing b with
+  | nil => simp [wordWeightedProfile]
+  | cons pl rest ih =>
+    have hstep := colWeight_applyStep w b pl
+    have hrec := ih (b := Placement.applyStep GameConfig.standard b pl)
+    rw [List.foldl_cons, wordClears_cons]
+    unfold wordWeightedProfile at hrec ⊢
+    rw [List.map_cons, List.sum_cons, Nat.mul_add]
+    omega
+
+/-- **THE WEIGHTED CYCLE LAW**: a word that folds the board back to itself
+pays its total column weight exactly once per cleared row. One equation
+for every weight function — an infinite family of cycle invariants. -/
+theorem cycle_weighted_law (w : ℕ → ℕ) {b : Board} {pls : List Placement}
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    (∑ j ∈ Finset.range 10, w j) * wordClears b pls
+      = wordWeightedProfile w pls := by
+  have h := colWeight_word w (b := b) (pls := pls)
+  rw [hfold] at h
+  omega
+
+/-! #### Weight one: a single column — exact delivery -/
+
+/-- The word's total delivery to column `c`. -/
+def wordColProfile (c : ℕ) (pls : List Placement) : ℕ :=
+  (pls.map (fun pl => pl.colProfile c)).sum
+
+/-- The per-column ledger along a word. -/
+theorem colCount_word {c : ℕ} (hc : c < 10) {b : Board}
+    {pls : List Placement} :
+    (pls.foldl (Placement.applyStep GameConfig.standard) b).colCount c
+      + wordClears b pls
+      = b.colCount c + wordColProfile c pls := by
+  induction pls generalizing b with
+  | nil => simp [wordColProfile]
+  | cons pl rest ih =>
+    have hstep := applyStep_colCount GameConfig.standard b pl
+      (j := c) (by rw [GameConfig.standard_cols]; exact hc)
+    rw [Board.linesCleared] at hstep
+    have hrec := ih (b := Placement.applyStep GameConfig.standard b pl)
+    rw [List.foldl_cons, wordClears_cons]
+    unfold wordColProfile at hrec ⊢
+    rw [List.map_cons, List.sum_cons]
+    omega
+
+/-- **EVERY COLUMN IS FED EXACTLY THE CLEAR COUNT**: around any board
+cycle each of the ten columns receives exactly as many cells as the cycle
+clears rows. The delivery is perfectly even across the board — no column
+can be favoured, whatever the geometry. -/
+theorem cycle_column_delivery {c : ℕ} (hc : c < 10) {b : Board}
+    {pls : List Placement}
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    wordColProfile c pls = wordClears b pls := by
+  have h := colCount_word hc (b := b) (pls := pls)
+  rw [hfold] at h
+  omega
+
+/-- A legal 35-cycle delivers exactly FOURTEEN cells to every one of the
+ten columns — 140 cells split ten ways with no remainder. -/
+theorem legal_cycle_column_fourteen {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) {c : ℕ} (hc : c < 10) :
+    wordColProfile c w = 14 := by
+  rw [cycle_column_delivery hc hfold]
+  exact legal_cycle_word_clears_fourteen hwf hne hv hbag hfold hlen
+
+/-- Each column is fed on at least four of a legal 35-cycle's moves: a
+single placement can drop at most four cells into one column. -/
+theorem legal_cycle_column_feed_moves {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) {c : ℕ} (hc : c < 10) :
+    14 ≤ 4 * (w.filter (fun pl => 0 < pl.colProfile c)).length := by
+  classical
+  have h14 := legal_cycle_column_fourteen hwf hne hv hbag hfold hlen hc
+  have hbound : ∀ (l : List Placement),
+      (l.map (fun pl => pl.colProfile c)).sum
+        ≤ 4 * (l.filter (fun pl => 0 < pl.colProfile c)).length := by
+    intro l
+    induction l with
+    | nil => simp
+    | cons pl rest ih =>
+      have hle : pl.colProfile c ≤ 4 := by
+        unfold Placement.colProfile
+        calc (pl.shapeUp.filter (fun cell => pl.col + cell.1 = c)).card
+            ≤ pl.shapeUp.card := Finset.card_filter_le _ _
+          _ = 4 := pl.shapeUp_card
+      rw [List.map_cons, List.sum_cons, List.filter_cons]
+      by_cases hpos : 0 < pl.colProfile c
+      · rw [if_pos (by simpa using hpos)]
+        rw [List.length_cons]
+        omega
+      · rw [if_neg (by simpa using hpos)]
+        omega
+  unfold wordColProfile at h14
+  have := hbound w
+  omega
+
+/-! #### Weight two: the odd columns — a parity law -/
+
+/-- The odd-column indicator weight. -/
+def oddW : ℕ → ℕ := fun j => if j % 2 = 1 then 1 else 0
+
+theorem sum_oddW : ∑ j ∈ Finset.range 10, oddW j = 5 := by decide
+
+/-- **The odd-column charge is a SHAPE invariant**: modulo two, how many
+of a piece's four cells land in odd columns does not depend on where the
+piece is dropped. Shifting the drop column by one swaps the odd cells for
+the even ones, and a four-cell shape has `4 - k ≡ k`. -/
+theorem oddProfile_col_free {pl : Placement}
+    (hv : pl.Valid GameConfig.standard) :
+    weightedProfile oddW pl % 2
+      = (pl.shapeUp.filter (fun cell => cell.1 % 2 = 1)).card % 2 := by
+  classical
+  rw [weightedProfile_eq_cell_sum hv]
+  unfold oddW
+  rw [← Finset.card_filter]
+  have hcol : pl.col % 2 = 0 ∨ pl.col % 2 = 1 := by omega
+  rcases hcol with hc0 | hc1
+  · congr 2
+    apply Finset.filter_congr
+    intro cell _
+    omega
+  · have hcompl : pl.shapeUp.filter (fun cell => (pl.col + cell.1) % 2 = 1)
+        = pl.shapeUp.filter (fun cell => ¬ (cell.1 % 2 = 1)) := by
+      apply Finset.filter_congr
+      intro cell _
+      omega
+    rw [hcompl]
+    have hsum := Finset.filter_card_add_filter_neg_card_eq_card
+      (s := pl.shapeUp) (p := fun cell => cell.1 % 2 = 1)
+    have h4 := pl.shapeUp_card
+    omega
+
+/-- **THE ODD-COLUMN PARITY LAW**: around any cycle the pieces' total
+odd-column delivery and the cleared-row count have the same parity. Unlike
+the checkerboard charge, this one SURVIVES line clears — gravity never
+moves a cell between columns. -/
+theorem cycle_odd_parity {b : Board} {pls : List Placement}
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    wordWeightedProfile oddW pls % 2 = wordClears b pls % 2 := by
+  have h := cycle_weighted_law oddW hfold
+  rw [sum_oddW] at h
+  omega
+
+/-- A legal 35-cycle's total odd-column delivery is EVEN, since it clears
+fourteen rows. -/
+theorem legal_cycle_odd_delivery_even {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    wordWeightedProfile oddW w % 2 = 0 := by
+  rw [cycle_odd_parity hfold,
+    legal_cycle_word_clears_fourteen hwf hne hv hbag hfold hlen]
+
+/-! #### Weight three: the column index — a moment law mod five -/
+
+theorem sum_idW : ∑ j ∈ Finset.range 10, j = 45 := by decide
+
+/-- A piece's own column moment: the sum of its cells' column offsets. -/
+def shapeMoment (pl : Placement) : ℕ := ∑ cell ∈ pl.shapeUp, cell.1
+
+/-- **The moment of a drop**: weighting columns by their index, a
+placement contributes four times its drop column plus the shape's own
+moment. This is the first cycle quantity that MENTIONS the drop column. -/
+theorem weightedProfile_id {pl : Placement}
+    (hv : pl.Valid GameConfig.standard) :
+    weightedProfile (fun j => j) pl = 4 * pl.col + shapeMoment pl := by
+  rw [weightedProfile_eq_cell_sum hv]
+  unfold shapeMoment
+  rw [Finset.sum_add_distrib, Finset.sum_const, smul_eq_mul,
+    pl.shapeUp_card]
+
+/-- **THE MOMENT LAW MOD FIVE**: a full row carries column moment
+`0+1+…+9 = 45`, which vanishes mod five, so clears are INVISIBLE to the
+column moment mod five. Around any cycle the drops' moments must
+therefore vanish mod five — a constraint on where the pieces are placed,
+not merely on which pieces are played. -/
+theorem cycle_moment_mod_five {b : Board} {pls : List Placement}
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    wordWeightedProfile (fun j => j) pls % 5 = 0 := by
+  have h := cycle_weighted_law (fun j => j) hfold
+  rw [sum_idW] at h
+  omega
+
+/-- The moment law in drop coordinates: around a cycle, four times the sum
+of the drop columns plus the sum of the shape moments is divisible by
+five. -/
+theorem cycle_drop_column_moment {b : Board} {pls : List Placement}
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard)
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    5 ∣ (pls.map (fun pl => 4 * pl.col + shapeMoment pl)).sum := by
+  have h := cycle_moment_mod_five hfold
+  have hmap : (pls.map (fun pl => 4 * pl.col + shapeMoment pl)).sum
+      = wordWeightedProfile (fun j => j) pls := by
+    unfold wordWeightedProfile
+    congr 1
+    apply List.map_congr_left
+    intro pl hpl
+    exact (weightedProfile_id (hv pl hpl)).symm
+  rw [hmap]
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
