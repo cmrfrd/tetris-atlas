@@ -15336,6 +15336,77 @@ theorem T_split (W : LegalCycleWitness) :
 
 end LegalCycleWitness
 
+/-! ### Only three tetrises fit
+
+The bag argument caps a cycle's tetrises at five, one per bag. The clear
+budget caps them lower: fourteen rows at four rows apiece leaves room
+for only three. And three tetrises cannot be the whole story, since
+fourteen is not a multiple of four — some clearing move must take fewer
+than four rows. -/
+
+/-- Each tetris move takes four rows off the budget. -/
+theorem four_mul_tetrises_le_clears (b : Board) (pls : List Placement) :
+    4 * wordTetrises b pls ≤ wordClears b pls := by
+  induction pls generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordTetrises_cons, wordClears_cons, Nat.mul_add]
+    have hrec := ih (Placement.applyStep GameConfig.standard b pl)
+    by_cases h4 : 4 ≤ (Board.fullRows GameConfig.standard
+        (pl.place b)).card
+    · rw [if_pos h4]
+      omega
+    · rw [if_neg h4]
+      omega
+
+/-- **AT MOST THREE TETRISES**: fourteen rows at four apiece leave room
+for three, not the five the bag count allows. The clear budget is the
+binding constraint, not the piece supply. -/
+theorem legal_cycle_tetris_le_three {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    wordTetrises b w ≤ 3 := by
+  have h14 := legal_cycle_word_clears_fourteen hwf hne hv hbag hfold hlen
+  have h4 := four_mul_tetrises_le_clears b w
+  omega
+
+/-- **A LEGAL CYCLE ALWAYS CLEARS SMALL SOMEWHERE**: its clearing moves
+cannot all be tetrises, because fourteen is not a multiple of four.
+Every M2 witness contains a single, a double or a triple. -/
+theorem legal_cycle_tetrises_lt_clearMoves {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    wordTetrises b w < wordClearMoves b w := by
+  have hpos : 0 < w.length := List.length_pos_iff.mpr hne
+  have h14 := legal_cycle_word_clears_fourteen hwf hne hv hbag hfold hlen
+  have h4 := four_mul_tetrises_le_clears b w
+  have hnfb : ∀ r, ¬ Board.isFull GameConfig.standard b r :=
+    board_on_cycle_clear_free ⟨w, rfl, hpos, hv, hfold⟩
+  have hmix := word_clear_mix_bound (w := w) hnfb
+  have hle : wordTetrises b w ≤ wordClearMoves b w := by
+    have hcap := wordClears_le_four_mul_moves (w := w) hnfb
+    omega
+  omega
+
+/-- The non-tetris clearing moves of a legal cycle take at least two
+rows between them. -/
+theorem legal_cycle_small_clears_ge_two {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    2 ≤ wordClears b w - 4 * wordTetrises b w := by
+  have h14 := legal_cycle_word_clears_fourteen hwf hne hv hbag hfold hlen
+  have h3 := legal_cycle_tetris_le_three hwf hne hv hbag hfold hlen
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

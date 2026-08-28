@@ -41629,6 +41629,25 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28gg) — only three tetrises fit (bank 408/N)
+
+- **`four_mul_tetrises_le_clears`** — each tetris move takes four rows
+  off the budget.
+- **`legal_cycle_tetris_le_three`** — so a legal 35-cycle plays AT MOST
+  THREE tetrises, not the five the bag count allows. The clear budget
+  is the binding constraint, not the piece supply (this sharpens
+  `legal_cycle_word_tetris_cap`).
+- **`legal_cycle_tetrises_lt_clearMoves`** — and the clearing moves
+  cannot all be tetrises, since fourteen is not a multiple of four:
+  every M2 witness contains a single, a double or a triple.
+- **`legal_cycle_small_clears_ge_two`** — those smaller clears account
+  for at least two rows.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean. Compiled first
+try.
+
+---
+
 ### Tick (manual, 2026-08-28gf) — the certificate, as one object (bank 407/N)
 
 - **`LegalCycleWitness`** — everything the M2 argument consumes,
