@@ -10643,6 +10643,41 @@ theorem legal_cycle_word_clearing_moves_bracket {b : Board}
   have hhi := wordClearMoves_le_wordClears b w
   omega
 
+/-- **THE LEGAL CYCLE LEDGER** — everything arithmetic knows about a
+bag-legal repeatable cycle word, in one statement. For any valid word
+`w` folding a well-formed board back to itself whose repetition deals
+full bags:
+
+1. the length is a positive multiple of 35;
+2. each of the seven pieces appears exactly `length / 7` times;
+3. exactly `2 · length / 5` rows are cleared (`5 · clears = 2 · n`);
+4. the clearing moves are bracketed: `2n ≤ 20 · moves` and
+   `5 · moves ≤ 2n` — between a tenth and two fifths of the moves
+   harvest.
+
+The M2 witness, whatever its geometry, must run on these clocks. -/
+theorem legal_cycle_ledger {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    (0 < w.length ∧ 35 ∣ w.length)
+    ∧ (∀ p : Piece, ((Finset.range w.length).filter
+        (fun i => (w.getD i ⟨Piece.O, 0, 0⟩).piece = p)).card
+          = w.length / 7)
+    ∧ 5 * wordClears b w = 2 * w.length
+    ∧ 2 * w.length ≤ 20 * wordClearMoves b w
+    ∧ 5 * wordClearMoves b w ≤ 2 * w.length := by
+  have hpos : 0 < w.length := List.length_pos_iff.mpr hne
+  have h35 := legal_cycle_word_thirty_five_dvd hwf hne hv hbag hfold
+  have hcensus := legal_cycle_word_piece_census hwf hne hv hbag hfold
+  have hclears := cycle_word_clear_census hwf hv hfold
+  have hnfb : ∀ r, ¬ Board.isFull GameConfig.standard b r :=
+    board_on_cycle_clear_free ⟨w, rfl, hpos, hv, hfold⟩
+  have hlo := wordClears_le_four_mul_moves (w := w) hnfb
+  have hhi := wordClearMoves_le_wordClears b w
+  exact ⟨⟨hpos, h35⟩, hcensus, hclears, by omega, by omega⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

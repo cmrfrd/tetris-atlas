@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28er) — THE LEGAL CYCLE LEDGER (bank 367/N)
+
+- **`legal_cycle_ledger`** — the consolidation capstone: for any valid
+  word folding a well-formed board back to itself whose repetition
+  deals full bags, in ONE statement: (1) length is a positive multiple
+  of 35; (2) each of the seven pieces appears exactly length/7 times;
+  (3) exactly 2·length/5 rows are cleared; (4) the clearing moves sit
+  between a tenth and two fifths of the word. The M2 witness, whatever
+  its geometry, must run on these clocks.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28eq) — the clearing-moves bracket for words (bank 366/N)
 
 - **`wordClearMoves`** — the number of clearing moves along a word.
