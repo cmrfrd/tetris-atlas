@@ -15009,6 +15009,93 @@ theorem cycle_base_mass_le_180 {b : Board} {w : List Placement}
   exact count_le_180 hwf hin
     (board_on_cycle_clear_free ⟨w, rfl, hpos, hv, hfold⟩)
 
+/-! ### Consequences of the sharper ceiling, and repeated boards
+
+Two uses of the hundred-and-eighty ceiling and one new reading of the
+mass clock: within a loop the same BOARD can recur, but only at times
+five apart, so any five consecutive moments show five different
+boards. -/
+
+/-- A non-empty play ends on a clear-free board. -/
+theorem foldl_clear_free_of_ne_nil {b : Board} {pls : List Placement}
+    (hne : pls ≠ []) :
+    ∀ r, ¬ Board.isFull GameConfig.standard
+      (pls.foldl (Placement.applyStep GameConfig.standard) b) r := by
+  rcases pls.eq_nil_or_concat with hnil | ⟨ys, y, hys⟩
+  · exact absurd hnil hne
+  · rw [hys]
+    simp only [List.concat_eq_append, List.foldl_append, List.foldl]
+    exact applyStep_clear_free _ _
+
+/-- **The prefix band, tightened**: with the clear-free ceiling the mass
+delivered can outrun the mass cleared by at most a hundred and eighty,
+not two hundred. -/
+theorem prefix_mass_bound_180 {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard) {i : ℕ}
+    (hi : i ≤ pls.length) (hpos : 0 < i)
+    (hin : ∀ p ∈ (pls.take i).foldl
+      (Placement.applyStep GameConfig.standard) b, p.2 < 20) :
+    b.count + 4 * i ≤ 180 + 10 * wordClears b (pls.take i) := by
+  have hvt : ∀ pl ∈ pls.take i, pl.Valid GameConfig.standard :=
+    fun pl hpl => hv pl (List.mem_of_mem_take hpl)
+  have hnet : pls.take i ≠ [] := by
+    intro hnil
+    have hlen0 : (pls.take i).length = 0 := by rw [hnil]; rfl
+    rw [List.length_take] at hlen0
+    omega
+  have hcap : Board.count ((pls.take i).foldl
+      (Placement.applyStep GameConfig.standard) b) ≤ 180 :=
+    count_le_180 (foldl_applyStep_wf hwf hvt) hin
+      (foldl_clear_free_of_ne_nil hnet)
+  have h := foldl_count_ledger_exact (b := b) (pls := pls.take i) hwf hvt
+  have hlen : (pls.take i).length = i := by
+    rw [List.length_take]
+    omega
+  rw [hlen] at h
+  omega
+
+/-- **REPEATED BOARDS ARE FIVE APART**: the mass clock reads the time
+modulo five, so if a loop revisits the same board the gap between the
+visits is a multiple of five. -/
+theorem legal_cycle_board_repeat_five_dvd {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) {i j : ℕ}
+    (hij : i ≤ j) (hj : j ≤ w.length)
+    (heq : (wordPlay ⟨b, Bag.full⟩ w i).board
+      = (wordPlay ⟨b, Bag.full⟩ w j).board) :
+    5 ∣ (j - i) := by
+  have hci := wordPlay_count_mod (b := b) (w := w) hwf hv
+    (show i ≤ w.length by omega)
+  have hcj := wordPlay_count_mod (b := b) (w := w) hwf hv hj
+  rw [heq] at hci
+  omega
+
+/-- **FIVE CONSECUTIVE MOMENTS, FIVE DIFFERENT BOARDS**: inside a loop
+no board can recur within four moves of itself. The orbit therefore
+shows at least five distinct boards, however many times the loop
+revisits them afterwards. -/
+theorem legal_cycle_consecutive_boards_distinct {b : Board}
+    {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) {i j : ℕ}
+    (hij : i < j) (hlt : j < i + 5) (hj : j ≤ w.length) :
+    (wordPlay ⟨b, Bag.full⟩ w i).board
+      ≠ (wordPlay ⟨b, Bag.full⟩ w j).board := by
+  intro heq
+  have h5 := legal_cycle_board_repeat_five_dvd hwf hv (by omega) hj heq
+  omega
+
+/-- The board at any moment differs from the board one move later: a
+single placement always changes the board. -/
+theorem legal_cycle_board_ne_succ {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) {i : ℕ}
+    (hi : i + 1 ≤ w.length) :
+    (wordPlay ⟨b, Bag.full⟩ w i).board
+      ≠ (wordPlay ⟨b, Bag.full⟩ w (i + 1)).board :=
+  legal_cycle_consecutive_boards_distinct hwf hv (by omega) (by omega) hi
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

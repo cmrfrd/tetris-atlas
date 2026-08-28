@@ -41629,6 +41629,28 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28gc) — repeated boards are five apart (bank 404/N)
+
+- **`foldl_clear_free_of_ne_nil`** — a non-empty play ends clear-free.
+- **`prefix_mass_bound_180`** — so the prefix band tightens: the mass
+  delivered outruns the mass cleared by at most 180, not 200.
+- **`legal_cycle_board_repeat_five_dvd`** — the mass clock reads the
+  time modulo five, so if a loop revisits the same BOARD (the states
+  are all distinct, but boards may recur with a different bag) the gap
+  between visits is a multiple of five.
+- **`legal_cycle_consecutive_boards_distinct`** /
+  **`legal_cycle_board_ne_succ`** — hence no board recurs within four
+  moves of itself: any five consecutive moments show five different
+  boards, so the orbit visits at least five distinct boards.
+
+Gotcha: `Board.count` and `Finset.card` are defeq but DIFFERENT ATOMS
+to omega — state the bound with the same one the ledger uses (a `have`
+with an explicit type ascription bridges them).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28gb) — a clear-free board holds at most 180 (bank 403/N)
 
 The usual ceiling on board mass is the capacity 10 × 20 = 200. But a
