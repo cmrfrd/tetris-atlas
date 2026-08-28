@@ -9178,6 +9178,164 @@ theorem five_O_loop_safe {g : GameState} {h : ℕ} (hcap : h + 2 ≤ 20)
     rw [e0, e1, e2, e3, e4]
     exact safeb
 
+/-- **The five-O waltz**: the policy that reads the partial band off the
+board — via the marker cells `(0,h), (2,h), (4,h), (6,h)` — and plays
+the next square of the ritual. A closed-form, five-line strategy. -/
+def fiveOPolicy (h : ℕ) : Policy GameConfig.standard := fun g =>
+  if (6, h) ∈ g.board then ⟨Piece.O, 0, 8⟩
+  else if (4, h) ∈ g.board then ⟨Piece.O, 0, 6⟩
+  else if (2, h) ∈ g.board then ⟨Piece.O, 0, 4⟩
+  else if (0, h) ∈ g.board then ⟨Piece.O, 0, 2⟩
+  else ⟨Piece.O, 0, 0⟩
+
+/-- Evaluation unfolding for the five-O policy. -/
+theorem fiveOPolicy_eval (h : ℕ) (g : GameState) :
+    fiveOPolicy h g
+      = if (6, h) ∈ g.board then ⟨Piece.O, 0, 8⟩
+        else if (4, h) ∈ g.board then ⟨Piece.O, 0, 6⟩
+        else if (2, h) ∈ g.board then ⟨Piece.O, 0, 4⟩
+        else if (0, h) ∈ g.board then ⟨Piece.O, 0, 2⟩
+        else ⟨Piece.O, 0, 0⟩ := rfl
+
+/-- **The waltz's exact orbit**: under the five-O policy from any
+clear-free level state, the board at step `n` is the base board plus
+the partial band of width `2·(n % 5)` — a closed-form formula for the
+ENTIRE infinite trace. -/
+theorem fiveOPolicy_trace_board {g0 : GameState} {h : ℕ}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard g0.board r)
+    (hlow : ∀ p ∈ g0.board, p.2 < h)
+    (hH : ∀ c < 10, g0.board.colHeight c = h) (n : ℕ) :
+    (trace GameConfig.standard (fiveOPolicy h) g0 n).board
+      = g0.board ∪ (Finset.range (2 * (n % 5))) ×ˢ
+          ({h, h + 1} : Finset ℕ) := by
+  have hmem : ∀ (m k : ℕ),
+      ((k, h) ∈ g0.board ∪ (Finset.range m) ×ˢ
+        ({h, h + 1} : Finset ℕ)) ↔ k < m := by
+    intro m k
+    simp only [Finset.mem_union, Finset.mem_product, Finset.mem_range,
+      Finset.mem_insert, Finset.mem_singleton]
+    constructor
+    · rintro (hb | ⟨hk, _⟩)
+      · have := hlow _ hb
+        simp at this
+      · exact hk
+    · intro hk
+      right
+      exact ⟨hk, by simp⟩
+  obtain ⟨e0, e1, e2, e3⟩ := five_O_intermediate_boards hnf hlow hH
+  have e4 := five_O_final_step (b := g0.board) hnf hlow
+    (hH 8 (by omega)) (hH 9 (by omega))
+  induction n with
+  | zero => simp
+  | succ k ih =>
+    have hr : k % 5 = 0 ∨ k % 5 = 1 ∨ k % 5 = 2 ∨ k % 5 = 3
+        ∨ k % 5 = 4 := by omega
+    rcases hr with hr | hr | hr | hr | hr
+    · have hu : g0.board ∪ (Finset.range (2 * (0 : ℕ))) ×ˢ
+          ({h, h + 1} : Finset ℕ) = g0.board := by simp
+      have hpol : fiveOPolicy h
+          (trace GameConfig.standard (fiveOPolicy h) g0 k)
+          = ⟨Piece.O, 0, 0⟩ := by
+        rw [fiveOPolicy_eval, ih, hr, hu]
+        rw [if_neg, if_neg, if_neg, if_neg]
+        all_goals (intro hc; have := hlow _ hc; simp at this)
+      rw [trace_succ, GameState.step_board, hpol, ih, hr, hu, e0,
+        show (k + 1) % 5 = 1 from by omega,
+        show (2 : ℕ) * 1 = 2 from rfl]
+    · have hpol : fiveOPolicy h
+          (trace GameConfig.standard (fiveOPolicy h) g0 k)
+          = ⟨Piece.O, 0, 2⟩ := by
+        rw [fiveOPolicy_eval, ih, hr]
+        rw [if_neg, if_neg, if_neg, if_pos]
+        all_goals (rw [hmem]; omega)
+      rw [trace_succ, GameState.step_board, hpol, ih, hr,
+        show (2 : ℕ) * 1 = 2 from rfl, e1,
+        show (k + 1) % 5 = 2 from by omega,
+        show (2 : ℕ) * 2 = 4 from rfl]
+    · have hpol : fiveOPolicy h
+          (trace GameConfig.standard (fiveOPolicy h) g0 k)
+          = ⟨Piece.O, 0, 4⟩ := by
+        rw [fiveOPolicy_eval, ih, hr]
+        rw [if_neg, if_neg, if_pos]
+        all_goals (rw [hmem]; omega)
+      rw [trace_succ, GameState.step_board, hpol, ih, hr,
+        show (2 : ℕ) * 2 = 4 from rfl, e2,
+        show (k + 1) % 5 = 3 from by omega,
+        show (2 : ℕ) * 3 = 6 from rfl]
+    · have hpol : fiveOPolicy h
+          (trace GameConfig.standard (fiveOPolicy h) g0 k)
+          = ⟨Piece.O, 0, 6⟩ := by
+        rw [fiveOPolicy_eval, ih, hr]
+        rw [if_neg, if_pos]
+        all_goals (rw [hmem]; omega)
+      rw [trace_succ, GameState.step_board, hpol, ih, hr,
+        show (2 : ℕ) * 3 = 6 from rfl, e3,
+        show (k + 1) % 5 = 4 from by omega,
+        show (2 : ℕ) * 4 = 8 from rfl]
+    · have hpol : fiveOPolicy h
+          (trace GameConfig.standard (fiveOPolicy h) g0 k)
+          = ⟨Piece.O, 0, 8⟩ := by
+        rw [fiveOPolicy_eval, ih, hr]
+        rw [if_pos]
+        rw [hmem]; omega
+      rw [trace_succ, GameState.step_board, hpol, ih, hr,
+        show (2 : ℕ) * 4 = 8 from rfl, e4,
+        show (k + 1) % 5 = 0 from by omega]
+      simp
+
+/-- **The waltz returns every five steps**: the board component of the
+five-O trace is periodic with period five, exactly. -/
+theorem fiveOPolicy_board_period {g0 : GameState} {h : ℕ}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard g0.board r)
+    (hlow : ∀ p ∈ g0.board, p.2 < h)
+    (hH : ∀ c < 10, g0.board.colHeight c = h) (k : ℕ) :
+    (trace GameConfig.standard (fiveOPolicy h) g0 (5 * k)).board
+      = g0.board := by
+  rw [fiveOPolicy_trace_board hnf hlow hH]
+  simp [Nat.mul_mod_right]
+
+/-- **THE FIVE-O WALTZ SURVIVES FOREVER**: from any clear-free level
+state with two rows of ceiling, the five-O policy never tops out. A
+closed-form strategy with a closed-form orbit — the free-piece world's
+simplest possible perpetual game. (Policy world: the piece stream is
+chosen by the policy, not dealt by a bag.) -/
+theorem fiveOPolicy_survives {g0 : GameState} {h : ℕ} (hcap : h + 2 ≤ 20)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard g0.board r)
+    (hlow : ∀ p ∈ g0.board, p.2 < h)
+    (hH : ∀ c < 10, g0.board.colHeight c = h) :
+    SurvivesForever GameConfig.standard (fiveOPolicy h) g0 := by
+  intro n
+  rw [GameState.not_lost_iff_not_board_isLost,
+    fiveOPolicy_trace_board hnf hlow hH,
+    Board.not_isLost_iff_forall_row_lt, GameConfig.standard_rows]
+  intro p hp
+  rw [Finset.mem_union] at hp
+  rcases hp with hb | hX
+  · have := hlow p hb
+    omega
+  · rw [Finset.mem_product] at hX
+    obtain ⟨-, h2⟩ := hX
+    simp only [Finset.mem_insert, Finset.mem_singleton] at h2
+    omega
+
+/-- **The waltz from the empty board**: the five-O policy at ground
+level survives forever from `init` — a fully explicit, five-line,
+period-five witness of `∃ π, SurvivesForever init` in the free-piece
+world. -/
+theorem fiveOPolicy_survives_init :
+    SurvivesForever GameConfig.standard (fiveOPolicy 0) GameState.init := by
+  apply fiveOPolicy_survives (h := 0) (by omega)
+  · intro r hfull
+    have h0 := hfull 0 (by rw [GameConfig.standard_cols]; simp)
+    rw [GameState.init_board_eq_emptyset] at h0
+    exact absurd h0 (Finset.notMem_empty _)
+  · intro p hp
+    rw [GameState.init_board_eq_emptyset] at hp
+    exact absurd hp (Finset.notMem_empty _)
+  · intro c _
+    rw [GameState.init_board_eq_emptyset]
+    exact Board.colHeight_empty c
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,30 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ec) — THE FIVE-O WALTZ (bank 352/N)
+
+- **`fiveOPolicy`** / **`fiveOPolicy_eval`** — the closed-form policy:
+  read the partial band off the marker cells (0,h),(2,h),(4,h),(6,h),
+  play the next square of the ritual. Five lines of code.
+- **`fiveOPolicy_trace_board`** — the waltz's EXACT orbit: the board at
+  step n is the base board plus the band of width 2·(n mod 5), for the
+  entire infinite trace, in closed form.
+- **`fiveOPolicy_board_period`** — the board component is periodic with
+  period five, exactly.
+- **`fiveOPolicy_survives`** — THE WALTZ SURVIVES FOREVER from any
+  clear-free level state with two rows of ceiling (h + 2 ≤ 20).
+- **`fiveOPolicy_survives_init`** — and from `init` itself: a fully
+  explicit, period-five witness of ∃ π, SurvivesForever init in the
+  free-piece (policy) world.
+
+Gotcha: `unfold fiveOPolicy` also unfolds the occurrence inside
+`trace … (fiveOPolicy h) …`, killing `rw [ih]` — use a head-application
+`_eval` rfl-lemma instead, which only matches the fully applied form.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28eb) — the five-O loop is safe all the way round (bank 351/N)
 
 - **`five_O_intermediate_boards`** — the four partial-band boards of
