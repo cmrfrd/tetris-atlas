@@ -41629,6 +41629,30 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ge) — bag-legality is a finite check (bank 406/N)
+
+`IsBagStream` quantifies over infinitely many blocks, which makes it
+awkward to establish for a candidate word. For a 35-word it need not
+be.
+
+- **`isBagStream_of_blocks`** — THE FIVE-BLOCK TEST: the repeated
+  stream's block j is the word's own block j mod 5, so checking the
+  five blocks of the word settles every block of the stream. An
+  infinite condition reduced to a finite, decidable one.
+- **`sampleWord`** (+ `_length`, `_valid`, `_isBagStream`, `_census`,
+  `_has_flat_T`) — a concrete valid 35-word for which the kernel
+  discharges bag-legality and the forced census (five of every piece)
+  by evaluation alone.
+
+The machinery finally has something to bite on: any candidate M2 word
+can now be tested for legality mechanically. What it cannot yet be
+tested for, cheaply, is whether it CYCLES.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean. Compiled first
+try.
+
+---
+
 ### Tick (manual, 2026-08-28gd) — how a column's fourteen cells arrive (bank 405/N)
 
 Each column takes delivery of exactly fourteen cells per cycle, and

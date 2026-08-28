@@ -15186,6 +15186,62 @@ theorem legal_cycle_column_no_quad_feeds_five {b : Board}
   rw [h14] at hle
   omega
 
+/-! ### Bag-legality is a finite check
+
+`IsBagStream` quantifies over infinitely many blocks, which makes it
+awkward to establish for a candidate word. For a word of length
+thirty-five it need not be: the repeated stream's block `j` is the
+word's own block `j mod 5`, so checking the five blocks of the word
+settles every block of the stream. Bag-legality becomes decidable. -/
+
+/-- **THE FIVE-BLOCK TEST**: a 35-word whose five seven-blocks each
+contain all seven pieces generates a bag-legal stream. An infinite
+condition reduced to a finite one. -/
+theorem isBagStream_of_blocks {w : List Placement} (hlen : w.length = 35)
+    (hblocks : ∀ jj, jj < 5 → ∀ p : Piece, ∃ i, i < 7 ∧
+      (w.getD (7 * jj + i) ⟨Piece.O, 0, 0⟩).piece = p) :
+    IsBagStream (wordStream w) := by
+  intro j p
+  obtain ⟨i, hi, hval⟩ := hblocks (j % 5) (by omega) p
+  refine ⟨i, hi, ?_⟩
+  unfold wordStream
+  rw [hlen, show (7 * j + i) % 35 = 7 * (j % 5) + i from by omega]
+  exact hval
+
+/-- One bag's worth of placements, all dropped at column `c`. -/
+def sampleBlock (c : ℕ) : List Placement :=
+  [⟨Piece.I, 1, c⟩, ⟨Piece.O, 0, c⟩, ⟨Piece.S, 0, c⟩, ⟨Piece.Z, 0, c⟩,
+   ⟨Piece.T, 0, c⟩, ⟨Piece.L, 0, c⟩, ⟨Piece.J, 0, c⟩]
+
+/-- Five bags, one per column of the left half: a concrete 35-word. -/
+def sampleWord : List Placement :=
+  sampleBlock 0 ++ sampleBlock 1 ++ sampleBlock 2 ++ sampleBlock 3
+    ++ sampleBlock 4
+
+theorem sampleWord_length : sampleWord.length = 35 := by decide
+
+theorem sampleWord_valid :
+    ∀ pl ∈ sampleWord, pl.Valid GameConfig.standard := by decide
+
+/-- **A CONCRETE BAG-LEGAL WORD**: the five-block test discharges
+`IsBagStream` for `sampleWord` by kernel evaluation alone. The
+machinery has something to bite on. -/
+theorem sampleWord_isBagStream : IsBagStream (wordStream sampleWord) := by
+  apply isBagStream_of_blocks sampleWord_length
+  decide
+
+/-- Its census is the forced one: five of every piece. -/
+theorem sampleWord_census (p : Piece) :
+    (sampleWord.map (·.piece)).count p = 5 := by
+  cases p <;> decide
+
+/-- Every piece of the sample word is played, in particular a flat T is
+present — as any legal cycle would need. -/
+theorem sampleWord_has_flat_T :
+    ∃ pl ∈ sampleWord, pl.piece = Piece.T ∧ (pl.rot = 0 ∨ pl.rot = 2) := by
+  refine ⟨⟨Piece.T, 0, 0⟩, ?_, rfl, Or.inl rfl⟩
+  decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
