@@ -41629,6 +41629,27 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fl) — the frozen foundation, and the empty board (bank 387/N)
+
+- **`lowCells`** / **`lowCells_clearLines`** — THE FROZEN FOUNDATION at
+  every depth: if no row at or below r is full, the whole band [0, r]
+  is fixed by the clear. Cells inside cannot move (nothing beneath
+  them is removed) and cells above cannot enter (a cell dropping to
+  row ≤ r would need every row beneath it full). The bottom-row lemma
+  generalized.
+- **`dropOffset_emptyset`** / **`bottomCells_place_empty_nonempty`** —
+  the opening piece always lands on the floor: every shape has a cell
+  on its own bottom row and the empty board's drop offset is zero.
+- **`cycle_through_empty_clears_bottom`** — therefore ANY CYCLE
+  THROUGH THE EMPTY BOARD MUST CLEAR ITS BOTTOM ROW. The opening piece
+  puts a cell on the floor, so by the dichotomy the loop cannot leave
+  row zero alone; it has to complete and clear it. Unconditional, and
+  genuinely geometric.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fk) — THE BOTTOM-ROW DICHOTOMY (bank 386/N)
 
 The first geometric application of the obstruction principle. The

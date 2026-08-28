@@ -12723,6 +12723,116 @@ theorem cycle_bottom_row_frozen {b : Board} {pl : Placement}
   exact (Finset.eq_of_subset_of_card_le (bottomCells_subset_place b pl)
     (by omega)).symm
 
+/-! ### The frozen foundation, and what it says about the empty board -/
+
+/-- The cells of the board at or below row `r`. -/
+def lowCells (r : ℕ) (b : Board) : Finset Coord :=
+  b.filter (fun p => p.2 ≤ r)
+
+/-- **THE FROZEN FOUNDATION**: if no row at or below `r` is full, the
+whole band `[0, r]` is fixed by the clear — cells inside it cannot move
+(nothing beneath them is removed) and cells above it cannot enter (a
+cell dropping to row `≤ r` would need every row beneath it full). The
+bottom-row lemma at every depth. -/
+theorem lowCells_clearLines {b : Board} {r : ℕ}
+    (hnf : ∀ s, s ≤ r → ¬ Board.isFull GameConfig.standard b s) :
+    lowCells r (Board.clearLines GameConfig.standard b) = lowCells r b := by
+  classical
+  have hfull_gt : ∀ t ∈ Board.fullRows GameConfig.standard b, r < t := by
+    intro t ht
+    by_contra hle
+    exact hnf t (by omega) (Board.isFull_of_mem_fullRows ht)
+  have hcb_low : ∀ s, s ≤ r →
+      Board.clearedBelow GameConfig.standard b s = 0 := by
+    intro s hs
+    unfold Board.clearedBelow
+    rw [Finset.card_eq_zero, Finset.eq_empty_iff_forall_notMem]
+    intro x hx
+    obtain ⟨hxf, hxlt⟩ := Finset.mem_filter.mp hx
+    have := hfull_gt x hxf
+    omega
+  have hcb_high : ∀ t, r < t →
+      Board.clearedBelow GameConfig.standard b t ≤ t - r - 1 := by
+    intro t ht
+    unfold Board.clearedBelow
+    have hsub : (Board.fullRows GameConfig.standard b).filter (· < t)
+        ⊆ Finset.Ico (r + 1) t := by
+      intro x hx
+      obtain ⟨hxf, hxlt⟩ := Finset.mem_filter.mp hx
+      rw [Finset.mem_Ico]
+      exact ⟨by have := hfull_gt x hxf; omega, hxlt⟩
+    have := Finset.card_le_card hsub
+    rw [Nat.card_Ico] at this
+    omega
+  ext p
+  unfold lowCells
+  simp only [Finset.mem_filter]
+  constructor
+  · rintro ⟨hp, hp0⟩
+    rw [Board.mem_clearLines_iff] at hp
+    obtain ⟨q, hq, hqnf, hqp⟩ := hp
+    have h2 : q.2 - Board.clearedBelow GameConfig.standard b q.2 = p.2 :=
+      congrArg Prod.snd hqp
+    have hqlow : q.2 ≤ r := by
+      by_contra hgt
+      have := hcb_high q.2 (by omega)
+      omega
+    have hcb := hcb_low q.2 hqlow
+    have hpq : p = q := by
+      rw [← hqp, hcb]
+      exact Prod.ext_iff.mpr ⟨rfl, by omega⟩
+    rw [hpq]
+    exact ⟨hq, hqlow⟩
+  · rintro ⟨hp, hp0⟩
+    refine ⟨?_, hp0⟩
+    rw [Board.mem_clearLines_iff]
+    refine ⟨p, hp, hnf p.2 hp0, ?_⟩
+    rw [hcb_low p.2 hp0]
+    exact Prod.ext_iff.mpr ⟨rfl, by omega⟩
+
+/-- On the empty board every piece rests on the floor (emptyset form). -/
+theorem dropOffset_emptyset (pl : Placement) :
+    pl.dropOffset (∅ : Board) = 0 := by
+  rw [Placement.dropOffset_eq_sup]
+  refine Nat.le_antisymm ?_ (Nat.zero_le _)
+  apply Finset.sup_le
+  intro cell _
+  rw [Board.colHeight_empty]
+  omega
+
+/-- **The first piece always lands on the floor**: every shape has a cell
+on its own bottom row, and on the empty board the drop offset is zero,
+so the opening move necessarily deposits a cell in row zero. -/
+theorem bottomCells_place_empty_nonempty (pl : Placement) :
+    (bottomCells (pl.place (∅ : Board))).Nonempty := by
+  obtain ⟨cell, hcell, hc0⟩ := Piece.shapeUp_row_zero_mem pl.piece pl.rot
+  refine ⟨(pl.col + cell.1, 0), ?_⟩
+  unfold bottomCells
+  rw [Finset.mem_filter]
+  refine ⟨?_, rfl⟩
+  rw [Placement.place_eq_union_dropped, Finset.mem_union]
+  right
+  rw [Placement.dropped_eq_image, Finset.mem_image]
+  refine ⟨cell, hcell, ?_⟩
+  rw [dropOffset_emptyset, hc0]
+
+/-- **ANY CYCLE THROUGH THE EMPTY BOARD MUST CLEAR ITS BOTTOM ROW.** The
+opening piece puts a cell on the floor, so by the bottom-row dichotomy
+the loop cannot leave row zero alone; it has to complete and clear it.
+An unconditional structural fact about every `∅`-cycle, geometry
+included. -/
+theorem cycle_through_empty_clears_bottom {pl : Placement}
+    {rest : List Placement}
+    (hfold : (pl :: rest).foldl
+      (Placement.applyStep GameConfig.standard) (∅ : Board) = ∅) :
+    wordBottomClear (∅ : Board) (pl :: rest) := by
+  by_contra hnb
+  have h := cycle_bottom_row_frozen hnb hfold
+  have hne := bottomCells_place_empty_nonempty pl
+  rw [h] at hne
+  unfold bottomCells at hne
+  simp at hne
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
