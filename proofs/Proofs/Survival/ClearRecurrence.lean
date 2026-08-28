@@ -8454,6 +8454,173 @@ theorem applyStep_colHeight_reset_general {b : Board} {pl : Placement}
   unfold Board.colHeight at this
   exact this
 
+/-- The vertical I (rotation 1): the four-cell tower in column zero. -/
+theorem I_r1_shape :
+    ((0 : ℕ), (0 : ℕ)) ∈ Piece.I.shapeUp (1 : Rotation)
+    ∧ ((0 : ℕ), (1 : ℕ)) ∈ Piece.I.shapeUp (1 : Rotation)
+    ∧ ((0 : ℕ), (2 : ℕ)) ∈ Piece.I.shapeUp (1 : Rotation)
+    ∧ ((0 : ℕ), (3 : ℕ)) ∈ Piece.I.shapeUp (1 : Rotation)
+    ∧ ∀ cell ∈ Piece.I.shapeUp (1 : Rotation),
+        cell.1 = 0 ∧ cell.2 ≤ 3 := by
+  decide
+
+/-- A single-column drop completes any row the other nine columns
+prepared. -/
+theorem single_col_move_completes_row {b : Board} {pl : Placement}
+    {j r : ℕ} (hj : j < 10)
+    (hprep : ∀ c < 10, c ≠ j → (c, r) ∈ b)
+    (hd : (j, r) ∈ pl.dropped b) :
+    r ∈ Board.fullRows GameConfig.standard (pl.place b) := by
+  classical
+  have hmem : ∀ c < 10, (c, r) ∈ pl.place b := by
+    intro c hc
+    rw [Placement.place_eq_union_dropped, Finset.mem_union]
+    by_cases h0 : c = j
+    · right
+      rw [h0]
+      exact hd
+    · left
+      exact hprep c hc h0
+  rw [Board.fullRows, Finset.mem_filter]
+  constructor
+  · rw [Finset.mem_image]
+    exact ⟨(j, r), hmem j hj, rfl⟩
+  · intro c hc
+    rw [GameConfig.standard_cols, Finset.mem_range] at hc
+    exact hmem c hc
+
+/-- **THE WINDOW TETRIS**: on a clear-free board where column `j` stands
+at height `h` and the four rows above it are prepared in every other
+column, the vertical I clears exactly four rows and returns column `j`
+to precisely height `h` — the biggest harvest is also a perfect
+service. -/
+theorem window_I_tetris_service {b : Board} {j h : ℕ} (hj : j < 10)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h0 : b.colHeight j = h)
+    (hprep : ∀ c < 10, c ≠ j → ∀ k < 4, (c, h + k) ∈ b) :
+    ∃ pl : Placement, pl.piece = Piece.I ∧ pl.Valid GameConfig.standard
+      ∧ (∀ cell ∈ pl.shapeUp, pl.col + cell.1 = j)
+      ∧ Board.linesCleared GameConfig.standard (pl.place b) = 4
+      ∧ (Placement.applyStep GameConfig.standard b pl).colHeight j = h := by
+  classical
+  obtain ⟨hc0, hc1, hc2, hc3, hall⟩ := I_r1_shape
+  have hcells : ∀ cell ∈ (⟨Piece.I, 1, j⟩ : Placement).shapeUp,
+      (⟨Piece.I, 1, j⟩ : Placement).col + cell.1 = j := by
+    intro cell hcell
+    have := (hall cell hcell).1
+    change j + cell.1 = j
+    omega
+  have hD : (⟨Piece.I, 1, j⟩ : Placement).dropOffset b = h := by
+    apply Nat.le_antisymm
+    · unfold Placement.dropOffset
+      apply Finset.sup_le
+      intro cell hcell
+      have := (hall cell hcell).1
+      change b.colHeight (j + cell.1) - cell.2 ≤ h
+      rw [this]
+      simp only [Nat.add_zero]
+      omega
+    · have hle := Finset.le_sup
+        (f := fun cell : PieceCell =>
+          b.colHeight ((⟨Piece.I, 1, j⟩ : Placement).col + cell.1)
+            - cell.2) hc0
+      unfold Placement.dropOffset
+      simp only [] at hle ⊢
+      rw [show (⟨Piece.I, 1, j⟩ : Placement).col + ((0 : ℕ), (0 : ℕ)).1
+          = j from by simp, h0] at hle
+      simpa using hle
+  have hdrows : ∀ p ∈ (⟨Piece.I, 1, j⟩ : Placement).dropped b,
+      p.2 ∈ ({h, h + 1, h + 2, h + 3} : Finset ℕ) := by
+    intro p hp
+    unfold Placement.dropped Placement.cellsAt at hp
+    rw [Finset.mem_image] at hp
+    obtain ⟨cell, hcell, heq⟩ := hp
+    have hrow := congrArg Prod.snd heq
+    simp only [] at hrow
+    have := (hall cell hcell).2
+    simp only [Finset.mem_insert, Finset.mem_singleton]
+    omega
+  have hdmem : ∀ cell ∈ (⟨Piece.I, 1, j⟩ : Placement).shapeUp,
+      (j, h + cell.2) ∈ (⟨Piece.I, 1, j⟩ : Placement).dropped b := by
+    intro cell hcell
+    unfold Placement.dropped Placement.cellsAt
+    rw [Finset.mem_image]
+    refine ⟨cell, hcell, ?_⟩
+    rw [hD]
+    have := (hall cell hcell).1
+    change (j + cell.1, h + cell.2) = (j, h + cell.2)
+    rw [this]
+    simp
+  have hfr : Board.fullRows GameConfig.standard
+      ((⟨Piece.I, 1, j⟩ : Placement).place b)
+      = ({h, h + 1, h + 2, h + 3} : Finset ℕ) := by
+    apply Finset.Subset.antisymm
+    · intro r hr
+      have hfull := (Finset.mem_filter.mp hr).2
+      simp only [Finset.mem_insert, Finset.mem_singleton]
+      by_contra hne
+      push Not at hne
+      have hmemj : (j, r) ∈ (⟨Piece.I, 1, j⟩ : Placement).place b :=
+        hfull j (by
+          rw [GameConfig.standard_cols]
+          exact Finset.mem_range.mpr hj)
+      rw [Placement.place_eq_union_dropped, Finset.mem_union] at hmemj
+      have hrlt : r < h := by
+        rcases hmemj with hb | hd
+        · have := Board.lt_colHeight hb
+          omega
+        · have := hdrows _ hd
+          simp only [Finset.mem_insert, Finset.mem_singleton] at this
+          omega
+      apply hnf r
+      intro c hcr
+      have hmemc := hfull c hcr
+      rw [Placement.place_eq_union_dropped, Finset.mem_union] at hmemc
+      rcases hmemc with hb | hd
+      · exact hb
+      · exfalso
+        have := hdrows _ hd
+        simp only [Finset.mem_insert, Finset.mem_singleton] at this
+        omega
+    · intro r hr
+      simp only [Finset.mem_insert, Finset.mem_singleton] at hr
+      have hget : ∀ k, k < 4 → h + k ∈ Board.fullRows GameConfig.standard
+          ((⟨Piece.I, 1, j⟩ : Placement).place b) := by
+        intro k hk
+        apply single_col_move_completes_row hj
+          (fun c hc hn0 => hprep c hc hn0 k hk)
+        rcases (show k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3 by omega) with
+          h' | h' | h' | h' <;> subst h'
+        · have := hdmem _ hc0
+          simpa using this
+        · have := hdmem _ hc1
+          simpa using this
+        · have := hdmem _ hc2
+          simpa using this
+        · have := hdmem _ hc3
+          simpa using this
+      rcases hr with h' | h' | h' | h' <;> subst h'
+      · simpa using hget 0 (by omega)
+      · exact hget 1 (by omega)
+      · exact hget 2 (by omega)
+      · exact hget 3 (by omega)
+  refine ⟨⟨Piece.I, 1, j⟩, rfl, ?_, hcells, ?_, ?_⟩
+  · intro cell hcell
+    have := (hall cell hcell).1
+    change j + cell.1 < GameConfig.standard.cols
+    rw [GameConfig.standard_cols]
+    omega
+  · unfold Board.linesCleared
+    rw [hfr]
+    rw [Finset.card_insert_of_notMem (by simp),
+      Finset.card_insert_of_notMem (by simp),
+      Finset.card_insert_of_notMem (by simp), Finset.card_singleton]
+  · apply applyStep_colHeight_reset_general h0 hfr
+    · intro x hx
+      simp only [Finset.mem_insert, Finset.mem_singleton] at hx
+      omega
+    · exact hdrows
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

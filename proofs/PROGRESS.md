@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ds) — THE WINDOW TETRIS (bank 342/N)
+
+- **`I_r1_shape`**, **`single_col_move_completes_row`** — bricks.
+- **`window_I_tetris_service`** — on a clear-free board where column j
+  sits at h with the four rows above prepared in every other column,
+  the vertical I clears EXACTLY four and returns column j to h. The O
+  double (340) and the I tetris (342) are both perfect services: the
+  window's harvest menu now includes surgical 2- and 4-clears with
+  full resets.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dr) — the general reset lemma (bank 341/N)
 
 - **`applyStep_colHeight_reset_general`** — the two-row reset
