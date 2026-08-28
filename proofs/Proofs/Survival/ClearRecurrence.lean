@@ -13682,6 +13682,211 @@ theorem legal_cycle_has_flat_T {b : Board} {w : List Placement}
   revert hodd
   decide
 
+/-! ### The potential balance: how high things happen
+
+Every law so far is blind to HEIGHT. Summing the row indices of the
+board's cells gives a potential: drops raise it by four times the drop
+offset plus the shape's own moment, and clears lower it by ten times
+the height of each row removed plus the gravity work. Around a cycle
+the two must balance EXACTLY — not merely modulo something.
+
+This is the first cycle law that mentions how high the pieces land and
+how high the rows are that they complete. -/
+
+/-- The board's potential: the sum of its cells' row indices. -/
+def rowMoment (b : Board) : ℕ := ∑ p ∈ b, p.2
+
+/-- A shape's own row moment. -/
+def shapeRowMoment (pl : Placement) : ℕ := ∑ cell ∈ pl.shapeUp, cell.2
+
+/-- The integer gravity work: how far, in total, the survivors fall. -/
+def gravityInt (b : Board) : ℕ :=
+  ∑ p ∈ b.filter (fun p => ¬ Board.isFull GameConfig.standard b p.2),
+    Board.clearedBelow GameConfig.standard b p.2
+
+/-- The total height of the rows a clear removes. -/
+def clearedRowSum (b : Board) : ℕ :=
+  ∑ t ∈ Board.fullRows GameConfig.standard b, t
+
+/-- **A drop raises the potential by four times its landing height plus
+the shape's own moment.** -/
+theorem rowMoment_place (b : Board) (pl : Placement) :
+    rowMoment (pl.place b)
+      = rowMoment b + 4 * pl.dropOffset b + shapeRowMoment pl := by
+  classical
+  have hdrop : ∑ p ∈ pl.dropped b, p.2
+      = 4 * pl.dropOffset b + shapeRowMoment pl := by
+    rw [Placement.dropped_eq_image]
+    rw [Finset.sum_image (fun x _ y _ hxy => by
+      have h1 : pl.col + x.1 = pl.col + y.1 := congrArg Prod.fst hxy
+      have h2 : pl.dropOffset b + x.2 = pl.dropOffset b + y.2 :=
+        congrArg Prod.snd hxy
+      exact Prod.ext_iff.mpr ⟨by omega, by omega⟩)]
+    unfold shapeRowMoment
+    rw [Finset.sum_congr rfl (fun cell _ => show
+      ((pl.col + cell.1, pl.dropOffset b + cell.2) : Coord).2
+        = pl.dropOffset b + cell.2 from rfl)]
+    rw [Finset.sum_add_distrib, Finset.sum_const, pl.shapeUp_card,
+      smul_eq_mul]
+  unfold rowMoment
+  rw [Placement.place_eq_union_dropped,
+    Finset.sum_union (pl.dropped_disjoint b).symm, hdrop]
+  omega
+
+/-- The cells a clear removes carry total height `10` per cleared row. -/
+theorem clearedCells_rowMoment {b : Board}
+    (hwf : Board.WF GameConfig.standard b) :
+    ∑ p ∈ b.filter (fun p => Board.isFull GameConfig.standard b p.2), p.2
+      = 10 * clearedRowSum b := by
+  classical
+  have hmaps : ∀ p ∈ b.filter
+      (fun p => Board.isFull GameConfig.standard b p.2),
+      p.2 ∈ Board.fullRows GameConfig.standard b := by
+    intro p hp
+    obtain ⟨hpb, hpf⟩ := Finset.mem_filter.mp hp
+    unfold Board.fullRows
+    rw [Finset.mem_filter]
+    exact ⟨Finset.mem_image.mpr ⟨p, hpb, rfl⟩, hpf⟩
+  have hfib := Finset.sum_fiberwise_of_maps_to hmaps (fun p : Coord => p.2)
+  have hrow : ∀ t ∈ Board.fullRows GameConfig.standard b,
+      (∑ p ∈ (b.filter
+          (fun p => Board.isFull GameConfig.standard b p.2)).filter
+          (fun p => p.2 = t), p.2) = 10 * t := by
+    intro t ht
+    rw [cleared_fiber_eq hwf ht]
+    rw [Finset.sum_image (fun x _ y _ hxy => by
+      simpa using congrArg Prod.fst hxy)]
+    simp only [Finset.sum_const, Finset.card_range, smul_eq_mul]
+  rw [← hfib, Finset.sum_congr rfl hrow, ← Finset.mul_sum]
+  rfl
+
+/-- **THE POTENTIAL LAW ACROSS A CLEAR**: the potential lost is ten per
+unit height of each removed row, plus the distance the survivors fall. -/
+theorem rowMoment_clearLines {b : Board}
+    (hwf : Board.WF GameConfig.standard b) :
+    rowMoment (Board.clearLines GameConfig.standard b)
+      + 10 * clearedRowSum b + gravityInt b = rowMoment b := by
+  classical
+  have hinj : ∀ x ∈ b.filter
+      (fun p => ¬ Board.isFull GameConfig.standard b p.2),
+      ∀ y ∈ b.filter
+      (fun p => ¬ Board.isFull GameConfig.standard b p.2),
+      ((x.1, x.2 - Board.clearedBelow GameConfig.standard b x.2) : Coord)
+        = ((y.1, y.2 - Board.clearedBelow GameConfig.standard b y.2)
+            : Coord) → x = y := by
+    intro x hx y hy hxy
+    rw [Finset.mem_filter] at hx hy
+    have hpair := Prod.ext_iff.mp hxy
+    have h3 : x.2 = y.2 := by
+      rcases lt_trichotomy x.2 y.2 with hlt | heq | hgt
+      · have := clearedBelow_shift_strictMono
+          (cfg := GameConfig.standard) (b := b) hlt hx.2
+        have := hpair.2
+        omega
+      · exact heq
+      · have := clearedBelow_shift_strictMono
+          (cfg := GameConfig.standard) (b := b) hgt hy.2
+        have := hpair.2
+        omega
+    exact Prod.ext_iff.mpr ⟨hpair.1, h3⟩
+  have hcl : Board.clearLines GameConfig.standard b
+      = (b.filter
+          (fun p => ¬ Board.isFull GameConfig.standard b p.2)).image
+        (fun p => ((p.1, p.2 - Board.clearedBelow GameConfig.standard b p.2)
+          : Coord)) := rfl
+  have hsurv :
+      (∑ p ∈ b.filter
+          (fun p => ¬ Board.isFull GameConfig.standard b p.2),
+        ((p.1, p.2 - Board.clearedBelow GameConfig.standard b p.2)
+          : Coord).2) + gravityInt b
+      = ∑ p ∈ b.filter
+          (fun p => ¬ Board.isFull GameConfig.standard b p.2), p.2 := by
+    unfold gravityInt
+    rw [← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl (fun p _ => ?_)
+    have hle := clearedBelow_le GameConfig.standard b p.2
+    show (p.2 - Board.clearedBelow GameConfig.standard b p.2)
+      + Board.clearedBelow GameConfig.standard b p.2 = p.2
+    omega
+  have hsplit := Finset.sum_filter_add_sum_filter_not b
+    (fun p => Board.isFull GameConfig.standard b p.2)
+    (fun p : Coord => p.2)
+  have hclr := clearedCells_rowMoment hwf
+  unfold rowMoment
+  rw [hcl, Finset.sum_image hinj]
+  omega
+
+/-- The potential law for a whole move. -/
+theorem rowMoment_applyStep {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard) :
+    rowMoment (Placement.applyStep GameConfig.standard b pl)
+      + 10 * clearedRowSum (pl.place b) + gravityInt (pl.place b)
+      = rowMoment b + 4 * pl.dropOffset b + shapeRowMoment pl := by
+  rw [Placement.applyStep_eq_clearLines_place]
+  have h1 := rowMoment_clearLines (Placement.place_wf hwf hv)
+  have h2 := rowMoment_place b pl
+  omega
+
+/-- The potential a word's drops deliver. -/
+def wordLift (b : Board) : List Placement → ℕ
+  | [] => 0
+  | pl :: rest =>
+      (4 * pl.dropOffset b + shapeRowMoment pl)
+      + wordLift (Placement.applyStep GameConfig.standard b pl) rest
+
+/-- The potential a word's clears release. -/
+def wordRelease (b : Board) : List Placement → ℕ
+  | [] => 0
+  | pl :: rest =>
+      (10 * clearedRowSum (pl.place b) + gravityInt (pl.place b))
+      + wordRelease (Placement.applyStep GameConfig.standard b pl) rest
+
+theorem wordLift_cons (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    wordLift b (pl :: rest)
+      = (4 * pl.dropOffset b + shapeRowMoment pl)
+        + wordLift (Placement.applyStep GameConfig.standard b pl)
+            rest := rfl
+
+theorem wordRelease_cons (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    wordRelease b (pl :: rest)
+      = (10 * clearedRowSum (pl.place b) + gravityInt (pl.place b))
+        + wordRelease (Placement.applyStep GameConfig.standard b pl)
+            rest := rfl
+
+/-- The potential ledger along a word. -/
+theorem rowMoment_word {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard) :
+    rowMoment (pls.foldl (Placement.applyStep GameConfig.standard) b)
+      + wordRelease b pls = rowMoment b + wordLift b pls := by
+  induction pls generalizing b with
+  | nil => simp [wordLift, wordRelease]
+  | cons pl rest ih =>
+    have hvpl := hv pl (by simp)
+    have hstep := rowMoment_applyStep hwf hvpl
+    have hrec := ih (Placement.applyStep_wf hwf hvpl)
+      (fun q hq => hv q (by simp [hq]))
+    rw [List.foldl_cons, wordLift_cons, wordRelease_cons]
+    omega
+
+/-- **THE POTENTIAL BALANCE OF A CYCLE**: the height the drops deliver
+is exactly the height the clears give back. Four times the total
+landing height plus the shapes' moments equals ten times the total
+height of the rows removed plus the total fall of the survivors. An
+exact identity, not a congruence — and the first cycle law that sees
+how HIGH the play happens. -/
+theorem cycle_potential_balance {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard)
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    wordLift b pls = wordRelease b pls := by
+  have h := rowMoment_word hwf hv
+  rw [hfold] at h
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

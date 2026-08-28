@@ -41629,6 +41629,33 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fs) — THE POTENTIAL BALANCE (bank 394/N)
+
+Every law so far is blind to HEIGHT. Summing the row indices of the
+board's cells gives a potential, and it obeys an exact — not modular —
+conservation law around a cycle.
+
+- **`rowMoment`**, **`shapeRowMoment`**, **`gravityInt`**,
+  **`clearedRowSum`** — the potential, the shape's own moment, the
+  survivors' total fall, and the total height of the removed rows.
+- **`rowMoment_place`** — a drop raises the potential by four times its
+  landing height plus the shape's own moment.
+- **`clearedCells_rowMoment`** / **`rowMoment_clearLines`** — a clear
+  lowers it by ten per unit height of each removed row, plus the
+  distance the survivors fall.
+- **`rowMoment_word`** / **`cycle_potential_balance`** — around a cycle
+  the height the drops deliver is EXACTLY the height the clears give
+  back: 4·(total landing height) + shape moments = 10·(total height of
+  removed rows) + total fall.
+
+An exact identity, and the first cycle law that mentions how high the
+pieces land and how high the rows they complete are. Compiled first
+try.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fr) — EVERY LEGAL 35-CYCLE LAYS A T FLAT (bank 393/N)
 
 The row-moment table turns out remarkably clean (eval-first, then
