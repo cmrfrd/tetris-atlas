@@ -41629,6 +41629,29 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fo) — which clears can do gravity work (bank 390/N)
+
+Gravity work is done only by a clear that leaves something behind AND
+takes something away.
+
+- **`gravityWork_of_no_clears`** — a dry move does none: nothing falls.
+- **`gravityWork_of_perfect`** — a clear that empties the board does
+  none either: nothing is left to fall.
+- **`partial_of_gravityWork`** / **`exists_partial_clear`** — so
+  nonzero gravity work means a PARTIAL clear: at least one row removed,
+  at least one cell left standing.
+- **`legal_cycle_has_partial_clear`** — since a legal 35-cycle does odd
+  gravity work, it must make such a partial clear somewhere.
+- **`no_legal_perfect_clear_cycle`** — hence NO LEGAL CYCLE IS A
+  PERFECT-CLEAR LOOP. The T-parity obstruction that forbids five bags
+  from tiling a 10×14 rectangle (`no_five_bag_perfect_rectangle`,
+  clear-free) now survives the passage to loops WITH clears — which is
+  exactly what the old argument could not do.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fn) — what the charge law says about a cycle (bank 389/N)
 
 Folding yesterday's charge law along a word ties three things together

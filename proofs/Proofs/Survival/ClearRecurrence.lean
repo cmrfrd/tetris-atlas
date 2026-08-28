@@ -13149,6 +13149,108 @@ theorem exists_loaded_clear {b : Board} {pls : List Placement}
       exact ih h
     · exact ⟨b, pl, exists_cell_above_clear hhead⟩
 
+/-! ### Which clears can do gravity work
+
+Gravity work is done only by a clear that leaves something behind AND
+takes something away. A move that clears nothing does none (nothing
+falls); a move that clears EVERYTHING does none either (nothing is left
+to fall). Since a legal 35-cycle must do odd — hence nonzero — gravity
+work, it can be neither all-dry nor all-perfect: somewhere it must make
+a partial clear. -/
+
+/-- A move that clears nothing does no gravity work. -/
+theorem gravityWork_of_no_clears {B : Board}
+    (h : Board.fullRows GameConfig.standard B = ∅) :
+    gravityWork B = 0 := by
+  classical
+  unfold gravityWork
+  apply Finset.sum_eq_zero
+  intro p _
+  have hcb : Board.clearedBelow GameConfig.standard B p.2 = 0 := by
+    unfold Board.clearedBelow
+    rw [h]
+    simp
+  rw [hcb]
+  simp
+
+/-- A move that clears EVERYTHING does no gravity work either: nothing
+survives to fall. -/
+theorem gravityWork_of_perfect {B : Board}
+    (h : ∀ p ∈ B, Board.isFull GameConfig.standard B p.2) :
+    gravityWork B = 0 := by
+  classical
+  unfold gravityWork
+  apply Finset.sum_eq_zero
+  intro p hp
+  obtain ⟨hpB, hpnf⟩ := Finset.mem_filter.mp hp
+  exact absurd (h p hpB) hpnf
+
+/-- **Gravity work means a partial clear**: the move removed at least one
+row and left at least one cell standing. -/
+theorem partial_of_gravityWork {B : Board} (h : gravityWork B ≠ 0) :
+    Board.fullRows GameConfig.standard B ≠ ∅
+      ∧ ∃ p ∈ B, ¬ Board.isFull GameConfig.standard B p.2 := by
+  classical
+  constructor
+  · intro hnil
+    exact h (gravityWork_of_no_clears hnil)
+  · by_contra hcon
+    push Not at hcon
+    exact h (gravityWork_of_perfect hcon)
+
+/-- **A LEGAL CYCLE MAKES A PARTIAL CLEAR**: some move of it removes at
+least one row while leaving at least one cell standing. The loop can be
+neither all-dry nor a chain of perfect clears — a concrete exclusion
+extracted from the piece census through the charge law. -/
+theorem exists_partial_clear {b : Board} {pls : List Placement}
+    (h : wordGravity b pls ≠ 0) :
+    ∃ (c : Board) (pl : Placement),
+      Board.fullRows GameConfig.standard (pl.place c) ≠ ∅
+        ∧ ∃ p ∈ pl.place c,
+            ¬ Board.isFull GameConfig.standard (pl.place c) p.2 := by
+  induction pls generalizing b with
+  | nil => exact absurd rfl h
+  | cons pl rest ih =>
+    rw [wordGravity_cons] at h
+    by_cases hhead : gravityWork (pl.place b) = 0
+    · rw [hhead, zero_add] at h
+      exact ih h
+    · exact ⟨b, pl, partial_of_gravityWork hhead⟩
+
+/-- The legal 35-cycle instance: five T's against fourteen rows force
+odd gravity work, so a partial clear exists. -/
+theorem legal_cycle_has_partial_clear {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    ∃ (c : Board) (pl : Placement),
+      Board.fullRows GameConfig.standard (pl.place c) ≠ ∅
+        ∧ ∃ p ∈ pl.place c,
+            ¬ Board.isFull GameConfig.standard (pl.place c) p.2 := by
+  apply exists_partial_clear (b := b) (pls := w)
+  rw [legal_cycle_gravity_odd hwf hne hv hbag hfold hlen]
+  decide
+
+/-- **NO LEGAL CYCLE IS A PERFECT-CLEAR LOOP**: a cycle whose every
+clearing move empties the board outright cannot be bag-legal at length
+35. The T-parity that forbids five bags from tiling a rectangle
+survives the passage to loops WITH clears. -/
+theorem no_legal_perfect_clear_cycle {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35)
+    (hperfect : ∀ (c : Board) (pl : Placement),
+      Board.fullRows GameConfig.standard (pl.place c) ≠ ∅ →
+      ∀ p ∈ pl.place c,
+        Board.isFull GameConfig.standard (pl.place c) p.2) : False := by
+  obtain ⟨c, pl, hne', p, hp, hpnf⟩ :=
+    legal_cycle_has_partial_clear hwf hne hv hbag hfold hlen
+  exact hpnf (hperfect c pl hne' p hp)
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
