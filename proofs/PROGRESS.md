@@ -41629,6 +41629,20 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fb) — the orbit is a true 35-cycle (bank 377/N)
+
+- **`legal_cycle_orbit_distinct`** — two first-period states less than
+  35 steps apart are DISTINCT: the bag clock separates times mod 7,
+  the mass clock mod 5, and the clocks are coprime.
+- **`legal_cycle_thirty_five_distinct_states`** — the first 35 states
+  of any legal cycle word are pairwise distinct: the M2 object cannot
+  degenerate; its orbit genuinely visits at least thirty-five states,
+  one per tick of the joint clock.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fa) — the orbit signature (bank 376/N)
 
 - **`map_piece_blocks`** — a bag-legal word's piece list has full

@@ -11360,6 +11360,50 @@ theorem legal_cycle_orbit_signature {b : Board} {w : List Placement}
         = (b.count + 4 * n) % 10 :=
   ⟨wordPlay_bag_card hbag h7 hn, wordPlay_count_mod hwf hv hn⟩
 
+/-- **No shortcuts on the orbit**: along a legal cycle word, two
+first-period states less than 35 steps apart are DISTINCT — the bag
+clock separates times differing mod 7, the mass clock separates times
+differing mod 5, and the clocks are coprime. -/
+theorem legal_cycle_orbit_distinct {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    {i j : ℕ} (hij : i < j) (hj : j ≤ w.length) (hlt : j - i < 35) :
+    wordPlay ⟨b, Bag.full⟩ w i ≠ wordPlay ⟨b, Bag.full⟩ w j := by
+  intro heq
+  have h35 := legal_cycle_word_thirty_five_dvd hwf hne hv hbag hfold
+  have h7 : 7 ∣ w.length := by omega
+  have hci := wordPlay_bag_card (b := b) hbag h7
+    (show i ≤ w.length by omega)
+  have hcj := wordPlay_bag_card (b := b) hbag h7 hj
+  have hmi := wordPlay_count_mod (b := b) (w := w) hwf hv
+    (show i ≤ w.length by omega)
+  have hmj := wordPlay_count_mod (b := b) (w := w) hwf hv hj
+  rw [heq] at hci hmi
+  omega
+
+/-- **THE ORBIT IS A TRUE 35-CYCLE**: a legal cycle word's first 35
+states are pairwise distinct. The M2 object cannot degenerate — its
+orbit genuinely visits (at least) thirty-five states, one for each
+tick of the joint mass-and-bag clock. -/
+theorem legal_cycle_thirty_five_distinct_states {b : Board}
+    {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    ∀ i < 35, ∀ j < 35, i ≠ j →
+      wordPlay ⟨b, Bag.full⟩ w i ≠ wordPlay ⟨b, Bag.full⟩ w j := by
+  have hmin := legal_cycle_word_min_length hwf hne hv hbag hfold
+  intro i hi j hj hne'
+  rcases Nat.lt_or_ge i j with hlt | hge
+  · exact legal_cycle_orbit_distinct hwf hne hv hbag hfold hlt
+      (by omega) (by omega)
+  · have hlt : j < i := by omega
+    exact (legal_cycle_orbit_distinct hwf hne hv hbag hfold hlt
+      (by omega) (by omega)).symm
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
