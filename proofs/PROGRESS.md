@@ -41629,6 +41629,26 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28eu) — THE INFINITE MILL (bank 370/N)
+
+- **`wordPlay`** — the infinite play repeating a word forever; move n
+  plays letter n mod length.
+- **`wordPlay_eq_stepWord_take`** — inside the first period the play
+  is the prefix fold.
+- **`wordPlay_periodic`** — one full period returns the state, and
+  every later step repeats the pattern exactly.
+- **`legal_cycle_word_survives_forever`** — THE CAPSTONE: a bag-legal
+  cycle word that never tops out within its first period, repeated
+  forever from ⟨b, full bag⟩, NEVER tops out. A safe legal cycle word
+  is a complete proof of infinite play — M2 implies M1 for pure words.
+
+Gotcha: omega fails on (len + k) % len = k % len with a VARIABLE
+modulus — use Nat.add_mod_left.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28et) — THE FULL-STATE LEGAL CYCLE (bank 369/N)
 
 - **`stepWord`** / **`stepWord_board`** / **`stepWord_bag`** — playing

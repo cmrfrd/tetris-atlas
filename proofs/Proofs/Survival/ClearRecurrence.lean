@@ -10872,6 +10872,81 @@ theorem legal_cycle_word_state_cycle {b : Board} {w : List Placement}
   · rw [stepWord_bag]
     exact legal_word_bag_reset hbag (by omega)
 
+/-- The infinite play obtained by repeating a placement word forever
+from a state: move `n` plays the word's letter `n mod length`. -/
+def wordPlay (g : GameState) (w : List Placement) : ℕ → GameState
+  | 0 => g
+  | n + 1 =>
+      (wordPlay g w n).step GameConfig.standard
+        (w.getD (n % w.length) ⟨Piece.O, 0, 0⟩)
+
+@[simp] theorem wordPlay_zero (g : GameState) (w : List Placement) :
+    wordPlay g w 0 = g := rfl
+
+theorem wordPlay_succ (g : GameState) (w : List Placement) (n : ℕ) :
+    wordPlay g w (n + 1)
+      = (wordPlay g w n).step GameConfig.standard
+          (w.getD (n % w.length) ⟨Piece.O, 0, 0⟩) := rfl
+
+/-- Inside the first period, the infinite play is the prefix fold. -/
+theorem wordPlay_eq_stepWord_take {g : GameState} {w : List Placement}
+    {n : ℕ} (hn : n ≤ w.length) :
+    wordPlay g w n = stepWord g (w.take n) := by
+  induction n with
+  | zero => simp [stepWord]
+  | succ m ih =>
+    have hm : m < w.length := by omega
+    rw [wordPlay_succ, ih (by omega), Nat.mod_eq_of_lt hm]
+    rw [List.take_succ]
+    unfold stepWord
+    rw [List.foldl_append]
+    rw [List.getElem?_eq_getElem hm]
+    simp only [Option.toList_some, List.foldl_cons, List.foldl_nil]
+    rw [List.getD_eq_getElem _ _ hm]
+
+/-- **The mill turns forever**: repeating a legal cycle word makes the
+infinite play periodic — one full period returns the state, and every
+later step repeats the pattern exactly. -/
+theorem wordPlay_periodic {b : Board} {w : List Placement}
+    (hne : w ≠ [])
+    (hcyc : stepWord ⟨b, Bag.full⟩ w = ⟨b, Bag.full⟩) :
+    ∀ m, wordPlay ⟨b, Bag.full⟩ w (w.length + m)
+      = wordPlay ⟨b, Bag.full⟩ w m := by
+  have hpos : 0 < w.length := List.length_pos_iff.mpr hne
+  intro m
+  induction m with
+  | zero =>
+    rw [Nat.add_zero, wordPlay_eq_stepWord_take (le_refl w.length),
+      List.take_length, hcyc]
+    rfl
+  | succ k ih =>
+    rw [show w.length + (k + 1) = (w.length + k) + 1 from rfl,
+      wordPlay_succ, wordPlay_succ, ih,
+      Nat.add_mod_left w.length k]
+
+/-- **THE INFINITE MILL**: a bag-legal cycle word that never tops out
+within its first period, repeated forever from `⟨b, full bag⟩`, NEVER
+tops out. Periodicity reduces every future state to a first-period
+state, and those are safe by hypothesis. A safe legal cycle word is a
+complete proof of infinite play — M2 implies M1, at the level of pure
+words. -/
+theorem legal_cycle_word_survives_forever {b : Board}
+    {w : List Placement} (hne : w ≠ [])
+    (hcyc : stepWord ⟨b, Bag.full⟩ w = ⟨b, Bag.full⟩)
+    (hsafe : ∀ n ≤ w.length,
+      ¬ (stepWord ⟨b, Bag.full⟩ (w.take n)).lost GameConfig.standard) :
+    ∀ n, ¬ (wordPlay ⟨b, Bag.full⟩ w n).lost GameConfig.standard := by
+  have hpos : 0 < w.length := List.length_pos_iff.mpr hne
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    by_cases hlt : n < w.length
+    · rw [wordPlay_eq_stepWord_take (by omega)]
+      exact hsafe n (by omega)
+    · have hsplit : n = w.length + (n - w.length) := by omega
+      rw [hsplit, wordPlay_periodic hne hcyc]
+      exact ih (n - w.length) (by omega)
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
