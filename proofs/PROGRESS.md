@@ -41629,6 +41629,32 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fj) — the obstruction sharpened, and two things it catches (bank 385/N)
+
+The monotone obstruction demanded a quantity monotone on ALL boards —
+a heavy hypothesis that ordinary board measures fail. But only
+monotonicity ALONG THE WORD is ever used.
+
+- **`cycle_prefix_monotone_const`** — the sharpened form: a quantity
+  that never falls across the moves of a cycle is constant on every
+  board the cycle visits. No global hypothesis on Φ whatsoever.
+
+Two immediate catches:
+
+- **`move_count_ne`** — a move never leaves the mass unchanged: four
+  cells in, ten per cleared row out, and 10k = 4 has no solution.
+- **`cycle_has_mass_drop`** — therefore EVERY non-empty cycle has a
+  move at which the cell count strictly falls. Mass cannot merely
+  drift upward and land back home; the loop has to breathe out.
+- **`wordBuried_eq_zero_cons`** / **`cycle_first_move_flush`** —
+  flushness unfolded one move at a time: a cycle that recycles no
+  holes lands its first piece perfectly flush, and cycle rotation
+  (`board_on_cycle_shift`) then pins every move of such a cycle.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fi) — schedule, obstruction, coordinates (bank 384/N)
 
 Every law so far is a TOTAL over the whole cycle. Three orthogonal

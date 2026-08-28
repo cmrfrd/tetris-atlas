@@ -12469,6 +12469,121 @@ theorem legal_cycle_coordinates_faithful {b : Board} {w : List Placement}
   rw [hci, hcj] at hcount
   omega
 
+/-! ### The obstruction sharpened, and two things it catches
+
+The monotone obstruction asked for a quantity monotone on ALL boards,
+which is a heavy demand. Only monotonicity ALONG THE WORD is ever used,
+and that is a far weaker hypothesis — one that ordinary board measures
+actually satisfy. Sharpening it immediately catches two facts. -/
+
+/-- **Word-local monotonicity suffices**: a quantity that never falls
+across the moves of a cycle is constant on every board the cycle
+visits. No global hypothesis on `Φ` at all. -/
+theorem cycle_prefix_monotone_const {Φ : Board → ℕ} {b : Board}
+    {pls : List Placement}
+    (hmono : ∀ i < pls.length,
+      Φ ((pls.take i).foldl (Placement.applyStep GameConfig.standard) b)
+        ≤ Φ ((pls.take (i + 1)).foldl
+              (Placement.applyStep GameConfig.standard) b))
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    ∀ i ≤ pls.length,
+      Φ ((pls.take i).foldl (Placement.applyStep GameConfig.standard) b)
+        = Φ b := by
+  have hchain : ∀ j, j ≤ pls.length → ∀ i, i ≤ j →
+      Φ ((pls.take i).foldl (Placement.applyStep GameConfig.standard) b)
+        ≤ Φ ((pls.take j).foldl
+              (Placement.applyStep GameConfig.standard) b) := by
+    intro j
+    induction j with
+    | zero =>
+      intro _ i hi
+      have hi0 : i = 0 := by omega
+      rw [hi0]
+    | succ k ihk =>
+      intro hk i hi
+      by_cases hcase : i = k + 1
+      · rw [hcase]
+      · exact le_trans (ihk (by omega) i (by omega)) (hmono k (by omega))
+  intro i hi
+  have h1 := hchain i hi 0 (by omega)
+  have h2 := hchain pls.length (le_refl _) i hi
+  rw [List.take_zero, List.foldl_nil] at h1
+  rw [List.take_length, hfold] at h2
+  omega
+
+/-- **A move never leaves the mass unchanged**: four cells in, ten per
+cleared row out, and `10k = 4` has no solution. -/
+theorem move_count_ne {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard) :
+    (Placement.applyStep GameConfig.standard b pl).count ≠ b.count := by
+  have h := BagGrowth.count_applyStep_add (cfg := GameConfig.standard)
+    hwf hv
+  rw [GameConfig.standard_cols] at h
+  omega
+
+/-- **EVERY CYCLE MUST SHED MASS SOMEWHERE**: a non-empty cycle has a
+move at which the board's cell count strictly falls. Mass cannot merely
+drift upward and land back home — the loop has to breathe out. -/
+theorem cycle_has_mass_drop {b : Board} {pls : List Placement}
+    (hne : pls ≠ [])
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard)
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    ∃ i < pls.length,
+      ((pls.take (i + 1)).foldl
+          (Placement.applyStep GameConfig.standard) b).count
+        < ((pls.take i).foldl
+            (Placement.applyStep GameConfig.standard) b).count := by
+  by_contra hcon
+  push Not at hcon
+  have hconst := cycle_prefix_monotone_const (Φ := fun x => x.count)
+    hcon hfold
+  cases pls with
+  | nil => exact hne rfl
+  | cons pl rest =>
+    have h1 := hconst 1 (by simp)
+    have htake : ((pl :: rest).take 1).foldl
+        (Placement.applyStep GameConfig.standard) b
+        = Placement.applyStep GameConfig.standard b pl := by
+      simp
+    rw [htake] at h1
+    exact move_count_ne hwf (hv pl (by simp)) h1
+
+/-- Flushness of a word, unfolded one move at a time: burying nothing
+means the first drop creates no hole and the rest of the word buries
+nothing either. -/
+theorem wordBuried_eq_zero_cons {b : Board} {pl : Placement}
+    {rest : List Placement} :
+    wordBuried b (pl :: rest) = 0
+      ↔ HoleDebt.debt GameConfig.standard (pl.place b)
+            = HoleDebt.debt GameConfig.standard b
+        ∧ wordBuried (Placement.applyStep GameConfig.standard b pl)
+            rest = 0 := by
+  have hle := debt_le_debt_place b pl
+  rw [wordBuried_cons]
+  constructor
+  · intro h
+    exact ⟨by omega, by omega⟩
+  · rintro ⟨h1, h2⟩
+    omega
+
+/-- **A cycle that recycles nothing lands its first piece perfectly
+flush.** With `board_on_cycle_shift` rotating the word, this pins every
+move of such a cycle: no drop may leave a single cell buried. -/
+theorem cycle_first_move_flush {b : Board} {pl : Placement}
+    {rest : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ q ∈ pl :: rest, q.Valid GameConfig.standard)
+    (hfold : (pl :: rest).foldl
+      (Placement.applyStep GameConfig.standard) b = b)
+    (hnorecycle : wordUnburied b (pl :: rest) = 0) :
+    HoleDebt.debt GameConfig.standard (pl.place b)
+      = HoleDebt.debt GameConfig.standard b := by
+  have hcons := cycle_burial_conservation hwf hv hfold
+  rw [hnorecycle] at hcons
+  exact (wordBuried_eq_zero_cons.mp hcons).1
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
