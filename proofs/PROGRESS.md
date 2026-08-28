@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28eb) — the five-O loop is safe all the way round (bank 351/N)
+
+- **`five_O_intermediate_boards`** — the four partial-band boards of
+  the ritual in one package: each drop extends the band by one even
+  pair.
+- **`five_O_state_board_cycle`** — the cycle at the GameState level:
+  five O steps return the board component exactly; only the bag moves.
+- **`five_O_loop_safe`** — with two rows of ceiling above the level
+  (h + 2 ≤ 20), every state along the five-O ritual is non-lost. The
+  cycle is not only closed, it is SAFE all the way round — the game
+  can actually ride it without dying.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ea) — the empty board rides a five-move loop (bank 350/N)
 
 - **`five_O_cycle_empty`** — five squares dropped on the even pairs

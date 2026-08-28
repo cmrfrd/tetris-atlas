@@ -9064,6 +9064,120 @@ theorem five_O_cycle_empty :
   · intro c _
     exact Board.colHeight_empty c
 
+/-- The four intermediate boards of the five-O ritual, in one package:
+each drop extends the band by one even pair. -/
+theorem five_O_intermediate_boards {b : Board} {h : ℕ}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hlow : ∀ p ∈ b, p.2 < h)
+    (hH : ∀ c < 10, b.colHeight c = h) :
+    Placement.applyStep GameConfig.standard b ⟨Piece.O, 0, 0⟩
+        = b ∪ (Finset.range 2) ×ˢ ({h, h + 1} : Finset ℕ)
+    ∧ Placement.applyStep GameConfig.standard
+        (b ∪ (Finset.range 2) ×ˢ ({h, h + 1} : Finset ℕ)) ⟨Piece.O, 0, 2⟩
+        = b ∪ (Finset.range 4) ×ˢ ({h, h + 1} : Finset ℕ)
+    ∧ Placement.applyStep GameConfig.standard
+        (b ∪ (Finset.range 4) ×ˢ ({h, h + 1} : Finset ℕ)) ⟨Piece.O, 0, 4⟩
+        = b ∪ (Finset.range 6) ×ˢ ({h, h + 1} : Finset ℕ)
+    ∧ Placement.applyStep GameConfig.standard
+        (b ∪ (Finset.range 6) ×ˢ ({h, h + 1} : Finset ℕ)) ⟨Piece.O, 0, 6⟩
+        = b ∪ (Finset.range 8) ×ˢ ({h, h + 1} : Finset ℕ) := by
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · have h' := five_O_dry_step (b := b) (m := 0) (by omega) hnf hlow
+      (hH 0 (by omega)) (hH 1 (by omega))
+    simpa using h'
+  · have h' := five_O_dry_step (b := b) (m := 2) (by omega) hnf hlow
+      (hH 2 (by omega)) (hH 3 (by omega))
+    rwa [show (2 : ℕ) + 2 = 4 from rfl] at h'
+  · have h' := five_O_dry_step (b := b) (m := 4) (by omega) hnf hlow
+      (hH 4 (by omega)) (hH 5 (by omega))
+    rwa [show (4 : ℕ) + 2 = 6 from rfl] at h'
+  · have h' := five_O_dry_step (b := b) (m := 6) (by omega) hnf hlow
+      (hH 6 (by omega)) (hH 7 (by omega))
+    rwa [show (6 : ℕ) + 2 = 8 from rfl] at h'
+
+/-- **The five-O cycle at the game-state level**: five O steps from any
+state whose board is clear-free and level return the BOARD component
+exactly. Only the bag moves on. -/
+theorem five_O_state_board_cycle {g : GameState} {h : ℕ}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard g.board r)
+    (hlow : ∀ p ∈ g.board, p.2 < h)
+    (hH : ∀ c < 10, g.board.colHeight c = h) :
+    (((((g.step GameConfig.standard ⟨Piece.O, 0, 0⟩).step
+        GameConfig.standard ⟨Piece.O, 0, 2⟩).step
+        GameConfig.standard ⟨Piece.O, 0, 4⟩).step
+        GameConfig.standard ⟨Piece.O, 0, 6⟩).step
+        GameConfig.standard ⟨Piece.O, 0, 8⟩).board = g.board := by
+  simp only [GameState.step_board]
+  exact five_O_cycle hnf hlow hH
+
+/-- **The five-O loop never tops out**: with two rows of ceiling above
+the level (`h + 2 ≤ 20`), every state along the five-O ritual — the four
+partial-band states and the return — is non-lost. The cycle is not only
+closed, it is SAFE all the way round. -/
+theorem five_O_loop_safe {g : GameState} {h : ℕ} (hcap : h + 2 ≤ 20)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard g.board r)
+    (hlow : ∀ p ∈ g.board, p.2 < h)
+    (hH : ∀ c < 10, g.board.colHeight c = h) :
+    ¬ (g.step GameConfig.standard ⟨Piece.O, 0, 0⟩).lost GameConfig.standard
+    ∧ ¬ ((g.step GameConfig.standard ⟨Piece.O, 0, 0⟩).step
+        GameConfig.standard ⟨Piece.O, 0, 2⟩).lost GameConfig.standard
+    ∧ ¬ (((g.step GameConfig.standard ⟨Piece.O, 0, 0⟩).step
+        GameConfig.standard ⟨Piece.O, 0, 2⟩).step
+        GameConfig.standard ⟨Piece.O, 0, 4⟩).lost GameConfig.standard
+    ∧ ¬ ((((g.step GameConfig.standard ⟨Piece.O, 0, 0⟩).step
+        GameConfig.standard ⟨Piece.O, 0, 2⟩).step
+        GameConfig.standard ⟨Piece.O, 0, 4⟩).step
+        GameConfig.standard ⟨Piece.O, 0, 6⟩).lost GameConfig.standard
+    ∧ ¬ (((((g.step GameConfig.standard ⟨Piece.O, 0, 0⟩).step
+        GameConfig.standard ⟨Piece.O, 0, 2⟩).step
+        GameConfig.standard ⟨Piece.O, 0, 4⟩).step
+        GameConfig.standard ⟨Piece.O, 0, 6⟩).step
+        GameConfig.standard ⟨Piece.O, 0, 8⟩).lost GameConfig.standard := by
+  obtain ⟨e0, e1, e2, e3⟩ := five_O_intermediate_boards hnf hlow hH
+  have e4 := five_O_final_step (b := g.board) hnf hlow
+    (hH 8 (by omega)) (hH 9 (by omega))
+  have hband : ∀ m : ℕ, ∀ p ∈ g.board ∪ (Finset.range m) ×ˢ
+      ({h, h + 1} : Finset ℕ), p.2 < 20 := by
+    intro m p hp
+    rw [Finset.mem_union] at hp
+    rcases hp with hb | hX
+    · have := hlow p hb
+      omega
+    · rw [Finset.mem_product] at hX
+      obtain ⟨-, h2⟩ := hX
+      simp only [Finset.mem_insert, Finset.mem_singleton] at h2
+      omega
+  have safe : ∀ m : ℕ,
+      ¬ Board.isLost GameConfig.standard
+        (g.board ∪ (Finset.range m) ×ˢ ({h, h + 1} : Finset ℕ)) := by
+    intro m
+    rw [Board.not_isLost_iff_forall_row_lt, GameConfig.standard_rows]
+    exact hband m
+  have safeb : ¬ Board.isLost GameConfig.standard g.board := by
+    rw [Board.not_isLost_iff_forall_row_lt, GameConfig.standard_rows]
+    intro p hp
+    have := hlow p hp
+    omega
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · rw [GameState.not_lost_iff_not_board_isLost, GameState.step_board, e0]
+    exact safe 2
+  · rw [GameState.not_lost_iff_not_board_isLost]
+    simp only [GameState.step_board]
+    rw [e0, e1]
+    exact safe 4
+  · rw [GameState.not_lost_iff_not_board_isLost]
+    simp only [GameState.step_board]
+    rw [e0, e1, e2]
+    exact safe 6
+  · rw [GameState.not_lost_iff_not_board_isLost]
+    simp only [GameState.step_board]
+    rw [e0, e1, e2, e3]
+    exact safe 8
+  · rw [GameState.not_lost_iff_not_board_isLost]
+    simp only [GameState.step_board]
+    rw [e0, e1, e2, e3, e4]
+    exact safeb
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
