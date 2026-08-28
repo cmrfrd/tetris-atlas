@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dm) — the free-move graph closes (bank 336/N)
+
+- **`L_r1_shape`**, **`J_r3_shape`** + **`window_L_makes_down2_
+  exists`** / **`window_J_makes_up2_exists`** — seated L/J dig the
+  two-steps their arm-up forms flatten, free. THE COMPLETE FREE GRAPH:
+  flat —O→ flat; flat —L/J→ ∓2 —L/J→ flat; ±1 —S/Z→ ±1; ±1 —T→ ∓1;
+  I vertical anywhere free. Only entering a stair from flat (S/Z/T's
+  setup, bill 1) costs anything in the whole window economy.
+- Gotcha: goals like `h + (1,0).2 + 1 = h + 1` survive rw's rfl-check
+  (unreduced literal projections) — close with simp.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dl) — L and J repair the two-step (bank 335/N)
 
 - **`L_r3_shape`**, **`J_r1_shape`** — the arm-up rotations' structure.

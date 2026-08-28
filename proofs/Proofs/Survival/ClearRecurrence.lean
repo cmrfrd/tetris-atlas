@@ -7802,6 +7802,182 @@ theorem window_J_repairs_up2_exists {b : Board} {j h : ℕ}
         = j + 1 from rfl] at hfed
     rw [hfed, hD]
 
+/-- The seated L (rotation 1): narrow, full column left, single foot
+right. -/
+theorem L_r1_shape :
+    (∀ cell ∈ Piece.L.shapeUp (1 : Rotation), cell.1 ≤ 1)
+    ∧ ((0 : ℕ), (0 : ℕ)) ∈ Piece.L.shapeUp (1 : Rotation)
+    ∧ ((0 : ℕ), (2 : ℕ)) ∈ Piece.L.shapeUp (1 : Rotation)
+    ∧ ((1 : ℕ), (0 : ℕ)) ∈ Piece.L.shapeUp (1 : Rotation)
+    ∧ (∀ cell ∈ Piece.L.shapeUp (1 : Rotation),
+        (cell.1 = 0 → cell.2 ≤ 2) ∧ (cell.1 = 1 → cell.2 = 0)) := by
+  decide
+
+/-- The seated J (rotation 3): narrow, single foot left, full column
+right. -/
+theorem J_r3_shape :
+    (∀ cell ∈ Piece.J.shapeUp (3 : Rotation), cell.1 ≤ 1)
+    ∧ ((0 : ℕ), (0 : ℕ)) ∈ Piece.J.shapeUp (3 : Rotation)
+    ∧ ((1 : ℕ), (0 : ℕ)) ∈ Piece.J.shapeUp (3 : Rotation)
+    ∧ ((1 : ℕ), (2 : ℕ)) ∈ Piece.J.shapeUp (3 : Rotation)
+    ∧ (∀ cell ∈ Piece.J.shapeUp (3 : Rotation),
+        (cell.1 = 0 → cell.2 = 0) ∧ (cell.1 = 1 → cell.2 ≤ 2)) := by
+  decide
+
+/-- **The seated L digs the two-step**: on a flat pair it lands free and
+leaves a two-step drop — the inverse of the arm-up repair. -/
+theorem window_L_makes_down2_exists {b : Board} {j h : ℕ}
+    (hj : j + 1 < 10)
+    (h0 : b.colHeight j = h) (h1 : b.colHeight (j + 1) = h) :
+    ∃ pl : Placement, pl.piece = Piece.L ∧ pl.Valid GameConfig.standard
+      ∧ (∀ cell ∈ pl.shapeUp,
+          pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1)
+      ∧ Board.holes GameConfig.standard (pl.place b)
+          = Board.holes GameConfig.standard b
+      ∧ (pl.place b).colHeight j = h + 3
+      ∧ (pl.place b).colHeight (j + 1) = h + 1 := by
+  classical
+  obtain ⟨hn, hm00, hm02, hm10, hmm⟩ := L_r1_shape
+  have hcells : ∀ cell ∈ (⟨Piece.L, 1, j⟩ : Placement).shapeUp,
+      (⟨Piece.L, 1, j⟩ : Placement).col + cell.1 = j
+      ∨ (⟨Piece.L, 1, j⟩ : Placement).col + cell.1 = j + 1 := by
+    intro cell hcell
+    have := hn cell hcell
+    change j + cell.1 = j ∨ j + cell.1 = j + 1
+    omega
+  have hD : (⟨Piece.L, 1, j⟩ : Placement).dropOffset b = h := by
+    apply Nat.le_antisymm
+    · unfold Placement.dropOffset
+      apply Finset.sup_le
+      intro cell hcell
+      have hle1 := hn cell hcell
+      by_cases hc0 : cell.1 = 0
+      · change b.colHeight (j + cell.1) - cell.2 ≤ h
+        rw [hc0]
+        simp only [Nat.add_zero]
+        omega
+      · have hc1 : cell.1 = 1 := by omega
+        change b.colHeight (j + cell.1) - cell.2 ≤ h
+        rw [hc1, h1]
+        omega
+    · have hle := Finset.le_sup
+        (f := fun cell : PieceCell =>
+          b.colHeight ((⟨Piece.L, 1, j⟩ : Placement).col + cell.1)
+            - cell.2) hm00
+      unfold Placement.dropOffset
+      simp only [] at hle ⊢
+      rw [show (⟨Piece.L, 1, j⟩ : Placement).col + ((0 : ℕ), (0 : ℕ)).1
+          = j from by simp, h0] at hle
+      simpa using hle
+  refine ⟨⟨Piece.L, 1, j⟩, rfl, ?_, hcells, ?_, ?_, ?_⟩
+  · intro cell hcell
+    have := hn cell hcell
+    change j + cell.1 < GameConfig.standard.cols
+    rw [GameConfig.standard_cols]
+    omega
+  · have hbill := window_two_col_hole_bill (b := b)
+      (pl := ⟨Piece.L, 1, j⟩) (f₀ := 0) (f₁ := 0) hj hn rfl hm00
+      (fun cell _ _ => Nat.zero_le _) hm10
+      (fun cell _ _ => Nat.zero_le _)
+    rw [h0, h1, hD] at hbill
+    omega
+  · have htop0 : ∀ cell' ∈ (⟨Piece.L, 1, j⟩ : Placement).shapeUp,
+        cell'.1 = ((0 : ℕ), (2 : ℕ)).1 → cell'.2 ≤ ((0 : ℕ), (2 : ℕ)).2 := by
+      intro cell' hcell' hc
+      exact (hmm cell' hcell').1 hc
+    have hfed := place_fed_colHeight_eq (b := b)
+      (pl := ⟨Piece.L, 1, j⟩) hm02 htop0
+    rw [show (⟨Piece.L, 1, j⟩ : Placement).col + ((0 : ℕ), (2 : ℕ)).1 = j
+        from by simp] at hfed
+    rw [hfed, hD]
+  · have htop1 : ∀ cell' ∈ (⟨Piece.L, 1, j⟩ : Placement).shapeUp,
+        cell'.1 = ((1 : ℕ), (0 : ℕ)).1 → cell'.2 ≤ ((1 : ℕ), (0 : ℕ)).2 := by
+      intro cell' hcell' hc
+      exact le_of_eq ((hmm cell' hcell').2 hc)
+    have hfed := place_fed_colHeight_eq (b := b)
+      (pl := ⟨Piece.L, 1, j⟩) hm10 htop1
+    rw [show (⟨Piece.L, 1, j⟩ : Placement).col + ((1 : ℕ), (0 : ℕ)).1
+        = j + 1 from rfl] at hfed
+    rw [hfed, hD]
+    simp
+
+/-- **The seated J digs the two-step**: mirror — on a flat pair it lands
+free and leaves a two-step rise. -/
+theorem window_J_makes_up2_exists {b : Board} {j h : ℕ}
+    (hj : j + 1 < 10)
+    (h0 : b.colHeight j = h) (h1 : b.colHeight (j + 1) = h) :
+    ∃ pl : Placement, pl.piece = Piece.J ∧ pl.Valid GameConfig.standard
+      ∧ (∀ cell ∈ pl.shapeUp,
+          pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1)
+      ∧ Board.holes GameConfig.standard (pl.place b)
+          = Board.holes GameConfig.standard b
+      ∧ (pl.place b).colHeight j = h + 1
+      ∧ (pl.place b).colHeight (j + 1) = h + 3 := by
+  classical
+  obtain ⟨hn, hm00, hm10, hm12, hmm⟩ := J_r3_shape
+  have hcells : ∀ cell ∈ (⟨Piece.J, 3, j⟩ : Placement).shapeUp,
+      (⟨Piece.J, 3, j⟩ : Placement).col + cell.1 = j
+      ∨ (⟨Piece.J, 3, j⟩ : Placement).col + cell.1 = j + 1 := by
+    intro cell hcell
+    have := hn cell hcell
+    change j + cell.1 = j ∨ j + cell.1 = j + 1
+    omega
+  have hD : (⟨Piece.J, 3, j⟩ : Placement).dropOffset b = h := by
+    apply Nat.le_antisymm
+    · unfold Placement.dropOffset
+      apply Finset.sup_le
+      intro cell hcell
+      have hle1 := hn cell hcell
+      by_cases hc0 : cell.1 = 0
+      · change b.colHeight (j + cell.1) - cell.2 ≤ h
+        rw [hc0]
+        simp only [Nat.add_zero]
+        omega
+      · have hc1 : cell.1 = 1 := by omega
+        change b.colHeight (j + cell.1) - cell.2 ≤ h
+        rw [hc1, h1]
+        omega
+    · have hle := Finset.le_sup
+        (f := fun cell : PieceCell =>
+          b.colHeight ((⟨Piece.J, 3, j⟩ : Placement).col + cell.1)
+            - cell.2) hm00
+      unfold Placement.dropOffset
+      simp only [] at hle ⊢
+      rw [show (⟨Piece.J, 3, j⟩ : Placement).col + ((0 : ℕ), (0 : ℕ)).1
+          = j from by simp, h0] at hle
+      simpa using hle
+  refine ⟨⟨Piece.J, 3, j⟩, rfl, ?_, hcells, ?_, ?_, ?_⟩
+  · intro cell hcell
+    have := hn cell hcell
+    change j + cell.1 < GameConfig.standard.cols
+    rw [GameConfig.standard_cols]
+    omega
+  · have hbill := window_two_col_hole_bill (b := b)
+      (pl := ⟨Piece.J, 3, j⟩) (f₀ := 0) (f₁ := 0) hj hn rfl hm00
+      (fun cell _ _ => Nat.zero_le _) hm10
+      (fun cell _ _ => Nat.zero_le _)
+    rw [h0, h1, hD] at hbill
+    omega
+  · have htop0 : ∀ cell' ∈ (⟨Piece.J, 3, j⟩ : Placement).shapeUp,
+        cell'.1 = ((0 : ℕ), (0 : ℕ)).1 → cell'.2 ≤ ((0 : ℕ), (0 : ℕ)).2 := by
+      intro cell' hcell' hc
+      exact le_of_eq ((hmm cell' hcell').1 hc)
+    have hfed := place_fed_colHeight_eq (b := b)
+      (pl := ⟨Piece.J, 3, j⟩) hm00 htop0
+    rw [show (⟨Piece.J, 3, j⟩ : Placement).col + ((0 : ℕ), (0 : ℕ)).1 = j
+        from by simp] at hfed
+    rw [hfed, hD]
+    simp
+  · have htop1 : ∀ cell' ∈ (⟨Piece.J, 3, j⟩ : Placement).shapeUp,
+        cell'.1 = ((1 : ℕ), (2 : ℕ)).1 → cell'.2 ≤ ((1 : ℕ), (2 : ℕ)).2 := by
+      intro cell' hcell' hc
+      exact (hmm cell' hcell').2 hc
+    have hfed := place_fed_colHeight_eq (b := b)
+      (pl := ⟨Piece.J, 3, j⟩) hm12 htop1
+    rw [show (⟨Piece.J, 3, j⟩ : Placement).col + ((1 : ℕ), (2 : ℕ)).1
+        = j + 1 from rfl] at hfed
+    rw [hfed, hD]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
