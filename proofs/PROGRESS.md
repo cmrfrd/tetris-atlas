@@ -41629,6 +41629,23 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28es) — the bag block reset (bank 368/N)
+
+- **`foldl_draw_exhaust`** — drawing, in any order, exactly the pieces
+  a bag holds (each once) ends at the freshly refilled FULL bag: the
+  last draw empties the bag and hits the refill guard.
+- **`full_block_nodup`** — a seven-piece list containing every piece
+  has no repeats (dedup-sublist length argument).
+- **`bag_refills_after_full_block`** — playing a full seven-block from
+  the full bag returns the full bag: bag legality makes the bag
+  component PERIODIC with period seven.
+
+(Toward the full-state word cycle: board period 35 × bag period 7.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28er) — THE LEGAL CYCLE LEDGER (bank 367/N)
 
 - **`legal_cycle_ledger`** — the consolidation capstone: for any valid

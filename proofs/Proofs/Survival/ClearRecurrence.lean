@@ -10678,6 +10678,83 @@ theorem legal_cycle_ledger {b : Board} {w : List Placement}
   have hhi := wordClearMoves_le_wordClears b w
   exact ⟨⟨hpos, h35⟩, hcensus, hclears, by omega, by omega⟩
 
+/-- **Exhausting a bag refills it**: drawing, in any order, exactly the
+pieces a bag holds — each once — ends with the freshly refilled full
+bag. The seventh draw of every bag block hits the refill guard. -/
+theorem foldl_draw_exhaust : ∀ (l : List Piece) (B : Bag), l ≠ [] →
+    l.Nodup → (∀ p ∈ l, p ∈ B) → B.card = l.length →
+    l.foldl Bag.draw B = Bag.full := by
+  intro l
+  induction l with
+  | nil => intro B hne; exact absurd rfl hne
+  | cons p rest ih =>
+    intro B _ hnodup hmem hcard
+    have hpB : p ∈ B := hmem p (by simp)
+    rcases List.eq_nil_or_concat rest with hrest | _
+    · subst hrest
+      have hB : B = {p} := by
+        rw [List.length_cons, List.length_nil] at hcard
+        obtain ⟨a, ha⟩ := Finset.card_eq_one.mp hcard
+        rw [ha] at hpB ⊢
+        rw [Finset.mem_singleton] at hpB
+        rw [hpB]
+      rw [List.foldl_cons, List.foldl_nil, hB]
+      unfold Bag.draw
+      rw [if_pos (by rw [Finset.erase_singleton])]
+    · have hrne : rest ≠ [] := by
+        rintro rfl
+        simp_all
+      have hdraw : B.draw p = B.erase p := by
+        unfold Bag.draw
+        rw [if_neg]
+        intro hemp
+        have hce := Finset.card_erase_of_mem hpB
+        rw [hemp, Finset.card_empty] at hce
+        rw [List.length_cons] at hcard
+        have hlen := List.length_pos_iff.mpr hrne
+        omega
+      rw [List.foldl_cons, hdraw]
+      apply ih (B.erase p) hrne (List.Nodup.of_cons hnodup)
+      · intro q hq
+        rw [Finset.mem_erase]
+        refine ⟨?_, hmem q (by simp [hq])⟩
+        intro hqp
+        subst hqp
+        exact (List.nodup_cons.mp hnodup).1 hq
+      · rw [Finset.card_erase_of_mem hpB, hcard, List.length_cons]
+        omega
+
+/-- A seven-piece list containing every piece has no repeats. -/
+theorem full_block_nodup {l : List Piece} (hlen : l.length = 7)
+    (hall : ∀ p : Piece, p ∈ l) : l.Nodup := by
+  classical
+  have hsub : (Finset.univ : Finset Piece) ⊆ l.toFinset := fun p _ =>
+    List.mem_toFinset.mpr (hall p)
+  have hcard7 : 7 ≤ l.toFinset.card := by
+    rw [← piece_univ_card]
+    exact Finset.card_le_card hsub
+  have hle : l.toFinset.card ≤ l.length := l.toFinset_card_le
+  have hdlen : l.dedup.length = l.length := by
+    have hct := l.card_toFinset
+    omega
+  have hde : l.dedup = l := (List.dedup_sublist l).eq_of_length hdlen
+  exact List.dedup_eq_self.mp hde
+
+/-- **The bag block reset**: playing a seven-piece block that contains
+every piece, from the full bag, ends back at the full bag. Bag legality
+makes the bag component PERIODIC with period seven. -/
+theorem bag_refills_after_full_block {l : List Piece}
+    (hlen : l.length = 7) (hall : ∀ p : Piece, p ∈ l) :
+    l.foldl Bag.draw Bag.full = Bag.full := by
+  apply foldl_draw_exhaust l Bag.full
+  · intro hnil
+    rw [hnil] at hlen
+    simp at hlen
+  · exact full_block_nodup hlen hall
+  · intro q _
+    exact Bag.mem_full q
+  · rw [hlen, Bag.full_card]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
