@@ -8652,6 +8652,34 @@ theorem window_O_perfect_service_lightens {b : Board} {j h : ℕ}
     unfold Placement.applyStep
     omega
 
+/-- **The tetris service buys thirty-six lightness**: the window tetris
+drops the cell count by exactly thirty-six (four in, forty out) and
+never adds a hole — the deepest single-move deleveraging the game
+allows. -/
+theorem window_I_tetris_lightens {b : Board} {j h : ℕ} (hj : j < 10)
+    (hwf : Board.WF GameConfig.standard b)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (h0 : b.colHeight j = h)
+    (hprep : ∀ c < 10, c ≠ j → ∀ k < 4, (c, h + k) ∈ b) :
+    ∃ pl : Placement, pl.piece = Piece.I ∧ pl.Valid GameConfig.standard
+      ∧ (∀ cell ∈ pl.shapeUp, pl.col + cell.1 = j)
+      ∧ (Placement.applyStep GameConfig.standard b pl).count + 36
+          = b.count
+      ∧ Board.holes GameConfig.standard
+          (Placement.applyStep GameConfig.standard b pl)
+        ≤ Board.holes GameConfig.standard b := by
+  obtain ⟨pl, hpiece, hvalid, hcells, hlines, _⟩ :=
+    window_I_tetris_service (b := b) hj hnf h0 hprep
+  refine ⟨pl, hpiece, hvalid, hcells, ?_, ?_⟩
+  · have hcnt := applyStep_count GameConfig.standard b pl hwf hvalid
+    rw [GameConfig.standard_cols, hlines] at hcnt
+    omega
+  · have hfree := vertical_I_hole_free (b := b) (pl := pl) (j := j)
+      hpiece (fun cell hcell => Or.inl (hcells cell hcell))
+    have hcl := holes_clearLines_le GameConfig.standard (pl.place b)
+    unfold Placement.applyStep
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

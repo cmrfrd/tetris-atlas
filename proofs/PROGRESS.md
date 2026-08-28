@@ -41629,6 +41629,16 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28du) — the tetris buys thirty-six (bank 344/N)
+
+- **`window_I_tetris_lightens`** — the window tetris drops count by
+  exactly 36 with zero new holes: the deepest single-move deleveraging
+  the game allows. The lightness income menu: double = 16, tetris = 36.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dt) — the service buys sixteen (bank 343/N)
 
 - **`window_O_perfect_service_lightens`** — the O double drops count by
