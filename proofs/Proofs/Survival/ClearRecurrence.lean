@@ -6706,6 +6706,238 @@ theorem window_Z_hole_bill {b : Board} {pl : Placement} {j : ℕ}
     have hB := hcells cw (by unfold Placement.shapeUp; exact hcw)
     omega
 
+/-- A narrow L stands arm-down (feet 0, 0) or arm-up (feet 2, 0). -/
+theorem L_narrow_feet : ∀ r : Rotation,
+    (∀ cell ∈ Piece.L.shapeUp r, cell.1 ≤ 1) →
+    ((((0 : ℕ), (0 : ℕ)) ∈ Piece.L.shapeUp r
+        ∧ ((1 : ℕ), (0 : ℕ)) ∈ Piece.L.shapeUp r)
+      ∨ (((0 : ℕ), (2 : ℕ)) ∈ Piece.L.shapeUp r
+        ∧ ((1 : ℕ), (0 : ℕ)) ∈ Piece.L.shapeUp r
+        ∧ ∀ cell ∈ Piece.L.shapeUp r, cell.1 = 0 → 2 ≤ cell.2)) := by
+  decide
+
+/-- A narrow J stands arm-up (feet 0, 2) or arm-down (feet 0, 0). -/
+theorem J_narrow_feet : ∀ r : Rotation,
+    (∀ cell ∈ Piece.J.shapeUp r, cell.1 ≤ 1) →
+    ((((0 : ℕ), (0 : ℕ)) ∈ Piece.J.shapeUp r
+        ∧ ((1 : ℕ), (2 : ℕ)) ∈ Piece.J.shapeUp r
+        ∧ ∀ cell ∈ Piece.J.shapeUp r, cell.1 = 1 → 2 ≤ cell.2)
+      ∨ (((0 : ℕ), (0 : ℕ)) ∈ Piece.J.shapeUp r
+        ∧ ((1 : ℕ), (0 : ℕ)) ∈ Piece.J.shapeUp r)) := by
+  decide
+
+/-- A narrow T points left (feet 1, 0) or right (feet 0, 1). -/
+theorem T_narrow_feet : ∀ r : Rotation,
+    (∀ cell ∈ Piece.T.shapeUp r, cell.1 ≤ 1) →
+    ((((0 : ℕ), (1 : ℕ)) ∈ Piece.T.shapeUp r
+        ∧ ((1 : ℕ), (0 : ℕ)) ∈ Piece.T.shapeUp r
+        ∧ ∀ cell ∈ Piece.T.shapeUp r, cell.1 = 0 → 1 ≤ cell.2)
+      ∨ (((0 : ℕ), (0 : ℕ)) ∈ Piece.T.shapeUp r
+        ∧ ((1 : ℕ), (1 : ℕ)) ∈ Piece.T.shapeUp r
+        ∧ ∀ cell ∈ Piece.T.shapeUp r, cell.1 = 1 → 1 ≤ cell.2)) := by
+  decide
+
+/-- **The window L's exact hole bill**: arm-down it seats like a flat
+pair (`(D − h_j) + (D − h_{j+1})`); arm-up it pays a two-deep overhang
+on the left (`(D + 2 − h_j) + (D − h_{j+1})`). -/
+theorem window_L_hole_bill {b : Board} {pl : Placement} {j : ℕ}
+    (hj : j + 1 < 10) (hL : pl.piece = Piece.L)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1) :
+    (Board.holes GameConfig.standard (pl.place b)
+      = Board.holes GameConfig.standard b
+        + (pl.dropOffset b - b.colHeight j)
+        + (pl.dropOffset b - b.colHeight (j + 1)))
+    ∨ (Board.holes GameConfig.standard (pl.place b)
+      = Board.holes GameConfig.standard b
+        + (pl.dropOffset b + 2 - b.colHeight j)
+        + (pl.dropOffset b - b.colHeight (j + 1))) := by
+  have hsh : pl.shapeUp = Piece.L.shapeUp pl.rot := by
+    unfold Placement.shapeUp
+    rw [hL]
+  rcases LJT_shape_window_split pl.piece (Or.inl hL) pl.rot with
+    ⟨_, hnarrow⟩ | ⟨cw, hcw, hc2⟩
+  · have hn : ∀ cell ∈ pl.shapeUp, cell.1 ≤ 1 := by
+      intro cell hcell
+      apply hnarrow
+      exact hcell
+    rcases L_narrow_feet pl.rot (by
+        intro cell hcell
+        apply hn
+        rw [hsh]
+        exact hcell) with ⟨hf0, hf1⟩ | ⟨hf0, hf1, hfmin⟩
+    · left
+      have hm0 : ((0 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+        rw [hsh]; exact hf0
+      have hm1 : ((1 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+        rw [hsh]; exact hf1
+      have hj0 := hcells _ hm0
+      have hj1 := hcells _ hm1
+      have e0 : pl.col + ((0 : ℕ), (0 : ℕ)).1 = pl.col := by simp
+      have e1 : pl.col + ((1 : ℕ), (0 : ℕ)).1 = pl.col + 1 := by simp
+      rw [e0] at hj0
+      rw [e1] at hj1
+      have hcol : pl.col = j := by omega
+      have hbill := window_two_col_hole_bill (b := b) (f₀ := 0) (f₁ := 0)
+        hj hn hcol hm0 (fun cell _ _ => Nat.zero_le _) hm1
+        (fun cell _ _ => Nat.zero_le _)
+      simpa using hbill
+    · right
+      have hm0 : ((0 : ℕ), (2 : ℕ)) ∈ pl.shapeUp := by
+        rw [hsh]; exact hf0
+      have hm1 : ((1 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+        rw [hsh]; exact hf1
+      have hj0 := hcells _ hm0
+      have hj1 := hcells _ hm1
+      have e0 : pl.col + ((0 : ℕ), (2 : ℕ)).1 = pl.col := by simp
+      have e1 : pl.col + ((1 : ℕ), (0 : ℕ)).1 = pl.col + 1 := by simp
+      rw [e0] at hj0
+      rw [e1] at hj1
+      have hcol : pl.col = j := by omega
+      have hbill := window_two_col_hole_bill (b := b) (f₀ := 2) (f₁ := 0)
+        hj hn hcol hm0
+        (fun cell hcell hc0 => hfmin cell (by rw [← hsh]; exact hcell) hc0)
+        hm1 (fun cell _ _ => Nat.zero_le _)
+      simpa using hbill
+  · exfalso
+    obtain ⟨cz, hczmem, hcz0⟩ := Piece.shapeUp_zero_mem pl.piece pl.rot
+    have hA := hcells cz (by unfold Placement.shapeUp; exact hczmem)
+    have hB := hcells cw (by unfold Placement.shapeUp; exact hcw)
+    omega
+
+/-- **The window J's exact hole bill**: mirror of the L — arm-up pays a
+two-deep overhang on the right. -/
+theorem window_J_hole_bill {b : Board} {pl : Placement} {j : ℕ}
+    (hj : j + 1 < 10) (hJ : pl.piece = Piece.J)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1) :
+    (Board.holes GameConfig.standard (pl.place b)
+      = Board.holes GameConfig.standard b
+        + (pl.dropOffset b - b.colHeight j)
+        + (pl.dropOffset b + 2 - b.colHeight (j + 1)))
+    ∨ (Board.holes GameConfig.standard (pl.place b)
+      = Board.holes GameConfig.standard b
+        + (pl.dropOffset b - b.colHeight j)
+        + (pl.dropOffset b - b.colHeight (j + 1))) := by
+  have hsh : pl.shapeUp = Piece.J.shapeUp pl.rot := by
+    unfold Placement.shapeUp
+    rw [hJ]
+  rcases LJT_shape_window_split pl.piece (Or.inr (Or.inl hJ)) pl.rot with
+    ⟨_, hnarrow⟩ | ⟨cw, hcw, hc2⟩
+  · have hn : ∀ cell ∈ pl.shapeUp, cell.1 ≤ 1 := by
+      intro cell hcell
+      apply hnarrow
+      exact hcell
+    rcases J_narrow_feet pl.rot (by
+        intro cell hcell
+        apply hn
+        rw [hsh]
+        exact hcell) with ⟨hf0, hf1, hfmin⟩ | ⟨hf0, hf1⟩
+    · left
+      have hm0 : ((0 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+        rw [hsh]; exact hf0
+      have hm1 : ((1 : ℕ), (2 : ℕ)) ∈ pl.shapeUp := by
+        rw [hsh]; exact hf1
+      have hj0 := hcells _ hm0
+      have hj1 := hcells _ hm1
+      have e0 : pl.col + ((0 : ℕ), (0 : ℕ)).1 = pl.col := by simp
+      have e1 : pl.col + ((1 : ℕ), (2 : ℕ)).1 = pl.col + 1 := by simp
+      rw [e0] at hj0
+      rw [e1] at hj1
+      have hcol : pl.col = j := by omega
+      have hbill := window_two_col_hole_bill (b := b) (f₀ := 0) (f₁ := 2)
+        hj hn hcol hm0 (fun cell _ _ => Nat.zero_le _) hm1
+        (fun cell hcell hc1 => hfmin cell (by rw [← hsh]; exact hcell) hc1)
+      simpa using hbill
+    · right
+      have hm0 : ((0 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+        rw [hsh]; exact hf0
+      have hm1 : ((1 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+        rw [hsh]; exact hf1
+      have hj0 := hcells _ hm0
+      have hj1 := hcells _ hm1
+      have e0 : pl.col + ((0 : ℕ), (0 : ℕ)).1 = pl.col := by simp
+      have e1 : pl.col + ((1 : ℕ), (0 : ℕ)).1 = pl.col + 1 := by simp
+      rw [e0] at hj0
+      rw [e1] at hj1
+      have hcol : pl.col = j := by omega
+      have hbill := window_two_col_hole_bill (b := b) (f₀ := 0) (f₁ := 0)
+        hj hn hcol hm0 (fun cell _ _ => Nat.zero_le _) hm1
+        (fun cell _ _ => Nat.zero_le _)
+      simpa using hbill
+  · exfalso
+    obtain ⟨cz, hczmem, hcz0⟩ := Piece.shapeUp_zero_mem pl.piece pl.rot
+    have hA := hcells cz (by unfold Placement.shapeUp; exact hczmem)
+    have hB := hcells cw (by unfold Placement.shapeUp; exact hcw)
+    omega
+
+/-- **The window T's exact hole bill**: pointing left it pays a one-deep
+notch on the left, pointing right on the right — never more than one. -/
+theorem window_T_hole_bill {b : Board} {pl : Placement} {j : ℕ}
+    (hj : j + 1 < 10) (hT : pl.piece = Piece.T)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1) :
+    (Board.holes GameConfig.standard (pl.place b)
+      = Board.holes GameConfig.standard b
+        + (pl.dropOffset b + 1 - b.colHeight j)
+        + (pl.dropOffset b - b.colHeight (j + 1)))
+    ∨ (Board.holes GameConfig.standard (pl.place b)
+      = Board.holes GameConfig.standard b
+        + (pl.dropOffset b - b.colHeight j)
+        + (pl.dropOffset b + 1 - b.colHeight (j + 1))) := by
+  have hsh : pl.shapeUp = Piece.T.shapeUp pl.rot := by
+    unfold Placement.shapeUp
+    rw [hT]
+  rcases LJT_shape_window_split pl.piece (Or.inr (Or.inr hT)) pl.rot with
+    ⟨_, hnarrow⟩ | ⟨cw, hcw, hc2⟩
+  · have hn : ∀ cell ∈ pl.shapeUp, cell.1 ≤ 1 := by
+      intro cell hcell
+      apply hnarrow
+      exact hcell
+    rcases T_narrow_feet pl.rot (by
+        intro cell hcell
+        apply hn
+        rw [hsh]
+        exact hcell) with ⟨hf0, hf1, hfmin⟩ | ⟨hf0, hf1, hfmin⟩
+    · left
+      have hm0 : ((0 : ℕ), (1 : ℕ)) ∈ pl.shapeUp := by
+        rw [hsh]; exact hf0
+      have hm1 : ((1 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+        rw [hsh]; exact hf1
+      have hj0 := hcells _ hm0
+      have hj1 := hcells _ hm1
+      have e0 : pl.col + ((0 : ℕ), (1 : ℕ)).1 = pl.col := by simp
+      have e1 : pl.col + ((1 : ℕ), (0 : ℕ)).1 = pl.col + 1 := by simp
+      rw [e0] at hj0
+      rw [e1] at hj1
+      have hcol : pl.col = j := by omega
+      have hbill := window_two_col_hole_bill (b := b) (f₀ := 1) (f₁ := 0)
+        hj hn hcol hm0
+        (fun cell hcell hc0 => hfmin cell (by rw [← hsh]; exact hcell) hc0)
+        hm1 (fun cell _ _ => Nat.zero_le _)
+      simpa using hbill
+    · right
+      have hm0 : ((0 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+        rw [hsh]; exact hf0
+      have hm1 : ((1 : ℕ), (1 : ℕ)) ∈ pl.shapeUp := by
+        rw [hsh]; exact hf1
+      have hj0 := hcells _ hm0
+      have hj1 := hcells _ hm1
+      have e0 : pl.col + ((0 : ℕ), (0 : ℕ)).1 = pl.col := by simp
+      have e1 : pl.col + ((1 : ℕ), (1 : ℕ)).1 = pl.col + 1 := by simp
+      rw [e0] at hj0
+      rw [e1] at hj1
+      have hcol : pl.col = j := by omega
+      have hbill := window_two_col_hole_bill (b := b) (f₀ := 0) (f₁ := 1)
+        hj hn hcol hm0 (fun cell _ _ => Nat.zero_le _) hm1
+        (fun cell hcell hc1 => hfmin cell (by rw [← hsh]; exact hcell) hc1)
+      simpa using hbill
+  · exfalso
+    obtain ⟨cz, hczmem, hcz0⟩ := Piece.shapeUp_zero_mem pl.piece pl.rot
+    have hA := hcells cz (by unfold Placement.shapeUp; exact hczmem)
+    have hB := hcells cw (by unfold Placement.shapeUp; exact hcw)
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

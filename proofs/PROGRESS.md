@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28de) — the window debt catalog complete (bank 328/N)
+
+- **`L/J/T_narrow_feet`** — the two feet patterns per piece (arm
+  up/down, point left/right), eval-discovered, kernel-checked.
+- **`window_L/J/T_hole_bill`** — exact bills as disjunctions over the
+  standing orientation. FULL CATALOG: I free; O = stagger; S/Z =
+  stagger ∓ 1; T = notch ±1; L/J = flat or 2-overhang. Every window
+  move's debt is now a closed formula of the pair's heights.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dd) — the S/Z exact window bills (bank 327/N)
 
 - **`S_narrow_feet`** / **`Z_narrow_feet`** — eval-first revealed the
