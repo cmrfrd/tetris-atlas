@@ -41629,6 +41629,26 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28et) — THE FULL-STATE LEGAL CYCLE (bank 369/N)
+
+- **`stepWord`** / **`stepWord_board`** / **`stepWord_bag`** — playing
+  a word as game-state steps projects to the board fold and the
+  bag-draw fold over the word's pieces.
+- **`bag_stream_list_foldl`** — a 7k-piece list whose every
+  seven-block contains every piece drains the full bag back to the
+  full bag, block by block.
+- **`legal_word_bag_reset`** — a bag-legal word (length a multiple of
+  seven) folds the full bag to the full bag.
+- **`legal_cycle_word_state_cycle`** — THE CAPSTONE: a bag-legal cycle
+  word played from ⟨b, full⟩ returns the ENTIRE game state exactly.
+  Board rides the 35-quantum orbit, bag beats the seven-pulse, every
+  draw is legal. This is the shape of the M2 object — all that remains
+  open is exhibiting one such word.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28es) — the bag block reset (bank 368/N)
 
 - **`foldl_draw_exhaust`** — drawing, in any order, exactly the pieces

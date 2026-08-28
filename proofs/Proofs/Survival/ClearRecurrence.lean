@@ -10755,6 +10755,123 @@ theorem bag_refills_after_full_block {l : List Piece}
     exact Bag.mem_full q
   · rw [hlen, Bag.full_card]
 
+/-- Play a placement word as game-state steps. -/
+def stepWord (g : GameState) (w : List Placement) : GameState :=
+  w.foldl (fun g' pl => g'.step GameConfig.standard pl) g
+
+/-- The board component of a played word is the board fold. -/
+theorem stepWord_board (g : GameState) (w : List Placement) :
+    (stepWord g w).board
+      = w.foldl (Placement.applyStep GameConfig.standard) g.board := by
+  induction w generalizing g with
+  | nil => rfl
+  | cons pl rest ih =>
+    unfold stepWord at ih ⊢
+    rw [List.foldl_cons, List.foldl_cons, ih, GameState.step_board]
+
+/-- The bag component of a played word is the draw fold over the
+word's pieces. -/
+theorem stepWord_bag (g : GameState) (w : List Placement) :
+    (stepWord g w).bag
+      = (w.map (·.piece)).foldl Bag.draw g.bag := by
+  induction w generalizing g with
+  | nil => rfl
+  | cons pl rest ih =>
+    unfold stepWord at ih ⊢
+    rw [List.foldl_cons, List.map_cons, List.foldl_cons, ih,
+      GameState.step_bag]
+
+/-- **Block-structured piece lists drain to the full bag**: a list of
+`7k` pieces whose every seven-block contains every piece folds the full
+bag back to the full bag — block by block via the bag reset. -/
+theorem bag_stream_list_foldl : ∀ (k : ℕ) (l : List Piece),
+    l.length = 7 * k →
+    (∀ j < k, ∀ p : Piece, ∃ i < 7, l.getD (7 * j + i) Piece.O = p) →
+    l.foldl Bag.draw Bag.full = Bag.full := by
+  intro k
+  induction k with
+  | zero =>
+    intro l hlen _
+    rw [Nat.mul_zero] at hlen
+    rw [List.length_eq_zero_iff.mp hlen]
+    rfl
+  | succ m ih =>
+    intro l hlen hblock
+    have h7le : 7 ≤ l.length := by omega
+    have hsplit : l.take 7 ++ l.drop 7 = l := List.take_append_drop 7 l
+    have htlen : (l.take 7).length = 7 := by
+      rw [List.length_take]
+      omega
+    have hall : ∀ p : Piece, p ∈ l.take 7 := by
+      intro p
+      obtain ⟨i, hi, hget⟩ := hblock 0 (by omega) p
+      rw [Nat.mul_zero, Nat.zero_add] at hget
+      have hilen : i < l.length := by omega
+      rw [List.getD_eq_getElem l Piece.O hilen] at hget
+      have hit : (l.take 7)[i]'(by omega) = l[i] := by
+        rw [List.getElem_take]
+      rw [← hget, ← hit]
+      exact List.getElem_mem _
+    have hdlen : (l.drop 7).length = 7 * m := by
+      rw [List.length_drop]
+      omega
+    have hgd : ∀ n, n < (l.drop 7).length →
+        (l.drop 7).getD n Piece.O = l.getD (7 + n) Piece.O := by
+      intro n hn
+      rw [List.getD_eq_getElem _ _ hn,
+        List.getD_eq_getElem _ _ (by rw [List.length_drop] at hn; omega)]
+      rw [List.getElem_drop]
+    have hdblock : ∀ j < m, ∀ p : Piece,
+        ∃ i < 7, (l.drop 7).getD (7 * j + i) Piece.O = p := by
+      intro j hj p
+      obtain ⟨i, hi, hget⟩ := hblock (j + 1) (by omega) p
+      refine ⟨i, hi, ?_⟩
+      rw [hgd (7 * j + i) (by omega)]
+      rw [show 7 + (7 * j + i) = 7 * (j + 1) + i from by ring]
+      exact hget
+    rw [← hsplit, List.foldl_append,
+      bag_refills_after_full_block htlen hall]
+    exact ih (l.drop 7) hdlen hdblock
+
+/-- **A bag-legal word drains to the full bag**: if the repeated word
+deals full bags and its length is a multiple of seven, playing its
+pieces from the full bag ends at the full bag. -/
+theorem legal_word_bag_reset {w : List Placement}
+    (hbag : IsBagStream (wordStream w)) (h7 : 7 ∣ w.length) :
+    (w.map (·.piece)).foldl Bag.draw Bag.full = Bag.full := by
+  obtain ⟨k, hk⟩ := h7
+  apply bag_stream_list_foldl k
+  · rw [List.length_map, hk]
+  · intro j hj p
+    obtain ⟨i, hi, hws⟩ := hbag j p
+    refine ⟨i, hi, ?_⟩
+    have hn : 7 * j + i < w.length := by omega
+    unfold wordStream at hws
+    rw [Nat.mod_eq_of_lt hn] at hws
+    rw [List.getD_eq_getElem _ _ (by rw [List.length_map]; exact hn),
+      List.getElem_map]
+    rw [List.getD_eq_getElem _ _ hn] at hws
+    exact hws
+
+/-- **THE FULL-STATE LEGAL CYCLE**: a bag-legal cycle word, played as
+game-state steps from `⟨b, full bag⟩`, returns the ENTIRE game state —
+board AND bag — exactly. Every draw along the way is legal (the stream
+deals what the bag holds), the board rides its 35-quantum orbit, and
+the bag beats its seven-pulse. This is the shape of the M2 object:
+all that remains open is exhibiting one such word. -/
+theorem legal_cycle_word_state_cycle {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    stepWord ⟨b, Bag.full⟩ w = ⟨b, Bag.full⟩ := by
+  have h35 := legal_cycle_word_thirty_five_dvd hwf hne hv hbag hfold
+  apply GameState.eq_of_board_bag
+  · rw [stepWord_board]
+    exact hfold
+  · rw [stepWord_bag]
+    exact legal_word_bag_reset hbag (by omega)
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
