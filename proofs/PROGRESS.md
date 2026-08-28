@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dy) — the intermediate-state bricks (bank 348/N)
+
+- **`colHeight_union_high_cols`** — low-column additions leave higher
+  columns' heights unchanged.
+- **`no_full_of_partial_band`** — a partial band (< 10 columns) never
+  completes a row over a clear-free below-h board.
+- **`band_extend`** — (range m) band ∪ next pair's four cells =
+  (range (m+2)) band. All three bricks for the five-O composition.
+- Gotcha: subst fails on `p.1 = m` (projection ≠ variable); omega
+  proves ∧/∨ goals of linear equations directly — use it.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dx) — the O's drop identified (bank 347/N)
 
 - **`O_r0_shape_eq`** — the base square as an explicit 4-set.

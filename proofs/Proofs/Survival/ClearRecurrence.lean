@@ -8864,6 +8864,78 @@ theorem O_pair_dropped_eq {b : Board} {c h : ℕ}
   refine ⟨hdrop, ?_⟩
   rw [Placement.place_eq_union_dropped, hdrop]
 
+/-- Adding cells confined to low-index columns leaves every higher
+column's height unchanged. -/
+theorem colHeight_union_high_cols {X Y : Board} {m : ℕ}
+    (hY : ∀ p ∈ Y, p.1 < m) {c : ℕ} (hc : m ≤ c) :
+    (X ∪ Y).colHeight c = X.colHeight c := by
+  classical
+  unfold Board.colHeight Board.colRows
+  congr 1
+  congr 1
+  ext p
+  simp only [Finset.mem_filter, Finset.mem_union]
+  constructor
+  · rintro ⟨hp, hpc⟩
+    rcases hp with h' | h'
+    · exact ⟨h', hpc⟩
+    · exfalso
+      have := hY p h'
+      omega
+  · rintro ⟨hp, hpc⟩
+    exact ⟨Or.inl hp, hpc⟩
+
+/-- A clear-free below-`h` board stays clear-free after any partial band
+over fewer than ten columns. -/
+theorem no_full_of_partial_band {b : Board} {h m : ℕ} (hm : m < 10)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hlow : ∀ p ∈ b, p.2 < h) :
+    ∀ r, ¬ Board.isFull GameConfig.standard
+      (b ∪ (Finset.range m) ×ˢ ({h, h + 1} : Finset ℕ)) r := by
+  intro r hfull
+  have h9 := hfull 9 (by rw [GameConfig.standard_cols]; simp)
+  rw [Finset.mem_union] at h9
+  rcases h9 with hb | hX
+  · have hrlt := hlow _ hb
+    apply hnf r
+    intro c hc
+    have := hfull c hc
+    rw [Finset.mem_union] at this
+    rcases this with h' | h'
+    · exact h'
+    · exfalso
+      rw [Finset.mem_product] at h'
+      simp only [Finset.mem_insert, Finset.mem_singleton] at h'
+      omega
+  · rw [Finset.mem_product, Finset.mem_range] at hX
+    omega
+
+/-- Extending a band by its next pair of columns. -/
+theorem band_extend {m h : ℕ} :
+    (Finset.range m) ×ˢ ({h, h + 1} : Finset ℕ)
+      ∪ ({(m, h), (m, h + 1), (m + 1, h), (m + 1, h + 1)} : Finset Coord)
+    = (Finset.range (m + 2)) ×ˢ ({h, h + 1} : Finset ℕ) := by
+  ext p
+  simp only [Finset.mem_union, Finset.mem_product, Finset.mem_range,
+    Finset.mem_insert, Finset.mem_singleton, Prod.ext_iff]
+  constructor
+  · rintro (⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩ | ⟨h1, h2⟩) <;>
+      exact ⟨by omega, by omega⟩
+  · rintro ⟨h1, h2⟩
+    by_cases hlt : p.1 < m
+    · exact Or.inl ⟨hlt, h2⟩
+    · rcases h2 with h2 | h2
+      · by_cases hm0 : p.1 = m
+        · right; left
+          exact ⟨hm0, h2⟩
+        · right; right; right; left
+          exact ⟨by omega, h2⟩
+      · by_cases hm0 : p.1 = m
+        · right; right; left
+          exact ⟨hm0, h2⟩
+        · right; right; right; right
+          exact ⟨by omega, h2⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
