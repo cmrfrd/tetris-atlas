@@ -16019,6 +16019,121 @@ theorem cycle_no_emptying_all_occupied {b : Board}
   rw [← cycle_occupiedCols_frozen_split hne hfold]
   exact occupiedCols_eq_range_of_full hfull
 
+/-! ### The floor tax
+
+The empty-floor result generalizes: whatever gaps the bottom row has,
+each one becomes a hole the moment its column carries anything — and at
+a clearing moment every column carries something. So the board's debt
+is at least the number of floor gaps, and for a cycle that never
+completes its bottom row those gaps are permanent. -/
+
+/-- The columns whose floor cell is missing. -/
+def floorGaps (b : Board) : Finset ℕ :=
+  (Finset.range 10).filter (fun c => ((c, 0) : Coord) ∉ b)
+
+/-- **THE FLOOR TAX**: with any row complete, every floor gap is a hole,
+so the debt is at least the number of gaps. -/
+theorem debt_ge_floorGaps_of_full {B : Board} {t : ℕ}
+    (hfull : Board.isFull GameConfig.standard B t) :
+    (floorGaps B).card ≤ HoleDebt.debt GameConfig.standard B := by
+  classical
+  have hone : ∀ c ∈ floorGaps B, 1 ≤ HoleDebt.colHoles B c := by
+    intro c hc
+    simp only [floorGaps, Finset.mem_filter, Finset.mem_range] at hc
+    have hmem := hfull c (by
+      rw [GameConfig.standard_cols]
+      exact Finset.mem_range.mpr hc.1)
+    have hpos : 0 < B.colHeight c := by
+      have := Board.lt_colHeight hmem
+      omega
+    exact colHoles_pos_of_floor_gap hc.2 hpos
+  calc (floorGaps B).card
+      = ∑ _c ∈ floorGaps B, 1 := by
+        rw [Finset.sum_const, smul_eq_mul, mul_one]
+    _ ≤ ∑ c ∈ floorGaps B, HoleDebt.colHoles B c :=
+        Finset.sum_le_sum hone
+    _ ≤ ∑ c ∈ Finset.range 10, HoleDebt.colHoles B c :=
+        Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
+    _ = HoleDebt.debt GameConfig.standard B := by
+        unfold HoleDebt.debt
+        rw [GameConfig.standard_cols]
+
+/-- A clear-free board's floor is incomplete. -/
+theorem floorGaps_nonempty {b : Board}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r) :
+    (floorGaps b).Nonempty := by
+  classical
+  by_contra hemp
+  rw [Finset.not_nonempty_iff_eq_empty] at hemp
+  apply hnf 0
+  intro c hc
+  by_contra hmem
+  have : c ∈ floorGaps b := by
+    simp only [floorGaps, Finset.mem_filter]
+    rw [GameConfig.standard_cols] at hc
+    exact ⟨hc, hmem⟩
+  rw [hemp] at this
+  exact absurd this (Finset.notMem_empty _)
+
+/-- The floor gaps of a cycle that spares its bottom row are the same at
+every moment. -/
+theorem cycle_floorGaps_frozen {b : Board} {w1 w2 : List Placement}
+    (hnb : ¬ wordBottomClear b (w1 ++ w2))
+    (hfold : (w1 ++ w2).foldl
+      (Placement.applyStep GameConfig.standard) b = b) :
+    floorGaps (w1.foldl (Placement.applyStep GameConfig.standard) b)
+      = floorGaps b := by
+  classical
+  have hfrozen := cycle_bottom_frozen_split hnb hfold
+  ext c
+  simp only [floorGaps, Finset.mem_filter]
+  constructor
+  · rintro ⟨hc, hgap⟩
+    refine ⟨hc, ?_⟩
+    intro hmem
+    apply hgap
+    have hin : ((c, 0) : Coord) ∈ bottomCells b := by
+      unfold bottomCells
+      exact Finset.mem_filter.mpr ⟨hmem, rfl⟩
+    rw [← hfrozen] at hin
+    exact (Finset.mem_filter.mp hin).1
+  · rintro ⟨hc, hgap⟩
+    refine ⟨hc, ?_⟩
+    intro hmem
+    apply hgap
+    have hin : ((c, 0) : Coord)
+        ∈ bottomCells (w1.foldl
+            (Placement.applyStep GameConfig.standard) b) := by
+      unfold bottomCells
+      exact Finset.mem_filter.mpr ⟨hmem, rfl⟩
+    rw [hfrozen] at hin
+    exact (Finset.mem_filter.mp hin).1
+
+/-- **A PERMANENT TAX**: a cycle that never completes its bottom row
+carries at least one hole for each of its floor's gaps at every
+clearing moment — and its floor always has a gap, since a cycling board
+is clear-free. The debt never falls to zero. -/
+theorem cycle_floor_tax {b : Board} {w1 w2 : List Placement}
+    (hnb : ¬ wordBottomClear b (w1 ++ w2))
+    (hv : ∀ pl ∈ w1 ++ w2, pl.Valid GameConfig.standard)
+    (hpos : 0 < (w1 ++ w2).length)
+    (hfold : (w1 ++ w2).foldl
+      (Placement.applyStep GameConfig.standard) b = b)
+    {t : ℕ}
+    (hfull : Board.isFull GameConfig.standard
+      (w1.foldl (Placement.applyStep GameConfig.standard) b) t) :
+    1 ≤ HoleDebt.debt GameConfig.standard
+      (w1.foldl (Placement.applyStep GameConfig.standard) b) := by
+  have hnfb := board_on_cycle_clear_free
+    (b := b) (n := (w1 ++ w2).length) ⟨w1 ++ w2, rfl, hpos, hv, hfold⟩
+  obtain ⟨c, hc⟩ := floorGaps_nonempty hnfb
+  have hcard : 1 ≤ (floorGaps b).card :=
+    Finset.card_pos.mpr ⟨c, hc⟩
+  have hfrozen := cycle_floorGaps_frozen hnb hfold
+  have htax := debt_ge_floorGaps_of_full hfull
+  rw [hfrozen] at htax
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

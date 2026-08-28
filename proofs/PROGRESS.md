@@ -41629,6 +41629,25 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28gn) — the floor tax (bank 415/N)
+
+The empty-floor result generalizes to any gap.
+
+- **`floorGaps`**, **`debt_ge_floorGaps_of_full`** — with any row
+  complete, every floor gap is a hole, so the debt is at least the
+  number of gaps.
+- **`floorGaps_nonempty`** — a clear-free board's floor is incomplete,
+  so a cycling board always HAS a gap.
+- **`cycle_floorGaps_frozen`** — a cycle sparing its bottom row freezes
+  the gap set.
+- **`cycle_floor_tax`** — so such a cycle carries at least one hole at
+  every clearing moment. Its debt never falls to zero.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean. Compiled first
+try.
+
+---
+
 ### Tick (manual, 2026-08-28gm) — which columns are standing (bank 414/N)
 
 A fourth quantity for the split/obstruction technique.
