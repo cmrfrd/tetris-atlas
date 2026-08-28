@@ -41629,6 +41629,31 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fv) — splitting, applied twice more (bank 397/N)
+
+The split technique upgrades any "first move" statement to "every
+moment" for free. Two more applications.
+
+- **`wordBuried_append`**, **`wordUnburied_append`**,
+  **`debt_word_ge`** — burial and unburial split along concatenation,
+  and a word that frees no holes never lowers the debt.
+- **`cycle_debt_frozen_split`** — THE DEBT IS FROZEN THROUGHOUT: a
+  cycle that frees no holes carries exactly the same hole count on
+  every board it visits. It cannot even temporarily dig and repay.
+- **`wordLowClear`**, **`lowCells_subset_place`**,
+  **`lowCells_word_subset`**, **`wordLowClear_append`**,
+  **`cycle_lowCells_frozen_split`** — THE FOUNDATION IS FROZEN
+  THROUGHOUT: below the lowest row a cycle ever completes, the board
+  is identical at every single moment, not merely undisturbed at the
+  end. A permanent substructure the play never touches.
+
+Gotcha: `tauto` chokes on the disjunction-reassociation when a
+disjunct is an existential — `or_assoc` closes it deterministically.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fu) — the bottom row is frozen at every moment (bank 396/N)
 
 The dichotomy previously pinned only the opening move. Splitting the

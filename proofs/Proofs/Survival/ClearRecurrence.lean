@@ -14107,6 +14107,161 @@ theorem legal_cycle_permanent_floor_gap {b : Board} {w : List Placement}
   subst hw
   exact cycle_bottom_gap_permanent hnb hfold hcnot
 
+/-! ### Splitting, applied twice more
+
+The split technique upgrades any "first move" statement to "every
+moment" for free. Two more: the debt of a non-recycling cycle, and the
+frozen foundation at arbitrary depth. -/
+
+/-- Burial splits along concatenation. -/
+theorem wordBuried_append (b : Board) (w1 w2 : List Placement) :
+    wordBuried b (w1 ++ w2)
+      = wordBuried b w1
+        + wordBuried (w1.foldl
+            (Placement.applyStep GameConfig.standard) b) w2 := by
+  induction w1 generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [List.cons_append, wordBuried_cons, wordBuried_cons,
+      List.foldl_cons, ih]
+    omega
+
+/-- Unburial splits along concatenation. -/
+theorem wordUnburied_append (b : Board) (w1 w2 : List Placement) :
+    wordUnburied b (w1 ++ w2)
+      = wordUnburied b w1
+        + wordUnburied (w1.foldl
+            (Placement.applyStep GameConfig.standard) b) w2 := by
+  induction w1 generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [List.cons_append, wordUnburied_cons, wordUnburied_cons,
+      List.foldl_cons, ih]
+    omega
+
+/-- A word that frees no holes never lowers the debt. -/
+theorem debt_word_ge {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard)
+    (hnu : wordUnburied b pls = 0) :
+    HoleDebt.debt GameConfig.standard b
+      ≤ HoleDebt.debt GameConfig.standard
+          (pls.foldl (Placement.applyStep GameConfig.standard) b) := by
+  induction pls generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    have hvpl := hv pl (by simp)
+    rw [wordUnburied_cons] at hnu
+    have h1 := debt_le_debt_place b pl
+    have h2 := debt_applyStep_le b pl hwf hvpl
+    have hstep : HoleDebt.debt GameConfig.standard b
+        ≤ HoleDebt.debt GameConfig.standard
+            (Placement.applyStep GameConfig.standard b pl) := by omega
+    rw [List.foldl_cons]
+    exact le_trans hstep (ih (Placement.applyStep_wf hwf hvpl)
+      (fun q hq => hv q (by simp [hq])) (by omega))
+
+/-- **THE DEBT IS FROZEN THROUGHOUT**: a cycle that frees no holes
+carries exactly the same hole count on every board it visits. It cannot
+even temporarily dig and repay — the debt never moves at all. -/
+theorem cycle_debt_frozen_split {b : Board} {w1 w2 : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w1 ++ w2, pl.Valid GameConfig.standard)
+    (hnu : wordUnburied b (w1 ++ w2) = 0)
+    (hfold : (w1 ++ w2).foldl
+      (Placement.applyStep GameConfig.standard) b = b) :
+    HoleDebt.debt GameConfig.standard
+        (w1.foldl (Placement.applyStep GameConfig.standard) b)
+      = HoleDebt.debt GameConfig.standard b := by
+  rw [wordUnburied_append] at hnu
+  have hv1 : ∀ pl ∈ w1, pl.Valid GameConfig.standard :=
+    fun pl hpl => hv pl (List.mem_append_left _ hpl)
+  have hv2 : ∀ pl ∈ w2, pl.Valid GameConfig.standard :=
+    fun pl hpl => hv pl (List.mem_append_right _ hpl)
+  have hwf1 := foldl_applyStep_wf hwf hv1
+  have hge1 := debt_word_ge hwf hv1 (by omega)
+  have hge2 := debt_word_ge hwf1 hv2 (by omega)
+  rw [← List.foldl_append, hfold] at hge2
+  omega
+
+/-- The word fills some row at or below depth `r` at some point. -/
+def wordLowClear (r : ℕ) (b : Board) : List Placement → Prop
+  | [] => False
+  | pl :: rest =>
+      (∃ s, s ≤ r ∧ Board.isFull GameConfig.standard (pl.place b) s)
+      ∨ wordLowClear r (Placement.applyStep GameConfig.standard b pl) rest
+
+theorem wordLowClear_cons (r : ℕ) (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    wordLowClear r b (pl :: rest)
+      ↔ (∃ s, s ≤ r ∧ Board.isFull GameConfig.standard (pl.place b) s)
+        ∨ wordLowClear r
+            (Placement.applyStep GameConfig.standard b pl) rest := Iff.rfl
+
+/-- Low bands only grow under placement. -/
+theorem lowCells_subset_place (r : ℕ) (b : Board) (pl : Placement) :
+    lowCells r b ⊆ lowCells r (pl.place b) := by
+  unfold lowCells
+  apply Finset.filter_subset_filter
+  rw [Placement.place_eq_union_dropped]
+  exact Finset.subset_union_left
+
+/-- A word that never fills a low row only ever adds to the low band. -/
+theorem lowCells_word_subset {r : ℕ} {b : Board} {pls : List Placement}
+    (hnb : ¬ wordLowClear r b pls) :
+    lowCells r b
+      ⊆ lowCells r (pls.foldl
+          (Placement.applyStep GameConfig.standard) b) := by
+  induction pls generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordLowClear_cons] at hnb
+    push Not at hnb
+    have hnf : ∀ s, s ≤ r →
+        ¬ Board.isFull GameConfig.standard (pl.place b) s := by
+      intro s hs hfull
+      exact hnb.1 s hs hfull
+    have hstep : lowCells r b
+        ⊆ lowCells r (Placement.applyStep GameConfig.standard b pl) := by
+      rw [Placement.applyStep_eq_clearLines_place,
+        lowCells_clearLines hnf]
+      exact lowCells_subset_place r b pl
+    rw [List.foldl_cons]
+    exact subset_trans hstep (ih hnb.2)
+
+/-- Low clearing splits along concatenation. -/
+theorem wordLowClear_append (r : ℕ) (b : Board) (w1 w2 : List Placement) :
+    wordLowClear r b (w1 ++ w2)
+      ↔ wordLowClear r b w1
+        ∨ wordLowClear r
+            (w1.foldl (Placement.applyStep GameConfig.standard) b) w2 := by
+  induction w1 generalizing b with
+  | nil => simp [wordLowClear]
+  | cons pl rest ih =>
+    rw [List.cons_append, wordLowClear_cons, wordLowClear_cons,
+      List.foldl_cons, ih, or_assoc]
+
+/-- **THE FOUNDATION IS FROZEN THROUGHOUT**: below the lowest row a
+cycle ever completes, the board is not merely undisturbed at the end —
+it is identical at every single moment of the loop. A permanent
+substructure the play never touches. -/
+theorem cycle_lowCells_frozen_split {r : ℕ} {b : Board}
+    {w1 w2 : List Placement}
+    (hnb : ¬ wordLowClear r b (w1 ++ w2))
+    (hfold : (w1 ++ w2).foldl
+      (Placement.applyStep GameConfig.standard) b = b) :
+    lowCells r (w1.foldl (Placement.applyStep GameConfig.standard) b)
+      = lowCells r b := by
+  have hsplit := wordLowClear_append r b w1 w2
+  have hn1 : ¬ wordLowClear r b w1 := fun h => hnb (hsplit.mpr (Or.inl h))
+  have hn2 : ¬ wordLowClear r
+      (w1.foldl (Placement.applyStep GameConfig.standard) b) w2 :=
+    fun h => hnb (hsplit.mpr (Or.inr h))
+  have hsub1 := lowCells_word_subset hn1
+  have hsub2 := lowCells_word_subset hn2
+  rw [← List.foldl_append, hfold] at hsub2
+  exact Finset.Subset.antisymm hsub2 hsub1
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
