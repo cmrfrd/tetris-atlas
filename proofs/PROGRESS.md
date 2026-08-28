@@ -41629,6 +41629,26 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fa) — the orbit signature (bank 376/N)
+
+- **`map_piece_blocks`** — a bag-legal word's piece list has full
+  seven-blocks.
+- **`wordPlay_bag_card`** — the bag clock: within the first period the
+  bag after n moves holds exactly 7 − n mod 7 pieces.
+- **`wordPlay_count_mod`** — the mass clock: the board count after n
+  moves reads b.count + 4n modulo ten.
+- **`legal_cycle_orbit_signature`** — both clocks in one statement:
+  two first-period states can only coincide if their times agree
+  mod 35. (Distinctness of the 35-orbit next.)
+
+Gotcha: after `stepWord_board` the fold base is the unreduced
+projection (⟨b, full⟩).board — rw a `show … = b from rfl` before the
+ledger, or omega sees different atoms.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ez) — the bag-card signature (bank 375/N)
 
 - **`bag_stream_take_card`** — along a piece list of full

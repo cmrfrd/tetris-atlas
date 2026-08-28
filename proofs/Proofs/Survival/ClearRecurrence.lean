@@ -11295,6 +11295,71 @@ theorem bag_stream_take_card : ∀ (n : ℕ) (l : List Piece),
         bag_refills_after_full_block htlen hall, hrec]
       omega
 
+/-- A bag-legal word's piece list has full seven-blocks. -/
+theorem map_piece_blocks {w : List Placement}
+    (hbag : IsBagStream (wordStream w)) :
+    ∀ j, 7 * j + 7 ≤ (w.map (·.piece)).length → ∀ p : Piece,
+      ∃ i < 7, (w.map (·.piece)).getD (7 * j + i) Piece.O = p := by
+  intro j hj p
+  rw [List.length_map] at hj
+  obtain ⟨i, hi, hws⟩ := hbag j p
+  refine ⟨i, hi, ?_⟩
+  have hn : 7 * j + i < w.length := by omega
+  unfold wordStream at hws
+  rw [Nat.mod_eq_of_lt hn] at hws
+  rw [List.getD_eq_getElem _ _ (by rw [List.length_map]; exact hn),
+    List.getElem_map]
+  rw [List.getD_eq_getElem _ _ hn] at hws
+  exact hws
+
+/-- **The bag clock of a legal play**: within the first period, the
+bag after `n` moves holds exactly `7 - n % 7` pieces. -/
+theorem wordPlay_bag_card {b : Board} {w : List Placement}
+    (hbag : IsBagStream (wordStream w)) (h7 : 7 ∣ w.length)
+    {n : ℕ} (hn : n ≤ w.length) :
+    (wordPlay ⟨b, Bag.full⟩ w n).bag.card = 7 - n % 7 := by
+  rw [wordPlay_eq_stepWord_take hn, stepWord_bag]
+  have hmt : (w.take n).map (·.piece) = (w.map (·.piece)).take n :=
+    List.map_take
+  rw [hmt]
+  exact bag_stream_take_card n (w.map (·.piece))
+    (by rw [List.length_map]; exact h7)
+    (by rw [List.length_map]; exact hn)
+    (map_piece_blocks hbag)
+
+/-- **The mass clock of a legal play**: within the first period, the
+board count after `n` moves is `b.count + 4n` modulo ten. -/
+theorem wordPlay_count_mod {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    {n : ℕ} (hn : n ≤ w.length) :
+    (wordPlay ⟨b, Bag.full⟩ w n).board.count % 10
+      = (b.count + 4 * n) % 10 := by
+  rw [wordPlay_eq_stepWord_take hn, stepWord_board,
+    show (⟨b, Bag.full⟩ : GameState).board = b from rfl]
+  have hvt : ∀ pl ∈ w.take n, pl.Valid GameConfig.standard :=
+    fun pl hpl => hv pl (List.mem_of_mem_take hpl)
+  obtain ⟨C, hC⟩ := foldl_applyStep_count_ledger
+    (b := b) (pls := w.take n) hwf hvt
+  rw [List.length_take] at hC
+  have hmin : min n w.length = n := by omega
+  rw [hmin] at hC
+  omega
+
+/-- **THE ORBIT SIGNATURE**: along any legal cycle word's first
+period, every state wears two clocks — the bag reads `7 - n % 7` and
+the board count reads `b.count + 4n` mod ten. Two states at different
+first-period times can only coincide if their times agree mod 35. -/
+theorem legal_cycle_orbit_signature {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w)) (h7 : 7 ∣ w.length)
+    {n : ℕ} (hn : n ≤ w.length) :
+    (wordPlay ⟨b, Bag.full⟩ w n).bag.card = 7 - n % 7
+    ∧ (wordPlay ⟨b, Bag.full⟩ w n).board.count % 10
+        = (b.count + 4 * n) % 10 :=
+  ⟨wordPlay_bag_card hbag h7 hn, wordPlay_count_mod hwf hv hn⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
