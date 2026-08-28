@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ep) — the mills' harvests from arithmetic alone (bank 365/N)
+
+- **`wordClears_append`** — clears add along concatenation.
+- **`five_O_word_clears_two`** — the five-O word clears exactly two
+  rows, derived purely from the census 5·clears = 2·5.
+- **`ten_I_word_clears_four`** — the ten-I word clears exactly four
+  rows (the tetris), from 5·clears = 2·10. No board computation.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28eo) — the clear census of a cycle (bank 364/N)
 
 - **`wordClears`** — the total rows cleared while playing a word,

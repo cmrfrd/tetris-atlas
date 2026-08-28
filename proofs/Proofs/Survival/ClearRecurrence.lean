@@ -10528,6 +10528,57 @@ theorem legal_cycle_word_clears_fourteen {b : Board}
   rw [hlen] at h
   omega
 
+/-- Clears add along concatenation. -/
+theorem wordClears_append (b : Board) (w1 w2 : List Placement) :
+    wordClears b (w1 ++ w2)
+      = wordClears b w1
+        + wordClears (w1.foldl (Placement.applyStep GameConfig.standard) b)
+            w2 := by
+  induction w1 generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [List.cons_append, wordClears_cons, wordClears_cons,
+      List.foldl_cons, ih]
+    omega
+
+/-- **The double-mill's harvest, from arithmetic alone**: the five-O
+word clears exactly two rows — no board computation, just the census
+`5 · clears = 2 · 5`. -/
+theorem five_O_word_clears_two :
+    wordClears (∅ : Board)
+      [⟨Piece.O, 0, 0⟩, ⟨Piece.O, 0, 2⟩, ⟨Piece.O, 0, 4⟩,
+       ⟨Piece.O, 0, 6⟩, ⟨Piece.O, 0, 8⟩] = 2 := by
+  have hfold : ([⟨Piece.O, 0, 0⟩, ⟨Piece.O, 0, 2⟩, ⟨Piece.O, 0, 4⟩,
+      ⟨Piece.O, 0, 6⟩, ⟨Piece.O, 0, 8⟩] : List Placement).foldl
+      (Placement.applyStep GameConfig.standard) (∅ : Board) = ∅ := by
+    simp only [List.foldl]
+    exact five_O_cycle_empty
+  have h := cycle_word_clear_census
+    (Board.empty_wf GameConfig.standard) (by decide) hfold
+  simp only [List.length_cons, List.length_nil] at h
+  omega
+
+/-- **The tetris-mill's harvest, from arithmetic alone**: the ten-I
+word clears exactly four rows — the census `5 · clears = 2 · 10`
+already knows the tetris. -/
+theorem ten_I_word_clears_four :
+    wordClears (∅ : Board)
+      [⟨Piece.I, 1, 0⟩, ⟨Piece.I, 1, 1⟩, ⟨Piece.I, 1, 2⟩,
+       ⟨Piece.I, 1, 3⟩, ⟨Piece.I, 1, 4⟩, ⟨Piece.I, 1, 5⟩,
+       ⟨Piece.I, 1, 6⟩, ⟨Piece.I, 1, 7⟩, ⟨Piece.I, 1, 8⟩,
+       ⟨Piece.I, 1, 9⟩] = 4 := by
+  have hfold : ([⟨Piece.I, 1, 0⟩, ⟨Piece.I, 1, 1⟩, ⟨Piece.I, 1, 2⟩,
+      ⟨Piece.I, 1, 3⟩, ⟨Piece.I, 1, 4⟩, ⟨Piece.I, 1, 5⟩,
+      ⟨Piece.I, 1, 6⟩, ⟨Piece.I, 1, 7⟩, ⟨Piece.I, 1, 8⟩,
+      ⟨Piece.I, 1, 9⟩] : List Placement).foldl
+      (Placement.applyStep GameConfig.standard) (∅ : Board) = ∅ := by
+    simp only [List.foldl]
+    exact ten_I_cycle_empty
+  have h := cycle_word_clear_census
+    (Board.empty_wf GameConfig.standard) (by decide) hfold
+  simp only [List.length_cons, List.length_nil] at h
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
