@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28em) — THE 35-QUANTUM FOR LEGAL CYCLES (bank 362/N)
+
+- **`wordStream`** / **`wordStream_periodic`** — the piece stream of a
+  word repeated forever, periodic with the word's length.
+- **`legal_cycle_word_thirty_five_dvd`** — a placement word folding a
+  well-formed board back to itself whose repetition deals full bags
+  has length divisible by THIRTY-FIVE: five from the mass ledger,
+  seven from the bag heartbeat, coprime so they multiply. The M2
+  object, if it exists, lives in lengths 35, 70, 105, …
+- **`legal_cycle_word_min_length`** — legal cycles have ≥ 35 moves:
+  the five-O and ten-I mills are PROVABLY illegal under the 7-bag.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28el) — the bag's heartbeat cannot be compressed (bank 361/N)
 
 - **`IsBagStream`** — a piece stream deals full bags: every

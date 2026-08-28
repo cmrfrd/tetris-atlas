@@ -10372,6 +10372,51 @@ theorem bag_stream_period_seven_dvd {s : ℕ → Piece} {n : ℕ}
   have hB := periodic_count_mul hn hper Piece.O 7
   omega
 
+/-- The piece stream obtained by repeating a placement word forever. -/
+def wordStream (w : List Placement) : ℕ → Piece :=
+  fun i => (w.getD (i % w.length) ⟨Piece.O, 0, 0⟩).piece
+
+/-- The repeated word's stream has the word's length as a period. -/
+theorem wordStream_periodic (w : List Placement) :
+    ∀ i, wordStream w (i + w.length) = wordStream w i := by
+  intro i
+  unfold wordStream
+  rw [Nat.add_mod_right]
+
+/-- **THE 35-QUANTUM FOR LEGAL CYCLES**: a placement word that folds a
+well-formed board back to itself AND whose infinite repetition deals
+full bags has length divisible by thirty-five. Five from the mass
+ledger (`10 C = 4 n`), seven from the bag heartbeat — the two clocks
+are coprime, so they multiply. The M2 object, if it exists, lives in
+lengths 35, 70, 105, … -/
+theorem legal_cycle_word_thirty_five_dvd {b : Board}
+    {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    35 ∣ w.length := by
+  have hpos : 0 < w.length := List.length_pos_iff.mpr hne
+  have h5 : 5 ∣ w.length := board_cycle_length_quantum hwf
+    ⟨w, rfl, hpos, hv, hfold⟩
+  have h7 : 7 ∣ w.length :=
+    bag_stream_period_seven_dvd hpos (wordStream_periodic w) hbag
+  omega
+
+/-- **Legal cycles are long**: any bag-legal repeatable cycle word has
+at least thirty-five moves. The five-O and ten-I mills (lengths 5 and
+10) are thus PROVABLY illegal under the seven-bag — no dealer will
+ever hand you their pieces. -/
+theorem legal_cycle_word_min_length {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    35 ≤ w.length := by
+  have h35 := legal_cycle_word_thirty_five_dvd hwf hne hv hbag hfold
+  have hpos : 0 < w.length := List.length_pos_iff.mpr hne
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
