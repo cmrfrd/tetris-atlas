@@ -13348,6 +13348,224 @@ theorem legal_cycle_has_odd_or_split_clear {b : Board} {w : List Placement}
   rw [legal_cycle_gravity_odd hwf hne hv hbag hfold hlen]
   decide
 
+/-! ### The row charge: the other half of the checkerboard
+
+Splitting the checkerboard colour `(c + r)` into its two coordinates
+gives two independent invariants. The column half was done with the
+weighted ledger; the row half is new, and it behaves better than the
+full checkerboard in one respect: a cleared row contributes `10·t ≡ 0`,
+so the row count drops out entirely and only the gravity work remains.
+
+Comparing the two laws expresses the gravity work a second way — in
+terms of the shapes' ROW moments — and so turns the parity debt into a
+constraint on which ROTATIONS the cycle plays. -/
+
+/-- The row charge of a board: its cells' row indices, mod two. -/
+def rowCharge (b : Board) : ZMod 2 := ∑ p ∈ b, ((p.2 : ℕ) : ZMod 2)
+
+/-- A shape's own row moment, mod two. -/
+def shapeRowCharge (pl : Placement) : ZMod 2 :=
+  ∑ cell ∈ pl.shapeUp, ((cell.2 : ℕ) : ZMod 2)
+
+/-- **A drop adds its shape's row charge, wherever it lands**: the four
+cells all shift by the drop offset, and four is even. -/
+theorem rowCharge_place (b : Board) (pl : Placement) :
+    rowCharge (pl.place b) = rowCharge b + shapeRowCharge pl := by
+  classical
+  have hdrop : ∑ p ∈ pl.dropped b, ((p.2 : ℕ) : ZMod 2)
+      = shapeRowCharge pl := by
+    rw [Placement.dropped_eq_image]
+    rw [Finset.sum_image (fun x _ y _ hxy => by
+      have h1 : pl.col + x.1 = pl.col + y.1 := congrArg Prod.fst hxy
+      have h2 : pl.dropOffset b + x.2 = pl.dropOffset b + y.2 :=
+        congrArg Prod.snd hxy
+      exact Prod.ext_iff.mpr ⟨by omega, by omega⟩)]
+    unfold shapeRowCharge
+    have hterm : ∀ cell ∈ pl.shapeUp,
+        (((pl.dropOffset b + cell.2 : ℕ)) : ZMod 2)
+        = ((pl.dropOffset b : ℕ) : ZMod 2) + ((cell.2 : ℕ) : ZMod 2) := by
+      intro cell _
+      push_cast
+      ring
+    rw [Finset.sum_congr rfl hterm, Finset.sum_add_distrib,
+      Finset.sum_const, pl.shapeUp_card]
+    have h4 : (4 : ℕ) • ((pl.dropOffset b : ℕ) : ZMod 2) = 0 := by
+      rw [nsmul_eq_mul]
+      have : ((4 : ℕ) : ZMod 2) = 0 := by decide
+      rw [this, zero_mul]
+    rw [h4, zero_add]
+  unfold rowCharge
+  rw [Placement.place_eq_union_dropped,
+    Finset.sum_union (pl.dropped_disjoint b).symm, hdrop]
+
+/-- A cleared row contributes nothing to the row charge: ten cells all
+in the same row, and ten is even. -/
+theorem rowCharge_cleared_cells {b : Board}
+    (hwf : Board.WF GameConfig.standard b) :
+    ∑ p ∈ b.filter (fun p => Board.isFull GameConfig.standard b p.2),
+      ((p.2 : ℕ) : ZMod 2) = 0 := by
+  classical
+  have hmaps : ∀ p ∈ b.filter
+      (fun p => Board.isFull GameConfig.standard b p.2),
+      p.2 ∈ Board.fullRows GameConfig.standard b := by
+    intro p hp
+    obtain ⟨hpb, hpf⟩ := Finset.mem_filter.mp hp
+    unfold Board.fullRows
+    rw [Finset.mem_filter]
+    exact ⟨Finset.mem_image.mpr ⟨p, hpb, rfl⟩, hpf⟩
+  have hfib := Finset.sum_fiberwise_of_maps_to hmaps
+    (fun p : Coord => ((p.2 : ℕ) : ZMod 2))
+  have hrow : ∀ t ∈ Board.fullRows GameConfig.standard b,
+      (∑ p ∈ (b.filter
+          (fun p => Board.isFull GameConfig.standard b p.2)).filter
+          (fun p => p.2 = t), ((p.2 : ℕ) : ZMod 2)) = 0 := by
+    intro t ht
+    rw [cleared_fiber_eq hwf ht]
+    rw [Finset.sum_image (fun x _ y _ hxy => by
+      simpa using congrArg Prod.fst hxy)]
+    simp only [Finset.sum_const, Finset.card_range, nsmul_eq_mul]
+    rw [show ((10 : ℕ) : ZMod 2) = 0 from by decide, zero_mul]
+  rw [← hfib, Finset.sum_congr rfl hrow, Finset.sum_const, smul_zero]
+
+/-- **THE ROW-CHARGE LAW ACROSS A CLEAR**: the removed rows cancel
+(ten cells apiece), so a clear changes the row charge by the gravity
+work alone. -/
+theorem rowCharge_clearLines {b : Board}
+    (hwf : Board.WF GameConfig.standard b) :
+    rowCharge (Board.clearLines GameConfig.standard b)
+      = rowCharge b + gravityWork b := by
+  classical
+  have hinj : ∀ x ∈ b.filter
+      (fun p => ¬ Board.isFull GameConfig.standard b p.2),
+      ∀ y ∈ b.filter
+      (fun p => ¬ Board.isFull GameConfig.standard b p.2),
+      ((x.1, x.2 - Board.clearedBelow GameConfig.standard b x.2) : Coord)
+        = ((y.1, y.2 - Board.clearedBelow GameConfig.standard b y.2)
+            : Coord) → x = y := by
+    intro x hx y hy hxy
+    rw [Finset.mem_filter] at hx hy
+    have hpair := Prod.ext_iff.mp hxy
+    have h1 : x.1 = y.1 := hpair.1
+    have h2 : x.2 - Board.clearedBelow GameConfig.standard b x.2
+        = y.2 - Board.clearedBelow GameConfig.standard b y.2 := hpair.2
+    have h3 : x.2 = y.2 := by
+      rcases lt_trichotomy x.2 y.2 with hlt | heq | hgt
+      · have := clearedBelow_shift_strictMono
+          (cfg := GameConfig.standard) (b := b) hlt hx.2
+        omega
+      · exact heq
+      · have := clearedBelow_shift_strictMono
+          (cfg := GameConfig.standard) (b := b) hgt hy.2
+        omega
+    exact Prod.ext_iff.mpr ⟨h1, h3⟩
+  have hcl : Board.clearLines GameConfig.standard b
+      = (b.filter
+          (fun p => ¬ Board.isFull GameConfig.standard b p.2)).image
+        (fun p => ((p.1, p.2 - Board.clearedBelow GameConfig.standard b p.2)
+          : Coord)) := rfl
+  have hstep :
+      (∑ p ∈ b.filter
+          (fun p => ¬ Board.isFull GameConfig.standard b p.2),
+        (((((p.1, p.2 - Board.clearedBelow GameConfig.standard b p.2)
+            : Coord).2) : ℕ) : ZMod 2))
+      = (∑ p ∈ b.filter
+            (fun p => ¬ Board.isFull GameConfig.standard b p.2),
+          ((p.2 : ℕ) : ZMod 2))
+        + ∑ p ∈ b.filter
+            (fun p => ¬ Board.isFull GameConfig.standard b p.2),
+          ((Board.clearedBelow GameConfig.standard b p.2 : ℕ)
+            : ZMod 2) := by
+    rw [← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl (fun p _ => ?_)
+    have hle := clearedBelow_le GameConfig.standard b p.2
+    show (((p.2 - Board.clearedBelow GameConfig.standard b p.2 : ℕ))
+        : ZMod 2) = _
+    rw [cast_sub_two hle]
+  have hsplit := Finset.sum_filter_add_sum_filter_not b
+    (fun p => Board.isFull GameConfig.standard b p.2)
+    (fun p => ((p.2 : ℕ) : ZMod 2))
+  have hcl2 := rowCharge_cleared_cells hwf
+  unfold rowCharge gravityWork
+  rw [hcl, Finset.sum_image hinj, hstep, ← hsplit, hcl2, zero_add]
+
+/-- The row-charge law for a whole move. -/
+theorem rowCharge_applyStep {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard) :
+    rowCharge (Placement.applyStep GameConfig.standard b pl)
+      = rowCharge b + shapeRowCharge pl + gravityWork (pl.place b) := by
+  rw [Placement.applyStep_eq_clearLines_place,
+    rowCharge_clearLines (Placement.place_wf hwf hv), rowCharge_place]
+
+/-- The word's total shape row charge. -/
+def wordRowCharge : List Placement → ZMod 2
+  | [] => 0
+  | pl :: rest => shapeRowCharge pl + wordRowCharge rest
+
+@[simp] theorem wordRowCharge_nil : wordRowCharge [] = 0 := rfl
+
+theorem wordRowCharge_cons (pl : Placement) (rest : List Placement) :
+    wordRowCharge (pl :: rest)
+      = shapeRowCharge pl + wordRowCharge rest := rfl
+
+/-- The row-charge ledger along a word. -/
+theorem rowCharge_word {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard) :
+    rowCharge (pls.foldl (Placement.applyStep GameConfig.standard) b)
+      = rowCharge b + wordRowCharge pls + wordGravity b pls := by
+  induction pls generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    have hvpl := hv pl (by simp)
+    have hstep := rowCharge_applyStep hwf hvpl
+    have hrec := ih (Placement.applyStep_wf hwf hvpl)
+      (fun q hq => hv q (by simp [hq]))
+    rw [List.foldl_cons, hrec, hstep, wordRowCharge_cons, wordGravity_cons]
+    ring
+
+/-- **THE GRAVITY WORK, READ A SECOND WAY**: around a cycle it equals
+the total row moment of the shapes played. -/
+theorem cycle_rowCharge_law {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard)
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    wordGravity b pls = wordRowCharge pls := by
+  have h := rowCharge_word hwf hv
+  rw [hfold] at h
+  have hchar : ∀ x : ZMod 2, x + x = 0 := by decide
+  have key := hchar (rowCharge b)
+  have key2 := hchar (wordRowCharge pls)
+  first
+    | linear_combination -h - key2
+    | linear_combination h - key2
+    | linear_combination -h - key - key2
+
+/-- **THE ROTATION CENSUS IS CONSTRAINED**: reading the gravity work
+both ways forces the shapes' total row moment to match the T-count plus
+the cleared-row count. Which ROTATIONS the cycle plays is no longer
+free — it is pinned, mod two, by the piece census. -/
+theorem cycle_rotation_census {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard)
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    wordRowCharge pls
+      = wordTCharge pls + ((wordClears b pls : ℕ) : ZMod 2) := by
+  rw [← cycle_rowCharge_law hwf hv hfold]
+  exact cycle_charge_law hwf hv hfold
+
+/-- On a legal 35-cycle the row moment is ODD: an odd number of its
+placements present a shape whose cells' rows sum to an odd number. -/
+theorem legal_cycle_rowCharge_odd {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    wordRowCharge w = 1 := by
+  rw [← cycle_rowCharge_law hwf hv hfold]
+  exact legal_cycle_gravity_odd hwf hne hv hbag hfold hlen
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

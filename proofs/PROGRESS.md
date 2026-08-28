@@ -41629,6 +41629,32 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fq) — the row charge, and a rotation census (bank 392/N)
+
+Splitting the checkerboard colour (c + r) into its coordinates gives
+two invariants. The column half was the weighted ledger; the row half
+is new and behaves BETTER than the full checkerboard in one respect: a
+cleared row contributes 10·t ≡ 0, so the row count drops out entirely
+and only the gravity work remains.
+
+- **`rowCharge`**, **`shapeRowCharge`**, **`rowCharge_place`** — a drop
+  adds its shape's row moment wherever it lands (all four cells shift
+  by the drop offset, and four is even).
+- **`rowCharge_cleared_cells`** / **`rowCharge_clearLines`** — the
+  removed rows cancel ten cells apiece, so a clear changes the row
+  charge by the gravity work ALONE.
+- **`rowCharge_word`** / **`cycle_rowCharge_law`** — around a cycle the
+  gravity work equals the total row moment of the shapes played: a
+  SECOND reading of the same quantity.
+- **`cycle_rotation_census`** — comparing the two readings pins the
+  shapes' row moment to the T-count plus the cleared rows. Which
+  ROTATIONS the cycle plays is no longer free.
+- **`legal_cycle_rowCharge_odd`** — on a legal 35-cycle it is odd.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fp) — a legal cycle cannot live on doubles and tetrises (bank 391/N)
 
 If the cleared rows form one unbroken block, every survivor is either
