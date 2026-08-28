@@ -15407,6 +15407,87 @@ theorem legal_cycle_small_clears_ge_two {b : Board} {w : List Placement}
   have h3 := legal_cycle_tetris_le_three hwf hne hv hbag hfold hlen
   omega
 
+/-! ### A clear happens where the piece landed
+
+On a clear-free board every completed row owes its last cell to the
+piece just dropped, and that piece occupies only four consecutive rows
+starting at its landing height. So the rows a move clears all lie in a
+four-row window at the landing height — never below it, never far above
+it. High clears therefore cost height, and the potential balance has to
+pay for them. -/
+
+/-- **Cleared rows sit in the piece's own four-row window**: on a
+clear-free board a move can only complete rows it has just touched. -/
+theorem fullRows_subset_span {b : Board} {pl : Placement}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r) :
+    Board.fullRows GameConfig.standard (pl.place b)
+      ⊆ Finset.Icc (pl.dropOffset b) (pl.dropOffset b + 3) := by
+  classical
+  intro r hr
+  simp only [Board.fullRows, Finset.mem_filter] at hr
+  obtain ⟨c, hc, hcb⟩ : ∃ c ∈ Finset.range GameConfig.standard.cols,
+      ((c, r) : Coord) ∉ b := by
+    by_contra hcon
+    push Not at hcon
+    exact hnf r hcon
+  have hcplace : ((c, r) : Coord) ∈ pl.place b := hr.2 c hc
+  have hcdrop : ((c, r) : Coord) ∈ pl.dropped b := by
+    rw [Placement.place_eq_union_dropped, Finset.mem_union] at hcplace
+    rcases hcplace with h | h
+    · exact absurd h hcb
+    · exact h
+  rw [Placement.dropped_eq_image, Finset.mem_image] at hcdrop
+  obtain ⟨cell, hcell, hEq⟩ := hcdrop
+  have hrow : pl.dropOffset b + cell.2 = r := congrArg Prod.snd hEq
+  have hlt := Piece.shapeUp_row_lt_four pl.piece pl.rot cell hcell
+  rw [Finset.mem_Icc]
+  omega
+
+/-- **No clear happens below the landing height**: the rows a move
+completes are all at or above the height its piece came to rest at. -/
+theorem cleared_row_ge_dropOffset {b : Board} {pl : Placement}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r) {r : ℕ}
+    (hr : r ∈ Board.fullRows GameConfig.standard (pl.place b)) :
+    pl.dropOffset b ≤ r :=
+  (Finset.mem_Icc.mp (fullRows_subset_span hnf hr)).1
+
+/-- **THE HEIGHT OF A HARVEST**: the total height of the rows a move
+clears is at least its landing height times the number of rows taken.
+Clearing high is expensive, and the potential balance must pay for
+it. -/
+theorem clearedRowSum_ge_mul {b : Board} {pl : Placement}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r) :
+    (Board.fullRows GameConfig.standard (pl.place b)).card
+        * pl.dropOffset b
+      ≤ clearedRowSum (pl.place b) := by
+  classical
+  unfold clearedRowSum
+  calc (Board.fullRows GameConfig.standard (pl.place b)).card
+        * pl.dropOffset b
+      = ∑ _t ∈ Board.fullRows GameConfig.standard (pl.place b),
+          pl.dropOffset b := by
+        rw [Finset.sum_const, smul_eq_mul]
+    _ ≤ ∑ t ∈ Board.fullRows GameConfig.standard (pl.place b), t :=
+        Finset.sum_le_sum (fun t ht => cleared_row_ge_dropOffset hnf ht)
+
+/-- **…and at most three rows above it**: a harvest's total height is
+also bounded by the landing height plus three, per row taken. -/
+theorem clearedRowSum_le_mul {b : Board} {pl : Placement}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r) :
+    clearedRowSum (pl.place b)
+      ≤ (Board.fullRows GameConfig.standard (pl.place b)).card
+          * (pl.dropOffset b + 3) := by
+  classical
+  unfold clearedRowSum
+  calc ∑ t ∈ Board.fullRows GameConfig.standard (pl.place b), t
+      ≤ ∑ _t ∈ Board.fullRows GameConfig.standard (pl.place b),
+          (pl.dropOffset b + 3) :=
+        Finset.sum_le_sum (fun t ht =>
+          (Finset.mem_Icc.mp (fullRows_subset_span hnf ht)).2)
+    _ = (Board.fullRows GameConfig.standard (pl.place b)).card
+          * (pl.dropOffset b + 3) := by
+        rw [Finset.sum_const, smul_eq_mul]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

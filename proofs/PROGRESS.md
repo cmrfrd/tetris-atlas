@@ -41629,6 +41629,25 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28gh) — a clear happens where the piece landed (bank 409/N)
+
+On a clear-free board every completed row owes its last cell to the
+piece just dropped, and that piece occupies only four consecutive rows
+from its landing height.
+
+- **`fullRows_subset_span`** — so the rows a move clears all lie in the
+  piece's own four-row window.
+- **`cleared_row_ge_dropOffset`** — in particular NO CLEAR HAPPENS
+  BELOW THE LANDING HEIGHT.
+- **`clearedRowSum_ge_mul`** / **`clearedRowSum_le_mul`** — a harvest's
+  total height is therefore pinned between k·D and k·(D+3). Clearing
+  high is expensive, and the potential balance has to pay for it.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean. Compiled first
+try.
+
+---
+
 ### Tick (manual, 2026-08-28gg) — only three tetrises fit (bank 408/N)
 
 - **`four_mul_tetrises_le_clears`** — each tetris move takes four rows
