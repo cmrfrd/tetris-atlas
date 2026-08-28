@@ -13251,6 +13251,103 @@ theorem no_legal_perfect_clear_cycle {b : Board} {w : List Placement}
     legal_cycle_has_partial_clear hwf hne hv hbag hfold hlen
   exact hpnf (hperfect c pl hne' p hp)
 
+/-! ### Even contiguous clears are invisible to the charge
+
+If the cleared rows form one unbroken block, every surviving cell is
+either entirely below it (nothing falls) or entirely above it (falls by
+the block's height). So the gravity work is the block height times the
+mass above — and when the block height is EVEN it vanishes.
+
+Doubles and tetrises are exactly the even blocks. A legal 35-cycle owes
+odd gravity work, so it cannot be built out of them alone. -/
+
+/-- **A contiguous clear of even height does no gravity work**: every
+survivor falls by zero or by the whole block, and the block is even. -/
+theorem gravityWork_of_contiguous_even {B : Board} {t k : ℕ}
+    (hk : Even k)
+    (hf : Board.fullRows GameConfig.standard B = Finset.Ico t (t + k)) :
+    gravityWork B = 0 := by
+  classical
+  have hchar : ∀ x : ZMod 2, x + x = 0 := by decide
+  obtain ⟨m, hm⟩ := hk
+  unfold gravityWork
+  apply Finset.sum_eq_zero
+  intro p hp
+  obtain ⟨hpB, hpnf⟩ := Finset.mem_filter.mp hp
+  have hout : p.2 ∉ Board.fullRows GameConfig.standard B := by
+    intro hmem
+    exact hpnf (Board.isFull_of_mem_fullRows hmem)
+  rw [hf, Finset.mem_Ico] at hout
+  push Not at hout
+  have hcb : Board.clearedBelow GameConfig.standard B p.2 = 0
+      ∨ Board.clearedBelow GameConfig.standard B p.2 = k := by
+    unfold Board.clearedBelow
+    rw [hf]
+    by_cases hlt : p.2 < t
+    · left
+      rw [Finset.card_eq_zero, Finset.eq_empty_iff_forall_notMem]
+      intro x hx
+      obtain ⟨hx1, hx2⟩ := Finset.mem_filter.mp hx
+      rw [Finset.mem_Ico] at hx1
+      omega
+    · right
+      have hge : t + k ≤ p.2 := hout (by omega)
+      rw [Finset.filter_true_of_mem (fun x hx => by
+        rw [Finset.mem_Ico] at hx
+        omega)]
+      rw [Nat.card_Ico]
+      omega
+  rcases hcb with h0 | hkk
+  · rw [h0]
+    simp
+  · rw [hkk, hm]
+    push_cast
+    exact hchar (m : ZMod 2)
+
+/-- A tetris does no gravity work: four rows is an even block. -/
+theorem gravityWork_tetris {B : Board} {h : ℕ}
+    (hf : Board.fullRows GameConfig.standard B = Finset.Ico h (h + 4)) :
+    gravityWork B = 0 :=
+  gravityWork_of_contiguous_even ⟨2, by omega⟩ hf
+
+/-- A double on adjacent rows does no gravity work either. -/
+theorem gravityWork_double {B : Board} {h : ℕ}
+    (hf : Board.fullRows GameConfig.standard B = Finset.Ico h (h + 2)) :
+    gravityWork B = 0 :=
+  gravityWork_of_contiguous_even ⟨1, by omega⟩ hf
+
+/-- **A LEGAL CYCLE CANNOT LIVE ON DOUBLES AND TETRISES**: some move of
+it clears a block that is not an even contiguous run — a single, a
+triple, or a split clear straddling an unfilled row. -/
+theorem exists_odd_or_split_clear {b : Board} {pls : List Placement}
+    (h : wordGravity b pls ≠ 0) :
+    ∃ (c : Board) (pl : Placement), ∀ t k : ℕ, Even k →
+      Board.fullRows GameConfig.standard (pl.place c)
+        ≠ Finset.Ico t (t + k) := by
+  induction pls generalizing b with
+  | nil => exact absurd rfl h
+  | cons pl rest ih =>
+    rw [wordGravity_cons] at h
+    by_cases hhead : gravityWork (pl.place b) = 0
+    · rw [hhead, zero_add] at h
+      exact ih h
+    · refine ⟨b, pl, fun t k hk hf => hhead ?_⟩
+      exact gravityWork_of_contiguous_even hk hf
+
+/-- The legal 35-cycle instance. -/
+theorem legal_cycle_has_odd_or_split_clear {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    ∃ (c : Board) (pl : Placement), ∀ t k : ℕ, Even k →
+      Board.fullRows GameConfig.standard (pl.place c)
+        ≠ Finset.Ico t (t + k) := by
+  apply exists_odd_or_split_clear (b := b) (pls := w)
+  rw [legal_cycle_gravity_odd hwf hne hv hbag hfold hlen]
+  decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

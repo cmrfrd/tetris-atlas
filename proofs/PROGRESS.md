@@ -41629,6 +41629,30 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fp) — a legal cycle cannot live on doubles and tetrises (bank 391/N)
+
+If the cleared rows form one unbroken block, every survivor is either
+entirely below it (nothing falls) or entirely above it (falls by the
+block's height) — so the gravity work is the block height times the
+mass above, and an EVEN block contributes nothing.
+
+- **`gravityWork_of_contiguous_even`** — a contiguous clear of even
+  height does no gravity work.
+- **`gravityWork_tetris`** / **`gravityWork_double`** — tetrises and
+  adjacent doubles are exactly those even blocks, so both are
+  invisible to the charge.
+- **`exists_odd_or_split_clear`** / **`legal_cycle_has_odd_or_split_clear`**
+  — but a legal 35-cycle owes ODD gravity work, so it cannot be built
+  from them alone: some move must clear a single, a triple, or a SPLIT
+  block straddling an unfilled row.
+
+Note how sharp this is: the two "clean" clears every Tetris player
+relies on are precisely the ones that cannot pay the parity debt.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fo) — which clears can do gravity work (bank 390/N)
 
 Gravity work is done only by a clear that leaves something behind AND
