@@ -9966,6 +9966,113 @@ theorem empty_board_cycle_lengths (n : ℕ) :
   · intro c _
     exact Board.colHeight_empty c
 
+/-- The gravity shift of a row is at most the row itself. -/
+theorem clearedBelow_le (cfg : GameConfig) (b : Board) (r : ℕ) :
+    Board.clearedBelow cfg b r ≤ r := by
+  unfold Board.clearedBelow
+  calc ((Board.fullRows cfg b).filter (· < r)).card
+      ≤ (Finset.range r).card := Finset.card_le_card (by
+        intro x hx
+        rw [Finset.mem_filter] at hx
+        exact Finset.mem_range.mpr hx.2)
+    _ = r := Finset.card_range r
+
+/-- **Shifted rows keep their order**: if `r1 < r2` and `r1` survives
+the clear, the post-gravity positions stay strictly ordered — the count
+of full rows strictly between them is short of the gap by at least the
+surviving `r1` itself. -/
+theorem clearedBelow_shift_strictMono {cfg : GameConfig} {b : Board}
+    {r1 r2 : ℕ} (h12 : r1 < r2)
+    (hnf : ¬ Board.isFull cfg b r1) :
+    r1 - Board.clearedBelow cfg b r1
+      < r2 - Board.clearedBelow cfg b r2 := by
+  have hle1 := clearedBelow_le cfg b r1
+  have hsub : (Board.fullRows cfg b).filter (· < r2)
+      ⊆ ((Board.fullRows cfg b).filter (· < r1))
+        ∪ (Finset.Ico (r1 + 1) r2) := by
+    intro x hx
+    rw [Finset.mem_filter] at hx
+    obtain ⟨hxf, hxlt⟩ := hx
+    rw [Finset.mem_union, Finset.mem_filter, Finset.mem_Ico]
+    by_cases hlt : x < r1
+    · exact Or.inl ⟨hxf, hlt⟩
+    · right
+      have hxne : x ≠ r1 := by
+        intro he
+        subst he
+        exact hnf ((Finset.mem_filter.mp hxf).2)
+      omega
+  have hcard := Finset.card_le_card hsub
+  have hcard2 := Finset.card_union_le
+    ((Board.fullRows cfg b).filter (· < r1)) (Finset.Ico (r1 + 1) r2)
+  rw [Nat.card_Ico] at hcard2
+  unfold Board.clearedBelow at hle1 ⊢
+  omega
+
+/-- **Clearing leaves no full rows**: whatever the board, every row of
+`clearLines` is missing a cell. Distinct surviving source rows land on
+distinct target rows (`clearedBelow_shift_strictMono`), so a full
+target row would force a single full source row — which would have been
+cleared. -/
+theorem clearLines_no_fullRows {b : Board} :
+    ∀ r, ¬ Board.isFull GameConfig.standard
+      (Board.clearLines GameConfig.standard b) r := by
+  intro r hfull
+  have hsrc : ∀ c, c < 10 → ∃ ρ, (((c, ρ) : Coord) ∈ b
+      ∧ ¬ Board.isFull GameConfig.standard b ρ)
+      ∧ ρ - Board.clearedBelow GameConfig.standard b ρ = r := by
+    intro c hc
+    have hmem := hfull c
+      (by rw [GameConfig.standard_cols]; exact Finset.mem_range.mpr hc)
+    rw [Board.mem_clearLines_iff] at hmem
+    obtain ⟨q, hq, hqnf, hqp⟩ := hmem
+    have h1 : q.1 = c := congrArg Prod.fst hqp
+    have h2 : q.2 - Board.clearedBelow GameConfig.standard b q.2 = r :=
+      congrArg Prod.snd hqp
+    refine ⟨q.2, ⟨?_, hqnf⟩, h2⟩
+    rw [← h1]
+    exact hq
+  obtain ⟨ρ0, ⟨hmem0, hnf0⟩, hsh0⟩ := hsrc 0 (by omega)
+  apply hnf0
+  intro c hc
+  rw [GameConfig.standard_cols] at hc
+  obtain ⟨ρc, ⟨hmemc, hnfc⟩, hshc⟩ := hsrc c (Finset.mem_range.mp hc)
+  have heq : ρc = ρ0 := by
+    rcases lt_trichotomy ρc ρ0 with hlt | heq | hgt
+    · have := clearedBelow_shift_strictMono
+        (cfg := GameConfig.standard) (b := b) hlt hnfc
+      omega
+    · exact heq
+    · have := clearedBelow_shift_strictMono
+        (cfg := GameConfig.standard) (b := b) hgt hnf0
+      omega
+  rw [← heq]
+  exact hmemc
+
+/-- Every post-move board is clear-free: `applyStep` ends in
+`clearLines`. -/
+theorem applyStep_clear_free (b : Board) (pl : Placement) :
+    ∀ r, ¬ Board.isFull GameConfig.standard
+      (Placement.applyStep GameConfig.standard b pl) r := by
+  unfold Placement.applyStep
+  exact clearLines_no_fullRows
+
+/-- **Cycling boards are clear-free**: a board that sits on any closed
+cycle carries no full row — it is the image of a move, and moves always
+sweep. The mills' clear-freeness hypothesis is NECESSARY, not just
+convenient. -/
+theorem board_on_cycle_clear_free {b : Board} {n : ℕ}
+    (hcyc : BoardOnCycle b n) :
+    ∀ r, ¬ Board.isFull GameConfig.standard b r := by
+  obtain ⟨pls, hlen, hpos, hv, hfold⟩ := hcyc
+  rcases pls.eq_nil_or_concat with rfl | ⟨ys, y, rfl⟩
+  · rw [List.length_nil] at hlen
+    omega
+  · simp only [List.concat_eq_append, List.foldl_append,
+      List.foldl] at hfold
+    rw [← hfold]
+    exact applyStep_clear_free _ _
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

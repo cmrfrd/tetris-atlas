@@ -41629,6 +41629,24 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ei) — cycling boards are clear-free (bank 358/N)
+
+- **`clearedBelow_le`** / **`clearedBelow_shift_strictMono`** — gravity
+  keeps surviving rows strictly ordered: for r1 < r2 with r1 surviving,
+  the full rows strictly between them are short of the gap.
+- **`clearLines_no_fullRows`** — clearing leaves NO full rows, for any
+  board: a full target row would need all ten columns sourced from one
+  common surviving row (by shift injectivity), which would then be full
+  and cleared. No hypotheses.
+- **`applyStep_clear_free`** — every post-move board is clear-free.
+- **`board_on_cycle_clear_free`** — a board on any closed cycle is the
+  image of a move, hence clear-free: the mills' clear-freeness
+  hypothesis is NECESSARY.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28eh) — THE COMPLETE CYCLE-LENGTH SPECTRUM (bank 357/N)
 
 - `BoardOnCycle` upgraded: the witnessing word must be VALID (each
