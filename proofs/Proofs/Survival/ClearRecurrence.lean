@@ -10465,6 +10465,69 @@ theorem legal_cycle_word_piece_census {b : Board} {w : List Placement}
   have h35 := legal_cycle_word_thirty_five_dvd hwf hne hv hbag hfold
   exact bag_word_piece_census hbag (by omega) p
 
+/-- Total rows cleared while playing a word from a board. -/
+def wordClears (b : Board) : List Placement → ℕ
+  | [] => 0
+  | pl :: rest =>
+      (Board.fullRows GameConfig.standard (pl.place b)).card
+        + wordClears (Placement.applyStep GameConfig.standard b pl) rest
+
+@[simp] theorem wordClears_nil (b : Board) : wordClears b [] = 0 := rfl
+
+theorem wordClears_cons (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    wordClears b (pl :: rest)
+      = (Board.fullRows GameConfig.standard (pl.place b)).card
+        + wordClears (Placement.applyStep GameConfig.standard b pl)
+            rest := rfl
+
+/-- **The exact word ledger**: final count plus ten per cleared row
+equals initial count plus four per move — with the clear total NAMED,
+not existential. -/
+theorem foldl_count_ledger_exact {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard) :
+    (pls.foldl (Placement.applyStep GameConfig.standard) b).count
+      + 10 * wordClears b pls = b.count + 4 * pls.length := by
+  induction pls generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    have hstep := BagGrowth.count_applyStep_add
+      (cfg := GameConfig.standard) hwf (hv pl (by simp))
+    rw [GameConfig.standard_cols] at hstep
+    have hrec := ih (Placement.applyStep_wf hwf (hv pl (by simp)))
+      (fun q hq => hv q (by simp [hq]))
+    rw [List.foldl_cons, wordClears_cons]
+    simp only [List.length_cons]
+    omega
+
+/-- **THE CLEAR CENSUS OF A CYCLE**: any valid word that folds a
+well-formed board back to itself clears EXACTLY two fifths of a row
+per move: `5 · clears = 2 · length`. A legal 35-word therefore clears
+exactly 14 rows per period — the trace-level fourteen-per-period law,
+recovered at the level of pure placement words. -/
+theorem cycle_word_clear_census {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    5 * wordClears b w = 2 * w.length := by
+  have h := foldl_count_ledger_exact hwf hv
+  rw [hfold] at h
+  omega
+
+/-- A legal 35-cycle clears exactly fourteen rows. -/
+theorem legal_cycle_word_clears_fourteen {b : Board}
+    {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    wordClears b w = 14 := by
+  have h := cycle_word_clear_census hwf hv hfold
+  rw [hlen] at h
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

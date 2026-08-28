@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28eo) — the clear census of a cycle (bank 364/N)
+
+- **`wordClears`** — the total rows cleared while playing a word,
+  as a named recursive counter.
+- **`foldl_count_ledger_exact`** — the word ledger with the clear
+  total NAMED: final count + 10·wordClears = initial count + 4·length.
+- **`cycle_word_clear_census`** — any valid cycle word clears exactly
+  two fifths of a row per move: 5·clears = 2·length.
+- **`legal_cycle_word_clears_fourteen`** — a legal 35-cycle clears
+  EXACTLY fourteen rows: the trace-level fourteen-per-period law
+  recovered at the level of pure placement words.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28en) — the legal cycle's piece census (bank 363/N)
 
 - **`wordStream_eq_of_lt`** — inside the first period the repeated
