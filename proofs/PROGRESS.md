@@ -41629,6 +41629,30 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28gj) — burial conservation, column by column (bank 411/N)
+
+The global burial law says a cycle's digging is exactly repaid. It
+holds separately in each of the ten columns.
+
+- **`colHoles_le_colHoles_place`** — placement never lowers a single
+  column's hole count (from the hypothesis-free skyline bound).
+- **`colHoles_clearLines_le_std`** / **`colHoles_applyStep_le`** —
+  clearing never raises one.
+- **`colBuried`**, **`colUnburied`**, **`colHoles_word`** — the
+  per-column ledger along a word.
+- **`cycle_column_burial_conservation`** — around a cycle EVERY column
+  buries exactly as many holes as it frees. Ten equations where there
+  was one.
+- **`cycle_column_flush_iff`** — and a column that never frees a hole
+  never digs one either.
+
+Second name clash caught by the full build (`colHoles_clearLines_le`
+already existed); renamed with a `_std` suffix.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28gi) — what a clear must already own (bank 410/N)
 
 A piece brings four cells; a completed row needs ten.

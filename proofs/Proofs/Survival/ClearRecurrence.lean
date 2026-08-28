@@ -15614,6 +15614,130 @@ theorem tetris_prior_thirtysix {b : Board} {pl : Placement}
   rw [h4] at h
   omega
 
+/-! ### Burial conservation, column by column
+
+The global burial law says a cycle's digging is exactly repaid. It
+holds separately in each of the ten columns: a column's hole count
+returns like everything else, and holes still only enter by placement
+and leave by clearing. Ten equations where there was one. -/
+
+/-- Placement never lowers a single column's hole count. -/
+theorem colHoles_le_colHoles_place (b : Board) (pl : Placement) (j : ℕ) :
+    HoleDebt.colHoles b j ≤ HoleDebt.colHoles (pl.place b) j := by
+  have hh := colHeight_place_ge_add_colProfile b pl j
+  have hc : ((pl.place b).colRows j).card
+      = (b.colRows j).card + pl.colProfile j := by
+    rw [HoleDebt.card_colRows_eq_card_filter,
+      HoleDebt.card_colRows_eq_card_filter]
+    have h := Placement.colCount_place b pl j
+    unfold Board.colCount at h
+    exact h
+  unfold HoleDebt.colHoles
+  omega
+
+/-- Clearing never raises a single column's hole count. -/
+theorem colHoles_clearLines_le_std {b : Board} {j : ℕ} (hj : j < 10) :
+    HoleDebt.colHoles (Board.clearLines GameConfig.standard b) j
+      ≤ HoleDebt.colHoles b j := by
+  have hjc : j < GameConfig.standard.cols := by
+    rw [GameConfig.standard_cols]
+    exact hj
+  have hcount := Board.colCount_clearLines_add GameConfig.standard b hjc
+  have hcb : (b.colRows j).card
+      = ((Board.clearLines GameConfig.standard b).colRows j).card
+        + (Board.fullRows GameConfig.standard b).card := by
+    rw [HoleDebt.card_colRows_eq_card_filter b j,
+      HoleDebt.card_colRows_eq_card_filter
+        (Board.clearLines GameConfig.standard b) j]
+    simpa [Board.colCount] using hcount
+  have hheight := @HoleDebt.clearLines_colHeight_add_le
+    GameConfig.standard b j hjc
+  unfold HoleDebt.colHoles
+  omega
+
+/-- A move never lowers a column's hole count below its post-placement
+value. -/
+theorem colHoles_applyStep_le {b : Board} {pl : Placement} {j : ℕ}
+    (hj : j < 10) :
+    HoleDebt.colHoles
+        (Placement.applyStep GameConfig.standard b pl) j
+      ≤ HoleDebt.colHoles (pl.place b) j := by
+  rw [Placement.applyStep_eq_clearLines_place]
+  exact colHoles_clearLines_le_std hj
+
+/-- Holes buried in column `j` by a word's placements. -/
+def colBuried (j : ℕ) (b : Board) : List Placement → ℕ
+  | [] => 0
+  | pl :: rest =>
+      (HoleDebt.colHoles (pl.place b) j - HoleDebt.colHoles b j)
+      + colBuried j (Placement.applyStep GameConfig.standard b pl) rest
+
+/-- Holes freed in column `j` by a word's clears. -/
+def colUnburied (j : ℕ) (b : Board) : List Placement → ℕ
+  | [] => 0
+  | pl :: rest =>
+      (HoleDebt.colHoles (pl.place b) j
+        - HoleDebt.colHoles
+            (Placement.applyStep GameConfig.standard b pl) j)
+      + colUnburied j (Placement.applyStep GameConfig.standard b pl) rest
+
+@[simp] theorem colBuried_nil (j : ℕ) (b : Board) :
+    colBuried j b [] = 0 := rfl
+
+@[simp] theorem colUnburied_nil (j : ℕ) (b : Board) :
+    colUnburied j b [] = 0 := rfl
+
+theorem colBuried_cons (j : ℕ) (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    colBuried j b (pl :: rest)
+      = (HoleDebt.colHoles (pl.place b) j - HoleDebt.colHoles b j)
+        + colBuried j (Placement.applyStep GameConfig.standard b pl)
+            rest := rfl
+
+theorem colUnburied_cons (j : ℕ) (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    colUnburied j b (pl :: rest)
+      = (HoleDebt.colHoles (pl.place b) j
+          - HoleDebt.colHoles
+              (Placement.applyStep GameConfig.standard b pl) j)
+        + colUnburied j (Placement.applyStep GameConfig.standard b pl)
+            rest := rfl
+
+/-- The per-column burial ledger along a word. -/
+theorem colHoles_word {j : ℕ} (hj : j < 10) {b : Board}
+    {pls : List Placement} :
+    HoleDebt.colHoles b j + colBuried j b pls
+      = HoleDebt.colHoles
+          (pls.foldl (Placement.applyStep GameConfig.standard) b) j
+        + colUnburied j b pls := by
+  induction pls generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    have h1 := colHoles_le_colHoles_place b pl j
+    have h2 := colHoles_applyStep_le (b := b) (pl := pl) hj
+    have hrec := ih (b := Placement.applyStep GameConfig.standard b pl)
+    rw [List.foldl_cons, colBuried_cons, colUnburied_cons]
+    omega
+
+/-- **BURIAL CONSERVATION, COLUMN BY COLUMN**: around a cycle each of
+the ten columns buries exactly as many holes as it frees. Not merely
+the total — every single column balances on its own. -/
+theorem cycle_column_burial_conservation {j : ℕ} (hj : j < 10)
+    {b : Board} {pls : List Placement}
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    colBuried j b pls = colUnburied j b pls := by
+  have h := colHoles_word hj (b := b) (pls := pls)
+  rw [hfold] at h
+  omega
+
+/-- A column that never frees a hole never digs one either. -/
+theorem cycle_column_flush_iff {j : ℕ} (hj : j < 10) {b : Board}
+    {pls : List Placement}
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    colBuried j b pls = 0 ↔ colUnburied j b pls = 0 := by
+  have h := cycle_column_burial_conservation hj hfold
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
