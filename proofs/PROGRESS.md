@@ -41629,6 +41629,27 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28gb) — a clear-free board holds at most 180 (bank 403/N)
+
+The usual ceiling on board mass is the capacity 10 × 20 = 200. But a
+board with no complete row is missing a cell in every row it occupies,
+so it holds at most nine per row.
+
+- **`rowCount_le_nine`** — on a well-formed board an incomplete row
+  holds ≤ 9 cells (a 10-cell row would have to be the full row).
+- **`count_eq_sum_rowCount`** — the board's mass is its rows' masses.
+- **`count_le_180`** — hence a well-formed, in-field, clear-free board
+  holds at most 180 cells.
+- **`cycle_mass_le_180`** / **`cycle_base_mass_le_180`** — and every
+  board a cycle visits is the image of a move, hence clear-free, so the
+  ceiling for cyclic play is a tenth lower than the raw capacity at
+  EVERY moment of the loop.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean. Compiled first
+try.
+
+---
+
 ### Tick (manual, 2026-08-28ga) — the column charge, and the upright T's (bank 402/N)
 
 The checkerboard colour is the sum of the two coordinates, so the

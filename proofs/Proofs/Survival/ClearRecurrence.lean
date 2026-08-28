@@ -14898,6 +14898,117 @@ theorem legal_cycle_uprightT_even {b : Board} {w : List Placement}
   rw [hT] at hle
   omega
 
+/-! ### A clear-free board holds at most 180
+
+The usual ceiling on the board's mass is the capacity `10 × 20 = 200`.
+But a board with no complete row is missing a cell in every row it
+occupies, so it can hold at most nine per row — a hundred and eighty in
+all. Every board a cycle visits is clear-free, so that sharper ceiling
+holds at every moment of the loop, not merely at its base. -/
+
+/-- **A clear-free row is short of full**: on a well-formed board, a row
+that is not complete holds at most nine cells. -/
+theorem rowCount_le_nine {b : Board}
+    (hwf : Board.WF GameConfig.standard b) {r : ℕ}
+    (hnf : ¬ Board.isFull GameConfig.standard b r) :
+    Board.rowCount b r ≤ 9 := by
+  classical
+  by_contra hgt
+  push Not at hgt
+  have hsub : b.filter (fun p => p.2 = r)
+      ⊆ (Finset.range 10).image (fun c => ((c, r) : Coord)) := by
+    intro p hp
+    obtain ⟨hpb, hpr⟩ := Finset.mem_filter.mp hp
+    rw [Finset.mem_image]
+    refine ⟨p.1, ?_, ?_⟩
+    · have := hwf p hpb
+      rw [GameConfig.standard_cols] at this
+      exact Finset.mem_range.mpr this
+    · exact Prod.ext_iff.mpr ⟨rfl, hpr.symm⟩
+  have hcard : (b.filter (fun p => p.2 = r)).card
+      ≤ ((Finset.range 10).image (fun c => ((c, r) : Coord))).card :=
+    Finset.card_le_card hsub
+  have himg : ((Finset.range 10).image
+      (fun c => ((c, r) : Coord))).card = 10 := by
+    rw [Finset.card_image_of_injective _ (fun x y hxy => by
+      simpa using congrArg Prod.fst hxy), Finset.card_range]
+  have heq : b.filter (fun p => p.2 = r)
+      = (Finset.range 10).image (fun c => ((c, r) : Coord)) := by
+    apply Finset.eq_of_subset_of_card_le hsub
+    unfold Board.rowCount at hgt
+    omega
+  apply hnf
+  intro c hc
+  rw [GameConfig.standard_cols] at hc
+  have hmem : ((c, r) : Coord)
+      ∈ (Finset.range 10).image (fun c => ((c, r) : Coord)) := by
+    rw [Finset.mem_image]
+    exact ⟨c, hc, rfl⟩
+  rw [← heq, Finset.mem_filter] at hmem
+  exact hmem.1
+
+/-- The board's mass is its rows' masses, over the field. -/
+theorem count_eq_sum_rowCount {b : Board}
+    (hin : ∀ p ∈ b, p.2 < 20) :
+    b.card = ∑ r ∈ Finset.range 20, Board.rowCount b r := by
+  classical
+  unfold Board.rowCount
+  rw [Finset.card_eq_sum_card_fiberwise
+    (f := fun p : Coord => p.2) (t := Finset.range 20)
+    (fun p hp => Finset.mem_range.mpr (hin p hp))]
+
+/-- **THE CLEAR-FREE CEILING**: a well-formed, in-field board with no
+complete row holds at most a hundred and eighty cells — nine per row,
+not ten. -/
+theorem count_le_180 {b : Board}
+    (hwf : Board.WF GameConfig.standard b)
+    (hin : ∀ p ∈ b, p.2 < 20)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r) :
+    b.card ≤ 180 := by
+  classical
+  rw [count_eq_sum_rowCount hin]
+  calc ∑ r ∈ Finset.range 20, Board.rowCount b r
+      ≤ ∑ _r ∈ Finset.range 20, 9 :=
+        Finset.sum_le_sum (fun r _ => rowCount_le_nine hwf (hnf r))
+    _ = 180 := by simp
+
+/-- **A CYCLE NEVER CARRIES MORE THAN 180**: every board a loop visits
+is the image of a move, hence clear-free, hence nine-per-row at most.
+The mass ceiling for cyclic play is a tenth lower than the raw
+capacity. -/
+theorem cycle_mass_le_180 {b : Board} {w1 w2 : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w1 ++ w2, pl.Valid GameConfig.standard)
+    (hfold : (w1 ++ w2).foldl
+      (Placement.applyStep GameConfig.standard) b = b)
+    (hne : w1 ≠ [])
+    (hin : ∀ p ∈ w1.foldl (Placement.applyStep GameConfig.standard) b,
+      p.2 < 20) :
+    (w1.foldl (Placement.applyStep GameConfig.standard) b).card ≤ 180 := by
+  have hv1 : ∀ pl ∈ w1, pl.Valid GameConfig.standard :=
+    fun pl hpl => hv pl (List.mem_append_left _ hpl)
+  have hwf1 := foldl_applyStep_wf hwf hv1
+  have hnf : ∀ r, ¬ Board.isFull GameConfig.standard
+      (w1.foldl (Placement.applyStep GameConfig.standard) b) r := by
+    rcases w1.eq_nil_or_concat with hnil | ⟨ys, y, hys⟩
+    · exact absurd hnil hne
+    · rw [hys]
+      simp only [List.concat_eq_append, List.foldl_append, List.foldl]
+      exact applyStep_clear_free _ _
+  exact count_le_180 hwf1 hin hnf
+
+/-- The base board of a cycle obeys the same ceiling. -/
+theorem cycle_base_mass_le_180 {b : Board} {w : List Placement}
+    (hne : w ≠ [])
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hin : ∀ p ∈ b, p.2 < 20) :
+    b.card ≤ 180 := by
+  have hpos : 0 < w.length := List.length_pos_iff.mpr hne
+  exact count_le_180 hwf hin
+    (board_on_cycle_clear_free ⟨w, rfl, hpos, hv, hfold⟩)
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
