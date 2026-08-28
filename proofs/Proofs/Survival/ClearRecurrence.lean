@@ -15096,6 +15096,96 @@ theorem legal_cycle_board_ne_succ {b : Board} {w : List Placement}
       ≠ (wordPlay ⟨b, Bag.full⟩ w (i + 1)).board :=
   legal_cycle_consecutive_boards_distinct hwf hv (by omega) (by omega) hi
 
+/-! ### How a column's fourteen cells arrive
+
+Each column takes delivery of exactly fourteen cells per cycle. That
+fixed budget limits how COARSELY the deliveries can come: a move
+dropping four cells into one column (only a vertical I does that) can
+happen at most three times there, and a column that never receives one
+must be fed on at least five separate moves. -/
+
+/-- Moves delivering at least `k` cells to column `c` each pay `k`. -/
+theorem mul_bigMoves_le_colProfile (c k : ℕ) (pls : List Placement) :
+    k * (pls.filter (fun pl => decide (k ≤ pl.colProfile c))).length
+      ≤ wordColProfile c pls := by
+  induction pls with
+  | nil => simp [wordColProfile]
+  | cons pl rest ih =>
+    unfold wordColProfile at ih ⊢
+    rw [List.map_cons, List.sum_cons, List.filter_cons]
+    by_cases hk : k ≤ pl.colProfile c
+    · rw [if_pos (by simpa using hk), List.length_cons, Nat.mul_add,
+        Nat.mul_one]
+      omega
+    · rw [if_neg (by simpa using hk)]
+      omega
+
+/-- If no move delivers more than `m` cells to column `c`, the feeding
+moves must be numerous enough to cover the total. -/
+theorem colProfile_le_mul_feeds {c m : ℕ} {pls : List Placement}
+    (hm : ∀ pl ∈ pls, pl.colProfile c ≤ m) :
+    wordColProfile c pls
+      ≤ m * (pls.filter (fun pl => decide (0 < pl.colProfile c))).length := by
+  induction pls with
+  | nil => simp [wordColProfile]
+  | cons pl rest ih =>
+    have hrec := ih (fun q hq => hm q (by simp [hq]))
+    unfold wordColProfile at hrec ⊢
+    rw [List.map_cons, List.sum_cons, List.filter_cons]
+    by_cases hpos : 0 < pl.colProfile c
+    · rw [if_pos (by simpa using hpos), List.length_cons, Nat.mul_add,
+        Nat.mul_one]
+      have := hm pl (by simp)
+      omega
+    · rw [if_neg (by simpa using hpos)]
+      omega
+
+/-- **NO COLUMN TAKES FOUR VERTICAL I'S**: a move dropping four cells
+into a single column can happen at most three times there, since four
+such moves would deliver sixteen cells against a budget of fourteen. -/
+theorem legal_cycle_column_quad_le_three {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) {c : ℕ} (hc : c < 10) :
+    (w.filter (fun pl => decide (4 ≤ pl.colProfile c))).length ≤ 3 := by
+  have h14 := legal_cycle_column_fourteen hwf hne hv hbag hfold hlen hc
+  have hmul := mul_bigMoves_le_colProfile c 4 w
+  rw [h14] at hmul
+  omega
+
+/-- **…and at most four triples**: five moves of three cells apiece
+would already overshoot the budget. -/
+theorem legal_cycle_column_triple_le_four {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) {c : ℕ} (hc : c < 10) :
+    (w.filter (fun pl => decide (3 ≤ pl.colProfile c))).length ≤ 4 := by
+  have h14 := legal_cycle_column_fourteen hwf hne hv hbag hfold hlen hc
+  have hmul := mul_bigMoves_le_colProfile c 3 w
+  rw [h14] at hmul
+  omega
+
+/-- **A COLUMN WITHOUT A VERTICAL I IS FED FIVE TIMES**: if no move ever
+drops four cells into column `c`, then at most three arrive per move, so
+the fourteen require at least five separate deliveries. -/
+theorem legal_cycle_column_no_quad_feeds_five {b : Board}
+    {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) {c : ℕ} (hc : c < 10)
+    (hno : ∀ pl ∈ w, pl.colProfile c ≤ 3) :
+    5 ≤ (w.filter (fun pl => decide (0 < pl.colProfile c))).length := by
+  have h14 := legal_cycle_column_fourteen hwf hne hv hbag hfold hlen hc
+  have hle := colProfile_le_mul_feeds (c := c) (m := 3) hno
+  rw [h14] at hle
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,28 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28gd) — how a column's fourteen cells arrive (bank 405/N)
+
+Each column takes delivery of exactly fourteen cells per cycle, and
+that fixed budget limits how COARSELY they can come.
+
+- **`mul_bigMoves_le_colProfile`** — moves delivering ≥ k cells to a
+  column each pay k against the budget.
+- **`colProfile_le_mul_feeds`** — and if no move delivers more than m,
+  the feeding moves must be numerous enough to cover the total.
+- **`legal_cycle_column_quad_le_three`** — NO COLUMN TAKES FOUR
+  VERTICAL I'S: four four-cell drops would deliver sixteen against a
+  budget of fourteen.
+- **`legal_cycle_column_triple_le_four`** — at most four three-cell
+  drops per column.
+- **`legal_cycle_column_no_quad_feeds_five`** — a column that never
+  receives a vertical I is fed on at least FIVE separate moves.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean. Compiled first
+try.
+
+---
+
 ### Tick (manual, 2026-08-28gc) — repeated boards are five apart (bank 404/N)
 
 - **`foldl_clear_free_of_ne_nil`** — a non-empty play ends clear-free.
