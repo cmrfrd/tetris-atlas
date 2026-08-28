@@ -14681,6 +14681,223 @@ theorem legal_cycle_flatT_one_three_or_five {b : Board}
   rw [hT] at hle
   omega
 
+/-! ### The column charge, and the upright T's
+
+The checkerboard colour is the sum of the two coordinates, so the column
+charge is the checkerboard charge plus the row charge — no new induction
+needed, just character-two algebra on the two laws already proved. Its
+shape table is the exact mirror of the row table: I, O, S, Z always
+even, L and J always odd, and T odd precisely in its UPRIGHT rotations.
+
+Where the row charge counted flat T's, the column charge counts upright
+ones — and it forces their number to be even. -/
+
+/-- The column charge of a board: its cells' column indices, mod two. -/
+def colCharge (b : Board) : ZMod 2 := ∑ p ∈ b, ((p.1 : ℕ) : ZMod 2)
+
+/-- A shape's own column moment, mod two. -/
+def shapeColCharge (pl : Placement) : ZMod 2 :=
+  ∑ cell ∈ pl.shapeUp, ((cell.1 : ℕ) : ZMod 2)
+
+/-- The checkerboard charge splits into column and row parts. -/
+theorem charge_eq_col_add_row (s : Finset Coord) :
+    BagGrowth.charge s
+      = (∑ p ∈ s, ((p.1 : ℕ) : ZMod 2))
+        + ∑ p ∈ s, ((p.2 : ℕ) : ZMod 2) := by
+  unfold BagGrowth.charge
+  rw [← Finset.sum_add_distrib]
+  exact Finset.sum_congr rfl (fun p _ => by push_cast; ring)
+
+/-- Hence the column charge is the checkerboard charge plus the row
+charge. -/
+theorem colCharge_eq (b : Board) :
+    colCharge b = BagGrowth.charge b + rowCharge b := by
+  have h := charge_eq_col_add_row b
+  have hchar : ∀ x : ZMod 2, x + x = 0 := by decide
+  have key := hchar (∑ p ∈ b, ((p.2 : ℕ) : ZMod 2))
+  unfold colCharge rowCharge
+  first
+    | linear_combination -h - key
+    | linear_combination h - key
+    | linear_combination -h + key
+
+/-- The same decomposition for a shape. -/
+theorem shape_charge_eq (pl : Placement) :
+    BagGrowth.charge pl.shapeUp
+      = shapeColCharge pl + shapeRowCharge pl := by
+  unfold shapeColCharge shapeRowCharge
+  exact charge_eq_col_add_row pl.shapeUp
+
+/-- **A drop adds its shape's column moment.** -/
+theorem colCharge_place (b : Board) (pl : Placement) :
+    colCharge (pl.place b) = colCharge b + shapeColCharge pl := by
+  have hchar : ∀ x : ZMod 2, x + x = 0 := by decide
+  rw [colCharge_eq, colCharge_eq, BagGrowth.charge_place, rowCharge_place,
+    shape_charge_eq]
+  have key := hchar (shapeRowCharge pl)
+  first
+    | linear_combination key
+    | linear_combination -key
+
+/-- **THE COLUMN-CHARGE LAW ACROSS A CLEAR**: the gravity work cancels
+between the two halves, leaving only the row count. Columns do not care
+how far anything falls. -/
+theorem colCharge_clearLines {b : Board}
+    (hwf : Board.WF GameConfig.standard b) :
+    colCharge (Board.clearLines GameConfig.standard b)
+      = colCharge b
+        + ((Board.fullRows GameConfig.standard b).card : ZMod 2) := by
+  have hchar : ∀ x : ZMod 2, x + x = 0 := by decide
+  rw [colCharge_eq, colCharge_eq, charge_clearLines hwf,
+    rowCharge_clearLines hwf]
+  have key := hchar (gravityWork b)
+  first
+    | linear_combination key
+    | linear_combination -key
+
+/-- The column-charge law for a whole move. -/
+theorem colCharge_applyStep {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard) :
+    colCharge (Placement.applyStep GameConfig.standard b pl)
+      = colCharge b + shapeColCharge pl
+        + ((Board.fullRows GameConfig.standard (pl.place b)).card
+            : ZMod 2) := by
+  rw [Placement.applyStep_eq_clearLines_place,
+    colCharge_clearLines (Placement.place_wf hwf hv), colCharge_place]
+
+/-- The word's total shape column charge. -/
+def wordColCharge : List Placement → ZMod 2
+  | [] => 0
+  | pl :: rest => shapeColCharge pl + wordColCharge rest
+
+@[simp] theorem wordColCharge_nil : wordColCharge [] = 0 := rfl
+
+theorem wordColCharge_cons (pl : Placement) (rest : List Placement) :
+    wordColCharge (pl :: rest)
+      = shapeColCharge pl + wordColCharge rest := rfl
+
+/-- The column-charge ledger along a word. -/
+theorem colCharge_word {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard) :
+    colCharge (pls.foldl (Placement.applyStep GameConfig.standard) b)
+      = colCharge b + wordColCharge pls
+        + ((wordClears b pls : ℕ) : ZMod 2) := by
+  induction pls generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    have hvpl := hv pl (by simp)
+    have hstep := colCharge_applyStep hwf hvpl
+    have hrec := ih (Placement.applyStep_wf hwf hvpl)
+      (fun q hq => hv q (by simp [hq]))
+    rw [List.foldl_cons, hrec, hstep, wordColCharge_cons, wordClears_cons]
+    push_cast
+    ring
+
+/-- **The column cycle law**: around a loop the shapes' total column
+moment equals the cleared-row count. -/
+theorem cycle_colCharge_law {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard)
+    (hfold : pls.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    wordColCharge pls = ((wordClears b pls : ℕ) : ZMod 2) := by
+  have h := colCharge_word hwf hv
+  rw [hfold] at h
+  have hchar : ∀ x : ZMod 2, x + x = 0 := by decide
+  have key := hchar (colCharge b)
+  have key2 := hchar (((wordClears b pls : ℕ) : ZMod 2))
+  first
+    | linear_combination -h - key2
+    | linear_combination h - key2
+    | linear_combination -h - key - key2
+
+/-- The column charge splits into L, J and UPRIGHT-T indicators — the
+exact mirror of the row table. -/
+theorem shapeColCharge_split3 :
+    ∀ (p : Piece) (r : Rotation),
+      (∑ cell ∈ p.shapeUp r, ((cell.1 : ℕ) : ZMod 2))
+        = (if p = Piece.L then 1 else 0) + (if p = Piece.J then 1 else 0)
+          + (if p = Piece.T ∧ (r = 1 ∨ r = 3) then 1 else 0) := by
+  decide
+
+/-- How many of a word's placements stand a T upright. -/
+def wordUprightTCount : List Placement → ℕ
+  | [] => 0
+  | pl :: rest =>
+      (if pl.piece = Piece.T ∧ (pl.rot = 1 ∨ pl.rot = 3) then 1 else 0)
+        + wordUprightTCount rest
+
+@[simp] theorem wordUprightTCount_nil : wordUprightTCount [] = 0 := rfl
+
+theorem wordUprightTCount_cons (pl : Placement) (rest : List Placement) :
+    wordUprightTCount (pl :: rest)
+      = (if pl.piece = Piece.T ∧ (pl.rot = 1 ∨ pl.rot = 3) then 1 else 0)
+        + wordUprightTCount rest := rfl
+
+theorem wordColCharge_eq_counts (pls : List Placement) :
+    wordColCharge pls
+      = wordPieceCharge Piece.L pls + wordPieceCharge Piece.J pls
+        + ((wordUprightTCount pls : ℕ) : ZMod 2) := by
+  induction pls with
+  | nil => simp
+  | cons pl rest ih =>
+    have hs : shapeColCharge pl
+        = (if pl.piece = Piece.L then 1 else 0)
+          + (if pl.piece = Piece.J then 1 else 0)
+          + (if pl.piece = Piece.T ∧ (pl.rot = 1 ∨ pl.rot = 3)
+              then 1 else 0) := shapeColCharge_split3 pl.piece pl.rot
+    rw [wordColCharge_cons, ih, wordPieceCharge_cons, wordPieceCharge_cons,
+      wordUprightTCount_cons, Nat.cast_add, cast_ite_one_zero, hs]
+    ring
+
+/-- An upright T is a T. -/
+theorem wordUprightTCount_le_T (pls : List Placement) :
+    wordUprightTCount pls ≤ (pls.map (·.piece)).count Piece.T := by
+  induction pls with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordUprightTCount_cons, List.map_cons, List.count_cons]
+    by_cases hF : pl.piece = Piece.T ∧ (pl.rot = 1 ∨ pl.rot = 3)
+    · rw [if_pos hF, if_pos (show
+        (((fun x : Placement => x.piece) pl) == Piece.T) = true from by
+          simp [hF.1])]
+      omega
+    · rw [if_neg hF]
+      split <;> omega
+
+/-- **ZERO, TWO OR FOUR**: where the row charge made the flat T's odd,
+the column charge makes the UPRIGHT T's even. A legal 35-cycle stands an
+even number of its five T's on end. -/
+theorem legal_cycle_uprightT_even {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    wordUprightTCount w = 0 ∨ wordUprightTCount w = 2
+      ∨ wordUprightTCount w = 4 := by
+  have hlaw := cycle_colCharge_law hwf hv hfold
+  have hclears := legal_cycle_word_clears_fourteen hwf hne hv hbag hfold
+    hlen
+  have hL := legal_cycle_word_piece_census hwf hne hv hbag hfold Piece.L
+  have hJ := legal_cycle_word_piece_census hwf hne hv hbag hfold Piece.J
+  have hT := legal_cycle_word_piece_census hwf hne hv hbag hfold Piece.T
+  rw [census_eq_count, hlen] at hL hJ hT
+  norm_num at hL hJ hT
+  rw [wordColCharge_eq_counts, wordPieceCharge_eq_count,
+    wordPieceCharge_eq_count, hL, hJ, hclears] at hlaw
+  rw [show (((5 : ℕ)) : ZMod 2) + (((5 : ℕ)) : ZMod 2) = 0 from by decide,
+    zero_add] at hlaw
+  have hne1 : ¬ (wordUprightTCount w % 2 = 1) := by
+    intro hodd
+    rw [(natCast_two_eq_one_iff _).mpr hodd] at hlaw
+    revert hlaw
+    decide
+  have hle := wordUprightTCount_le_T w
+  rw [hT] at hle
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,33 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ga) — the column charge, and the upright T's (bank 402/N)
+
+The checkerboard colour is the sum of the two coordinates, so the
+column charge needs no new induction — it is the checkerboard charge
+plus the row charge, derived by character-two algebra from the two laws
+already proved.
+
+- **`charge_eq_col_add_row`**, **`colCharge_eq`**, **`shape_charge_eq`**
+  — the decomposition, for boards and for shapes.
+- **`colCharge_place`**, **`colCharge_clearLines`**,
+  **`colCharge_applyStep`** — a drop adds its shape's column moment,
+  and a clear adds only the row count: the GRAVITY WORK CANCELS between
+  the two halves. Columns do not care how far anything falls.
+- **`colCharge_word`** / **`cycle_colCharge_law`** — around a loop the
+  shapes' total column moment equals the cleared-row count.
+- **`shapeColCharge_split3`** — the shape table is the exact MIRROR of
+  the row table: I/O/S/Z always even, L/J always odd, and T odd
+  precisely in its UPRIGHT rotations.
+- **`wordUprightTCount`**, **`wordColCharge_eq_counts`**,
+  **`legal_cycle_uprightT_even`** — so where the row charge made the
+  flat T's odd, the column charge makes the upright T's EVEN: a legal
+  35-cycle stands zero, two or four of its five T's on end.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fz) — one, three or five (bank 401/N)
 
 Sharpening the flat-T result from "at least one" to an exact count.
