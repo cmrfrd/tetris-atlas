@@ -14000,6 +14000,113 @@ theorem legal_cycle_release_window {b : Board} {w : List Placement}
   rw [hlen] at h
   omega
 
+/-! ### The bottom row is frozen at EVERY moment of the cycle
+
+The dichotomy so far pinned only the opening move. Splitting the word
+at an arbitrary point instead of indexing into it upgrades this to the
+whole loop: the bottom row of every board the cycle visits is the same
+set of cells. -/
+
+/-- Bottom-row clearing splits along concatenation. -/
+theorem wordBottomClear_append (b : Board) (w1 w2 : List Placement) :
+    wordBottomClear b (w1 ++ w2)
+      ↔ wordBottomClear b w1
+        ∨ wordBottomClear
+            (w1.foldl (Placement.applyStep GameConfig.standard) b) w2 := by
+  induction w1 generalizing b with
+  | nil => simp [wordBottomClear]
+  | cons pl rest ih =>
+    rw [List.cons_append, wordBottomClear_cons, wordBottomClear_cons,
+      List.foldl_cons, ih]
+    tauto
+
+/-- A word that never fills the bottom row only ever adds to it. -/
+theorem bottomCells_word_subset {b : Board} {pls : List Placement}
+    (hnb : ¬ wordBottomClear b pls) :
+    bottomCells b
+      ⊆ bottomCells (pls.foldl
+          (Placement.applyStep GameConfig.standard) b) := by
+  induction pls generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordBottomClear_cons] at hnb
+    push Not at hnb
+    have hstep : bottomCells b
+        ⊆ bottomCells (Placement.applyStep GameConfig.standard b pl) := by
+      rw [Placement.applyStep_eq_clearLines_place,
+        bottomCells_clearLines hnb.1]
+      exact bottomCells_subset_place b pl
+    rw [List.foldl_cons]
+    exact subset_trans hstep (ih hnb.2)
+
+/-- **THE BOTTOM ROW IS FROZEN THROUGHOUT**: if a cycle never fills its
+bottom row, then every board it visits carries exactly the same bottom
+row — cell for cell, at every moment, not merely after the first move. -/
+theorem cycle_bottom_frozen_split {b : Board} {w1 w2 : List Placement}
+    (hnb : ¬ wordBottomClear b (w1 ++ w2))
+    (hfold : (w1 ++ w2).foldl
+      (Placement.applyStep GameConfig.standard) b = b) :
+    bottomCells (w1.foldl (Placement.applyStep GameConfig.standard) b)
+      = bottomCells b := by
+  have hsplit := wordBottomClear_append b w1 w2
+  have hn1 : ¬ wordBottomClear b w1 := fun h => hnb (hsplit.mpr (Or.inl h))
+  have hn2 : ¬ wordBottomClear
+      (w1.foldl (Placement.applyStep GameConfig.standard) b) w2 :=
+    fun h => hnb (hsplit.mpr (Or.inr h))
+  have hsub1 := bottomCells_word_subset hn1
+  have hsub2 := bottomCells_word_subset hn2
+  rw [← List.foldl_append, hfold] at hsub2
+  exact Finset.Subset.antisymm hsub2 hsub1
+
+/-- The floor gap of such a cycle is permanent: a column missing from
+the bottom row of the base board is missing from it at every moment. -/
+theorem cycle_bottom_gap_permanent {b : Board} {w1 w2 : List Placement}
+    (hnb : ¬ wordBottomClear b (w1 ++ w2))
+    (hfold : (w1 ++ w2).foldl
+      (Placement.applyStep GameConfig.standard) b = b)
+    {c : ℕ} (hc : ((c, 0) : Coord) ∉ b) :
+    ((c, 0) : Coord)
+      ∉ w1.foldl (Placement.applyStep GameConfig.standard) b := by
+  intro hmem
+  have hfrozen := cycle_bottom_frozen_split hnb hfold
+  have hin : ((c, 0) : Coord)
+      ∈ bottomCells (w1.foldl
+          (Placement.applyStep GameConfig.standard) b) := by
+    unfold bottomCells
+    exact Finset.mem_filter.mpr ⟨hmem, rfl⟩
+  rw [hfrozen] at hin
+  exact hc (Finset.mem_filter.mp hin).1
+
+/-- **A LEGAL CYCLE THAT SPARES ITS FLOOR CARRIES A PERMANENT GAP**: the
+base board of any cycle is clear-free, so its bottom row is missing a
+column; if the loop never completes that row, the gap survives every
+single move — while the column above it must still take delivery of
+fourteen cells. -/
+theorem legal_cycle_permanent_floor_gap {b : Board} {w : List Placement}
+    (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hnb : ¬ wordBottomClear b w) :
+    ∃ c < 10, ((c, 0) : Coord) ∉ b
+      ∧ ∀ w1 w2 : List Placement, w = w1 ++ w2 →
+          ((c, 0) : Coord)
+            ∉ w1.foldl (Placement.applyStep GameConfig.standard) b := by
+  have hpos : 0 < w.length := List.length_pos_iff.mpr hne
+  have hnf := board_on_cycle_clear_free
+    (b := b) (n := w.length) ⟨w, rfl, hpos, hv, hfold⟩
+  have h0 := hnf 0
+  have hex : ∃ c ∈ Finset.range GameConfig.standard.cols,
+      ((c, 0) : Coord) ∉ b := by
+    by_contra hcon
+    push Not at hcon
+    exact h0 hcon
+  obtain ⟨c, hcmem, hcnot⟩ := hex
+  rw [GameConfig.standard_cols, Finset.mem_range] at hcmem
+  refine ⟨c, hcmem, hcnot, ?_⟩
+  intro w1 w2 hw
+  subst hw
+  exact cycle_bottom_gap_permanent hnb hfold hcnot
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

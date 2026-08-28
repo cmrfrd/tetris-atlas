@@ -41629,6 +41629,32 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fu) — the bottom row is frozen at every moment (bank 396/N)
+
+The dichotomy previously pinned only the opening move. Splitting the
+word at an arbitrary point — instead of indexing into it — upgrades it
+to the whole loop, with no positional bookkeeping at all.
+
+- **`wordBottomClear_append`** — bottom-row clearing splits along
+  concatenation.
+- **`bottomCells_word_subset`** — a word that never fills the bottom
+  row only ever adds to it.
+- **`cycle_bottom_frozen_split`** — hence for EVERY splitting w1 ++ w2
+  of a cycle that spares its floor, the intermediate board's bottom row
+  equals the base board's, cell for cell.
+- **`cycle_bottom_gap_permanent`** / **`legal_cycle_permanent_floor_gap`**
+  — and since a cycle's base board is clear-free its bottom row is
+  missing a column, so that gap survives every single move, while the
+  column above it must still take delivery of fourteen cells.
+
+Technique note: "split the word" beats "index the word" in this
+codebase — no `List.get`, no fin arithmetic, and the induction stays
+one line.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ft) — reading the potential balance (bank 395/N)
 
 - **`gravityInt_le_rowMoment`** — a survivor never falls further than
