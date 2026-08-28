@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dj) — the Z-staircase (bank 333/N)
+
+- **`Z_narrow_tops`** + **`window_Z_staircase`** — the mirror: Z is
+  free on a step-up-1 pair and reproduces it at +2. S and Z each own a
+  self-sustaining stair; the window's shape dynamics now cover
+  O (flat→flat), S (down-stair fixed point), Z (up-stair fixed point).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28di) — the S-staircase (bank 332/N)
 
 - **`S_narrow_tops`** — tops at offsets (2, 1), kernel decide.
