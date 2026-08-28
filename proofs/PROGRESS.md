@@ -41629,6 +41629,25 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28eg) — cycles are everywhere on the level stratum (bank 356/N)
+
+- **`low_of_level_wf`** — on a well-formed board, level at h already
+  forces every cell below h: the mills' lowness hypothesis is FREE.
+- **`five_O_cycle_of_level`** / **`ten_I_cycle_of_level`** — both
+  mills restated with just clear-free + level.
+- **`BoardOnCycle`** — a board sits on a closed n-cycle when some
+  nonempty placement word of length n folds back to it.
+- **`level_board_on_five_cycle`** / **`level_board_on_ten_cycle`** —
+  EVERY well-formed clear-free level board sits on a five-cycle AND a
+  ten-cycle. Closed cycles are not exotic; they blanket the level
+  stratum.
+- **`empty_board_on_two_cycles`** — both mills through ∅ in one
+  statement.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ef) — THE TEN-I CYCLE (bank 355/N)
 
 - **`ten_I_cycle`** — from any clear-free board standing level at

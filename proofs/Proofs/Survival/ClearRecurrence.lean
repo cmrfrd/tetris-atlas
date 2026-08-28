@@ -9758,6 +9758,110 @@ theorem ten_I_cycle_empty :
   · intro c _
     exact Board.colHeight_empty c
 
+/-- On a well-formed board, being level at height `h` already forces
+every cell below `h`: the lowness hypothesis of the mill cycles is FREE
+for in-field boards. -/
+theorem low_of_level_wf {b : Board} {h : ℕ}
+    (hwf : Board.WF GameConfig.standard b)
+    (hH : ∀ c < 10, b.colHeight c = h) :
+    ∀ p ∈ b, p.2 < h := by
+  intro p hp
+  have hc : p.1 < 10 := by
+    have := hwf p hp
+    rwa [GameConfig.standard_cols] at this
+  have hmem : (p.1, p.2) ∈ b := hp
+  have := Board.lt_colHeight hmem
+  rw [hH p.1 hc] at this
+  exact this
+
+/-- The five-O cycle for well-formed boards: clear-free + level is
+enough — lowness comes free from `lt_colHeight`. -/
+theorem five_O_cycle_of_level {b : Board} {h : ℕ}
+    (hwf : Board.WF GameConfig.standard b)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hH : ∀ c < 10, b.colHeight c = h) :
+    Placement.applyStep GameConfig.standard
+      (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard b
+              ⟨Piece.O, 0, 0⟩) ⟨Piece.O, 0, 2⟩) ⟨Piece.O, 0, 4⟩)
+          ⟨Piece.O, 0, 6⟩) ⟨Piece.O, 0, 8⟩ = b :=
+  five_O_cycle hnf (low_of_level_wf hwf hH) hH
+
+/-- The ten-I cycle for well-formed boards: clear-free + level is
+enough. -/
+theorem ten_I_cycle_of_level {b : Board} {h : ℕ}
+    (hwf : Board.WF GameConfig.standard b)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hH : ∀ c < 10, b.colHeight c = h) :
+    Placement.applyStep GameConfig.standard
+      (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard
+                (Placement.applyStep GameConfig.standard
+                  (Placement.applyStep GameConfig.standard
+                    (Placement.applyStep GameConfig.standard
+                      (Placement.applyStep GameConfig.standard b
+                        ⟨Piece.I, 1, 0⟩) ⟨Piece.I, 1, 1⟩)
+                    ⟨Piece.I, 1, 2⟩) ⟨Piece.I, 1, 3⟩)
+                ⟨Piece.I, 1, 4⟩) ⟨Piece.I, 1, 5⟩)
+            ⟨Piece.I, 1, 6⟩) ⟨Piece.I, 1, 7⟩)
+        ⟨Piece.I, 1, 8⟩) ⟨Piece.I, 1, 9⟩ = b :=
+  ten_I_cycle hnf (low_of_level_wf hwf hH) hH
+
+/-- A board sits on a closed cycle of length `n` when some nonempty
+placement word of that length folds back to it. -/
+def BoardOnCycle (b : Board) (n : ℕ) : Prop :=
+  ∃ pls : List Placement, pls.length = n ∧ 0 < n ∧
+    pls.foldl (Placement.applyStep GameConfig.standard) b = b
+
+/-- **Every clear-free level board sits on a five-cycle**: the five-O
+word witnesses `BoardOnCycle b 5` for every well-formed, clear-free,
+level board. Closed cycles are not exotic — they are EVERYWHERE on the
+level stratum. -/
+theorem level_board_on_five_cycle {b : Board} {h : ℕ}
+    (hwf : Board.WF GameConfig.standard b)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hH : ∀ c < 10, b.colHeight c = h) :
+    BoardOnCycle b 5 := by
+  refine ⟨[⟨Piece.O, 0, 0⟩, ⟨Piece.O, 0, 2⟩, ⟨Piece.O, 0, 4⟩,
+    ⟨Piece.O, 0, 6⟩, ⟨Piece.O, 0, 8⟩], rfl, by omega, ?_⟩
+  simp only [List.foldl]
+  exact five_O_cycle_of_level hwf hnf hH
+
+/-- **…and on a ten-cycle**: the ten-I word witnesses
+`BoardOnCycle b 10` on the same stratum. -/
+theorem level_board_on_ten_cycle {b : Board} {h : ℕ}
+    (hwf : Board.WF GameConfig.standard b)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hH : ∀ c < 10, b.colHeight c = h) :
+    BoardOnCycle b 10 := by
+  refine ⟨[⟨Piece.I, 1, 0⟩, ⟨Piece.I, 1, 1⟩, ⟨Piece.I, 1, 2⟩,
+    ⟨Piece.I, 1, 3⟩, ⟨Piece.I, 1, 4⟩, ⟨Piece.I, 1, 5⟩,
+    ⟨Piece.I, 1, 6⟩, ⟨Piece.I, 1, 7⟩, ⟨Piece.I, 1, 8⟩,
+    ⟨Piece.I, 1, 9⟩], rfl, by omega, ?_⟩
+  simp only [List.foldl]
+  exact ten_I_cycle_of_level hwf hnf hH
+
+/-- **The empty board sits on both mills**: `BoardOnCycle ∅ 5` and
+`BoardOnCycle ∅ 10` — two distinct closed cycles through the initial
+board, in one statement. -/
+theorem empty_board_on_two_cycles :
+    BoardOnCycle (∅ : Board) 5 ∧ BoardOnCycle (∅ : Board) 10 := by
+  have hwf : Board.WF GameConfig.standard (∅ : Board) :=
+    Board.empty_wf GameConfig.standard
+  have hnf : ∀ r, ¬ Board.isFull GameConfig.standard (∅ : Board) r := by
+    intro r hfull
+    have h0 := hfull 0 (by rw [GameConfig.standard_cols]; simp)
+    exact absurd h0 (Finset.notMem_empty _)
+  have hH : ∀ c < 10, (∅ : Board).colHeight c = 0 := fun c _ =>
+    Board.colHeight_empty c
+  exact ⟨level_board_on_five_cycle hwf hnf hH,
+    level_board_on_ten_cycle hwf hnf hH⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
