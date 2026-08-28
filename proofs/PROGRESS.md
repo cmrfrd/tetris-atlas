@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ea) — the empty board rides a five-move loop (bank 350/N)
+
+- **`five_O_cycle_empty`** — five squares dropped on the even pairs
+  take the EMPTY board back to the empty board: four dry drops build
+  the ground floor, the fifth completes it, the double clears, nothing
+  remains. The simplest closed cycle in all of Tetris, as a concrete
+  five-placement instance of `five_O_cycle` at h = 0.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dz) — THE FIVE-O CYCLE (bank 349/N)
 
 - **`five_O_dry_step`** / **`five_O_final_step`** / **`five_O_cycle`**

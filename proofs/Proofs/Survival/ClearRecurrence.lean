@@ -9041,6 +9041,29 @@ theorem five_O_cycle {b : Board} {h : ℕ}
   rw [show (6 : ℕ) + 2 = 8 from rfl] at e3
   rw [e1, e2, e3, e4]
 
+/-- **The empty board rides a five-move loop**: five squares dropped on
+the even pairs take the empty board back to the empty board — the
+simplest closed cycle in all of Tetris, fully verified: four dry drops
+building the ground floor, one drop completing it, a double clear, and
+nothing remains. If the dealer hands five O's, the game is exactly
+where it began. -/
+theorem five_O_cycle_empty :
+    Placement.applyStep GameConfig.standard
+      (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard (∅ : Board)
+              ⟨Piece.O, 0, 0⟩) ⟨Piece.O, 0, 2⟩) ⟨Piece.O, 0, 4⟩)
+          ⟨Piece.O, 0, 6⟩) ⟨Piece.O, 0, 8⟩ = (∅ : Board) := by
+  apply five_O_cycle (h := 0)
+  · intro r hfull
+    have h0 := hfull 0 (by rw [GameConfig.standard_cols]; simp)
+    exact absurd h0 (Finset.notMem_empty _)
+  · intro p hp
+    exact absurd hp (Finset.notMem_empty _)
+  · intro c _
+    exact Board.colHeight_empty c
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
