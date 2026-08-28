@@ -6495,6 +6495,101 @@ theorem window_O_hole_bill {b : Board} {pl : Placement} {j : ℕ}
   have hj1r : j + 1 ∈ Finset.range 10 := Finset.mem_range.mpr (by omega)
   rw [if_pos hjr, if_pos hj1r, hdrop]
 
+/-- **The master two-column hole bill**: for any placement confined to
+an adjacent pair with a cell in each column, whose per-column feet sit
+at offsets `f₀` and `f₁`, the holes created are exactly the two landing
+gaps `(dropOffset + f₀ − h_j) + (dropOffset + f₁ − h_{j+1})`. Every
+window piece's debt price is an instance. -/
+theorem window_two_col_hole_bill {b : Board} {pl : Placement}
+    {j f₀ f₁ : ℕ} (hj : j + 1 < 10)
+    (hn : ∀ cell ∈ pl.shapeUp, cell.1 ≤ 1)
+    (hcol : pl.col = j)
+    (hm0 : ((0 : ℕ), f₀) ∈ pl.shapeUp)
+    (hmin0 : ∀ cell ∈ pl.shapeUp, cell.1 = 0 → f₀ ≤ cell.2)
+    (hm1 : ((1 : ℕ), f₁) ∈ pl.shapeUp)
+    (hmin1 : ∀ cell ∈ pl.shapeUp, cell.1 = 1 → f₁ ≤ cell.2) :
+    Board.holes GameConfig.standard (pl.place b)
+      = Board.holes GameConfig.standard b
+        + (pl.dropOffset b + f₀ - b.colHeight j)
+        + (pl.dropOffset b + f₁ - b.colHeight (j + 1)) := by
+  classical
+  have hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1 := by
+    intro cell hcell
+    have := hn cell hcell
+    rw [hcol]
+    omega
+  have hbot0 : (j, pl.dropOffset b + f₀) ∈ pl.dropped b := by
+    unfold Placement.dropped Placement.cellsAt
+    rw [Finset.mem_image]
+    exact ⟨(0, f₀), hm0, by rw [hcol]; simp⟩
+  have hminb0 : ∀ r, (j, r) ∈ pl.dropped b →
+      pl.dropOffset b + f₀ ≤ r := by
+    intro r hr
+    unfold Placement.dropped Placement.cellsAt at hr
+    rw [Finset.mem_image] at hr
+    obtain ⟨cell, hcell, heq⟩ := hr
+    have hrow := congrArg Prod.snd heq
+    have hcc := congrArg Prod.fst heq
+    simp only [] at hrow hcc
+    have hc0 : cell.1 = 0 := by omega
+    have := hmin0 cell hcell hc0
+    omega
+  have hbot1 : (j + 1, pl.dropOffset b + f₁) ∈ pl.dropped b := by
+    unfold Placement.dropped Placement.cellsAt
+    rw [Finset.mem_image]
+    exact ⟨(1, f₁), hm1, by rw [hcol]⟩
+  have hminb1 : ∀ r, (j + 1, r) ∈ pl.dropped b →
+      pl.dropOffset b + f₁ ≤ r := by
+    intro r hr
+    unfold Placement.dropped Placement.cellsAt at hr
+    rw [Finset.mem_image] at hr
+    obtain ⟨cell, hcell, heq⟩ := hr
+    have hrow := congrArg Prod.snd heq
+    have hcc := congrArg Prod.fst heq
+    simp only [] at hrow hcc
+    have hc1 : cell.1 = 1 := by
+      have := hn cell hcell
+      omega
+    have := hmin1 cell hcell hc1
+    omega
+  have hg0 := colHoles_place_eq (b := b) hbot0 hminb0
+  have hg1 := colHoles_place_eq (b := b) hbot1 hminb1
+  have hpoint : ∀ c ∈ Finset.range 10,
+      Board.colHoles (pl.place b) c
+      = Board.colHoles b c
+        + (if c = j then pl.dropOffset b + f₀ - b.colHeight j else 0)
+        + (if c = j + 1 then pl.dropOffset b + f₁ - b.colHeight (j + 1)
+            else 0) := by
+    intro c _
+    by_cases h0 : c = j
+    · subst h0
+      rw [if_pos rfl, if_neg (by omega)]
+      omega
+    · by_cases h1 : c = j + 1
+      · subst h1
+        rw [if_neg h0, if_pos rfl]
+        omega
+      · rw [if_neg h0, if_neg h1]
+        have hz : pl.colProfile c = 0 := by
+          apply colProfile_eq_zero_of_not_touched
+          intro cell hcell hceq
+          rcases hcells cell hcell with h | h
+          · exact h0 (by omega)
+          · exact h1 (by omega)
+        have := colHoles_place_eq_of_unfed (b := b) (pl := pl) hz
+        omega
+  unfold Board.holes
+  rw [GameConfig.standard_cols]
+  rw [Finset.sum_congr rfl hpoint]
+  rw [Finset.sum_add_distrib, Finset.sum_add_distrib]
+  rw [Finset.sum_ite_eq' (Finset.range 10) j
+      (fun _ => pl.dropOffset b + f₀ - b.colHeight j),
+    Finset.sum_ite_eq' (Finset.range 10) (j + 1)
+      (fun _ => pl.dropOffset b + f₁ - b.colHeight (j + 1))]
+  rw [if_pos (Finset.mem_range.mpr (by omega : j < 10)),
+    if_pos (Finset.mem_range.mpr (by omega : j + 1 < 10))]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

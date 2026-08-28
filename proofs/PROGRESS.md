@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dc) — the master two-column genesis formula (bank 326/N)
+
+- **`window_two_col_hole_bill`** — for any pair-confined placement with
+  per-column feet (f₀, f₁): Δholes = (D + f₀ − h_j) + (D + f₁ −
+  h_{j+1}) exactly. The O bill and (future) S/Z/L/J/T bills are
+  instances; window debt pricing is now one formula.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28db) — the window O's exact bill (bank 325/N)
 
 - **`O_shape_feet`** — both O feet at offset zero, every rotation.
