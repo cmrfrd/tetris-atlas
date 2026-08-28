@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dk) — the T is the stair-flipper (bank 334/N)
+
+- **`T_r1_shape`**, **`T_r3_shape`** — the pointing rotations' full
+  foot/top structure, kernel decide.
+- **`window_T_downstair_flip_exists`** / **`_upstair_`** — a T lands
+  FREE on either one-step stair and flips its direction. The window
+  shape-dynamics: O flat→flat, S down→down, Z up→up, T down↔up — all
+  free once the stair exists.
+- Gotcha: `set pl := ⟨...⟩` + `change` whnf-loops; use literal
+  anonymous-constructor placements throughout (batch 330 style).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dj) — the Z-staircase (bank 333/N)
 
 - **`Z_narrow_tops`** + **`window_Z_staircase`** — the mirror: Z is
