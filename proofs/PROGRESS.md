@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dl) — L and J repair the two-step (bank 335/N)
+
+- **`L_r3_shape`**, **`J_r1_shape`** — the arm-up rotations' structure.
+- **`window_L_repairs_down2_exists`** / **`window_J_repairs_up2_`** —
+  free landings that FLATTEN a two-step pair. The complete free-move
+  graph on window profiles: flat —O→ flat; flat —seated L/J→ ∓2-step;
+  ±2-step —arm-up L/J→ flat; ±1-stair —S/Z→ itself; ±1-stair —T→
+  ∓1-stair. Every piece has a debt-free home somewhere in the graph.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dk) — the T is the stair-flipper (bank 334/N)
 
 - **`T_r1_shape`**, **`T_r3_shape`** — the pointing rotations' full
