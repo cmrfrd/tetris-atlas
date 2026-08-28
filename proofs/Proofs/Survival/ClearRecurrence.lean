@@ -15738,6 +15738,94 @@ theorem cycle_column_flush_iff {j : ℕ} (hj : j < 10) {b : Board}
   have h := cycle_column_burial_conservation hj hfold
   omega
 
+/-! ### The sawtooth: how heavy the board may be
+
+Between clears the board only grows, four cells a move, and it may
+never pass a hundred and eighty. So a long dry opening forces a light
+base board. In the other direction a clear cannot happen on a light
+board at all: a `k`-clear needs `10k − 4` cells already present. The
+mass is squeezed from both ends. -/
+
+/-- Summing a set of rows never exceeds the whole board. -/
+theorem sum_rowCount_le_count {b : Board} (S : Finset ℕ) :
+    ∑ t ∈ S, Board.rowCount b t ≤ b.card := by
+  classical
+  have hsub : ∀ t ∈ S, b.filter (fun p => p.2 = t)
+      ⊆ b.filter (fun p => p.2 ∈ S) := by
+    intro t ht p hp
+    obtain ⟨hpb, hpt⟩ := Finset.mem_filter.mp hp
+    exact Finset.mem_filter.mpr ⟨hpb, by rw [hpt]; exact ht⟩
+  have hmaps : ∀ p ∈ b.filter (fun p => p.2 ∈ S), p.2 ∈ S :=
+    fun p hp => (Finset.mem_filter.mp hp).2
+  have hfib := Finset.card_eq_sum_card_fiberwise hmaps
+  have hcongr : ∀ t ∈ S,
+      Board.rowCount b t
+        = ((b.filter (fun p => p.2 ∈ S)).filter
+            (fun p => p.2 = t)).card := by
+    intro t ht
+    unfold Board.rowCount
+    congr 1
+    ext p
+    simp only [Finset.mem_filter]
+    constructor
+    · rintro ⟨hpb, hpt⟩
+      exact ⟨⟨hpb, by rw [hpt]; exact ht⟩, hpt⟩
+    · rintro ⟨⟨hpb, -⟩, hpt⟩
+      exact ⟨hpb, hpt⟩
+  rw [Finset.sum_congr rfl hcongr, ← hfib]
+  exact Finset.card_filter_le _ _
+
+/-- **A CLEAR NEEDS A HEAVY BOARD**: a `k`-clear cannot happen unless
+`10k − 4` cells are already standing. -/
+theorem count_ge_of_clear {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard) :
+    10 * (Board.fullRows GameConfig.standard (pl.place b)).card
+      ≤ b.card + 4 := by
+  have hinv := cleared_rows_prior_inventory_board hwf hv
+  have hle := sum_rowCount_le_count (b := b)
+    (Board.fullRows GameConfig.standard (pl.place b))
+  omega
+
+/-- A tetris demands thirty-six cells on the board beforehand. -/
+theorem count_ge_of_tetris {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4) :
+    36 ≤ b.card := by
+  have h := count_ge_of_clear hwf hv
+  rw [h4] at h
+  omega
+
+/-- **A LONG DRY OPENING FORCES A LIGHT BASE**: if a cycle's first `r`
+moves clear nothing, its base board carries at most `180 − 4r` cells.
+Twenty dry moves already cap the base at a hundred. -/
+theorem legal_cycle_dry_prefix_mass {b : Board} {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard) {r : ℕ}
+    (hr : r ≤ pls.length) (hpos : 0 < r)
+    (hdry : wordClears b (pls.take r) = 0)
+    (hin : ∀ p ∈ (pls.take r).foldl
+      (Placement.applyStep GameConfig.standard) b, p.2 < 20) :
+    b.count + 4 * r ≤ 180 := by
+  have h := prefix_mass_bound_180 hwf hv hr hpos hin
+  omega
+
+/-- Turned around: a heavy base board cannot open with many dry
+moves. -/
+theorem legal_cycle_heavy_base_short_dry {b : Board}
+    {pls : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ pls, pl.Valid GameConfig.standard) {r : ℕ}
+    (hr : r ≤ pls.length) (hpos : 0 < r)
+    (hdry : wordClears b (pls.take r) = 0)
+    (hin : ∀ p ∈ (pls.take r).foldl
+      (Placement.applyStep GameConfig.standard) b, p.2 < 20)
+    (hheavy : 100 ≤ b.count) :
+    r ≤ 20 := by
+  have h := legal_cycle_dry_prefix_mass hwf hv hr hpos hdry hin
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

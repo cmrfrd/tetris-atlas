@@ -41629,6 +41629,27 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28gk) — the sawtooth (bank 412/N)
+
+The board's mass is squeezed from both ends.
+
+- **`sum_rowCount_le_count`** — a set of rows never outweighs the whole
+  board.
+- **`count_ge_of_clear`** — so a k-clear cannot happen unless 10k − 4
+  cells are already standing…
+- **`count_ge_of_tetris`** — thirty-six for a tetris.
+- **`legal_cycle_dry_prefix_mass`** — and in the other direction,
+  between clears the board grows four a move and may never pass 180,
+  so a cycle whose first r moves clear nothing has a base board of at
+  most 180 − 4r cells.
+- **`legal_cycle_heavy_base_short_dry`** — turned around: a base board
+  of a hundred cells cannot open with more than twenty dry moves.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean. Compiled first
+try.
+
+---
+
 ### Tick (manual, 2026-08-28gj) — burial conservation, column by column (bank 411/N)
 
 The global burial law says a cycle's digging is exactly repaid. It
