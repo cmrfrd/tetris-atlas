@@ -41629,6 +41629,27 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fz) — one, three or five (bank 401/N)
+
+Sharpening the flat-T result from "at least one" to an exact count.
+
+- **`cast_ite_one_zero`**, **`natCast_two_eq_one_iff`** — casting a
+  zero-or-one commutes with the test, and a natural casts to one in
+  `ZMod 2` exactly when it is odd.
+- **`shapeRowCharge_split3`** — the row charge splits EXACTLY into an L
+  indicator, a J indicator and a flat-T indicator (kernel `decide`).
+- **`wordFlatTCount`**, **`wordRowCharge_eq_counts`** — so a word's row
+  charge counts its L's, J's and flat T's.
+- **`legal_cycle_flatT_odd`** — the ten L's and J's cancel in pairs,
+  leaving the entire parity debt on the flat T's: their count is ODD.
+- **`wordFlatTCount_le_T`**, **`legal_cycle_flatT_one_three_or_five`** —
+  and since only five T's are played at all, the flat count is exactly
+  one, three or five.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fy) — what an empty floor costs (bank 400/N)
 
 - **`colHoles_pos_of_floor_gap`** — a column with a gap at the floor

@@ -14558,6 +14558,129 @@ theorem cycle_empty_floor_debt {b : Board} {w1 w2 : List Placement}
   debt_ge_ten_of_empty_floor (cycle_floor_stays_empty hnb hfold hempty)
     hfull
 
+/-! ### Counting the flat T's
+
+The row-moment table splits cleanly: a shape's row charge is the L
+indicator plus the J indicator plus the flat-T indicator, with nothing
+else contributing. So the parity debt of a legal cycle reads directly as
+a count of flat T's — and since only five T's are played at all, that
+count is one, three or five. -/
+
+/-- Casting a zero-or-one through to `ZMod 2` commutes with the test. -/
+theorem cast_ite_one_zero (P : Prop) [Decidable P] :
+    (((if P then 1 else 0 : ℕ)) : ZMod 2) = if P then 1 else 0 := by
+  split <;> simp
+
+/-- A natural casts to one in `ZMod 2` exactly when it is odd. -/
+theorem natCast_two_eq_one_iff (n : ℕ) :
+    ((n : ℕ) : ZMod 2) = 1 ↔ n % 2 = 1 := by
+  have h : ((n : ℕ) : ZMod 2) = ((n % 2 : ℕ) : ZMod 2) :=
+    (ZMod.natCast_mod n 2).symm
+  rcases (show n % 2 = 0 ∨ n % 2 = 1 by omega) with h0 | h1
+  · rw [h, h0]
+    constructor
+    · intro hc
+      exact absurd hc (by decide)
+    · intro hc
+      exact absurd hc (by decide)
+  · rw [h, h1]
+    simp
+
+/-- The row charge splits into an L part, a J part and a flat-T part. -/
+theorem shapeRowCharge_split3 :
+    ∀ (p : Piece) (r : Rotation),
+      (∑ cell ∈ p.shapeUp r, ((cell.2 : ℕ) : ZMod 2))
+        = (if p = Piece.L then 1 else 0) + (if p = Piece.J then 1 else 0)
+          + (if p = Piece.T ∧ (r = 0 ∨ r = 2) then 1 else 0) := by
+  decide
+
+/-- How many of a word's placements lay a T flat. -/
+def wordFlatTCount : List Placement → ℕ
+  | [] => 0
+  | pl :: rest =>
+      (if pl.piece = Piece.T ∧ (pl.rot = 0 ∨ pl.rot = 2) then 1 else 0)
+        + wordFlatTCount rest
+
+@[simp] theorem wordFlatTCount_nil : wordFlatTCount [] = 0 := rfl
+
+theorem wordFlatTCount_cons (pl : Placement) (rest : List Placement) :
+    wordFlatTCount (pl :: rest)
+      = (if pl.piece = Piece.T ∧ (pl.rot = 0 ∨ pl.rot = 2) then 1 else 0)
+        + wordFlatTCount rest := rfl
+
+/-- **The word's row charge counts its L's, J's and flat T's.** -/
+theorem wordRowCharge_eq_counts (pls : List Placement) :
+    wordRowCharge pls
+      = wordPieceCharge Piece.L pls + wordPieceCharge Piece.J pls
+        + ((wordFlatTCount pls : ℕ) : ZMod 2) := by
+  induction pls with
+  | nil => simp
+  | cons pl rest ih =>
+    have hs : shapeRowCharge pl
+        = (if pl.piece = Piece.L then 1 else 0)
+          + (if pl.piece = Piece.J then 1 else 0)
+          + (if pl.piece = Piece.T ∧ (pl.rot = 0 ∨ pl.rot = 2)
+              then 1 else 0) := shapeRowCharge_split3 pl.piece pl.rot
+    rw [wordRowCharge_cons, ih, wordPieceCharge_cons, wordPieceCharge_cons,
+      wordFlatTCount_cons, Nat.cast_add, cast_ite_one_zero, hs]
+    ring
+
+/-- **THE FLAT-T COUNT IS ODD**: a legal 35-cycle lays an odd number of
+its T's flat. Ten L's and J's cancel in pairs, leaving the entire parity
+debt on the flat T's. -/
+theorem legal_cycle_flatT_odd {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    wordFlatTCount w % 2 = 1 := by
+  have hodd := legal_cycle_rowCharge_odd hwf hne hv hbag hfold hlen
+  have hL := legal_cycle_word_piece_census hwf hne hv hbag hfold Piece.L
+  have hJ := legal_cycle_word_piece_census hwf hne hv hbag hfold Piece.J
+  rw [census_eq_count, hlen] at hL hJ
+  norm_num at hL hJ
+  rw [wordRowCharge_eq_counts, wordPieceCharge_eq_count,
+    wordPieceCharge_eq_count, hL, hJ] at hodd
+  rw [show (((5 : ℕ)) : ZMod 2) + (((5 : ℕ)) : ZMod 2) = 0 from by decide,
+    zero_add] at hodd
+  exact (natCast_two_eq_one_iff _).mp hodd
+
+/-- A flat T is a T, so the flat count never exceeds the T count. -/
+theorem wordFlatTCount_le_T (pls : List Placement) :
+    wordFlatTCount pls ≤ (pls.map (·.piece)).count Piece.T := by
+  induction pls with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordFlatTCount_cons, List.map_cons, List.count_cons]
+    by_cases hF : pl.piece = Piece.T ∧ (pl.rot = 0 ∨ pl.rot = 2)
+    · rw [if_pos hF, if_pos (show
+        (((fun x : Placement => x.piece) pl) == Piece.T) = true from by
+          simp [hF.1])]
+      omega
+    · rw [if_neg hF]
+      split <;> omega
+
+/-- **ONE, THREE OR FIVE**: a legal 35-cycle lays an odd number of its
+five T's flat, and there are only five T's — so the flat count is
+exactly one, three or five. -/
+theorem legal_cycle_flatT_one_three_or_five {b : Board}
+    {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    wordFlatTCount w = 1 ∨ wordFlatTCount w = 3
+      ∨ wordFlatTCount w = 5 := by
+  have hodd := legal_cycle_flatT_odd hwf hne hv hbag hfold hlen
+  have hT := legal_cycle_word_piece_census hwf hne hv hbag hfold Piece.T
+  rw [census_eq_count, hlen] at hT
+  norm_num at hT
+  have hle := wordFlatTCount_le_T w
+  rw [hT] at hle
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
