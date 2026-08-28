@@ -10579,6 +10579,70 @@ theorem ten_I_word_clears_four :
   simp only [List.length_cons, List.length_nil] at h
   omega
 
+/-- Number of clearing moves (moves that clear at least one row) while
+playing a word from a board. -/
+def wordClearMoves (b : Board) : List Placement → ℕ
+  | [] => 0
+  | pl :: rest =>
+      (if 0 < (Board.fullRows GameConfig.standard (pl.place b)).card
+        then 1 else 0)
+        + wordClearMoves (Placement.applyStep GameConfig.standard b pl)
+            rest
+
+@[simp] theorem wordClearMoves_nil (b : Board) :
+    wordClearMoves b [] = 0 := rfl
+
+theorem wordClearMoves_cons (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    wordClearMoves b (pl :: rest)
+      = (if 0 < (Board.fullRows GameConfig.standard (pl.place b)).card
+          then 1 else 0)
+        + wordClearMoves (Placement.applyStep GameConfig.standard b pl)
+            rest := rfl
+
+/-- Each clearing move reaps at least one row. -/
+theorem wordClearMoves_le_wordClears (b : Board) (w : List Placement) :
+    wordClearMoves b w ≤ wordClears b w := by
+  induction w generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordClearMoves_cons, wordClears_cons]
+    have := ih (Placement.applyStep GameConfig.standard b pl)
+    split <;> omega
+
+/-- Each clearing move reaps at most four rows — provided the start
+board is clear-free, which every later board then is automatically. -/
+theorem wordClears_le_four_mul_moves {b : Board} {w : List Placement}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r) :
+    wordClears b w ≤ 4 * wordClearMoves b w := by
+  induction w generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordClearMoves_cons, wordClears_cons]
+    have hcap : (Board.fullRows GameConfig.standard (pl.place b)).card
+        ≤ 4 := linesCleared_place_le_four GameConfig.standard b pl hnf
+    have hrec := ih (applyStep_clear_free b pl)
+    split <;> omega
+
+/-- **THE CLEARING-MOVES BRACKET**: a legal 35-cycle clears on at least
+4 and at most 14 of its moves — fourteen rows at one-to-four rows per
+harvest. The trace-level bracket, recovered for pure words. -/
+theorem legal_cycle_word_clearing_moves_bracket {b : Board}
+    {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35) :
+    4 ≤ wordClearMoves b w ∧ wordClearMoves b w ≤ 14 := by
+  have hpos : 0 < w.length := List.length_pos_iff.mpr hne
+  have h14 := legal_cycle_word_clears_fourteen hwf hne hv hbag hfold hlen
+  have hnfb : ∀ r, ¬ Board.isFull GameConfig.standard b r :=
+    board_on_cycle_clear_free ⟨w, rfl, hpos, hv, hfold⟩
+  have hlo := wordClears_le_four_mul_moves (w := w) hnfb
+  have hhi := wordClearMoves_le_wordClears b w
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28eq) — the clearing-moves bracket for words (bank 366/N)
+
+- **`wordClearMoves`** — the number of clearing moves along a word.
+- **`wordClearMoves_le_wordClears`** — each harvest reaps ≥ 1 row.
+- **`wordClears_le_four_mul_moves`** — each harvest reaps ≤ 4 rows,
+  needing only clear-freeness of the start board (all later boards
+  are clear-free automatically via applyStep_clear_free).
+- **`legal_cycle_word_clearing_moves_bracket`** — a legal 35-cycle
+  clears on between 4 and 14 of its 35 moves: fourteen rows at
+  one-to-four per harvest. Clear-freeness of the base comes FREE from
+  cycling (board_on_cycle_clear_free).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ep) — the mills' harvests from arithmetic alone (bank 365/N)
 
 - **`wordClears_append`** — clears add along concatenation.
