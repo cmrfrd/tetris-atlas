@@ -41629,6 +41629,19 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dn) — the window harvests (bank 337/N)
+
+- **`confined_move_completes_row`** — a confined drop covering the
+  pair's cells of an eight-prepared row completes it.
+- **`window_O_completes_two_rows`** — a flat-pair O reaps two prepared
+  rows at once, debt-free. The window economy now has both sides:
+  free-graph deposits AND the harvest mechanics (sweep to prepare,
+  return with the square to reap doubles).
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dm) — the free-move graph closes (bank 336/N)
 
 - **`L_r1_shape`**, **`J_r3_shape`** + **`window_L_makes_down2_

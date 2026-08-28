@@ -7978,6 +7978,111 @@ theorem window_J_makes_up2_exists {b : Board} {j h : ℕ}
         = j + 1 from rfl] at hfed
     rw [hfed, hD]
 
+/-- A confined move completes any row the other eight columns prepared,
+provided its drop covers the pair's two cells of that row. -/
+theorem confined_move_completes_row {b : Board} {pl : Placement}
+    {j r : ℕ} (hj : j + 1 < 10)
+    (hprep : ∀ c < 10, c ≠ j → c ≠ j + 1 → (c, r) ∈ b)
+    (hd0 : (j, r) ∈ pl.dropped b) (hd1 : (j + 1, r) ∈ pl.dropped b) :
+    r ∈ Board.fullRows GameConfig.standard (pl.place b) := by
+  classical
+  have hmem : ∀ c < 10, (c, r) ∈ pl.place b := by
+    intro c hc
+    rw [Placement.place_eq_union_dropped, Finset.mem_union]
+    by_cases h0 : c = j
+    · right
+      rw [h0]
+      exact hd0
+    · by_cases h1 : c = j + 1
+      · right
+        rw [h1]
+        exact hd1
+      · left
+        exact hprep c hc h0 h1
+  rw [Board.fullRows, Finset.mem_filter]
+  constructor
+  · rw [Finset.mem_image]
+    exact ⟨(j, r), hmem j (by omega), rfl⟩
+  · intro c hc
+    rw [GameConfig.standard_cols, Finset.mem_range] at hc
+    exact hmem c hc
+/-- **The window O harvests a double**: on a flat pair whose next two
+rows the other eight columns have prepared, a confined O completes both
+at once — the window economy's clearing side: sweeps prepare rows, the
+returning window's square reaps them two at a time, debt-free. -/
+theorem window_O_completes_two_rows {b : Board} {j h : ℕ}
+    (hj : j + 1 < 10)
+    (h0 : b.colHeight j = h) (h1 : b.colHeight (j + 1) = h)
+    (hprep : ∀ c < 10, c ≠ j → c ≠ j + 1 →
+      (c, h) ∈ b ∧ (c, h + 1) ∈ b) :
+    ∃ pl : Placement, pl.piece = Piece.O ∧ pl.Valid GameConfig.standard
+      ∧ (∀ cell ∈ pl.shapeUp,
+          pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1)
+      ∧ 2 ≤ (Board.fullRows GameConfig.standard
+          (pl.place b)).card := by
+  classical
+  obtain ⟨hf0, hf1⟩ := O_shape_feet (0 : Rotation)
+  obtain ⟨ht0, ht1, _⟩ := O_shape_tops (0 : Rotation)
+  have hnarrow := (O_shape_columns (0 : Rotation)).2.2
+  have hcells : ∀ cell ∈ (⟨Piece.O, 0, j⟩ : Placement).shapeUp,
+      (⟨Piece.O, 0, j⟩ : Placement).col + cell.1 = j
+      ∨ (⟨Piece.O, 0, j⟩ : Placement).col + cell.1 = j + 1 := by
+    intro cell hcell
+    have := hnarrow cell hcell
+    change j + cell.1 = j ∨ j + cell.1 = j + 1
+    omega
+  have hD : (⟨Piece.O, 0, j⟩ : Placement).dropOffset b = h := by
+    apply Nat.le_antisymm
+    · exact confined_dropOffset_le_of_flat hcells h0 h1
+    · have hle := Finset.le_sup
+        (f := fun cell : PieceCell =>
+          b.colHeight ((⟨Piece.O, 0, j⟩ : Placement).col + cell.1)
+            - cell.2) hf0
+      unfold Placement.dropOffset
+      simp only [] at hle ⊢
+      rw [show (⟨Piece.O, 0, j⟩ : Placement).col + ((0 : ℕ), (0 : ℕ)).1
+          = j from by simp, h0] at hle
+      simpa using hle
+  have hdmem : ∀ cell ∈ (⟨Piece.O, 0, j⟩ : Placement).shapeUp,
+      (j + cell.1, h + cell.2) ∈ (⟨Piece.O, 0, j⟩ : Placement).dropped b := by
+    intro cell hcell
+    unfold Placement.dropped Placement.cellsAt
+    rw [Finset.mem_image]
+    exact ⟨cell, hcell, by rw [hD]⟩
+  have hfull0 : h ∈ Board.fullRows GameConfig.standard
+      ((⟨Piece.O, 0, j⟩ : Placement).place b) := by
+    apply confined_move_completes_row hj
+      (fun c hc hn0 hn1 => (hprep c hc hn0 hn1).1)
+    · have := hdmem _ hf0
+      simpa using this
+    · have := hdmem _ hf1
+      simpa using this
+  have hfull1 : h + 1 ∈ Board.fullRows GameConfig.standard
+      ((⟨Piece.O, 0, j⟩ : Placement).place b) := by
+    apply confined_move_completes_row hj
+      (fun c hc hn0 hn1 => (hprep c hc hn0 hn1).2)
+    · have := hdmem _ ht0
+      simpa using this
+    · have := hdmem _ ht1
+      simpa using this
+  refine ⟨⟨Piece.O, 0, j⟩, rfl, ?_, hcells, ?_⟩
+  · intro cell hcell
+    have := hnarrow cell hcell
+    change j + cell.1 < GameConfig.standard.cols
+    rw [GameConfig.standard_cols]
+    omega
+  · have hsub : ({h, h + 1} : Finset ℕ)
+        ⊆ Board.fullRows GameConfig.standard
+          ((⟨Piece.O, 0, j⟩ : Placement).place b) := by
+      intro r hr
+      simp only [Finset.mem_insert, Finset.mem_singleton] at hr
+      rcases hr with h' | h' <;> subst h'
+      · exact hfull0
+      · exact hfull1
+    calc (2 : ℕ) = ({h, h + 1} : Finset ℕ).card := by
+          rw [Finset.card_insert_of_notMem (by simp), Finset.card_singleton]
+      _ ≤ _ := Finset.card_le_card hsub
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
