@@ -41629,6 +41629,26 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28gl) — back-to-back harvests (bank 413/N)
+
+- **`count_of_dry_move`** — a dry move adds exactly four cells.
+- **`clears_of_count_le`** — so a move that does not add mass has
+  cleared: only a clear can stop the board growing.
+- **`count_after_clear`** — the exact mass after a k-clear.
+- **`consecutive_tetris_needs_seventytwo`** — a tetris leaves the board
+  thirty-six lighter and needs thirty-six to fire, so two in a row
+  demand SEVENTY-TWO cells standing beforehand: two fifths of
+  everything a clear-free board can hold.
+- **`consecutive_clears_mass`** — in general consecutive k- and
+  k′-clears need 10k + 10k′ − 8 cells at the start.
+
+Gotcha repeated: the `Board.count` / `Finset.card` atom split bit again
+— bridge with an explicitly typed `have` before calling omega.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28gk) — the sawtooth (bank 412/N)
 
 The board's mass is squeezed from both ends.

@@ -15826,6 +15826,84 @@ theorem legal_cycle_heavy_base_short_dry {b : Board}
   have h := legal_cycle_dry_prefix_mass hwf hv hr hpos hdry hin
   omega
 
+/-! ### Back-to-back harvests
+
+A tetris leaves the board thirty-six cells lighter and needs thirty-six
+to happen at all. Two in a row therefore demand seventy-two cells
+standing before the first — nearly half the clear-free ceiling. Big
+harvests cannot be crowded together on a light board. -/
+
+/-- A dry move adds exactly four cells. -/
+theorem count_of_dry_move {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hdry : Board.fullRows GameConfig.standard (pl.place b) = ∅) :
+    (Placement.applyStep GameConfig.standard b pl).count = b.count + 4 := by
+  have h := BagGrowth.count_applyStep_add (cfg := GameConfig.standard)
+    hwf hv
+  rw [GameConfig.standard_cols, hdry, Finset.card_empty] at h
+  omega
+
+/-- **A MOVE THAT DOES NOT ADD MASS HAS CLEARED**: only a clear can stop
+the board from growing. -/
+theorem clears_of_count_le {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hle : (Placement.applyStep GameConfig.standard b pl).count
+      ≤ b.count) :
+    Board.fullRows GameConfig.standard (pl.place b) ≠ ∅ := by
+  intro hdry
+  have h := count_of_dry_move hwf hv hdry
+  omega
+
+/-- The exact mass after a `k`-clear. -/
+theorem count_after_clear {b : Board} {pl : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard) :
+    (Placement.applyStep GameConfig.standard b pl).count
+      + 10 * (Board.fullRows GameConfig.standard (pl.place b)).card
+      = b.count + 4 := by
+  have h := BagGrowth.count_applyStep_add (cfg := GameConfig.standard)
+    hwf hv
+  rwa [GameConfig.standard_cols] at h
+
+/-- **TWO TETRISES IN A ROW NEED SEVENTY-TWO**: the first leaves the
+board thirty-six lighter, and the second needs thirty-six to fire, so
+the board must have been carrying seventy-two beforehand — two fifths of
+everything a clear-free board can hold. -/
+theorem consecutive_tetris_needs_seventytwo {b : Board}
+    {pl q : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hvq : q.Valid GameConfig.standard)
+    (h4 : (Board.fullRows GameConfig.standard (pl.place b)).card = 4)
+    (h4' : (Board.fullRows GameConfig.standard
+      (q.place (Placement.applyStep GameConfig.standard b pl))).card = 4) :
+    72 ≤ b.count := by
+  have hstep := count_after_clear hwf hv
+  rw [h4] at hstep
+  have hsecond : 36 ≤ Board.count
+      (Placement.applyStep GameConfig.standard b pl) :=
+    count_ge_of_tetris (Placement.applyStep_wf hwf hv) hvq h4'
+  omega
+
+/-- More generally, a `k`-clear immediately followed by a `k'`-clear
+needs `10k + 10k' − 8` cells standing at the start. -/
+theorem consecutive_clears_mass {b : Board} {pl q : Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : pl.Valid GameConfig.standard)
+    (hvq : q.Valid GameConfig.standard) :
+    10 * (Board.fullRows GameConfig.standard (pl.place b)).card
+        + 10 * (Board.fullRows GameConfig.standard
+            (q.place (Placement.applyStep GameConfig.standard b pl))).card
+      ≤ b.count + 8 := by
+  have hstep := count_after_clear hwf hv
+  have hsecond : 10 * (Board.fullRows GameConfig.standard
+      (q.place (Placement.applyStep GameConfig.standard b pl))).card
+      ≤ Board.count (Placement.applyStep GameConfig.standard b pl) + 4 :=
+    count_ge_of_clear (Placement.applyStep_wf hwf hv) hvq
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
