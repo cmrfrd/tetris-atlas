@@ -6938,6 +6938,60 @@ theorem window_T_hole_bill {b : Board} {pl : Placement} {j : ℕ}
     have hB := hcells cw (by unfold Placement.shapeUp; exact hcw)
     omega
 
+/-- On a flat pair every confined drop's offset is at most the pair's
+height. -/
+theorem confined_dropOffset_le_of_flat {b : Board} {pl : Placement}
+    {j h : ℕ}
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1)
+    (hflat0 : b.colHeight j = h) (hflat1 : b.colHeight (j + 1) = h) :
+    pl.dropOffset b ≤ h := by
+  unfold Placement.dropOffset
+  apply Finset.sup_le
+  intro cell hcell
+  rcases hcells cell hcell with hc | hc <;> rw [hc]
+  · omega
+  · omega
+
+/-- **A flat window never pays more than two**: whatever piece arrives,
+any placement confined to a flat pair creates at most two holes — zero
+for I, O and seated L/J, one for S, Z and T, two only for an
+arm-up L/J. The flat window is a universal cheap landing zone. -/
+theorem flat_window_bill_le_two {b : Board} {pl : Placement} {j h : ℕ}
+    (hj : j + 1 < 10)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1)
+    (hflat0 : b.colHeight j = h) (hflat1 : b.colHeight (j + 1) = h) :
+    Board.holes GameConfig.standard (pl.place b)
+      ≤ Board.holes GameConfig.standard b + 2 := by
+  have hD := confined_dropOffset_le_of_flat hcells hflat0 hflat1
+  cases hp : pl.piece with
+  | I =>
+    have := vertical_I_hole_free (b := b) hp hcells
+    omega
+  | O =>
+    have := window_O_hole_bill (b := b) hj hp hcells
+    rw [hflat0, hflat1] at this
+    simp only [max_self] at this
+    omega
+  | S =>
+    have := window_S_hole_bill (b := b) hj hp hcells
+    rw [hflat0, hflat1] at this
+    omega
+  | Z =>
+    have := window_Z_hole_bill (b := b) hj hp hcells
+    rw [hflat0, hflat1] at this
+    omega
+  | T =>
+    rcases window_T_hole_bill (b := b) hj hp hcells with hbill | hbill <;>
+      rw [hflat0, hflat1] at hbill <;> omega
+  | L =>
+    rcases window_L_hole_bill (b := b) hj hp hcells with hbill | hbill <;>
+      rw [hflat0, hflat1] at hbill <;> omega
+  | J =>
+    rcases window_J_hole_bill (b := b) hj hp hcells with hbill | hbill <;>
+      rw [hflat0, hflat1] at hbill <;> omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

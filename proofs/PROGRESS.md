@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28df) — a flat window never pays more than two (bank 329/N)
+
+- **`confined_dropOffset_le_of_flat`** — D ≤ h on flat pairs.
+- **`flat_window_bill_le_two`** — any confined move on a flat pair
+  creates ≤ 2 holes, whatever the piece (7-way case over the catalog:
+  I/O/seated-L/J free, S/Z/T one, arm-up L/J two). Lightness
+  maintenance has its per-move debt cap on flat windows.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28de) — the window debt catalog complete (bank 328/N)
 
 - **`L/J/T_narrow_feet`** — the two feet patterns per piece (arm
