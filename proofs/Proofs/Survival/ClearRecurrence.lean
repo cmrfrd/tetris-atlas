@@ -8936,6 +8936,111 @@ theorem band_extend {m h : ℕ} :
         · right; right; right; right
           exact ⟨by omega, h2⟩
 
+/-- A dry step of the five-O ritual: the square at column `m` extends
+the partial band by one pair, clearing nothing. -/
+theorem five_O_dry_step {b : Board} {h m : ℕ} (hm : m + 2 < 10)
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hlow : ∀ p ∈ b, p.2 < h)
+    (hH0 : b.colHeight m = h) (hH1 : b.colHeight (m + 1) = h) :
+    Placement.applyStep GameConfig.standard
+      (b ∪ (Finset.range m) ×ˢ ({h, h + 1} : Finset ℕ))
+      ⟨Piece.O, 0, m⟩
+    = b ∪ (Finset.range (m + 2)) ×ˢ ({h, h + 1} : Finset ℕ) := by
+  classical
+  have hband : ∀ p ∈ (Finset.range m) ×ˢ ({h, h + 1} : Finset ℕ),
+      p.1 < m := fun p hp =>
+    Finset.mem_range.mp (Finset.mem_product.mp hp).1
+  have h0 : (b ∪ (Finset.range m) ×ˢ ({h, h + 1} : Finset ℕ)).colHeight m
+      = h := by
+    rw [colHeight_union_high_cols hband (le_refl m)]
+    exact hH0
+  have h1 : (b ∪ (Finset.range m) ×ˢ
+      ({h, h + 1} : Finset ℕ)).colHeight (m + 1) = h := by
+    rw [colHeight_union_high_cols hband (by omega)]
+    exact hH1
+  obtain ⟨_, hplace⟩ := O_pair_dropped_eq
+    (b := b ∪ (Finset.range m) ×ˢ ({h, h + 1} : Finset ℕ)) h0 h1
+  have hplace' : (⟨Piece.O, 0, m⟩ : Placement).place
+      (b ∪ (Finset.range m) ×ˢ ({h, h + 1} : Finset ℕ))
+      = b ∪ (Finset.range (m + 2)) ×ˢ ({h, h + 1} : Finset ℕ) := by
+    rw [hplace, Finset.union_assoc, band_extend]
+  have hnofull := no_full_of_partial_band (m := m + 2) (by omega) hnf hlow
+  have hempty : Board.fullRows GameConfig.standard
+      (b ∪ (Finset.range (m + 2)) ×ˢ ({h, h + 1} : Finset ℕ)) = ∅ :=
+    Finset.eq_empty_iff_forall_notMem.mpr (fun r hr =>
+      hnofull r (Finset.mem_filter.mp hr).2)
+  unfold Placement.applyStep
+  rw [hplace']
+  exact Board.clearLines_eq_self_of_no_fullRows GameConfig.standard hempty
+
+/-- The final step of the five-O ritual: the fifth square completes the
+band, the double clears, and the original board returns. -/
+theorem five_O_final_step {b : Board} {h : ℕ}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hlow : ∀ p ∈ b, p.2 < h)
+    (hH8 : b.colHeight 8 = h) (hH9 : b.colHeight 9 = h) :
+    Placement.applyStep GameConfig.standard
+      (b ∪ (Finset.range 8) ×ˢ ({h, h + 1} : Finset ℕ))
+      ⟨Piece.O, 0, 8⟩ = b := by
+  classical
+  have hband : ∀ p ∈ (Finset.range 8) ×ˢ ({h, h + 1} : Finset ℕ),
+      p.1 < 8 := fun p hp =>
+    Finset.mem_range.mp (Finset.mem_product.mp hp).1
+  have h0 : (b ∪ (Finset.range 8) ×ˢ ({h, h + 1} : Finset ℕ)).colHeight 8
+      = h := by
+    rw [colHeight_union_high_cols hband (le_refl 8)]
+    exact hH8
+  have h1 : (b ∪ (Finset.range 8) ×ˢ ({h, h + 1} : Finset ℕ)).colHeight 9
+      = h := by
+    rw [colHeight_union_high_cols hband (by omega)]
+    exact hH9
+  obtain ⟨_, hplace⟩ := O_pair_dropped_eq
+    (b := b ∪ (Finset.range 8) ×ˢ ({h, h + 1} : Finset ℕ)) h0 h1
+  have hplace' : (⟨Piece.O, 0, 8⟩ : Placement).place
+      (b ∪ (Finset.range 8) ×ˢ ({h, h + 1} : Finset ℕ))
+      = b ∪ (Finset.range 10) ×ˢ ({h, h + 1} : Finset ℕ) := by
+    rw [hplace, Finset.union_assoc, band_extend]
+  unfold Placement.applyStep
+  rw [hplace']
+  exact clearLines_two_band_reset hnf hlow
+
+/-- **THE FIVE-O CYCLE**: from any clear-free board standing level at
+height `h` across all ten columns, dropping the square on the five even
+pairs in turn — five moves, one for each window of the even tiling —
+clears a double on the last drop and returns the board to EXACTLY its
+starting state, cell for cell. A concrete closed board cycle: the
+even-tiling tour's minimal service loop, realized as five explicit
+placements. -/
+theorem five_O_cycle {b : Board} {h : ℕ}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hlow : ∀ p ∈ b, p.2 < h)
+    (hH : ∀ c < 10, b.colHeight c = h) :
+    Placement.applyStep GameConfig.standard
+      (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard b
+              ⟨Piece.O, 0, 0⟩) ⟨Piece.O, 0, 2⟩) ⟨Piece.O, 0, 4⟩)
+          ⟨Piece.O, 0, 6⟩) ⟨Piece.O, 0, 8⟩ = b := by
+  have e0 : Placement.applyStep GameConfig.standard b ⟨Piece.O, 0, 0⟩
+      = b ∪ (Finset.range 2) ×ˢ ({h, h + 1} : Finset ℕ) := by
+    have h' := five_O_dry_step (b := b) (m := 0) (by omega) hnf hlow
+      (hH 0 (by omega)) (hH 1 (by omega))
+    simpa using h'
+  have e1 := five_O_dry_step (b := b) (m := 2) (by omega) hnf hlow
+    (hH 2 (by omega)) (hH 3 (by omega))
+  have e2 := five_O_dry_step (b := b) (m := 4) (by omega) hnf hlow
+    (hH 4 (by omega)) (hH 5 (by omega))
+  have e3 := five_O_dry_step (b := b) (m := 6) (by omega) hnf hlow
+    (hH 6 (by omega)) (hH 7 (by omega))
+  have e4 := five_O_final_step (b := b) hnf hlow
+    (hH 8 (by omega)) (hH 9 (by omega))
+  rw [e0]
+  rw [show (2 : ℕ) + 2 = 4 from rfl] at e1
+  rw [show (4 : ℕ) + 2 = 6 from rfl] at e2
+  rw [show (6 : ℕ) + 2 = 8 from rfl] at e3
+  rw [e1, e2, e3, e4]
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

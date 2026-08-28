@@ -41629,6 +41629,22 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dz) — THE FIVE-O CYCLE (bank 349/N)
+
+- **`five_O_dry_step`** / **`five_O_final_step`** / **`five_O_cycle`**
+  — from any clear-free board level at height h, the five squares at
+  columns 0, 2, 4, 6, 8 build the two-row band pair by pair (dry), the
+  fifth completes it, the double clears, and the board returns CELL FOR
+  CELL. A concrete, fully proven closed board cycle — the even-tiling
+  tour's minimal service loop as five explicit placements. (Board-level
+  M2 germ; the bag/state-level cycle needs the piece stream to supply
+  five O's, which one bag cannot — but the BOARD dynamics of the loop
+  are now exact.)
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dy) — the intermediate-state bricks (bank 348/N)
 
 - **`colHeight_union_high_cols`** — low-column additions leave higher
