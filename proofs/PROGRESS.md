@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ef) — THE TEN-I CYCLE (bank 355/N)
+
+- **`ten_I_cycle`** — from any clear-free board standing level at
+  height h, dropping the vertical I into each of the ten columns in
+  turn completes a four-row band, clears a TETRIS on the last drop,
+  and returns the board CELL FOR CELL. The five-O cycle's tall
+  sibling: same return, but one quadruple instead of five doubles.
+- **`ten_I_cycle_empty`** — the empty board rides this loop too: it
+  sits on (at least) two distinct closed cycles, the five-O
+  double-mill and the ten-I tetris-mill.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ee) — the ten-I machinery: general band reset + column towers (bank 354/N)
 
 - **`clearLines_band_reset`** — the general k-row band reset: filling k

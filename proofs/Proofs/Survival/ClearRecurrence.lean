@@ -9670,6 +9670,94 @@ theorem ten_I_final_step {b : Board} {h : ℕ}
   rw [hplace']
   exact clearLines_band_reset hnf hlow
 
+/-- **THE TEN-I CYCLE**: from any clear-free board standing level at
+height `h` across all ten columns, dropping the vertical I into each
+column in turn — ten moves, one tower per column — completes a four-row
+band, clears a TETRIS on the last drop, and returns the board to
+EXACTLY its starting state, cell for cell. The five-O cycle's tall
+sibling: same board, same return, but the harvest is one quadruple
+instead of five doubles. -/
+theorem ten_I_cycle {b : Board} {h : ℕ}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hlow : ∀ p ∈ b, p.2 < h)
+    (hH : ∀ c < 10, b.colHeight c = h) :
+    Placement.applyStep GameConfig.standard
+      (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard
+                (Placement.applyStep GameConfig.standard
+                  (Placement.applyStep GameConfig.standard
+                    (Placement.applyStep GameConfig.standard
+                      (Placement.applyStep GameConfig.standard b
+                        ⟨Piece.I, 1, 0⟩) ⟨Piece.I, 1, 1⟩)
+                    ⟨Piece.I, 1, 2⟩) ⟨Piece.I, 1, 3⟩)
+                ⟨Piece.I, 1, 4⟩) ⟨Piece.I, 1, 5⟩)
+            ⟨Piece.I, 1, 6⟩) ⟨Piece.I, 1, 7⟩)
+        ⟨Piece.I, 1, 8⟩) ⟨Piece.I, 1, 9⟩ = b := by
+  have e0 : Placement.applyStep GameConfig.standard b ⟨Piece.I, 1, 0⟩
+      = b ∪ (Finset.range 1) ×ˢ (Finset.Ico h (h + 4)) := by
+    have h' := ten_I_dry_step (b := b) (m := 0) (by omega) hnf hlow
+      (hH 0 (by omega))
+    simpa using h'
+  have e1 := ten_I_dry_step (b := b) (m := 1) (by omega) hnf hlow
+    (hH 1 (by omega))
+  have e2 := ten_I_dry_step (b := b) (m := 2) (by omega) hnf hlow
+    (hH 2 (by omega))
+  have e3 := ten_I_dry_step (b := b) (m := 3) (by omega) hnf hlow
+    (hH 3 (by omega))
+  have e4 := ten_I_dry_step (b := b) (m := 4) (by omega) hnf hlow
+    (hH 4 (by omega))
+  have e5 := ten_I_dry_step (b := b) (m := 5) (by omega) hnf hlow
+    (hH 5 (by omega))
+  have e6 := ten_I_dry_step (b := b) (m := 6) (by omega) hnf hlow
+    (hH 6 (by omega))
+  have e7 := ten_I_dry_step (b := b) (m := 7) (by omega) hnf hlow
+    (hH 7 (by omega))
+  have e8 := ten_I_dry_step (b := b) (m := 8) (by omega) hnf hlow
+    (hH 8 (by omega))
+  have e9 := ten_I_final_step (b := b) hnf hlow (hH 9 (by omega))
+  rw [show (1 : ℕ) + 1 = 2 from rfl] at e1
+  rw [show (2 : ℕ) + 1 = 3 from rfl] at e2
+  rw [show (3 : ℕ) + 1 = 4 from rfl] at e3
+  rw [show (4 : ℕ) + 1 = 5 from rfl] at e4
+  rw [show (5 : ℕ) + 1 = 6 from rfl] at e5
+  rw [show (6 : ℕ) + 1 = 7 from rfl] at e6
+  rw [show (7 : ℕ) + 1 = 8 from rfl] at e7
+  rw [show (8 : ℕ) + 1 = 9 from rfl] at e8
+  rw [e0, e1, e2, e3, e4, e5, e6, e7, e8, e9]
+
+/-- **The empty board rides the ten-I loop too**: ten vertical I's, one
+per column, take the empty board back to the empty board — the ground
+floor rises four rows and a tetris reaps it whole. The empty board thus
+sits on (at least) TWO distinct closed cycles: the five-O double-mill
+and the ten-I tetris-mill. -/
+theorem ten_I_cycle_empty :
+    Placement.applyStep GameConfig.standard
+      (Placement.applyStep GameConfig.standard
+        (Placement.applyStep GameConfig.standard
+          (Placement.applyStep GameConfig.standard
+            (Placement.applyStep GameConfig.standard
+              (Placement.applyStep GameConfig.standard
+                (Placement.applyStep GameConfig.standard
+                  (Placement.applyStep GameConfig.standard
+                    (Placement.applyStep GameConfig.standard
+                      (Placement.applyStep GameConfig.standard
+                        (∅ : Board) ⟨Piece.I, 1, 0⟩) ⟨Piece.I, 1, 1⟩)
+                    ⟨Piece.I, 1, 2⟩) ⟨Piece.I, 1, 3⟩)
+                ⟨Piece.I, 1, 4⟩) ⟨Piece.I, 1, 5⟩)
+            ⟨Piece.I, 1, 6⟩) ⟨Piece.I, 1, 7⟩)
+        ⟨Piece.I, 1, 8⟩) ⟨Piece.I, 1, 9⟩ = (∅ : Board) := by
+  apply ten_I_cycle (h := 0)
+  · intro r hfull
+    have h0 := hfull 0 (by rw [GameConfig.standard_cols]; simp)
+    exact absurd h0 (Finset.notMem_empty _)
+  · intro p hp
+    exact absurd hp (Finset.notMem_empty _)
+  · intro c _
+    exact Board.colHeight_empty c
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
