@@ -14262,6 +14262,98 @@ theorem cycle_lowCells_frozen_split {r : ℕ} {b : Board}
   rw [← List.foldl_append, hfold] at hsub2
   exact Finset.Subset.antisymm hsub2 hsub1
 
+/-! ### From a safe legal word to a certified closed cycle
+
+Everything the word theory needs is now in place: the orbit's thirty-five
+states are distinct, the table policy reproduces the word on them, every
+draw along the way is legal, and the loop closes. Assembling these gives
+the library's canonical `ClosedCycle` — and with it infinite play. -/
+
+/-- Membership in a legal cycle's orbit names a position. -/
+theorem mem_wordOrbit_iff {b : Board} {w : List Placement}
+    (hlen : w.length = 35) (s : GameState) :
+    s ∈ (wordOrbit b w).toFinset
+      ↔ ∃ i, i < 35 ∧ wordPlay ⟨b, Bag.full⟩ w i = s := by
+  rw [List.mem_toFinset]
+  unfold wordOrbit
+  rw [List.mem_map]
+  constructor
+  · rintro ⟨i, hi, hval⟩
+    rw [List.mem_range, hlen] at hi
+    exact ⟨i, hi, hval⟩
+  · rintro ⟨i, hi, hval⟩
+    exact ⟨i, by rw [List.mem_range, hlen]; exact hi, hval⟩
+
+/-- **THE CERTIFIED CLOSED CYCLE**: a bag-legal 35-word that folds a
+well-formed board back to itself and never tops out along the way is a
+`ClosedCycle` of the game — states, policy, validity, legal draws,
+safety and closure all discharged. -/
+theorem legal_safe_word_closedCycle {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35)
+    (hsafe : ∀ i, i < 35 →
+      ¬ (wordPlay ⟨b, Bag.full⟩ w i).lost GameConfig.standard) :
+    ∃ C : ClosedCycle GameConfig.standard,
+      (⟨b, Bag.full⟩ : GameState) ∈ C.states := by
+  classical
+  have h35 := legal_cycle_word_thirty_five_dvd hwf hne hv hbag hfold
+  have h7 : 7 ∣ w.length := by omega
+  have hcyc := legal_cycle_word_state_cycle hwf hne hv hbag hfold
+  have hgetD : ∀ i, i < 35 →
+      w.getD i ⟨Piece.O, 0, 0⟩ ∈ w := by
+    intro i hi
+    rw [List.getD_eq_getElem w _ (by omega)]
+    exact List.getElem_mem _
+  have hstep : ∀ i, i < 35 →
+      (wordPlay ⟨b, Bag.full⟩ w i).step GameConfig.standard
+        (wordPolicy b w (wordPlay ⟨b, Bag.full⟩ w i))
+        = wordPlay ⟨b, Bag.full⟩ w (i + 1) := by
+    intro i hi
+    rw [wordPolicy_eval hwf hne hv hbag hfold hlen hi, wordPlay_succ,
+      Nat.mod_eq_of_lt (by omega)]
+  refine ⟨⟨(wordOrbit b w).toFinset, wordPolicy b w, ?_, ?_, ?_, ?_⟩, ?_⟩
+  · intro s hs
+    obtain ⟨i, hi, rfl⟩ := (mem_wordOrbit_iff hlen s).mp hs
+    rw [wordPolicy_eval hwf hne hv hbag hfold hlen hi]
+    exact hv _ (hgetD i hi)
+  · intro s hs
+    obtain ⟨i, hi, rfl⟩ := (mem_wordOrbit_iff hlen s).mp hs
+    rw [wordPolicy_eval hwf hne hv hbag hfold hlen hi]
+    exact legal_word_draw_legal (b := b) hbag h7 (by omega)
+  · intro s hs
+    obtain ⟨i, hi, rfl⟩ := (mem_wordOrbit_iff hlen s).mp hs
+    exact hsafe i hi
+  · intro s hs
+    obtain ⟨i, hi, rfl⟩ := (mem_wordOrbit_iff hlen s).mp hs
+    rw [hstep i hi, mem_wordOrbit_iff hlen]
+    by_cases hlt : i + 1 < 35
+    · exact ⟨i + 1, hlt, rfl⟩
+    · refine ⟨0, by omega, ?_⟩
+      have hi34 : i + 1 = 35 := by omega
+      rw [hi34, wordPlay_mod hne hcyc 35, hlen]
+  · rw [mem_wordOrbit_iff hlen]
+    exact ⟨0, by omega, rfl⟩
+
+/-- **…and therefore infinite play.** A safe, bag-legal 35-cycle word is
+a complete M2 certificate: the game entered at its base board survives
+forever under the table policy the word induces. -/
+theorem legal_safe_word_survives {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hlen : w.length = 35)
+    (hsafe : ∀ i, i < 35 →
+      ¬ (wordPlay ⟨b, Bag.full⟩ w i).lost GameConfig.standard) :
+    ∃ (C : ClosedCycle GameConfig.standard),
+      SurvivesForever GameConfig.standard C.policy ⟨b, Bag.full⟩ := by
+  obtain ⟨C, hC⟩ := legal_safe_word_closedCycle hwf hne hv hbag hfold
+    hlen hsafe
+  exact ⟨C, closed_cycle_survives C hC⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,28 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28fw) — THE CERTIFIED CLOSED CYCLE (bank 398/N)
+
+Everything the word theory needed is in place — the orbit's 35 states
+are distinct, the table policy reproduces the word on them, every draw
+is legal, and the loop closes — so it can finally be assembled into the
+library's canonical structure.
+
+- **`mem_wordOrbit_iff`** — membership in the orbit names a position.
+- **`legal_safe_word_closedCycle`** — a bag-legal 35-word that folds a
+  well-formed board back to itself and never tops out IS a
+  `ClosedCycle` of the game: states, policy, validity, legal draws,
+  safety and closure all discharged.
+- **`legal_safe_word_survives`** — hence `SurvivesForever` from its
+  base board, via `closed_cycle_survives`.
+
+The M2 conditional is now complete inside the library's own vocabulary:
+produce one safe legal 35-word and the certificate assembles itself.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28fv) — splitting, applied twice more (bank 397/N)
 
 The split technique upgrades any "first move" statement to "every
