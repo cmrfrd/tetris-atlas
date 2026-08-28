@@ -11112,6 +11112,54 @@ theorem move_clear_dichotomy {b : Board} {pl : Placement}
   · exact Or.inr ⟨by omega, tetris_requires_I hnf h4⟩
   · exact Or.inl (by omega)
 
+/-- **The word mix bound**: total rows cleared is at most three per
+clearing move plus one extra per tetris — the clear dichotomy, folded
+along the word. -/
+theorem word_clear_mix_bound {b : Board} {w : List Placement}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r) :
+    wordClears b w ≤ 3 * wordClearMoves b w + wordTetrises b w := by
+  induction w generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordClears_cons, wordClearMoves_cons, wordTetrises_cons]
+    have hcap : (Board.fullRows GameConfig.standard (pl.place b)).card
+        ≤ 4 := by
+      have := linesCleared_place_le_four GameConfig.standard b pl hnf
+      rwa [Board.linesCleared] at this
+    have hrec := ih (applyStep_clear_free b pl)
+    by_cases h4 : 4 ≤ (Board.fullRows GameConfig.standard
+        (pl.place b)).card
+    · rw [if_pos h4, if_pos (by omega)]
+      omega
+    · rw [if_neg h4]
+      by_cases h0 : 0 < (Board.fullRows GameConfig.standard
+          (pl.place b)).card
+      · rw [if_pos h0]
+        omega
+      · rw [if_neg h0]
+        have hz : (Board.fullRows GameConfig.standard
+            (pl.place b)).card = 0 := by omega
+        omega
+
+/-- **Tetris-free cycles work harder**: a bag-legal cycle word playing
+NO tetrises must clear on at least `2·length/15` of its moves — the
+mix bound with the fourth row withheld. A tetris-free legal 35-cycle
+harvests on at least five moves. -/
+theorem legal_cycle_word_tetris_free_moves {b : Board}
+    {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b) (hne : w ≠ [])
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hT : wordTetrises b w = 0) :
+    2 * w.length ≤ 15 * wordClearMoves b w := by
+  have hpos : 0 < w.length := List.length_pos_iff.mpr hne
+  have hnfb : ∀ r, ¬ Board.isFull GameConfig.standard b r :=
+    board_on_cycle_clear_free ⟨w, rfl, hpos, hv, hfold⟩
+  have hmix := word_clear_mix_bound (w := w) hnfb
+  have hcensus := cycle_word_clear_census hwf hv hfold
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

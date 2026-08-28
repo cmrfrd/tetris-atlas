@@ -41629,6 +41629,18 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28ex) — the word mix bound (bank 373/N)
+
+- **`word_clear_mix_bound`** — the clear dichotomy folded along a
+  word: total rows cleared ≤ 3·(clearing moves) + tetrises.
+- **`legal_cycle_word_tetris_free_moves`** — a bag-legal cycle word
+  playing NO tetrises must clear on at least 2·length/15 of its
+  moves; a tetris-free legal 35-cycle harvests on ≥ 5 moves.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28ew) — the clear dichotomy (bank 372/N)
 
 - **`clears_le_row_span`** — on a clear-free board a move clears at
