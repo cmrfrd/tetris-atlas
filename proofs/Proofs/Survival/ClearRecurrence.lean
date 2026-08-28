@@ -8727,6 +8727,83 @@ theorem trace_window_I_tetris_service {π : Policy GameConfig.standard}
           j = h :=
   window_I_tetris_service hj (fun r => trace_board_no_full n r) h0 hprep
 
+/-- Filling two complete rows above a clear-free board and clearing
+returns exactly the original board: the band vanishes without a trace.
+The board-level germ of a closed cycle. -/
+theorem clearLines_two_band_reset {b : Board} {h : ℕ}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard b r)
+    (hlow : ∀ p ∈ b, p.2 < h) :
+    Board.clearLines GameConfig.standard
+      (b ∪ (Finset.range 10) ×ˢ ({h, h + 1} : Finset ℕ)) = b := by
+  classical
+  have hXfull : ∀ r, r = h ∨ r = h + 1 →
+      Board.isFull GameConfig.standard
+        (b ∪ (Finset.range 10) ×ˢ ({h, h + 1} : Finset ℕ)) r := by
+    intro r hr
+    intro c hc
+    rw [GameConfig.standard_cols] at hc
+    rw [Finset.mem_union]
+    right
+    rw [Finset.mem_product]
+    simp only [Finset.mem_insert, Finset.mem_singleton]
+    exact ⟨hc, hr⟩
+  have hlowfull : ∀ r, r ≠ h → r ≠ h + 1 →
+      ¬ Board.isFull GameConfig.standard
+        (b ∪ (Finset.range 10) ×ˢ ({h, h + 1} : Finset ℕ)) r := by
+    intro r hr0 hr1 hfull
+    apply hnf r
+    intro c hc
+    have := hfull c hc
+    rw [Finset.mem_union] at this
+    rcases this with hb | hX
+    · exact hb
+    · exfalso
+      rw [Finset.mem_product] at hX
+      simp only [Finset.mem_insert, Finset.mem_singleton] at hX
+      omega
+  have hcb : ∀ r, r < h →
+      Board.clearedBelow GameConfig.standard
+        (b ∪ (Finset.range 10) ×ˢ ({h, h + 1} : Finset ℕ)) r = 0 := by
+    intro r hr
+    unfold Board.clearedBelow
+    rw [Finset.card_eq_zero, Finset.eq_empty_iff_forall_notMem]
+    intro x hx
+    rw [Finset.mem_filter] at hx
+    obtain ⟨hxf, hxlt⟩ := hx
+    have hxfull := (Finset.mem_filter.mp hxf).2
+    by_cases hx0 : x = h
+    · omega
+    · by_cases hx1 : x = h + 1
+      · omega
+      · exact hlowfull x hx0 hx1 hxfull
+  ext p
+  rw [Board.mem_clearLines_iff]
+  constructor
+  · rintro ⟨q, hq, hqnf, hqp⟩
+    rw [Finset.mem_union] at hq
+    rcases hq with hb | hX
+    · have hlt := hlow q hb
+      have := hcb q.2 hlt
+      rw [this] at hqp
+      have : (q.1, q.2 - 0) = q := by simp
+      rw [this] at hqp
+      rw [← hqp]
+      exact hb
+    · exfalso
+      rw [Finset.mem_product] at hX
+      simp only [Finset.mem_insert, Finset.mem_singleton] at hX
+      exact hqnf (hXfull q.2 hX.2)
+  · intro hp
+    have hlt := hlow p hp
+    refine ⟨p, ?_, ?_, ?_⟩
+    · rw [Finset.mem_union]
+      left
+      exact hp
+    · intro hfull
+      exact hlowfull p.2 (by omega) (by omega) hfull
+    · rw [hcb p.2 hlt]
+      simp
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

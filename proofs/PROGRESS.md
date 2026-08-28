@@ -41629,6 +41629,17 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dw) — the band reset (bank 346/N)
+
+- **`clearLines_two_band_reset`** — b ∪ (two complete rows above b),
+  cleared, equals b exactly. The board-level germ of a closed cycle:
+  if five O's can build the band (next: the five-O sequencing), the
+  board state literally returns. M2's heart at the Board level.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dv) — the services are in-game (bank 345/N)
 
 - **`trace_window_O_perfect_service`** / **`trace_window_I_tetris_
