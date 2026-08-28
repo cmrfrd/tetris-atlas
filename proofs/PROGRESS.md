@@ -41629,6 +41629,21 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-28dd) — the S/Z exact window bills (bank 327/N)
+
+- **`S_narrow_feet`** / **`Z_narrow_feet`** — eval-first revealed the
+  chirality (S narrow: fiber-0 foot 1, fiber-1 foot 0; Z mirrored),
+  then kernel decide.
+- **`window_S_hole_bill`** / **`window_Z_hole_bill`** — exact bills via
+  the master formula: S free on a one-step down, Z on a one-step up.
+  In-window debt catalog: I free, O = stagger, S/Z = stagger ∓ 1.
+- Gotcha: goals of the form `cell ∈ pl.piece.shapeUp pl.rot` are DEFEQ
+  to `cell ∈ pl.shapeUp` — use exact, not rw [← hsh].
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28dc) — the master two-column genesis formula (bank 326/N)
 
 - **`window_two_col_hole_bill`** — for any pair-confined placement with

@@ -6590,6 +6590,122 @@ theorem window_two_col_hole_bill {b : Board} {pl : Placement}
   rw [if_pos (Finset.mem_range.mpr (by omega : j < 10)),
     if_pos (Finset.mem_range.mpr (by omega : j + 1 < 10))]
 
+/-- A narrow S stands with its right foot down: fiber-0 foot at offset
+1, fiber-1 foot at offset 0. -/
+theorem S_narrow_feet : ∀ r : Rotation,
+    (∀ cell ∈ Piece.S.shapeUp r, cell.1 ≤ 1) →
+    (((0 : ℕ), (1 : ℕ)) ∈ Piece.S.shapeUp r
+      ∧ ((1 : ℕ), (0 : ℕ)) ∈ Piece.S.shapeUp r
+      ∧ ∀ cell ∈ Piece.S.shapeUp r, cell.1 = 0 → 1 ≤ cell.2) := by
+  decide
+
+/-- A narrow Z stands with its left foot down: fiber-0 foot at offset 0,
+fiber-1 foot at offset 1. -/
+theorem Z_narrow_feet : ∀ r : Rotation,
+    (∀ cell ∈ Piece.Z.shapeUp r, cell.1 ≤ 1) →
+    (((0 : ℕ), (0 : ℕ)) ∈ Piece.Z.shapeUp r
+      ∧ ((1 : ℕ), (1 : ℕ)) ∈ Piece.Z.shapeUp r
+      ∧ ∀ cell ∈ Piece.Z.shapeUp r, cell.1 = 1 → 1 ≤ cell.2) := by
+  decide
+
+/-- **The window S's exact hole bill**: a pair-confined S pays
+`(D + 1 − h_j) + (D − h_{j+1})` where `D` is its drop offset — free
+exactly when the pair steps down by one under it. -/
+theorem window_S_hole_bill {b : Board} {pl : Placement} {j : ℕ}
+    (hj : j + 1 < 10) (hS : pl.piece = Piece.S)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1) :
+    Board.holes GameConfig.standard (pl.place b)
+      = Board.holes GameConfig.standard b
+        + (pl.dropOffset b + 1 - b.colHeight j)
+        + (pl.dropOffset b - b.colHeight (j + 1)) := by
+  have hsh : pl.shapeUp = Piece.S.shapeUp pl.rot := by
+    unfold Placement.shapeUp
+    rw [hS]
+  rcases SZ_shape_window_split pl.piece (Or.inl hS) pl.rot with
+    ⟨h0, h1, hnarrow⟩ | ⟨cw, hcw, hc2⟩
+  · have hn : ∀ cell ∈ pl.shapeUp, cell.1 ≤ 1 := by
+      intro cell hcell
+      apply hnarrow
+      exact hcell
+    obtain ⟨hf0, hf1, hfmin⟩ := S_narrow_feet pl.rot (by
+      intro cell hcell
+      apply hn
+      rw [hsh]
+      exact hcell)
+    have hm0 : ((0 : ℕ), (1 : ℕ)) ∈ pl.shapeUp := by
+      rw [hsh]
+      exact hf0
+    have hm1 : ((1 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+      rw [hsh]
+      exact hf1
+    have hj0 := hcells _ hm0
+    have hj1 := hcells _ hm1
+    have hcol : pl.col = j := by
+      have e0 : pl.col + ((0 : ℕ), (1 : ℕ)).1 = pl.col := by simp
+      have e1 : pl.col + ((1 : ℕ), (0 : ℕ)).1 = pl.col + 1 := by simp
+      rw [e0] at hj0
+      rw [e1] at hj1
+      omega
+    have hbill := window_two_col_hole_bill (b := b) (f₀ := 1) (f₁ := 0)
+      hj hn hcol hm0
+      (fun cell hcell hc0 => hfmin cell (by rw [← hsh]; exact hcell) hc0)
+      hm1 (fun cell _ _ => Nat.zero_le _)
+    simpa using hbill
+  · exfalso
+    obtain ⟨cz, hczmem, hcz0⟩ := Piece.shapeUp_zero_mem pl.piece pl.rot
+    have hA := hcells cz (by unfold Placement.shapeUp; exact hczmem)
+    have hB := hcells cw (by unfold Placement.shapeUp; exact hcw)
+    omega
+
+/-- **The window Z's exact hole bill**: mirror of the S — free exactly
+when the pair steps up by one under it. -/
+theorem window_Z_hole_bill {b : Board} {pl : Placement} {j : ℕ}
+    (hj : j + 1 < 10) (hZ : pl.piece = Piece.Z)
+    (hcells : ∀ cell ∈ pl.shapeUp,
+      pl.col + cell.1 = j ∨ pl.col + cell.1 = j + 1) :
+    Board.holes GameConfig.standard (pl.place b)
+      = Board.holes GameConfig.standard b
+        + (pl.dropOffset b - b.colHeight j)
+        + (pl.dropOffset b + 1 - b.colHeight (j + 1)) := by
+  have hsh : pl.shapeUp = Piece.Z.shapeUp pl.rot := by
+    unfold Placement.shapeUp
+    rw [hZ]
+  rcases SZ_shape_window_split pl.piece (Or.inr hZ) pl.rot with
+    ⟨h0, h1, hnarrow⟩ | ⟨cw, hcw, hc2⟩
+  · have hn : ∀ cell ∈ pl.shapeUp, cell.1 ≤ 1 := by
+      intro cell hcell
+      apply hnarrow
+      exact hcell
+    obtain ⟨hf0, hf1, hfmin⟩ := Z_narrow_feet pl.rot (by
+      intro cell hcell
+      apply hn
+      rw [hsh]
+      exact hcell)
+    have hm0 : ((0 : ℕ), (0 : ℕ)) ∈ pl.shapeUp := by
+      rw [hsh]
+      exact hf0
+    have hm1 : ((1 : ℕ), (1 : ℕ)) ∈ pl.shapeUp := by
+      rw [hsh]
+      exact hf1
+    have hj0 := hcells _ hm0
+    have hj1 := hcells _ hm1
+    have hcol : pl.col = j := by
+      have e0 : pl.col + ((0 : ℕ), (0 : ℕ)).1 = pl.col := by simp
+      have e1 : pl.col + ((1 : ℕ), (1 : ℕ)).1 = pl.col + 1 := by simp
+      rw [e0] at hj0
+      rw [e1] at hj1
+      omega
+    have hbill := window_two_col_hole_bill (b := b) (f₀ := 0) (f₁ := 1)
+      hj hn hcol hm0 (fun cell _ _ => Nat.zero_le _) hm1
+      (fun cell hcell hc1 => hfmin cell (by rw [← hsh]; exact hcell) hc1)
+    simpa using hbill
+  · exfalso
+    obtain ⟨cz, hczmem, hcz0⟩ := Piece.shapeUp_zero_mem pl.piece pl.rot
+    have hA := hcells cz (by unfold Placement.shapeUp; exact hczmem)
+    have hB := hcells cw (by unfold Placement.shapeUp; exact hcw)
+    omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
