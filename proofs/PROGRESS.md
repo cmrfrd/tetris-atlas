@@ -41629,6 +41629,33 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29e) — a witness is never one round repeated (bank 420/N)
+
+The first design constraint aimed at an actual construction. With
+witness-hood now a finite check, the question became which shapes of
+word are worth checking — and the most obvious one is ruled out.
+
+- **`round_seven_dvd`** — if a witness is one round run `k` times, that
+  round plays every piece equally often, so its length is a multiple of
+  seven. Repetition multiplies counts; equal totals force equal parts.
+- **`not_seven_copies_of_ten`** — so the natural perfect-clear shape,
+  seven repetitions of a ten-piece round, is bag-illegal. Ten is not a
+  multiple of seven.
+- **`not_repetition_of_partial_bag`** — the general form.
+- **`length_eq_sum_count`**, **`count_flatten_replicate`** — the two
+  counting lemmas behind it.
+
+Why it matters: the seventy-move perfect-clear loop is the shape the
+theory points at (`perfect_clear_length_ge_seventy`), and the tempting
+way to build it is to solve one ten-piece round and run it seven times.
+That is now closed. The rounds must genuinely differ — which is exactly
+what real perfect-clear play requires, since the bag hands you a new
+order each time and the round has to be re-solved.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29d) — witness-hood is a finite check (bank 419/N)
 
 The decisive practical finding of the session. Every field of a

@@ -16560,6 +16560,102 @@ theorem five_O_cycle_empty_by_kernel :
       (Placement.applyStep GameConfig.standard) (∅ : Board)
       = (∅ : Board) := by decide
 
+/-! ### A witness cannot be one round repeated
+
+The obvious way to build a seventy-move loop is to find a ten-piece
+perfect-clear round and run it seven times. That cannot work. A
+bag-legal word plays every piece equally often, so a round repeated `k`
+times must itself play every piece equally often — which forces its
+length to be a multiple of seven. Ten is not.
+
+Any construction of this shape therefore needs genuinely different
+rounds, exactly as perfect-clear play does in practice: the bag hands
+you a new order each time and the round must be re-solved. -/
+
+/-- A list of pieces is as long as its counts sum to. -/
+theorem length_eq_sum_count (l : List Piece) :
+    l.length = ∑ p : Piece, l.count p := by
+  classical
+  induction l with
+  | nil => simp
+  | cons a rest ih =>
+    rw [List.length_cons, ih]
+    simp only [List.count_cons]
+    rw [Finset.sum_add_distrib]
+    have hone : (∑ p : Piece, if (a == p) = true then 1 else 0) = 1 := by
+      rw [Finset.sum_congr rfl (fun p _ => show
+        (if (a == p) = true then 1 else 0)
+          = (if p = a then 1 else 0) from by
+            by_cases h : p = a
+            · rw [if_pos h, if_pos (by simp [h])]
+            · rw [if_neg h, if_neg (by simp [Ne.symm h])])]
+      rw [Finset.sum_ite_eq' Finset.univ a (fun _ => 1)]
+      simp
+    omega
+
+/-- Repeating a round multiplies every piece count. -/
+theorem count_flatten_replicate (R : List Placement) (k : ℕ) (p : Piece) :
+    (((List.replicate k R).flatten).map (·.piece)).count p
+      = k * ((R.map (·.piece)).count p) := by
+  induction k with
+  | zero => simp
+  | succ n ih =>
+    rw [List.replicate_succ, List.flatten_cons, List.map_append,
+      List.count_append, ih]
+    ring
+
+namespace CycleWitness
+
+/-- **A REPEATED ROUND MUST BE A WHOLE NUMBER OF BAGS**: if a witness is
+one round run `k` times, that round plays every piece equally often, so
+its length is divisible by seven. -/
+theorem round_seven_dvd (W : CycleWitness) {R : List Placement} {k : ℕ}
+    (hk : 0 < k) (hrep : W.word = (List.replicate k R).flatten) :
+    7 ∣ R.length := by
+  classical
+  have hcount : ∀ p : Piece,
+      k * ((R.map (·.piece)).count p) = W.bags := by
+    intro p
+    have h := W.piece_census p
+    rw [hrep, count_flatten_replicate] at h
+    exact h
+  have hconst : ∀ p : Piece,
+      (R.map (·.piece)).count p
+        = (R.map (·.piece)).count Piece.O := by
+    intro p
+    have h1 := hcount p
+    have h2 := hcount Piece.O
+    have : k * ((R.map (·.piece)).count p)
+        = k * ((R.map (·.piece)).count Piece.O) := by omega
+    exact Nat.eq_of_mul_eq_mul_left hk this
+  have hlen : R.length = 7 * ((R.map (·.piece)).count Piece.O) := by
+    have hml : (R.map (·.piece)).length = R.length := List.length_map ..
+    rw [← hml, length_eq_sum_count]
+    rw [Finset.sum_congr rfl (fun p _ => hconst p), Finset.sum_const,
+      piece_univ_card, smul_eq_mul]
+  exact ⟨_, hlen⟩
+
+/-- **NO SEVEN COPIES OF A TEN-PIECE ROUND**: the natural shape for a
+perfect-clear loop — seven repetitions of a ten-piece round — is
+bag-illegal, because ten is not a multiple of seven. The rounds of any
+such construction must genuinely differ. -/
+theorem not_seven_copies_of_ten (W : CycleWitness) {R : List Placement}
+    (hR : R.length = 10)
+    (hrep : W.word = (List.replicate 7 R).flatten) : False := by
+  have h7 := W.round_seven_dvd (by omega) hrep
+  rw [hR] at h7
+  omega
+
+/-- More generally, a witness is never a repetition of a round whose
+length is not a whole number of bags. -/
+theorem not_repetition_of_partial_bag (W : CycleWitness)
+    {R : List Placement} {k : ℕ} (hk : 0 < k)
+    (hrep : W.word = (List.replicate k R).flatten)
+    (hnd : ¬ (7 ∣ R.length)) : False :=
+  hnd (W.round_seven_dvd hk hrep)
+
+end CycleWitness
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
