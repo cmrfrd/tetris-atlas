@@ -41629,6 +41629,37 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29t) — what the opening owes the mill (bank 435/N)
+
+Putting the two halves together yields a condition on the first three
+bags that costs nothing to derive and rules out a whole style of
+opening.
+
+- **`charge_from_empty`** — the full law specialised to a start from
+  nothing: charge changes by the T's played, the rows cleared, and the
+  gravity work done.
+- **`charge_millStackWith_floorE`** (= 1), **`millWith_floorE_charge`**
+  — the mill's tiling is clear-free, so its parity test fixes the
+  charge of whatever board is handed to it: zero.
+- **`mill_prefix_gravity_odd`** — three bags play three T's and, on
+  this schedule, clear six rows, which already accounts for a charge of
+  one. The gravity work must supply the missing one, so **the opening
+  must do odd gravity work**.
+- **`mill_prefix_has_partial_clear`** — and gravity work is done only
+  by clears that leave survivors standing above them. So an opening
+  whose every harvest is flush — nothing riding above the row that goes
+  — cannot feed the mill, whatever its placements.
+
+That is the first condition in this construction obtained purely from
+geometry rather than counting, and it was derived without choosing a
+single placement. It also explains a failure pattern from the hand
+search: designs that kept the board tidy by clearing only flush rows
+were structurally disqualified, not merely unlucky.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29s) — the mill carries a payload (bank 434/N)
 
 `millBag` swept the board bare, which is what the last bag of a loop

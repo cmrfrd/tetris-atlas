@@ -18368,6 +18368,98 @@ theorem well_I_floorE_trace_inField :
     ∀ c ∈ wordTrace (millStackWith floorE)
       [(⟨Piece.I, 1, 9⟩ : Placement)], ∀ q ∈ c, q.2 < 20 := by decide
 
+/-! ### What the opening owes the mill
+
+Put the two halves together. The mill's tiling is clear-free, so its
+parity test fixes the charge of the board handed to it: to feed a mill
+carrying the floor as payload, the opening must deliver a board of
+charge zero.
+
+The opening's own charge is fixed too, by the full law — charge changes
+by the T's played, the rows cleared, and the gravity work done. Three
+bags play three T's and, on this schedule, clear six rows; that already
+accounts for a charge of one. So the gravity work must supply the
+missing one.
+
+**The opening must therefore do odd gravity work**, and gravity work is
+done only by clears that leave survivors standing above them. An
+opening whose every clear is flush — nothing riding above the row that
+goes — cannot feed the mill. That is a geometric condition on the first
+three bags, obtained without choosing a single placement. -/
+
+/-- **THE CHARGE LAW FROM THE EMPTY BOARD.** -/
+theorem charge_from_empty {w : List Placement}
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) :
+    BagGrowth.charge (w.foldl (Placement.applyStep GameConfig.standard) ∅)
+      = wordTCharge w + ((wordClears ∅ w : ℕ) : ZMod 2)
+        + wordGravity ∅ w := by
+  have hwf : Board.WF GameConfig.standard (∅ : Board) := by
+    intro p hp
+    simp at hp
+  have h := charge_word (b := ∅) (pls := w) hwf hv
+  simpa using h
+
+set_option maxRecDepth 1000000 in
+theorem charge_millStackWith_floorE :
+    BagGrowth.charge (millStackWith floorE) = 1 := by decide
+
+/-- **THE PAYLOAD MILL'S FLOOR TEST.** A board that six pieces with one
+T can build, without clearing, into the stack carrying `floorE` must
+have charge zero. -/
+theorem millWith_floorE_charge {X : Board} {u : List Placement}
+    (hT : u.countP (fun pl => pl.piece == Piece.T) = 1)
+    (hclear : wordClears X u = 0)
+    (hbuild : u.foldl (Placement.applyStep GameConfig.standard) X
+      = millStackWith floorE) :
+    BagGrowth.charge X = 0 := by
+  have h := clear_free_charge_change hclear hbuild
+  rw [hT, charge_millStackWith_floorE] at h
+  have hz : ∀ x : ZMod 2, 1 = x + ((1 : ℕ) : ZMod 2) → x = 0 := by decide
+  exact hz _ h
+
+/-- **THE OPENING MUST WORK AGAINST GRAVITY.** A three-bag opening from
+the empty board that clears six rows and hands its board to a mill
+carrying the floor has odd gravity work. -/
+theorem mill_prefix_gravity_odd {w u : List Placement} {X : Board}
+    (hvw : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hTw : wordTCharge w = 1)
+    (hcw : wordClears ∅ w = 6)
+    (hbuild : w.foldl (Placement.applyStep GameConfig.standard) ∅ = X)
+    (hTu : u.countP (fun pl => pl.piece == Piece.T) = 1)
+    (hcu : wordClears X u = 0)
+    (hmill : u.foldl (Placement.applyStep GameConfig.standard) X
+      = millStackWith floorE) :
+    wordGravity ∅ w = 1 := by
+  have hX := millWith_floorE_charge hTu hcu hmill
+  have hlaw := charge_from_empty hvw
+  rw [hbuild, hX, hTw, hcw] at hlaw
+  have hsix : ((6 : ℕ) : ZMod 2) = 0 := by decide
+  rw [hsix] at hlaw
+  have hz : ∀ g : ZMod 2, (0 : ZMod 2) = 1 + 0 + g → g = 1 := by decide
+  exact hz _ hlaw
+
+/-- **SO SOME CLEAR MUST CARRY A LOAD.** Odd gravity work is impossible
+without a clear that leaves cells standing above the row it takes: the
+opening cannot consist of flush harvests alone. -/
+theorem mill_prefix_has_partial_clear {w u : List Placement} {X : Board}
+    (hvw : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hTw : wordTCharge w = 1)
+    (hcw : wordClears ∅ w = 6)
+    (hbuild : w.foldl (Placement.applyStep GameConfig.standard) ∅ = X)
+    (hTu : u.countP (fun pl => pl.piece == Piece.T) = 1)
+    (hcu : wordClears X u = 0)
+    (hmill : u.foldl (Placement.applyStep GameConfig.standard) X
+      = millStackWith floorE) :
+    ∃ (c : Board) (pl : Placement),
+      Board.fullRows GameConfig.standard (pl.place c) ≠ ∅ ∧
+        ∃ p ∈ pl.place c,
+          ¬ Board.isFull GameConfig.standard (pl.place c) p.2 := by
+  have hg := mill_prefix_gravity_odd hvw hTw hcw hbuild hTu hcu hmill
+  have hne : wordGravity ∅ w ≠ 0 := by
+    rw [hg]
+    decide
+  exact exists_partial_clear hne
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
