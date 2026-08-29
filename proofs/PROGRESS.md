@@ -41629,6 +41629,34 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29c) — a perfect-clear loop needs ten bags (bank 418/N)
+
+The T-parity obstruction says five bags cannot tile a rectangle,
+because five charges of ±1 never sum to zero. That argument lived
+entirely in clear-free stacking. Through the charge law it now reaches
+loops that actually clear.
+
+- **`natCast_two_eq_zero_iff`** — the even companion to the odd cast.
+- **`CycleWitness.clears_eq`** — a witness's clears in closed form:
+  fourteen per five bags.
+- **`CycleWitness.perfect_clear_bags`** — THE PARITY: if every harvest
+  sweeps the board bare the gravity work vanishes, so the charge law
+  reads 0 = (bags) + (clears) mod 2, i.e. 19k ≡ k ≡ 0. The bag count
+  is divisible by TEN.
+- **`.perfect_clear_length_ge_seventy`** / **`.no_perfect_clear_five_bags`**
+  — hence a perfect-clear witness runs at least seventy placements, and
+  five bags is impossible.
+
+This is the concrete guidance for a construction attempt: aim at
+seventy moves, not thirty-five. Real Tetris perfect-clear loops run ten
+pieces at a time and re-synchronise with the bag after seven of them —
+seventy — which is exactly what this parity predicts.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean. Compiled first
+try.
+
+---
+
 ### Tick (manual, 2026-08-29b) — the witness, at any number of bags (bank 417/N)
 
 - **`isBagStream_of_blocks_gen`** — the m-block test: a word of 7m

@@ -16380,6 +16380,94 @@ theorem clear_census (W : CycleWitness) :
 
 end CycleWitness
 
+/-! ### A perfect-clear loop needs ten bags
+
+The T-parity obstruction says five bags cannot tile a rectangle,
+because five charges of `±1` never sum to zero. That argument lived
+entirely in clear-free stacking. Through the charge law it now reaches
+loops that actually clear: if a witness renews by perfect clears — every
+harvest sweeping the board bare — its gravity work vanishes, the parity
+equation collapses to "the bag count over five is even", and the period
+cannot be thirty-five. Seventy is the first length allowed. -/
+
+/-- A natural casts to zero in `ZMod 2` exactly when it is even. -/
+theorem natCast_two_eq_zero_iff (n : ℕ) :
+    ((n : ℕ) : ZMod 2) = 0 ↔ n % 2 = 0 := by
+  have hval : ∀ x : ZMod 2, x = 0 ∨ x = 1 := by decide
+  have hone := natCast_two_eq_one_iff n
+  constructor
+  · intro h0
+    by_contra hodd
+    have : n % 2 = 1 := by omega
+    rw [hone.mpr this] at h0
+    exact absurd h0 (by decide)
+  · intro heven
+    rcases hval ((n : ℕ) : ZMod 2) with h | h
+    · exact h
+    · have := hone.mp h
+      omega
+
+namespace CycleWitness
+
+/-- A witness's total clears, in closed form: fourteen per five bags. -/
+theorem clears_eq {W : CycleWitness} {k : ℕ} (hk : W.bags = 5 * k) :
+    wordClears W.base W.word = 14 * k := by
+  have h := W.clear_census
+  rw [hk] at h
+  omega
+
+/-- **THE PERFECT-CLEAR PARITY**: a witness whose every harvest sweeps
+the board bare runs a number of bags divisible by ten. Five bags carry
+five T's — an odd charge — and nothing else is left to cancel it. -/
+theorem perfect_clear_bags (W : CycleWitness)
+    (hperfect : ∀ (c : Board) (pl : Placement),
+      Board.fullRows GameConfig.standard (pl.place c) ≠ ∅ →
+      ∀ p ∈ pl.place c,
+        Board.isFull GameConfig.standard (pl.place c) p.2) :
+    10 ∣ W.bags := by
+  have hgrav : wordGravity W.base W.word = 0 := by
+    by_contra hne
+    obtain ⟨c, pl, hne', p, hp, hpnf⟩ := exists_partial_clear hne
+    exact hpnf (hperfect c pl hne' p hp)
+  have hlaw := cycle_charge_law W.wf W.valid W.cycles
+  rw [hgrav, wordTCharge_eq_count, W.piece_census] at hlaw
+  obtain ⟨k, hk⟩ := W.five_dvd_bags
+  have hclears := clears_eq (W := W) hk
+  rw [hclears, hk] at hlaw
+  have hsum : (((5 * k + 14 * k : ℕ)) : ZMod 2) = 0 := by
+    push_cast
+    push_cast at hlaw
+    linear_combination -hlaw
+  have hpar := (natCast_two_eq_zero_iff _).mp hsum
+  omega
+
+/-- **SEVENTY MOVES, NOT THIRTY-FIVE**: a perfect-clear witness runs at
+least ten bags, so its period is at least seventy placements. The
+shortest conceivable M2 loop of that kind is twice as long as the mass
+and bag clocks alone would allow. -/
+theorem perfect_clear_length_ge_seventy (W : CycleWitness)
+    (hperfect : ∀ (c : Board) (pl : Placement),
+      Board.fullRows GameConfig.standard (pl.place c) ≠ ∅ →
+      ∀ p ∈ pl.place c,
+        Board.isFull GameConfig.standard (pl.place c) p.2) :
+    70 ≤ W.word.length := by
+  have h10 := W.perfect_clear_bags hperfect
+  have hpos := W.bags_pos
+  have hlen := W.len
+  omega
+
+/-- In particular no perfect-clear witness runs exactly five bags. -/
+theorem no_perfect_clear_five_bags (W : CycleWitness)
+    (hperfect : ∀ (c : Board) (pl : Placement),
+      Board.fullRows GameConfig.standard (pl.place c) ≠ ∅ →
+      ∀ p ∈ pl.place c,
+        Board.isFull GameConfig.standard (pl.place c) p.2)
+    (h5 : W.bags = 5) : False := by
+  have h10 := W.perfect_clear_bags hperfect
+  omega
+
+end CycleWitness
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
