@@ -17246,6 +17246,102 @@ no row is owed to a cell trapped beneath it. -/
 theorem segABC_trace_holeFree :
     ∀ c ∈ wordTrace ∅ segABC.moves, HoleFree c := by decide
 
+/-! ### The last move sweeps the board bare
+
+A loop anchored at the empty board has to come home to it, and the only
+thing that removes cells is a clear. So the final placement of such a
+witness lands on a board every one of whose cells is in a row that the
+landing completes: nothing at all may be left standing, anywhere.
+
+That is a severe condition, and it is the one that has defeated every
+hand-built ending so far. It also says what the arithmetic of a finish
+must be. With three bags banked, twenty-four cells standing and
+fifty-six still to come, the last two bags have to take exactly four
+rows each — two tetrises, the classic mill — and the alternative
+schedules are equally rigid. -/
+
+/-- A clear that empties the board leaves every cell it removed in a
+full row. -/
+theorem forall_isFull_of_clearLines_empty {cfg : GameConfig} {b : Board}
+    (h : Board.clearLines cfg b = ∅) :
+    ∀ q ∈ b, Board.isFull cfg b q.2 := by
+  intro q hq
+  by_contra hnf
+  have hmem : q ∈ b.filter (fun p => ¬ Board.isFull cfg b p.2) :=
+    Finset.mem_filter.mpr ⟨hq, hnf⟩
+  have hin : (q.1, q.2 - Board.clearedBelow cfg b q.2)
+      ∈ Board.clearLines cfg b := by
+    simp only [Board.clearLines]
+    exact Finset.mem_image_of_mem _ hmem
+  rw [h] at hin
+  simp at hin
+
+namespace CycleWitness
+
+/-- **THE FINAL LANDING IS SWEPT AWAY.** For a witness anchored at the
+empty board, the last placement's merged board clears to nothing. -/
+theorem final_board_swept (W : CycleWitness) (hbase : W.base = ∅)
+    {init : List Placement} {last : Placement}
+    (hsplit : W.word = init ++ [last]) :
+    Board.clearLines GameConfig.standard
+      (last.place (init.foldl (Placement.applyStep GameConfig.standard) ∅))
+      = ∅ := by
+  have hc := W.cycles
+  rw [hsplit, hbase, List.foldl_append] at hc
+  simpa [Placement.applyStep] using hc
+
+/-- **NOTHING MAY BE LEFT STANDING.** Every cell on the board when the
+last piece lands — the piece's own four included — lies in a row that
+the landing completes. A witness anchored at the empty board has no
+room for a single stray cell at the end. -/
+theorem every_cell_swept (W : CycleWitness) (hbase : W.base = ∅)
+    {init : List Placement} {last : Placement}
+    (hsplit : W.word = init ++ [last]) :
+    ∀ q ∈ last.place (init.foldl (Placement.applyStep GameConfig.standard) ∅),
+      Board.isFull GameConfig.standard
+        (last.place (init.foldl (Placement.applyStep GameConfig.standard) ∅))
+        q.2 :=
+  forall_isFull_of_clearLines_empty (W.final_board_swept hbase hsplit)
+
+/-- The clears a witness's tail owes, given what its prefix took. -/
+theorem tail_clears (W : CycleWitness) (hbase : W.base = ∅) (hbags : W.bags = 5)
+    {p t : List Placement} (hsplit : W.word = p ++ t) :
+    wordClears ∅ p
+      + wordClears (p.foldl (Placement.applyStep GameConfig.standard) ∅) t
+      = 14 := by
+  have hc := W.clear_census
+  rw [hbags] at hc
+  have htot : wordClears W.base W.word = 14 := by omega
+  rw [hbase, hsplit, wordClears_append] at htot
+  exact htot
+
+/-- **THE MILL FINISH.** Three bags that clear six rows leave twenty-four
+cells standing with fifty-six more coming, and the only way to reach
+nothing is two four-row harvests: a tetris in each of the last two bags.
+Each needs a nine-wide stack four deep and the bag's single I stood
+upright in the tenth column — which is exactly the classical mill, now
+forced rather than chosen. -/
+theorem mill_finish (W : CycleWitness) (hbase : W.base = ∅) (hbags : W.bags = 5)
+    {p t : List Placement} (hsplit : W.word = p ++ t)
+    (hpc : wordClears ∅ p = 6) :
+    wordClears (p.foldl (Placement.applyStep GameConfig.standard) ∅) t = 8 := by
+  have h := W.tail_clears hbase hbags hsplit
+  omega
+
+/-- The same for the chain actually banked: three bags clearing seven
+rows leave fourteen cells, and the last two owe seven. -/
+theorem banked_finish (W : CycleWitness) (hbase : W.base = ∅) (hbags : W.bags = 5)
+    {t : List Placement} (hsplit : W.word = segABC.moves ++ t) :
+    wordClears segABC.dst t = 7 := by
+  have h := W.tail_clears hbase hbags hsplit
+  rw [segABC_clears] at h
+  have hfold : segABC.moves.foldl (Placement.applyStep GameConfig.standard) ∅
+      = segABC.dst := segABC.steps
+  rw [hfold] at h
+  omega
+
+end CycleWitness
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

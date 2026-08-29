@@ -41629,6 +41629,32 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29k) — the last move sweeps the board bare (bank 426/N)
+
+Why the ending is the hard part, stated as a theorem.
+
+- **`forall_isFull_of_clearLines_empty`** — a clear that empties the
+  board leaves every removed cell in a full row.
+- **`CycleWitness.final_board_swept`**, **`every_cell_swept`** — so for
+  a witness anchored at the empty board, every cell standing when the
+  last piece lands (the piece's own four included) lies in a row that
+  the landing completes. Not one stray cell is permitted at the end.
+  This is the condition that has defeated every hand-built ending so
+  far, and it is now precise rather than folklore.
+- **`tail_clears`** — what a tail owes, given what its prefix took.
+- **`mill_finish`** — and the arithmetic of a finish is rigid: three
+  bags clearing six rows leave twenty-four cells standing with
+  fifty-six coming, and only four-plus-four reaches nothing. Each of
+  those needs a nine-wide stack four deep and the bag's single I stood
+  upright in the tenth column — the classical mill, forced rather than
+  chosen.
+- **`banked_finish`** — for the chain actually in the bank (seven rows
+  in three bags, fourteen cells standing), the last two owe seven.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29j) — the skyline is everything, and a buried gap is forever (bank 425/N)
 
 Two facts about how this model drops pieces, and together they are what
