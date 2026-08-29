@@ -41629,6 +41629,41 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29r) — the parity test for tilings (bank 433/N)
+
+Counting closed at bag resolution last tick, so the next constraint had
+to come from geometry. This is it, and it is cheap.
+
+Colour the board like a chessboard. Of the twenty-eight piece-rotation
+pairs exactly one kind is unbalanced — the T covers three squares of
+one colour and one of the other, every other piece two and two. So:
+
+- **`applyStep_eq_place_of_no_clear`** — with nothing to clear, a move
+  is just a placement.
+- **`clear_free_word_charge`** — hence along a word that clears
+  nothing, the checkerboard charge changes by the number of T's played
+  and by nothing else.
+- **`clear_free_charge_change`** — read backwards, this is a rejection
+  test: charges that do not match rule the word out whatever its
+  placements are.
+- **`clear_free_bag_flips_charge`** — and since a bag deals exactly one
+  T, **a clear-free bag always flips the charge**. A stretch that must
+  come home to the same charge cannot be made of clear-free bags alone.
+- **`millFloor_charge`** — the design instance: six pieces containing
+  one T cannot build a floor into the mill stack without clearing
+  unless that floor has charge one. `charge millStack = 0`,
+  `charge floorE = 1`, and `floorE_passes_millFloor_test` derives the
+  floor's charge from the tiling rather than assuming it.
+
+What this buys is a filter. Candidate floors for the missing bag can now
+be accepted or rejected by one kernel evaluation *before* any placement
+is chosen — which is exactly the reasoning that found `floorE` by hand,
+now available as a theorem instead of a habit.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29q) — the bag profile (bank 432/N)
 
 At the resolution of whole bags the clear schedule is now completely

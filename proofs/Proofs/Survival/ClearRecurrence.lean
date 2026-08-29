@@ -18095,6 +18095,112 @@ theorem bag_boundary_mass (W : CycleWitness) (hbase : W.base = ∅)
 
 end CycleWitness
 
+/-! ### The parity test for tilings
+
+Counting is closed at bag resolution, so the next constraint must come
+from geometry. Here it is, and it is cheap.
+
+Colour the board like a chessboard. Of the twenty-eight piece-rotation
+pairs, exactly one kind is unbalanced: the T covers three squares of one
+colour and one of the other, and every other piece covers two and two.
+So along a stretch of play with no clears, the board's checkerboard
+charge changes by the number of T's played, and by nothing else.
+
+A bag deals exactly one T. **A clear-free bag therefore always flips the
+charge** — which turns a design question into a single kernel
+evaluation. Six pieces cannot build a floor into the mill stack unless
+the floor's charge differs from the stack's, and that can be checked
+before any placement is chosen. `floorE` passes: its charge is one, the
+stack's is zero.
+
+This is the tool that found the mill floor in the first place. It is
+now a theorem rather than a habit. -/
+
+/-- With nothing to clear, a move is just a placement. -/
+theorem applyStep_eq_place_of_no_clear {b : Board} {pl : Placement}
+    (h : (Board.fullRows GameConfig.standard (pl.place b)).card = 0) :
+    Placement.applyStep GameConfig.standard b pl = pl.place b := by
+  unfold Placement.applyStep
+  exact Board.clearLines_eq_self_of_no_fullRows GameConfig.standard
+    (Finset.card_eq_zero.mp h)
+
+/-- **THE CHARGE COUNTS THE T's.** Along a word that clears nothing, the
+checkerboard charge changes by the number of T's played. -/
+theorem clear_free_word_charge {b : Board} {w : List Placement}
+    (h : wordClears b w = 0) :
+    BagGrowth.charge (w.foldl (Placement.applyStep GameConfig.standard) b)
+      = BagGrowth.charge b
+        + ((w.countP (fun pl => pl.piece == Piece.T) : ℕ) : ZMod 2) := by
+  induction w generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    rw [wordClears_cons] at h
+    have h0 : (Board.fullRows GameConfig.standard (pl.place b)).card = 0 := by
+      omega
+    have hrest : wordClears
+        (Placement.applyStep GameConfig.standard b pl) rest = 0 := by omega
+    have hstep := applyStep_eq_place_of_no_clear h0
+    rw [List.foldl_cons, ih hrest, hstep, BagGrowth.charge_place,
+      BagGrowth.charge_shapeUp_pl, List.countP_cons]
+    by_cases hp : pl.piece = Piece.T
+    · have hbeq : (pl.piece == Piece.T) = true := beq_iff_eq.mpr hp
+      rw [if_pos hp, hbeq, if_pos rfl]
+      push_cast
+      ring
+    · have hbeq : (pl.piece == Piece.T) = false := beq_eq_false_iff_ne.mpr hp
+      rw [if_neg hp, hbeq, if_neg (by decide : ¬ (false = true))]
+      push_cast
+      ring
+
+/-- **THE PARITY TEST.** A clear-free word carrying one board to another
+pins the change in charge to its T-count. Read backwards: charges that
+do not match rule the word out, whatever its placements. -/
+theorem clear_free_charge_change {b b' : Board} {w : List Placement}
+    (hclear : wordClears b w = 0)
+    (hbuild : w.foldl (Placement.applyStep GameConfig.standard) b = b') :
+    BagGrowth.charge b'
+      = BagGrowth.charge b
+        + ((w.countP (fun pl => pl.piece == Piece.T) : ℕ) : ZMod 2) := by
+  rw [← hbuild]
+  exact clear_free_word_charge hclear
+
+/-- **A CLEAR-FREE BAG FLIPS THE CHARGE.** Every bag deals exactly one T,
+so a bag that clears nothing always changes the board's colour balance.
+A stretch of play that must come home to the same charge cannot be made
+of clear-free bags alone. -/
+theorem clear_free_bag_flips_charge {b : Board} {w : List Placement}
+    (hT : w.countP (fun pl => pl.piece == Piece.T) = 1)
+    (hclear : wordClears b w = 0) :
+    BagGrowth.charge (w.foldl (Placement.applyStep GameConfig.standard) b)
+      = BagGrowth.charge b + 1 := by
+  rw [clear_free_word_charge hclear, hT]
+  norm_num
+
+theorem charge_millStack : BagGrowth.charge millStack = 0 := by decide
+
+theorem charge_floorE : BagGrowth.charge floorE = 1 := by decide
+
+theorem sixE_T_count : sixE.countP (fun pl => pl.piece == Piece.T) = 1 := by
+  decide
+
+/-- **THE MILL FLOOR TEST.** Six pieces containing one T cannot build a
+floor into the mill stack without clearing unless that floor has charge
+one. A candidate floor is accepted or rejected by one evaluation,
+before a single placement is chosen. -/
+theorem millFloor_charge {f : Board} {w : List Placement}
+    (hT : w.countP (fun pl => pl.piece == Piece.T) = 1)
+    (hclear : wordClears f w = 0)
+    (hbuild : w.foldl (Placement.applyStep GameConfig.standard) f = millStack) :
+    BagGrowth.charge f = 1 := by
+  have h := clear_free_charge_change hclear hbuild
+  rw [hT, charge_millStack] at h
+  have hz : ∀ x : ZMod 2, 0 = x + ((1 : ℕ) : ZMod 2) → x = 1 := by decide
+  exact hz _ h
+
+/-- The floor actually used passes the test, as it must. -/
+theorem floorE_passes_millFloor_test : BagGrowth.charge floorE = 1 :=
+  millFloor_charge sixE_T_count sixE_no_clears sixE_builds
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
