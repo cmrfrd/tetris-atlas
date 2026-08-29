@@ -17927,6 +17927,101 @@ theorem final_mass_cases (W : CycleWitness) (hbase : W.base = ∅)
 
 end CycleWitness
 
+/-! ### What one bag can take
+
+The ceiling was global. Localised to a single bag it becomes a
+statement about standing inventory: a bag delivers twenty-eight cells,
+so ten times what it clears is what it found plus what it delivered,
+less what it leaves behind. A bag can therefore never take more than
+`(mass + 28)/10` rows.
+
+Read off the table. From the empty board a bag takes at most two. To
+take four — a bag's whole harvest in one tetris — twelve cells must
+already be standing, and twelve is exactly what the mill floor carries.
+The last bag built is thus extremal: it harvests the most any bag could
+from the lightest board that permits it. To take five, twenty-two must
+be standing. -/
+
+/-- The schedule of a join is the join of the schedules. -/
+theorem clearSeq_append (b : Board) (w1 w2 : List Placement) :
+    clearSeq b (w1 ++ w2)
+      = clearSeq b w1
+        ++ clearSeq (w1.foldl (Placement.applyStep GameConfig.standard) b) w2 := by
+  induction w1 generalizing b with
+  | nil => simp
+  | cons pl rest ih => rw [List.cons_append, clearSeq_cons, clearSeq_cons,
+      List.cons_append, ih, List.foldl_cons]
+
+/-- **THE PER-BAG LEDGER.** Ten times what a bag clears, plus the mass
+it leaves, is the mass it found plus the twenty-eight cells it laid. -/
+theorem bag_ledger {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) (hlen : w.length = 7) :
+    10 * wordClears b w
+        + (w.foldl (Placement.applyStep GameConfig.standard) b).count
+      = b.count + 28 := by
+  have h := foldl_count_ledger_exact hwf hv
+  rw [hlen] at h
+  omega
+
+/-- **A BAG'S HARVEST IS CAPPED BY WHAT IT FINDS.** -/
+theorem bag_clears_le {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) (hlen : w.length = 7) :
+    10 * wordClears b w ≤ b.count + 28 := by
+  have h := bag_ledger hwf hv hlen
+  omega
+
+/-- On the empty board a bag takes at most two rows. -/
+theorem bag_on_empty_le_two {w : List Placement}
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) (hlen : w.length = 7) :
+    wordClears ∅ w ≤ 2 := by
+  have hwf : Board.WF GameConfig.standard (∅ : Board) := by
+    intro p hp
+    simp at hp
+  have h := bag_clears_le hwf hv hlen
+  have hz : Board.count (∅ : Board) = 0 := rfl
+  omega
+
+/-- **TWELVE CELLS ARE NEEDED TO TETRIS IN A BAG.** Forty cells must
+leave and a bag lays only twenty-eight. -/
+theorem bag_tetris_needs_twelve {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) (hlen : w.length = 7)
+    (h4 : 4 ≤ wordClears b w) : 12 ≤ b.count := by
+  have h := bag_clears_le hwf hv hlen
+  omega
+
+/-- And twenty-two to take five. -/
+theorem bag_five_needs_twentytwo {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) (hlen : w.length = 7)
+    (h5 : 5 ≤ wordClears b w) : 22 ≤ b.count := by
+  have h := bag_clears_le hwf hv hlen
+  omega
+
+/-- A stretch of `m` bags clears at most `(mass + 28m)/10`. -/
+theorem Segment.clears_le (S : Segment)
+    (hwf : Board.WF GameConfig.standard S.src) :
+    10 * wordClears S.src S.moves ≤ S.src.count + 28 * S.bags := by
+  have h := foldl_count_ledger_exact hwf S.valid
+  rw [S.len] at h
+  omega
+
+/-- **THE MILL FLOOR IS THE LIGHTEST BOARD THAT CAN TETRIS IN A BAG**,
+and the last bag built takes the most any bag could from it: twelve
+cells standing, four rows away. -/
+theorem millBagE_extremal :
+    floorE.card = 12 ∧ wordClears floorE millBagE.moves = 4
+      ∧ ∀ (w : List Placement), (∀ pl ∈ w, pl.Valid GameConfig.standard) →
+          w.length = 7 → wordClears floorE w ≤ 4 := by
+  refine ⟨floorE_card, millBagE_clears, ?_⟩
+  intro w hv hlen
+  have hwf : Board.WF GameConfig.standard floorE := by decide
+  have h := bag_clears_le hwf hv hlen
+  have hc : Board.count floorE = 12 := floorE_card
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

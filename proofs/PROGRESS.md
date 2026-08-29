@@ -41629,6 +41629,36 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29p) — what one bag can take (bank 431/N)
+
+The ceiling was global; localised to a single bag it becomes a
+statement about standing inventory.
+
+- **`bag_ledger`** — ten times what a bag clears, plus the mass it
+  leaves, is the mass it found plus the twenty-eight cells it laid.
+- **`bag_clears_le`** — so a bag never takes more than `(mass + 28)/10`
+  rows, and `Segment.clears_le` gives the same for a stretch of `m`
+  bags.
+- **`bag_on_empty_le_two`** — from the empty board, two rows.
+- **`bag_tetris_needs_twelve`** — to take four in one bag, twelve cells
+  must already be standing: forty must leave and a bag lays only
+  twenty-eight.
+- **`bag_five_needs_twentytwo`** — five rows needs twenty-two standing.
+- **`clearSeq_append`** — the schedule of a join is the join of the
+  schedules, which is what makes per-bag talk rigorous.
+
+The pleasing consequence is **`millBagE_extremal`**: the mill floor
+carries exactly twelve cells, which is the *minimum* from which any bag
+can tetris, and the mill bag takes four, which is the *maximum* any bag
+could take from it. The last bag built is extremal on both counts —
+the lightest board that permits the largest harvest. That is not a
+coincidence of the design; twelve is forced by the ledger, which is
+why the floor had to have exactly that mass.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29o) — reading the schedule (bank 430/N)
 
 With the ballot ceiling in hand the schedule can be read off bag by bag
