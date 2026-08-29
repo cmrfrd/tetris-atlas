@@ -16468,6 +16468,98 @@ theorem no_perfect_clear_five_bags (W : CycleWitness)
 
 end CycleWitness
 
+/-! ### Witness-hood is a finite check
+
+Every field of a `CycleWitness` quantifies over a finite domain: the
+cells of a board, the letters of a word, the bags of a period, the
+positions of one pass. Even the two that carry the mathematics — that
+the word closes the loop and that it never tops out — are an equality
+of boards and a bounded quantification. So a candidate can be certified
+by kernel evaluation, with no argument at all.
+
+The instance below records that formally, and the two theorems after it
+show the kernel really does execute a ten-move loop with a tetris in
+it. Producing a witness is therefore a search for the right word, not a
+search for the right proof. -/
+
+/-- Well-formedness is a finite check (the definition must be unfolded
+before instance search can see the bounded quantifier). -/
+instance boardWF_decidable (cfg : GameConfig) (b : Board) :
+    Decidable (Board.WF cfg b) := by
+  unfold Board.WF
+  infer_instance
+
+/-- Safety follows from staying in the field. -/
+theorem safe_of_inField {b : Board} {w : List Placement}
+    (hin : ∀ i, i < w.length →
+      ∀ p ∈ (wordPlay ⟨b, Bag.full⟩ w i).board, p.2 < 20) :
+    ∀ i, i < w.length →
+      ¬ (wordPlay ⟨b, Bag.full⟩ w i).lost GameConfig.standard := by
+  intro i hi
+  rw [GameState.not_lost_iff_forall_row_lt, GameConfig.standard_rows]
+  exact hin i hi
+
+/-- The six conditions of a certificate, as one proposition. -/
+def WitnessConditions (b : Board) (w : List Placement) (m : ℕ) : Prop :=
+  Board.WF GameConfig.standard b ∧ 0 < m ∧ w.length = 7 * m
+    ∧ (∀ pl ∈ w, pl.Valid GameConfig.standard)
+    ∧ (∀ jj, jj < m → ∀ p : Piece, ∃ i, i < 7 ∧
+        (w.getD (7 * jj + i) ⟨Piece.O, 0, 0⟩).piece = p)
+    ∧ w.foldl (Placement.applyStep GameConfig.standard) b = b
+    ∧ (∀ i, i < w.length →
+        ¬ (wordPlay ⟨b, Bag.full⟩ w i).lost GameConfig.standard)
+
+/-- **EVERY WITNESS CONDITION IS DECIDABLE.** Handed a concrete board,
+word and bag count, the kernel can settle by itself whether they form a
+certificate — closure and safety included. -/
+instance witnessConditions_decidable (b : Board) (w : List Placement)
+    (m : ℕ) : Decidable (WitnessConditions b w m) := by
+  unfold WitnessConditions
+  infer_instance
+
+/-- Assemble a witness from a verified bundle of the six conditions. -/
+def CycleWitness.ofConditions {b : Board} {w : List Placement} {m : ℕ}
+    (h : WitnessConditions b w m) : CycleWitness where
+  base := b
+  word := w
+  bags := m
+  wf := h.1
+  bags_pos := h.2.1
+  len := h.2.2.1
+  valid := h.2.2.2.1
+  blocks := h.2.2.2.2.1
+  cycles := h.2.2.2.2.2.1
+  safe := h.2.2.2.2.2.2
+
+/-- **ANY CERTIFICATE SETTLES M2.** Checking the conditions — by kernel
+evaluation or otherwise — is enough to produce infinite play. -/
+theorem survives_of_witnessConditions {b : Board} {w : List Placement}
+    {m : ℕ} (h : WitnessConditions b w m) :
+    ∃ (C : ClosedCycle GameConfig.standard),
+      SurvivesForever GameConfig.standard C.policy ⟨b, Bag.full⟩ :=
+  (CycleWitness.ofConditions h).survives
+
+set_option maxRecDepth 400000 in
+/-- **THE KERNEL CAN RUN A LOOP.** The ten-move tetris mill, closed by
+evaluation rather than by argument: a thirty-six cell band built and
+swept, checked entirely inside the kernel. Evidence that the `cycles`
+field of a candidate is machine-checkable at realistic size. -/
+theorem ten_I_cycle_empty_by_kernel :
+    ([⟨Piece.I, 1, 0⟩, ⟨Piece.I, 1, 1⟩, ⟨Piece.I, 1, 2⟩,
+      ⟨Piece.I, 1, 3⟩, ⟨Piece.I, 1, 4⟩, ⟨Piece.I, 1, 5⟩,
+      ⟨Piece.I, 1, 6⟩, ⟨Piece.I, 1, 7⟩, ⟨Piece.I, 1, 8⟩,
+      ⟨Piece.I, 1, 9⟩] : List Placement).foldl
+      (Placement.applyStep GameConfig.standard) (∅ : Board)
+      = (∅ : Board) := by decide
+
+set_option maxRecDepth 400000 in
+/-- The same for the five-O double mill. -/
+theorem five_O_cycle_empty_by_kernel :
+    ([⟨Piece.O, 0, 0⟩, ⟨Piece.O, 0, 2⟩, ⟨Piece.O, 0, 4⟩,
+      ⟨Piece.O, 0, 6⟩, ⟨Piece.O, 0, 8⟩] : List Placement).foldl
+      (Placement.applyStep GameConfig.standard) (∅ : Board)
+      = (∅ : Board) := by decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

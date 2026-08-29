@@ -41629,6 +41629,36 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29d) — witness-hood is a finite check (bank 419/N)
+
+The decisive practical finding of the session. Every field of a
+`CycleWitness` quantifies over a finite domain — the two that carry the
+mathematics are an equality of boards and a bounded quantification — so
+a candidate can be certified by kernel evaluation with no argument at
+all.
+
+- **`boardWF_decidable`** — `Board.WF` is a `def`, so instance search
+  cannot see its bounded quantifier until it is unfolded. That one
+  missing instance was all that blocked the rest.
+- **`WitnessConditions`** / **`witnessConditions_decidable`** — the six
+  conditions as one decidable proposition.
+- **`CycleWitness.ofConditions`**, **`survives_of_witnessConditions`** —
+  check the conditions, get infinite play.
+- **`safe_of_inField`** — safety reduces to staying below row twenty.
+- **`ten_I_cycle_empty_by_kernel`**, **`five_O_cycle_empty_by_kernel`**
+  — and the kernel really does run the loops: the ten-move tetris mill
+  builds a thirty-six cell band and sweeps it, `decide`-checked in
+  about nine seconds at `maxRecDepth 400000`.
+
+What this changes: producing a witness is now a search for the right
+WORD, not for the right proof. The remaining problem is combinatorial
+design, and the theory says where to look — five bags for a general
+loop, ten if every harvest sweeps the board bare.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29c) — a perfect-clear loop needs ten bags (bank 418/N)
 
 The T-parity obstruction says five bags cannot tile a rectangle,
