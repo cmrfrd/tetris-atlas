@@ -41629,6 +41629,38 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29g) — segments compose (bank 422/N)
+
+The step that makes constructing a witness an incremental job rather
+than a single guess.
+
+A *segment* is a stretch of legal play: some whole number of bags
+carrying one board to another, in field the whole way. The content of
+the batch is that segments form an algebra.
+
+- **`Segment.comp`** — segments join when the first ends where the
+  second begins. All five obligations compose: lengths add, the
+  seven-blocks reindex across the seam, validity is pointwise, the
+  folds chain, and field-safety follows from `mem_wordTrace_append`
+  (a board visited by two words in succession is visited by one).
+- **`mem_wordTrace_append`**, **`getD_append_left`/`_right`** — the two
+  seam lemmas that make that work.
+- **`Segment.toWitnessFast`**, **`Segment.survives`** — a segment that
+  ends where it began IS a certificate, and settles M2.
+- **`Segment.id`** — the unit, and the base case for chaining.
+- **`Segment.five_chain_survives`** — the target stated as a chain of
+  five one-bag links.
+
+Why it matters: a thirty-five move word had to be designed all at once,
+because nothing let partial designs be joined. Now one bag can be
+designed, kernel-checked, and kept; the next starts from where the last
+left off. The five-bag loop is five verified links, and only the joins
+are shared between them.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29f) — safety in one pass (bank 421/N)
 
 An engineering theorem with a mathematical payoff: it is what makes the

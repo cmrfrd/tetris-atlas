@@ -16773,6 +16773,166 @@ theorem ten_I_trace_inField :
        ⟨Piece.I, 1, 6⟩, ⟨Piece.I, 1, 7⟩, ⟨Piece.I, 1, 8⟩,
        ⟨Piece.I, 1, 9⟩], ∀ p ∈ c, p.2 < 20 := by decide
 
+/-! ### Segments: building a witness a bag at a time
+
+A witness has to be designed all at once only if there is no way to
+join partial designs. There is. A *segment* is a stretch of legal play:
+some whole number of bags carrying one board to another, in field the
+whole way. Segments compose when the first one ends where the second
+begins, and a segment that ends where it started is a witness.
+
+That turns the construction into an incremental job. Design one bag,
+check it, keep it; design the next from where the last left off. The
+five-bag loop is then a chain of five verified links rather than a
+single thirty-five move guess. -/
+
+theorem getD_append_left {α : Type*} (l1 l2 : List α) (n : ℕ) (d : α)
+    (h : n < l1.length) : (l1 ++ l2).getD n d = l1.getD n d := by
+  have h' : n < (l1 ++ l2).length := by rw [List.length_append]; omega
+  rw [List.getD_eq_getElem _ _ h', List.getD_eq_getElem _ _ h,
+    List.getElem_append_left h]
+
+theorem getD_append_right {α : Type*} (l1 l2 : List α) (n : ℕ) (d : α)
+    (h : l1.length ≤ n) (h2 : n - l1.length < l2.length) :
+    (l1 ++ l2).getD n d = l2.getD (n - l1.length) d := by
+  have h' : n < (l1 ++ l2).length := by rw [List.length_append]; omega
+  rw [List.getD_eq_getElem _ _ h', List.getD_eq_getElem _ _ h2,
+    List.getElem_append_right h]
+
+/-- **THE TRACE OF A JOIN**: a board visited by two words in succession
+is visited by one of them. Field-safety therefore composes. -/
+theorem mem_wordTrace_append {b : Board} {w1 w2 : List Placement} {c : Board}
+    (h : c ∈ wordTrace b (w1 ++ w2)) :
+    c ∈ wordTrace b w1 ∨
+      c ∈ wordTrace (w1.foldl (Placement.applyStep GameConfig.standard) b) w2 := by
+  induction w1 generalizing b with
+  | nil => right; simpa using h
+  | cons pl rest ih =>
+    rw [List.cons_append, wordTrace_cons, List.mem_cons] at h
+    rcases h with h | h
+    · exact Or.inl (by rw [wordTrace_cons, List.mem_cons]; exact Or.inl h)
+    · rcases ih h with h' | h'
+      · exact Or.inl (by rw [wordTrace_cons, List.mem_cons]; exact Or.inr h')
+      · exact Or.inr (by rwa [List.foldl_cons])
+
+/-- A stretch of legal play: `bags` whole bags carrying `src` to `dst`,
+never leaving the field. -/
+structure Segment where
+  /-- Where the stretch begins. -/
+  src : Board
+  /-- Where it ends. -/
+  dst : Board
+  /-- The placements it makes. -/
+  moves : List Placement
+  /-- How many bags it runs. -/
+  bags : ℕ
+  /-- Seven placements per bag. -/
+  len : moves.length = 7 * bags
+  /-- Each seven-block deals every piece. -/
+  blocks : ∀ jj, jj < bags → ∀ p : Piece, ∃ i, i < 7 ∧
+    (moves.getD (7 * jj + i) ⟨Piece.O, 0, 0⟩).piece = p
+  /-- Every placement is in-bounds. -/
+  valid : ∀ pl ∈ moves, pl.Valid GameConfig.standard
+  /-- The stretch does carry `src` to `dst`. -/
+  steps : moves.foldl (Placement.applyStep GameConfig.standard) src = dst
+  /-- No board along the way leaves the field. -/
+  inField : ∀ c ∈ wordTrace src moves, ∀ p ∈ c, p.2 < 20
+
+namespace Segment
+
+/-- **SEGMENTS COMPOSE.** Play one stretch, then a stretch that starts
+where it ended, and the result is a stretch. -/
+def comp (S T : Segment) (h : S.dst = T.src) : Segment where
+  src := S.src
+  dst := T.dst
+  moves := S.moves ++ T.moves
+  bags := S.bags + T.bags
+  len := by rw [List.length_append, S.len, T.len]; ring
+  blocks := by
+    intro jj hjj p
+    by_cases hlt : jj < S.bags
+    · obtain ⟨i, hi, hval⟩ := S.blocks jj hlt p
+      refine ⟨i, hi, ?_⟩
+      rw [getD_append_left _ _ _ _ (by rw [S.len]; omega)]
+      exact hval
+    · obtain ⟨i, hi, hval⟩ := T.blocks (jj - S.bags) (by omega) p
+      refine ⟨i, hi, ?_⟩
+      rw [getD_append_right _ _ _ _ (by rw [S.len]; omega)
+        (by rw [S.len, T.len]; omega)]
+      rw [S.len]
+      have : 7 * jj + i - 7 * S.bags = 7 * (jj - S.bags) + i := by omega
+      rw [this]
+      exact hval
+  valid := by
+    intro pl hpl
+    rcases List.mem_append.mp hpl with hp | hp
+    · exact S.valid pl hp
+    · exact T.valid pl hp
+  steps := by rw [List.foldl_append, S.steps, h, T.steps]
+  inField := by
+    intro c hc p hp
+    rcases mem_wordTrace_append hc with hm | hm
+    · exact S.inField c hm p hp
+    · rw [S.steps, h] at hm
+      exact T.inField c hm p hp
+
+@[simp] theorem comp_src (S T : Segment) (h : S.dst = T.src) :
+    (S.comp T h).src = S.src := rfl
+
+@[simp] theorem comp_dst (S T : Segment) (h : S.dst = T.src) :
+    (S.comp T h).dst = T.dst := rfl
+
+@[simp] theorem comp_bags (S T : Segment) (h : S.dst = T.src) :
+    (S.comp T h).bags = S.bags + T.bags := rfl
+
+/-- **A CLOSED SEGMENT IS A CERTIFICATE.** A stretch that ends where it
+began, on a well-formed board, meets the one-pass witness conditions. -/
+theorem toWitnessFast (S : Segment) (hwf : Board.WF GameConfig.standard S.src)
+    (hpos : 0 < S.bags) (hclose : S.dst = S.src) :
+    WitnessConditionsFast S.src S.moves S.bags :=
+  ⟨hwf, hpos, S.len, S.valid, S.blocks, by rw [S.steps, hclose], S.inField⟩
+
+/-- **…AND THEREFORE INFINITE PLAY.** Chain enough segments to come
+home and M2 is settled. -/
+theorem survives (S : Segment) (hwf : Board.WF GameConfig.standard S.src)
+    (hpos : 0 < S.bags) (hclose : S.dst = S.src) :
+    ∃ (C : ClosedCycle GameConfig.standard),
+      SurvivesForever GameConfig.standard C.policy ⟨S.src, Bag.full⟩ :=
+  survives_of_witnessConditionsFast (S.toWitnessFast hwf hpos hclose)
+
+/-- The idle segment: no bags, no moves, board unchanged. Composition's
+unit, and the base case for chaining a design together. -/
+def id (b : Board) (hb : ∀ p ∈ b, p.2 < 20) : Segment where
+  src := b
+  dst := b
+  moves := []
+  bags := 0
+  len := rfl
+  blocks := by intro jj hjj; omega
+  valid := by intro pl hpl; simp at hpl
+  steps := rfl
+  inField := by
+    intro c hc p hp
+    rw [wordTrace_nil, List.mem_singleton] at hc
+    subst hc
+    exact hb p hp
+
+/-- The five-bag target, stated as a chain: five one-bag segments that
+come home give the shortest witness the theory allows. Each link can be
+designed and checked on its own; only the joins are shared. -/
+theorem five_chain_survives (S1 S2 S3 S4 S5 : Segment)
+    (hb1 : 0 < S1.bags)
+    (h12 : S1.dst = S2.src) (h23 : S2.dst = S3.src)
+    (h34 : S3.dst = S4.src) (h45 : S4.dst = S5.src)
+    (hclose : S5.dst = S1.src)
+    (hwf : Board.WF GameConfig.standard S1.src) :
+    ∃ (C : ClosedCycle GameConfig.standard),
+      SurvivesForever GameConfig.standard C.policy ⟨S1.src, Bag.full⟩ :=
+  ((((S1.comp S2 h12).comp S3 h23).comp S4 h34).comp S5 h45).survives
+    hwf (by simp only [comp_bags]; omega) hclose
+
+end Segment
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
