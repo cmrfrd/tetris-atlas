@@ -16656,6 +16656,123 @@ theorem not_repetition_of_partial_bag (W : CycleWitness)
 
 end CycleWitness
 
+/-! ### The running trace: safety in one pass
+
+`WitnessConditions` states safety as "for each `i`, the play at time `i`
+is not lost", and the play at time `i` re-folds the word from the
+beginning. Checking a seventy-move candidate that way costs a quadratic
+number of placements — thousands where seventy would do, which is the
+difference between a check that runs and one that does not.
+
+The running trace fixes it. `wordTrace` lists the boards the word
+passes through, each computed once from the last, and every state of
+the first period appears in it. Safety becomes a single sweep of that
+list. -/
+
+/-- The boards a word passes through, each built from the previous one. -/
+def wordTrace (b : Board) : List Placement → List Board
+  | [] => [b]
+  | pl :: rest => b :: wordTrace (Placement.applyStep GameConfig.standard b pl) rest
+
+@[simp] theorem wordTrace_nil (b : Board) : wordTrace b [] = [b] := rfl
+
+@[simp] theorem wordTrace_cons (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    wordTrace b (pl :: rest)
+      = b :: wordTrace (Placement.applyStep GameConfig.standard b pl) rest := rfl
+
+theorem wordTrace_length (b : Board) (w : List Placement) :
+    (wordTrace b w).length = w.length + 1 := by
+  induction w generalizing b with
+  | nil => rfl
+  | cons pl rest ih => rw [wordTrace_cons, List.length_cons, List.length_cons, ih]
+
+theorem wordTrace_ne_nil (b : Board) (w : List Placement) :
+    wordTrace b w ≠ [] := by
+  cases w <;> simp
+
+theorem base_mem_wordTrace (b : Board) (w : List Placement) :
+    b ∈ wordTrace b w := by
+  cases w <;> simp
+
+/-- **EVERY PREFIX FOLD IS IN THE TRACE.** The boards the word visits
+are exactly the entries of the trace, so a property checked once per
+entry holds at every moment of the pass. -/
+theorem foldl_take_mem_wordTrace (b : Board) (w : List Placement) (n : ℕ) :
+    (w.take n).foldl (Placement.applyStep GameConfig.standard) b
+      ∈ wordTrace b w := by
+  induction w generalizing b n with
+  | nil => simp
+  | cons pl rest ih =>
+    cases n with
+    | zero => simp
+    | succ k =>
+      rw [List.take_succ_cons, List.foldl_cons, wordTrace_cons, List.mem_cons]
+      exact Or.inr (ih _ k)
+
+/-- The word's own endpoint is in its trace. -/
+theorem foldl_mem_wordTrace (b : Board) (w : List Placement) :
+    w.foldl (Placement.applyStep GameConfig.standard) b ∈ wordTrace b w := by
+  have h := foldl_take_mem_wordTrace b w w.length
+  rwa [List.take_length] at h
+
+/-- **SAFETY IN ONE PASS**: if every board of the trace is in-field then
+no state of the first period is lost. This is the linear replacement for
+the quadratic `safe` field. -/
+theorem safe_of_trace_inField {b : Board} {w : List Placement}
+    (h : ∀ c ∈ wordTrace b w, ∀ p ∈ c, p.2 < 20) :
+    ∀ i, i < w.length →
+      ¬ (wordPlay ⟨b, Bag.full⟩ w i).lost GameConfig.standard := by
+  intro i hi
+  rw [GameState.not_lost_iff_forall_row_lt, GameConfig.standard_rows]
+  intro p hp
+  rw [wordPlay_eq_stepWord_take (le_of_lt hi), stepWord_board] at hp
+  exact h _ (foldl_take_mem_wordTrace b w i) p hp
+
+/-- The six conditions again, with safety in its one-pass form. -/
+def WitnessConditionsFast (b : Board) (w : List Placement) (m : ℕ) : Prop :=
+  Board.WF GameConfig.standard b ∧ 0 < m ∧ w.length = 7 * m
+    ∧ (∀ pl ∈ w, pl.Valid GameConfig.standard)
+    ∧ (∀ jj, jj < m → ∀ p : Piece, ∃ i, i < 7 ∧
+        (w.getD (7 * jj + i) ⟨Piece.O, 0, 0⟩).piece = p)
+    ∧ w.foldl (Placement.applyStep GameConfig.standard) b = b
+    ∧ (∀ c ∈ wordTrace b w, ∀ p ∈ c, p.2 < 20)
+
+instance witnessConditionsFast_decidable (b : Board) (w : List Placement)
+    (m : ℕ) : Decidable (WitnessConditionsFast b w m) := by
+  unfold WitnessConditionsFast
+  infer_instance
+
+theorem witnessConditions_of_fast {b : Board} {w : List Placement} {m : ℕ}
+    (h : WitnessConditionsFast b w m) : WitnessConditions b w m :=
+  ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, h.2.2.2.2.1, h.2.2.2.2.2.1,
+    safe_of_trace_inField h.2.2.2.2.2.2⟩
+
+/-- Assemble a witness from the one-pass conditions. -/
+def CycleWitness.ofFast {b : Board} {w : List Placement} {m : ℕ}
+    (h : WitnessConditionsFast b w m) : CycleWitness :=
+  CycleWitness.ofConditions (witnessConditions_of_fast h)
+
+/-- **THE CHECK THAT FITS.** A candidate certified by the one-pass
+conditions — a linear number of placements, all kernel-decidable —
+settles M2. This is the form in which a concrete witness should be
+presented. -/
+theorem survives_of_witnessConditionsFast {b : Board} {w : List Placement}
+    {m : ℕ} (h : WitnessConditionsFast b w m) :
+    ∃ (C : ClosedCycle GameConfig.standard),
+      SurvivesForever GameConfig.standard C.policy ⟨b, Bag.full⟩ :=
+  (CycleWitness.ofFast h).survives
+
+set_option maxRecDepth 400000 in
+/-- The trace check, run for real: the ten-move tetris mill never puts a
+cell at or above row twenty. -/
+theorem ten_I_trace_inField :
+    ∀ c ∈ wordTrace (∅ : Board)
+      [⟨Piece.I, 1, 0⟩, ⟨Piece.I, 1, 1⟩, ⟨Piece.I, 1, 2⟩,
+       ⟨Piece.I, 1, 3⟩, ⟨Piece.I, 1, 4⟩, ⟨Piece.I, 1, 5⟩,
+       ⟨Piece.I, 1, 6⟩, ⟨Piece.I, 1, 7⟩, ⟨Piece.I, 1, 8⟩,
+       ⟨Piece.I, 1, 9⟩], ∀ p ∈ c, p.2 < 20 := by decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,33 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29f) — safety in one pass (bank 421/N)
+
+An engineering theorem with a mathematical payoff: it is what makes the
+seventy-move check actually runnable.
+
+`WitnessConditions` stated safety as "for each `i`, the play at time `i`
+is not lost" — and the play at time `i` re-folds the word from the
+beginning. Checking a seventy-move candidate that way costs a quadratic
+number of placements, thousands where seventy would do. That is the
+difference between a check that runs and one that does not.
+
+- **`wordTrace`** — the boards a word passes through, each built from
+  the previous one, computed once each.
+- **`foldl_take_mem_wordTrace`** — every prefix fold is an entry of the
+  trace, so a property checked per entry holds at every moment.
+- **`safe_of_trace_inField`** — hence safety is one linear sweep.
+- **`WitnessConditionsFast`**, **`witnessConditions_of_fast`**,
+  **`CycleWitness.ofFast`**, **`survives_of_witnessConditionsFast`** —
+  the certificate in its runnable form; a candidate presented this way
+  and checked by the kernel settles M2.
+- **`ten_I_trace_inField`** — and the sweep runs: the ten-move mill
+  never puts a cell at or above row twenty, `decide`-checked.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29e) — a witness is never one round repeated (bank 420/N)
 
 The first design constraint aimed at an actual construction. With
