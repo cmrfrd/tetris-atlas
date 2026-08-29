@@ -17342,6 +17342,189 @@ theorem banked_finish (W : CycleWitness) (hbase : W.base = ∅) (hbags : W.bags 
 
 end CycleWitness
 
+/-! ### The mill stack, and the finish as a tiling problem
+
+`mill_finish` says the last two bags of an empty-anchored five-bag loop
+must each take four rows. Here is the shape that does it: nine columns
+filled four deep with the tenth left open, and the bag's own I stood
+upright in it. The kernel confirms the sweep leaves nothing at all.
+
+That turns the endgame into a question with no game theory left in it.
+Hand six placements — one each of the six pieces that are not the I —
+which carry a floor to the mill stack without leaving the field, and
+`millBag` returns the finished bag: seven placements dealing all seven
+pieces, ending on the empty board. Whether such six placements exist is
+a pure tiling question about a nine-by-four rectangle, decidable and
+independent of everything else in the construction. -/
+
+/-- The mill's stack: nine columns, four deep, the tenth left open. -/
+def millStack : Board := (Finset.range 9) ×ˢ (Finset.range 4)
+
+theorem millStack_card : millStack.card = 36 := by decide
+
+/-- The stack buries nothing and stands well clear of the ceiling. -/
+theorem millStack_holeFree : HoleFree millStack := by decide
+
+set_option maxRecDepth 400000 in
+/-- **THE SWEEP.** A vertical I in the open tenth column completes all
+four rows at once and takes the mill stack to nothing. -/
+theorem well_I_sweeps :
+    Placement.applyStep GameConfig.standard millStack ⟨Piece.I, 1, 9⟩ = ∅ := by
+  decide
+
+set_option maxRecDepth 400000 in
+theorem well_I_trace_inField :
+    ∀ c ∈ wordTrace millStack [(⟨Piece.I, 1, 9⟩ : Placement)],
+      ∀ q ∈ c, q.2 < 20 := by decide
+
+/-- **THE FINISH, GIVEN A TILING.** Six placements dealing the six
+non-I pieces and carrying `b` to the mill stack, plus the bag's I in
+the open column, are a bag that empties the board. -/
+def millBag (b : Board) (w : List Placement) (hlen : w.length = 6)
+    (hdeal : ∀ p : Piece, p ≠ Piece.I → ∃ i, i < 6 ∧
+      (w.getD i ⟨Piece.O, 0, 0⟩).piece = p)
+    (hvalid : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hfield : ∀ c ∈ wordTrace b w, ∀ q ∈ c, q.2 < 20)
+    (hbuild : w.foldl (Placement.applyStep GameConfig.standard) b = millStack) :
+    Segment where
+  src := b
+  dst := ∅
+  moves := w ++ [⟨Piece.I, 1, 9⟩]
+  bags := 1
+  len := by simp [hlen]
+  blocks := by
+    intro jj hjj p
+    have hz : jj = 0 := by omega
+    subst hz
+    by_cases hI : p = Piece.I
+    · refine ⟨6, by omega, ?_⟩
+      rw [getD_append_right _ _ _ _ (by rw [hlen]) (by rw [hlen]; simp)]
+      rw [hlen]
+      simpa using hI.symm
+    · obtain ⟨i, hi, hval⟩ := hdeal p hI
+      refine ⟨i, by omega, ?_⟩
+      rw [show 7 * 0 + i = i from by omega,
+        getD_append_left _ _ _ _ (by rw [hlen]; omega)]
+      exact hval
+  valid := by
+    intro pl hpl
+    rcases List.mem_append.mp hpl with h | h
+    · exact hvalid pl h
+    · rw [List.mem_singleton] at h
+      subst h
+      decide
+  steps := by
+    rw [List.foldl_append, hbuild]
+    simpa using well_I_sweeps
+  inField := by
+    intro c hc q hq
+    rcases mem_wordTrace_append hc with h | h
+    · exact hfield c h q hq
+    · rw [hbuild] at h
+      exact well_I_trace_inField c h q hq
+
+@[simp] theorem millBag_src (b w hlen hdeal hvalid hfield hbuild) :
+    (millBag b w hlen hdeal hvalid hfield hbuild).src = b := rfl
+
+@[simp] theorem millBag_dst (b w hlen hdeal hvalid hfield hbuild) :
+    (millBag b w hlen hdeal hvalid hfield hbuild).dst = ∅ := rfl
+
+/-- **THE LOOP, GIVEN THE LAST BAG.** Four bags from the empty board
+that reach a floor, and a mill bag that sweeps that floor away, close
+the cycle — and settle M2. Everything but the six-placement tiling is
+now in place. -/
+theorem mill_loop_survives (S : Segment) (hsrc : S.src = ∅) (hbags : S.bags = 4)
+    (E : Segment) (hjoin : S.dst = E.src) (hE : E.dst = ∅) :
+    ∃ (C : ClosedCycle GameConfig.standard),
+      SurvivesForever GameConfig.standard C.policy ⟨(∅ : Board), Bag.full⟩ := by
+  have hclose : (S.comp E hjoin).dst = (S.comp E hjoin).src := by
+    simp only [Segment.comp_dst, Segment.comp_src, hE, hsrc]
+  have hwf : Board.WF GameConfig.standard (S.comp E hjoin).src := by
+    simp only [Segment.comp_src, hsrc]
+    intro p hp
+    simp at hp
+  have h := (S.comp E hjoin).survives hwf
+    (by simp only [Segment.comp_bags, hbags]; omega) hclose
+  simpa only [Segment.comp_src, hsrc] using h
+
+/-! ### The last bag
+
+The tiling exists. Twelve cells stand in a shallow terrace across the
+left six columns; six pieces — every piece but the I — build them into
+the mill stack, and the I sweeps it away. Seven placements, one of each
+piece, from a twelve-cell floor to the empty board.
+
+The construction splits cleanly in two. Over the right three columns
+the L, the O and the J fill a four-deep block on bare ground. Over the
+left six the Z drops into the terrace's step, the S lies across the
+shelf it leaves, and the T settles nose-down into the notch between
+them. Nothing is buried at any point, and no row completes early — the
+tenth column stays open the whole way, so no clear can fire until the I
+falls into it.
+
+This is the last bag of a five-bag loop. What remains is the four bags
+that bring the empty board to this floor. -/
+
+/-- The mill floor: a terrace of twelve cells across the left six
+columns, heights three, two, two, two, one, two. -/
+def floorE : Board :=
+  {(0,0), (0,1), (0,2), (1,0), (1,1), (2,0), (2,1),
+   (3,0), (3,1), (4,0), (5,0), (5,1)}
+
+theorem floorE_card : floorE.card = 12 := by decide
+
+theorem floorE_holeFree : HoleFree floorE := by decide
+
+/-- The six placements that build the terrace into the mill stack. -/
+def sixE : List Placement :=
+  [⟨Piece.Z, 1, 4⟩, ⟨Piece.S, 0, 2⟩, ⟨Piece.T, 0, 0⟩,
+   ⟨Piece.L, 0, 6⟩, ⟨Piece.O, 0, 6⟩, ⟨Piece.J, 2, 6⟩]
+
+set_option maxRecDepth 400000 in
+/-- **THE TILING.** Six pieces carry the terrace to the mill stack. -/
+theorem sixE_builds :
+    sixE.foldl (Placement.applyStep GameConfig.standard) floorE = millStack := by
+  decide
+
+set_option maxRecDepth 400000 in
+/-- Nothing clears on the way: the tenth column stays open throughout,
+so no row can complete before the I falls. -/
+theorem sixE_no_clears : wordClears floorE sixE = 0 := by decide
+
+set_option maxRecDepth 400000 in
+/-- Nothing is buried on the way either. -/
+theorem sixE_holeFree : ∀ c ∈ wordTrace floorE sixE, HoleFree c := by decide
+
+set_option maxRecDepth 400000 in
+theorem sixE_inField : ∀ c ∈ wordTrace floorE sixE, ∀ q ∈ c, q.2 < 20 := by
+  decide
+
+/-- **THE LAST BAG.** One bag — all seven pieces — from the terrace to
+the empty board. -/
+def millBagE : Segment :=
+  millBag floorE sixE rfl (by decide) (by decide) sixE_inField sixE_builds
+
+theorem millBagE_src : millBagE.src = floorE := rfl
+
+theorem millBagE_dst : millBagE.dst = ∅ := rfl
+
+theorem millBagE_bags : millBagE.bags = 1 := rfl
+
+theorem millBagE_length : millBagE.moves.length = 7 := rfl
+
+set_option maxRecDepth 400000 in
+/-- The bag clears four rows — the tetris — and nothing else. -/
+theorem millBagE_clears : wordClears floorE millBagE.moves = 4 := by decide
+
+/-- **WHAT IS LEFT.** Four bags carrying the empty board to the mill
+floor would close the loop and settle M2. The last bag is built. -/
+theorem loop_closed_by_four_bags (S : Segment) (hsrc : S.src = ∅)
+    (hbags : S.bags = 4) (hdst : S.dst = floorE) :
+    ∃ (C : ClosedCycle GameConfig.standard),
+      SurvivesForever GameConfig.standard C.policy ⟨(∅ : Board), Bag.full⟩ :=
+  mill_loop_survives S hsrc hbags millBagE (by rw [hdst, millBagE_src])
+    millBagE_dst
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,48 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29m) — the last bag (bank 427-428/N)
+
+The loop's final bag is built and kernel-verified.
+
+**427, the reduction.** `millStack` is the shape that finishes: nine
+columns four deep, the tenth left open. `well_I_sweeps` confirms by
+kernel evaluation that a vertical I in the open column takes it to
+nothing. `millBag` then turns the endgame into a question with no game
+theory in it — hand it six placements dealing the six non-I pieces and
+carrying a floor to the mill stack in field, and it returns the
+finished bag. `mill_loop_survives` closes the chain: four bags to a
+floor plus a mill bag settle M2.
+
+**428, the tiling.** It exists. `floorE` is a terrace of twelve cells
+across the left six columns (heights 3,2,2,2,1,2) and `sixE` builds it
+into the mill stack:
+
+- over the right three columns the L, the O and the J fill a four-deep
+  block on bare ground;
+- over the left six the Z drops into the terrace's step, the S lies
+  across the shelf it leaves, and the T settles nose-down into the
+  notch between them.
+
+`sixE_holeFree` — nothing buried at any point. `sixE_no_clears` — and
+no row completes early, because the tenth column stays open the whole
+way, so no clear can fire until the I falls into it. `millBagE` is the
+finished bag: seven placements, one of each piece, from the terrace to
+the empty board, clearing four rows.
+
+`loop_closed_by_four_bags` states exactly what is left: four bags
+carrying the empty board to `floorE`.
+
+The route here was the parity bookkeeping. The T is the only unbalanced
+piece, so the floor had to carry a checkerboard imbalance of two — two
+odd-height columns of the same column parity — and the earlier failures
+were floors that isolated a 2x4 or 4x4 region, neither of which any two
+or four distinct pieces can tile.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29k) — the last move sweeps the board bare (bank 426/N)
 
 Why the ending is the hard part, stated as a theorem.
