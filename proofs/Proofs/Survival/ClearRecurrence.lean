@@ -16134,6 +16134,136 @@ theorem cycle_floor_tax {b : Board} {w1 w2 : List Placement}
   rw [hfrozen] at htax
   omega
 
+/-! ### The construction, freed of its length
+
+The closed-cycle build above assumed a period of exactly thirty-five
+and leaned on the thirty-five states being pairwise distinct. Neither
+is needed. The table policy looks a state up and gets back SOME index
+of the orbit carrying it; whichever index that is, the word's letter
+there is valid, its piece is drawable, and stepping lands on the next
+orbit entry. Distinctness never enters.
+
+Dropping the constraint matters: the parity of the T count says a loop
+renewing by perfect clears must run an even number of bags, so the
+shortest constructible witness may well be seventy moves rather than
+thirty-five. -/
+
+theorem wordOrbit_length (b : Board) (w : List Placement) :
+    (wordOrbit b w).length = w.length := by
+  unfold wordOrbit
+  rw [List.length_map, List.length_range]
+
+/-- Membership in the orbit names a position — at any period. -/
+theorem mem_wordOrbit_iff_gen {b : Board} {w : List Placement}
+    (s : GameState) :
+    s ∈ (wordOrbit b w).toFinset
+      ↔ ∃ i, i < w.length ∧ wordPlay ⟨b, Bag.full⟩ w i = s := by
+  rw [List.mem_toFinset]
+  unfold wordOrbit
+  rw [List.mem_map]
+  constructor
+  · rintro ⟨i, hi, hval⟩
+    rw [List.mem_range] at hi
+    exact ⟨i, hi, hval⟩
+  · rintro ⟨i, hi, hval⟩
+    exact ⟨i, List.mem_range.mpr hi, hval⟩
+
+/-- **THE POLICY'S CHOICE, NAMED**: at any orbit state the table policy
+plays the word's letter at SOME position carrying that state. The
+position is all the construction needs; which one it is, and whether it
+is unique, never matters. -/
+theorem wordPolicy_spec {b : Board} {w : List Placement} {s : GameState}
+    (hmem : s ∈ (wordOrbit b w).toFinset) :
+    ∃ j, j < w.length ∧ wordPlay ⟨b, Bag.full⟩ w j = s
+      ∧ wordPolicy b w s = w.getD j ⟨Piece.O, 0, 0⟩ := by
+  classical
+  rw [List.mem_toFinset] at hmem
+  have hlen : (wordOrbit b w).idxOf s < (wordOrbit b w).length :=
+    List.idxOf_lt_length_of_mem hmem
+  have hget : (wordOrbit b w)[(wordOrbit b w).idxOf s]'hlen = s :=
+    List.getElem_idxOf hlen
+  have hentry : ∀ (j : ℕ) (hj : j < (wordOrbit b w).length),
+      (wordOrbit b w)[j]'hj = wordPlay ⟨b, Bag.full⟩ w j := by
+    intro j hj
+    unfold wordOrbit
+    simp only [List.getElem_map, List.getElem_range]
+  refine ⟨(wordOrbit b w).idxOf s, ?_, (hentry _ hlen).symm.trans hget,
+    rfl⟩
+  rw [wordOrbit_length] at hlen
+  exact hlen
+
+/-- A bag-legal word of whole-bag length returns the full bag, so a
+board cycle is a state cycle. -/
+theorem safe_word_state_cycle {b : Board} {w : List Placement}
+    (hbag : IsBagStream (wordStream w)) (h7 : 7 ∣ w.length)
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b) :
+    stepWord ⟨b, Bag.full⟩ w = ⟨b, Bag.full⟩ := by
+  apply GameState.eq_of_board_bag
+  · rw [stepWord_board]
+    exact hfold
+  · rw [stepWord_bag]
+    exact legal_word_bag_reset hbag h7
+
+/-- **THE CERTIFIED CLOSED CYCLE, AT ANY PERIOD.** A bag-legal word of
+whole-bag length that folds a board back to itself and never tops out
+is a `ClosedCycle` — no assumption on the period, and no distinctness
+of the orbit required. -/
+theorem safe_word_closedCycle_gen {b : Board} {w : List Placement}
+    (hne : w ≠ []) (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (h7 : 7 ∣ w.length)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hsafe : ∀ i, i < w.length →
+      ¬ (wordPlay ⟨b, Bag.full⟩ w i).lost GameConfig.standard) :
+    ∃ C : ClosedCycle GameConfig.standard,
+      (⟨b, Bag.full⟩ : GameState) ∈ C.states := by
+  classical
+  have hcyc := safe_word_state_cycle hbag h7 hfold
+  have hgetD : ∀ i, i < w.length →
+      w.getD i ⟨Piece.O, 0, 0⟩ ∈ w := by
+    intro i hi
+    rw [List.getD_eq_getElem w _ hi]
+    exact List.getElem_mem _
+  refine ⟨⟨(wordOrbit b w).toFinset, wordPolicy b w, ?_, ?_, ?_, ?_⟩, ?_⟩
+  · intro s hs
+    obtain ⟨j, hlt, -, hpol⟩ := wordPolicy_spec hs
+    rw [hpol]
+    exact hv _ (hgetD j hlt)
+  · intro s hs
+    obtain ⟨j, hlt, heq, hpol⟩ := wordPolicy_spec hs
+    rw [hpol, ← heq]
+    exact legal_word_draw_legal (b := b) hbag h7 hlt
+  · intro s hs
+    obtain ⟨j, hlt, heq, -⟩ := wordPolicy_spec hs
+    rw [← heq]
+    exact hsafe j hlt
+  · intro s hs
+    obtain ⟨j, hlt, heq, hpol⟩ := wordPolicy_spec hs
+    have hstep : s.step GameConfig.standard (wordPolicy b w s)
+        = wordPlay ⟨b, Bag.full⟩ w (j + 1) := by
+      rw [hpol, ← heq, wordPlay_succ, Nat.mod_eq_of_lt hlt]
+    rw [hstep, mem_wordOrbit_iff_gen]
+    by_cases hlt2 : j + 1 < w.length
+    · exact ⟨j + 1, hlt2, rfl⟩
+    · refine ⟨0, List.length_pos_iff.mpr hne, ?_⟩
+      have hEq : j + 1 = w.length := by omega
+      rw [hEq, wordPlay_mod hne hcyc w.length, Nat.mod_self]
+  · rw [mem_wordOrbit_iff_gen]
+    exact ⟨0, List.length_pos_iff.mpr hne, rfl⟩
+
+/-- …and therefore infinite play, at any period. -/
+theorem safe_word_survives_gen {b : Board} {w : List Placement}
+    (hne : w ≠ []) (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (h7 : 7 ∣ w.length)
+    (hbag : IsBagStream (wordStream w))
+    (hfold : w.foldl (Placement.applyStep GameConfig.standard) b = b)
+    (hsafe : ∀ i, i < w.length →
+      ¬ (wordPlay ⟨b, Bag.full⟩ w i).lost GameConfig.standard) :
+    ∃ (C : ClosedCycle GameConfig.standard),
+      SurvivesForever GameConfig.standard C.policy ⟨b, Bag.full⟩ := by
+  obtain ⟨C, hC⟩ := safe_word_closedCycle_gen hne hv h7 hbag hfold hsafe
+  exact ⟨C, closed_cycle_survives C hC⟩
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

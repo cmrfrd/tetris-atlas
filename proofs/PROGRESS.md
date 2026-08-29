@@ -41629,6 +41629,34 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29a) — the construction, freed of its length (bank 416/N)
+
+Working toward an actual witness, the first job is removing what would
+block one. The closed-cycle build assumed a period of exactly
+thirty-five and leaned on the thirty-five states being pairwise
+distinct; neither is needed.
+
+- **`wordOrbit_length`**, **`mem_wordOrbit_iff_gen`** — orbit
+  bookkeeping at any period.
+- **`wordPolicy_spec`** — the key move: the table policy returns SOME
+  index of the orbit carrying the state. Making that index OPAQUE (an
+  existential rather than `idxOf` in the goal) is what makes the proof
+  go through; rewriting with `s = wordPlay j` otherwise substitutes
+  inside `idxOf s` itself.
+- **`safe_word_state_cycle`** — a bag-legal word of whole-bag length
+  turns a board cycle into a state cycle.
+- **`safe_word_closedCycle_gen`** / **`safe_word_survives_gen`** — the
+  certified closed cycle and infinite play AT ANY PERIOD.
+
+Why it matters: five bags carry five T's, and five ±1 charges never sum
+to zero, so a loop renewing by perfect clears must run an EVEN number
+of bags. The shortest constructible witness is therefore plausibly
+seventy moves, which the old statement could not even express.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-28gn) — the floor tax (bank 415/N)
 
 The empty-floor result generalizes to any gap.
