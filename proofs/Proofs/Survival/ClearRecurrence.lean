@@ -17165,6 +17165,87 @@ theorem segABC_remaining_clears (W : CycleWitness) {tail : List Placement}
   rw [hbags, hpre, List.length_append, segABC_length] at hlen
   omega
 
+/-! ### The skyline is everything, and a buried gap is forever
+
+Two facts about how this model drops pieces, and they are what make
+hand-designing a loop possible at all.
+
+The first: where a piece lands depends on the column heights and on
+nothing else. Two boards with the same skyline receive the same piece
+in the same cells, however differently they are filled underneath. A
+design can therefore be reasoned about entirely in terms of its
+profile — which is how the three bags above were built.
+
+The second is the price of the first: a gap with anything above it can
+never be filled again. The drop always lands at or above the column's
+height, so it cannot reach underneath. Only a line clear can dispose of
+a buried cell, by taking away the row it sits in. This is why
+hole-freeness is the binding constraint on a construction, and why the
+first attempt at bag one — which buried seven cells — was abandoned. -/
+
+/-- **THE DROP SEES ONLY THE SKYLINE.** -/
+theorem dropOffset_congr {b b' : Board} (pl : Placement)
+    (h : ∀ j, b.colHeight j = b'.colHeight j) :
+    pl.dropOffset b = pl.dropOffset b' := by
+  unfold Placement.dropOffset
+  exact Finset.sup_congr rfl (fun c _ => by rw [h])
+
+/-- Hence the cells it occupies are the same too. -/
+theorem dropped_congr {b b' : Board} (pl : Placement)
+    (h : ∀ j, b.colHeight j = b'.colHeight j) :
+    pl.dropped b = pl.dropped b' := by
+  unfold Placement.dropped
+  rw [dropOffset_congr pl h]
+
+/-- **THE DROP NEVER REACHES UNDERNEATH**: every cell a piece lands on
+sits at or above its column's standing height. -/
+theorem dropped_row_ge_colHeight {b : Board} {pl : Placement} {j r : ℕ}
+    (h : (j, r) ∈ pl.dropped b) : b.colHeight j ≤ r := by
+  unfold Placement.dropped Placement.cellsAt at h
+  rw [Finset.mem_image] at h
+  obtain ⟨c, hc, hEq⟩ := h
+  have hj : pl.col + c.1 = j := congrArg Prod.fst hEq
+  have hr : pl.dropOffset b + c.2 = r := congrArg Prod.snd hEq
+  have hle : b.colHeight (pl.col + c.1) - c.2 ≤ pl.dropOffset b :=
+    Placement.le_sup_sub pl.shapeUp b.colHeight pl.col hc
+  rw [hj] at hle
+  omega
+
+/-- **A BURIED GAP IS FOREVER.** An empty cell with filled cells above
+it in its own column cannot be filled by any placement. Only a line
+clear can dispose of it, by removing the row it sits in — so a design
+that buries a cell has committed to clearing that row before it can
+ever come home. -/
+theorem buried_stays_buried {b : Board} {pl : Placement} {j r : ℕ}
+    (hgap : (j, r) ∉ b) (hcov : r < b.colHeight j) :
+    (j, r) ∉ pl.place b := by
+  intro hmem
+  simp only [Placement.place, Finset.mem_union] at hmem
+  rcases hmem with h | h
+  · exact hgap h
+  · have := dropped_row_ge_colHeight h
+    omega
+
+/-- A board buries nothing: every cell below a column's height is
+filled. -/
+def HoleFree (b : Board) : Prop :=
+  ∀ j < 10, ∀ r < 20, r < b.colHeight j → (j, r) ∈ b
+
+instance holeFree_decidable (b : Board) : Decidable (HoleFree b) := by
+  unfold HoleFree
+  infer_instance
+
+@[simp] theorem holeFree_empty : HoleFree (∅ : Board) := by
+  intro j _ r _ hr
+  simp at hr
+
+set_option maxRecDepth 1000000 in
+/-- **THE THREE BAGS BURY NOTHING**, cell by cell, at every one of the
+twenty-two boards they pass through. The chain is therefore still open:
+no row is owed to a cell trapped beneath it. -/
+theorem segABC_trace_holeFree :
+    ∀ c ∈ wordTrace ∅ segABC.moves, HoleFree c := by decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,38 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29j) — the skyline is everything, and a buried gap is forever (bank 425/N)
+
+Two facts about how this model drops pieces, and together they are what
+makes hand-designing a loop possible at all.
+
+- **`dropOffset_congr`**, **`dropped_congr`** — where a piece lands
+  depends on the column heights and on nothing else. Two boards with
+  the same skyline receive the same piece in the same cells, however
+  differently they are filled underneath. A design can therefore be
+  reasoned about purely as a profile, which is exactly how the three
+  bags in the bank were built.
+- **`dropped_row_ge_colHeight`** — the price of that: every cell a
+  piece lands on sits at or above its column's standing height. The
+  drop never reaches underneath.
+- **`buried_stays_buried`** — so an empty cell with anything above it
+  in its column can never be filled by any placement. Only a line clear
+  can dispose of it, by taking away the row it sits in. A design that
+  buries a cell has committed to clearing that row before it can come
+  home.
+- **`HoleFree`**, **`segABC_trace_holeFree`** — and the three banked
+  bags bury nothing, cell by cell, at every one of the twenty-two
+  boards they pass through. The chain is still open: no row is owed to
+  a cell trapped beneath it.
+
+This is the formal content of a practical lesson. The first attempt at
+bag one buried seven cells and was thrown away; these theorems say why
+that was the right call rather than a matter of taste.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29i) — a third bag, and why flat gaps are scarce (bank 424/N)
 
 - **`bagC`**, **`segC`**, **`segABC`** — bag three continues the chain.
