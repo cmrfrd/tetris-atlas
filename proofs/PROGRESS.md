@@ -41629,6 +41629,40 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29q) — the bag profile (bank 432/N)
+
+At the resolution of whole bags the clear schedule is now completely
+described.
+
+- **`bag_profile`** — cumulative clears after one, two, three and four
+  bags are capped at two, five, eight and eleven, and after five they
+  are exactly fourteen.
+- **`last_two_bags_clear_six`**, **`last_three_bags_clear_nine`**,
+  **`last_four_bags_clear_twelve`** — the same box read from the other
+  end. The opening bag can spare only two of the fourteen.
+- **`bag_boundary_mass`** — and the profile determines the standing
+  inventory outright: ten times the cumulative clears plus the mass at
+  a bag boundary is twenty-eight per bag.
+
+Worth recording that this is closed rather than merely progressed: the
+per-bag cap `(mass + 28)/10` from batch 431 and the prefix ceiling from
+429 turn out to be the *same* inequality once the boundary mass is
+substituted. So the box is the whole story at bag resolution — every
+legal profile is a non-decreasing path through it, and every design
+must pick one. Further constraints on where clears fall have to come
+from geometry, not from counting.
+
+For the construction in the bank: the profile picks out three viable
+continuations from a three-bag prefix, indexed by what the prefix
+cleared — (8 cleared, 4 standing, bag four takes 2), (7, 14, 3), or
+(6, 24, 4). The banked prefix clears seven, so bag four owes three.
+The (6, 24, 4) branch is the one that would let bag four end in a
+tetris, mirroring the last bag.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29p) — what one bag can take (bank 431/N)
 
 The ceiling was global; localised to a single bag it becomes a

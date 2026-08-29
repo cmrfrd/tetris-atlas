@@ -18022,6 +18022,79 @@ theorem millBagE_extremal :
   have hc : Board.count floorE = 12 := floorE_card
   omega
 
+/-! ### The bag profile
+
+At the resolution of whole bags the schedule is completely described.
+The cumulative clears after one, two, three and four bags are capped at
+two, five, eight and eleven, and after five they are exactly fourteen.
+Read from the other end: the last bag takes at least three, the last
+two at least six, the last three at least nine, the last four at least
+twelve.
+
+Nothing further is hidden here. The per-bag cap `(mass + 28)/10` and
+the prefix ceiling turn out to be the same inequality, so this box is
+the whole story at bag resolution — every legal profile is a
+non-decreasing path through it, and every design must pick one. -/
+
+namespace CycleWitness
+
+/-- The last two bags take at least six rows. -/
+theorem last_two_bags_clear_six (W : CycleWitness) (hbase : W.base = ∅)
+    (hbags : W.bags = 5) :
+    6 ≤ ((clearSeq ∅ W.word).drop 21).sum := by
+  have h := W.clearSeq_tail_ge hbase hbags 21
+  omega
+
+/-- The last three take at least nine. -/
+theorem last_three_bags_clear_nine (W : CycleWitness) (hbase : W.base = ∅)
+    (hbags : W.bags = 5) :
+    9 ≤ ((clearSeq ∅ W.word).drop 14).sum := by
+  have h := W.clearSeq_tail_ge hbase hbags 14
+  omega
+
+/-- The last four take at least twelve — the opening bag can spare only
+two of the fourteen. -/
+theorem last_four_bags_clear_twelve (W : CycleWitness) (hbase : W.base = ∅)
+    (hbags : W.bags = 5) :
+    12 ≤ ((clearSeq ∅ W.word).drop 7).sum := by
+  have h := W.clearSeq_tail_ge hbase hbags 7
+  omega
+
+/-- **THE BAG PROFILE.** Every empty-anchored five-bag loop clears at
+most two rows in its first bag, five in its first two, eight in its
+first three, eleven in its first four — and fourteen in all. -/
+theorem bag_profile (W : CycleWitness) (hbase : W.base = ∅)
+    (hbags : W.bags = 5) :
+    ((clearSeq ∅ W.word).take 7).sum ≤ 2
+      ∧ ((clearSeq ∅ W.word).take 14).sum ≤ 5
+      ∧ ((clearSeq ∅ W.word).take 21).sum ≤ 8
+      ∧ ((clearSeq ∅ W.word).take 28).sum ≤ 11
+      ∧ (clearSeq ∅ W.word).sum = 14 := by
+  have hc := W.clear_census
+  rw [hbags, hbase] at hc
+  refine ⟨first_bag_le_two W.valid, two_bags_le_five W.valid,
+    three_bags_le_eight W.valid, four_bags_le_eleven W.valid, ?_⟩
+  rw [clearSeq_sum]
+  omega
+
+/-- **THE MASS AT EACH BAG BOUNDARY** is twenty-eight per bag less ten
+per row cleared — so the profile and the standing inventory determine
+one another completely. -/
+theorem bag_boundary_mass (W : CycleWitness) (hbase : W.base = ∅)
+    {j : ℕ} (hj : 7 * j ≤ W.word.length) :
+    10 * ((clearSeq ∅ W.word).take (7 * j)).sum
+        + ((W.word.take (7 * j)).foldl
+            (Placement.applyStep GameConfig.standard) ∅).count
+      = 28 * j := by
+  have hwf : Board.WF GameConfig.standard (∅ : Board) := by
+    intro p hp
+    simp at hp
+  have hm := clearSeq_prefix_mass (b := ∅) (w := W.word) hwf W.valid hj
+  have hz : Board.count (∅ : Board) = 0 := rfl
+  omega
+
+end CycleWitness
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
