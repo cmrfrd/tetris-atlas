@@ -41629,6 +41629,44 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29o) — reading the schedule (bank 430/N)
+
+With the ballot ceiling in hand the schedule can be read off bag by bag
+and move by move, and both readings are directly actionable for design.
+
+**Bag by bag.** `clearSeq_bag_ceiling`: after `j` whole bags at most
+`14j/5` rows are gone — so `first_bag_le_two` (2), `two_bags_le_five`
+(5), `three_bags_le_eight` (8), `four_bags_le_eleven` (11). Hence
+`CycleWitness.last_bag_clears_three`: the LAST bag of a five-bag loop
+must take at least three rows.
+
+**Move by move.** `clearSeq_entry_bound`: a move taking `c` rows needs
+`5c ≤ 2k+2`, where `k` counts the moves before it. So the first clear
+cannot precede the third placement, a double the fifth, a triple the
+eighth, and `no_tetris_before_tenth` — forty cells must go and nine
+moves deliver only thirty-six. Big clears are late by arithmetic.
+
+**The four finishes.** `final_mass`: ten times what the last move takes
+is the mass standing before it plus its own four cells. With entries
+capped at four this gives `final_mass_le_thirty_six` — the board
+carries at most thirty-six cells into its final placement, one
+nine-wide stack four deep — and `final_mass_cases`: the standing mass
+is six, sixteen, twenty-six or thirty-six, the last move taking one,
+two, three or four rows to match.
+
+That last result is worth stating plainly: **every empty-anchored
+five-bag loop ends in one of exactly four ways**, and the heaviest of
+them is the mill already built (`millBagE`, whose schedule is
+`[0,0,0,0,0,0,4]` and whose penultimate mass is exactly thirty-six).
+
+Checked against the bank: the banked chain's schedule takes 1 row in
+bag one (≤ 2), 5 in bags one–two (≤ 5, tight), 7 in bags one–three
+(≤ 8) — inside the corridor throughout.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29n) — the clear schedule (bank 429/N)
 
 Everything before this counted clears in bulk — fourteen rows per five

@@ -17730,6 +17730,203 @@ set_option maxRecDepth 400000 in
 theorem millBagE_clearSeq :
     clearSeq floorE millBagE.moves = [0, 0, 0, 0, 0, 0, 4] := by decide
 
+/-! ### Reading the schedule: when, how big, and the four finishes
+
+With the ceiling in hand the schedule can be read off bag by bag and
+move by move.
+
+Bag by bag: after `j` whole bags at most `14j/5` rows are gone, so the
+first bag takes at most two, the first two at most five, the first
+three at most eight, the first four at most eleven — and therefore the
+LAST bag of a five-bag loop must take at least three.
+
+Move by move: a move that takes `c` rows cannot happen before
+`5c ≤ 2k+2`. A single needs two moves of warm-up, a double four, a
+triple seven, a tetris nine. Big clears are late by arithmetic, not by
+taste.
+
+And the ending is one of exactly four kinds. The mass standing before
+the final placement is six, sixteen, twenty-six or thirty-six, and the
+last move takes one, two, three or four rows to match. The board
+carries at most thirty-six cells into its last move — which is one
+nine-wide stack four deep, the mill. -/
+
+theorem sum_le_four_mul_length {l : List ℕ} (h : ∀ x ∈ l, x ≤ 4) :
+    l.sum ≤ 4 * l.length := by
+  induction l with
+  | nil => simp
+  | cons a rest ih =>
+    have ha := h a (by simp)
+    have hr := ih (fun x hx => h x (by simp [hx]))
+    simp only [List.sum_cons, List.length_cons]
+    omega
+
+/-- **THE BAG CEILING.** After `j` whole bags at most `14j/5` rows have
+been cleared. -/
+theorem clearSeq_bag_ceiling {w : List Placement}
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) (j : ℕ) :
+    5 * ((clearSeq ∅ w).take (7 * j)).sum ≤ 14 * j := by
+  have h := clearSeq_ballot hv (7 * j)
+  omega
+
+/-- The first bag takes at most two rows. -/
+theorem first_bag_le_two {w : List Placement}
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) :
+    ((clearSeq ∅ w).take 7).sum ≤ 2 := by
+  have h := clearSeq_bag_ceiling hv 1
+  norm_num at h
+  omega
+
+/-- Two bags take at most five. -/
+theorem two_bags_le_five {w : List Placement}
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) :
+    ((clearSeq ∅ w).take 14).sum ≤ 5 := by
+  have h := clearSeq_bag_ceiling hv 2
+  norm_num at h
+  omega
+
+/-- Three bags take at most eight. -/
+theorem three_bags_le_eight {w : List Placement}
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) :
+    ((clearSeq ∅ w).take 21).sum ≤ 8 := by
+  have h := clearSeq_bag_ceiling hv 3
+  norm_num at h
+  omega
+
+/-- Four bags take at most eleven. -/
+theorem four_bags_le_eleven {w : List Placement}
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) :
+    ((clearSeq ∅ w).take 28).sum ≤ 11 := by
+  have h := clearSeq_bag_ceiling hv 4
+  norm_num at h
+  omega
+
+/-- **NO EARLY BIG CLEARS.** A move taking `c` rows satisfies
+`5c ≤ 2k + 2`, where `k` is how many moves preceded it. -/
+theorem clearSeq_entry_bound {w : List Placement}
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) {k : ℕ}
+    (hk : k < (clearSeq ∅ w).length) :
+    5 * (clearSeq ∅ w)[k] ≤ 2 * k + 2 := by
+  have hsucc := List.sum_take_succ (clearSeq ∅ w) k hk
+  have hb := clearSeq_ballot hv (k + 1)
+  omega
+
+/-- The first clear cannot come before the third placement. -/
+theorem no_clear_before_third {w : List Placement}
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) {k : ℕ}
+    (hk : k < (clearSeq ∅ w).length) (hpos : 0 < (clearSeq ∅ w)[k]) :
+    2 ≤ k := by
+  have h := clearSeq_entry_bound hv hk
+  omega
+
+/-- A double cannot come before the fifth placement. -/
+theorem no_double_before_fifth {w : List Placement}
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) {k : ℕ}
+    (hk : k < (clearSeq ∅ w).length) (h2 : 2 ≤ (clearSeq ∅ w)[k]) :
+    4 ≤ k := by
+  have h := clearSeq_entry_bound hv hk
+  omega
+
+/-- A triple cannot come before the eighth placement. -/
+theorem no_triple_before_eighth {w : List Placement}
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) {k : ℕ}
+    (hk : k < (clearSeq ∅ w).length) (h3 : 3 ≤ (clearSeq ∅ w)[k]) :
+    7 ≤ k := by
+  have h := clearSeq_entry_bound hv hk
+  omega
+
+/-- **A TETRIS CANNOT COME BEFORE THE TENTH PLACEMENT**: forty cells
+must go, and nine moves deliver only thirty-six. -/
+theorem no_tetris_before_tenth {w : List Placement}
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) {k : ℕ}
+    (hk : k < (clearSeq ∅ w).length) (h4 : 4 ≤ (clearSeq ∅ w)[k]) :
+    9 ≤ k := by
+  have h := clearSeq_entry_bound hv hk
+  omega
+
+namespace CycleWitness
+
+theorem clearSeq_length_eq (W : CycleWitness) (hbags : W.bags = 5) :
+    (clearSeq ∅ W.word).length = 35 := by
+  rw [clearSeq_length, W.len, hbags]
+
+/-- **THE LAST BAG TAKES AT LEAST THREE.** Four bags can have taken at
+most eleven of the fourteen owed. -/
+theorem last_bag_clears_three (W : CycleWitness) (hbase : W.base = ∅)
+    (hbags : W.bags = 5) :
+    3 ≤ ((clearSeq ∅ W.word).drop 28).sum := by
+  have h := W.clearSeq_tail_ge hbase hbags 28
+  omega
+
+/-- **THE FINAL LEDGER.** Ten times what the last move takes is the mass
+standing before it, plus its own four cells. -/
+theorem final_mass (W : CycleWitness) (hbase : W.base = ∅)
+    (hbags : W.bags = 5) :
+    10 * ((clearSeq ∅ W.word).drop 34).sum
+      = ((W.word.take 34).foldl
+          (Placement.applyStep GameConfig.standard) ∅).count + 4 := by
+  have hlen : W.word.length = 35 := by rw [W.len, hbags]
+  have hwf : Board.WF GameConfig.standard (∅ : Board) := by
+    intro p hp
+    simp at hp
+  have hm := clearSeq_prefix_mass (b := ∅) (w := W.word) hwf W.valid
+    (k := 34) (by omega)
+  have hz : Board.count (∅ : Board) = 0 := rfl
+  have hc := W.clear_census
+  rw [hbags, hbase] at hc
+  have hsum : (clearSeq (∅ : Board) W.word).sum = 14 := by
+    rw [clearSeq_sum]
+    omega
+  have hsplit : ((clearSeq (∅ : Board) W.word).take 34).sum
+      + ((clearSeq (∅ : Board) W.word).drop 34).sum = 14 := by
+    rw [← List.sum_append, List.take_append_drop]
+    exact hsum
+  omega
+
+/-- **AT MOST A MILL GOES INTO THE LAST MOVE.** The board carries at
+most thirty-six cells into the final placement — one nine-wide stack
+four deep. -/
+theorem final_mass_le_thirty_six (W : CycleWitness) (hbase : W.base = ∅)
+    (hbags : W.bags = 5) :
+    ((W.word.take 34).foldl
+      (Placement.applyStep GameConfig.standard) ∅).count ≤ 36 := by
+  have hlen := W.clearSeq_length_eq hbags
+  have hdlen : ((clearSeq ∅ W.word).drop 34).length = 1 := by
+    rw [List.length_drop, hlen]
+  have hentries : ∀ x ∈ (clearSeq ∅ W.word).drop 34, x ≤ 4 := by
+    intro x hx
+    exact clearSeq_entries_le_four empty_no_fullRows W.word x
+      (List.mem_of_mem_drop hx)
+  have hle := sum_le_four_mul_length hentries
+  rw [hdlen] at hle
+  have hfm := W.final_mass hbase hbags
+  omega
+
+/-- **THE FOUR FINISHES.** The mass standing before the last placement
+is six, sixteen, twenty-six or thirty-six, and the last move takes one,
+two, three or four rows to match. -/
+theorem final_mass_cases (W : CycleWitness) (hbase : W.base = ∅)
+    (hbags : W.bags = 5) :
+    ∃ c, 1 ≤ c ∧ c ≤ 4 ∧
+      ((W.word.take 34).foldl
+        (Placement.applyStep GameConfig.standard) ∅).count = 10 * c - 4 := by
+  refine ⟨((clearSeq ∅ W.word).drop 34).sum, ?_, ?_, ?_⟩
+  · exact W.last_move_clears hbase hbags
+  · have hlen := W.clearSeq_length_eq hbags
+    have hdlen : ((clearSeq ∅ W.word).drop 34).length = 1 := by
+      rw [List.length_drop, hlen]
+    have hentries : ∀ x ∈ (clearSeq ∅ W.word).drop 34, x ≤ 4 := by
+      intro x hx
+      exact clearSeq_entries_le_four empty_no_fullRows W.word x
+        (List.mem_of_mem_drop hx)
+    have hle := sum_le_four_mul_length hentries
+    rw [hdlen] at hle
+    omega
+  · have hfm := W.final_mass hbase hbags
+    omega
+
+end CycleWitness
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
