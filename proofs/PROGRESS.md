@@ -41629,6 +41629,37 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29s) — the mill carries a payload (bank 434/N)
+
+`millBag` swept the board bare, which is what the last bag of a loop
+must do. But nothing about the mill requires the board to be empty
+underneath the sweep.
+
+- **`clearLines_band_below`** — the general fact: a board consisting of
+  a payload riding entirely above a full `k`-row band clears to exactly
+  that payload, lowered by `k`. (The library's existing
+  `clearLines_band_reset` is the opposite arrangement — residue below,
+  band above — so this is a new lemma, not a restatement.)
+- **`millStackWith`**, **`millBagWith`** — hence the mill is not a
+  special ending but a reusable move: six placements building a board
+  into "stack plus payload", plus the well-I, make a bag that returns
+  the payload. `millBag` is the empty-payload case.
+- **`well_I_sweeps_to_floorE`**, **`well_I_floorE_trace_inField`** —
+  and the instance the construction needs: carrying `floorE` as
+  payload, the well-I takes the stack away and sets the floor down four
+  rows, which is precisely what a fourth bag ending in a tetris has to
+  do. Its board is forty-eight cells
+  (`millStackWith_floorE_card`) — twenty-four standing plus a bag's
+  twenty-four, which is the (6 cleared, 24 standing, take 4) branch of
+  the bag profile exactly.
+
+So the two ends of the loop now share one mechanism, and the remaining
+gap is a single six-piece tiling rather than a bespoke bag.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29r) — the parity test for tilings (bank 433/N)
 
 Counting closed at bag resolution last tick, so the next constraint had

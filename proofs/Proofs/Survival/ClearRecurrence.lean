@@ -18201,6 +18201,173 @@ theorem millFloor_charge {f : Board} {w : List Placement}
 theorem floorE_passes_millFloor_test : BagGrowth.charge floorE = 1 :=
   millFloor_charge sixE_T_count sixE_no_clears sixE_builds
 
+/-! ### The mill carries a payload
+
+`millBag` swept the board bare, which is what the last bag of a loop
+must do. But nothing about the mill requires the board to be empty
+underneath the sweep — a payload riding above the band survives it, and
+simply falls four rows.
+
+That is the general shape: **a full band at the bottom clears to exactly
+the payload above it, lowered by the band's height**. So the mill is not
+a special ending but a reusable move: it takes any board that six pieces
+can build into "stack plus payload" and returns the payload. The last
+bag is the case where the payload is nothing.
+
+For the loop still being built this matters directly. A fourth bag that
+ends in a tetris would need to leave the mill floor behind rather than
+an empty board — and that is exactly a mill bag carrying `floorE` as its
+payload. -/
+
+/-- **A FULL BAND AT THE BOTTOM DROPS ITS PAYLOAD.** A board consisting
+of a payload riding entirely above a full `k`-row band clears to exactly
+that payload, lowered by `k`. -/
+theorem clearLines_band_below {R : Board} {k : ℕ}
+    (hnf : ∀ r, ¬ Board.isFull GameConfig.standard R r)
+    (hhigh : ∀ p ∈ R, k ≤ p.2) :
+    Board.clearLines GameConfig.standard
+        (R ∪ (Finset.range 10) ×ˢ (Finset.range k))
+      = R.image (fun p => (p.1, p.2 - k)) := by
+  classical
+  have hmem : ∀ p : ℕ × ℕ, k ≤ p.2 →
+      (p ∈ R ∪ (Finset.range 10) ×ˢ (Finset.range k) ↔ p ∈ R) := by
+    intro p hr
+    rw [Finset.mem_union]
+    constructor
+    · rintro (h | h)
+      · exact h
+      · rw [Finset.mem_product, Finset.mem_range, Finset.mem_range] at h
+        omega
+    · exact Or.inl
+  have hfullBand : ∀ r, r < k → Board.isFull GameConfig.standard
+      (R ∪ (Finset.range 10) ×ˢ (Finset.range k)) r := by
+    intro r hr c hc
+    rw [GameConfig.standard_cols, Finset.mem_range] at hc
+    rw [Finset.mem_union]
+    right
+    rw [Finset.mem_product, Finset.mem_range, Finset.mem_range]
+    exact ⟨hc, hr⟩
+  have hnotFull : ∀ r, k ≤ r → ¬ Board.isFull GameConfig.standard
+      (R ∪ (Finset.range 10) ×ˢ (Finset.range k)) r := by
+    intro r hr hfull
+    refine hnf r ?_
+    intro c hc
+    exact (hmem (c, r) hr).mp (hfull c hc)
+  have hfullRows : Board.fullRows GameConfig.standard
+      (R ∪ (Finset.range 10) ×ˢ (Finset.range k)) = Finset.range k := by
+    ext r
+    simp only [Board.fullRows, Finset.mem_filter, Finset.mem_image,
+      Finset.mem_range]
+    constructor
+    · rintro ⟨_, hfull⟩
+      by_contra hk
+      exact hnotFull r (by omega) hfull
+    · intro hr
+      refine ⟨⟨(0, r), ?_, rfl⟩, hfullBand r hr⟩
+      rw [Finset.mem_union]
+      right
+      rw [Finset.mem_product, Finset.mem_range, Finset.mem_range]
+      exact ⟨by omega, hr⟩
+  have hcb : ∀ r, k ≤ r → Board.clearedBelow GameConfig.standard
+      (R ∪ (Finset.range 10) ×ˢ (Finset.range k)) r = k := by
+    intro r hr
+    rw [Board.clearedBelow, hfullRows]
+    have hfil : (Finset.range k).filter (· < r) = Finset.range k := by
+      ext x
+      simp only [Finset.mem_filter, Finset.mem_range]
+      exact ⟨fun h => h.1, fun h => ⟨h, by omega⟩⟩
+    rw [hfil, Finset.card_range]
+  ext q
+  simp only [Board.clearLines, Finset.mem_image, Finset.mem_filter]
+  constructor
+  · rintro ⟨p, ⟨hpB, hpnf⟩, rfl⟩
+    have hpk : k ≤ p.2 := by
+      by_contra hlt
+      exact hpnf (hfullBand p.2 (by omega))
+    exact ⟨p, (hmem p hpk).mp hpB, by rw [hcb p.2 hpk]⟩
+  · rintro ⟨p, hpR, rfl⟩
+    have hpk : k ≤ p.2 := hhigh p hpR
+    exact ⟨p, ⟨(hmem p hpk).mpr hpR, hnotFull p.2 hpk⟩, by rw [hcb p.2 hpk]⟩
+
+/-- The mill stack with a payload riding four rows above it. -/
+def millStackWith (R : Board) : Board :=
+  millStack ∪ R.image (fun p => (p.1, p.2 + 4))
+
+@[simp] theorem millStackWith_empty : millStackWith ∅ = millStack := by
+  simp [millStackWith]
+
+/-- **THE MILL, WITH PAYLOAD.** Six placements dealing the six non-I
+pieces, carrying `b` to the stack-with-payload, plus the bag's I in the
+open column, are a bag that leaves exactly the payload. `millBag` is the
+case of an empty payload. -/
+def millBagWith (R b : Board) (w : List Placement) (hlen : w.length = 6)
+    (hdeal : ∀ p : Piece, p ≠ Piece.I → ∃ i, i < 6 ∧
+      (w.getD i ⟨Piece.O, 0, 0⟩).piece = p)
+    (hvalid : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hfield : ∀ c ∈ wordTrace b w, ∀ q ∈ c, q.2 < 20)
+    (hsweepField : ∀ c ∈ wordTrace (millStackWith R)
+      [(⟨Piece.I, 1, 9⟩ : Placement)], ∀ q ∈ c, q.2 < 20)
+    (hbuild : w.foldl (Placement.applyStep GameConfig.standard) b
+      = millStackWith R)
+    (hsweep : Placement.applyStep GameConfig.standard (millStackWith R)
+      ⟨Piece.I, 1, 9⟩ = R) : Segment where
+  src := b
+  dst := R
+  moves := w ++ [⟨Piece.I, 1, 9⟩]
+  bags := 1
+  len := by simp [hlen]
+  blocks := by
+    intro jj hjj p
+    have hz : jj = 0 := by omega
+    subst hz
+    by_cases hI : p = Piece.I
+    · refine ⟨6, by omega, ?_⟩
+      rw [getD_append_right _ _ _ _ (by rw [hlen]) (by rw [hlen]; simp)]
+      rw [hlen]
+      simpa using hI.symm
+    · obtain ⟨i, hi, hval⟩ := hdeal p hI
+      refine ⟨i, by omega, ?_⟩
+      rw [show 7 * 0 + i = i from by omega,
+        getD_append_left _ _ _ _ (by rw [hlen]; omega)]
+      exact hval
+  valid := by
+    intro pl hpl
+    rcases List.mem_append.mp hpl with h | h
+    · exact hvalid pl h
+    · rw [List.mem_singleton] at h
+      subst h
+      decide
+  steps := by
+    rw [List.foldl_append, hbuild]
+    simpa using hsweep
+  inField := by
+    intro c hc q hq
+    rcases mem_wordTrace_append hc with h | h
+    · exact hfield c h q hq
+    · rw [hbuild] at h
+      exact hsweepField c h q hq
+
+@[simp] theorem millBagWith_dst (R b w hlen hdeal hvalid hfield hsf hbuild hsw) :
+    (millBagWith R b w hlen hdeal hvalid hfield hsf hbuild hsw).dst = R := rfl
+
+set_option maxRecDepth 1000000 in
+/-- **THE SWEEP THAT LEAVES THE MILL FLOOR.** Carrying `floorE` as its
+payload, the well-I takes the stack away and sets the floor down four
+rows lower — which is precisely what a fourth bag ending in a tetris
+would have to do. -/
+theorem well_I_sweeps_to_floorE :
+    Placement.applyStep GameConfig.standard (millStackWith floorE)
+      ⟨Piece.I, 1, 9⟩ = floorE := by decide
+
+set_option maxRecDepth 1000000 in
+theorem millStackWith_floorE_card : (millStackWith floorE).card = 48 := by
+  decide
+
+set_option maxRecDepth 1000000 in
+theorem well_I_floorE_trace_inField :
+    ∀ c ∈ wordTrace (millStackWith floorE)
+      [(⟨Piece.I, 1, 9⟩ : Placement)], ∀ q ∈ c, q.2 < 20 := by decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
