@@ -17043,6 +17043,128 @@ theorem segAB_remaining_clears (W : CycleWitness) {tail : List Placement}
   rw [hfold, segAB_clears] at htot
   omega
 
+/-! ### A third bag, and why flat gaps are scarce
+
+Bag three continues the chain: seven rows cleared from the empty board
+in twenty-one placements, still without burying a single cell.
+
+It also comes with the first lesson learned from failing to finish the
+loop by hand. A gap one row tall can only ever be closed by a piece
+that lies entirely within one row — and exactly one placement in the
+whole catalogue does that, the horizontal I. Since a bag deals one I,
+a period of `m` bags can close at most `m` such gaps. Designs that
+leave long one-tall strips behind are therefore dead, and that single
+fact rules out most of the tempting endings. -/
+
+/-- Bag three: the O and T fill the floor's last two notches, a flat
+two closes the third, and then S, L and a vertical I stand the walls
+back up. Two rows cleared. -/
+def bagC : List Placement :=
+  [⟨Piece.O, 0, 2⟩, ⟨Piece.T, 1, 4⟩, ⟨Piece.J, 3, 7⟩, ⟨Piece.S, 1, 6⟩,
+   ⟨Piece.L, 3, 8⟩, ⟨Piece.I, 1, 0⟩, ⟨Piece.Z, 1, 1⟩]
+
+set_option maxRecDepth 400000 in
+/-- **THE THIRD LINK.** -/
+def segC : Segment :=
+  oneBag segAB.dst bagC rfl (by decide) (by decide) (by decide)
+
+/-- Three bags of legal play from the empty board. -/
+def segABC : Segment := segAB.comp segC rfl
+
+theorem segABC_bags : segABC.bags = 3 := rfl
+
+theorem segABC_src : segABC.src = ∅ := rfl
+
+theorem segABC_length : segABC.moves.length = 21 := rfl
+
+set_option maxRecDepth 1000000 in
+/-- Seven rows cleared in three bags: one, then four, then two. -/
+theorem segABC_clears : wordClears ∅ segABC.moves = 7 := by decide
+
+set_option maxRecDepth 1000000 in
+/-- Eighty-four cells delivered, seventy swept, fourteen standing. -/
+theorem segABC_dst_card : segABC.dst.card = 14 := by decide
+
+set_option maxRecDepth 1000000 in
+/-- Still nothing buried, twenty-one placements in. -/
+theorem segABC_hole_free :
+    ∀ c ∈ wordTrace ∅ segABC.moves,
+      ((List.range 10).map (fun j => c.colHeight j)).sum = c.card := by
+  decide
+
+/-- **THE FLAT PIECE IS UNIQUE.** Of all twenty-eight piece-rotation
+pairs, exactly one lies entirely within a single row: the I laid
+horizontally. Everything else spans at least two. -/
+theorem shapeUp_flat_iff : ∀ (p : Piece) (r : Rotation),
+    (∀ c ∈ p.shapeUp r, c.2 = 0) ↔ (p = Piece.I ∧ (r = 0 ∨ r = 2)) := by
+  decide
+
+/-- A placement that lies flat is an I. -/
+theorem piece_eq_I_of_flat {pl : Placement}
+    (h : ∀ c ∈ pl.shapeUp, c.2 = 0) : pl.piece = Piece.I :=
+  ((shapeUp_flat_iff pl.piece pl.rot).mp h).1
+
+theorem length_filter_le_count {α : Type*} {β : Type*} [DecidableEq β]
+    (f : α → β) (b : β) (P : α → Bool) (l : List α)
+    (h : ∀ a ∈ l, P a = true → f a = b) :
+    (l.filter P).length ≤ (l.map f).count b := by
+  induction l with
+  | nil => simp
+  | cons a rest ih =>
+    have ih' := ih (fun x hx hpx => h x (List.mem_cons_of_mem a hx) hpx)
+    rw [List.map_cons, List.count_cons]
+    by_cases hp : P a = true
+    · rw [List.filter_cons_of_pos hp, List.length_cons]
+      have hfa : f a = b := h a (by simp) hp
+      rw [if_pos (show (f a == b) = true from by simp [hfa])]
+      omega
+    · rw [List.filter_cons_of_neg (by simpa using hp)]
+      omega
+
+namespace CycleWitness
+
+/-- **ONE FLAT PLACEMENT PER BAG, AT MOST.** A gap one row tall can only
+be closed by a piece lying inside that row, and only the horizontal I
+does. A witness deals exactly one I per bag, so a period of `m` bags
+contains at most `m` flat placements — and can close at most `m`
+one-tall gaps in its whole lifetime.
+
+This is a real constraint on design, not a curiosity: any construction
+that leaves a one-row strip of empty cells behind has to spend its bag's
+only I to close it, and if the strip is not exactly four wide it cannot
+be closed at all. -/
+theorem flat_le_bags (W : CycleWitness) :
+    (W.word.filter (fun pl => decide (∀ c ∈ pl.shapeUp, c.2 = 0))).length
+      ≤ W.bags := by
+  have hle := length_filter_le_count (fun pl : Placement => pl.piece)
+    Piece.I (fun pl => decide (∀ c ∈ pl.shapeUp, c.2 = 0)) W.word
+    (fun pl _ hpl => piece_eq_I_of_flat (of_decide_eq_true hpl))
+  rw [W.piece_census] at hle
+  exact hle
+
+end CycleWitness
+
+/-- **WHAT THE LAST TWO BAGS MUST DO.** Fourteen cells stand and
+fifty-six more are coming; a five-bag loop home to the empty board owes
+seven rows, and seventy is exactly what fourteen and fifty-six make. The
+finish has no slack at all: every cell delivered in the last two bags
+must end up in a row that clears. -/
+theorem segABC_remaining_clears (W : CycleWitness) {tail : List Placement}
+    (hbase : W.base = ∅) (hbags : W.bags = 5)
+    (hpre : W.word = segABC.moves ++ tail) :
+    wordClears segABC.dst tail = 7 ∧ tail.length = 14 := by
+  have hc := W.clear_census
+  rw [hbags] at hc
+  have htot : wordClears W.base W.word = 14 := by omega
+  rw [hbase, hpre, wordClears_append] at htot
+  have hfold : segABC.moves.foldl (Placement.applyStep GameConfig.standard) ∅
+      = segABC.dst := segABC.steps
+  rw [hfold, segABC_clears] at htot
+  refine ⟨by omega, ?_⟩
+  have hlen := W.len
+  rw [hbags, hpre, List.length_append, segABC_length] at hlen
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

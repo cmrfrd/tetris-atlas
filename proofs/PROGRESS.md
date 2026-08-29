@@ -41629,6 +41629,34 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29i) — a third bag, and why flat gaps are scarce (bank 424/N)
+
+- **`bagC`**, **`segC`**, **`segABC`** — bag three continues the chain.
+  Seven rows cleared from the empty board in twenty-one placements
+  (`segABC_clears`), fourteen cells standing (`segABC_dst_card`), and
+  still not one buried cell (`segABC_hole_free`).
+- **`shapeUp_flat_iff`** — of all twenty-eight piece-rotation pairs,
+  exactly one lies entirely within a single row: the I laid flat.
+  Everything else spans at least two rows.
+- **`CycleWitness.flat_le_bags`** — and a witness deals exactly one I
+  per bag, so a period of `m` bags contains at most `m` flat
+  placements. A gap one row tall can only be closed by a flat piece,
+  so `m` bags can close at most `m` such gaps in their whole lifetime.
+- **`segABC_remaining_clears`** — the last two bags owe seven rows, and
+  fourteen standing plus fifty-six delivered is exactly seventy. The
+  finish has no slack: every cell of the last two bags must land in a
+  row that clears.
+
+The flat-piece lemma came out of failing to finish the loop by hand.
+Several promising endings died the same way: they left a strip of empty
+cells one row tall, and nothing but a horizontal I can fill such a
+strip — one per bag, and only if the strip is exactly four wide. That
+is now a theorem rather than a repeated mistake.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29h) — two bags, built and checked (bank 423/N)
 
 The first concrete play in the bank. Not a theorem about hypothetical
