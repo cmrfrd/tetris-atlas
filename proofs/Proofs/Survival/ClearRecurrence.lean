@@ -16933,6 +16933,116 @@ theorem five_chain_survives (S1 S2 S3 S4 S5 : Segment)
 
 end Segment
 
+/-! ### Two bags, built and checked
+
+The first concrete links. `oneBag` is the tool: hand it seven
+placements that deal every piece, and proofs — kernel-checked — that
+they are in-bounds and stay in the field, and it returns the segment
+they make, ending wherever they lead.
+
+Two bags are built with it below and joined. Both are hole-free at
+every step: no cell is ever buried under another, which matters because
+this model drops on the skyline, so a buried gap can never be filled
+again. Together they clear five rows from the empty board.
+
+Three more bags are needed to come home, and the mass ledger says what
+they must do: fourteen rows in five bags, so the remaining three owe
+nine. -/
+
+/-- **THE DESIGN TOOL.** Seven placements dealing every piece, checked
+in-bounds and in-field, are a one-bag segment ending wherever they
+lead. The destination need not be written down — it is the fold. -/
+def oneBag (b : Board) (w : List Placement) (hlen : w.length = 7)
+    (hblocks : ∀ p : Piece, ∃ i, i < 7 ∧
+      (w.getD i ⟨Piece.O, 0, 0⟩).piece = p)
+    (hvalid : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hfield : ∀ c ∈ wordTrace b w, ∀ p ∈ c, p.2 < 20) : Segment where
+  src := b
+  dst := w.foldl (Placement.applyStep GameConfig.standard) b
+  moves := w
+  bags := 1
+  len := by rw [hlen]
+  blocks := by
+    intro jj hjj p
+    have hz : jj = 0 := by omega
+    subst hz
+    simpa using hblocks p
+  valid := hvalid
+  steps := rfl
+  inField := hfield
+
+/-- Bag one, from the empty board: two flat threes and a four fill the
+floor and sweep it, then the awkward four are laid into the notches the
+sweep leaves behind. One row cleared, eighteen cells standing, not a
+single buried cell. -/
+def bagA : List Placement :=
+  [⟨Piece.J, 0, 0⟩, ⟨Piece.L, 0, 3⟩, ⟨Piece.I, 0, 6⟩,
+   ⟨Piece.S, 1, 0⟩, ⟨Piece.Z, 1, 4⟩, ⟨Piece.T, 2, 6⟩, ⟨Piece.O, 0, 2⟩]
+
+/-- Bag two, from where bag one left off: the S and Z go first, into the
+steps bag one built for them, and each of the four sweeps that follow
+takes the floor away again. Four rows cleared. -/
+def bagB : List Placement :=
+  [⟨Piece.S, 1, 8⟩, ⟨Piece.Z, 1, 6⟩, ⟨Piece.I, 0, 1⟩, ⟨Piece.T, 1, 8⟩,
+   ⟨Piece.O, 0, 0⟩, ⟨Piece.L, 0, 2⟩, ⟨Piece.J, 3, 5⟩]
+
+set_option maxRecDepth 400000 in
+/-- **THE FIRST LINK**, from the empty board. -/
+def segA : Segment :=
+  oneBag ∅ bagA rfl (by decide) (by decide) (by decide)
+
+set_option maxRecDepth 400000 in
+/-- **THE SECOND LINK**, starting exactly where the first ends. -/
+def segB : Segment :=
+  oneBag (bagA.foldl (Placement.applyStep GameConfig.standard) ∅) bagB rfl
+    (by decide) (by decide) (by decide)
+
+/-- **THE JOIN.** Two bags of legal play from the empty board. -/
+def segAB : Segment := segA.comp segB rfl
+
+theorem segAB_bags : segAB.bags = 2 := rfl
+
+theorem segAB_src : segAB.src = ∅ := rfl
+
+theorem segAB_length : segAB.moves.length = 14 := rfl
+
+set_option maxRecDepth 400000 in
+/-- The two bags clear five rows between them: one, then four. -/
+theorem segAB_clears : wordClears ∅ segAB.moves = 5 := by decide
+
+set_option maxRecDepth 400000 in
+/-- **THE LEDGER, CONFIRMED BY THE KERNEL.** Fifty-six cells delivered,
+fifty swept away, six standing — exactly what one clear and then four
+predicts. -/
+theorem segAB_dst_card : segAB.dst.card = 6 := by decide
+
+set_option maxRecDepth 400000 in
+/-- Neither bag ever buries a cell: on this board the standing mass is
+the sum of the column heights at every step, so nothing is trapped. In
+a model that drops on the skyline, a buried gap is permanent — so
+hole-freeness is not tidiness, it is the difference between a link that
+can be continued and one that cannot. -/
+theorem segAB_hole_free :
+    ∀ c ∈ wordTrace ∅ segAB.moves,
+      ((List.range 10).map (fun j => c.colHeight j)).sum = c.card := by
+  decide
+
+/-- **WHAT REMAINS.** A closed five-bag loop from the empty board must
+clear fourteen rows. Five are banked; nine are owed, across whatever
+three bags continue from the six-cell floor these two leave. -/
+theorem segAB_remaining_clears (W : CycleWitness) {tail : List Placement}
+    (hbase : W.base = ∅) (hbags : W.bags = 5)
+    (hpre : W.word = segAB.moves ++ tail) :
+    wordClears segAB.dst tail = 9 := by
+  have hc := W.clear_census
+  rw [hbags] at hc
+  have htot : wordClears W.base W.word = 14 := by omega
+  rw [hbase, hpre, wordClears_append] at htot
+  have hfold : segAB.moves.foldl (Placement.applyStep GameConfig.standard) ∅
+      = segAB.dst := segAB.steps
+  rw [hfold, segAB_clears] at htot
+  omega
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

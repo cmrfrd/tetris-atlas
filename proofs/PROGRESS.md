@@ -41629,6 +41629,41 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29h) — two bags, built and checked (bank 423/N)
+
+The first concrete play in the bank. Not a theorem about hypothetical
+witnesses — two actual bags, designed by hand and verified by the
+kernel.
+
+- **`oneBag`** — the design tool. Hand it seven placements dealing
+  every piece, plus `decide`-checked proofs that they are in-bounds and
+  stay in the field, and it returns the one-bag segment they make. The
+  destination need not be written out; it is the fold.
+- **`bagA`** — from the EMPTY board. Two flat threes (J, L) and a
+  horizontal I fill the floor and sweep it; then S, Z, T, O are laid
+  into the notches the sweep leaves. One row cleared, eighteen cells
+  standing.
+- **`bagB`** — from where bagA ends. S and Z go first, into the steps
+  bagA built for them, and each of the four sweeps that follow takes
+  the floor away again. Four rows cleared.
+- **`segAB`** — the join, via `Segment.comp`. Fourteen placements, two
+  bags, from the empty board.
+- **`segAB_clears`** (= 5), **`segAB_dst_card`** (= 6) — the ledger
+  confirmed by kernel evaluation: fifty-six cells delivered, fifty
+  swept, six standing.
+- **`segAB_hole_free`** — and nothing is buried at any step. This model
+  drops on the skyline, so a buried gap is permanent; hole-freeness is
+  not tidiness, it is the difference between a link that can be
+  continued and one that cannot. The first design attempt left seven
+  holes and was discarded for exactly this reason.
+- **`segAB_remaining_clears`** — what is owed: a closed five-bag loop
+  from the empty board clears fourteen rows, five are banked, so nine
+  remain across three bags starting from the six-cell floor.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29g) — segments compose (bank 422/N)
 
 The step that makes constructing a witness an incremental job rather
