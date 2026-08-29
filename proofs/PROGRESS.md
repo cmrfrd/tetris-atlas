@@ -41629,6 +41629,46 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29n) — the clear schedule (bank 429/N)
+
+Everything before this counted clears in bulk — fourteen rows per five
+bags. But a cycle does not merely clear fourteen rows, it clears them
+at particular moments, and naming that sequence makes the constraints
+visible.
+
+- **`clearSeq`** — what each placement takes, in order: a list like
+  `[0,0,1,0,0,0,0,…]`, one entry per move. `clearSeq_sum`,
+  `clearSeq_length`, `clearSeq_take`, `clearSeq_prefix_sum` are the
+  basic algebra.
+- **`clearSeq_entries_le_four`** — the alphabet is `{0,1,2,3,4}`.
+- **`clearSeq_prefix_mass`** — the central identity: ten times the rows
+  cleared in the first `k` moves, plus the mass then standing, is the
+  starting mass plus four per move. The schedule and the mass
+  trajectory are the same information seen twice.
+- **`clearSeq_ballot`** — hence from the empty board the schedule never
+  runs ahead of two fifths of a move, and the gap to that ceiling is
+  precisely the standing mass over ten.
+- **`clearSeq_opening_dry`** — two placements deliver eight cells and a
+  row needs ten, so the first two moves clear nothing.
+- **`CycleWitness.clearSeq_tail_ge`** — the part that bites. A five-bag
+  loop home to the empty board must reach fourteen exactly at move
+  thirty-five, and fourteen is two fifths of thirty-five exactly. So
+  the schedule finishes flush against a ceiling it may never cross —
+  a ballot path forced to land on the line it cannot exceed — and
+  every row not cleared early is a debt the tail must pay:
+  `last_move_clears` (the final move must clear), `last_five_clear_two`,
+  `last_ten_clear_four`.
+- **`segABC_clearSeq`**, **`millBagE_clearSeq`** — the banked chain's
+  actual schedule, `[0,0,1,0,0,0,0, 1,1,0,1,0,0,1, 0,0,1,0,0,0,1]`,
+  and the mill bag's `[0,0,0,0,0,0,4]`: six dry moves, then everything
+  at once. The banked schedule touches its ceiling at moves 3, 4, 9,
+  11, 14 and 17, and its shortfall at move 21 is exactly the fourteen
+  cells standing.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29m) — the last bag (bank 427-428/N)
 
 The loop's final bag is built and kernel-verified.

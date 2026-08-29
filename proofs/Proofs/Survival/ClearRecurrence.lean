@@ -17525,6 +17525,211 @@ theorem loop_closed_by_four_bags (S : Segment) (hsrc : S.src = ∅)
   mill_loop_survives S hsrc hbags millBagE (by rw [hdst, millBagE_src])
     millBagE_dst
 
+/-! ### The clear schedule
+
+Everything so far has counted clears in bulk — fourteen rows per five
+bags — but a cycle does not merely clear fourteen rows, it clears them
+at particular moments. Name that sequence and the constraints on it
+become visible.
+
+`clearSeq` records what each placement takes: a list of naturals, one
+per move, like `[0,0,1,0,0,0,0,…]`. Three facts pin it down.
+
+Its entries are at most four, and only the I can pay four. Its partial
+sums are not free: ten times the rows cleared in the first `k` moves,
+plus the mass then standing, is exactly four per move played. So the
+schedule and the mass trajectory are the same information seen twice,
+and the mass being non-negative gives a **ceiling** — from the empty
+board the schedule never runs ahead of two fifths of a move.
+
+The third fact is what makes it bite. A five-bag loop home to the empty
+board must reach fourteen exactly at move thirty-five, and fourteen is
+two fifths of thirty-five exactly. The schedule must therefore finish
+flush against a ceiling it may never cross: a ballot path, forced to
+land on the line it is forbidden to exceed. Every row not cleared early
+is a debt the tail must pay. -/
+
+/-- **THE CLEAR SCHEDULE**: what each placement of a word takes, in
+order. -/
+def clearSeq (b : Board) : List Placement → List ℕ
+  | [] => []
+  | pl :: rest =>
+      (Board.fullRows GameConfig.standard (pl.place b)).card
+        :: clearSeq (Placement.applyStep GameConfig.standard b pl) rest
+
+@[simp] theorem clearSeq_nil (b : Board) : clearSeq b [] = [] := rfl
+
+@[simp] theorem clearSeq_cons (b : Board) (pl : Placement)
+    (rest : List Placement) :
+    clearSeq b (pl :: rest)
+      = (Board.fullRows GameConfig.standard (pl.place b)).card
+        :: clearSeq (Placement.applyStep GameConfig.standard b pl) rest := rfl
+
+theorem clearSeq_length (b : Board) (w : List Placement) :
+    (clearSeq b w).length = w.length := by
+  induction w generalizing b with
+  | nil => rfl
+  | cons pl rest ih => rw [clearSeq_cons, List.length_cons, List.length_cons, ih]
+
+/-- The schedule sums to the total. -/
+theorem clearSeq_sum (b : Board) (w : List Placement) :
+    (clearSeq b w).sum = wordClears b w := by
+  induction w generalizing b with
+  | nil => rfl
+  | cons pl rest ih => rw [clearSeq_cons, List.sum_cons, wordClears_cons, ih]
+
+/-- A prefix of the schedule is the schedule of the prefix. -/
+theorem clearSeq_take (b : Board) (w : List Placement) (k : ℕ) :
+    (clearSeq b w).take k = clearSeq b (w.take k) := by
+  induction w generalizing b k with
+  | nil => simp
+  | cons pl rest ih =>
+    cases k with
+    | zero => simp
+    | succ m => rw [clearSeq_cons, List.take_succ_cons, List.take_succ_cons,
+        clearSeq_cons, ih]
+
+theorem clearSeq_prefix_sum (b : Board) (w : List Placement) (k : ℕ) :
+    ((clearSeq b w).take k).sum = wordClears b (w.take k) := by
+  rw [clearSeq_take, clearSeq_sum]
+
+theorem empty_no_fullRows :
+    ∀ r, ¬ Board.isFull GameConfig.standard (∅ : Board) r := by
+  intro r h
+  simp only [Board.isFull] at h
+  have h0 := h 0 (by simp [GameConfig.standard_cols])
+  simp at h0
+
+/-- **THE ENTRIES ARE AT MOST FOUR.** No placement can take more than
+four rows, so the schedule is a word over `{0,1,2,3,4}`. -/
+theorem clearSeq_entries_le_four {b : Board}
+    (hb : ∀ r, ¬ Board.isFull GameConfig.standard b r) (w : List Placement) :
+    ∀ x ∈ clearSeq b w, x ≤ 4 := by
+  induction w generalizing b with
+  | nil => simp
+  | cons pl rest ih =>
+    intro x hx
+    rw [clearSeq_cons, List.mem_cons] at hx
+    rcases hx with h | h
+    · subst h
+      exact linesCleared_place_le_four GameConfig.standard b pl hb
+    · exact ih (applyStep_clear_free b pl) x h
+
+/-- **THE SCHEDULE READS THE MASS.** Ten times the rows cleared in the
+first `k` moves, plus the mass then standing, is the starting mass plus
+four per move. The partial sums of the schedule and the board's mass
+carry exactly the same information. -/
+theorem clearSeq_prefix_mass {b : Board} {w : List Placement}
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) {k : ℕ} (hk : k ≤ w.length) :
+    10 * ((clearSeq b w).take k).sum
+      + ((w.take k).foldl (Placement.applyStep GameConfig.standard) b).count
+      = b.count + 4 * k := by
+  have hvt : ∀ pl ∈ w.take k, pl.Valid GameConfig.standard :=
+    fun pl hpl => hv pl (List.mem_of_mem_take hpl)
+  have h := foldl_count_ledger_exact (b := b) (pls := w.take k) hwf hvt
+  have hlen : (w.take k).length = k := by rw [List.length_take]; omega
+  rw [hlen] at h
+  rw [clearSeq_prefix_sum]
+  omega
+
+/-- **THE CEILING.** From the empty board the schedule never runs ahead
+of two fifths of a move: you cannot clear what has not been delivered.
+The gap to the ceiling is the standing mass, to a factor of ten. -/
+theorem clearSeq_ballot {w : List Placement}
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) (k : ℕ) :
+    5 * ((clearSeq ∅ w).take k).sum ≤ 2 * k := by
+  have hwf : Board.WF GameConfig.standard (∅ : Board) := by
+    intro p hp
+    simp at hp
+  have h := prefix_clear_bound (b := ∅) (pls := w) hwf hv k
+  have hz : Board.count (∅ : Board) = 0 := rfl
+  rw [clearSeq_prefix_sum]
+  omega
+
+/-- **THE OPENING IS DRY.** Two placements deliver eight cells and a row
+needs ten, so no word from the empty board clears anything on its first
+two moves. -/
+theorem clearSeq_opening_dry {w : List Placement}
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) :
+    ((clearSeq ∅ w).take 2).sum = 0 := by
+  have h := clearSeq_ballot hv 2
+  omega
+
+theorem clearSeq_opening_entries_zero {w : List Placement}
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard) :
+    ∀ x ∈ (clearSeq ∅ w).take 2, x = 0 := by
+  intro x hx
+  have hsum := clearSeq_opening_dry hv
+  have hle : x ≤ ((clearSeq ∅ w).take 2).sum :=
+    List.single_le_sum (fun y _ => Nat.zero_le y) x hx
+  omega
+
+namespace CycleWitness
+
+/-- The schedule of a witness sums to fourteen rows per five bags. -/
+theorem clearSeq_sum_eq (W : CycleWitness) :
+    5 * (clearSeq W.base W.word).sum = 14 * W.bags := by
+  rw [clearSeq_sum]
+  exact W.clear_census
+
+/-- **THE TAIL MUST CATCH UP.** A five-bag loop home to the empty board
+lands on fourteen exactly, while never exceeding two fifths of the moves
+played. So whatever the first `k` moves leave undone, the rest owe: the
+rows cleared after move `k` are at least `14 - 2k/5`. -/
+theorem clearSeq_tail_ge (W : CycleWitness) (hbase : W.base = ∅)
+    (hbags : W.bags = 5) (k : ℕ) :
+    70 ≤ 2 * k + 5 * ((clearSeq ∅ W.word).drop k).sum := by
+  have hc := W.clear_census
+  rw [hbags, hbase] at hc
+  have hsum : (clearSeq (∅ : Board) W.word).sum = 14 := by
+    rw [clearSeq_sum]
+    omega
+  have hsplit : ((clearSeq (∅ : Board) W.word).take k).sum
+      + ((clearSeq (∅ : Board) W.word).drop k).sum = 14 := by
+    rw [← List.sum_append, List.take_append_drop]
+    exact hsum
+  have hb := clearSeq_ballot (w := W.word) W.valid k
+  omega
+
+/-- The last placement of such a loop must clear: thirty-four moves can
+have taken at most thirteen rows, and fourteen are owed. -/
+theorem last_move_clears (W : CycleWitness) (hbase : W.base = ∅)
+    (hbags : W.bags = 5) :
+    1 ≤ ((clearSeq ∅ W.word).drop 34).sum := by
+  have h := W.clearSeq_tail_ge hbase hbags 34
+  omega
+
+/-- The last five moves clear at least two rows. -/
+theorem last_five_clear_two (W : CycleWitness) (hbase : W.base = ∅)
+    (hbags : W.bags = 5) :
+    2 ≤ ((clearSeq ∅ W.word).drop 30).sum := by
+  have h := W.clearSeq_tail_ge hbase hbags 30
+  omega
+
+/-- The last ten clear at least four — a tetris' worth, at minimum. -/
+theorem last_ten_clear_four (W : CycleWitness) (hbase : W.base = ∅)
+    (hbags : W.bags = 5) :
+    4 ≤ ((clearSeq ∅ W.word).drop 25).sum := by
+  have h := W.clearSeq_tail_ge hbase hbags 25
+  omega
+
+end CycleWitness
+
+set_option maxRecDepth 1000000 in
+/-- **THE SCHEDULE OF THE BANKED CHAIN.** Three bags, twenty-one
+placements, seven rows — and where each fell. -/
+theorem segABC_clearSeq :
+    clearSeq ∅ segABC.moves
+      = [0, 0, 1, 0, 0, 0, 0,
+         1, 1, 0, 1, 0, 0, 1,
+         0, 0, 1, 0, 0, 0, 1] := by decide
+
+set_option maxRecDepth 400000 in
+/-- **AND OF THE LAST BAG**: six dry moves, then everything at once. -/
+theorem millBagE_clearSeq :
+    clearSeq floorE millBagE.moves = [0, 0, 0, 0, 0, 0, 4] := by decide
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
