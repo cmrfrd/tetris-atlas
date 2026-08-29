@@ -16264,6 +16264,122 @@ theorem safe_word_survives_gen {b : Board} {w : List Placement}
   obtain ⟨C, hC⟩ := safe_word_closedCycle_gen hne hv h7 hbag hfold hsafe
   exact ⟨C, closed_cycle_survives C hC⟩
 
+/-! ### The witness, at any number of bags
+
+With the construction freed of its period, the certificate can be too.
+A witness now names how many bags it runs; the five-block test becomes
+an `m`-block test, and the theory itself supplies the constraint that
+`m` is a multiple of five. -/
+
+/-- **THE `m`-BLOCK TEST**: a word of `7m` placements whose every
+seven-block deals all seven pieces generates a bag-legal stream. The
+repeated stream's block `j` is the word's own block `j mod m`. -/
+theorem isBagStream_of_blocks_gen {w : List Placement} {m : ℕ}
+    (hm : 0 < m) (hlen : w.length = 7 * m)
+    (hblocks : ∀ jj, jj < m → ∀ p : Piece, ∃ i, i < 7 ∧
+      (w.getD (7 * jj + i) ⟨Piece.O, 0, 0⟩).piece = p) :
+    IsBagStream (wordStream w) := by
+  intro j p
+  obtain ⟨i, hi, hval⟩ := hblocks (j % m) (Nat.mod_lt j hm) p
+  refine ⟨i, hi, ?_⟩
+  have hlt : 7 * (j % m) + i < 7 * m := by
+    have := Nat.mod_lt j hm
+    omega
+  have hjd : j = m * (j / m) + j % m := (Nat.div_add_mod j m).symm
+  have hdecomp : 7 * j + i = (7 * (j % m) + i) + 7 * m * (j / m) := by
+    conv_lhs => rw [hjd]
+    ring
+  unfold wordStream
+  rw [hlen, hdecomp, Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hlt]
+  exact hval
+
+/-- A complete M2 certificate over any number of bags. -/
+structure CycleWitness where
+  /-- The board the loop is anchored at. -/
+  base : Board
+  /-- The placements of one period. -/
+  word : List Placement
+  /-- How many bags one period runs. -/
+  bags : ℕ
+  /-- The board is well formed. -/
+  wf : Board.WF GameConfig.standard base
+  /-- At least one bag. -/
+  bags_pos : 0 < bags
+  /-- One period is seven placements per bag. -/
+  len : word.length = 7 * bags
+  /-- Every placement is in-bounds. -/
+  valid : ∀ pl ∈ word, pl.Valid GameConfig.standard
+  /-- Each seven-block deals every piece. -/
+  blocks : ∀ jj, jj < bags → ∀ p : Piece, ∃ i, i < 7 ∧
+    (word.getD (7 * jj + i) ⟨Piece.O, 0, 0⟩).piece = p
+  /-- The word returns the board exactly. -/
+  cycles : word.foldl (Placement.applyStep GameConfig.standard) base = base
+  /-- No state of the period is lost. -/
+  safe : ∀ i, i < word.length →
+    ¬ (wordPlay ⟨base, Bag.full⟩ word i).lost GameConfig.standard
+
+namespace CycleWitness
+
+theorem word_ne_nil (W : CycleWitness) : W.word ≠ [] := by
+  intro hnil
+  have hl := W.len
+  rw [hnil, List.length_nil] at hl
+  have := W.bags_pos
+  omega
+
+theorem seven_dvd (W : CycleWitness) : 7 ∣ W.word.length := by
+  rw [W.len]
+  exact ⟨W.bags, rfl⟩
+
+theorem isBagStream (W : CycleWitness) : IsBagStream (wordStream W.word) :=
+  isBagStream_of_blocks_gen W.bags_pos W.len W.blocks
+
+/-- **A WITNESS IS A CLOSED CYCLE**, whatever its period. -/
+theorem closedCycle (W : CycleWitness) :
+    ∃ C : ClosedCycle GameConfig.standard,
+      (⟨W.base, Bag.full⟩ : GameState) ∈ C.states :=
+  safe_word_closedCycle_gen W.word_ne_nil W.valid W.seven_dvd
+    W.isBagStream W.cycles W.safe
+
+/-- **…AND THEREFORE INFINITE PLAY.** One inhabitant settles M2. -/
+theorem survives (W : CycleWitness) :
+    ∃ (C : ClosedCycle GameConfig.standard),
+      SurvivesForever GameConfig.standard C.policy ⟨W.base, Bag.full⟩ :=
+  safe_word_survives_gen W.word_ne_nil W.valid W.seven_dvd W.isBagStream
+    W.cycles W.safe
+
+/-- **EVERY WITNESS RUNS A MULTIPLE OF FIVE BAGS**: the mass clock forces
+the period to be divisible by thirty-five, so the bag count is divisible
+by five. A witness of one, two, three or four bags cannot exist. -/
+theorem five_dvd_bags (W : CycleWitness) : 5 ∣ W.bags := by
+  have h35 := legal_cycle_word_thirty_five_dvd W.wf W.word_ne_nil
+    W.valid W.isBagStream W.cycles
+  rw [W.len] at h35
+  omega
+
+/-- Hence at least five bags — thirty-five placements. -/
+theorem bags_ge_five (W : CycleWitness) : 5 ≤ W.bags := by
+  have h5 := W.five_dvd_bags
+  have hp := W.bags_pos
+  omega
+
+/-- Each of the seven pieces is played once per bag. -/
+theorem piece_census (W : CycleWitness) (p : Piece) :
+    (W.word.map (·.piece)).count p = W.bags := by
+  have h := legal_cycle_word_piece_census W.wf W.word_ne_nil W.valid
+    W.isBagStream W.cycles p
+  rw [census_eq_count, W.len] at h
+  omega
+
+/-- The period clears exactly `2.8` rows per bag — fourteen per five. -/
+theorem clear_census (W : CycleWitness) :
+    5 * wordClears W.base W.word = 14 * W.bags := by
+  have h := cycle_word_clear_census W.wf W.valid W.cycles
+  rw [W.len] at h
+  omega
+
+end CycleWitness
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the

@@ -41629,6 +41629,26 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29b) — the witness, at any number of bags (bank 417/N)
+
+- **`isBagStream_of_blocks_gen`** — the m-block test: a word of 7m
+  placements whose every seven-block deals all seven pieces generates a
+  bag-legal stream. (`omega` cannot do the index arithmetic here — the
+  modulus `7*m` is not a literal — so decompose by hand with
+  `Nat.add_mul_mod_self_left`.)
+- **`CycleWitness`** — the certificate carrying its own bag count, with
+  `.closedCycle` and `.survives` at any period.
+- **`.five_dvd_bags`** / **`.bags_ge_five`** — and the theory supplies
+  the missing constraint: EVERY witness runs a multiple of five bags,
+  so one, two, three or four bags is impossible.
+- **`.piece_census`**, **`.clear_census`** — one of each piece per bag;
+  fourteen rows cleared per five bags.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean. Compiled first
+try.
+
+---
+
 ### Tick (manual, 2026-08-29a) — the construction, freed of its length (bank 416/N)
 
 Working toward an actual witness, the first job is removing what would
