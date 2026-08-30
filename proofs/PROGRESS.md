@@ -41629,6 +41629,39 @@ Next: <subtask id and one-line description>
 
 ---
 
+### Tick (manual, 2026-08-29u) — the reserved column (bank 436/N)
+
+The mill is a specific shape, but only one idea in it does any work,
+and the shape is not it. This batch isolates that idea.
+
+- **`UsesCol`** — which columns a placement occupies. Where a piece
+  lands vertically depends on the skyline; which columns it covers does
+  not.
+- **`no_fullRows_of_col_free`** — a row clears when every column of it
+  is occupied, so a board with an empty column has no full row at all.
+- **`wordClears_eq_zero_of_col_free`** — hence **play that never
+  touches one column never clears anything**, whatever it builds.
+  `foldl_col_free` says the column stays open throughout.
+- **`col_free_mass`**, **`col_free_charge`** — and that is worth more
+  than safety, because clear-free play is where the arithmetic is
+  rigid: mass grows by exactly four a placement, the checkerboard
+  charge counts the T's, and no cell ever moves once it lands. Every
+  tiling argument applies; no gravity argument is needed.
+- **`sixE_no_clears_structural`** — `sixE_no_clears` was checked by
+  evaluation; this is the reason. The six building pieces are safe
+  because they stay out of column nine, not because of the rectangle
+  they build.
+
+So the general shape of a harvesting bag is **reserve a column, build
+freely under rigid arithmetic, then spend the column**. `millBag` is the
+instance where the column is the tenth, the build is a nine-by-four
+rectangle, and the spending piece is a vertical I — and none of those
+three choices is forced by the mechanism.
+
+Build: PASS (8311 jobs); hygiene OK; base-axiom-clean.
+
+---
+
 ### Tick (manual, 2026-08-29t) — what the opening owes the mill (bank 435/N)
 
 Putting the two halves together yields a condition on the first three

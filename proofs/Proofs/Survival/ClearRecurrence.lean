@@ -18460,6 +18460,149 @@ theorem mill_prefix_has_partial_clear {w u : List Placement} {X : Board}
     decide
   exact exists_partial_clear hne
 
+/-! ### The reserved column
+
+The mill is a specific shape, but only one idea in it is doing work,
+and the shape is not it.
+
+A row clears when every column of it is occupied. So a stretch of play
+that never touches some column cannot clear anything — not because of
+what it builds, but because a row it could complete does not exist.
+That is the whole reason the mill's six building pieces are safe: they
+stay out of column nine. The nine-wide, four-deep stack is incidental.
+
+Reserving a column is worth more than safety, because clear-free play is
+where the arithmetic is rigid. On such a stretch the mass is exactly
+four per placement, the checkerboard charge counts the T's, and no cell
+ever moves once it lands. All the machinery for reasoning about tilings
+applies, and none of the machinery for reasoning about gravity is
+needed.
+
+So the general shape of a harvesting bag is: **reserve a column, build
+freely under rigid arithmetic, then spend the column.** The mill is the
+case where the column is the tenth, the build is a rectangle, and the
+spending piece is a vertical I. -/
+
+/-- The columns a placement occupies. Independent of the board: where a
+piece lands vertically depends on the skyline, but which columns it
+covers does not. -/
+def UsesCol (pl : Placement) (j : ℕ) : Prop :=
+  ∃ c ∈ pl.shapeUp, pl.col + c.1 = j
+
+instance (pl : Placement) (j : ℕ) : Decidable (UsesCol pl j) := by
+  unfold UsesCol
+  infer_instance
+
+/-- A placement that avoids a column puts nothing in it, wherever it
+lands. -/
+theorem dropped_col_ne {b : Board} {pl : Placement} {j : ℕ}
+    (h : ¬ UsesCol pl j) : ∀ p ∈ pl.dropped b, p.1 ≠ j := by
+  intro p hp hpj
+  refine h ?_
+  unfold Placement.dropped Placement.cellsAt at hp
+  rw [Finset.mem_image] at hp
+  obtain ⟨c, hc, hEq⟩ := hp
+  have h1 : pl.col + c.1 = p.1 := congrArg Prod.fst hEq
+  unfold UsesCol
+  exact ⟨c, hc, by rw [h1]; exact hpj⟩
+
+/-- Avoiding a column is preserved by placement. -/
+theorem place_col_free {b : Board} {pl : Placement} {j : ℕ}
+    (hb : ∀ p ∈ b, p.1 ≠ j) (hpl : ¬ UsesCol pl j) :
+    ∀ p ∈ pl.place b, p.1 ≠ j := by
+  intro p hp
+  simp only [Placement.place, Finset.mem_union] at hp
+  rcases hp with h | h
+  · exact hb p h
+  · exact dropped_col_ne hpl p h
+
+/-- **A ROW NEEDS EVERY COLUMN.** A board with an empty column has no
+full row at all. -/
+theorem no_fullRows_of_col_free {b : Board} {j : ℕ} (hj : j < 10)
+    (hb : ∀ p ∈ b, p.1 ≠ j) :
+    Board.fullRows GameConfig.standard b = ∅ := by
+  refine Finset.eq_empty_iff_forall_notMem.mpr ?_
+  intro r hr
+  rw [Board.fullRows, Finset.mem_filter] at hr
+  have hmem := hr.2 j (by rw [GameConfig.standard_cols]; exact Finset.mem_range.mpr hj)
+  exact hb (j, r) hmem rfl
+
+/-- With an empty column, a move is just a placement. -/
+theorem applyStep_col_free {b : Board} {pl : Placement} {j : ℕ} (hj : j < 10)
+    (hb : ∀ p ∈ b, p.1 ≠ j) (hpl : ¬ UsesCol pl j) :
+    Placement.applyStep GameConfig.standard b pl = pl.place b := by
+  refine applyStep_eq_place_of_no_clear ?_
+  rw [no_fullRows_of_col_free hj (place_col_free hb hpl)]
+  rfl
+
+/-- **THE RESERVED COLUMN PRINCIPLE.** Play that never touches one
+column never clears a row. -/
+theorem wordClears_eq_zero_of_col_free {b : Board} {w : List Placement} {j : ℕ}
+    (hj : j < 10) (hb : ∀ p ∈ b, p.1 ≠ j)
+    (hw : ∀ pl ∈ w, ¬ UsesCol pl j) :
+    wordClears b w = 0 := by
+  induction w generalizing b with
+  | nil => rfl
+  | cons pl rest ih =>
+    have hpl := hw pl (by simp)
+    have hplace := place_col_free hb hpl
+    have hstep : Placement.applyStep GameConfig.standard b pl = pl.place b :=
+      applyStep_col_free hj hb hpl
+    rw [wordClears_cons, no_fullRows_of_col_free hj hplace]
+    have hnext : ∀ p ∈ Placement.applyStep GameConfig.standard b pl, p.1 ≠ j := by
+      rw [hstep]
+      exact hplace
+    rw [ih hnext (fun q hq => hw q (by simp [hq]))]
+    simp
+
+/-- And the column stays empty throughout. -/
+theorem foldl_col_free {b : Board} {w : List Placement} {j : ℕ} (hj : j < 10)
+    (hb : ∀ p ∈ b, p.1 ≠ j) (hw : ∀ pl ∈ w, ¬ UsesCol pl j) :
+    ∀ p ∈ w.foldl (Placement.applyStep GameConfig.standard) b, p.1 ≠ j := by
+  induction w generalizing b with
+  | nil => exact hb
+  | cons pl rest ih =>
+    rw [List.foldl_cons]
+    have hpl := hw pl (by simp)
+    have hstep : Placement.applyStep GameConfig.standard b pl = pl.place b :=
+      applyStep_col_free hj hb hpl
+    refine ih ?_ (fun q hq => hw q (by simp [hq]))
+    rw [hstep]
+    exact place_col_free hb hpl
+
+/-- **RESERVED-COLUMN PLAY HAS RIGID ARITHMETIC.** While a column is
+held open the mass grows by exactly four a move and the checkerboard
+charge counts the T's — the two laws that make a tiling argument
+possible. -/
+theorem col_free_mass {b : Board} {w : List Placement} {j : ℕ} (hj : j < 10)
+    (hwf : Board.WF GameConfig.standard b)
+    (hv : ∀ pl ∈ w, pl.Valid GameConfig.standard)
+    (hb : ∀ p ∈ b, p.1 ≠ j) (hw : ∀ pl ∈ w, ¬ UsesCol pl j) :
+    (w.foldl (Placement.applyStep GameConfig.standard) b).count
+      = b.count + 4 * w.length := by
+  have h := foldl_count_ledger_exact hwf hv
+  rw [wordClears_eq_zero_of_col_free hj hb hw] at h
+  omega
+
+theorem col_free_charge {b : Board} {w : List Placement} {j : ℕ} (hj : j < 10)
+    (hb : ∀ p ∈ b, p.1 ≠ j) (hw : ∀ pl ∈ w, ¬ UsesCol pl j) :
+    BagGrowth.charge (w.foldl (Placement.applyStep GameConfig.standard) b)
+      = BagGrowth.charge b
+        + ((w.countP (fun pl => pl.piece == Piece.T) : ℕ) : ZMod 2) :=
+  clear_free_word_charge (wordClears_eq_zero_of_col_free hj hb hw)
+
+/-! The mill, explained. Its six building pieces are safe because they
+stay out of column nine — not because of the shape they build. -/
+
+theorem sixE_avoids_col_nine : ∀ pl ∈ sixE, ¬ UsesCol pl 9 := by decide
+
+theorem floorE_avoids_col_nine : ∀ p ∈ floorE, p.1 ≠ 9 := by decide
+
+/-- `sixE_no_clears` was checked by evaluation; here is the reason. -/
+theorem sixE_no_clears_structural : wordClears floorE sixE = 0 :=
+  wordClears_eq_zero_of_col_free (by omega) floorE_avoids_col_nine
+    sixE_avoids_col_nine
+
 /-! ## The clear-free horizon is fifty placements -/
 
 /-- **Clear-free survival ends by placement fifty.** With no rows cleared the
