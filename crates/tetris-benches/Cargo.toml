@@ -13,6 +13,10 @@ path = "src/lib.rs"
 name = "benches"
 harness = false
 
+[features]
+default = []
+apple-silicon = ["tetris-search/apple-silicon"]
+
 [dependencies]
 tetris-game.workspace = true
 tetris-search.workspace = true

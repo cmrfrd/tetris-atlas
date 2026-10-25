@@ -22,11 +22,11 @@ const fn pow_f32(base: f32, exponent: usize) -> f32 {
     result
 }
 
-/// Byte-level LUT for weighted popcount: `WPOP_LUT[byte]` = Σ (bit_i × 1.25^i) for i in 0..8.
+/// Byte-level LUT for weighted popcount: `WPOP_LUT[byte]` = Σ (bit_i × 1.5^i) for i in 0..8.
 ///
 /// Higher byte lanes reuse this table with a constant scale factor:
-///   mid-byte score = WPOP_LUT[byte] × 1.25^8
-///   hi-nibble score = WPOP_LUT[nibble] × 1.25^16
+///   mid-byte score = WPOP_LUT[byte] × 1.5^8
+///   hi-nibble score = WPOP_LUT[nibble] × 1.5^16
 const WPOP_LUT: [f32; 256] = {
     let mut lut = [0.0f32; 256];
     let mut v = 0usize;
@@ -48,7 +48,39 @@ const WPOP_LUT: [f32; 256] = {
 const WPOP_SCALE_MID: f32 = pow_f32(HEIGHT_MSE_ROW_PENALTY_BASE, 8);
 const WPOP_SCALE_HI: f32 = pow_f32(HEIGHT_MSE_ROW_PENALTY_BASE, 16);
 
-/// Compare a board against empty by summing per-cell weights `1.25^row` for every filled cell.
+// Preserve the original 8+8+4 split and addition order. Only fold each existing
+// multiplication into its table entry; a 10+10 split would change rounding.
+#[cfg(all(
+    feature = "apple-silicon",
+    target_arch = "aarch64",
+    target_os = "macos"
+))]
+const WPOP_MID: [f32; 256] = {
+    let mut lut = [0.0; 256];
+    let mut i = 0;
+    while i < lut.len() {
+        lut[i] = WPOP_LUT[i] * WPOP_SCALE_MID;
+        i += 1;
+    }
+    lut
+};
+
+#[cfg(all(
+    feature = "apple-silicon",
+    target_arch = "aarch64",
+    target_os = "macos"
+))]
+const WPOP_HI: [f32; 16] = {
+    let mut lut = [0.0; 16];
+    let mut i = 0;
+    while i < lut.len() {
+        lut[i] = WPOP_LUT[i] * WPOP_SCALE_HI;
+        i += 1;
+    }
+    lut
+};
+
+/// Compare a board against empty by summing per-cell weights `1.5^row` for every filled cell.
 ///
 /// Uses a single byte-level LUT for branchless weighted popcount per column.
 #[inline_conditioned(always)]
@@ -60,9 +92,26 @@ pub const fn height_mse_distance_from_empty(board: TetrisBoard) -> f32 {
 
     repeat_idx_unroll!(StandardTetris::COLS, COL, {
         let v = limbs[COL] & PLAYABLE_MASK;
-        total += WPOP_LUT[(v & 0xFF) as usize]
-            + WPOP_LUT[((v >> 8) & 0xFF) as usize] * WPOP_SCALE_MID
-            + WPOP_LUT[((v >> 16) & 0xF) as usize] * WPOP_SCALE_HI;
+        #[cfg(all(
+            feature = "apple-silicon",
+            target_arch = "aarch64",
+            target_os = "macos"
+        ))]
+        {
+            total += WPOP_LUT[(v & 0xFF) as usize]
+                + WPOP_MID[((v >> 8) & 0xFF) as usize]
+                + WPOP_HI[((v >> 16) & 0xF) as usize];
+        }
+        #[cfg(not(all(
+            feature = "apple-silicon",
+            target_arch = "aarch64",
+            target_os = "macos"
+        )))]
+        {
+            total += WPOP_LUT[(v & 0xFF) as usize]
+                + WPOP_LUT[((v >> 8) & 0xFF) as usize] * WPOP_SCALE_MID
+                + WPOP_LUT[((v >> 16) & 0xF) as usize] * WPOP_SCALE_HI;
+        }
     });
     total
 }
@@ -90,6 +139,30 @@ pub fn height_mse_beam_tetris_score(state: &BeamTetrisState) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn weighted_score_preserves_legacy_float_bits() {
+        let mut rng = tetris_game::TetrisGameRng::new(0xDEAD_BEEF_CAFE);
+        for index in 0..10_000 {
+            let limbs = std::array::from_fn(|_| match index {
+                0 => 0,
+                1 => u32::MAX,
+                _ => rng.next_u64() as u32,
+            });
+            let board: TetrisBoard = TetrisBoard::from_limbs(limbs);
+            let mut expected = 0.0f32;
+            for raw in limbs {
+                let v = raw & StandardTetris::ROW_MASK;
+                expected += WPOP_LUT[(v & 0xFF) as usize]
+                    + WPOP_LUT[((v >> 8) & 0xFF) as usize] * WPOP_SCALE_MID
+                    + WPOP_LUT[((v >> 16) & 0xF) as usize] * WPOP_SCALE_HI;
+            }
+            assert_eq!(
+                height_mse_distance_from_empty(board).to_bits(),
+                expected.to_bits()
+            );
+        }
+    }
 
     #[test]
     fn test_height_mse_distance_from_empty_empty_board() {

@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [features]
 default = []
 never-inline = []
+apple-silicon = []
 
 [dependencies]
 tetris-game.workspace = true

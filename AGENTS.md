@@ -95,6 +95,10 @@ Playground defaults enable no optional backends. Relevant flags:
 Choose exactly one explicit `dtype-f16`/`dtype-bf16`/`dtype-f32`/`dtype-f64` override when needed.
 `never-inline` supports ASM analysis. Check native backend prerequisites on the target platform;
 do not blindly enable every GPU/backend feature together.
+`apple-silicon` opts into pre-scaled scoring tables, guarded by both
+`target_arch = "aarch64"` and `target_os = "macos"`. Defaults and other targets keep the portable
+implementation. New architecture-specific tricks need this kind of feature/target guard,
+reference-equivalence tests, and separate baseline/candidate measurements.
 
 ```sh
 cargo run --release -p tetris-playground --bin tetris_demo_single
