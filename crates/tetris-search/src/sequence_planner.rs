@@ -160,6 +160,19 @@ impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
         }
     }
 
+    /// Heap-allocates a fresh planner without materializing it on the stack.
+    ///
+    /// The fixed-capacity buffers reach hundreds of megabytes at production
+    /// widths, so `Box::new(Self::new())` would overflow the stack, and storing
+    /// the planner in const-initialized TLS makes every `thread::spawn` fault in
+    /// the full buffer size.
+    pub fn new_boxed() -> Box<Self> {
+        // SAFETY: all-zero bytes are exactly `Self::new()` — both containers are
+        // `MaybeUninit` storage (no validity requirement) plus a zero `len`, the
+        // counters are zero, and `None::<fn>` is the all-zero niche.
+        unsafe { Box::<Self>::new_zeroed().assume_init() }
+    }
+
     /// Set a terminal filter. Full-depth boards where `f(board)` returns `false` are rejected.
     pub fn with_filter(mut self, f: fn(TetrisBoard) -> bool) -> Self {
         self.filter_fn = Some(f);
@@ -436,6 +449,28 @@ mod tests {
             assert!(witness.nodes_expanded > 0);
             assert!(witness.terminal_candidates_examined > 0);
         }
+    }
+
+    /// `new_boxed` (zeroed heap allocation) must behave identically to `new`.
+    #[test]
+    fn new_boxed_matches_new() {
+        let mut stack_planner = TetrisSequencePlanner::<WIDTH, DEPTH, NODE_CAPACITY>::new();
+        let mut boxed_planner = TetrisSequencePlanner::<WIDTH, DEPTH, NODE_CAPACITY>::new_boxed();
+        let stack_outcome = stack_planner.search(
+            TetrisBoard::EMPTY_BOARD,
+            &sequence(),
+            &height_mse_plan_score,
+        );
+        let boxed_outcome = boxed_planner.search(
+            TetrisBoard::EMPTY_BOARD,
+            &sequence(),
+            &height_mse_plan_score,
+        );
+        assert!(
+            matches!(stack_outcome, TetrisSequencePlanOutcome::Success(_)),
+            "planner should produce a full script"
+        );
+        assert_eq!(stack_outcome, boxed_outcome);
     }
 
     #[test]

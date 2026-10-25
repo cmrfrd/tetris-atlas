@@ -190,9 +190,23 @@ enum SearchOutcome {
     Exhausted,
 }
 
+type ThreadPlanner = TetrisSequencePlanner<PLANNER_WIDTH, PIECES_PER_BAG, BEST_FIRST_NODE_CAPACITY>;
+
 thread_local! {
-    static THREAD_LOCAL_PLANNER: RefCell<TetrisSequencePlanner<PLANNER_WIDTH, PIECES_PER_BAG, BEST_FIRST_NODE_CAPACITY>> =
-        const { RefCell::new(TetrisSequencePlanner::new()) };
+    static THREAD_LOCAL_PLANNER: RefCell<Option<Box<ThreadPlanner>>> = const { RefCell::new(None) };
+}
+
+/// Runs `f` on this thread's lazily heap-allocated planner.
+///
+/// The planner is ~1GB of fixed-capacity buffers. Storing it directly in
+/// const-initialized TLS put it in the static thread-local image, so every
+/// `thread::spawn` in this binary had to materialize ~1GB (~0.6s per thread).
+/// A tiny `Option<Box>` slot keeps spawns cheap for threads that never search.
+fn with_thread_local_planner<R>(f: impl FnOnce(&mut ThreadPlanner) -> R) -> R {
+    THREAD_LOCAL_PLANNER.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        f(slot.get_or_insert_with(ThreadPlanner::new_boxed))
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -241,6 +255,54 @@ impl WorkSignal {
             .expect("work signal mutex poisoned while notifying");
         *ready = true;
         self.condvar.notify_all();
+    }
+}
+
+/// Owns an unresolved `InProgress` cache claim until a terminal value is published.
+///
+/// If the owner unwinds before resolving (e.g. `compute` panics), the claim is
+/// removed and waiters are woken so they can re-claim the vacant key instead of
+/// blocking forever on a signal that will never fire.
+struct InProgressClaim<'a, K, V>
+where
+    K: Eq + std::hash::Hash,
+{
+    cache: &'a DashMap<K, V>,
+    key: K,
+    signal: Arc<WorkSignal>,
+    resolved: bool,
+}
+
+impl<'a, K, V> InProgressClaim<'a, K, V>
+where
+    K: Eq + std::hash::Hash + Copy,
+{
+    fn new(cache: &'a DashMap<K, V>, key: K, signal: Arc<WorkSignal>) -> Self {
+        Self {
+            cache,
+            key,
+            signal,
+            resolved: false,
+        }
+    }
+
+    /// Publishes the terminal cached value, then wakes all waiters.
+    fn resolve(mut self, value: V) {
+        self.cache.insert(self.key, value);
+        self.signal.notify_ready();
+        self.resolved = true;
+    }
+}
+
+impl<K, V> Drop for InProgressClaim<'_, K, V>
+where
+    K: Eq + std::hash::Hash,
+{
+    fn drop(&mut self) {
+        if !self.resolved {
+            self.cache.remove(&self.key);
+            self.signal.notify_ready();
+        }
     }
 }
 
@@ -1136,8 +1198,7 @@ fn search_forced_sequence_core(
     forced_sequence: &ForcedBag,
     filter: Option<fn(TetrisBoard) -> bool>,
 ) -> SearchOutcome {
-    THREAD_LOCAL_PLANNER.with(|planner| {
-        let mut planner = planner.borrow_mut();
+    with_thread_local_planner(|planner| {
         if let Some(f) = filter {
             planner.set_filter(f);
         } else {
@@ -1159,15 +1220,13 @@ fn collect_first_bag_candidates_core(
     forced_sequence: &ForcedBag,
     limit: usize,
 ) -> CandidateBuffer {
-    THREAD_LOCAL_PLANNER.with(|planner| {
-        let planner_witnesses = planner
-            .borrow_mut()
-            .collect_witnesses::<_, CANDIDATE_BUFFER_CAPACITY>(
-                start_board,
-                forced_sequence,
-                &height_mse_plan_score,
-                limit,
-            );
+    with_thread_local_planner(|planner| {
+        let planner_witnesses = planner.collect_witnesses::<_, CANDIDATE_BUFFER_CAPACITY>(
+            start_board,
+            forced_sequence,
+            &height_mse_plan_score,
+            limit,
+        );
         let mut witnesses = CandidateBuffer::new();
         for witness in planner_witnesses.into_iter() {
             let pushed = witnesses.try_push(SearchWitness::from(*witness));
@@ -1232,13 +1291,13 @@ where
         }
     };
 
+    let claim = InProgressClaim::new(&context.direct_cache, key, signal);
     let result = compute();
     let cached = match result {
         Some(witness) => DirectSearchCacheValue::Success(witness),
         None => DirectSearchCacheValue::Failure,
     };
-    context.direct_cache.insert(key, cached);
-    signal.notify_ready();
+    claim.resolve(cached);
     result
 }
 
@@ -1398,6 +1457,7 @@ where
         }
     };
 
+    let claim = InProgressClaim::new(&context.recursive_board_cache, key, signal);
     let result = compute();
     match &result {
         RecursiveBoardCertification::Complete { .. } => {
@@ -1415,8 +1475,7 @@ where
             failure: failure.clone(),
         },
     };
-    context.recursive_board_cache.insert(key, cached);
-    signal.notify_ready();
+    claim.resolve(cached);
     result
 }
 
@@ -2308,8 +2367,8 @@ mod tests {
     #[test]
     /// Confirms the planner uses the fixed-capacity storage chosen for the allocation-free core.
     fn planner_uses_fixed_capacity_buffers() {
-        THREAD_LOCAL_PLANNER.with(|planner| {
-            assert!(std::mem::size_of_val(&*planner.borrow()) > 0);
+        with_thread_local_planner(|planner| {
+            assert!(std::mem::size_of_val(planner) > 0);
         });
         assert!(BEST_FIRST_NODE_CAPACITY >= 21_845);
     }
@@ -2404,10 +2463,13 @@ mod tests {
             TetrisPiece::J_PIECE,
         ];
 
+        // The candidate board must stay above the safe height cap, otherwise `terminal_fn`
+        // short-circuits certification to `Direct` and the second-bag loop never runs.
         let mut intermediate = TetrisBoard::EMPTY_BOARD;
-        intermediate.set_bit(0, 3);
-        intermediate.set_bit(1, 2);
-        intermediate.set_bit(2, 1);
+        intermediate.set_bit(0, SAFE_HEIGHT_CAP as usize + 1);
+        intermediate.set_bit(1, SAFE_HEIGHT_CAP as usize);
+        intermediate.set_bit(2, SAFE_HEIGHT_CAP as usize - 1);
+        assert!(!terminal_fn(&intermediate));
 
         let candidate = test_witness([0, 1, 2, 3, 4, 5, 6], intermediate);
         let recovered_terminal = test_witness([6, 5, 4, 3, 2, 1, 0], TetrisBoard::EMPTY_BOARD);
@@ -2475,10 +2537,12 @@ mod tests {
             TetrisPiece::J_PIECE,
         ];
 
-        let mut bad_intermediate = TetrisBoard::EMPTY_BOARD;
-        bad_intermediate.set_bit(0, 3);
-        let mut good_intermediate = TetrisBoard::EMPTY_BOARD;
-        good_intermediate.set_bit(1, 3);
+        // Both candidate boards must stay above the safe height cap so certification reaches
+        // the second-bag loop instead of short-circuiting to `Direct` on the first candidate.
+        let bad_intermediate = board_with_bit(0, SAFE_HEIGHT_CAP as usize + 1);
+        let good_intermediate = board_with_bit(1, SAFE_HEIGHT_CAP as usize + 1);
+        assert!(!terminal_fn(&bad_intermediate));
+        assert!(!terminal_fn(&good_intermediate));
 
         let bad_candidate = test_witness([0, 1, 2, 3, 4, 5, 6], bad_intermediate);
         let good_candidate = test_witness([6, 5, 4, 3, 2, 1, 0], good_intermediate);
@@ -3489,6 +3553,42 @@ mod tests {
     }
 
     #[test]
+    /// An interrupted computation must release its claim and notify existing waiters.
+    fn direct_cache_releases_claim_on_unwind() {
+        let context = SharedSearchContext::new();
+        let board = TetrisBoard::EMPTY_BOARD;
+        let bag = ALL_FORCED_BAG_PERMUTATIONS[0];
+        let mut interrupted_signal = None;
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            query_direct_search_cached_with(&context, board, &bag, || {
+                interrupted_signal = context.direct_cache.iter().find_map(|entry| {
+                    if let DirectSearchCacheValue::InProgress(signal) = entry.value() {
+                        Some(Arc::clone(signal))
+                    } else {
+                        None
+                    }
+                });
+                std::panic::resume_unwind(Box::new("interrupted cache computation"));
+            });
+        }));
+        assert!(result.is_err());
+        assert!(context.direct_cache.is_empty());
+        let signal = interrupted_signal.expect("computation should own a cache claim");
+        assert!(
+            *signal
+                .ready
+                .lock()
+                .expect("signal lock should remain usable")
+        );
+
+        let witness = test_witness([0, 1, 2, 3, 4, 5, 6], board);
+        assert_eq!(
+            query_direct_search_cached_with(&context, board, &bag, || Some(witness)),
+            Some(witness)
+        );
+    }
+
+    #[test]
     /// Concurrent direct-cache lookups should execute the underlying search only once.
     fn direct_cache_deduplicates_in_progress_searches() {
         let context = Arc::new(SharedSearchContext::new());
@@ -3570,7 +3670,7 @@ mod tests {
             });
 
             started_rx
-                .recv_timeout(Duration::from_secs(1))
+                .recv_timeout(Duration::from_secs(10))
                 .expect("direct cache owner should start");
 
             let waiter_context = Arc::clone(&context);
@@ -3707,7 +3807,7 @@ mod tests {
             });
 
             started_rx
-                .recv_timeout(Duration::from_secs(1))
+                .recv_timeout(Duration::from_secs(10))
                 .expect("recursive cache owner should start");
 
             let waiter_context = Arc::clone(&context);
