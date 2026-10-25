@@ -1,426 +1,171 @@
 # AGENTS.md — Tetris Atlas
 
-This is a **research project**. The ultimate mission is to **"solve tetris"** — to build a complete lookup table (the **Atlas**) for the canonical game of Tetris such that for any reachable game state, the correct move to play forever can be found by a simple table lookup.
+This is the shared contributor and agent guide. `CLAUDE.md` points here; keep one source of truth.
 
-A solved game means **provably infinite play**: a proof-by-construction that there exists a strategy under the canonical rules which never tops out, regardless of the piece sequence drawn from the 7-bag randomizer.
+## Mission and proof standard
 
----
+Build an **Atlas**: a lookup policy that proves infinite survival under this repository's canonical
+Tetris engine, for every legal 7-bag piece sequence. The ideal Atlas covers all reachable states;
+a validated policy-closed subgraph containing the empty-board seed is sufficient to prove survival
+from a new game. Finite survival, heuristic scores, and partial exploration are evidence, not proof.
 
-## Project framing
+Milestones: **M0** strong finite play; **M1** no observed deaths (empirical); **M2** a certified
+closed policy set; **M3** that set reachable from the empty board; **M4** the global Atlas or a
+sufficient closed policy graph from the seed.
 
-### The final goal: a total lookup table
+The online adversarial quantifier order is **for every possible next piece, there exists a move**.
+For a state `(board, remaining_bag)`, every remaining piece is an AND obligation and its placements
+are OR alternatives. After the last piece, refill the bag with all seven pieces. A state is dead
+when any possible piece has no surviving move. Unknown/unexpanded states are not certified live.
+A lookup can include the observed piece in its key or store one move per possible piece.
 
-The ideal end state of this project is a **global Atlas** — a mapping from every reachable `(board, bag_state, current_piece)` to the placement that keeps the game alive indefinitely. If such a table exists and is complete, then playing Tetris reduces to:
+A cycle or strongly connected component alone is insufficient: certify that every possible draw
+has a selected legal move whose successor stays in the winning set. Recompute transitions with
+the engine, validate closure independently, and verify reachability from the seed. A fixed piece
+order or a script chosen after seeing an entire bag proves only that restricted/lookahead model.
+Tighter height/hole carriers restrict the search; a closed winning policy within one still proves
+survival under the canonical game. Failure within a carrier does not prove the full game losing.
 
-1. Observe the current game state.
-2. Look up the state in the Atlas.
-3. Play the prescribed move.
-4. Repeat forever.
+## Ground truth and ownership
 
-This constitutes a **proof by construction** that Tetris (under the canonical 7-bag rules on a 10×20 board) is survivable for infinite horizons. The Atlas itself is the proof artifact.
+`crates/tetris-game` is authoritative. `StandardTetris` is 10 columns × 20 playable rows, with a
+column-major `[u32; 10]` board, seven standard tetrominoes (O, I, S, Z, T, L, J), and deterministic
+seeded 7-bag draws. Actions are precomputed rotation/column hard-drop placements, not timed input
+sequences or a separate rotation/kick system. Derive action counts from
+`TetrisPiecePlacement::NUM_PLACEMENTS`; do not hardcode a stale count. Placement drops and merges
+the piece, clears complete rows, then checks loss (`height > ROWS`); a lost result is normalized
+to the engine's terminal board marker. All solvers, learned models, and verifiers must agree.
 
-### Why this is hard
+| Location | Responsibility |
+|---|---|
+| `crates/tetris-game` | Board, configuration, pieces, bags, placement, line clearing |
+| `crates/tetris-utils` | Bit operations, fixed-capacity containers, shared low-level utilities |
+| `crates/proc-macros` | Conditional inlining |
+| `crates/tetris-search` | Beam/multi-beam search, sequence planner, parallel state exploration |
+| `crates/tetris-ml` | Candle models, optimizers, tensors, data generation, checkpoints, TUI |
+| `crates/tetris-playground` | Explicit Cargo binaries: examples, atlas, research, training, tools |
+| `crates/tetris-benches` | Criterion benchmarks and pprof profiling |
+| `crates/tensorboard` | TensorBoard event writer and checked-in generated protobuf bindings |
+| `scripts/`, `.docker/`, `.devcontainer/` | Utilities and development/container configuration |
 
-The raw state space of Tetris is enormous. A 10×20 binary board alone has up to 2^200 configurations (though the vast majority are unreachable). The 7-bag randomizer adds combinatorial branching on every piece draw. Building a total lookup table by brute force is infeasible — the project must find structure to exploit:
+Read the relevant source and manifests before editing. Binary paths and required features live
+in `crates/tetris-playground/Cargo.toml`; detailed research descriptions live beside their source.
+Do not assume old `docs/`, proof sources, archived experiments, or runtime artifacts still exist.
+Do not revive removed files or branches incidentally. Treat research-status statements as historical
+unless supported by the current run artifacts.
 
-- **Closed cycles**: subsets of states that form loops — once you enter the cycle, you stay in it forever. Finding even one such cycle proves infinite play for the states it covers.
-- **DAG search with death propagation**: expand the reachable state graph, propagate "death" backward from losing states, and identify the surviving subgraph.
-- **Symmetry and compression**: many board states are strategically equivalent; the effective state space may be far smaller than the raw space.
+## Implementation workflow
 
-### Milestone hierarchy
+- Propose a minimal change set, preserve unrelated work, and add or adjust meaningful tests.
+- Use the pinned nightly in `rust-toolchain.toml`; unstable features include `generic_const_exprs`.
+  Follow `rustfmt.toml` (edition 2024, width 100, four spaces, Unix newlines).
+- Prefer `anyhow::Result` for fallible operations. Workspace Clippy denies `panic!`, `todo!`,
+  `unimplemented!`, and `unreachable!`. Other lint settings, including `unwrap`/`expect`, come from
+  workspace `Cargo.toml`; do not weaken them to hide new failures.
+- Preserve const-generic, bitwise, fixed-capacity, and unrolled hot paths where justified.
+  Large fixed-capacity planners must not be materialized on thread stacks; audit unsafe allocation
+  assumptions against the actual field layouts and test equivalence to ordinary initialization.
+- Algorithm changes need fixed-seed evaluations, ablations, and a rollback plan. Do not claim a
+  search or performance improvement from code inspection alone.
+- Keep persisted state encodings, policy semantics, and resume guards consistent. Schema changes
+  require explicit compatibility handling or a fresh database. Never mistake a drained work queue,
+  optimistic liveness, Bloom-filter hint, or progress ratio for a closure certificate.
 
-The milestones below are ordered from most achievable to the final goal. Each earlier milestone provides tools, evidence, or infrastructure for the next.
+Run these before merging, plus checks for the features/targets touched:
 
-**M0 — Strong finite play (subgoal)**
-Agents that survive for very long horizons (millions of pieces) across many seeds via beam search, multi-beam voting, and heuristic tuning. This is the current baseline and provides the search infrastructure everything else builds on.
-
-**M1 — Empirically infinite play (subgoal)**
-Agents (search-based, learned, or hybrid) that have never been observed to top out in any test run. Not a proof, but strong empirical evidence that infinite play is reachable.
-
-**M2 — Closed cycles found (subgoal)**
-Discovery of at least one closed cycle in the state graph — a set of states and a policy that loops through them indefinitely, clearing lines as needed to keep the board bounded. This is a local proof of infinite play for those states.
-
-**M3 — Reachable closed cycles (subgoal)**
-A closed cycle from M2 that is also reachable from the initial empty-board state via a known action sequence. This proves that a real game, starting from an empty board, can enter a provably infinite loop.
-
-**M4 — The Atlas (final goal)**
-A complete or practically complete lookup table covering all reachable states (or a sufficient surviving subgraph), such that any game played from the empty board using the Atlas as its policy never tops out. The Atlas is the proof artifact.
-
-### Evaluation and reproducibility
-
-All results must report:
-- Number of runs (N) and seed set definition
-- Aggregation statistic (mean/median) and dispersion (stdev/quantiles)
-- Runtime cost (wall time, pieces/sec, hardware info)
-- For atlas work: state count, cycle length, coverage fraction, expansion rate
-
-Every claim must be backed by a run spec, logs, seed set, and commit hash.
-
-### Canonical environment
-
-The ground-truth Tetris engine lives in `crates/tetris-game`:
-- Board: 10 columns × 20 rows, column-major `[u32; 10]` layout
-- Pieces: 7 standard tetrominoes (O, I, S, Z, T, L, J)
-- Randomizer: 7-bag system with deterministic seeded RNG
-- Actions: 117 precomputed `TetrisPiecePlacement` values (piece × rotation × column)
-- Loss: board height exceeds 20 rows
-
-All agents, search algorithms, atlas builders, and ML models depend on this implementation.
-
----
-
-## Repository structure
-
-```
-tetris-atlas/
-├── crates/
-│   ├── tetris-game/        # Core engine: board, pieces, bag, placement, line clearing
-│   ├── tetris-search/      # Beam search, multi-beam voting, parallel BFS explorer
-│   ├── tetris-ml/          # Candle-based ML: modules, optimizers, tensors, data gen, TUI
-│   ├── tetris-playground/  # All runnable binaries: demos, training, atlas, experiments
-│   ├── tetris-benches/     # Criterion + pprof benchmarks
-│   ├── tensorboard/        # TensorBoard event-file writer
-│   └── proc-macros/        # Conditional inlining and loop unrolling macros
-├── scripts/                # Plotting and data download scripts (Python)
-├── .docker/                # Dockerfiles for CPU runs and local dev images
-├── artifacts/              # Runtime outputs (checkpoints, logdir, databases, data)
-│   ├── checkpoints/
-│   ├── logdir/
-│   ├── databases/
-│   └── data/
-├── rust-toolchain.toml     # Pinned to nightly
-└── Cargo.toml              # Virtual workspace
-```
-
-### Crate dependency graph
-
-```
-tetris-game ← proc-macros
-     ↑
-tetris-search ← proc-macros
-     ↑
-tetris-ml ← candle-core, candle-nn
-     ↑
-tetris-playground ← tensorboard, clap, rocksdb, heed, feoxdb, ratatui, ...
-```
-
----
-
-## Agent roles
-
-Agents are humans, automated scripts, or LLM-based contributors. Each must produce artifacts that are reviewable and reproducible.
-
-| Role | Owns | Key crates |
-|---|---|---|
-| **Research Director** | Research direction, objective definitions, milestone acceptance | — |
-| **Search Engineer** | Beam search, multi-beam voting, tiered heuristics, pruning | `tetris-search` |
-| **Atlas Engineer** | State-space expansion, persistent lookup tables, coverage metrics | `tetris-playground` (atlas bins) |
-| **ML Engineer** | Learned models, training loops, dataset generation, hybrid agents | `tetris-ml`, `tetris-playground` (train bins) |
-| **Engine Engineer** | Core game logic correctness, performance, new features | `tetris-game`, `proc-macros` |
-| **Benchmarking Engineer** | Performance evidence, flamegraphs, regression detection | `tetris-benches` |
-| **Infra Engineer** | CI, Docker builds, toolchain stability | `.docker/` |
-
----
-
-## Coding conventions
-
-### Rust toolchain
-- **Nightly required** — pinned via `rust-toolchain.toml`
-- Uses `#![feature(generic_const_exprs)]` and edition 2024 in newer crates
-- `rustfmt.toml`: edition 2021, 100 char max width, 4-space tabs, Unix newlines
-
-### Style
-- Clippy is configured in the workspace `Cargo.toml` with many pedantic lints relaxed
-- `unwrap_used` and `expect_used` are warnings; `panic!`, `todo!`, `unimplemented!`, `unreachable!` are **denied**
-- Prefer `anyhow::Result` for fallible operations
-- Performance-critical code uses const generics, bitwise operations, stack allocation (`HeaplessVec`), and compile-time unrolling (`repeat_idx_unroll!`)
-
-### Feature flags
-- `never-inline` — disables inlining for ASM/benchmark analysis
-- `candle-cuda` — enables CUDA backend for ML
-- `candle-metal` — enables Metal backend for ML (macOS)
-- `dtype-f16` / `dtype-bf16` / `dtype-f32` / `dtype-f64` — float precision selection
-
----
-
-## Testing
-
-Run all workspace tests:
-```sh
-cargo test --workspace
-```
-
-Run a single crate:
-```sh
-cargo test -p tetris-game
-cargo test -p tetris-search
-```
-
-Guidelines:
-- Use fixed seeds for deterministic tests in search/ML components
-- Keep unit tests fast; put longer randomized tests behind `#[ignore]`
-- All tests must pass before merging
-
-### Formatting and linting
 ```sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+# Focused checks:
+cargo test -p tetris-game
+cargo test -p tetris-search
+cargo test -p tetris-playground --bin tetris_safe_set
+cargo test -p tetris-playground --features rocksdb-backend --bin tetris_atlas_partitioned
 ```
 
----
+Use fixed seeds in tests; keep unit tests fast and put expensive randomized/research sweeps behind
+`#[ignore]`. Default workspace checks skip feature-gated binaries. Report pre-existing failures
+separately from regressions, and state exactly what passed, failed, or was not run.
 
-## Benchmarking
+## Features and representative commands
 
-Benchmarks live in `tetris-benches` using Criterion + pprof:
+Playground defaults enable no optional backends. Relevant flags:
+`ml` (training/CLI), `tui` (interactive atlas), `rocksdb-backend`, `sqlite-backend`, and `smt`.
+`candle-metal`/`candle-cuda` select GPU backends; include `ml` for playground training targets.
+Choose exactly one explicit `dtype-f16`/`dtype-bf16`/`dtype-f32`/`dtype-f64` override when needed.
+`never-inline` supports ASM analysis. Check native backend prerequisites on the target platform;
+do not blindly enable every GPU/backend feature together.
 
 ```sh
-# Run all Criterion benchmarks
-cargo bench -p tetris-benches --bench benches
+cargo run --release -p tetris-playground --bin tetris_demo_single
+cargo run --release -p tetris-playground --bin tetris_demo_multi
+cargo run --release -p tetris-playground --bin tetris_demo_adaptive_multi
 
-# Profiling mode (reduced noise, generate flamegraphs)
+# Create output directories before runs; use --help to inspect current options.
+mkdir -p artifacts/databases/inmemory artifacts/databases/rocksdb
+cargo run --release -p tetris-playground --features tui \
+  --bin tetris_atlas_inmemory -- --path artifacts/databases/inmemory create
+cargo run --release -p tetris-playground --features rocksdb-backend,tui \
+  --bin tetris_atlas_rocksdb -- --db-path artifacts/databases/rocksdb create
+cargo run --release -p tetris-playground --features rocksdb-backend \
+  --bin tetris_atlas_partitioned -- --db-path artifacts/databases/partitioned \
+  create --writers 4 --ram-mib 4096
+
+# Metal on macOS; substitute candle-cuda on a configured CUDA host.
+RAYON_STACK_SIZE_MB=64 cargo run --release -p tetris-playground --features ml,candle-metal \
+  --bin tetris_train_beam_supervised -- train --run-name my-run \
+  --logdir artifacts/logdir --checkpoint-dir artifacts/checkpoints
+cargo run --release -p tetris-playground --features ml --bin tetris_train_genetic
+```
+
+For training inference, pass a checkpoint **directory** via `inference --checkpoint <dir>`.
+Training resume accepts a checkpoint ULID via `train ... --resume <ULID>`.
+Search's global Rayon pool accepts `RAYON_NUM_THREADS` and `RAYON_STACK_SIZE_MB` (default 64 MiB
+stack); individual binaries may create separate pools. Verify container feature flags and output
+paths against current manifests before running `.docker/` builds.
+
+## Evaluation and artifacts
+
+Write new runtime outputs under gitignored `artifacts/`, creating directories as needed:
+`checkpoints/<run>/`, `logdir/<run>/`, `databases/`, `data/`, `output/`, and `benchmarks/<sha>/`.
+Do not commit generated databases, models, logs, or Criterion reports unless explicitly requested.
+Some utility scripts and archives are ignored by current rules; check `git status`/`.gitignore`
+when adding reproducibility tooling rather than assuming a file is tracked.
+
+Every result needs a run specification, parameters, logs, seed set, and commit hash (with any dirty
+worktree noted). Record N, mean/median and dispersion, wall time, throughput, hardware/OS, and
+replay inputs (seed + bag state and action sequence or policy/model). Track pieces, lines, score,
+height, holes, and mean/p95 move latency. Atlas results also need state/frontier counts, expansion
+rate, cycle/closed-set size, and coverage with its denominator; preserve unknown coverage as unknown.
+Keep historical measurements distinct from current verification.
+
+## Benchmarks and profiling
+
+Use `crates/tetris-benches` with fixed seeds/fixtures and unchanged benchmark names. Avoid unbounded
+demos as benchmarks. For performance-sensitive changes, save a named baseline **before** editing:
+
+```sh
+cargo bench -p tetris-benches --bench benches -- --save-baseline before-change
+# After the change, same hardware/toolchain/features and benchmark configuration:
+cargo bench -p tetris-benches --bench benches -- --baseline before-change
+# Profiling mode (separate from statistical timing):
 cargo bench -p tetris-benches --bench benches -- --profile-time 5
 ```
 
-Criterion HTML reports go to `target/criterion/`. Flamegraphs are emitted via the pprof integration.
-
-### Baseline comparisons
-
-Use Criterion named baselines when a change may affect performance. This is a
-process requirement, not a custom script requirement. There are two supported
-comparison modes.
-
-**Before/after baseline for the current change**
-
-Use this when you are about to modify performance-sensitive code and want a
-local baseline from the same checkout/environment.
-
-```sh
-# 1. Before the change, save a local baseline.
-cargo bench -p tetris-benches --bench benches -- --save-baseline before-change
-
-# 2. After the change, compare against that baseline.
-cargo bench -p tetris-benches --bench benches -- --baseline before-change
-```
-
-**Per-commit benchmark artifact**
-
-For every commit an agent prepares, try to leave a local benchmark artifact
-under `artifacts/benchmarks/<commit-sha>/`. This directory is inside the repo
-but gitignored, so it preserves local history without bloating source control.
-If a benchmark is too expensive for the current task, record that it was not run
-and why in the final report.
-
-```sh
-SHA=$(git rev-parse --short HEAD)
-OUT="artifacts/benchmarks/$SHA"
-mkdir -p "$OUT"
-
-git rev-parse HEAD > "$OUT/commit.txt"
-git status --short > "$OUT/git-status.txt"
-rustc -Vv > "$OUT/rustc.txt"
-cargo bench -p tetris-benches --bench benches -- --save-baseline "$SHA" 2>&1 | tee "$OUT/cargo-bench.log"
-cp -R target/criterion "$OUT/criterion"
-```
-
-**Historical/ref baseline comparison**
-
-Use this when comparing against a known branch, tag, or commit. Good baseline
-names are branch/commit based: `main`, `pre-heap-change`, `abc1234`.
-
-```sh
-# 1. On the historical reference implementation, save a named baseline.
-cargo bench -p tetris-benches --bench benches -- --save-baseline main
-
-# 2. On the candidate implementation, compare against the historical baseline.
-cargo bench -p tetris-benches --bench benches -- --baseline main
-
-# 3. If restoring a local per-commit artifact on a fresh checkout:
-rm -rf target/criterion
-cp -R artifacts/benchmarks/<baseline-sha>/criterion target/criterion
-
-# 4. For either mode, open the detailed local report if needed.
-open target/criterion/report/index.html
-```
-
-Active Criterion data lives under `target/criterion/`. Per-commit snapshots live
-under `artifacts/benchmarks/`. Both are local, gitignored build artifacts. Do
-not commit Criterion output to the repo unless the user explicitly asks for a
-benchmark artifact.
-
-When comparing against another git ref, only switch commits if the worktree is
-clean or the user has approved the workflow. If the tree is dirty, prefer a
-same-checkout before/after comparison around the change being made, or report
-that a cross-ref benchmark was not run.
-
-Benchmark definitions must be stable across baseline and candidate runs:
-- Use fixed seeds and fixed board/search fixtures.
-- Keep benchmark names unchanged unless intentionally replacing a benchmark.
-- Avoid benchmarking unbounded demos or exploratory binaries.
-- Prefer `crates/tetris-benches` over ad-hoc playground binaries.
-
-Every performance claim must report:
-- Baseline name and commit SHA
-- Candidate commit SHA or dirty-worktree note
-- Benchmark command and feature flags
-- Hardware/OS and `rustc -Vv`
-- Criterion percentage delta and whether the change is statistically significant
-- Any known noise source, such as thermal throttling, background load, or changed benchmark definitions
-
-### ASM analysis
-
-The `cargo-asm` crate is unmaintained — use `cargo-show-asm` instead:
-```sh
-cargo install cargo-show-asm
-cargo asm -p tetris-game --features never-inline --dev --lib "tetris_game::utils::rshift_slice_from_mask_u32" 0 --rust
-```
-
-### Macro expansion
-```sh
-cargo expand -p tetris-game --lib utils::rshift_slice_from_mask_u32
-```
-
----
-
-## Running demos and experiments
-
-### Search demos
-
-```sh
-# Single beam search
-cargo run --release -p tetris-playground --bin tetris_demo_single
-
-# Multi-beam voting
-cargo run --release -p tetris-playground --bin tetris_demo_multi
-
-# Adaptive multi-beam
-cargo run --release -p tetris-playground --bin tetris_demo_adaptive_multi
-```
-
-### Atlas builders
-
-```sh
-# In-memory atlas (fastest, checkpoints to tetris_atlas_inmemory.bin)
-cargo run --release -p tetris-playground --bin tetris_atlas_inmemory -- create
-cargo run --release -p tetris-playground --bin tetris_atlas_inmemory -- explore
-
-# RocksDB atlas
-cargo run --release -p tetris-playground --bin tetris_atlas_rocksdb -- -d ./artifacts/databases/rocksdb create
-cargo run --release -p tetris-playground --bin tetris_atlas_rocksdb -- -d ./artifacts/databases/rocksdb explore
-
-```
-
-### ML training
-
-```sh
-# Beam-supervised learning (GPU)
-RAYON_STACK_SIZE_MB=64 cargo run --release -p tetris-playground --features candle-metal \
-  --bin tetris_train_beam_supervised -- train \
-  --run-name my-run --logdir ./artifacts/logdir --checkpoint-dir ./artifacts/checkpoints
-
-# Genetic algorithm over heuristic weights
-cargo run --release -p tetris-playground --bin tetris_train_genetic
-
-# Inference from a checkpoint
-cargo run --release -p tetris-playground --features candle-metal \
-  --bin tetris_train_beam_supervised -- inference \
-  --checkpoint ./artifacts/checkpoints/my-run/model.safetensors
-```
-
-### Threading controls
-
-Search and exploration use Rayon. Configure via environment variables:
-```sh
-RAYON_NUM_THREADS=16 RAYON_STACK_SIZE_MB=128 cargo run --release -p tetris-playground --bin tetris_demo_multi
-```
-
-Default stack size is 64MB.
-
----
-
-## Deployment
-
-### Docker
-
-```sh
-# CPU build (in-memory atlas)
-docker build -f .docker/Dockerfile.cpu.run -t tetris-atlas-cpu .
-
-```
-
----
-
-## Artifacts and reproducibility
-
-### Artifact layout
-
-All runtime outputs go under `artifacts/` (gitignored):
-- `artifacts/checkpoints/<run-name>/` — model safetensors
-- `artifacts/logdir/<run-name>/` — TensorBoard event files
-- `artifacts/databases/` — atlas DB files (RocksDB, LMDB, etc.)
-- `artifacts/data/` — generated datasets
-- `artifacts/output/` — CSV metrics, plots
-- `artifacts/benchmarks/<commit-sha>/` — local Criterion benchmark snapshots and metadata
-
-### Determinism
-
-Every evaluation should be replayable from:
-- Engine seed(s) + bag state
-- Action sequence OR policy model + commit hash
-
-### Metrics to track
-
-Per-run and aggregate:
-- `pieces_placed`, `lines_cleared`, `score`
-- `max_height`, `avg_height`, `holes`
-- `time_per_move_ms` (mean/p95), `pieces_per_sec`
-- Atlas-specific: `lookup_size`, `frontier_size`, `expansion_rate` (boards/sec)
-
----
-
-## Research directions
-
-### Approaches by milestone
-
-#### M0 — Strong finite play
-
-| Approach | Status | Binary |
-|---|---|---|
-| Single beam search | Working | `tetris_demo_single` |
-| Multi-beam voting | Working | `tetris_demo_multi` |
-| Adaptive multi-beam | Working | `tetris_demo_adaptive_multi` |
-| Genetic heuristic tuning | Working | `tetris_train_genetic` |
-| Beam-supervised learning | Active | `tetris_train_beam_supervised` |
-
-#### M1 — Empirically infinite play
-
-- Scaling beam search width/depth until no observed deaths
-- Hybrid agents: learned policy for fast moves, search for hard positions
-- Imitation from search: generate large datasets from multi-beam, train fast policy network
-
-#### M2/M3 — Closed cycles and reachability
-
-| Approach | Status | Binary |
-|---|---|---|
-| In-memory atlas (BFS expansion) | Working | `tetris_atlas_inmemory` |
-| RocksDB atlas | Working | `tetris_atlas_rocksdb` |
-| Controlled-invariant synthesis | Research | `tetris_invariant_synthesis` |
-| Safe-set certification | Research | `tetris_safe_set` |
-| Success-set solving | Research | `tetris_success_set_solver` |
-
-Key techniques:
-- **DAG expansion with backward death propagation**: expand the reachable state graph from a root, identify dead-end states, propagate death backward, and extract the surviving subgraph.
-- **Cycle detection**: find strongly connected components in the surviving subgraph — any SCC is a closed cycle proving infinite play for its member states.
-- **Reachability bridging**: given a closed cycle, search for a path from the empty board to any cycle entry state.
-
-#### M4 — The Atlas (final goal)
-
-- Grow the surviving subgraph until it covers all reachable states (or a sufficient fraction)
-- Compress the Atlas via symmetry exploitation, state equivalence classes, or learned hash functions
-- Persist the Atlas in a queryable format (RocksDB, custom on-disk structure, or distributed store)
-- Validate completeness: for every state in the Atlas, every possible piece draw leads to another Atlas state
-
----
-
-## Prompt for automated agents
-
-You are an engineering+research agent working on Tetris Atlas. The final goal is to build a complete lookup table (the Atlas) that proves Tetris is survivable for infinite horizons under canonical 7-bag rules on a 10×20 board. Subgoals include strong finite play via search/ML, empirically infinite agents, and finding closed cycles in the state graph. Always: (1) read relevant code before changing it; (2) propose a minimal change set; (3) add/adjust tests; (4) run `cargo fmt`, `cargo clippy`, `cargo test`; (5) report metrics with seeds, commit, and parameters. Never claim improvements without an eval run over a fixed seed set. When modifying algorithms, include ablations and a rollback plan.
+For historical comparisons, save a baseline named for the ref/commit. Switch refs only with a clean
+worktree or an explicitly authorized workflow; otherwise use a same-checkout comparison. Keep
+compiler, feature flags, fixture data, sample settings, and load comparable. Explain any changed
+benchmark definitions or toolchain; do not attribute those effects solely to the code change.
+
+Active reports are in `target/criterion/` (`report/index.html`). For each prepared commit, try to
+snapshot that directory under `artifacts/benchmarks/<commit-sha>/`, alongside `commit.txt`,
+`git-status.txt`, `rustc -Vv`, hardware/OS, exact commands, and benchmark logs. Restore a saved
+Criterion directory to compare on a fresh checkout. If benchmarks are skipped, explain why.
+Report baseline/candidate SHAs (or dirty state), Criterion percentage deltas and significance,
+plus noise sources such as background load or thermals. A faster heuristic still needs survival
+and correctness evaluation.
+
+Use `cargo-show-asm` (`cargo asm`) rather than the unmaintained `cargo-asm`. The low-level
+`rshift_slice_from_mask_u32` function now lives in `tetris-utils`; use that crate for ASM or
+`cargo expand` inspection, with `never-inline` when needed.

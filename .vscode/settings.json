@@ -15,16 +15,11 @@
             "source.fixAll.clippy": "explicit"
         }
     },
-    // Ensure rust-analyzer uses Clippy for checking and fixing
+    // Use the analyzer installed with the repository's pinned Rust toolchain.
+    "rust-analyzer.server.path": "rust-analyzer",
+    // Run Clippy diagnostics; save actions above apply explicitly requested fixes.
     "rust-analyzer.checkOnSave": true,
-    "rust-analyzer.checkOnSave.command": "clippy",
-    "rust-analyzer.checkOnSave.extraArgs": [
-        "--fix",
-        "--allow-dirty"
-    ],
-    // Force rust-analyzer to use our Cargo.toml configuration
-    "rust-analyzer.lints.clippy.unwrap_used": "warn",
-    "rust-analyzer.lints.clippy.expect_used": "warn",
-    "rust-analyzer.assist.importGranularity": "module",
-    "rust-analyzer.assist.importPrefix": "by_crate"
+    "rust-analyzer.check.command": "clippy",
+    "rust-analyzer.imports.granularity.group": "module",
+    "rust-analyzer.imports.prefix": "crate"
 }
