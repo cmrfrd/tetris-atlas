@@ -144,6 +144,11 @@ Keep historical measurements distinct from current verification.
 Use `crates/tetris-benches` with fixed seeds/fixtures and unchanged benchmark names. Avoid unbounded
 demos as benchmarks. For performance-sensitive changes, save a named baseline **before** editing:
 
+Mutation benchmarks must reset their inputs outside the measured batch, or copy fixed inputs into
+reused output storage on every iteration. Never time boards that become permanently lost/empty
+during warm-up. Keep allocation-inclusive and kernel-only cases distinct. Renamed repaired fixtures
+need fresh baselines; their numbers are not comparable with the previous benchmark definitions.
+
 ```sh
 cargo bench -p tetris-benches --bench benches -- --save-baseline before-change
 # After the change, same hardware/toolchain/features and benchmark configuration:

@@ -368,28 +368,18 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_clear_filled_rows(c: &mut Criterion) {
-        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
-        let mut boards = black_box(
-            (0..NUM_ELEMS)
-                .map(|_| {
-                    let mut b: TetrisBoard = TetrisBoard::new();
-                    b.set_random_bits(1024, &mut rng);
-                    b
-                })
-                .collect::<Vec<_>>(),
-        );
-        c.bench_with_input(
-            BenchmarkId::new("clear_filled_rows", NUM_ELEMS),
-            &NUM_ELEMS,
-            |b, _| {
-                b.iter(|| {
-                    boards
-                        .iter_mut()
-                        .map(|p| p.clear_filled_rows())
-                        .collect::<Vec<_>>()
-                })
-            },
-        );
+        let boards = crate::fixtures::rows();
+        let mut output = vec![([0u32; 10], 0u32); boards.len()];
+        c.bench_with_input(BenchmarkId::new("engine/clear_fixed", boards.len()), &boards, |b, boards| {
+            b.iter(|| {
+                for (&board, out) in boards.iter().zip(&mut output) {
+                    let mut board = board;
+                    let cleared = board.clear_filled_rows();
+                    *out = (board.as_limbs(), cleared);
+                }
+                black_box(&output);
+            });
+        });
     }
 }
 
@@ -418,30 +408,18 @@ tetris_bench! {
 
 tetris_bench! {
     pub fn bench_apply_piece_placement(c: &mut Criterion) {
-        let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
-        let mut empty_boards = black_box(
-            (0..NUM_ELEMS)
-                .map(|_| -> TetrisBoard { TetrisBoard::EMPTY_BOARD })
-                .collect::<Vec<_>>(),
-        );
-        let placements = black_box(
-            rng.random_iter::<TetrisPiecePlacement>()
-                .take(NUM_ELEMS)
-                .collect::<Vec<_>>(),
-        );
-        c.bench_with_input(
-            BenchmarkId::new("apply_piece_placement", NUM_ELEMS),
-            &NUM_ELEMS,
-            |b, _| {
-                b.iter(|| {
-                    empty_boards
-                        .iter_mut()
-                        .zip(placements.iter())
-                        .map(|(b, &p)| b.apply_piece_placement(p))
-                        .collect::<Vec<_>>()
-                })
-            },
-        );
+        let input = crate::fixtures::placements();
+        let mut output = vec![([0u32; 10], 0u32, false); input.len()];
+        c.bench_with_input(BenchmarkId::new("engine/apply_fixed", input.len()), &input, |b, input| {
+            b.iter(|| {
+                for (f, out) in input.iter().zip(&mut output) {
+                    let mut board = f.board;
+                    let result = board.apply_piece_placement(f.placement);
+                    *out = (board.as_limbs(), result.lines_cleared, bool::from(result.is_lost));
+                }
+                black_box(&output);
+            });
+        });
     }
 }
 

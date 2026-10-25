@@ -2,5 +2,6 @@
 #![allow(incomplete_features)]
 
 pub mod benches;
+mod fixtures;
 
 pub use benches::*;

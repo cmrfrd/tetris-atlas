@@ -1573,12 +1573,12 @@ macro_rules! repeat_idx_unroll {
     };
 }
 
-/// Right shifts elements in a u32 array based on a mask, performing `I` iterations.
+/// Removes up to `I` lowest marked rows from every column in a u32 array.
 ///
 /// For each iteration, this function:
-/// 1. Finds the most significant bit (MSB) in the mask
+/// 1. Finds the least significant set bit in the mask
 /// 2. Right shifts all elements by 1 position from that bit onward
-/// 3. Clears the MSB from the mask
+/// 3. Clears the processed bit from the mask
 ///
 /// # Type Parameters
 ///
