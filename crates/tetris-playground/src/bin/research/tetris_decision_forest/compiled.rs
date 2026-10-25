@@ -156,7 +156,7 @@ mod tests {
     use super::*;
     use crate::encode::NUM_INPUTS;
     use rand::rngs::SmallRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{RngExt, SeedableRng};
 
     #[test]
     fn compiled_forest_matches_boxed_semantics_exactly() {

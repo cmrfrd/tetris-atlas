@@ -22,7 +22,7 @@
 //! - **CSV File**: `beam_search_multisearch_output.csv` - Statistics over time
 //! - **Console**: Periodic progress updates with performance metrics
 
-use rand::Rng;
+use rand::RngExt;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufWriter, Write};

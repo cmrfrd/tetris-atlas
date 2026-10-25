@@ -1,5 +1,5 @@
 use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 
 use tetris_game::tetris::{TetrisPiece, TetrisPiecePlacement};
 

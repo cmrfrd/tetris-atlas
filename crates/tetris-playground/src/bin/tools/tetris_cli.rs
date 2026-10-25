@@ -129,8 +129,10 @@ fn main() {
     let _guard: Option<()> = if cli.trace {
         let _timestamp = OffsetDateTime::now_utc()
             .format(
-                &time::format_description::parse("[year][month][day]_[hour][minute][second]")
-                    .unwrap(),
+                &time::format_description::parse_borrowed::<2>(
+                    "[year][month][day]_[hour][minute][second]",
+                )
+                .unwrap(),
             )
             .unwrap();
         registry.init();
@@ -149,7 +151,7 @@ fn main() {
             model,
             resume,
         } => {
-            let ulid = ulid::Ulid::new().to_string();
+            let ulid = ulid::Ulid::generate().to_string();
             let run_name = format!("{run_name}_{ulid}");
             let logdir = logdir.as_ref().map(|s| {
                 let path = std::path::Path::new(s).join(&run_name);

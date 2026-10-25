@@ -930,7 +930,7 @@ impl BeamSearchState for BeamTetrisState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::Rng;
+    use rand::RngExt;
     use tetris_utils::HeaplessVec;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]

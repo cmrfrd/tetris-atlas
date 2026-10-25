@@ -978,7 +978,7 @@ pub fn run_tetris_atlas_explore(db_path: &str) {
                                     .collect();
 
                                     if !available.is_empty() {
-                                        use rand::Rng;
+                                        use rand::RngExt;
                                         let mut rng = rand::rng();
                                         let idx = rng.random_range(0..available.len());
                                         Some(available[idx])

@@ -9,7 +9,7 @@ prost.workspace = true
 prost-types.workspace = true
 image.workspace = true
 gethostname.workspace = true
-crc32fast = "1.4.2"
+crc32fast = "1.5.3"
 
 [features]
 # Regenerate the protobuf bindings from .proto sources via prost-build.
@@ -18,7 +18,7 @@ crc32fast = "1.4.2"
 regen-protos = ["dep:prost-build"]
 
 [build-dependencies]
-prost-build = { version = "0.13", optional = true }
+prost-build = { version = "0.14.4", optional = true }
 
 [lib]
 name = "tensorboard"

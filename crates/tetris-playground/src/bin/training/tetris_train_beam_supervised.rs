@@ -7,7 +7,7 @@ use anyhow::Result;
 use candle_core::{D, DType, Tensor};
 use candle_nn::{VarBuilder, VarMap};
 use clap::{Parser, Subcommand};
-use rand::Rng;
+use rand::RngExt;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
@@ -96,7 +96,7 @@ impl<
 > TetrisGameIter<NUM_GAMES, NUM_BEAMS, TOP_N_PER_BEAM, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
 {
     pub fn new() -> Self {
-        let mut rng = SmallRng::from_os_rng();
+        let mut rng = rand::make_rng::<SmallRng>();
         let games = std::array::from_fn(|_| TetrisGame::new_with_seed(rng.random()));
         Self {
             games,
@@ -834,7 +834,7 @@ fn main() {
             let is_resume = resume.is_some();
             let ulid = match resume {
                 Some(ulid) => ulid.clone(),
-                None => ulid::Ulid::new().to_string(),
+                None => ulid::Ulid::generate().to_string(),
             };
             println!("Run: {run_name}/{ulid} (resume={is_resume})");
             let logdir = logdir.as_ref().map(|s| {

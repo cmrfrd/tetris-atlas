@@ -1,5 +1,5 @@
 use proc_macros::inline_conditioned;
-use rand::Rng;
+use rand::RngExt;
 use rand::distr::{Distribution, StandardUniform};
 
 use std::fmt::Display;
@@ -278,7 +278,7 @@ impl Default for TetrisPiece {
 }
 
 impl Distribution<TetrisPiece> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> TetrisPiece {
+    fn sample<R: RngExt + ?Sized>(&self, rng: &mut R) -> TetrisPiece {
         TetrisPiece::new(rng.random_range(0..constants::NUM_TETRIS_PIECES) as u8)
     }
 }
@@ -708,7 +708,7 @@ impl TetrisPieceOrientation {
     }
 
     #[inline_conditioned(always)]
-    pub fn rand_orientation_from_piece<R: Rng + ?Sized>(
+    pub fn rand_orientation_from_piece<R: RngExt + ?Sized>(
         piece: TetrisPiece,
         rng: &mut R,
     ) -> TetrisPieceOrientation {
@@ -741,7 +741,7 @@ impl Display for TetrisPiecePlacement {
 }
 
 impl Distribution<TetrisPiecePlacement> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> TetrisPiecePlacement {
+    fn sample<R: RngExt + ?Sized>(&self, rng: &mut R) -> TetrisPiecePlacement {
         let piece: TetrisPiece = rng.sample(StandardUniform);
         let orientation: TetrisPieceOrientation =
             TetrisPieceOrientation::rand_orientation_from_piece(piece, rng);
@@ -1618,18 +1618,18 @@ where
     /// # Arguments
     ///
     /// * `num_bits` - The number of random bits to set
-    /// * `rng` - Random number generator implementing the `Rng` trait
+    /// * `rng` - Random number generator implementing the `RngExt` trait
     ///
     /// # Example
     ///
     /// ```
     /// use tetris_game::tetris::TetrisBoard;
-    /// use rand::thread_rng;
+    /// use rand::rng;
     /// let mut board: TetrisBoard = TetrisBoard::new();
-    /// let mut rng = thread_rng();
+    /// let mut rng = rng();
     /// board.set_random_bits(10, &mut rng);
     /// ```
-    pub fn set_random_bits<R: Rng + ?Sized>(&mut self, num_bits: usize, rng: &mut R) {
+    pub fn set_random_bits<R: RngExt + ?Sized>(&mut self, num_bits: usize, rng: &mut R) {
         for _ in 0..num_bits {
             let rand = rng.random::<u32>();
             let col = ((rand >> 16) as u16 % C::COLS as u16) as usize;

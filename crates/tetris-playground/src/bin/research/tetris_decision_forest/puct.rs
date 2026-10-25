@@ -21,7 +21,7 @@
 //! information.
 
 use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 
 use tetris_game::config::StandardTetris;
 use tetris_game::tetris::{IsLost, TetrisGame, TetrisGameRng, TetrisPiecePlacement};

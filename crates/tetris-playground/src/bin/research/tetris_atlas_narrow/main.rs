@@ -1363,7 +1363,7 @@ fn run_explore(base_path: &str) {
                                         })
                                         .collect();
                                     if !available.is_empty() {
-                                        use rand::Rng;
+                                        use rand::RngExt;
                                         let mut rng = rand::rng();
                                         Some(available[rng.random_range(0..available.len())])
                                     } else {

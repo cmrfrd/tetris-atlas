@@ -1681,7 +1681,7 @@ fn select_kth_u64(mut x: u64, mut k: u32) -> u32 {
 }
 
 #[inline(always)]
-pub fn choose_set_bit_u64<R: rand::Rng + ?Sized>(mask: u64, rng: &mut R) -> Option<u32> {
+pub fn choose_set_bit_u64<R: rand::RngExt + ?Sized>(mask: u64, rng: &mut R) -> Option<u32> {
     (mask != 0).then(|| {
         let n = mask.count_ones(); // 1..=64, fits in u32
         let k = (rng.next_u64() % (n as u64)) as u32; // bias acceptable
@@ -1691,7 +1691,7 @@ pub fn choose_set_bit_u64<R: rand::Rng + ?Sized>(mask: u64, rng: &mut R) -> Opti
 
 #[cfg(test)]
 mod tests {
-    use rand::Rng;
+    use rand::RngExt;
 
     use super::*;
 

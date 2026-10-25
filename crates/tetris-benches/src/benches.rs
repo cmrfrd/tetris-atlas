@@ -3,7 +3,7 @@
 // minimal wrappers that register these functions with Criterion.
 
 use criterion::{BenchmarkId, Criterion, black_box};
-use rand::Rng;
+use rand::RngExt;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use rand::seq::IndexedRandom;

@@ -6,7 +6,7 @@ use anyhow::Result;
 use candle_core::Device;
 use crossbeam::channel::{Receiver, bounded};
 use rand::{
-    Rng,
+    RngExt,
     distr::{Distribution, Uniform},
     seq::IndexedRandom,
 };
@@ -42,7 +42,7 @@ impl TetrisDatasetGenerator {
         Self {}
     }
 
-    pub fn gen_uniform_sampled_gameset<R: Rng>(
+    pub fn gen_uniform_sampled_gameset<R: RngExt>(
         &self,
         num_piece_range: Range<usize>,
         batch_size: usize,
@@ -67,7 +67,7 @@ impl TetrisDatasetGenerator {
         Ok(gameset)
     }
 
-    pub fn gen_uniform_sampled_transition<R: Rng>(
+    pub fn gen_uniform_sampled_transition<R: RngExt>(
         &self,
         num_piece_range: Range<usize>,
         batch_size: usize,
@@ -112,7 +112,7 @@ impl TetrisDatasetGenerator {
         })
     }
 
-    pub fn gen_sequence<R: Rng>(
+    pub fn gen_sequence<R: RngExt>(
         &self,
         num_piece_range: Range<usize>,
         batch_size: usize,

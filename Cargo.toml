@@ -23,35 +23,35 @@ tetris-ml = { path = "crates/tetris-ml" }
 tensorboard = { path = "crates/tensorboard" }
 
 # Core
-rand = { version = "0.9.2", features = ["small_rng"] }
-anyhow = "1.0.95"
+rand = { version = "0.10.3" }
+anyhow = "1.0.104"
 
 # Logging
-tracing = "0.1.41"
+tracing = "0.1.44"
 
 # Parallelism
-rayon = "1.10.0"
-crossbeam = "0.8.4"
+rayon = "1.12.0"
+crossbeam = "0.8.5"
 num_cpus = "1.17.0"
 
 # Serialization
-serde = { version = "1.0.226", features = ["derive"] }
-prost = "0.13"
-prost-types = "0.13"
+serde = { version = "1.0.229", features = ["derive"] }
+prost = "0.14.4"
+prost-types = "0.14.4"
 
 # ML
-candle-core = "0.9.2-alpha.2"
-candle-nn = "0.9.2-alpha.2"
+candle-core = "0.10.2"
+candle-nn = "0.10.2"
 
 # TUI
-ratatui = "0.29"
-crossterm = "0.28"
+ratatui = "0.30.2"
+crossterm = "0.29.0"
 
 # Utilities
 # PNG-only: tensorboard encodes PNG summaries, tetris-ml builds RgbImage in
 # memory. Dropping default features avoids compiling jpeg/gif/webp/tiff/bmp codecs.
-image = { version = "0.25.8", default-features = false, features = ["png"] }
-gethostname = "1.0.2"
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+gethostname = "1.1.0"
 
 [workspace.lints.clippy]
 too_many_arguments = "allow"

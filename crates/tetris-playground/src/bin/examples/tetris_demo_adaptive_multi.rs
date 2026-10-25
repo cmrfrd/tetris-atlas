@@ -8,7 +8,7 @@
 //! This keeps cheap searches for easy boards while spending more compute on
 //! difficult positions.
 
-use rand::Rng;
+use rand::RngExt;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Write};

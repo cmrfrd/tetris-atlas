@@ -27,7 +27,7 @@
 //! - Final best coefficients printed at completion
 
 use proc_macros::inline_conditioned;
-use rand::Rng;
+use rand::RngExt;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fs::File;
@@ -57,7 +57,7 @@ const MAX: f32 = 2.0;
 
 impl EvalCoefficients {
     /// Create random coefficients for initial population
-    pub fn random<R: rand::Rng>(rng: &mut R) -> Self {
+    pub fn random<R: rand::RngExt>(rng: &mut R) -> Self {
         Self {
             lines_cleared: 1.,
             height: -0.1,
@@ -68,7 +68,7 @@ impl EvalCoefficients {
     }
 
     /// Mutate coefficients slightly
-    pub fn mutate<R: rand::Rng>(&mut self, rng: &mut R, mutation_rate: f32) {
+    pub fn mutate<R: rand::RngExt>(&mut self, rng: &mut R, mutation_rate: f32) {
         if rng.random::<f32>() < mutation_rate {
             self.lines_cleared += rng.random_range(-0.05..0.05);
             self.lines_cleared = self.lines_cleared.clamp(MIN, MAX);
@@ -92,7 +92,7 @@ impl EvalCoefficients {
     }
 
     /// Crossover two coefficient sets
-    pub fn crossover<R: rand::Rng>(parent1: &Self, parent2: &Self, rng: &mut R) -> Self {
+    pub fn crossover<R: rand::RngExt>(parent1: &Self, parent2: &Self, rng: &mut R) -> Self {
         Self {
             lines_cleared: if rng.random_bool(0.5) {
                 parent1.lines_cleared
