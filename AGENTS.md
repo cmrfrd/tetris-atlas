@@ -169,3 +169,54 @@ and correctness evaluation.
 Use `cargo-show-asm` (`cargo asm`) rather than the unmaintained `cargo-asm`. The low-level
 `rshift_slice_from_mask_u32` function now lives in `tetris-utils`; use that crate for ASM or
 `cargo expand` inspection, with `never-inline` when needed.
+
+### macOS tools and measurement discipline
+
+| Question | Tool |
+|---|---|
+| Did a component get faster? | Criterion with named baselines and fixed fixtures |
+| Did real work get faster? | Bounded release workloads, alternating A/B or ABBA, identical outputs |
+| Which threads, functions, and inlined lines are hot? | [Samply](https://github.com/mstange/samply), with its call tree and timeline |
+| Is time going into CPU work, scheduling, or allocation? | Xcode Instruments: Time Profiler, System Trace, Allocations |
+| Did instruction/cycle cost change? | Instruments CPU Counters, where supported; normalize by pieces or expansions |
+| What are wall time and peak memory? | `/usr/bin/time -l` on a bounded release command |
+| Where is a running process stuck? | `/usr/bin/sample PID 10 -file <output>`; `vmmap -summary PID` for memory regions |
+| Did generated code change? | `cargo-show-asm`; `atos` for sampled addresses with matching symbols/load address |
+
+Build first, then measure the executable directly; do not time compilation. Release and bench
+profiles retain debug info in `Cargo.toml`, enabling symbolized stacks. Preserve the measured binary
+and symbols. For example, use the benchmark executable path printed by Cargo (the hash changes):
+
+```sh
+cargo bench -p tetris-benches --bench benches --no-run
+mkdir -p artifacts/output/profiles
+ATLAS_BENCH_BIN="target/release/deps/benches-<hash>"
+samply record --save-only -o artifacts/output/profiles/scorer.json.gz -- \
+  "$ATLAS_BENCH_BIN" --bench height_mse_board_score \
+  --sample-size 10 --warm-up-time 1 --measurement-time 10
+samply load artifacts/output/profiles/scorer.json.gz
+
+# Full Xcode is required; list templates before selecting one.
+xcrun xctrace list templates
+xcrun xctrace record --template 'Time Profiler' --time-limit 15s \
+  --output artifacts/output/profiles/scorer.trace --launch -- \
+  "$ATLAS_BENCH_BIN" --bench height_mse_board_score \
+  --sample-size 10 --warm-up-time 1 --measurement-time 10
+```
+
+These are profiling runs: their timings include instrumentation and are not Criterion evidence
+of a speedup. Run Samply, Instruments, and the existing pprof `--profile-time` mode separately.
+Use a fixed-size production workload for end-to-end confirmation; validate outcomes as well as
+time. The related `tetris-optim-rs` project's counter/A-B helper scripts are not installed here.
+
+Before timing, check `uptime`/`top`, `pmset -g batt`, and `pmset -g`; use consistent power and
+Low Power Mode settings. Avoid simultaneous builds, IDE indexing, training, other agents' workloads,
+or profilers; allow the machine to cool after a large build. Record background load and thermal
+limitations instead of attributing every change to the code. Apple Silicon performance/efficiency
+core placement matters; counters do not remove scheduling, thermal, or core-mix effects.
+
+If unchanged components shift together, repeat the **old executable** under current conditions
+and compare old-before, old-now, and new. Confirm suspicious changes with alternating A/B or ABBA
+runs and report medians, dispersion, and matching outputs. Keep native arm64 measurements separate
+from Rosetta/x86-64 and other machines. Record tool versions and keep profiles/traces under
+`artifacts/`; report unavailable counters explicitly. Do not clear baselines during a comparison.

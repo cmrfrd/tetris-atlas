@@ -60,13 +60,16 @@ Use `--features candle-cuda` instead of `candle-metal` for NVIDIA GPUs.
 
 ```sh
 # Run all benchmarks
-cargo bench -p tetris-benches
+cargo bench -p tetris-benches --bench benches
 
 # Generate flamegraphs (5 second profiling)
-cargo bench -p tetris-benches -- --profile-time 5
+cargo bench -p tetris-benches --bench benches -- --profile-time 5
 ```
 
 Criterion HTML reports are written to `target/criterion/`.
+
+See [benchmarking and profiling guidance](AGENTS.md#benchmarks-and-profiling) for named baselines,
+reproducible comparisons, and macOS tools including Samply, Instruments, `sample`, and memory checks.
 
 ## ASM analysis
 
@@ -74,14 +77,14 @@ Install [cargo-show-asm](https://lib.rs/crates/cargo-show-asm) (replaces the unm
 
 ```sh
 cargo install cargo-show-asm
-cargo asm -p tetris-game --features never-inline --dev --lib \
-  "tetris_game::utils::rshift_slice_from_mask_u32" 0 --rust
+cargo asm -p tetris-utils --features never-inline --dev --lib \
+  "tetris_utils::rshift_slice_from_mask_u32" 0 --rust
 ```
 
 ## Macro expansion
 
 ```sh
-cargo expand -p tetris-game --lib utils::rshift_slice_from_mask_u32
+cargo expand -p tetris-utils --lib rshift_slice_from_mask_u32
 ```
 
 Requires nightly and `cargo-expand` (`cargo install cargo-expand`).
