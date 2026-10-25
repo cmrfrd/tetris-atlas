@@ -9,8 +9,6 @@ loop grows the forest up a survival curriculum toward playing **1,000,000
 pieces** in a single game.
 
 - **What it is / why**: see [`DESIGN.md`](./DESIGN.md).
-- **How it was built (task-by-task)**: see
-  `docs/superpowers/plans/2026-07-09-tetris-decision-forest.md`.
 
 All code for this system lives in this one directory. Fitness is pure
 **survival** (pieces placed before topping out).

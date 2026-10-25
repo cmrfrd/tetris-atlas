@@ -9,8 +9,6 @@
 //! the candidate safe set
 //! `K = { s | ∃ placement a, ∀ next piece q ∈ bag(s): T(s,a,q) ∈ K }`.
 //!
-//! Design spec: docs/superpowers/specs/2026-07-13-tetris-atlas-puct-design.md
-//!
 //! Memory is paid up-front: three preallocated arenas (~5 KB per state at the
 //! configured `--max-states`) hold fixed-size records addressed by dense u32
 //! ids. The DashMap is used only for interning; rollouts traverse cached ids.

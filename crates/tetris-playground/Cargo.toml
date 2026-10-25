@@ -81,11 +81,6 @@ name = "tetris_safe_set"
 path = "src/bin/research/tetris_safe_set/main.rs"
 
 [[bin]]
-name = "tetris_mcgs"
-path = "src/bin/research/tetris_mcgs/main.rs"
-required-features = ["sqlite-backend"]
-
-[[bin]]
 name = "tetris_success_set_solver"
 path = "src/bin/research/tetris_success_set_solver/main.rs"
 

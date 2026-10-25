@@ -27,9 +27,7 @@ So this binary has two jobs:
 2. Produce a policy in a form that is **verifiable** later — total,
    deterministic, expressed as Boolean logic over the raw game bits.
 
-This document outlines the system. The task-by-task build lives in
-`docs/superpowers/plans/2026-07-09-tetris-decision-forest.md`. Usage lives in
-`README.md` next to this file.
+This document outlines the system. Usage lives in `README.md` next to this file.
 
 ## 2. The policy: game bits → tree votes → placement
 

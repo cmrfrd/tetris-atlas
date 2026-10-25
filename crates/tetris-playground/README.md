@@ -67,13 +67,6 @@ Each approach may relax or strengthen the problem along these axes:
 - **Status:** Tested at various bounds; no winning configuration found yet
 - **README:** [Yes](src/bin/research/tetris_bag_cycle_solver/README.md)
 
-#### `tetris_mcgs`
-- **Strategy:** Monte Carlo Graph Search with AND-OR semantics. Builds a graph (not tree) of unique `(board, bag_state)` nodes. AND nodes = adversary picks piece from bag. OR nodes = player picks placement. Cycle detection at bag-refill boundaries.
-- **Opponent:** Adversarial (AND nodes enumerate all piece choices via `bag.iter_next_states()`)
-- **Constraints:** Configurable h/holes/roughness, hard node cap prevents OOM
-- **Status:** New — MCGS implementation
-- **README:** [Yes](src/bin/research/tetris_mcgs/README.md)
-
 #### `tetris_success_set_solver`
 - **Strategy:** Exact in-memory retrograde solver; state=(board, bag_mask), target=empty board, AND-OR with witness extraction
 - **Opponent:** Adversarial
@@ -178,7 +171,6 @@ Each approach may relax or strengthen the problem along these axes:
 | Fixed-bag atlas | **L1** | **SOLVED** — 25-27% winning states for fixed piece cycles |
 | Bag checkpoint (chain) | — | Chain diverges at step 3 (cover set explosion) |
 | Bag checkpoint (MCTS) | L0 | 71% of random 5-bag sequences return to empty |
-| MCGS cycle finder | — | New — graph-based AND-OR cycle search |
 | All exhaustive adversarial solvers | — | 0% winning at all tested bounds |
 | SMT/synthesis | — | No invariants found yet |
 | Beam search demos | L0 | Millions of pieces without death (empirical) |
