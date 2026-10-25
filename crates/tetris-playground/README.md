@@ -127,15 +127,6 @@ Each approach may relax or strengthen the problem along these axes:
 - **Status:** Experimental
 - **README:** [Yes](src/bin/research/tetris_invariant_synthesis/README.md)
 
-### Heuristic / empirical play
-
-#### `tetris_safe_set`
-- **Strategy:** Allocation-free best-first backtracker proving infinite play via bounded recursive recovery scripts
-- **Opponent:** Non-adversarial (forced bag sequence)
-- **Constraints:** h≤4, recovery depth ≤2 bags
-- **Status:** Experimental
-- **README:** [Yes](src/bin/research/tetris_safe_set/README.md)
-
 ---
 
 ## Non-Research Binaries

@@ -77,10 +77,6 @@ name = "tetris_invariant_synthesis"
 path = "src/bin/research/tetris_invariant_synthesis/main.rs"
 
 [[bin]]
-name = "tetris_safe_set"
-path = "src/bin/research/tetris_safe_set/main.rs"
-
-[[bin]]
 name = "tetris_success_set_solver"
 path = "src/bin/research/tetris_success_set_solver/main.rs"
 

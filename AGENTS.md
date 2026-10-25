@@ -80,7 +80,6 @@ cargo test --workspace
 # Focused checks:
 cargo test -p tetris-game
 cargo test -p tetris-search
-cargo test -p tetris-playground --bin tetris_safe_set
 cargo test -p tetris-playground --features rocksdb-backend --bin tetris_atlas_partitioned
 ```
 

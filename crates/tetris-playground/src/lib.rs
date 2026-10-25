@@ -22,7 +22,6 @@
 //!
 //! ## Research
 //! - `tetris_invariant_synthesis` - Controlled-invariant synthesis prototype
-//! - `tetris_safe_set` - Safe-set certifier prototype
 //! - `tetris_success_set_solver` - Closed winning-set solver prototype
 
 // Re-export common types for bin convenience

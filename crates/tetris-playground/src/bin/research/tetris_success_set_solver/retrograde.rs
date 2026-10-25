@@ -557,9 +557,7 @@ mod tests {
                 }
             }
 
-            let Some((branch_depth, placement)) = best_branch else {
-                return None;
-            };
+            let (branch_depth, placement) = best_branch?;
 
             best_action[piece_idx] = Some(placement);
             worst_case_depth = worst_case_depth.max(branch_depth);

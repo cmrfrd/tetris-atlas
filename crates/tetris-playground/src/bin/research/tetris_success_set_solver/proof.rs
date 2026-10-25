@@ -4919,7 +4919,7 @@ mod tests {
             UniverseBuilder::build(config).expect("recovery oracle universe should build");
         let recovery = solve_recovery(&universe);
 
-        assert_eq!(evaluate_recovery_root(&universe, &recovery).is_some(), true);
+        assert!(evaluate_recovery_root(&universe, &recovery).is_some());
         assert_eq!(closed.root_result.result, NodeResolution::Lost);
     }
 
