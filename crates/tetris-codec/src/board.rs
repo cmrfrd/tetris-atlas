@@ -2,9 +2,9 @@ use crate::{IdConfig, private, rules::occupancy_modulus};
 use std::{fmt, marker::PhantomData};
 use tetris_game::{TetrisBoard, TetrisGameConfig};
 
-/// At the history cap, at most one top-row run may lack support underneath;
+/// At widths >=4 and the history cap, at most one top-row run may lack support underneath;
 /// that unsupported run can have at most three cells. Floor support is handled
-/// by the caller, which skips this rule for a one-row cap.
+/// by the caller, which skips this rule for a one-row cap and widths below four.
 pub(crate) const fn top_supported(top: u16, below: u16, cols: usize) -> bool {
     let mut unsupported = 0;
     let mut x = 0;
@@ -47,7 +47,9 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Self::InvalidConfiguration => "codec height must fit the configured playable board",
+            Self::InvalidConfiguration => {
+                "codec cap must be 1..=28 and fit a game with fewer than 32 rows"
+            }
             Self::HeightExceeded => "board exceeds the codec height cap",
             Self::InvalidRowMask => "row has occupied cells outside C::COLS",
             Self::EmptyInternalRow => "board has an empty row below an occupied row",
@@ -271,12 +273,15 @@ impl<C: TetrisGameConfig, const COLS: usize, const ROWS: usize, const MAX_HOLES:
 where
     Dimensions<COLS, ROWS, MAX_HOLES>: CompiledConfig,
 {
+    // All four cells must start above the previous board. Near the top of the
+    // engine's u32 columns, abs_diff-based placement can overlap existing cells,
+    // invalidating even the occupancy residue invariant, not just the last-move rule.
     const VALID_CONFIGURATION: bool =
-        COLS == C::COLS && ROWS > 0 && ROWS <= C::ROWS && C::ROWS < 32;
+        COLS == C::COLS && ROWS > 0 && ROWS <= 28 && ROWS <= C::ROWS && C::ROWS < 32;
     pub const BOARD_COUNT: u64 = {
         assert!(
             Self::VALID_CONFIGURATION,
-            "codec height must fit the configured playable board"
+            "codec cap must be 1..=28 and fit a game with fewer than 32 rows"
         );
         <Dimensions<COLS, ROWS, MAX_HOLES> as CompiledConfig>::BOARD_COUNT
     };
@@ -286,7 +291,7 @@ where
     pub const fn new() -> Self {
         assert!(
             Self::VALID_CONFIGURATION,
-            "codec height must fit the configured playable board"
+            "codec cap must be 1..=28 and fit a game with fewer than 32 rows"
         );
         Self {
             tables: <Dimensions<COLS, ROWS, MAX_HOLES> as CompiledConfig>::TABLES,
@@ -388,7 +393,8 @@ where
         if holes > self.tables.holes {
             return Err(Error::TooManyHoles);
         }
-        if height == ROWS
+        if C::COLS >= 4
+            && height == ROWS
             && height >= 2
             && !top_supported(rows[height - 1], rows[height - 2], C::COLS)
         {
@@ -603,6 +609,175 @@ mod tests {
         assert_eq!(Standard::required_bytes(64), 3_139_450_768);
         assert_eq!(CODEC.id_rows_u64(&[0; 4]), Ok(0));
     }
+    #[test]
+    fn all_reachable_three_column_two_row_bag_states_are_admitted() {
+        use std::collections::{HashSet, VecDeque};
+        type Narrow = Game<3, 20>;
+        let codec = BoardCodec::<Narrow, 2, 2>::new();
+        let empty = TetrisBoard::<Narrow>::new();
+        let full_bag = u8::from(tetris_game::TetrisPieceBagState::new());
+        let mut seen = HashSet::from([(empty.as_limbs(), full_bag)]);
+        let mut pending = VecDeque::from([(empty, full_bag)]);
+        // Independent forward reachability: do not prune parents by codec admission
+        // or hole count, which could otherwise hide an unsound carrier constraint.
+        while let Some((board, bag)) = pending.pop_front() {
+            for action in TetrisPiecePlacement::ALL_PLACEMENTS {
+                let bit = 1 << action.piece.index();
+                if bag & bit == 0
+                    || action.orientation.column.index()
+                        + usize::from(action.piece.width(action.orientation.rotation))
+                        > Narrow::COLS
+                {
+                    continue;
+                }
+                let mut next = board;
+                next.apply_piece_placement(action);
+                if next.is_lost() || next.height() > 2 {
+                    continue;
+                }
+                if next.total_holes() <= 2 {
+                    assert!(codec.id_u64(&next).is_ok(), "{:?}", next.as_limbs());
+                }
+                let remaining = if bag & !bit == 0 {
+                    full_bag
+                } else {
+                    bag & !bit
+                };
+                if seen.insert((next.as_limbs(), remaining)) {
+                    pending.push_back((next, remaining));
+                }
+            }
+        }
+        assert!(seen.len() > 1);
+    }
+
+    #[test]
+    fn three_column_line_clear_can_create_two_unsupported_top_runs() {
+        type Narrow = Game<3, 20>;
+        let codec = BoardCodec::<Narrow, 2, 2>::new();
+        // Two full seven-bags, followed by J from the third bag. Its full
+        // three-cell row clears above the history cap and leaves a cell behind.
+        let actions = [
+            [0, 0, 0],
+            [1, 1, 2],
+            [2, 0, 0],
+            [5, 2, 0],
+            [6, 0, 0],
+            [3, 1, 1],
+            [4, 0, 0],
+            [1, 1, 0],
+            [0, 0, 1],
+            [2, 0, 0],
+            [5, 2, 0],
+            [4, 1, 1],
+            [3, 1, 0],
+            [6, 0, 0],
+            [6, 2, 0],
+        ];
+        let mut board = TetrisBoard::<Narrow>::new();
+        let mut bag = tetris_game::TetrisPieceBagState::new();
+        for action in actions {
+            let placement = *TetrisPiecePlacement::ALL_PLACEMENTS
+                .iter()
+                .find(|p| {
+                    [
+                        p.piece.index(),
+                        p.orientation.index() / tetris_game::Column::MAX,
+                        p.orientation.column.index() as u8,
+                    ] == action
+                })
+                .unwrap();
+            assert!(bag.contains(placement.piece));
+            bag.remove(placement.piece);
+            if bag.is_empty() {
+                bag = tetris_game::TetrisPieceBagState::new();
+            }
+            board.apply_piece_placement(placement);
+            assert!(!board.is_lost());
+            assert!(board.height() <= 2);
+            let id = codec.id_u64(&board).unwrap();
+            assert_eq!(codec.board_from_u64(id), Ok(board));
+        }
+        assert_eq!(board.as_limbs(), [2, 1, 2]);
+        assert_eq!(board.total_holes(), 2);
+        assert_eq!(codec.len(), 43);
+    }
+
+    #[test]
+    fn unsupported_spawn_overlap_heights_are_rejected() {
+        assert!(BoardCodec::<Game<1, 31>, 28, 0>::try_new().is_ok());
+        assert_eq!(
+            BoardCodec::<Game<1, 31>, 29, 0>::try_new().unwrap_err(),
+            Error::InvalidConfiguration
+        );
+        assert_eq!(
+            BoardCodec::<Game<1, 31>, 30, 0>::try_new().unwrap_err(),
+            Error::InvalidConfiguration
+        );
+        assert_eq!(
+            BoardCodec::<Game<1, 31>, 31, 0>::try_new().unwrap_err(),
+            Error::InvalidConfiguration
+        );
+
+        // Three legal seven-bags on an otherwise empty four-column board. The
+        // last vertical I overlaps two cells at the engine's spawn boundary:
+        // 21 placements leave 82 cells, so gcd(4, COLS) no longer applies.
+        // Use semantic actions rather than indices into the placement inventory.
+        let actions = [
+            [5, 1, 0],
+            [2, 1, 1],
+            [1, 1, 2],
+            [0, 0, 0],
+            [3, 1, 1],
+            [6, 1, 0],
+            [4, 2, 0],
+            [4, 3, 0],
+            [5, 3, 1],
+            [6, 3, 1],
+            [3, 1, 0],
+            [1, 1, 0],
+            [0, 0, 1],
+            [2, 1, 0],
+            [5, 3, 1],
+            [0, 0, 1],
+            [6, 1, 0],
+            [2, 1, 1],
+            [4, 1, 1],
+            [3, 1, 1],
+            [1, 1, 2],
+        ];
+        let mut board = TetrisBoard::<Game<4, 31>>::new();
+        let mut bag = tetris_game::TetrisPieceBagState::new();
+        for (index, action) in actions.into_iter().enumerate() {
+            let placement = *TetrisPiecePlacement::ALL_PLACEMENTS
+                .iter()
+                .find(|p| {
+                    [
+                        p.piece.index(),
+                        p.orientation.index() / tetris_game::Column::MAX,
+                        p.orientation.column.index() as u8,
+                    ] == action
+                })
+                .unwrap();
+            assert!(bag.contains(placement.piece));
+            bag.remove(placement.piece);
+            if bag.is_empty() {
+                bag = tetris_game::TetrisPieceBagState::new();
+            }
+            let outcome = board.apply_piece_placement(placement);
+            assert!(!board.is_lost());
+            assert_eq!(outcome.lines_cleared, 0);
+            assert_eq!(board.total_holes(), 0);
+            if index + 1 < actions.len() {
+                assert_eq!(board.count(), 4 * (index as u32 + 1));
+            }
+        }
+        assert_eq!(board.as_limbs(), [8_388_607, 268_435_455, 2_147_483_647, 0]);
+        assert_eq!(board.height(), 31);
+        assert_eq!(board.count(), 82);
+        assert_ne!(board.count() % 4, 0);
+    }
+
     #[test]
     fn invalid_inputs_preserve_precise_errors_and_are_never_truncated() {
         for (rows, error) in [

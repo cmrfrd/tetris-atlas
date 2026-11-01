@@ -181,3 +181,28 @@ bits/IDs, packed-storage boundaries, the 216 known impossible examples, and seed
 Tests live in their owning modules; the expensive timing ablation is ignored by default.
 The full workspace/backend suite and optional six-hole benchmark were not run for this unmerged
 experiment. The complete default sweep and focused checks are recorded above.
+
+## Correctness audit follow-up (2026-11-01)
+
+A separate audit verified every one of the 393,685,466 original default candidates, all
+392,431,346 committed-codec native round trips, and all 380,842,218 prototype round trips.
+It independently replayed the 1,254,120 original exclusions and 11,589,128 additional prototype
+exclusions with the engine, and retained all 1,179 saved witness paths (4,632 in-carrier prefixes).
+
+Independent forward search also exposed two domain errors that reference-carrier comparisons
+had not caught: three-column clears above the cap can violate the top-support condition, and
+31-row engine spawn overlap can invalidate the occupancy residue. The codec now applies top
+support only at widths >=4 and supports history caps through 28. Regression tests retain legal
+seven-bag sequences for both cases, plus exhaustive forward exploration of the three-column,
+two-row board/bag graph. These corrections leave default ten-column IDs and lookup data unchanged.
+
+After both corrections, workspace tests passed (412 unit/doctest cases; three ignored), workspace
+all-target Clippy passed with `-D warnings`, and the 65 RocksDB partitioned tests passed.
+Eight bounded board/bag reachability graphs and five complete small raw-board universes were
+also checked independently. A preserved-binary placement replay reproduced 7.11x median
+throughput with identical outcomes. This confirms the earlier bounded workload result; it is
+not a general search/survival speed claim or a production benchmark of the stronger prototype.
+
+Full commands, source/binary fingerprints, failures found, scopes, and logs are under
+`artifacts/output/codec-validation-20261101/`. The stronger predecessor-elimination rule remains
+research only, with the same 380,842,218-state result; it has not replaced the compiled codec.

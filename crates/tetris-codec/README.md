@@ -43,7 +43,8 @@ The admitted language enforces:
 - No uncleared full rows or empty internal rows.
 - Cell-count residue modulo `gcd(4, C::COLS)`.
 - The requested hole budget, clamped to its physical maximum.
-- The existing capped-history top-support condition.
+- The capped-history top-support condition at widths >=4. Three-column clears above the cap
+  can leave multiple unsupported runs, so the condition must not be applied there.
 - The proved last-move condition: at the cap, separated top runs require a legal zero-clear
   predecessor. If none exists, the board cannot be encoded. This proof applies at widths >4
   and caps <=28; [EXCLUSIONS.md](EXCLUSIONS.md) gives the argument and exact scope.
@@ -68,9 +69,12 @@ of retained record payload. The codec itself remains one pointer. `table_payload
 small metadata headers and temporary compiler workspaces. `required_bytes(bits)` reports a dense
 per-board payload size and performs no I/O.
 
-The generator accepts 1–12 columns and 1–31 rows, subject to bounded symbolic node/workspace and
-`u64` count budgets. The cap must fit the game's playable rows; `try_new()` handles that constructor
-error. Very large diagrams fail const evaluation with a budget error. Fresh compilation of a
+The codec supports 1–12 columns and history caps of 1–28 rows, subject to bounded symbolic
+node/workspace and `u64` count budgets. The cap must fit the game's playable rows, which must be
+below 32; `try_new()` handles constructor configuration errors. Higher history caps are unsupported:
+the engine's top-aligned spawn masks can overlap existing cells there, invalidating even the
+cell-count residue rule. A legal 31-row seven-bag counterexample is retained in the unit tests.
+Very large diagrams fail const evaluation with a budget error. Fresh compilation of a
 consuming target with a nontrivial configuration is expensive (about two minutes for the default
 in this experiment); separate binaries may each evaluate it. Normal queries do none of that work.
 Use the pinned nightly and allow the compiler's long-running const-evaluation progress lint in

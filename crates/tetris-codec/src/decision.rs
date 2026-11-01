@@ -375,7 +375,10 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             }
             y += 1;
         }
-        if self.rows >= 2 {
+        // At width three a full L/J row above the cap can clear while leaving
+        // a new unsupported cell beside an existing unsupported top run.
+        // At width four the only such full row is an I, which clears entirely.
+        if self.rows >= 2 && self.cols >= 4 {
             let mut unsupported = [0u32; 2];
             let mut long = 0;
             let mut a = 0;

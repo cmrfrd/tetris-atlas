@@ -66,6 +66,13 @@ The width-greater-than-four premise matters. At width four, a horizontal I above
 board can clear itself and return to the same board. The rule must not be transferred blindly to
 that configuration. See [REACHABILITY.md](REACHABILITY.md) for the original counterexample.
 
+The separate top-support condition needs width at least four. At width four, a full row above
+the previous cap can only be a horizontal I: clearing it consumes the entire piece and leaves
+the old board unchanged. At width three, a full L/J row can clear above the cap while leaving
+a new unsupported cell beside an existing unsupported top run. A legal seven-bag replay reaches
+columns `[2,1,2]` at height two, so applying the support condition there was incorrect. The codec
+now omits it below width four; its owning module retains the complete replay as a regression test.
+
 ## Built into the codec language
 
 The current implementation has no excluded-ID file, rank-correction layer, source-binding
@@ -88,8 +95,9 @@ The same construction applies to other dimensions automatically. For example, si
 three rows and two holes now gives **26,365** states, instead of 28,492. No per-configuration
 registration, generated asset, or build script is needed. The width-greater-than-four proof is
 not applied at widths 1–4. It is applied at height caps through 28, where the engine's 32-bit
-columns can hold a transient four-cell piece before clearing. Higher caps retain the original
-carrier conditions. StandardTetris's 20-row playable height lies within this range.
+columns can hold a transient four-cell piece before clearing. Higher history caps are rejected
+by the codec constructor: spawn overlap can invalidate the original occupancy invariant as well.
+StandardTetris's 20-row playable height lies within the supported range.
 
 This remains a carrier defined by necessary conditions. A last-move witness need not itself
 have a reachable predecessor or compatible bag history. Retained boards therefore are not all

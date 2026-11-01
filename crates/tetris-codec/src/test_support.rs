@@ -98,7 +98,7 @@ where
     if holes > H {
         return false;
     }
-    if height == R && R >= 2 {
+    if C::COLS >= 4 && height == R && R >= 2 {
         let mut unsupported = 0;
         let mut x = 0;
         while x < C::COLS {
