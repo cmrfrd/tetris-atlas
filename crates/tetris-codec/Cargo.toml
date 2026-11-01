@@ -1,0 +1,11 @@
+[package]
+name = "tetris-codec"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+tetris-game.workspace = true
+
+[lints]
+workspace = true

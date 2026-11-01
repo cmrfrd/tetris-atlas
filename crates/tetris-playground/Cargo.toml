@@ -34,6 +34,10 @@ name = "tetris_five_bag_bench"
 path = "src/bin/examples/tetris_five_bag_bench.rs"
 
 [[bin]]
+name = "tetris_codec_reachability"
+path = "src/bin/examples/codec_reachability/main.rs"
+
+[[bin]]
 name = "tetris_atlas_inmemory"
 path = "src/bin/atlas/tetris_atlas_inmemory.rs"
 required-features = ["tui"]
@@ -131,6 +135,7 @@ tui = ["dep:ratatui", "dep:crossterm"]
 [dependencies]
 # Internal crates
 tetris-game.workspace = true
+tetris-codec.workspace = true
 tetris-utils.workspace = true
 tetris-search.workspace = true
 tetris-ml = { workspace = true, optional = true }

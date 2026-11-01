@@ -15,12 +15,15 @@ harness = false
 
 [features]
 default = []
+# Large symbolic compilations are opt-in; benchmark names remain unchanged.
+large-codec-benchmarks = []
 apple-silicon = ["tetris-search/apple-silicon"]
 
 [dependencies]
 tetris-game.workspace = true
 inventory = "0.3.25"
 rand.workspace = true
+tetris-codec.workspace = true
 tetris-search.workspace = true
 tetris-utils.workspace = true
 criterion = { version = "0.5.1", features = ["html_reports"] }
