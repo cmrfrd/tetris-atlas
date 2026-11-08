@@ -232,6 +232,12 @@ pub struct TetrisTui {
     high_score: u32,
 }
 
+impl Default for TetrisTui {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TetrisTui {
     pub fn new() -> Self {
         Self {
@@ -460,24 +466,19 @@ fn run_app(
     loop {
         terminal.draw(|f| ui(f, app))?;
 
-        if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
-                    match key.code {
-                        KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
-                        KeyCode::Left | KeyCode::Char('a') | KeyCode::Char('h') => app.move_left(),
-                        KeyCode::Right | KeyCode::Char('d') | KeyCode::Char('l') => {
-                            app.move_right()
-                        }
-                        KeyCode::Up | KeyCode::Char('w') | KeyCode::Char('k') => app.rotate(),
-                        KeyCode::Down | KeyCode::Char('s') | KeyCode::Char('j') => {
-                            app.rotate_back()
-                        }
-                        KeyCode::Enter | KeyCode::Char(' ') => app.apply_current_placement(),
-                        KeyCode::Char('r') => app.restart(),
-                        _ => {}
-                    }
-                }
+        if event::poll(Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
+            && key.kind == KeyEventKind::Press
+        {
+            match key.code {
+                KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
+                KeyCode::Left | KeyCode::Char('a') | KeyCode::Char('h') => app.move_left(),
+                KeyCode::Right | KeyCode::Char('d') | KeyCode::Char('l') => app.move_right(),
+                KeyCode::Up | KeyCode::Char('w') | KeyCode::Char('k') => app.rotate(),
+                KeyCode::Down | KeyCode::Char('s') | KeyCode::Char('j') => app.rotate_back(),
+                KeyCode::Enter | KeyCode::Char(' ') => app.apply_current_placement(),
+                KeyCode::Char('r') => app.restart(),
+                _ => {}
             }
         }
     }
@@ -640,6 +641,12 @@ fn draw_controls(f: &mut Frame, area: Rect) {
 
 /// Calculate where the ghost piece would be displayed
 /// Returns a set of (col, row) positions for the ghost piece
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "Piece cells use a fixed 4x4 grid and the board is 10x20; collision coordinates are checked for nonnegative bounds before indexing."
+)]
 fn calculate_ghost_piece(app: &TetrisTui) -> Vec<(usize, usize)> {
     if app.game_over {
         return vec![];
@@ -742,6 +749,11 @@ fn calculate_ghost_piece(app: &TetrisTui) -> Vec<(usize, usize)> {
     vec![]
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "Piece cells use a fixed 4x4 grid and the board is 10x20; collision coordinates are checked for nonnegative bounds before indexing."
+)]
 fn draw_board(f: &mut Frame, area: Rect, app: &TetrisTui) {
     let board = &app.game.board;
 

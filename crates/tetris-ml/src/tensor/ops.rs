@@ -28,9 +28,6 @@ pub fn get_l2_norm(grad_store: &GradStore) -> Result<f32> {
     Ok(total_squared_sum.sqrt())
 }
 
-/// Create the mask over all orientations for a specific piece.
-/// Each piece has 4 possible rotations (indices 0-3), but only canonical/unique rotations are enabled.
-/// The mask is organized as [piece_index][rotation][column], where rotation*10 + column gives the flat index.
 // const PIECE_MASK_LOOKUP: [u8; constants::NUM_TETRIS_PIECES
 //     * <tetris_game::TetrisPieceOrientation>::TOTAL_NUM_ORIENTATIONS] = [
 //     // O piece (index 0): Only 1 unique rotation
@@ -70,6 +67,9 @@ pub fn get_l2_norm(grad_store: &GradStore) -> Result<f32> {
 //     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 3: width=2 → 9 valid columns (0-8)
 // ];
 
+/// Create the mask over all orientations for a specific piece.
+/// Each piece has 4 possible rotations (indices 0-3), but only canonical/unique rotations are enabled.
+/// The mask is organized as [piece_index][rotation][column], where rotation*10 + column gives the flat index.
 const PIECE_MASK_LOOKUP: [u8; constants::NUM_TETRIS_PIECES
     * <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS] = {
     let mut out = [0u8; constants::NUM_TETRIS_PIECES
@@ -110,6 +110,7 @@ pub fn create_orientation_mask(pieces: &TetrisPieceTensor) -> Result<Tensor> {
 /// Masked softmax over the last dim of [B, N].
 /// - `x`:    [B, N] f32
 /// - `mask`: [B, N] (bool/int/float; >0 => keep, 0 => mask)
+///
 /// Returns [B, N] probs; masked entries are exactly 0.
 /// Rows that are fully masked become all-zeros (no NaNs).
 pub fn masked_softmax_2d(x: &Tensor, mask: &Tensor) -> Result<Tensor> {
@@ -169,7 +170,7 @@ pub fn triu2d(t: usize, device: &Device) -> Result<Tensor> {
     let mask = (0..t)
         .flat_map(|i| (0..t).map(move |j| u8::from(j > i)))
         .collect::<Vec<_>>();
-    let mask = Tensor::from_slice(&mask, (t, t), &device)?;
+    let mask = Tensor::from_slice(&mask, (t, t), device)?;
     Ok(mask)
 }
 
@@ -205,6 +206,7 @@ pub fn kl_div<D: candle_core::shape::Dim>(p: &Tensor, q: &Tensor, dim: D) -> Res
 /// Numerically stable binary cross entropy loss.
 /// - `logits`: `[B, ...]` raw predictions (not probabilities)
 /// - `targets`: `[B, ...]` binary targets (0 or 1)
+///
 /// Returns scalar mean loss.
 ///
 /// Numerically stable computation using the log-sum-exp trick:
@@ -266,8 +268,10 @@ pub fn clip_grad_norm(
     let grad_store_mutex = RwLock::new(grad_store);
 
     // Compute norm FIRST (on unclipped gradients)
-    let read_guard = grad_store_mutex.read().unwrap();
-    let norm = get_l2_norm(&*read_guard)? as f64;
+    let read_guard = grad_store_mutex
+        .read()
+        .expect("reading the saved fixture must succeed in clip_grad_norm");
+    let norm = get_l2_norm(*read_guard)? as f64;
     drop(read_guard);
 
     let scale = if norm > max_norm {
@@ -278,11 +282,15 @@ pub fn clip_grad_norm(
 
     // Scale gradients based on norm
     vars.par_iter().try_for_each(|var| -> Result<()> {
-        let read_guard = grad_store_mutex.read().unwrap();
+        let read_guard = grad_store_mutex
+            .read()
+            .expect("reading the saved fixture must succeed in clip_grad_norm");
         if let Some(grad) = read_guard.get_id(var.id()) {
             let scaled_grad = grad.affine(scale, 0.0)?;
             drop(read_guard);
-            let mut write_guard = grad_store_mutex.write().unwrap();
+            let mut write_guard = grad_store_mutex
+                .write()
+                .expect("writing the fixture file must succeed in clip_grad_norm");
             write_guard.insert(var, scaled_grad);
         }
         Ok(())
@@ -291,11 +299,15 @@ pub fn clip_grad_norm(
     // Optional element-wise value clipping (applied AFTER norm-based scaling)
     if let Some(clip_value) = max_value {
         vars.par_iter().try_for_each(|var| -> Result<()> {
-            let read_guard = grad_store_mutex.read().unwrap();
+            let read_guard = grad_store_mutex
+                .read()
+                .expect("reading the saved fixture must succeed in clip_grad_norm");
             if let Some(grad) = read_guard.get_id(var.id()) {
                 let clipped = grad.clamp(-clip_value, clip_value)?;
                 drop(read_guard);
-                let mut write_guard = grad_store_mutex.write().unwrap();
+                let mut write_guard = grad_store_mutex
+                    .write()
+                    .expect("writing the fixture file must succeed in clip_grad_norm");
                 write_guard.insert(var, clipped);
             }
             Ok(())
@@ -329,7 +341,9 @@ mod tests {
         let pieces = TetrisPiece::all();
         let pieces_tensor = TetrisPieceTensor::from_pieces(&pieces, &Device::Cpu)?;
         let mask = create_orientation_mask(&pieces_tensor)?.to_dtype(crate::tensor::fdtype())?;
-        let mask_as_vec = mask.to_vec2::<f32>().unwrap();
+        let mask_as_vec = mask.to_vec2::<f32>().expect(
+            "reading the two-dimensional tensor must succeed in test_create_orientation_mask",
+        );
         let expected_mask: Vec<Vec<f32>> = vec![
             <TetrisPieceOrientation<10>>::bitmask_from_piece(TetrisPiece::O)
                 .as_slice()
@@ -383,14 +397,18 @@ mod tests {
             TetrisPieceTensor::from_pieces(&reversed_pieces, &Device::Cpu)?;
         let reversed_mask =
             create_orientation_mask(&reversed_pieces_tensor)?.to_dtype(crate::tensor::fdtype())?;
-        let reversed_mask_as_vec = reversed_mask.to_vec2::<f32>().unwrap();
+        let reversed_mask_as_vec = reversed_mask.to_vec2::<f32>().expect(
+            "reading the two-dimensional tensor must succeed in test_create_orientation_mask",
+        );
         assert_eq!(reversed_mask_as_vec, expected_mask_reversed);
 
         // test indexing the same piece 100 times
         let pieces = vec![TetrisPiece::O; 100];
         let pieces_tensor = TetrisPieceTensor::from_pieces(&pieces, &Device::Cpu)?;
         let mask = create_orientation_mask(&pieces_tensor)?.to_dtype(crate::tensor::fdtype())?;
-        let mask_as_vec = mask.to_vec2::<f32>().unwrap();
+        let mask_as_vec = mask.to_vec2::<f32>().expect(
+            "reading the two-dimensional tensor must succeed in test_create_orientation_mask",
+        );
         let expected_mask = vec![
             1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
             0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -406,7 +424,9 @@ mod tests {
     #[test]
     fn test_tril2d() -> Result<()> {
         let mask = triu2d(3, &Device::Cpu)?;
-        let mask_as_vec = mask.to_vec2::<u8>().unwrap();
+        let mask_as_vec = mask
+            .to_vec2::<u8>()
+            .expect("reading the two-dimensional tensor must succeed in test_tril2d");
         let expected_mask = vec![vec![0, 1, 1], vec![0, 0, 1], vec![0, 0, 0]];
         assert_eq!(mask_as_vec, expected_mask);
         Ok(())
@@ -467,7 +487,9 @@ mod tests {
         let mask = Tensor::from_vec(vec![1u8, 1, 0, 1], (1, 4), &dev)?;
 
         let probs = masked_softmax_2d(&x, &mask)?;
-        let v = probs.to_vec2::<f32>().unwrap();
+        let v = probs.to_vec2::<f32>().expect(
+            "reading the two-dimensional tensor must succeed in test_masked_softmax_2d_basic",
+        );
 
         let e1 = (1.0f32 - 4.0).exp(); // exp(-3)
         let e2 = (2.0f32 - 4.0).exp(); // exp(-2)
@@ -492,7 +514,7 @@ mod tests {
         let mask = Tensor::from_vec(vec![0u8, 0, 0], (1, 3), &dev)?;
 
         let probs = masked_softmax_2d(&x, &mask)?;
-        let v = probs.to_vec2::<f32>().unwrap();
+        let v = probs.to_vec2::<f32>().expect("reading the two-dimensional tensor must succeed in test_masked_softmax_2d_all_masked_row");
         assert_eq!(v, vec![vec![0.0, 0.0, 0.0]]);
 
         Ok(())
@@ -507,7 +529,7 @@ mod tests {
         let mask = Tensor::from_vec(vec![1u8, 1, 1, 1], (1, 4), &dev)?;
 
         let probs = masked_softmax_2d(&x, &mask)?;
-        let v = probs.to_vec2::<f32>().unwrap();
+        let v = probs.to_vec2::<f32>().expect("reading the two-dimensional tensor must succeed in test_masked_softmax_2d_all_zero_inputs_row");
         assert_eq!(v, vec![vec![0.0, 0.0, 0.0, 0.0]]);
 
         Ok(())
@@ -641,10 +663,11 @@ mod tests {
                 let mut x_permute_in_place_fast = x.clone();
                 let mut indices_permute_in_place_fast = indices.clone();
                 let output_simple_gather = simple_gather(x_simple_gather, indices_simple_gather);
-                let _ = gather_permute_in_place(
+                gather_permute_in_place(
                     &mut x_permute_in_place_fast,
                     &mut indices_permute_in_place_fast,
-                );
+                )
+                .expect("fixture permutation must succeed");
                 assert_eq!(output_simple_gather, x_permute_in_place_fast);
             })
             .count();

@@ -9,6 +9,10 @@ use serde::{Deserialize, Serialize};
 use crate::fdtype;
 use crate::{masked_fill, triu2d};
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn calculate_default_inv_freq(head_dim: usize, theta: f32) -> Vec<f32> {
     (0..head_dim)
         .step_by(2)
@@ -34,10 +38,14 @@ impl RopeEncoding {
     pub fn new(config: RopeEncodingConfig, vb: &VarBuilder) -> Result<Self> {
         let dim = config.head_dim;
         let theta = Tensor::new(calculate_default_inv_freq(dim, config.theta), vb.device())?;
-        let idx_theta = Tensor::arange(0, config.max_position_embeddings as u32, vb.device())?
-            .to_dtype(fdtype())?
-            .reshape((config.max_position_embeddings, 1))?
-            .matmul(&theta.reshape((1, theta.elem_count()))?)?;
+        let idx_theta = Tensor::arange(
+            0,
+            u32::try_from(config.max_position_embeddings)?,
+            vb.device(),
+        )?
+        .to_dtype(fdtype())?
+        .reshape((config.max_position_embeddings, 1))?
+        .matmul(&theta.reshape((1, theta.elem_count()))?)?;
 
         // This is different from the paper, see:
         // https://github.com/huggingface/transformers/blob/6112b1c6442aaf7affd2b0676a1cd4eee30c45cf/src/transformers/models/llama/modeling_llama.py#L112
@@ -102,16 +110,20 @@ pub struct CausalSelfAttention {
 }
 
 impl CausalSelfAttention {
+    #[allow(
+        clippy::manual_is_multiple_of,
+        reason = "Preserve zero-divisor rejection for the existing attention configuration."
+    )]
     pub fn init(vb: &VarBuilder, config: &CausalSelfAttentionConfig) -> Result<Self> {
         let size_in = config.d_model;
         ensure!(
-            config.d_model.is_multiple_of(config.n_attention_heads),
+            config.d_model % config.n_attention_heads == 0,
             "d_model ({}) must be divisible by n_attention_heads ({})",
             config.d_model,
             config.n_attention_heads
         );
         ensure!(
-            config.n_attention_heads.is_multiple_of(config.n_kv_heads),
+            config.n_attention_heads % config.n_kv_heads == 0,
             "n_attention_heads ({}) must be divisible by n_kv_heads ({})",
             config.n_attention_heads,
             config.n_kv_heads
@@ -131,7 +143,7 @@ impl CausalSelfAttention {
                 head_dim,
                 theta: config.rope_theta,
             },
-            &vb,
+            vb,
         )?;
 
         Ok(Self {
@@ -147,6 +159,10 @@ impl CausalSelfAttention {
         })
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     pub fn forward(&self, x: Tensor, with_causal_mask: bool) -> Result<(Tensor, Tensor)> {
         let (batch_size, seq_len, hidden_dim) = x.dims3()?;
         ensure!(
@@ -203,7 +219,7 @@ impl CausalSelfAttention {
         let attn_scores = if seq_len == 1 || !with_causal_mask {
             attn_scores
         } else {
-            let mask = triu2d(seq_len, &device)?
+            let mask = triu2d(seq_len, device)?
                 .reshape(&[1, 1, seq_len, seq_len])?
                 .broadcast_as(attn_scores.shape())?;
 
@@ -471,7 +487,10 @@ impl TransformerBlock {
 
     pub fn forward_with_attn(&self, x: Tensor, with_causal_mask: bool) -> Result<(Tensor, Tensor)> {
         let (output, attn_opt) = self.forward_internal(x, with_causal_mask, true)?;
-        Ok((output, attn_opt.unwrap()))
+        Ok((
+            output,
+            attn_opt.expect("attention output must be enabled in forward_with_attn"),
+        ))
     }
 
     fn forward_internal(
@@ -558,7 +577,10 @@ impl TransformerBody {
             if return_attention {
                 let (y, attn) = block.forward_with_attn(x, with_causal_mask)?;
                 x = y;
-                attns.as_mut().unwrap().push(attn);
+                attns
+                    .as_mut()
+                    .expect("attention collection must be enabled in forward_internal")
+                    .push(attn);
             } else {
                 x = block.forward(x, with_causal_mask)?;
             }
@@ -623,9 +645,13 @@ pub struct ConvBlock {
 }
 
 impl ConvBlock {
+    #[allow(
+        clippy::manual_is_multiple_of,
+        reason = "Preserve zero-divisor rejection for the existing group-normalization configuration."
+    )]
     pub fn init(vb: &VarBuilder, spec: &ConvBlockSpec, idx: usize) -> Result<(Self, usize)> {
         assert!(
-            spec.out_channels.is_multiple_of(spec.gn_groups),
+            spec.out_channels % spec.gn_groups == 0,
             "gn_groups must divide out_channels"
         );
         let conv = conv2d(
@@ -650,6 +676,15 @@ impl ConvBlock {
         Ok(candle_nn::ops::silu(&x)?)
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "Grid dimensions are nonnegative; pixels are quantized after clamping to 0..255, and image dimensions are checked before pixel coordinates are narrowed."
+    )]
     pub fn get_conv_filters(&self) -> Result<RgbImage> {
         let w = self.conv.weight();
         let w = w.to_dtype(fdtype())?;
@@ -662,7 +697,7 @@ impl ConvBlock {
         let rows: usize = out_channels.div_ceil(cols);
         let img_w: usize = cols * kw + (cols.saturating_sub(1)) * pad;
         let img_h: usize = rows * kh + (rows.saturating_sub(1)) * pad;
-        let mut img = RgbImage::new(img_w as u32, img_h as u32);
+        let mut img = RgbImage::new(u32::try_from(img_w)?, u32::try_from(img_h)?);
 
         for o in 0..out_channels {
             let row = o / cols;

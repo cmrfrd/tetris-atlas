@@ -78,14 +78,21 @@ impl Optimizer for AdamW {
     }
 
     fn step(&mut self, grads: &candle_core::backprop::GradStore) -> Result<()> {
-        self.step_t += 1;
+        let next_step = self
+            .step_t
+            .checked_add(1)
+            .ok_or_else(|| candle_core::Error::Msg("optimizer step counter overflow".into()))?;
+        let exponent = i32::try_from(next_step).map_err(|_| {
+            candle_core::Error::Msg("optimizer step exceeds powi exponent range".into())
+        })?;
+        self.step_t = next_step;
         let lr = self.params.lr;
         let lambda = self.params.weight_decay;
         let lr_lambda = lr * lambda;
         let beta1 = self.params.beta1;
         let beta2 = self.params.beta2;
-        let scale_m = 1f64 / (1f64 - beta1.powi(self.step_t as i32));
-        let scale_v = 1f64 / (1f64 - beta2.powi(self.step_t as i32));
+        let scale_m = 1f64 / (1f64 - beta1.powi(exponent));
+        let scale_v = 1f64 / (1f64 - beta2.powi(exponent));
         for var in self.vars.iter() {
             let theta = &var.var;
             let m = &var.first_moment;
@@ -231,7 +238,12 @@ impl Checkpointable for AdamW {
         let mut map: HashMap<String, Tensor> = HashMap::new();
         map.insert(
             "step_t".to_string(),
-            Tensor::new(state.step_t as i64, &Device::Cpu)?,
+            Tensor::new(
+                i64::try_from(state.step_t).map_err(|_| {
+                    candle_core::Error::Msg("optimizer step exceeds checkpoint range".into())
+                })?,
+                &Device::Cpu,
+            )?,
         );
 
         if self.has_names() {
@@ -241,7 +253,10 @@ impl Checkpointable for AdamW {
                 .iter()
                 .zip(state.first_moments.iter().zip(state.second_moments.iter()))
             {
-                let name = v.name.as_ref().unwrap();
+                let name = v
+                    .name
+                    .as_ref()
+                    .expect("configured optimizer variable must have a name in save_to_path");
                 map.insert(format!("m1.{}", name), m1.clone());
                 map.insert(format!("m2.{}", name), m2.clone());
             }
@@ -267,10 +282,16 @@ impl Checkpointable for AdamW {
             .unwrap_or(&Device::Cpu);
         let map = candle_core::safetensors::load(path, first_device)?;
 
-        let step_t = map
-            .get("step_t")
-            .ok_or_else(|| candle_core::Error::Msg("missing step_t in optimizer state".into()))?
-            .to_scalar::<i64>()? as usize;
+        let step_t = usize::try_from(
+            map.get("step_t")
+                .ok_or_else(|| candle_core::Error::Msg("missing step_t in optimizer state".into()))?
+                .to_scalar::<i64>()?,
+        )
+        .map_err(|_| {
+            candle_core::Error::Msg(
+                "checkpoint optimizer step must be nonnegative and fit usize".into(),
+            )
+        })?;
 
         // Detect format: named keys start with "m1." / "m2.", legacy uses "first_moment_N"
         let is_named_format = map.keys().any(|k| k.starts_with("m1."));
@@ -280,7 +301,10 @@ impl Checkpointable for AdamW {
 
         if is_named_format && self.has_names() {
             for v in &self.vars {
-                let name = v.name.as_ref().unwrap();
+                let name = v
+                    .name
+                    .as_ref()
+                    .expect("configured optimizer variable must have a name in load_from_path");
                 let m1_key = format!("m1.{}", name);
                 let m2_key = format!("m2.{}", name);
                 let m1 = map.get(&m1_key).ok_or_else(|| {
@@ -314,5 +338,25 @@ impl Checkpointable for AdamW {
             second_moments,
         };
         self.import_state(&state)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_optimizer_step_overflow_without_advancing() -> Result<()> {
+        let gradients = Tensor::new(1.0f32, &Device::Cpu)?.backward()?;
+        let mut optimizer = AdamW::new_lr(Vec::new(), 0.001)?;
+        for step in [
+            usize::try_from(i32::MAX).expect("i32::MAX fits usize"),
+            usize::MAX,
+        ] {
+            optimizer.step_t = step;
+            assert!(optimizer.step(&gradients).is_err());
+            assert_eq!(optimizer.step_t(), step);
+        }
+        Ok(())
     }
 }
