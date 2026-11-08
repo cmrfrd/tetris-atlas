@@ -53,13 +53,6 @@ Each approach may relax or strengthen the problem along these axes:
 - **Status:** All tested configurations → 0% winning. Adversarial admissibility constraints help the adversary too much.
 - **README:** [Yes](src/bin/research/tetris_7bag_atlas/README.md)
 
-#### `tetris_cycle_atlas`
-- **Strategy:** GFP over boards at bag-refill boundaries; safe if all adversarial piece sequences return to safe set
-- **Opponent:** Adversarial within each bag
-- **Constraints:** Configurable h/holes/roughness/count, two-tier admissibility envelopes
-- **Status:** Converges to empty safe set on all tested profiles
-- **README:** [Yes](src/bin/research/tetris_cycle_atlas/README.md)
-
 #### `tetris_bag_cycle_solver`
 - **Strategy:** Memoized AND-OR depth-bounded search proving player can force empty-board reset in N cycles against adversary
 - **Opponent:** Adversarial bag ordering
@@ -76,34 +69,6 @@ Each approach may relax or strengthen the problem along these axes:
 
 ### Non-adversarial / known-sequence solvers
 
-#### `tetris_bag_checkpoint`
-- **Strategy:** Multiple approaches for 5-bag cycle closure with known permutation ordering:
-  - `discover`: Find checkpoint boards reachable by all 5040 perms from empty
-  - `chain-targeted`: Build 5-step residue-class chain with greedy set cover
-  - `gfp`/`gfp2`/`lfp`: Fixed-point pruning/expansion (all converge to empty)
-  - `five-bag-cycle`: Beam search / MCTS / split-mode for specific 5-bag sequences
-  - `prove`: Exhaustive DFS for impossibility proofs
-- **Opponent:** Non-adversarial (player knows full bag permutation)
-- **Constraints:** Configurable h/holes, all 5040 perms must be covered
-- **Status:**
-  - Chain approach: 2→14→83→1000+ cover boards, diverges at step 3
-  - MCTS (pacing scorer, 10M rollouts): **71/100 random 5-bag sequences return to empty**
-  - ~29% of sequences appear structurally unable to clear exactly 14 lines
-  - 100M rollouts on hardest case: still fails (always 10 residual cells)
-- **Best command:**
-  ```sh
-  cargo run --release -p tetris-playground --bin tetris_bag_checkpoint -- \
-    five-bag-cycle --mcts --rollouts 10000000 --temperature 1.0 --trials 100 --seed 42
-  ```
-- **README:** [Yes](src/bin/research/tetris_bag_checkpoint/README.md)
-
-#### `tetris_fixed_bag_atlas`
-- **Strategy:** Solves deterministic piece sequence (fixed 7-piece permutation repeating forever) via BFS + retrograde GFP
-- **Opponent:** None — piece sequence is fully deterministic
-- **Constraints:** Fixed cycle order (e.g., O,I,S,Z,T,L,J repeating), configurable h/holes/roughness/count
-- **Status:** **~25-27% of boards are winning** on most tested cycle orders. This is a solved constrained game (L1).
-- **README:** [Yes](src/bin/research/tetris_fixed_bag_atlas/README.md)
-
 #### `tetris_nbag_solver`
 - **Strategy:** Searches for placement sequence over N seeded random bags returning to empty
 - **Opponent:** Non-adversarial (known sequence from seed)
@@ -112,13 +77,6 @@ Each approach may relax or strengthen the problem along these axes:
 - **README:** [Yes](src/bin/research/tetris_nbag_solver/README.md)
 
 ### SMT / synthesis approaches
-
-#### `tetris_invariant_smt`
-- **Strategy:** Finds per-bag-state inductive invariants P_B(board) via SMT/CEGIS such that all 448 bag-state transitions remain safe
-- **Opponent:** Adversarial (all transitions must be safe)
-- **Constraints:** Bitvector-encoded board, per-bag-state invariant looseness
-- **Status:** In development
-- **README:** [Yes](src/bin/research/tetris_invariant_smt/README.md)
 
 #### `tetris_invariant_synthesis`
 - **Strategy:** Fixed-point elimination on sampled concrete states + refinement rounds
@@ -159,17 +117,12 @@ Each approach may relax or strengthen the problem along these axes:
 
 | Approach | Level | Key result |
 |----------|-------|------------|
-| Fixed-bag atlas | **L1** | **SOLVED** — 25-27% winning states for fixed piece cycles |
-| Bag checkpoint (chain) | — | Chain diverges at step 3 (cover set explosion) |
-| Bag checkpoint (MCTS) | L0 | 71% of random 5-bag sequences return to empty |
 | All exhaustive adversarial solvers | — | 0% winning at all tested bounds |
 | SMT/synthesis | — | No invariants found yet |
 | Beam search demos | L0 | Millions of pieces without death (empirical) |
 
 ### What's proven
 
-- **Fixed-bag atlas (L1):** For any fixed repeating piece order, ~25% of low-height boards have a winning strategy. This proves infinite play under the constraint of deterministic piece sequence.
-- **5-bag cycle feasibility:** ~71% of random 5-bag sequences can return to empty board. ~29% structurally cannot (exactly 13 line clears, never 14).
 
 ### What's NOT proven
 

@@ -90,7 +90,7 @@ separately from regressions, and state exactly what passed, failed, or was not r
 ## Features and representative commands
 
 Playground defaults enable no optional backends. Relevant flags:
-`ml` (training/CLI), `tui` (interactive atlas), `rocksdb-backend`, `sqlite-backend`, and `smt`.
+`ml` (training/CLI), `tui` (interactive atlas), and `rocksdb-backend`.
 `candle-metal`/`candle-cuda` select GPU backends; include `ml` for playground training targets.
 Choose exactly one explicit `dtype-f16`/`dtype-bf16`/`dtype-f32`/`dtype-f64` override when needed.
 `never-inline` supports ASM analysis. Check native backend prerequisites on the target platform;
