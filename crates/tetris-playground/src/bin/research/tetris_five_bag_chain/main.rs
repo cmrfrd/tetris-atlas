@@ -951,9 +951,7 @@ fn interactive_viewer(
                     }
                 }
                 KeyCode::Left | KeyCode::Backspace => {
-                    if cursor > 0 {
-                        cursor -= 1;
-                    }
+                    cursor = cursor.saturating_sub(1);
                 }
                 KeyCode::Home => cursor = 0,
                 KeyCode::End => cursor = TOTAL_PIECES,

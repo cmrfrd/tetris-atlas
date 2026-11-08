@@ -300,12 +300,12 @@ impl AtlasDB {
         let cf_frontier = self.cf_handle(CF_FRONTIER);
 
         // Check if already seeded (exact check, not bloom filter)
-        if self.db.get_cf(&cf_seeded, &board_bytes)?.is_some() {
+        if self.db.get_cf(&cf_seeded, board_bytes)?.is_some() {
             return Ok(false); // already seeded
         }
 
         // Mark as seeded FIRST (prevents races)
-        self.db.put_cf(&cf_seeded, &board_bytes, &[1u8])?;
+        self.db.put_cf(&cf_seeded, board_bytes, [1u8])?;
 
         // Add all 5040 permutations to frontier
         for perm_idx in 0..NUM_PERMS as u16 {
@@ -330,7 +330,7 @@ impl AtlasDB {
         let board_bytes = board.to_bytes(Major::Col);
         let cf_seeded = self.cf_handle(CF_SEEDED);
         self.db
-            .get_cf(&cf_seeded, &board_bytes)
+            .get_cf(&cf_seeded, board_bytes)
             .ok()
             .flatten()
             .is_some()
@@ -532,7 +532,7 @@ impl AtlasDB {
 
                                         if plan_ok {
                                             // Store (board, perm) → [placement; 7]
-                                            wb.put_cf(&cf_lookup, &lk, &plan);
+                                            wb.put_cf(&cf_lookup, lk, plan);
                                             lookup_inserts.fetch_add(1, Ordering::Relaxed);
 
                                             // After completing a bag, seed the resulting
@@ -548,13 +548,13 @@ impl AtlasDB {
                                             let cf_seeded =
                                                 db.cf_handle(CF_SEEDED).expect("missing seeded cf");
                                             let already = db
-                                                .get_cf(&cf_seeded, &board_bytes)
+                                                .get_cf(&cf_seeded, board_bytes)
                                                 .ok()
                                                 .flatten()
                                                 .is_some();
                                             if passes_filter && !already {
                                                 // Mark seeded first to prevent races
-                                                wb.put_cf(&cf_seeded, &board_bytes, &[1u8]);
+                                                wb.put_cf(&cf_seeded, board_bytes, [1u8]);
                                                 for next_perm in 0..NUM_PERMS as u16 {
                                                     let nfk =
                                                         make_frontier_key(sim_board, next_perm);
