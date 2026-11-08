@@ -167,11 +167,11 @@ during warm-up. Keep allocation-inclusive and kernel-only cases distinct. Rename
 need fresh baselines; their numbers are not comparable with the previous benchmark definitions.
 
 ```sh
-cargo bench -p tetris-benches --bench benches -- --save-baseline before-change
+cargo bench -p tetris-benches -- --save-baseline before-change
 # After the change, same hardware/toolchain/features and benchmark configuration:
-cargo bench -p tetris-benches --bench benches -- --baseline before-change
+cargo bench -p tetris-benches -- --baseline before-change
 # Profiling mode (separate from statistical timing):
-cargo bench -p tetris-benches --bench benches -- --profile-time 5
+cargo bench -p tetris-benches -- engine/apply_fixed --profile-time 5
 ```
 
 For historical comparisons, save a baseline named for the ref/commit. Switch refs only with a clean
@@ -188,8 +188,9 @@ plus noise sources such as background load or thermals. A faster heuristic still
 and correctness evaluation.
 
 Use `cargo-show-asm` (`cargo asm`) rather than the unmaintained `cargo-asm`. The low-level
-`rshift_slice_from_mask_u32` function now lives in `tetris-utils`; use that crate for ASM or
-`cargo expand` inspection, with `never-inline` when needed.
+row compaction is part of `TetrisBoard::clear_and_collapse_rows` in `tetris-game`. Use that crate for
+`cargo expand`; inspect a concrete implementation in a caller such as the benchmark target for ASM,
+with `tetris-game/never-inline` when needed.
 
 ### macOS tools and measurement discipline
 
@@ -209,11 +210,11 @@ profiles retain debug info in `Cargo.toml`, enabling symbolized stacks. Preserve
 and symbols. For example, use the benchmark executable path printed by Cargo (the hash changes):
 
 ```sh
-cargo bench -p tetris-benches --bench benches --no-run
+cargo bench -p tetris-benches --no-run
 mkdir -p artifacts/output/profiles
 ATLAS_BENCH_BIN="target/release/deps/benches-<hash>"
 samply record --save-only -o artifacts/output/profiles/scorer.json.gz -- \
-  "$ATLAS_BENCH_BIN" --bench height_mse_board_score \
+  "$ATLAS_BENCH_BIN" --bench search/score_fixed \
   --sample-size 10 --warm-up-time 1 --measurement-time 10
 samply load artifacts/output/profiles/scorer.json.gz
 
@@ -221,7 +222,7 @@ samply load artifacts/output/profiles/scorer.json.gz
 xcrun xctrace list templates
 xcrun xctrace record --template 'Time Profiler' --time-limit 15s \
   --output artifacts/output/profiles/scorer.trace --launch -- \
-  "$ATLAS_BENCH_BIN" --bench height_mse_board_score \
+  "$ATLAS_BENCH_BIN" --bench search/score_fixed \
   --sample-size 10 --warm-up-time 1 --measurement-time 10
 ```
 

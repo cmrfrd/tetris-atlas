@@ -6,11 +6,11 @@ authors = ["Alex Comerford <alex@taoa.io>"]
 publish = false
 
 [lib]
-name = "tetris_benches"
-path = "src/lib.rs"
+bench = false
 
 [[bench]]
 name = "benches"
+path = "src/criterion.rs"
 harness = false
 
 [features]
@@ -19,11 +19,13 @@ apple-silicon = ["tetris-search/apple-silicon"]
 
 [dependencies]
 tetris-game.workspace = true
+inventory = "0.3.25"
+rand.workspace = true
 tetris-search.workspace = true
 tetris-utils.workspace = true
-rand.workspace = true
-inventory = "0.3.25"
 criterion = { version = "0.5.1", features = ["html_reports"] }
+
+[dev-dependencies]
 pprof = { version = "0.15.0", features = [
     "flamegraph",
     "criterion",

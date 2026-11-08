@@ -1725,38 +1725,6 @@ macro_rules! repeat_idx_unroll {
     }};
 }
 
-#[inline_conditioned(always)]
-pub const fn rshift_slice_from_mask_u32<const N: usize, const I: usize>(
-    xs: &mut [u32; N],
-    mut m: u32,
-) {
-    #[inline_conditioned(always)]
-    const fn step<const N: usize>(xs: &mut [u32; N], m: &mut u32) -> bool {
-        if *m == 0 {
-            return false;
-        }
-        let pos = m.trailing_zeros();
-        let pivot = 1u32 << pos;
-        let keep = pivot - 1; // Mask for bits below pos (0 to pos-1)
-        let above = !pivot & !keep; // Mask for bits above pos (pos+1 to 31)
-
-        // Remove row at pos: keep bits below, shift bits above down by 1
-        repeat_idx_unroll!(N, I, {
-            xs[I] = (xs[I] & keep) | ((xs[I] & above) >> 1);
-        });
-
-        // Clear the processed bit from the mask and shift mask down too
-        *m = (*m & !pivot) >> 1;
-        true
-    }
-
-    repeat_idx_unroll!(I, _I, {
-        if !step(xs, &mut m) {
-            return;
-        }
-    });
-}
-
 /// Returns the bit index of the `k`-th set bit in `x` (0-indexed).
 ///
 /// The ranking is from least-significant bit to most-significant bit:
