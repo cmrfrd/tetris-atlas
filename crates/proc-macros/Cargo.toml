@@ -6,5 +6,13 @@ edition = "2024"
 [lib]
 proc-macro = true
 
-# No external dependencies — uses only the built-in `proc_macro` crate.
+[features]
+never-inline = []
+
 [dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = "3"
+
+[lints]
+workspace = true
