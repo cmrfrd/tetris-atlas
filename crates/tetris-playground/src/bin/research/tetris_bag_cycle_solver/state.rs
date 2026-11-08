@@ -23,7 +23,8 @@ impl BoardCache {
         if let Some(&id) = self.board_to_id.get(&board) {
             return id;
         }
-        let id = self.boards.len() as BoardId;
+        let id = BoardId::try_from(self.boards.len())
+            .expect("graph index must fit its packed representation");
         self.boards.push(board);
         self.board_to_id.insert(board, id);
         id

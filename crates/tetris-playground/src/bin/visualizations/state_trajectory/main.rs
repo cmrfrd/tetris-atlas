@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 //! # State Trajectory Recorder
 //!
 //! Plays Tetris using single beam search and records the trajectory of
@@ -57,6 +56,10 @@ const fn filter_fn(state: &BeamTetrisState) -> bool {
     true
 }
 
+#[allow(
+    clippy::needless_range_loop,
+    reason = "Indices align board coordinates or parallel buffers; retain the existing traversal and independent reference calculation."
+)]
 fn board_to_flat_array(board: TetrisBoard<10, 20>) -> [u8; 200] {
     let limbs = board.as_limbs();
     let mut flat = [0u8; 200];
@@ -91,6 +94,10 @@ fn write_record(
     Ok(())
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn main() {
     tetris_search::set_global_threadpool();
 
@@ -172,7 +179,7 @@ fn main() {
 
     writer.flush().expect("Failed to flush");
     let elapsed = start.elapsed().as_secs_f64();
-    let file_size_mb = (total_steps as usize * RECORD_SIZE) as f64 / (1024.0 * 1024.0);
+    let file_size_mb = (total_steps as f64 * RECORD_SIZE as f64) / (1024.0 * 1024.0);
     println!("Recorded {total_steps} steps in {elapsed:.1}s ({file_size_mb:.1} MB)");
     println!("Wrote trajectory to {OUTPUT_FILE}");
 }

@@ -22,7 +22,6 @@ struct BoardSuccEntry {
 
 /// Wrapper for concurrent writes to disjoint indices of a slice.
 ///
-/// SAFETY: The caller must ensure no two threads write to the same index.
 struct UnsafeSlice<T> {
     ptr: *mut T,
     #[cfg(debug_assertions)]
@@ -91,6 +90,10 @@ impl Universe {
     /// 2. **State BFS** (parallel): Walk (board, bag) states using precomputed successors.
     ///    Uses DashMap for concurrent state interning and atomic edge allocation for
     ///    lock-free parallel writes to the edge array.
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     pub fn build(config: &SolverConfig) -> Self {
         let total_start = Instant::now();
 
@@ -127,7 +130,8 @@ impl Universe {
 
             for piece in TetrisPiece::all() {
                 let pidx = piece.index() as usize;
-                let succ_start = board_succs.len() as u32;
+                let succ_start = u32::try_from(board_succs.len())
+                    .expect("graph index must fit its packed representation");
 
                 for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
                     let mut new_board = board;
@@ -165,7 +169,9 @@ impl Universe {
                     });
                 }
 
-                let succ_len = board_succs.len() as u32 - succ_start;
+                let succ_len = u32::try_from(board_succs.len())
+                    .expect("graph index must fit its packed representation")
+                    - succ_start;
                 ranges[pidx] = EdgeRange {
                     start: succ_start,
                     len: succ_len,
@@ -256,7 +262,8 @@ impl Universe {
                 .collect();
 
             // Step B: Prefix sum for edge start offsets (sequential)
-            let edge_base = edges.len() as u32;
+            let edge_base =
+                u32::try_from(edges.len()).expect("graph index must fit its packed representation");
             let mut edge_starts: Vec<u32> = Vec::with_capacity(batch.len());
             let mut offset = edge_base;
             for &count in &edge_counts {
@@ -287,7 +294,8 @@ impl Universe {
 
                         for branch in piece_branches(key.bag) {
                             let pidx = branch.piece.index() as usize;
-                            let range_start = write_pos as u32;
+                            let range_start = u32::try_from(write_pos)
+                                .expect("graph index must fit its packed representation");
 
                             let board_range = board_succ_ranges[key.board_id as usize][pidx];
                             for idx in 0..board_range.len {
@@ -306,8 +314,6 @@ impl Universe {
                                     }
                                 };
 
-                                // SAFETY: Each thread writes to its own pre-allocated slice
-                                // (disjoint ranges computed via prefix sum in Step B).
                                 unsafe {
                                     edges_unsafe.write(
                                         write_pos,
@@ -320,14 +326,15 @@ impl Universe {
                                 write_pos += 1;
                             }
 
-                            let range_len = write_pos as u32 - range_start;
+                            let range_len = u32::try_from(write_pos)
+                                .expect("graph index must fit its packed representation")
+                                - range_start;
                             index.piece_ranges[pidx] = EdgeRange {
                                 start: range_start,
                                 len: range_len,
                             };
                         }
 
-                        // SAFETY: Each batch entry has a unique sid, so writes are disjoint.
                         unsafe {
                             indices_unsafe.write(sid as usize, index);
                         }
@@ -437,7 +444,8 @@ impl Universe {
 
             for branch in piece_branches(key.bag) {
                 let pidx = branch.piece.index() as usize;
-                let piece_edge_start = self.edges.len() as u32;
+                let piece_edge_start = u32::try_from(self.edges.len())
+                    .expect("graph index must fit its packed representation");
 
                 // Look up precomputed board successors
                 let board_range = self.board_succ_ranges[key.board_id as usize][pidx];
@@ -461,7 +469,9 @@ impl Universe {
                     });
                 }
 
-                let piece_edge_len = self.edges.len() as u32 - piece_edge_start;
+                let piece_edge_len = u32::try_from(self.edges.len())
+                    .expect("graph index must fit its packed representation")
+                    - piece_edge_start;
                 index.piece_ranges[pidx] = EdgeRange {
                     start: piece_edge_start,
                     len: piece_edge_len,
@@ -493,7 +503,8 @@ fn intern_board(
     if let Some(&id) = board_to_id.get(board) {
         return id;
     }
-    let id = boards.len() as BoardId;
+    let id =
+        BoardId::try_from(boards.len()).expect("graph index must fit its packed representation");
     boards.push(*board);
     board_to_id.insert(*board, id);
     id
@@ -504,7 +515,8 @@ fn intern_state(
     state_to_id: &mut FxHashMap<StateKeyPacked, StateId>,
     key: StateKey,
 ) -> StateId {
-    let id = states.len() as StateId;
+    let id =
+        StateId::try_from(states.len()).expect("graph index must fit its packed representation");
     states.push(key);
     state_to_id.insert(key.pack(), id);
     id
@@ -532,6 +544,14 @@ fn board_is_admissible(board: &TetrisBoard<10, 20>, adm: &BoardAdmissibility) ->
 ///
 /// Each predecessor ref records which piece index was played, so the AND-OR
 /// retrograde knows which counter to decrement.
+#[allow(
+    clippy::needless_range_loop,
+    reason = "Indices align board coordinates or parallel buffers; retain the existing traversal and independent reference calculation."
+)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Every parent index comes from states whose IDs are checked when interned."
+)]
 fn build_predecessors(
     state_count: usize,
     state_indices: &[StateIndex],

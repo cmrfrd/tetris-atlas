@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 //! # Tetris Training - Genetic Algorithm
 //!
 //! Evolves optimal heuristic coefficients for Tetris board evaluation using a genetic algorithm.
@@ -55,8 +54,8 @@ const MIN: f32 = -2.0;
 const MAX: f32 = 2.0;
 
 impl EvalCoefficients {
-    /// Create random coefficients for initial population
-    pub fn random<R: rand::RngExt>(rng: &mut R) -> Self {
+    /// Create the fixed baseline coefficients for the initial population.
+    pub fn random<R: rand::RngExt>(_rng: &mut R) -> Self {
         Self {
             lines_cleared: 1.,
             height: -0.1,
@@ -136,6 +135,10 @@ impl BeamTetrisStateGenetic {
 
     /// Evolved heuristic using genetic algorithm coefficients
     #[inline_conditioned(always)]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+    )]
     pub fn score(&self) -> f32 {
         if self.game.board.is_lost() {
             return f32::NEG_INFINITY;
@@ -356,6 +359,10 @@ impl Individual {
     }
 
     /// Evaluate fitness by playing a game with these coefficients
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+    )]
     fn evaluate_fitness<
         const N: usize,
         const BEAM_WIDTH: usize,
@@ -415,6 +422,14 @@ impl Individual {
 }
 
 /// Genetic algorithm for evolving Tetris evaluation coefficients
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+)]
+#[allow(
+    clippy::needless_range_loop,
+    reason = "Indices align ranked candidates with priors or copy the fixed elite prefix; preserve the existing traversal."
+)]
 fn evolve_coefficients() {
     set_global_threadpool();
 
@@ -468,7 +483,11 @@ fn evolve_coefficients() {
             });
 
         // Sort by fitness (descending)
-        population.sort_by(|a, b| b.fitness.partial_cmp(&a.fitness).unwrap());
+        population.sort_by(|a, b| {
+            b.fitness
+                .partial_cmp(&a.fitness)
+                .expect("scores must be comparable (not NaN) in evolve_coefficients")
+        });
 
         let best = &population[0];
         let best_fitness = best.fitness;
@@ -535,18 +554,18 @@ fn evolve_coefficients() {
                     population[b]
                         .fitness
                         .partial_cmp(&population[a].fitness)
-                        .unwrap()
+                        .expect("scores must be comparable (not NaN) in evolve_coefficients")
                 })
-                .unwrap();
+                .expect("candidate collection must be nonempty in evolve_coefficients");
             let parent2_idx = (0..5)
                 .map(|_| rng.random_range(0..POPULATION_SIZE))
                 .min_by(|&a, &b| {
                     population[b]
                         .fitness
                         .partial_cmp(&population[a].fitness)
-                        .unwrap()
+                        .expect("scores must be comparable (not NaN) in evolve_coefficients")
                 })
-                .unwrap();
+                .expect("candidate collection must be nonempty in evolve_coefficients");
 
             // Crossover
             let mut child_coeffs = EvalCoefficients::crossover(

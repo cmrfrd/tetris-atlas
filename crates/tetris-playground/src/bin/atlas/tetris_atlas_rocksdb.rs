@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 #![feature(const_convert)]
 #![feature(const_trait_impl)]
 #![feature(impl_trait_in_bindings)]

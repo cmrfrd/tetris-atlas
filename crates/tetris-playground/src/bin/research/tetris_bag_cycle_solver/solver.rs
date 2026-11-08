@@ -220,7 +220,7 @@ impl Solver {
         // Progress reporting
         self.stats.nodes_explored += 1;
         self.update_depth_progress(bag, cycles_remaining);
-        if self.stats.nodes_explored % 100_000 == 0 {
+        if self.stats.nodes_explored.is_multiple_of(100_000) {
             self.maybe_report();
         }
 
@@ -246,7 +246,7 @@ impl Solver {
             };
             let pieces_remaining = pieces_in_bag + full_bags_remaining;
             let total_cells = board.count() + 4 * pieces_remaining;
-            if total_cells % 10 != 0 {
+            if !total_cells.is_multiple_of(10) {
                 self.stats.cell_prunes += 1;
                 self.stats.memo_false += 1;
                 self.memo.insert(key, false);
@@ -398,6 +398,10 @@ impl Solver {
         })
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     fn diagnose_root_piece_coverage(&mut self) -> RootDiagnostics {
         let bag = TetrisPieceBagState::full();
         let cycles = self.config.bag_cycles;
@@ -438,6 +442,10 @@ impl Solver {
         }
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     fn maybe_report(&mut self) {
         if self.last_report.elapsed().as_secs() >= 2 {
             let elapsed = self.start_time.elapsed().as_secs_f64();
@@ -517,6 +525,10 @@ fn piece_name_from_index(index: usize) -> &'static str {
     }
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn percentage(numerator: u64, denominator: u64) -> f64 {
     if denominator == 0 {
         0.0

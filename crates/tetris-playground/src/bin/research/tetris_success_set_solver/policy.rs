@@ -16,10 +16,16 @@ impl PolicyVerification {
     }
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Universe state IDs are checked when interned."
+)]
 pub fn verify_policy(universe: &Universe, result: &SolveResult) -> PolicyVerification {
     let mut verification = PolicyVerification::default();
 
-    for state_id in 0..universe.states.len() as StateId {
+    for state_id in 0..StateId::try_from(universe.states.len())
+        .expect("universe state count must fit packed iteration range")
+    {
         if !result.winning[state_id as usize] {
             continue;
         }

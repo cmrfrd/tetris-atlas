@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 //! # Tetris Controlled-Invariant Synthesis (MVP)
 //!
 //! Builds an abstract safety game from sampled concrete states and solves for a
@@ -502,6 +501,10 @@ fn enumerate_transitions(state: ConcreteState) -> Vec<CachedTransition> {
     out
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn run_tetris_invariant_synthesis(cli: Cli) {
     let start = Instant::now();
     println!("=== Tetris Controlled-Invariant Synthesis (MVP) ===");
@@ -772,9 +775,12 @@ fn abstract_state(state: ConcreteState, cfg: &AbstractionConfig) -> AbstractStat
 
     AbstractState {
         bag_mask: state.bag.into(),
-        max_height_bucket: (max_height / cfg.height_bucket.max(1)) as u8,
-        holes_bucket: (holes / cfg.holes_bucket.max(1)) as u8,
-        roughness_bucket: (roughness / cfg.roughness_bucket.max(1)) as u8,
+        max_height_bucket: u8::try_from(max_height / cfg.height_bucket.max(1))
+            .expect("abstract state bucket must fit u8"),
+        holes_bucket: u8::try_from(holes / cfg.holes_bucket.max(1))
+            .expect("abstract state bucket must fit u8"),
+        roughness_bucket: u8::try_from(roughness / cfg.roughness_bucket.max(1))
+            .expect("abstract state bucket must fit u8"),
     }
 }
 
@@ -1209,6 +1215,10 @@ fn strongly_connected_components(graph: &PolicyGraph, kept_len: usize) -> Vec<Ve
     ctx.sccs
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn rank_cycle_candidates(
     sccs: &[Vec<usize>],
     graph: &PolicyGraph,
@@ -1314,10 +1324,18 @@ fn initialize_round_stats_csv(path: &str) {
     }
     if let Ok(file) = File::create(path) {
         let mut writer = BufWriter::new(file);
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "Progress and optional statistics output are best effort and do not affect solver state."
+        )]
         let _ = writeln!(
             writer,
             "round,newly_expanded,total_concrete,total_abstract,kept_abstract,complete_policy_states,incomplete_policy_states,scc_count,largest_scc,reachable_cycle_count,falsify_successes,falsify_failures,falsify_earliest_failure_step"
         );
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "Progress and optional statistics output are best effort and do not affect solver state."
+        )]
         let _ = writer.flush();
     }
 }
@@ -1327,6 +1345,10 @@ fn append_round_stats_csv(path: &str, stats: &RoundStats) {
         return;
     };
     let mut writer = BufWriter::new(file);
+    #[allow(
+        clippy::let_underscore_must_use,
+        reason = "Progress and optional statistics output are best effort and do not affect solver state."
+    )]
     let _ = writeln!(
         writer,
         "{},{},{},{},{},{},{},{},{},{},{},{},{}",
@@ -1346,6 +1368,10 @@ fn append_round_stats_csv(path: &str, stats: &RoundStats) {
             .falsify_earliest_failure_step
             .map_or_else(|| "none".to_string(), |v| v.to_string())
     );
+    #[allow(
+        clippy::let_underscore_must_use,
+        reason = "Progress and optional statistics output are best effort and do not affect solver state."
+    )]
     let _ = writer.flush();
 }
 

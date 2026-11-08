@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 use std::num::NonZeroU64;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -82,6 +81,21 @@ pub struct TetrisGameIter<
     search: TetrisMultiBeamSearch<NUM_BEAMS, TOP_N_PER_BEAM, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>,
     step_counter: u64,
     current_game_idx: usize, // Round-robin index for batch diversity
+}
+
+impl<
+    const NUM_GAMES: usize,
+    const NUM_BEAMS: usize,
+    const TOP_N_PER_BEAM: usize,
+    const BEAM_WIDTH: usize,
+    const MAX_DEPTH: usize,
+    const MAX_MOVES: usize,
+> Default
+    for TetrisGameIter<NUM_GAMES, NUM_BEAMS, TOP_N_PER_BEAM, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<
@@ -320,12 +334,20 @@ impl TetrisBeamSupervisedPolicyMLP {
         let device = logits.device();
         let zero = mask.zeros_like()?;
         let keep = mask.gt(&zero)?;
-        let neg_inf = Tensor::new(-1e9f32, &device)?.broadcast_as(logits.dims())?;
+        let neg_inf = Tensor::new(-1e9f32, device)?.broadcast_as(logits.dims())?;
         let masked = keep.where_cond(logits.inner(), &neg_inf)?;
         TetrisPieceOrientationLogitsTensor::try_from(masked)
     }
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "The mean game length is converted to f32 only for TensorBoard reporting."
+)]
 pub fn train_tetris_beam_supervised(
     run_name: String,
     logdir: Option<PathBuf>,
@@ -381,36 +403,37 @@ pub fn train_tetris_beam_supervised(
 
     let mut summary_writer = logdir.map(SummaryWriter::new);
     let checkpointer = checkpoint_dir.as_ref().map(|dir| {
-        let _ = std::fs::create_dir_all(dir);
-        let _ = std::fs::write(
+        std::fs::create_dir_all(dir).expect("checkpoint directory must be created before training");
+        std::fs::write(
             dir.join("beam_supervised_policy_config.json"),
-            serde_json::to_string_pretty(&policy_cfg).unwrap(),
-        );
+            serde_json::to_string_pretty(&policy_cfg).expect(
+                "serializing the policy configuration must succeed in train_tetris_beam_supervised",
+            ),
+        )
+        .expect("checkpoint policy configuration must be written before training");
         Checkpointer::new(CHECKPOINT_INTERVAL, dir.clone(), run_name.clone())
             .expect("Failed to create checkpointer")
     });
 
     let mut starting_iteration = 0;
-    if resume {
-        if let Some(cp) = checkpointer.as_ref() {
-            match cp.load_latest_checkpoint(&mut model_varmap) {
-                Ok(Some(iteration)) => {
-                    starting_iteration = iteration;
-                    println!("✅ Loaded model checkpoint from iteration {}", iteration);
-                }
-                Ok(None) => println!("ℹ️  No model checkpoint found, starting fresh"),
-                Err(e) => println!("⚠️  Failed to load model checkpoint: {}", e),
+    if resume && let Some(cp) = checkpointer.as_ref() {
+        match cp.load_latest_checkpoint(&mut model_varmap) {
+            Ok(Some(iteration)) => {
+                starting_iteration = iteration;
+                println!("✅ Loaded model checkpoint from iteration {}", iteration);
             }
-            match cp.load_item_latest(&mut optimizer, Some("optimizer")) {
-                Ok(Some((path, iteration))) => {
-                    println!(
-                        "✅ Loaded optimizer checkpoint from iteration {} at {:?}",
-                        iteration, path
-                    );
-                }
-                Ok(None) => println!("ℹ️  No optimizer checkpoint found, using fresh optimizer"),
-                Err(e) => println!("⚠️  Failed to load optimizer checkpoint: {}", e),
+            Ok(None) => println!("ℹ️  No model checkpoint found, starting fresh"),
+            Err(e) => println!("⚠️  Failed to load model checkpoint: {}", e),
+        }
+        match cp.load_item_latest(&mut optimizer, Some("optimizer")) {
+            Ok(Some((path, iteration))) => {
+                println!(
+                    "✅ Loaded optimizer checkpoint from iteration {} at {:?}",
+                    iteration, path
+                );
             }
+            Ok(None) => println!("ℹ️  No optimizer checkpoint found, using fresh optimizer"),
+            Err(e) => println!("⚠️  Failed to load optimizer checkpoint: {}", e),
         }
     }
 
@@ -492,7 +515,7 @@ pub fn train_tetris_beam_supervised(
         let log_probs = (&probs + eps_broadcast)?.log()?;
         let keep_mask_float = keep_mask.to_dtype(fdtype())?;
         let log_probs_masked = log_probs.mul(&keep_mask_float)?;
-        let entropy = (&probs).mul(&log_probs_masked)?.sum(D::Minus1)?.neg()?;
+        let entropy = probs.mul(&log_probs_masked)?.sum(D::Minus1)?.neg()?;
         let avg_entropy = entropy.mean_all()?;
 
         // Compute accuracy: argmax(predictions) == argmax(masked_target_distribution)
@@ -595,6 +618,15 @@ pub fn train_tetris_beam_supervised(
     Ok(())
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "The p90 quantile is nonnegative and bounded by the fixed game count; histogram indices are clamped to the fixed bin count."
+)]
 pub fn inference_tetris_beam_supervised(checkpoint_dir: PathBuf) -> Result<()> {
     let device = device();
     let dtype = fdtype();
@@ -723,7 +755,7 @@ pub fn inference_tetris_beam_supervised(checkpoint_dir: PathBuf) -> Result<()> {
 
     let sum_pieces: u64 = pieces_per_game.iter().sum();
     let mean_pieces = sum_pieces as f64 / NUM_GAMES as f64;
-    let median_pieces = if NUM_GAMES % 2 == 0 {
+    let median_pieces = if NUM_GAMES.is_multiple_of(2) {
         (pieces_sorted[NUM_GAMES / 2 - 1] + pieces_sorted[NUM_GAMES / 2]) as f64 / 2.0
     } else {
         pieces_sorted[NUM_GAMES / 2] as f64
@@ -751,7 +783,7 @@ pub fn inference_tetris_beam_supervised(checkpoint_dir: PathBuf) -> Result<()> {
 
     let range = max_pieces.saturating_sub(min_pieces);
     let bin_width = ((range + HISTOGRAM_BINS as u64) / HISTOGRAM_BINS as u64).max(1);
-    let mut counts = vec![0usize; HISTOGRAM_BINS];
+    let mut counts = [0usize; HISTOGRAM_BINS];
     for &value in &pieces_per_game {
         let mut idx = ((value.saturating_sub(min_pieces)) / bin_width) as usize;
         if idx >= HISTOGRAM_BINS {
@@ -767,7 +799,7 @@ pub fn inference_tetris_beam_supervised(checkpoint_dir: PathBuf) -> Result<()> {
         let filled = if max_count == 0 {
             0
         } else {
-            (count * BAR_WIDTH + max_count - 1) / max_count
+            (count * BAR_WIDTH).div_ceil(max_count)
         };
         let bar = "#".repeat(filled);
         println!("[{start:>8}..{end:>8}] {count:>3} {bar}");
@@ -816,7 +848,8 @@ fn main() {
     let cli = Cli::parse();
 
     let verbosity = cli.verbose.saturating_add(2).clamp(0, 5);
-    let level = Level::from_str(verbosity.to_string().as_str()).unwrap();
+    let level = Level::from_str(verbosity.to_string().as_str())
+        .expect("configured verbosity must parse as a tracing level in main");
 
     let registry = tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().with_target(false))
@@ -854,10 +887,11 @@ fn main() {
                 checkpoint_dir.clone(),
                 is_resume,
             )
-            .unwrap();
+            .expect("supervised training must succeed in main");
         }
         Commands::Inference { checkpoint } => {
-            inference_tetris_beam_supervised(checkpoint.clone()).unwrap();
+            inference_tetris_beam_supervised(checkpoint.clone())
+                .expect("checkpoint inference must succeed in main");
         }
     }
 }

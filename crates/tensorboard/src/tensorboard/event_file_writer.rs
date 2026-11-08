@@ -27,7 +27,7 @@ impl EventFileWriter {
     pub fn new<P: AsRef<Path>>(logdir: P) -> EventFileWriter {
         let logdir = logdir.as_ref().to_path_buf();
 
-        fs::create_dir_all(&logdir).expect("");
+        fs::create_dir_all(&logdir).expect("TensorBoard log directory must be created");
 
         let mut time = 0;
         let mut time_full = 0.0;
@@ -35,7 +35,9 @@ impl EventFileWriter {
             time = n.as_secs();
             time_full = n.as_secs_f64();
         }
-        let hostname = gethostname().into_string().expect("");
+        let hostname = gethostname()
+            .into_string()
+            .expect("hostname must be valid Unicode");
         let pid = id();
 
         let file_name = format!(
@@ -46,11 +48,14 @@ impl EventFileWriter {
         let logdir_move = logdir.clone();
         let (tx, rx) = channel();
         let child = spawn(move || {
-            let file_writer = File::create(logdir_move.join(file_name)).expect("");
+            let file_writer = File::create(logdir_move.join(file_name))
+                .expect("TensorBoard event file must be created");
             let mut writer = RecordWriter::new(file_writer);
 
             loop {
-                let result: EventSignal = rx.recv().unwrap();
+                let result: EventSignal = rx
+                    .recv()
+                    .expect("receiving the next TensorBoard writer event must succeed in new");
                 match result {
                     EventSignal::Data(d) => {
                         writer.write(&d).expect("write error");
@@ -92,17 +97,27 @@ impl EventFileWriter {
 
     pub fn add_event(&mut self, event: &Event) {
         let data: Vec<u8> = event.encode_to_vec();
-        self.writer.send(EventSignal::Data(data)).expect("");
+        self.writer
+            .send(EventSignal::Data(data))
+            .expect("TensorBoard worker must accept event data");
     }
 
     pub fn flush(&mut self) {
-        self.writer.send(EventSignal::Flush).expect("");
+        self.writer
+            .send(EventSignal::Flush)
+            .expect("TensorBoard worker must accept flush request");
     }
 }
 
 impl Drop for EventFileWriter {
     fn drop(&mut self) {
-        self.writer.send(EventSignal::Stop).expect("");
-        self.child.take().unwrap().join().expect("");
+        self.writer
+            .send(EventSignal::Stop)
+            .expect("TensorBoard worker must accept shutdown request");
+        self.child
+            .take()
+            .expect("TensorBoard worker handle must be present during shutdown in drop")
+            .join()
+            .expect("TensorBoard worker must finish successfully");
     }
 }

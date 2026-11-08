@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 //! 5-bag empty-board witness search.
 //!
 //! This binary enumerates fixed 5-bag sequences and runs a direct PUCT/MCTS search
@@ -35,6 +34,10 @@ const DEFAULT_MCTS_PRIOR_TEMPERATURE: f32 = 64.0;
 const DEFAULT_MCTS_PRIOR_NOISE: f32 = 0.0;
 const DEFAULT_MCTS_MAX_CHILDREN: usize = <TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT;
 const DEFAULT_MCTS_PROGRESS_EVERY: u64 = 25_000;
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "StandardTetris has twenty playable rows."
+)]
 const DEFAULT_MAX_HEIGHT: u32 = StandardTetris::ROWS as u32;
 
 type ForcedBag = [TetrisPiece; PIECES_PER_BAG];
@@ -327,7 +330,7 @@ impl<'a> PuctSearch<'a> {
             iterations += 1;
             self.run_iteration();
 
-            if progress_every > 0 && iterations % progress_every == 0 {
+            if progress_every > 0 && iterations.is_multiple_of(progress_every) {
                 on_progress(self.progress(iterations));
             }
             if self.witness_placements.is_some() {
@@ -556,6 +559,10 @@ impl<'a> PuctSearch<'a> {
         !self.nodes[node_id].children.is_empty()
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     fn select_child(&self, node_id: usize) -> usize {
         let node = &self.nodes[node_id];
         let parent_visits = node.visits.max(1) as f32;
@@ -684,6 +691,10 @@ fn main() -> Result<()> {
     scan_all_tuples(&cli)
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "StandardTetris has exactly twenty playable rows."
+)]
 fn validate_cli(cli: &Cli) -> Result<()> {
     if cli.start >= TOTAL_FIVE_BAG_SEQUENCES {
         bail!(
@@ -789,7 +800,7 @@ fn scan_all_tuples(cli: &Cli) -> Result<()> {
         stats.scanned += 1;
         ordinal += 1;
 
-        if cli.progress_every > 0 && stats.scanned % cli.progress_every == 0 {
+        if cli.progress_every > 0 && stats.scanned.is_multiple_of(cli.progress_every) {
             print_progress(&stats, scan_total, ordinal, started);
         }
     }
@@ -869,15 +880,15 @@ fn run_puct_for_sequence(
             aggregate.best_score = result.best_score;
         }
 
-        if let Some(placements) = result.witness_placements {
-            if let Some(mut witness) = replay_witness(pieces, &placements, cli.max_height) {
-                witness.iterations = aggregate.iterations;
-                witness.tree_nodes = aggregate.tree_nodes;
-                witness.terminal_evaluations = aggregate.terminal_evaluations;
-                witness.restart = restart + 1;
-                witness.best_score = result.best_score;
-                return PuctAttempt::Witness(witness);
-            }
+        if let Some(placements) = result.witness_placements
+            && let Some(mut witness) = replay_witness(pieces, &placements, cli.max_height)
+        {
+            witness.iterations = aggregate.iterations;
+            witness.tree_nodes = aggregate.tree_nodes;
+            witness.terminal_evaluations = aggregate.terminal_evaluations;
+            witness.restart = restart + 1;
+            witness.best_score = result.best_score;
+            return PuctAttempt::Witness(witness);
         }
     }
 
@@ -939,6 +950,10 @@ fn fill_five_bag_sequence(tuple: [usize; BAG_COUNT], out: &mut [TetrisPiece; TOT
     }
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "The fixed five-bag search has only 35 steps."
+)]
 fn state_key(state: SearchState) -> StateKey {
     StateKey {
         board: state.board,
@@ -953,12 +968,20 @@ fn scorer_prior(board: TetrisBoard<10, 20>, recent_lines_cleared: u32) -> f32 {
     })
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn nonterminal_value(board: TetrisBoard<10, 20>, step: usize, total_steps: usize) -> f32 {
     let scorer_value = score_value_from_empty_distance(board);
     let depth_value = step as f32 / total_steps.max(1) as f32;
     (scorer_value * 0.85 + depth_value * 0.15).clamp(-1.0, 0.99)
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn terminal_failure_value(board: TetrisBoard<10, 20>) -> f32 {
     let distance = height_mse_distance_from_empty(board);
     let cells = board.count();
@@ -973,6 +996,10 @@ fn score_value_from_empty_distance(board: TetrisBoard<10, 20>) -> f32 {
     (1.0 - distance / 200.0).clamp(-1.0, 1.0)
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn normalized_priors(
     candidates: &[Candidate; <TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT],
     len: usize,
@@ -1011,6 +1038,14 @@ fn normalized_priors(
     priors
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Normalized hash noise lies in the unit interval; rounding to f32 is intentional."
+)]
 fn prior_noise(state: SearchState, placement: TetrisPiecePlacement<10>, seed: u64) -> f32 {
     let mut hasher = FxHasher::default();
     seed.hash(&mut hasher);
@@ -1022,6 +1057,10 @@ fn prior_noise(state: SearchState, placement: TetrisPiecePlacement<10>, seed: u6
     unit * 2.0 - 1.0
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "The low u64 intentionally selects the low half of the u128 ordinal; the high half is mixed separately."
+)]
 fn ordinal_seed(ordinal: u128) -> u64 {
     let lo = ordinal as u64;
     let hi = (ordinal >> 64) as u64;
@@ -1089,6 +1128,10 @@ fn replay_witness(
     })
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn print_progress(stats: &ScanStats, scan_total: u128, next_ordinal: u128, started: Instant) {
     let elapsed = started.elapsed().as_secs_f64();
     let rate = stats.scanned as f64 / elapsed.max(1e-9);
@@ -1147,6 +1190,10 @@ fn print_mcts_progress(
     }
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn print_summary(stats: &ScanStats, started: Instant) {
     let elapsed = started.elapsed().as_secs_f64();
     let rate = stats.scanned as f64 / elapsed.max(1e-9);
@@ -1303,6 +1350,10 @@ fn display_optional_iterations(iterations: Option<u64>) -> String {
 mod tests {
     use super::*;
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "StandardTetris has exactly twenty playable rows."
+    )]
     fn test_config() -> PuctConfig {
         PuctConfig {
             max_height: StandardTetris::ROWS as u32,

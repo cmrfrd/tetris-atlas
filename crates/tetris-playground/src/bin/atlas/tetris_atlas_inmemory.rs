@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 #![feature(const_convert)]
 #![feature(const_trait_impl)]
 //! # Tetris Atlas Builder - In-Memory Implementation
@@ -484,7 +483,7 @@ impl SharedState {
 
         let mut count_buf = [0u8; 8];
         reader.read_exact(&mut count_buf)?;
-        let lookup_count = u64::from_le_bytes(count_buf) as usize;
+        let lookup_count = usize::try_from(u64::from_le_bytes(count_buf))?;
 
         for _ in 0..lookup_count {
             let mut board_bytes = [0u8; 40];
@@ -577,6 +576,10 @@ fn evaluated_alive(expanded: u64, dead: u64) -> u64 {
 /// ever *reduce* it — never racing an increment). Predecessor edges are appended **after**
 /// publish, under each successor's node lock, with a compensating decrement if the successor
 /// already died — the publish-under-lock that resolves the append-vs-die race.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Piece indices come from the seven-element canonical piece set."
+)]
 fn process_expand(
     graph: &Graph,
     frontier: &PriorityFrontier,
@@ -695,6 +698,10 @@ fn process_die(graph: &Graph, id: StateId) {
 /// To avoid nested DashMap reads during the parallel pass (which would be a deadlock hazard if
 /// any writer existed), the dead flags and per-node board heuristic are snapshotted into plain
 /// `Vec`s first; the parallel pass then holds at most one node lock at a time.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "n is read from the graph AtomicU32 next_id counter before conversion to usize."
+)]
 fn commit_surviving_policy(
     graph: &Graph,
     lookup: &FxDashMap<
@@ -790,6 +797,10 @@ impl CsvLogger {
         Ok(Self { file: writer })
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+    )]
     fn log(&mut self, ctx: &LoggerContext) -> std::io::Result<()> {
         let secs = ctx.start.elapsed().as_secs_f64();
         let g = &ctx.graph;
@@ -884,10 +895,10 @@ fn logger_thread(ctx: LoggerContext, csv_file: String) {
             print_stats(&ctx);
 
             // Log to CSV
-            if let Some(ref mut logger) = csv_logger {
-                if let Err(e) = logger.log(&ctx) {
-                    eprintln!("Failed to write CSV: {e}");
-                }
+            if let Some(ref mut logger) = csv_logger
+                && let Err(e) = logger.log(&ctx)
+            {
+                eprintln!("Failed to write CSV: {e}");
             }
 
             last_logged = Instant::now();
@@ -898,10 +909,10 @@ fn logger_thread(ctx: LoggerContext, csv_file: String) {
     print_stats(&ctx);
 
     // Final CSV log
-    if let Some(ref mut logger) = csv_logger {
-        if let Err(e) = logger.log(&ctx) {
-            eprintln!("Failed to write final CSV: {e}");
-        }
+    if let Some(ref mut logger) = csv_logger
+        && let Err(e) = logger.log(&ctx)
+    {
+        eprintln!("Failed to write final CSV: {e}");
     }
 
     println!("Logger: exiting");
@@ -914,6 +925,10 @@ fn logger_thread(ctx: LoggerContext, csv_file: String) {
 /// death saturation among expanded states; `seed` = whether the empty board (`StateId 0`) is still
 /// alive (once DEAD the safe set cannot contain the start). Death numbers only sharpen as the
 /// frontier drains; `eval_alive` is sound (a true safe-set upper bound) only at full quiescence.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+)]
 fn print_stats(ctx: &LoggerContext) {
     let secs = ctx.start.elapsed().as_secs_f64().max(1e-9);
     let g = &ctx.graph;
@@ -1159,6 +1174,10 @@ fn worker_loop(graph: &Graph, frontier: &PriorityFrontier, shutdown_requested: &
 
 /// Run the atlas builder as one continuous, fully-parallel AND-OR engine: expansion and
 /// death-propagation interleave across all workers, then a single parallel commit at quiescence.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+)]
 pub fn run_tetris_atlas_create(base_path: &str, max_states: Option<usize>) {
     let num_workers = num_cpus::get().saturating_sub(2).max(1);
 
@@ -1596,95 +1615,91 @@ pub fn run_tetris_atlas_explore(base_path: &str) {
             })?;
 
             // Handle input
-            if event::poll(Duration::from_millis(100))? {
-                if let Event::Key(key) = event::read()? {
-                    match key.code {
-                        KeyCode::Char('q') | KeyCode::Esc => break,
-                        KeyCode::Left => {
-                            timeline.go_back();
-                        }
-                        KeyCode::Right => {
-                            timeline.go_forward();
-                        }
-                        KeyCode::Char(c) => {
-                            let piece_opt = match c {
-                                '1' => Some(TetrisPiece::O),
-                                '2' => Some(TetrisPiece::I),
-                                '3' => Some(TetrisPiece::L),
-                                '4' => Some(TetrisPiece::J),
-                                '5' => Some(TetrisPiece::S),
-                                '6' => Some(TetrisPiece::Z),
-                                '7' => Some(TetrisPiece::T),
-                                'o' | 'O' => Some(TetrisPiece::O),
-                                'i' | 'I' => Some(TetrisPiece::I),
-                                'l' | 'L' => Some(TetrisPiece::L),
-                                'j' | 'J' => Some(TetrisPiece::J),
-                                's' | 'S' => Some(TetrisPiece::S),
-                                'z' | 'Z' => Some(TetrisPiece::Z),
-                                't' | 'T' => Some(TetrisPiece::T),
-                                'r' | 'R' => {
-                                    // Random piece from available pieces in DB
-                                    let available: Vec<TetrisPiece> = [
-                                        TetrisPiece::O,
-                                        TetrisPiece::I,
-                                        TetrisPiece::L,
-                                        TetrisPiece::J,
-                                        TetrisPiece::S,
-                                        TetrisPiece::Z,
-                                        TetrisPiece::T,
-                                    ]
-                                    .iter()
-                                    .copied()
-                                    .filter(|&p| {
-                                        bag.contains(p)
-                                            && state.lookup.contains_key(&(board, bag, p))
-                                    })
-                                    .collect();
+            if event::poll(Duration::from_millis(100))?
+                && let Event::Key(key) = event::read()?
+            {
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => break,
+                    KeyCode::Left => {
+                        timeline.go_back();
+                    }
+                    KeyCode::Right => {
+                        timeline.go_forward();
+                    }
+                    KeyCode::Char(c) => {
+                        let piece_opt = match c {
+                            '1' => Some(TetrisPiece::O),
+                            '2' => Some(TetrisPiece::I),
+                            '3' => Some(TetrisPiece::L),
+                            '4' => Some(TetrisPiece::J),
+                            '5' => Some(TetrisPiece::S),
+                            '6' => Some(TetrisPiece::Z),
+                            '7' => Some(TetrisPiece::T),
+                            'o' | 'O' => Some(TetrisPiece::O),
+                            'i' | 'I' => Some(TetrisPiece::I),
+                            'l' | 'L' => Some(TetrisPiece::L),
+                            'j' | 'J' => Some(TetrisPiece::J),
+                            's' | 'S' => Some(TetrisPiece::S),
+                            'z' | 'Z' => Some(TetrisPiece::Z),
+                            't' | 'T' => Some(TetrisPiece::T),
+                            'r' | 'R' => {
+                                // Random piece from available pieces in DB
+                                let available: Vec<TetrisPiece> = [
+                                    TetrisPiece::O,
+                                    TetrisPiece::I,
+                                    TetrisPiece::L,
+                                    TetrisPiece::J,
+                                    TetrisPiece::S,
+                                    TetrisPiece::Z,
+                                    TetrisPiece::T,
+                                ]
+                                .iter()
+                                .copied()
+                                .filter(|&p| {
+                                    bag.contains(p) && state.lookup.contains_key(&(board, bag, p))
+                                })
+                                .collect();
 
-                                    if !available.is_empty() {
-                                        use rand::RngExt;
-                                        let mut rng = rand::rng();
-                                        let idx = rng.random_range(0..available.len());
-                                        Some(available[idx])
-                                    } else {
-                                        None
-                                    }
+                                if !available.is_empty() {
+                                    use rand::RngExt;
+                                    let mut rng = rand::rng();
+                                    let idx = rng.random_range(0..available.len());
+                                    Some(available[idx])
+                                } else {
+                                    None
                                 }
-                                _ => None,
-                            };
+                            }
+                            _ => None,
+                        };
 
-                            if let Some(piece) = piece_opt {
-                                // Check if piece is valid (in bag and in DB)
-                                if bag.contains(piece) {
-                                    if let Some(&orientation) =
-                                        state.lookup.get(&(board, bag, piece)).as_deref()
-                                    {
-                                        // Apply the move
-                                        game.board = board;
-                                        game.set_bag_piece_seeded(bag, piece, 42);
+                        if let Some(piece) = piece_opt {
+                            // Check if piece is valid (in bag and in DB)
+                            if bag.contains(piece)
+                                && let Some(&orientation) =
+                                    state.lookup.get(&(board, bag, piece)).as_deref()
+                            {
+                                // Apply the move
+                                game.board = board;
+                                game.set_bag_piece_seeded(bag, piece, 42);
 
-                                        let placement = tetris_game::TetrisPiecePlacement {
-                                            piece,
-                                            orientation,
-                                        };
-                                        let result = game.apply_placement(placement);
-                                        if !result.is_lost {
-                                            let mut new_bag = bag;
-                                            new_bag.remove(piece);
-                                            // Auto-refill bag if empty
-                                            if new_bag.count() == 0 {
-                                                new_bag.fill();
-                                            }
-                                            let lines_cleared = timeline.total_lines_cleared()
-                                                + result.lines_cleared as usize;
-                                            timeline.push(game.board, new_bag, lines_cleared);
-                                        }
+                                let placement =
+                                    tetris_game::TetrisPiecePlacement { piece, orientation };
+                                let result = game.apply_placement(placement);
+                                if !result.is_lost {
+                                    let mut new_bag = bag;
+                                    new_bag.remove(piece);
+                                    // Auto-refill bag if empty
+                                    if new_bag.count() == 0 {
+                                        new_bag.fill();
                                     }
+                                    let lines_cleared = timeline.total_lines_cleared()
+                                        + result.lines_cleared as usize;
+                                    timeline.push(game.board, new_bag, lines_cleared);
                                 }
                             }
                         }
-                        _ => {}
                     }
+                    _ => {}
                 }
             }
         }
@@ -1708,6 +1723,11 @@ pub fn run_tetris_atlas_explore(base_path: &str) {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "Fixtures use small fixed graph IDs and intentionally fingerprint signed counter bit patterns."
+)]
 mod tests {
     use super::*;
     use tetris_game::TetrisPiece;
@@ -1815,9 +1835,11 @@ mod tests {
         let board = TetrisBoard::<10, 20>::new();
         let bag = TetrisPieceBagState::full();
         let (seed, _) = graph.intern(board, bag);
-        assert!(graph.nodes.get(&seed).unwrap().forward.is_none());
+        assert!(graph.nodes.get(&seed).expect("requested entry must exist in forward_edges_are_allocated_only_for_expanded_nodes").forward.is_none());
         process_expand(&graph, &frontier, board, bag);
-        let parent = graph.nodes.get(&seed).unwrap();
+        let parent = graph.nodes.get(&seed).expect(
+            "requested entry must exist in forward_edges_are_allocated_only_for_expanded_nodes",
+        );
         assert!(parent.expanded);
         assert!(parent.forward.is_some());
         drop(parent);
@@ -1880,12 +1902,18 @@ mod tests {
     fn link(g: &Graph, parent: StateId, succ: StateId, piece_idx: usize, ori_idx: u8) {
         let ori = <TetrisPieceOrientation<10>>::from_index(ori_idx);
         {
-            let mut p = g.nodes.get_mut(&parent).unwrap();
+            let mut p = g
+                .nodes
+                .get_mut(&parent)
+                .expect("requested mutable entry must exist in link");
             p.forward.get_or_insert_with(Box::default)[piece_idx].push((ori, succ));
             p.live[piece_idx] += 1;
         }
         {
-            let mut c = g.nodes.get_mut(&succ).unwrap();
+            let mut c = g
+                .nodes
+                .get_mut(&succ)
+                .expect("requested mutable entry must exist in link");
             c.preds.push(PredecessorRef {
                 parent,
                 piece_idx: piece_idx as u8,
@@ -1975,7 +2003,10 @@ mod tests {
         );
 
         // Once expanded, the base-case death check observes live[I] == 0 and kills it.
-        g.nodes.get_mut(&0).unwrap().expanded = true;
+        g.nodes
+            .get_mut(&0)
+            .expect("requested mutable entry must exist in death_by_exhaustion_waits_for_expanded")
+            .expanded = true;
         g.check_death(0);
         while let Some(d) = g.death_q.pop() {
             process_die(&g, d);
@@ -2023,11 +2054,11 @@ mod tests {
 
         let key = |k: u8| (make_board(k), bag, TetrisPiece::I);
         // State 0: only surviving edge is ->1 (ori 1).
-        assert_eq!(lookup.get(&key(0)).unwrap().index(), 1);
+        assert_eq!(lookup.get(&key(0)).expect("requested entry must exist in commit_writes_surviving_edges_and_skips_dead_states").index(), 1);
         // State 1: the DEAD edge ->2 (ori 2) must be filtered out; commit picks ->5 (ori 3).
-        assert_eq!(lookup.get(&key(1)).unwrap().index(), 3);
+        assert_eq!(lookup.get(&key(1)).expect("requested entry must exist in commit_writes_surviving_edges_and_skips_dead_states").index(), 3);
         // State 5: self-loop (ori 4).
-        assert_eq!(lookup.get(&key(5)).unwrap().index(), 4);
+        assert_eq!(lookup.get(&key(5)).expect("requested entry must exist in commit_writes_surviving_edges_and_skips_dead_states").index(), 4);
         // Dead states commit nothing.
         for k in [2u8, 3, 4] {
             assert!(
@@ -2167,16 +2198,25 @@ mod tests {
             let mut bytes = 1u64.to_le_bytes().to_vec();
             bytes.extend_from_slice(&[0; 40]);
             bytes.extend_from_slice(&[TetrisPieceBagState::FULL_MASK, bits, 0]);
-            std::fs::write(&path, bytes).unwrap();
+            std::fs::write(&path, bytes)
+                .expect("writing the fixture file must succeed in load_rejects_invalid_piece_bits");
             let state = SharedState::new();
-            let error = state.load_from_disk(path.to_str().unwrap()).unwrap_err();
+            let error =
+                state
+                    .load_from_disk(path.to_str().expect(
+                        "fixture path must be valid UTF-8 in load_rejects_invalid_piece_bits",
+                    ))
+                    .expect_err(
+                        "invalid getter input must be rejected in load_rejects_invalid_piece_bits",
+                    );
             assert_eq!(
-                error.downcast_ref::<std::io::Error>().unwrap().kind(),
+                error.downcast_ref::<std::io::Error>().expect("fixture failure must contain an I/O error in load_rejects_invalid_piece_bits").kind(),
                 std::io::ErrorKind::InvalidData
             );
             assert!(state.lookup.is_empty());
         }
-        std::fs::remove_file(path).unwrap();
+        std::fs::remove_file(path)
+            .expect("removing the fixture file must succeed in load_rejects_invalid_piece_bits");
     }
 
     /// `save_to_disk` then `load_from_disk` must reproduce the committed lookup exactly:
@@ -2200,7 +2240,9 @@ mod tests {
         state.lookup.insert((b1, bag, p1), o1);
 
         let path = std::env::temp_dir().join("tetris_atlas_inmemory_roundtrip_test.bin");
-        let path = path.to_str().unwrap();
+        let path = path.to_str().expect(
+            "fixture path must be valid UTF-8 in save_load_roundtrip_preserves_committed_lookup",
+        );
         state.save_to_disk(path).expect("save");
 
         let loaded = SharedState::new();
@@ -2208,14 +2250,30 @@ mod tests {
         assert_eq!(n, 2, "loaded entry count");
         assert_eq!(loaded.lookup.len(), 2);
         assert_eq!(
-            loaded.lookup.get(&(b0, bag, p0)).unwrap().index(),
+            loaded
+                .lookup
+                .get(&(b0, bag, p0))
+                .expect(
+                    "requested entry must exist in save_load_roundtrip_preserves_committed_lookup"
+                )
+                .index(),
             o0.index()
         );
         assert_eq!(
-            loaded.lookup.get(&(b1, bag, p1)).unwrap().index(),
+            loaded
+                .lookup
+                .get(&(b1, bag, p1))
+                .expect(
+                    "requested entry must exist in save_load_roundtrip_preserves_committed_lookup"
+                )
+                .index(),
             o1.index()
         );
 
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "Temporary test artifact cleanup is best effort."
+        )]
         let _ = std::fs::remove_file(path);
     }
 }

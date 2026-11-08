@@ -8,7 +8,6 @@
 //!
 //! ```
 //! # #![feature(generic_const_exprs)]
-//! # #![allow(incomplete_features)]
 //! use tetris_search::{BeamTetrisState, TetrisBeamSearch, height_mse_beam_tetris_score};
 //! use tetris_game::{TetrisGame, TetrisPiecePlacement};
 //!
@@ -20,9 +19,6 @@
 //! ```
 
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
-#![allow(clippy::out_of_bounds_indexing)]
-#![allow(clippy::unwrap_used)]
 
 pub mod beam_search;
 pub mod explorer;
@@ -87,5 +83,5 @@ pub fn set_global_threadpool_with_stack_size(stack_size: Option<usize>) {
         .num_threads(num_threads)
         .stack_size(stack_size)
         .build_global()
-        .unwrap();
+        .expect("initializing the global Rayon pool must succeed in set_global_threadpool_with_stack_size");
 }

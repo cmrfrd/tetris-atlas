@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 //! # Full 7-Bag Adversarial Atlas Solver
 //!
 //! Solves the full 7-bag Tetris survival problem where the bag ordering is
@@ -119,6 +118,10 @@ struct Cli {
     demand_verify: bool,
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn main() {
     let cli = Cli::parse();
     let total_start = Instant::now();

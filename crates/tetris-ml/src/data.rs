@@ -38,6 +38,12 @@ pub struct TetrisTransitionSequence {
 
 pub struct TetrisDatasetGenerator {}
 
+impl Default for TetrisDatasetGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TetrisDatasetGenerator {
     pub fn new() -> Self {
         Self {}
@@ -58,7 +64,10 @@ impl TetrisDatasetGenerator {
             let mut game = <TetrisGame>::new_with_seed(base_seed + i as u64);
             let num_pieces = distribution.sample(rng);
             for _ in 0..num_pieces {
-                let placement = *game.current_placements().choose(rng).unwrap();
+                let placement = *game
+                    .current_placements()
+                    .choose(rng)
+                    .expect("placement list must be nonempty in gen_uniform_sampled_gameset");
                 game.apply_placement(placement);
             }
             games.push(game);
@@ -83,7 +92,10 @@ impl TetrisDatasetGenerator {
             let placements = gameset
                 .current_placements()
                 .iter()
-                .map(|&pls| *pls.choose(rng).unwrap())
+                .map(|&pls| {
+                    *pls.choose(rng)
+                        .expect("placement list must be nonempty in gen_uniform_sampled_transition")
+                })
                 .collect::<Box<[_]>>();
             let pieces = placements.iter().map(|&p| p.piece).collect::<Vec<_>>();
             gameset.apply_placement(&placements);
@@ -91,7 +103,7 @@ impl TetrisDatasetGenerator {
                 TetrisPiecePlacementTensor::from_placements(&placements, device)
                     .expect("Failed to create placement tensor"),
                 TetrisPieceOrientationTensor::from_orientations(
-                    &placements
+                    placements
                         .iter()
                         .map(|&p| p.orientation)
                         .collect::<Vec<_>>()
@@ -139,7 +151,10 @@ impl TetrisDatasetGenerator {
                 let placements = gameset
                     .current_placements()
                     .iter()
-                    .map(|&pls| *pls.choose(rng).unwrap())
+                    .map(|&pls| {
+                        *pls.choose(rng)
+                            .expect("placement list must be nonempty in gen_sequence")
+                    })
                     .collect::<Box<[_]>>();
                 pieces.push(placements.iter().map(|&p| p.piece).collect::<Vec<_>>());
                 gameset.apply_placement(&placements);
@@ -264,20 +279,22 @@ mod test {
         let generator = TetrisDatasetGenerator::new();
         let seq_len = 6;
         let sequence = generator
-            .gen_sequence((0..10).into(), 1, seq_len, &Device::Cpu, &mut rand::rng())
-            .unwrap();
+            .gen_sequence(0..10, 1, seq_len, &Device::Cpu, &mut rand::rng())
+            .expect(
+                "generating the fixture sequence must succeed in test_sequence_boards_full_chain",
+            );
 
         for i in 0..(seq_len - 1) {
             let result_i: Vec<u8> = sequence.result_boards[i]
                 .flatten_all()
-                .unwrap()
+                .expect("flattening tensor dimensions must succeed in test_sequence_boards_full_chain")
                 .to_vec1::<u8>()
-                .unwrap();
+                .expect("reading the one-dimensional tensor must succeed in test_sequence_boards_full_chain");
             let current_next: Vec<u8> = sequence.current_boards[i + 1]
                 .flatten_all()
-                .unwrap()
+                .expect("flattening tensor dimensions must succeed in test_sequence_boards_full_chain")
                 .to_vec1::<u8>()
-                .unwrap();
+                .expect("reading the one-dimensional tensor must succeed in test_sequence_boards_full_chain");
 
             assert_eq!(result_i, current_next, "Mismatch at step {}", i);
         }

@@ -52,7 +52,7 @@ pub fn solve_state_with_retrograde(
     initial_bag: TetrisPieceBagState,
     plies_remaining: u32,
 ) -> SolveResult {
-    let mut solver = RetrogradeSolver::new(config);
+    let solver = RetrogradeSolver::new(config);
     solver.solve(initial_board, initial_bag, plies_remaining)
 }
 
@@ -77,6 +77,10 @@ impl RetrogradeSolver {
         }
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "State IDs are checked when interned, bounding the state vector length."
+    )]
     fn solve(
         mut self,
         initial_board: TetrisBoard<10, 20>,
@@ -257,7 +261,8 @@ impl RetrogradeSolver {
             return id;
         }
 
-        let id = self.states.len() as StateId;
+        let id = StateId::try_from(self.states.len())
+            .expect("graph index must fit its packed representation");
         self.state_to_id.insert(key, id);
         self.states.push(key);
         self.edges.push(StateEdges::new());
@@ -275,12 +280,16 @@ fn cycles_remaining_from_plies(plies_remaining: u32, bag: TetrisPieceBagState) -
         return None;
     }
     let completed_full_bags = plies_remaining - pieces_in_bag;
-    if completed_full_bags % 7 != 0 {
+    if !completed_full_bags.is_multiple_of(7) {
         return None;
     }
     Some(completed_full_bags / 7 + 1)
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn root_diagnostics_from_policy(
     root_board_id: BoardId,
     root_bag: TetrisPieceBagState,

@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 //! Benchmark: solve 10 fixed random 5-bag sequences and report total time.
 //!
 //! This binary is the autoresearch verification target.
@@ -152,10 +151,18 @@ const BEAM_ROLLOUT_WIDTH: usize = 8;
 const BEAM_ROLLOUT_MIN_DEPTH: u8 = 28; // only do rollout for last bag (step >= 28)
 
 const MCTS_EXPLORATION: f32 = 1.0;
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "StandardTetris has twenty playable rows."
+)]
 const MAX_HEIGHT: u32 = StandardTetris::ROWS as u32;
 const MAX_CHILDREN: usize = 20;
 const PRIOR_NOISE_AMPLITUDE: f32 = 1.0;
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Rank priors are approximate heuristic probabilities."
+)]
 const RANK_PRIORS: [f32; MAX_CHILDREN] = {
     let mut raw = [0.0f32; MAX_CHILDREN];
     let mut sum = 0.0f32;
@@ -417,10 +424,10 @@ impl<'a> PuctSearch<'a> {
                 self.pieces,
                 &self.path_placements,
             );
-            if let Some(placements) = witness {
-                if path_len == state.step as usize {
-                    self.witness_placements = Some(placements);
-                }
+            if let Some(placements) = witness
+                && path_len == state.step as usize
+            {
+                self.witness_placements = Some(placements);
             }
             return value;
         }
@@ -428,6 +435,14 @@ impl<'a> PuctSearch<'a> {
         nonterminal_value(state.board, state.step as usize, self.pieces.len())
     }
 
+    #[allow(
+        clippy::needless_range_loop,
+        reason = "Indices align board coordinates or parallel buffers; retain the existing traversal and independent reference calculation."
+    )]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "child_len is bounded by the fixed 10-column placement catalog, well below u16::MAX."
+    )]
     fn expand_node(&mut self, node_id: usize) -> bool {
         let state = self.nodes[node_id].state;
         let piece = self.pieces[state.step as usize];
@@ -467,7 +482,8 @@ impl<'a> PuctSearch<'a> {
             .min(MAX_CHILDREN)
             .min(<TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT);
 
-        let edges_start = self.edges.len() as u32;
+        let edges_start = u32::try_from(self.edges.len())
+            .expect("graph index must fit its packed representation");
         for idx in 0..child_len {
             let candidate = self.expand_candidates[idx];
             let child_state = SearchState {
@@ -492,6 +508,10 @@ impl<'a> PuctSearch<'a> {
         child_len > 0
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     fn select_child(&self, node_id: usize) -> usize {
         let node = &self.nodes[node_id];
         let parent_visits = node.visits.max(1) as f32;
@@ -548,6 +568,18 @@ impl BeamRolloutScratch {
 
     /// Run beam rollout from (board, start_step) over remaining pieces.
     /// Returns (value, optional witness placements).
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
+    #[allow(
+        clippy::needless_range_loop,
+        reason = "Indices align board coordinates or parallel buffers; retain the existing traversal and independent reference calculation."
+    )]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Parent indices are below the fixed beam width of eight."
+    )]
     fn rollout(
         &mut self,
         board: TetrisBoard<10, 20>,
@@ -638,12 +670,20 @@ fn scorer_prior(board: TetrisBoard<10, 20>, recent_lines_cleared: u32) -> f32 {
     })
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn nonterminal_value(board: TetrisBoard<10, 20>, step: usize, total_steps: usize) -> f32 {
     let scorer_value = score_value_from_empty_distance(board);
     let depth_value = step as f32 / total_steps.max(1) as f32;
     (scorer_value * 0.85 + depth_value * 0.15).clamp(-1.0, 0.99)
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn terminal_failure_value(board: TetrisBoard<10, 20>) -> f32 {
     let distance = height_mse_distance_from_empty(board);
     let cells = board.count();
@@ -658,6 +698,14 @@ fn score_value_from_empty_distance(board: TetrisBoard<10, 20>) -> f32 {
     (1.0 - distance / 200.0).clamp(-1.0, 1.0)
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "The normalized hash is an approximate unit-interval noise value; rounding to f32 is intentional."
+)]
 fn prior_noise(state: SearchState, placement: TetrisPiecePlacement<10>, seed: u64) -> f32 {
     let mut hasher = FxHasher::default();
     seed.hash(&mut hasher);
@@ -692,6 +740,10 @@ const GLOBAL_TIMEOUT_SECS: u64 = 360;
 const DEFAULT_MAX_ITERS_PER_RESTART: u64 = u64::MAX;
 const DEFAULT_MAX_RESTARTS: u32 = u32::MAX;
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn main() {
     let overall_start = Instant::now();
     let global_deadline = overall_start + std::time::Duration::from_secs(GLOBAL_TIMEOUT_SECS);

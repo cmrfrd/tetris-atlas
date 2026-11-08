@@ -105,7 +105,7 @@ macro_rules! impl_wrapped_tensor {
 
             #[proc_macros::inline_conditioned]
             fn shape_tuple(&self) -> Self::ShapeTuple {
-                let sized_dims: [usize; $crate::__count_tuple_elements!( $($spec),* )] = self.tensor_shape().dims().try_into().unwrap();
+                let sized_dims: [usize; $crate::__count_tuple_elements!( $($spec),* )] = self.tensor_shape().dims().try_into().expect("array length must match the validated dimensions in shape_tuple");
                 sized_dims.into()
             }
         }

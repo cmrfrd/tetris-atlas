@@ -29,6 +29,10 @@ impl SolveResult {
 /// zero alive successors (the adversary can pick that piece and the player
 /// has no surviving placement). Death propagates backward through predecessors,
 /// decrementing per-(state, piece) counters.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "State IDs are checked when interned; each piece range contains at most the fixed catalog of 10-column placements."
+)]
 pub fn solve(universe: &Universe) -> SolveResult {
     let start = Instant::now();
     let n = universe.state_count();

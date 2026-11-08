@@ -151,7 +151,7 @@ fn mutate_tree_node(
         DecisionTree::Leaf(pid) => {
             if allow_grow && rng.random_bool(cfg.grow_prob) {
                 *node = DecisionTree::Branch {
-                    cond: BoolExpr::random(rng, cfg.max_cond_depth.min(3).max(1)),
+                    cond: BoolExpr::random(rng, cfg.max_cond_depth.clamp(1, 3)),
                     yes: Box::new(random_tree_leaf_for(rng, ctx)),
                     no: Box::new(DecisionTree::Leaf(*pid)),
                 };
@@ -173,7 +173,7 @@ fn mutate_tree_node(
         DecisionTree::Abstain => {
             if allow_grow && rng.random_bool(cfg.grow_prob) {
                 *node = DecisionTree::Branch {
-                    cond: BoolExpr::random(rng, cfg.max_cond_depth.min(3).max(1)),
+                    cond: BoolExpr::random(rng, cfg.max_cond_depth.clamp(1, 3)),
                     yes: Box::new(random_tree_leaf_for(rng, ctx)),
                     no: Box::new(DecisionTree::Abstain),
                 };
@@ -321,6 +321,12 @@ pub fn tournament_select<'a>(
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "Fixture casts use explicitly bounded board dimensions and case counts, or deliberately extract test bits."
+)]
 mod tests {
     use super::*;
     use crate::encode::NUM_INPUTS;
@@ -377,12 +383,12 @@ mod tests {
         let mut from_a = 0;
         let mut from_b = 0;
         for (i, t) in child.trees.iter().enumerate() {
-            let s = serde_json::to_string(t).unwrap();
-            let sa = serde_json::to_string(&a.trees[i]).unwrap();
+            let s = serde_json::to_string(t).expect("serializing the decision tree must succeed in crossover_takes_whole_trees_from_parents");
+            let sa = serde_json::to_string(&a.trees[i]).expect("serializing the decision tree must succeed in crossover_takes_whole_trees_from_parents");
             let sb = b
                 .trees
                 .get(i)
-                .map(|bt| serde_json::to_string(bt).unwrap())
+                .map(|bt| serde_json::to_string(bt).expect("serializing the decision tree must succeed in crossover_takes_whole_trees_from_parents"))
                 .unwrap_or_default();
             if s == sa {
                 from_a += 1;
@@ -459,10 +465,10 @@ mod tests {
                     *b = u8::from(rng.random_bool(0.4));
                 }
                 bits[NUM_CELLS + NUM_PIECES + i] = 1;
-                if let Some(pid) = tree.decide(&bits) {
-                    if <TetrisPiecePlacement<10>>::from_index(pid).piece != *piece {
-                        return false;
-                    }
+                if let Some(pid) = tree.decide(&bits)
+                    && <TetrisPiecePlacement<10>>::from_index(pid).piece != *piece
+                {
+                    return false;
                 }
             }
         }
@@ -562,7 +568,7 @@ mod tests {
                 .iter()
                 .zip(child.trees.iter())
                 .filter(|(p, c)| {
-                    serde_json::to_string(p).unwrap() != serde_json::to_string(c).unwrap()
+                    serde_json::to_string(p).expect("serializing the decision tree must succeed in mutation_count_scales_with_forest_size") != serde_json::to_string(c).expect("serializing the decision tree must succeed in mutation_count_scales_with_forest_size")
                 })
                 .count();
             if changed >= 2 {
@@ -590,6 +596,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     fn tournament_picks_the_best_of_its_sample() {
         let mut rng = SmallRng::seed_from_u64(31);
         let population: Vec<DecisionForest> = (0..8)
@@ -605,7 +615,10 @@ mod tests {
         ];
         assert_eq!(
             winner.vote(&bits, &legal),
-            population.last().unwrap().vote(&bits, &legal)
+            population
+                .last()
+                .expect("population must be nonempty in tournament_picks_the_best_of_its_sample")
+                .vote(&bits, &legal)
         );
     }
 }

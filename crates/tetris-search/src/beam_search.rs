@@ -25,6 +25,10 @@ impl OrientationCounts {
     }
 
     #[inline_conditioned(always)]
+    #[allow(
+        clippy::out_of_bounds_indexing,
+        reason = "The constant-unrolled body is guarded by the actual array length; Clippy also visits unreachable expanded indices."
+    )]
     pub fn merge(&mut self, other: Self) -> &mut Self {
         repeat_idx_unroll!(
             <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS,
@@ -43,6 +47,10 @@ impl OrientationCounts {
     }
 
     #[inline_conditioned(always)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Indices come from the fixed 10-column orientation catalog, which fits u8."
+    )]
     pub fn top_orientation(&self) -> (TetrisPieceOrientation<10>, u32) {
         let (max_idx, &max_count) = self
             .0
@@ -57,6 +65,10 @@ impl OrientationCounts {
     }
 
     #[inline_conditioned(always)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Indices come from the fixed 10-column orientation catalog, which fits u8."
+    )]
     pub fn nonzero_orientations(
         &self,
     ) -> impl Iterator<Item = (TetrisPieceOrientation<10>, u32)> + '_ {
@@ -296,10 +308,10 @@ where
                 if !raw_score.is_finite() {
                     continue;
                 }
-                if let Some(filter) = self.filter_fn {
-                    if !filter(&new_state) {
-                        continue;
-                    }
+                if let Some(filter) = self.filter_fn
+                    && !filter(&new_state)
+                {
+                    continue;
                 }
                 let score = match self.score_mode {
                     BeamScoreMode::Leaf => raw_score,
@@ -507,7 +519,11 @@ where
         // Extract top N using partial sort (in-place, no allocation, unordered)
         // After select_nth_unstable_by, the top N elements are in beam_slice[..N] (unordered)
         beam_slice.select_nth_unstable_by(N - 1, |a, b| b.cmp(a));
-        Some(beam_slice[..N].try_into().unwrap())
+        Some(
+            beam_slice[..N]
+                .try_into()
+                .expect("selected beam slice must contain exactly N states in search_top_n_using"),
+        )
     }
 
     /// Load `state` as the only root node, then run `search_top_n::<N>(depth)`.
@@ -669,20 +685,14 @@ where
                         .search_top_with_state(BeamTetrisState(game), depth)
                         .and_then(|scored| scored.root_action)
                 })
-                .fold(
-                    || OrientationCounts::default(),
-                    |mut acc, action| {
-                        acc.add_action(action);
-                        acc
-                    },
-                )
-                .reduce(
-                    || OrientationCounts::default(),
-                    |mut a, b| {
-                        a.merge(b);
-                        a
-                    },
-                ),
+                .fold(OrientationCounts::default, |mut acc, action| {
+                    acc.add_action(action);
+                    acc
+                })
+                .reduce(OrientationCounts::default, |mut a, b| {
+                    a.merge(b);
+                    a
+                }),
             _ => base_par_iter
                 .flat_map(|(i, search)| {
                     let mut game = base_state.0;
@@ -694,20 +704,14 @@ where
                         .flatten()
                         .filter_map(|scored| scored.root_action)
                 })
-                .fold(
-                    || OrientationCounts::default(),
-                    |mut acc, action| {
-                        acc.add_action(action);
-                        acc
-                    },
-                )
-                .reduce(
-                    || OrientationCounts::default(),
-                    |mut a, b| {
-                        a.merge(b);
-                        a
-                    },
-                ),
+                .fold(OrientationCounts::default, |mut acc, action| {
+                    acc.add_action(action);
+                    acc
+                })
+                .reduce(OrientationCounts::default, |mut a, b| {
+                    a.merge(b);
+                    a
+                }),
         };
 
         counts
@@ -750,20 +754,14 @@ where
                         .search_top_with_state_using(BeamTetrisState(game), depth, score_fn.clone())
                         .and_then(|scored| scored.root_action)
                 })
-                .fold(
-                    || OrientationCounts::default(),
-                    |mut acc, action| {
-                        acc.add_action(action);
-                        acc
-                    },
-                )
-                .reduce(
-                    || OrientationCounts::default(),
-                    |mut a, b| {
-                        a.merge(b);
-                        a
-                    },
-                ),
+                .fold(OrientationCounts::default, |mut acc, action| {
+                    acc.add_action(action);
+                    acc
+                })
+                .reduce(OrientationCounts::default, |mut a, b| {
+                    a.merge(b);
+                    a
+                }),
             _ => base_par_iter
                 .flat_map(|(i, search)| {
                     let mut game = base_state.0;
@@ -779,20 +777,14 @@ where
                         .flatten()
                         .filter_map(|scored| scored.root_action)
                 })
-                .fold(
-                    || OrientationCounts::default(),
-                    |mut acc, action| {
-                        acc.add_action(action);
-                        acc
-                    },
-                )
-                .reduce(
-                    || OrientationCounts::default(),
-                    |mut a, b| {
-                        a.merge(b);
-                        a
-                    },
-                ),
+                .fold(OrientationCounts::default, |mut acc, action| {
+                    acc.add_action(action);
+                    acc
+                })
+                .reduce(OrientationCounts::default, |mut a, b| {
+                    a.merge(b);
+                    a
+                }),
         }
     }
 
@@ -914,6 +906,12 @@ impl BeamSearchState for BeamTetrisState {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "Fixture casts use explicitly bounded board dimensions and case counts, or deliberately extract test bits."
+)]
 mod tests {
     use super::*;
     use rand::RngExt;
@@ -951,6 +949,10 @@ mod tests {
 
         /// Score: negative Manhattan distance to goal (higher is better)
         #[inline]
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+        )]
         fn score(&self) -> f32 {
             let (x, y) = self.position;
             let (gx, gy) = self.goal;
@@ -1118,7 +1120,7 @@ mod tests {
                 let Some(state) = search.search_top_with_state(s, 5) else {
                     continue;
                 };
-                s = s.apply_action(&state.root_action.unwrap());
+                s = s.apply_action(&state.root_action.expect("successful search must provide a root action in test_beam_search_grid_many_cases"));
                 assert!(GridState::<N>::in_bounds(s.position), "moved out of bounds");
 
                 made += 1;

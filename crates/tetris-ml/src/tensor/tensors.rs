@@ -65,7 +65,9 @@ impl TetrisBoardsTensor {
                     .to_dtype(DType::U8)?
                     .to_vec1::<u8>()?;
                 boards.push(<TetrisBoard<10, 20>>::from_cell_array(
-                    board.try_into().unwrap(),
+                    board
+                        .try_into()
+                        .expect("board cell array must match tensor dimensions in into_boards"),
                     Major::Row,
                 ));
             }
@@ -110,7 +112,8 @@ impl TetrisBoardsTensor {
         let num_cells_equal = equal.sum(D::Minus1)?;
         let boards_equal = num_cells_equal
             .eq(&Tensor::full(
-                board_size as u32,
+                u32::try_from(board_size)
+                    .map_err(|_| candle_core::Error::Msg("board cell count exceeds u32".into()))?,
                 num_cells_equal.shape(),
                 equal.device(),
             )?)?
@@ -121,6 +124,10 @@ impl TetrisBoardsTensor {
 
     /// Count the number of cells that are equal between two tetris boards tensors
     /// Returns a tensor of shape (1)
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     pub fn perc_cells_equal(&self, other: &Self) -> Result<f32> {
         let (batch_size, _) = self.shape_tuple();
         let (other_batch_size, _) = other.shape_tuple();
@@ -443,6 +450,10 @@ impl TetrisPieceOrientationTensor {
         TetrisPieceOrientationDistTensor::try_from(dist)
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     pub fn perc_equal(&self, other: &Self) -> Result<f32> {
         let (batch_size, _) = self.shape_tuple();
         let (other_batch_size, _) = other.shape_tuple();
@@ -502,7 +513,7 @@ impl TetrisPieceOrientationLogitsTensor {
             .to_dtype(dtype)?
             .broadcast_as(self.dims())?;
 
-        let logits = keep_mask.where_cond(&self.inner(), &neg_inf)?;
+        let logits = keep_mask.where_cond(self.inner(), &neg_inf)?;
 
         if temperature == 0.0 {
             let argmax = logits
@@ -590,7 +601,7 @@ impl TetrisPieceOrientationDistTensor {
         let counts = Tensor::from_vec(
             orientation_counts
                 .iter()
-                .flat_map(|c| c.inner().into_iter().map(|x| x as u32))
+                .flat_map(|c| c.inner().into_iter())
                 .collect::<Vec<u32>>(),
             &[
                 batch_size,
@@ -768,18 +779,24 @@ impl TetrisContextTensor {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "Fixture casts use explicitly bounded board dimensions and case counts, or deliberately extract test bits."
+)]
 mod tests {
     use super::*;
 
     #[test]
     fn piece_tensor_round_trips_playable_pieces_and_rejects_invalid_indices() {
         let pieces = TetrisPiece::all();
-        let tensor = TetrisPieceTensor::from_pieces(&pieces, &Device::Cpu).unwrap();
-        assert_eq!(tensor.into_pieces().unwrap(), pieces);
+        let tensor = TetrisPieceTensor::from_pieces(&pieces, &Device::Cpu).expect("creating the piece tensor must succeed in piece_tensor_round_trips_playable_pieces_and_rejects_invalid_indices");
+        assert_eq!(tensor.into_pieces().expect("decoding fixture pieces must succeed in piece_tensor_round_trips_playable_pieces_and_rejects_invalid_indices"), pieces);
 
         for index in [7, 128, 256, u32::MAX] {
-            let raw = Tensor::from_vec(vec![index], (1, 1), &Device::Cpu).unwrap();
-            let tensor = TetrisPieceTensor::try_from(raw).unwrap();
+            let raw = Tensor::from_vec(vec![index], (1, 1), &Device::Cpu).expect("creating the tensor from fixture values must succeed in piece_tensor_round_trips_playable_pieces_and_rejects_invalid_indices");
+            let tensor = TetrisPieceTensor::try_from(raw).expect("fixture conversion must validate in piece_tensor_round_trips_playable_pieces_and_rejects_invalid_indices");
             assert!(tensor.into_pieces().is_err(), "index={index}");
         }
     }
@@ -937,7 +954,8 @@ mod tests {
         // --- Test 1: All pieces with various temperatures ---
         // Create batch with all pieces
         let batch_size = all_pieces.len();
-        let pieces_tensor = TetrisPieceTensor::from_pieces(&all_pieces, &device).unwrap();
+        let pieces_tensor = TetrisPieceTensor::from_pieces(&all_pieces, &device)
+            .expect("creating the piece tensor must succeed in test_masked_orientation_sampling");
 
         // Precompute valid placements for each piece
         let valid_placements_per_piece: Vec<Vec<TetrisPiecePlacement<10>>> = all_pieces
@@ -946,21 +964,22 @@ mod tests {
             .collect();
 
         // Test with multiple temperatures
-        let temperatures = vec![0.0, 0.5, 1.0, 2.0, 10.0];
+        let temperatures = [0.0, 0.5, 1.0, 2.0, 10.0];
         let num_samples_per_temp = 64;
 
         for &temp in temperatures.iter() {
             for _ in 0..num_samples_per_temp {
                 // Generate random logits for each sample
                 let logits = Tensor::randn(0f32, 1f32, (batch_size, num_orientations), &device)
-                    .unwrap()
+                    .expect("creating the normally distributed fixture tensor must succeed in test_masked_orientation_sampling")
                     .to_dtype(dtype)
-                    .unwrap();
-                let logits_tensor = TetrisPieceOrientationLogitsTensor::try_from(logits).unwrap();
+                    .expect("converting tensor dtype must succeed in test_masked_orientation_sampling");
+                let logits_tensor = TetrisPieceOrientationLogitsTensor::try_from(logits)
+                    .expect("fixture conversion must validate in test_masked_orientation_sampling");
 
                 // Sample orientations
-                let sampled = logits_tensor.sample(temp, &pieces_tensor).unwrap();
-                let orientations = sampled.into_orientations().unwrap();
+                let sampled = logits_tensor.sample(temp, &pieces_tensor).expect("sampling the fixture distribution must succeed in test_masked_orientation_sampling");
+                let orientations = sampled.into_orientations().expect("decoding fixture orientations must succeed in test_masked_orientation_sampling");
 
                 // Verify each sampled orientation creates a valid placement
                 for (i, (piece, orientation)) in
@@ -989,18 +1008,21 @@ mod tests {
         for &piece in all_pieces.iter() {
             let valid_placements = <TetrisPiecePlacement<10>>::all_from_piece(piece);
             let piece_batch = vec![piece; 16]; // Test with batch of same piece
-            let pieces_tensor = TetrisPieceTensor::from_pieces(&piece_batch, &device).unwrap();
+            let pieces_tensor = TetrisPieceTensor::from_pieces(&piece_batch, &device).expect(
+                "creating the piece tensor must succeed in test_masked_orientation_sampling",
+            );
 
             for _ in 0..32 {
                 let logits =
                     Tensor::randn(0f32, 1f32, (piece_batch.len(), num_orientations), &device)
-                        .unwrap()
+                        .expect("creating the normally distributed fixture tensor must succeed in test_masked_orientation_sampling")
                         .to_dtype(dtype)
-                        .unwrap();
-                let logits_tensor = TetrisPieceOrientationLogitsTensor::try_from(logits).unwrap();
+                        .expect("converting tensor dtype must succeed in test_masked_orientation_sampling");
+                let logits_tensor = TetrisPieceOrientationLogitsTensor::try_from(logits)
+                    .expect("fixture conversion must validate in test_masked_orientation_sampling");
 
-                let sampled = logits_tensor.sample(1.0, &pieces_tensor).unwrap();
-                let orientations = sampled.into_orientations().unwrap();
+                let sampled = logits_tensor.sample(1.0, &pieces_tensor).expect("sampling the fixture distribution must succeed in test_masked_orientation_sampling");
+                let orientations = sampled.into_orientations().expect("decoding fixture orientations must succeed in test_masked_orientation_sampling");
 
                 // All sampled orientations should create valid placements
                 for orientation in orientations.iter() {
@@ -1022,7 +1044,9 @@ mod tests {
         // Test argmax by setting strong preferences and verifying results
         for &piece in all_pieces.iter() {
             let valid_placements = <TetrisPiecePlacement<10>>::all_from_piece(piece);
-            let pieces_tensor = TetrisPieceTensor::from_pieces(&vec![piece; 1], &device).unwrap();
+            let pieces_tensor = TetrisPieceTensor::from_pieces(&[piece; 1], &device).expect(
+                "creating the piece tensor must succeed in test_masked_orientation_sampling",
+            );
 
             // Try setting maximum at each possible orientation index
             for target_ori in 0..num_orientations {
@@ -1030,13 +1054,14 @@ mod tests {
                 logits_data[target_ori] = 10.0;
 
                 let logits = Tensor::from_vec(logits_data, (1, num_orientations), &device)
-                    .unwrap()
+                    .expect("creating the tensor from fixture values must succeed in test_masked_orientation_sampling")
                     .to_dtype(dtype)
-                    .unwrap();
-                let logits_tensor = TetrisPieceOrientationLogitsTensor::try_from(logits).unwrap();
+                    .expect("converting tensor dtype must succeed in test_masked_orientation_sampling");
+                let logits_tensor = TetrisPieceOrientationLogitsTensor::try_from(logits)
+                    .expect("fixture conversion must validate in test_masked_orientation_sampling");
 
-                let sampled = logits_tensor.sample(0.0, &pieces_tensor).unwrap();
-                let orientations = sampled.into_orientations().unwrap();
+                let sampled = logits_tensor.sample(0.0, &pieces_tensor).expect("sampling the fixture distribution must succeed in test_masked_orientation_sampling");
+                let orientations = sampled.into_orientations().expect("decoding fixture orientations must succeed in test_masked_orientation_sampling");
 
                 let placement = TetrisPiecePlacement {
                     piece,
@@ -1061,17 +1086,21 @@ mod tests {
             .iter()
             .flat_map(|&p| vec![p, p, p]) // Triple each piece
             .collect();
-        let pieces_tensor = TetrisPieceTensor::from_pieces(&mixed_pieces, &device).unwrap();
+        let pieces_tensor = TetrisPieceTensor::from_pieces(&mixed_pieces, &device)
+            .expect("creating the piece tensor must succeed in test_masked_orientation_sampling");
 
         for _ in 0..50 {
             let logits = Tensor::randn(0f32, 1f32, (mixed_pieces.len(), num_orientations), &device)
-                .unwrap()
+                .expect("creating the normally distributed fixture tensor must succeed in test_masked_orientation_sampling")
                 .to_dtype(dtype)
-                .unwrap();
-            let logits_tensor = TetrisPieceOrientationLogitsTensor::try_from(logits).unwrap();
+                .expect("converting tensor dtype must succeed in test_masked_orientation_sampling");
+            let logits_tensor = TetrisPieceOrientationLogitsTensor::try_from(logits)
+                .expect("fixture conversion must validate in test_masked_orientation_sampling");
 
-            let sampled = logits_tensor.sample(1.5, &pieces_tensor).unwrap();
-            let orientations = sampled.into_orientations().unwrap();
+            let sampled = logits_tensor.sample(1.5, &pieces_tensor).expect("sampling the fixture distribution must succeed in test_masked_orientation_sampling");
+            let orientations = sampled.into_orientations().expect(
+                "decoding fixture orientations must succeed in test_masked_orientation_sampling",
+            );
 
             for (piece, orientation) in mixed_pieces.iter().zip(orientations.iter()) {
                 let placement = TetrisPiecePlacement {
@@ -1100,19 +1129,22 @@ mod tests {
 
         for &piece in all_pieces.iter() {
             let large_batch = vec![piece; 64];
-            let pieces_tensor = TetrisPieceTensor::from_pieces(&large_batch, &device).unwrap();
+            let pieces_tensor = TetrisPieceTensor::from_pieces(&large_batch, &device).expect(
+                "creating the piece tensor must succeed in test_masked_orientation_sampling",
+            );
             let valid_placements = <TetrisPiecePlacement<10>>::all_from_piece(piece);
 
             // Sample multiple times for each piece to ensure robustness
             for _ in 0..3 {
                 let logits = Tensor::randn(0f32, 1f32, (64, num_orientations), &device)
-                    .unwrap()
+                    .expect("creating the normally distributed fixture tensor must succeed in test_masked_orientation_sampling")
                     .to_dtype(dtype)
-                    .unwrap();
-                let logits_tensor = TetrisPieceOrientationLogitsTensor::try_from(logits).unwrap();
+                    .expect("converting tensor dtype must succeed in test_masked_orientation_sampling");
+                let logits_tensor = TetrisPieceOrientationLogitsTensor::try_from(logits)
+                    .expect("fixture conversion must validate in test_masked_orientation_sampling");
 
-                let sampled = logits_tensor.sample(2.0, &pieces_tensor).unwrap();
-                let orientations = sampled.into_orientations().unwrap();
+                let sampled = logits_tensor.sample(2.0, &pieces_tensor).expect("sampling the fixture distribution must succeed in test_masked_orientation_sampling");
+                let orientations = sampled.into_orientations().expect("decoding fixture orientations must succeed in test_masked_orientation_sampling");
 
                 // Verify all 64 sampled orientations create valid placements
                 for orientation in orientations.iter() {
@@ -1154,9 +1186,9 @@ mod tests {
         // --- Step 1: Create masked logits ---
         // Generate random logits
         let logits = Tensor::randn(0f32, 1f32, (batch_size, num_orientations), &device)
-            .unwrap()
+            .expect("creating the normally distributed fixture tensor must succeed in test_masked_logits_no_nan_in_loss")
             .to_dtype(dtype)
-            .unwrap();
+            .expect("converting tensor dtype must succeed in test_masked_logits_no_nan_in_loss");
 
         // Create piece-based mask (each piece has different valid orientations)
         let pieces = vec![
@@ -1165,38 +1197,60 @@ mod tests {
             TetrisPiece::T,
             TetrisPiece::L,
         ];
-        let pieces_tensor = TetrisPieceTensor::from_pieces(&pieces, &device).unwrap();
+        let pieces_tensor = TetrisPieceTensor::from_pieces(&pieces, &device)
+            .expect("creating the piece tensor must succeed in test_masked_logits_no_nan_in_loss");
         let mask = create_orientation_mask(&pieces_tensor)
-            .unwrap()
+            .expect("creating the fixture orientation mask must succeed in test_masked_logits_no_nan_in_loss")
             .to_dtype(dtype)
-            .unwrap();
+            .expect("converting tensor dtype must succeed in test_masked_logits_no_nan_in_loss");
 
         // Apply masking: set masked-out positions to -inf
-        let keep_mask = mask.gt(0.0).unwrap();
+        let keep_mask = mask.gt(0.0).expect(
+            "creating the tensor comparison mask must succeed in test_masked_logits_no_nan_in_loss",
+        );
         let neg_inf = match dtype {
             DType::F16 => Tensor::full(f32::NEG_INFINITY, logits.dims(), &device)
-                .unwrap()
+                .expect(
+                    "creating the filled tensor must succeed in test_masked_logits_no_nan_in_loss",
+                )
                 .to_dtype(DType::F16)
-                .unwrap(),
+                .expect(
+                    "converting tensor dtype must succeed in test_masked_logits_no_nan_in_loss",
+                ),
             DType::BF16 => Tensor::full(f32::NEG_INFINITY, logits.dims(), &device)
-                .unwrap()
+                .expect(
+                    "creating the filled tensor must succeed in test_masked_logits_no_nan_in_loss",
+                )
                 .to_dtype(DType::BF16)
-                .unwrap(),
-            DType::F32 => Tensor::full(f32::NEG_INFINITY, logits.dims(), &device).unwrap(),
-            DType::F64 => Tensor::full(f64::NEG_INFINITY, logits.dims(), &device).unwrap(),
+                .expect(
+                    "converting tensor dtype must succeed in test_masked_logits_no_nan_in_loss",
+                ),
+            DType::F32 => Tensor::full(f32::NEG_INFINITY, logits.dims(), &device).expect(
+                "creating the filled tensor must succeed in test_masked_logits_no_nan_in_loss",
+            ),
+            DType::F64 => Tensor::full(f64::NEG_INFINITY, logits.dims(), &device).expect(
+                "creating the filled tensor must succeed in test_masked_logits_no_nan_in_loss",
+            ),
             other => {
                 assert_eq!(other, DType::F32, "Unsupported dtype for masking");
-                Tensor::full(f32::NEG_INFINITY, logits.dims(), &device).unwrap()
+                Tensor::full(f32::NEG_INFINITY, logits.dims(), &device).expect(
+                    "creating the filled tensor must succeed in test_masked_logits_no_nan_in_loss",
+                )
             }
         };
-        let masked_logits = keep_mask.where_cond(&logits, &neg_inf).unwrap();
+        let masked_logits = keep_mask.where_cond(&logits, &neg_inf).expect(
+            "selecting masked tensor values must succeed in test_masked_logits_no_nan_in_loss",
+        );
 
         // --- Step 2: Compute softmax probabilities ---
-        let probs = softmax(&masked_logits, D::Minus1).unwrap();
+        let probs = softmax(&masked_logits, D::Minus1)
+            .expect("normalizing fixture logits must succeed in test_masked_logits_no_nan_in_loss");
 
         // Verify probabilities are finite
-        let probs_f32 = probs.to_dtype(DType::F32).unwrap();
-        let probs_vec = probs_f32.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+        let probs_f32 = probs
+            .to_dtype(DType::F32)
+            .expect("converting tensor dtype must succeed in test_masked_logits_no_nan_in_loss");
+        let probs_vec = probs_f32.flatten_all().expect("flattening tensor dimensions must succeed in test_masked_logits_no_nan_in_loss").to_vec1::<f32>().expect("reading the one-dimensional tensor must succeed in test_masked_logits_no_nan_in_loss");
         for (i, &p) in probs_vec.iter().enumerate() {
             assert!(
                 p.is_finite(),
@@ -1214,19 +1268,24 @@ mod tests {
             _ => 1e-10f32,          // F32/F64 can handle much smaller epsilon
         };
         let eps = Tensor::full(eps_val, probs.dims(), &device)
-            .unwrap()
+            .expect("creating the filled tensor must succeed in test_masked_logits_no_nan_in_loss")
             .to_dtype(dtype)
-            .unwrap();
-        let probs_stable = (probs + eps).unwrap();
-        let log_probs = probs_stable.log().unwrap();
+            .expect("converting tensor dtype must succeed in test_masked_logits_no_nan_in_loss");
+        let probs_stable = (probs + eps)
+            .expect("fixture tensor arithmetic must succeed in test_masked_logits_no_nan_in_loss");
+        let log_probs = probs_stable.log().expect(
+            "computing fixture log probabilities must succeed in test_masked_logits_no_nan_in_loss",
+        );
 
         // Verify log probabilities are finite
-        let log_probs_f32 = log_probs.to_dtype(DType::F32).unwrap();
+        let log_probs_f32 = log_probs
+            .to_dtype(DType::F32)
+            .expect("converting tensor dtype must succeed in test_masked_logits_no_nan_in_loss");
         let log_probs_vec = log_probs_f32
             .flatten_all()
-            .unwrap()
+            .expect("flattening tensor dimensions must succeed in test_masked_logits_no_nan_in_loss")
             .to_vec1::<f32>()
-            .unwrap();
+            .expect("reading the one-dimensional tensor must succeed in test_masked_logits_no_nan_in_loss");
         for (i, &lp) in log_probs_vec.iter().enumerate() {
             assert!(
                 lp.is_finite(),
@@ -1239,9 +1298,11 @@ mod tests {
         // --- Step 4: Compute cross-entropy loss ---
         // Create target indices that point to valid (non-masked) orientations
         let mut target_indices = Vec::new();
-        let mask_f32 = mask.to_dtype(DType::F32).unwrap();
+        let mask_f32 = mask
+            .to_dtype(DType::F32)
+            .expect("converting tensor dtype must succeed in test_masked_logits_no_nan_in_loss");
         for i in 0..batch_size {
-            let mask_row = mask_f32.i(i).unwrap().to_vec1::<f32>().unwrap();
+            let mask_row = mask_f32.i(i).expect("indexing the fixture tensor must succeed in test_masked_logits_no_nan_in_loss").to_vec1::<f32>().expect("reading the one-dimensional tensor must succeed in test_masked_logits_no_nan_in_loss");
 
             // Find first valid orientation for this batch item
             let valid_idx = mask_row
@@ -1252,22 +1313,33 @@ mod tests {
         }
 
         // Convert targets to one-hot encoding
-        let targets = Tensor::from_vec(target_indices, (batch_size,), &device).unwrap();
+        let targets = Tensor::from_vec(target_indices, (batch_size,), &device).expect("creating the tensor from fixture values must succeed in test_masked_logits_no_nan_in_loss");
         let targets_one_hot = candle_nn::encoding::one_hot(targets, num_orientations, 1.0, 0.0)
-            .unwrap()
+            .expect(
+                "encoding fixture target indices must succeed in test_masked_logits_no_nan_in_loss",
+            )
             .to_dtype(dtype)
-            .unwrap();
+            .expect("converting tensor dtype must succeed in test_masked_logits_no_nan_in_loss");
 
         // Calculate cross-entropy loss: -sum(target * log(pred))
-        let loss_per_sample = (&targets_one_hot * &log_probs).unwrap();
-        let loss = loss_per_sample.sum_all().unwrap().neg().unwrap();
+        let loss_per_sample = (&targets_one_hot * &log_probs)
+            .expect("fixture tensor arithmetic must succeed in test_masked_logits_no_nan_in_loss");
+        let loss = loss_per_sample
+            .sum_all()
+            .expect(
+                "reducing fixture tensor values must succeed in test_masked_logits_no_nan_in_loss",
+            )
+            .neg()
+            .expect(
+                "negating the fixture tensor must succeed in test_masked_logits_no_nan_in_loss",
+            );
 
         // Verify loss is valid
         let loss_val = loss
             .to_dtype(DType::F32)
-            .unwrap()
+            .expect("converting tensor dtype must succeed in test_masked_logits_no_nan_in_loss")
             .to_scalar::<f32>()
-            .unwrap();
+            .expect("reading the scalar tensor must succeed in test_masked_logits_no_nan_in_loss");
 
         assert!(
             loss_val.is_finite(),
@@ -1289,6 +1361,10 @@ mod tests {
     /// 3. All values are finite (no NaN/Inf)
     /// 4. Works with various count patterns (uniform, skewed, single vote)
     #[test]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     fn test_from_orientation_counts() {
         let device = Device::Cpu;
 
@@ -1313,13 +1389,15 @@ mod tests {
         });
 
         let dist =
-            TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts1], &device).unwrap();
+            TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts1], &device).expect("creating the orientation-count tensor must succeed in test_from_orientation_counts");
         let dist_vec = dist
             .inner()
             .flatten_all()
-            .unwrap()
+            .expect("flattening tensor dimensions must succeed in test_from_orientation_counts")
             .to_vec1::<f32>()
-            .unwrap();
+            .expect(
+                "reading the one-dimensional tensor must succeed in test_from_orientation_counts",
+            );
 
         // Check all values are finite
         for (i, &val) in dist_vec.iter().enumerate() {
@@ -1364,13 +1442,15 @@ mod tests {
         }
 
         let dist2 =
-            TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts2], &device).unwrap();
+            TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts2], &device).expect("creating the orientation-count tensor must succeed in test_from_orientation_counts");
         let dist2_vec = dist2
             .inner()
             .flatten_all()
-            .unwrap()
+            .expect("flattening tensor dimensions must succeed in test_from_orientation_counts")
             .to_vec1::<f32>()
-            .unwrap();
+            .expect(
+                "reading the one-dimensional tensor must succeed in test_from_orientation_counts",
+            );
 
         // With uniform counts, softmax should produce roughly equal probabilities for the first 4
         for i in 0..4 {
@@ -1392,13 +1472,15 @@ mod tests {
         });
 
         let dist3 =
-            TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts3], &device).unwrap();
+            TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts3], &device).expect("creating the orientation-count tensor must succeed in test_from_orientation_counts");
         let dist3_vec = dist3
             .inner()
             .flatten_all()
-            .unwrap()
+            .expect("flattening tensor dimensions must succeed in test_from_orientation_counts")
             .to_vec1::<f32>()
-            .unwrap();
+            .expect(
+                "reading the one-dimensional tensor must succeed in test_from_orientation_counts",
+            );
 
         // Should still be valid distribution
         let sum3: f32 = dist3_vec.iter().sum();
@@ -1414,9 +1496,13 @@ mod tests {
 
         // --- Test 4: Batch of multiple counts ---
         let counts_batch = vec![counts1, counts2, counts3];
-        let dist_batch =
-            TetrisPieceOrientationDistTensor::from_orientation_counts(&counts_batch, &device)
-                .unwrap();
+        let dist_batch = TetrisPieceOrientationDistTensor::from_orientation_counts(
+            &counts_batch,
+            &device,
+        )
+        .expect(
+            "creating the orientation-count tensor must succeed in test_from_orientation_counts",
+        );
 
         let (batch_size, num_orientations) = dist_batch.shape_tuple();
         assert_eq!(batch_size, 3, "Batch size should be 3");
@@ -1431,11 +1517,11 @@ mod tests {
             let row = dist_batch
                 .inner()
                 .i(i)
-                .unwrap()
+                .expect("indexing the fixture tensor must succeed in test_from_orientation_counts")
                 .flatten_all()
-                .unwrap()
+                .expect("flattening tensor dimensions must succeed in test_from_orientation_counts")
                 .to_vec1::<f32>()
-                .unwrap();
+                .expect("reading the one-dimensional tensor must succeed in test_from_orientation_counts");
             let row_sum: f32 = row.iter().sum();
             assert!(
                 (row_sum - 1.0).abs() < 1e-5,
@@ -1452,15 +1538,21 @@ mod tests {
 
         // --- Test 5: All zeros (edge case that might cause issues) ---
         let counts_zero = OrientationCounts::default(); // No votes
-        let dist_zero =
-            TetrisPieceOrientationDistTensor::from_orientation_counts(&[counts_zero], &device)
-                .unwrap();
+        let dist_zero = TetrisPieceOrientationDistTensor::from_orientation_counts(
+            &[counts_zero],
+            &device,
+        )
+        .expect(
+            "creating the orientation-count tensor must succeed in test_from_orientation_counts",
+        );
         let dist_zero_vec = dist_zero
             .inner()
             .flatten_all()
-            .unwrap()
+            .expect("flattening tensor dimensions must succeed in test_from_orientation_counts")
             .to_vec1::<f32>()
-            .unwrap();
+            .expect(
+                "reading the one-dimensional tensor must succeed in test_from_orientation_counts",
+            );
 
         // Softmax of all zeros should be uniform distribution
         let expected_uniform =

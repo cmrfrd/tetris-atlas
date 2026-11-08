@@ -39,6 +39,10 @@ const PAR_SEEDS_MIN_CAP: u64 = 10_000;
 /// is compiled ONCE and shared across all games; seeds run in parallel only
 /// at high caps (see `PAR_SEEDS_MIN_CAP`). Aggregation is integer-based, so
 /// results are deterministic regardless of scheduling.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 pub fn fitness(forest: &DecisionForest, seeds: &[u64], cap: u64) -> FitnessResult {
     let compiled = CompiledForest::compile(forest);
     let outcomes: Vec<GameOutcome> = if cap >= PAR_SEEDS_MIN_CAP && seeds.len() > 1 {
@@ -69,6 +73,10 @@ pub fn fitness(forest: &DecisionForest, seeds: &[u64], cap: u64) -> FitnessResul
 /// number of decisions. A tree is "valid" at a decision when its placement id
 /// is legal for the current piece (`DecisionTree::output_is_valid`). The game
 /// advances by the forest's actual vote.
+#[allow(
+    clippy::needless_range_loop,
+    reason = "Indices align board coordinates or parallel buffers; retain the existing traversal and independent reference calculation."
+)]
 pub fn tree_valid_counts(
     forest: &DecisionForest,
     seed: u64,
@@ -135,6 +143,10 @@ pub fn cull_invalid_trees(
 /// `cull_invalid_trees` without cloning the survivors — trees are dropped or
 /// kept IN PLACE (the reproduce pipeline owns its offspring, and forest
 /// clones dominate generation wall-time).
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 pub fn cull_invalid_trees_owned(
     mut forest: DecisionForest,
     seeds: &[u64],
@@ -168,7 +180,9 @@ pub fn cull_invalid_trees_owned(
         });
     } else {
         // Never empty a forest: keep the single most-valid tree.
-        let best = (0..n).max_by_key(|&i| total_valid[i]).unwrap();
+        let best = (0..n)
+            .max_by_key(|&i| total_valid[i])
+            .expect("candidate collection must be nonempty in cull_invalid_trees_owned");
         forest.trees.swap(0, best);
         forest.trees.truncate(1);
     }
@@ -217,6 +231,10 @@ const CURRICULUM: [u64; 5] = [200, 1_000, 10_000, 100_000, 1_000_000];
 /// survives the current cap on every eval seed. Writes `<run>_champion.json`
 /// on improvement, a `<run>_log.csv`, and (only with `snapshot_every`)
 /// periodic `<run>_gen_<n>.json` snapshots.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 pub fn train(
     cfg: &TrainConfig,
     artifacts: &TrainArtifacts,
@@ -295,9 +313,12 @@ pub fn train(
         let best_idx = scores
             .iter()
             .enumerate()
-            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            .max_by(|a, b| {
+                a.1.partial_cmp(b.1)
+                    .expect("scores must be comparable (not NaN) in train")
+            })
             .map(|(i, _)| i)
-            .unwrap();
+            .expect("candidate collection must yield a best result in train");
         let best_fit = scores[best_idx];
         let mean_fit = scores.iter().sum::<f32>() / scores.len() as f32;
 
@@ -350,14 +371,15 @@ pub fn train(
         // Periodic snapshots are opt-in (the synchronous write causes a
         // visible pause); the champion JSON is saved on every improvement
         // regardless.
-        if let Some(every) = cfg.snapshot_every {
-            if every > 0 && generation % every == 0 {
-                champion.save_json(
-                    &artifacts
-                        .out_dir
-                        .join(format!("{}_gen_{generation:08}.json", artifacts.run_name)),
-                )?;
-            }
+        if let Some(every) = cfg.snapshot_every
+            && every > 0
+            && generation % every == 0
+        {
+            champion.save_json(
+                &artifacts
+                    .out_dir
+                    .join(format!("{}_gen_{generation:08}.json", artifacts.run_name)),
+            )?;
         }
 
         if champ_stats.min_pieces >= cap && cap_stage + 1 < CURRICULUM.len() {
@@ -374,7 +396,11 @@ pub fn train(
         // regardless of thread scheduling. Each offspring is autokilled of
         // invalid-output trees (one short sample game).
         let mut order: Vec<usize> = (0..population.len()).collect();
-        order.sort_by(|&a, &b| scores[b].partial_cmp(&scores[a]).unwrap());
+        order.sort_by(|&a, &b| {
+            scores[b]
+                .partial_cmp(&scores[a])
+                .expect("scores must be comparable (not NaN) in train")
+        });
         let mut next: Vec<DecisionForest> = order
             .iter()
             .take(cfg.elite.min(order.len()))
@@ -422,6 +448,10 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     fn fitness_reports_survival() {
         let mut rng = SmallRng::seed_from_u64(2);
         let forest = DecisionForest::random(&mut rng, 4, 4, 2);
@@ -626,8 +656,14 @@ mod tests {
                 out_dir: dir.clone(),
                 run_name: "det".to_string(),
             };
-            train(&cfg, &artifacts, 99, None, &stop).unwrap();
-            champs.push(std::fs::read(dir.join("det_champion.json")).unwrap());
+            train(&cfg, &artifacts, 99, None, &stop).expect("training the fixture forest must succeed in train_is_deterministic_for_a_fixed_seed");
+            champs.push(std::fs::read(dir.join("det_champion.json")).expect(
+                "reading the saved fixture must succeed in train_is_deterministic_for_a_fixed_seed",
+            ));
+            #[allow(
+                clippy::let_underscore_must_use,
+                reason = "Progress and optional statistics output are best effort and do not affect solver state."
+            )]
             let _ = std::fs::remove_dir_all(&dir);
         }
         assert_eq!(
@@ -663,14 +699,20 @@ mod tests {
             run_name: "unit".to_string(),
         };
         let stop = AtomicBool::new(false);
-        let champion = train(&cfg, &artifacts, 7, None, &stop).unwrap();
+        let champion = train(&cfg, &artifacts, 7, None, &stop)
+            .expect("training the fixture forest must succeed in train_writes_champion_and_csv");
         assert!(
             dir.join("unit_champion.json").exists(),
             "champion not written"
         );
-        let reloaded = DecisionForest::load_json(&dir.join("unit_champion.json")).unwrap();
+        let reloaded = DecisionForest::load_json(&dir.join("unit_champion.json"))
+            .expect("loading the saved forest must succeed in train_writes_champion_and_csv");
         assert_eq!(reloaded.trees.len(), champion.trees.len());
         assert!(dir.join("unit_log.csv").exists(), "csv log not written");
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "Progress and optional statistics output are best effort and do not affect solver state."
+        )]
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

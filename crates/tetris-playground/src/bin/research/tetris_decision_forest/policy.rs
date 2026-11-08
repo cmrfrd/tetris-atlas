@@ -90,7 +90,9 @@ mod tests {
     #[test]
     fn choose_placement_returns_a_legal_move() {
         let game = TetrisGame::<StandardTetris>::new_with_seed(5);
-        let chosen = choose_placement(&always_pid0(), &game).unwrap();
+        let chosen = choose_placement(&always_pid0(), &game).expect(
+            "fixture policy must select a legal placement in choose_placement_returns_a_legal_move",
+        );
         assert!(game.current_placements().contains(&chosen));
     }
 

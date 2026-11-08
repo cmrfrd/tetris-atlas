@@ -108,6 +108,10 @@ impl BoolExpr {
 }
 
 /// A random valid placement id (index into `<TetrisPiecePlacement>::from_index`).
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "The sampled index is within the fixed 10-column placement catalog, which fits u8."
+)]
 pub fn random_pid(rng: &mut SmallRng) -> u8 {
     rng.random_range(0..<tetris_game::TetrisPiecePlacement<10>>::NUM_PLACEMENTS) as u8
 }
@@ -183,6 +187,10 @@ fn random_subtree_for_piece(
 
 /// Depth contributed by the piece-gate chain of `random_piece_gated_tree`:
 /// one branch level per piece.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "The canonical piece set contains seven pieces."
+)]
 pub const PIECE_GATE_DEPTH: u32 = NUM_PIECES as u32;
 
 /// Depth used when GENERATING random boolean conditions, regardless of the
@@ -395,6 +403,12 @@ impl DecisionTree {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "Fixture casts use explicitly bounded board dimensions and case counts, or deliberately extract test bits."
+)]
 mod tests {
     use super::*;
     use rand::SeedableRng;

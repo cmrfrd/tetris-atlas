@@ -84,6 +84,10 @@ const WPOP_HI: [f32; 16] = {
 ///
 /// Uses a single byte-level LUT for branchless weighted popcount per column.
 #[inline_conditioned(always)]
+#[allow(
+    clippy::out_of_bounds_indexing,
+    reason = "The constant-unrolled body is guarded by the actual array length; Clippy also visits unreachable expanded indices."
+)]
 pub const fn height_mse_distance_from_empty(board: TetrisBoard<10, 20>) -> f32 {
     const PLAYABLE_MASK: u32 = (1u32 << StandardTetris::ROWS) - 1;
 
@@ -137,6 +141,12 @@ pub fn height_mse_beam_tetris_score(state: &BeamTetrisState) -> f32 {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "Fixture casts use explicitly bounded board dimensions and case counts, or deliberately extract test bits."
+)]
 mod tests {
     use super::*;
 
@@ -172,6 +182,10 @@ mod tests {
 
     #[test]
     fn test_height_mse_distance_from_empty_random_boards() {
+        #[allow(
+            clippy::needless_range_loop,
+            reason = "Indices align board coordinates or parallel buffers; retain the existing traversal and independent reference calculation."
+        )]
         fn reference_score(board: TetrisBoard<10, 20>) -> f32 {
             let limbs = board.as_limbs();
             let mask = (1u32 << StandardTetris::ROWS) - 1;

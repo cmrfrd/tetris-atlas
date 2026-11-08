@@ -48,6 +48,14 @@ impl TetrisBloom1 {
         TetrisBloom1 { bits }
     }
 
+    #[allow(
+        clippy::out_of_bounds_indexing,
+        reason = "The constant-unrolled body is guarded by the actual array length; Clippy also visits unreachable expanded indices."
+    )]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "The unroller guards I < 10, so rotation offsets fit u32; truncating the final hash to a machine word is intentional."
+    )]
     const fn hash_tetris_board(x: TetrisBoard<10, 20>) -> usize {
         let limbs = x.as_limbs();
 
@@ -433,7 +441,7 @@ mod tests {
         };
 
         let target_state = explorer
-            .filter_map(|item| item.items.find(|x| success_state(&x)))
+            .filter_map(|item| item.items.find(|x| success_state(x)))
             .next();
         assert!(target_state.is_some(), "Should find a target state");
     }
@@ -443,7 +451,7 @@ mod tests {
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(4)
             .build()
-            .unwrap();
+            .expect("building the configured Rayon pool must succeed in test_explorer_find_line_clear_state_parallel");
 
         let success_state = |item: &TetrisExplorerItem| item.node.game.piece_count > 8;
         let target_state = pool.install(|| {

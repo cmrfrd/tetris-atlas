@@ -13,6 +13,10 @@ pub type FDtype = DType;
 
 /// Get the configured floating-point dtype based on compile-time features
 #[inline]
+#[allow(
+    clippy::absurd_extreme_comparisons,
+    reason = "This compile-time assertion rejects conflicting dtype features; valid feature counts are constant per build."
+)]
 pub const fn fdtype() -> FDtype {
     // Compile-time check: ensure at most one dtype feature is enabled
     const DTYPE_COUNT: usize = cfg!(feature = "dtype-f16") as usize

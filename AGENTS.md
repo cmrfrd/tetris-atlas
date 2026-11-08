@@ -75,6 +75,7 @@ unless supported by the current run artifacts.
 - Prefer `anyhow::Result` for fallible operations. Workspace Clippy denies `panic!`, `todo!`,
   `unimplemented!`, and `unreachable!`. Other lint settings, including `unwrap`/`expect`, come from
   workspace `Cargo.toml`; do not weaken them to hide new failures.
+- Workspace Rust lints deny unused imports and dead code. Keep test-only helpers under `cfg(test)`.
 - Preserve const-generic, bitwise, fixed-capacity, and unrolled hot paths where justified.
   Large fixed-capacity planners must not be materialized on thread stacks; audit unsafe allocation
   assumptions against the actual field layouts and test equivalence to ordinary initialization.

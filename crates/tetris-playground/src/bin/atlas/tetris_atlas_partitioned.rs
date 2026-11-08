@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 //! Partition-owned, disk-backed greedy closed-carrier atlas builder.
 
 use anyhow::{Context, Result, bail, ensure};
@@ -759,6 +758,10 @@ impl AsRef<[u8]> for EncodedCommand {
 }
 
 impl Command {
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "kind_index returns one of the six command tags defined as u8 constants."
+    )]
     fn encode(self) -> Result<EncodedCommand> {
         let mut out = EncodedCommand {
             bytes: [0u8; 66],
@@ -957,6 +960,10 @@ struct OwnerMap {
 }
 
 impl OwnerMap {
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "writer_count is checked in 1..=256 and shard indices are below 256."
+    )]
     fn balanced(writer_count: usize) -> Result<Self> {
         ensure!(
             writer_count > 0 && writer_count <= VIRTUAL_SHARDS,
@@ -988,6 +995,10 @@ impl OwnerMap {
         Ok(expected)
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "OwnerMap is constructed or decoded through balanced, which bounds writer_count by 256; the header stores u16."
+    )]
     fn as_bytes(&self) -> [u8; VIRTUAL_SHARDS + 2] {
         let mut out = [0u8; VIRTUAL_SHARDS + 2];
         out[..2].copy_from_slice(&(self.writer_count as u16).to_be_bytes());
@@ -1044,6 +1055,10 @@ fn state_hash(state: StateKey) -> u64 {
     hash
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Shard assignment intentionally selects the low eight hash bits for 256 virtual shards."
+)]
 fn state_shard(state: StateKey) -> u8 {
     state_hash(state) as u8
 }
@@ -1083,6 +1098,10 @@ impl DeadStateBloom {
         })
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Bloom indexing intentionally selects machine-word hash bits before masking by the allocated word count; exact state checks remain authoritative."
+    )]
     fn probe(&self, state: StateKey) -> (usize, u64) {
         let hash = state_hash(state);
         let word = hash as usize & self.word_mask;
@@ -1823,6 +1842,10 @@ struct RuntimeStatsSnapshot {
 }
 
 impl RuntimeStats {
+    #[allow(
+        clippy::cast_possible_wrap,
+        reason = "The canonical piece set contains seven pieces, which fits the signed closure gauges."
+    )]
     fn new(writer_count: usize, seed_owner: u8) -> Self {
         let seed_closure = ClosureGauges {
             live_states: 1,
@@ -2156,6 +2179,10 @@ impl RuntimeStats {
     }
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "The u128 microsecond value is explicitly clamped to u64::MAX before narrowing."
+)]
 fn duration_micros(duration: Duration) -> u64 {
     duration.as_micros().min(u128::from(u64::MAX)) as u64
 }
@@ -2440,7 +2467,7 @@ impl<'a> BatchProcessor<'a> {
         scratch: &'a mut WorkerScratch,
     ) -> Result<Self> {
         scratch.clear();
-        let node_cf = cf(&db, CF_NODE)?;
+        let node_cf = cf(db, CF_NODE)?;
         Ok(Self {
             db,
             node_cf,
@@ -3319,7 +3346,7 @@ impl<'a> BatchProcessor<'a> {
         self.scratch.ordered_redges.dedup();
         self.scratch.drain_edges.clear();
 
-        let cf = cf(&self.db, CF_REDGE)?;
+        let cf = cf(self.db, CF_REDGE)?;
         let mut options = ReadOptions::default();
         options.fill_cache(false);
         options.set_prefix_same_as_start(true);
@@ -3418,9 +3445,9 @@ impl<'a> BatchProcessor<'a> {
             .stats
             .reserve_outputs(output_count, &outputs_by_owner)?;
 
-        let node_cf = cf(&self.db, CF_NODE)?;
-        let redge_cf = cf(&self.db, CF_REDGE)?;
-        let work_cf = cf(&self.db, CF_WORK)?;
+        let node_cf = cf(self.db, CF_NODE)?;
+        let redge_cf = cf(self.db, CF_REDGE)?;
+        let work_cf = cf(self.db, CF_WORK)?;
         let mut batch = WriteBatch::default();
         for state in self.scratch.dirty_nodes.to_slice() {
             let entry = self
@@ -3500,10 +3527,10 @@ impl ShutdownSignal {
 
 impl SharedState {
     fn fail(&self, error: anyhow::Error) {
-        if let Ok(mut slot) = self.error.lock() {
-            if slot.is_none() {
-                *slot = Some(format!("{error:#}"));
-            }
+        if let Ok(mut slot) = self.error.lock()
+            && slot.is_none()
+        {
+            *slot = Some(format!("{error:#}"));
         }
         self.shutdown.stop.store(true, AtomicOrdering::SeqCst);
     }
@@ -3521,14 +3548,26 @@ fn atomic_add_i64_relaxed(counter: &AtomicI64, amount: i64) {
     }
 }
 
+#[allow(
+    clippy::cast_sign_loss,
+    reason = "The signed gauge is clamped to zero before conversion to an unsigned reporting value."
+)]
 fn nonnegative_atomic(counter: &AtomicI64) -> u64 {
     counter.load(AtomicOrdering::Relaxed).max(0) as u64
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "These values are approximate reporting statistics; work counts, state identities and closure decisions remain integers."
+)]
 fn ratio(numerator: u64, denominator: u64) -> Option<f64> {
     (denominator != 0).then(|| numerator as f64 / denominator as f64)
 }
 
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "Both delta magnitudes are explicitly clamped to i64::MAX before conversion."
+)]
 fn signed_delta(current: u64, previous: u64) -> i64 {
     if current >= previous {
         current.saturating_sub(previous).min(i64::MAX as u64) as i64
@@ -3559,6 +3598,10 @@ fn seed_key() -> Result<StateKey> {
     StateKey::from_board_bag(TetrisBoard::<10, 20>::new(), TetrisPieceBagState::full())
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "OwnerMap validates 1..=256 writers; owner and producer indices are below the writer count and fit u8."
+)]
 fn claim_batch(
     db: &DB,
     owners: &OwnerMap,
@@ -3572,7 +3615,7 @@ fn claim_batch(
         producer_start < owners.writer_count,
         "producer start is outside the owner map"
     );
-    let cf = cf(&db, CF_WORK)?;
+    let cf = cf(db, CF_WORK)?;
     let mut options = ReadOptions::default();
     options.fill_cache(false);
     let mut iterator = db.raw_iterator_cf_opt(&cf, options);
@@ -3855,14 +3898,16 @@ fn open_db(path: &PathBuf, ram_mib: usize, writer_count: usize, create: bool) ->
 }
 
 #[cfg(unix)]
+#[allow(
+    clippy::cast_sign_loss,
+    reason = "ru_maxrss is clamped to zero before conversion to an unsigned byte count."
+)]
 fn peak_rss_bytes() -> u64 {
     let mut usage = MaybeUninit::<libc::rusage>::zeroed();
-    // SAFETY: getrusage initializes the provided rusage when it returns success.
     let result = unsafe { libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) };
     if result != 0 {
         return 0;
     }
-    // SAFETY: the successful getrusage call initialized usage.
     let max_rss = unsafe { usage.assume_init() }.ru_maxrss.max(0) as u64;
     if cfg!(target_os = "macos") {
         max_rss
@@ -3987,6 +4032,10 @@ fn is_fresh_database_path(path: &PathBuf) -> Result<bool> {
         .is_none())
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "OwnerMap validates 1..=256 writers; owner and producer indices are below the writer count and fit u8."
+)]
 fn append_work_heads(
     batch: &mut WriteBatch,
     owners: &OwnerMap,
@@ -4009,6 +4058,10 @@ fn append_work_heads(
     Ok(())
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "OwnerMap validates 1..=256 writers; owner and producer indices are below the writer count and fit u8."
+)]
 fn read_work_heads(db: &DB, owners: &OwnerMap) -> Result<Option<Vec<WorkClaimCursor>>> {
     let mut work_heads = vec![WorkClaimCursor::new(); owners.writer_count];
     let mut present = 0usize;
@@ -4035,14 +4088,18 @@ fn read_work_heads(db: &DB, owners: &OwnerMap) -> Result<Option<Vec<WorkClaimCur
     Ok((present == expected).then_some(work_heads))
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "OwnerMap validates 1..=256 writers; owner and producer indices are below the writer count and fit u8."
+)]
 fn initialize_database(db: &DB, owners: &OwnerMap, source_commit: &str) -> Result<(StateKey, u8)> {
     let seed = seed_key()?;
     let seed_owner = owners.owner(seed);
     let command = Command::Expand { state: seed };
     let work_key = WorkKey::new(seed_owner, command.priority(), seed_owner, 0)?;
     owners.validate_work(work_key, command)?;
-    let node_cf = cf(&db, CF_NODE)?;
-    let work_cf = cf(&db, CF_WORK)?;
+    let node_cf = cf(db, CF_NODE)?;
+    let work_cf = cf(db, CF_WORK)?;
     let mut batch = WriteBatch::default();
     batch.put(META_SCHEMA_VERSION, SCHEMA_VERSION);
     batch.put(META_STATUS, STATUS_BUILDING);
@@ -4115,6 +4172,10 @@ fn read_database_metadata(path: &PathBuf, ram_mib: usize) -> Result<ExploreMetad
     })
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "OwnerMap validates 1..=256 writers; owner and producer indices are below the writer count and fit u8."
+)]
 fn recover_runtime(
     db: &DB,
     owners: &OwnerMap,
@@ -4133,7 +4194,7 @@ fn recover_runtime(
         work_heads,
     };
 
-    let work_cf = cf(&db, CF_WORK)?;
+    let work_cf = cf(db, CF_WORK)?;
     let mut read_options = ReadOptions::default();
     read_options.fill_cache(false);
     for item in db.iterator_cf_opt(&work_cf, read_options, IteratorMode::Start) {
@@ -4194,7 +4255,7 @@ fn recover_runtime(
         }
     }
 
-    let node_cf = cf(&db, CF_NODE)?;
+    let node_cf = cf(db, CF_NODE)?;
     let mut read_options = ReadOptions::default();
     read_options.fill_cache(false);
     for item in db.iterator_cf_opt(&node_cf, read_options, IteratorMode::Start) {
@@ -4234,6 +4295,10 @@ fn recover_runtime(
     Ok(recovery)
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "OwnerMap validates 1..=256 writers; owner and producer indices are below the writer count and fit u8."
+)]
 fn mark_exploring(
     db: &DB,
     owners: &OwnerMap,
@@ -4346,6 +4411,10 @@ struct ClosureTrendSnapshot {
 }
 
 impl ClosureTrendSnapshot {
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "These values are approximate reporting statistics; work counts, state identities and closure decisions remain integers."
+    )]
     fn between(
         previous: &RuntimeStatsSnapshot,
         current: &RuntimeStatsSnapshot,
@@ -4483,9 +4552,13 @@ fn status_text(status: &[u8]) -> &str {
     std::str::from_utf8(status).unwrap_or("invalid-status")
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "OwnerMap validates 1..=256 writers; owner and producer indices are below the writer count and fit u8."
+)]
 fn validate_closure(db: &DB, owners: &OwnerMap) -> Result<ValidationSummary> {
-    let node_cf = cf(&db, CF_NODE)?;
-    let redge_cf = cf(&db, CF_REDGE)?;
+    let node_cf = cf(db, CF_NODE)?;
+    let redge_cf = cf(db, CF_REDGE)?;
     let work_heads = read_work_heads(db, owners)?.context("missing work-head metadata")?;
     for (owner, cursor) in work_heads.iter().enumerate() {
         let mut claimed = ClaimedBatch::new();
@@ -4667,6 +4740,14 @@ struct BuilderRun {
     mark_building: bool,
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "OwnerMap validates 1..=256 writers; owner and producer indices are below the writer count and fit u8."
+)]
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "These values are approximate reporting statistics; work counts, state identities and closure decisions remain integers."
+)]
 fn run_builder(run: BuilderRun) -> Result<()> {
     let BuilderRun {
         path,
@@ -4909,6 +4990,10 @@ fn run_builder(run: BuilderRun) -> Result<()> {
     Ok(())
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "OwnerMap validates 1..=256 writers; owner and producer indices are below the writer count and fit u8."
+)]
 fn create_fresh(path: PathBuf, writers: Option<usize>, ram_mib: usize) -> Result<()> {
     let available = thread::available_parallelism()
         .map(|count| count.get())
@@ -5028,7 +5113,7 @@ fn piece_from_char(value: char) -> Result<TetrisPiece> {
 }
 
 fn print_state_moves(db: &DB, state: StateKey) -> Result<()> {
-    let node_cf = cf(&db, CF_NODE)?;
+    let node_cf = cf(db, CF_NODE)?;
     let (board, bag) = state.decode()?;
     let value = db
         .get_pinned_cf(&node_cf, state.as_bytes())
@@ -5117,6 +5202,11 @@ fn main() -> Result<()> {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    reason = "Test fixtures use small fixed writer counts, node IDs and seven-piece closure gauges."
+)]
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicU64;
@@ -5157,6 +5247,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "These values are approximate reporting statistics; work counts, state identities and closure decisions remain integers."
+    )]
     fn writer_memory_reserve_covers_fixed_scratch_batch_stack_and_transients() {
         let scratch = WorkerScratch::new().expect("worker scratch must allocate");
         let hash_table_bytes = |capacity: usize, entry_bytes: usize| {
@@ -5900,7 +5994,7 @@ mod tests {
     fn owner_map_is_balanced_and_round_trips() {
         for writers in [1, 2, 3, 4, 7, 255, 256] {
             let map = OwnerMap::balanced(writers).expect("valid writer count");
-            let mut counts = vec![0usize; writers as usize];
+            let mut counts = vec![0usize; writers];
             for owner in map.owners {
                 counts[owner as usize] += 1;
             }

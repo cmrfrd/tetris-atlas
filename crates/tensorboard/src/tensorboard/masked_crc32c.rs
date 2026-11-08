@@ -1,4 +1,7 @@
-#[allow(clippy::manual_rotate)]
+#[allow(
+    clippy::manual_rotate,
+    reason = "Keep the TensorBoard CRC implementation aligned with its existing bitwise formulation."
+)]
 pub fn masked_crc32c(data: &[u8]) -> u32 {
     let x = crc32c(data);
     ((x >> 15) | (x << 17)).overflowing_add(0xa282ead8).0

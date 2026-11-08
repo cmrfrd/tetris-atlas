@@ -10,7 +10,10 @@ use tracing::info;
 /// non-deterministic across runs. This causes optimizer checkpoint mismatches
 /// when save and load see different parameter orderings.
 pub fn sorted_vars(varmap: &VarMap) -> Vec<Var> {
-    let data = varmap.data().lock().unwrap();
+    let data = varmap
+        .data()
+        .lock()
+        .expect("model variable mutex must not be poisoned in sorted_vars");
     let mut named: Vec<_> = data.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     named.sort_by(|a, b| a.0.cmp(&b.0));
     named.into_iter().map(|(_, v)| v).collect()
@@ -18,7 +21,10 @@ pub fn sorted_vars(varmap: &VarMap) -> Vec<Var> {
 
 /// Returns VarMap variables as (name, var) pairs sorted by name.
 pub fn sorted_named_vars(varmap: &VarMap) -> Vec<(String, Var)> {
-    let data = varmap.data().lock().unwrap();
+    let data = varmap
+        .data()
+        .lock()
+        .expect("model variable mutex must not be poisoned in sorted_named_vars");
     let mut named: Vec<_> = data.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     named.sort_by(|a, b| a.0.cmp(&b.0));
     named
@@ -110,6 +116,10 @@ impl Checkpointer {
     ///
     /// # Errors
     /// Returns an error if the checkpoint cannot be written or cleanup fails.
+    #[allow(
+        clippy::manual_is_multiple_of,
+        reason = "Preserve the existing rejection of a zero checkpoint interval."
+    )]
     pub fn checkpoint_item<T: Checkpointable + ?Sized>(
         &self,
         iteration: usize,
@@ -117,7 +127,7 @@ impl Checkpointer {
         prefix: Option<&str>,
         suffix: Option<&str>,
     ) -> Result<bool> {
-        if iteration > 0 && iteration.is_multiple_of(self.save_every) {
+        if iteration > 0 && iteration % self.save_every == 0 {
             let _ = self.save_item(iteration, item, prefix, suffix)?;
             if !self.keep_all {
                 self.cleanup_old_checkpoints(iteration)?;
@@ -413,11 +423,16 @@ mod tests {
     fn test_checkpointer_creation() {
         use std::env;
         let temp_dir = env::temp_dir().join("test_checkpointer");
-        let checkpointer = Checkpointer::new(10, temp_dir.clone(), "test_run".to_string()).unwrap();
+        let checkpointer = Checkpointer::new(10, temp_dir.clone(), "test_run".to_string())
+            .expect("creating the checkpoint fixture must succeed in test_checkpointer_creation");
 
         assert_eq!(checkpointer.save_every, 10);
         assert_eq!(checkpointer.run_name, "test_run");
         assert!(temp_dir.exists());
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "Temporary test artifact cleanup is best effort."
+        )]
         let _ = std::fs::remove_dir_all(temp_dir);
     }
 
@@ -425,11 +440,16 @@ mod tests {
     fn test_checkpoint_path() {
         use std::env;
         let temp_dir = env::temp_dir().join("test_checkpointer2");
-        let checkpointer = Checkpointer::new(10, temp_dir.clone(), "test_run".to_string()).unwrap();
+        let checkpointer = Checkpointer::new(10, temp_dir.clone(), "test_run".to_string())
+            .expect("creating the checkpoint fixture must succeed in test_checkpoint_path");
 
         let path = checkpointer.checkpoint_path(1000);
         let expected = temp_dir.join("test_run_iter_00001000.safetensors");
         assert_eq!(path, expected);
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "Temporary test artifact cleanup is best effort."
+        )]
         let _ = std::fs::remove_dir_all(temp_dir);
     }
 }

@@ -163,6 +163,10 @@ pub fn build_distill_set(
 /// Agreement fitness: the fraction of labeled states where the forest's vote
 /// is exactly the teacher's move. Deterministic on a fixed set, so champion
 /// updates are strict improvements.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 pub fn agreement(forest: &DecisionForest, set: &[DistillExample]) -> f32 {
     if set.is_empty() {
         return 0.0;
@@ -182,6 +186,10 @@ pub fn agreement(forest: &DecisionForest, set: &[DistillExample]) -> f32 {
 /// Run the distillation loop: evolve forests toward agreement with a PUCT
 /// teacher built around `prior`. Writes `<run>_distilled.json` (the champion,
 /// resumable by `train --resume`) and `<run>_distill_log.csv`.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 pub fn distill(
     cfg: &DistillConfig,
     artifacts: &TrainArtifacts,
@@ -235,9 +243,12 @@ pub fn distill(
         let best_idx = scores
             .iter()
             .enumerate()
-            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            .max_by(|a, b| {
+                a.1.partial_cmp(b.1)
+                    .expect("scores must be comparable (not NaN) in distill")
+            })
             .map(|(i, _)| i)
-            .unwrap();
+            .expect("candidate collection must yield a best result in distill");
         let best_fit = scores[best_idx];
         let mean_fit = scores.iter().sum::<f32>() / scores.len() as f32;
 
@@ -268,7 +279,11 @@ pub fn distill(
         }
 
         let mut order: Vec<usize> = (0..population.len()).collect();
-        order.sort_by(|&a, &b| scores[b].partial_cmp(&scores[a]).unwrap());
+        order.sort_by(|&a, &b| {
+            scores[b]
+                .partial_cmp(&scores[a])
+                .expect("scores must be comparable (not NaN) in distill")
+        });
         let mut next: Vec<DecisionForest> = order
             .iter()
             .take(cfg.elite.min(order.len()))
@@ -386,7 +401,7 @@ mod tests {
         cfg.min_q_gap = f32::INFINITY;
         let set = build_distill_set(&prior, &cfg, 5);
         for ex in &set {
-            let vote = compiled.vote(&ex.bits, ex.legal).unwrap();
+            let vote = compiled.vote(&ex.bits, ex.legal).expect("fixture forest must select a legal placement in infinite_q_gap_keeps_only_agreeing_labels");
             assert_eq!(vote.index(), ex.label);
         }
         if !set.is_empty() {
@@ -409,7 +424,7 @@ mod tests {
             }
             let bits = encode_game(&game);
             let legal = <TetrisPiecePlacement<10>>::all_from_piece(game.current_piece());
-            let vote = compiled.vote(&bits, legal).unwrap();
+            let vote = compiled.vote(&bits, legal).expect("fixture forest must select a legal placement in agreement_is_one_when_labels_are_the_forest_votes");
             set.push(DistillExample {
                 bits,
                 legal,
@@ -432,12 +447,19 @@ mod tests {
             run_name: "unit".to_string(),
         };
         let stop = AtomicBool::new(false);
-        let champion = distill(&cfg, &artifacts, 21, None, &stop).unwrap();
+        let champion = distill(&cfg, &artifacts, 21, None, &stop).expect(
+            "distilling the fixture forest must succeed in distill_writes_a_resumable_champion",
+        );
         let path = dir.join("unit_distilled.json");
         assert!(path.exists(), "distilled champion not written");
-        let reloaded = DecisionForest::load_json(&path).unwrap();
+        let reloaded = DecisionForest::load_json(&path)
+            .expect("loading the saved forest must succeed in distill_writes_a_resumable_champion");
         assert_eq!(reloaded.trees.len(), champion.trees.len());
         assert!(dir.join("unit_distill_log.csv").exists());
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "Temporary test artifact cleanup is best effort."
+        )]
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

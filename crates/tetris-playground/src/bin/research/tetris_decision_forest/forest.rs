@@ -143,7 +143,7 @@ mod tests {
             <TetrisPiecePlacement<10>>::from_index(1),
         ];
         assert_eq!(
-            forest.vote(&bits, &legal).unwrap(),
+            forest.vote(&bits, &legal).expect("fixture forest must select a legal placement in vote_picks_the_legal_placement_with_the_most_votes"),
             <TetrisPiecePlacement<10>>::from_index(0)
         );
     }
@@ -162,7 +162,7 @@ mod tests {
         ];
         // Invalid vote discarded -> no legal placement got a vote -> lowest index (3).
         assert_eq!(
-            forest.vote(&bits, &legal).unwrap(),
+            forest.vote(&bits, &legal).expect("fixture forest must select a legal placement in invalid_votes_cannot_win_and_fallback_is_lowest_index"),
             <TetrisPiecePlacement<10>>::from_index(3)
         );
     }
@@ -184,7 +184,7 @@ mod tests {
             <TetrisPiecePlacement<10>>::from_index(1),
         ];
         assert_eq!(
-            forest.vote(&bits, &legal).unwrap(),
+            forest.vote(&bits, &legal).expect("fixture forest must select a legal placement in abstaining_trees_do_not_block_the_vote"),
             <TetrisPiecePlacement<10>>::from_index(1)
         );
         // All-abstain forest: fallback still plays the lowest-index legal move.
@@ -193,7 +193,7 @@ mod tests {
             trees: vec![DecisionTree::Abstain, DecisionTree::Abstain],
         };
         assert_eq!(
-            silent.vote(&bits, &legal).unwrap(),
+            silent.vote(&bits, &legal).expect("fixture forest must select a legal placement in abstaining_trees_do_not_block_the_vote"),
             <TetrisPiecePlacement<10>>::from_index(0)
         );
     }
@@ -215,7 +215,9 @@ mod tests {
         let legal: Vec<_> = (0u8..9)
             .map(<TetrisPiecePlacement<10>>::from_index)
             .collect();
-        let chosen = forest.vote(&bits, &legal).unwrap();
+        let chosen = forest.vote(&bits, &legal).expect(
+            "fixture forest must select a legal placement in vote_always_returns_a_legal_placement",
+        );
         assert!(legal.contains(&chosen));
     }
 
@@ -224,15 +226,24 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(5);
         let forest = DecisionForest::random(&mut rng, 2, 2, 2);
         let path = std::env::temp_dir().join("df_version_reject.json");
-        forest.save_json(&path).unwrap();
-        let txt = std::fs::read_to_string(&path).unwrap();
+        forest
+            .save_json(&path)
+            .expect("saving the forest must succeed in load_json_rejects_wrong_version");
+        let txt = std::fs::read_to_string(&path).expect(
+            "reading the saved fixture text must succeed in load_json_rejects_wrong_version",
+        );
         let doctored = txt.replace(
             &format!("\"version\": {FOREST_FORMAT_VERSION}"),
             "\"version\": 999",
         );
         assert_ne!(txt, doctored, "version field not found to doctor");
-        std::fs::write(&path, doctored).unwrap();
+        std::fs::write(&path, doctored)
+            .expect("writing the fixture file must succeed in load_json_rejects_wrong_version");
         assert!(DecisionForest::load_json(&path).is_err());
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "Temporary test artifact cleanup is best effort."
+        )]
         let _ = std::fs::remove_file(&path);
     }
 
@@ -243,14 +254,21 @@ mod tests {
         assert_eq!(forest.trees.len(), 8);
         assert!(forest.total_nodes() >= 8);
         let path = std::env::temp_dir().join("df_forest_roundtrip.json");
-        forest.save_json(&path).unwrap();
-        let loaded = DecisionForest::load_json(&path).unwrap();
+        forest
+            .save_json(&path)
+            .expect("saving the forest must succeed in random_forest_and_json_round_trip");
+        let loaded = DecisionForest::load_json(&path)
+            .expect("loading the saved forest must succeed in random_forest_and_json_round_trip");
         let bits = [0u8; NUM_INPUTS];
         let legal = [
             <TetrisPiecePlacement<10>>::from_index(0),
             <TetrisPiecePlacement<10>>::from_index(1),
         ];
         assert_eq!(forest.vote(&bits, &legal), loaded.vote(&bits, &legal));
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "Temporary test artifact cleanup is best effort."
+        )]
         let _ = std::fs::remove_file(&path);
     }
 }

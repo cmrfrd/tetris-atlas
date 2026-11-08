@@ -88,6 +88,10 @@ fn rollout_survived(
 /// Deterministic given `(game, forest, cfg, rng state)`. Fitness of an action
 /// is pure SURVIVAL of the rollout that follows it — consistent with the
 /// training objective.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 pub fn puct_root(
     game: &TetrisGame<StandardTetris>,
     forest: &CompiledForest,
@@ -344,8 +348,8 @@ mod tests {
             let n_losers = losers.iter().filter(|&&l| l).count();
             if n_losers > 0 && n_losers < legal.len() {
                 let label =
-                    puct_label(&game, &compiled, &cfg, &mut SmallRng::seed_from_u64(7)).unwrap();
-                let idx = legal.iter().position(|&p| p == label).unwrap();
+                    puct_label(&game, &compiled, &cfg, &mut SmallRng::seed_from_u64(7)).expect("labeling the fixture with PUCT must succeed in teacher_avoids_immediately_losing_placements");
+                let idx = legal.iter().position(|&p| p == label).expect("fixture must contain the requested identifier in teacher_avoids_immediately_losing_placements");
                 assert!(
                     !losers[idx],
                     "teacher picked an immediately-losing placement"
@@ -372,8 +376,12 @@ mod tests {
         let compiled = CompiledForest::compile(&forest);
         let game = TetrisGame::<StandardTetris>::new_with_seed(11);
         let cfg = tiny_cfg();
-        let l1 = puct_label(&game, &compiled, &cfg, &mut SmallRng::seed_from_u64(42)).unwrap();
-        let l2 = puct_label(&game, &compiled, &cfg, &mut SmallRng::seed_from_u64(42)).unwrap();
+        let l1 = puct_label(&game, &compiled, &cfg, &mut SmallRng::seed_from_u64(42)).expect(
+            "labeling the fixture with PUCT must succeed in puct_label_is_legal_and_deterministic",
+        );
+        let l2 = puct_label(&game, &compiled, &cfg, &mut SmallRng::seed_from_u64(42)).expect(
+            "labeling the fixture with PUCT must succeed in puct_label_is_legal_and_deterministic",
+        );
         assert_eq!(l1, l2, "same rng seed must give the same label");
         assert!(game.current_placements().contains(&l1));
     }

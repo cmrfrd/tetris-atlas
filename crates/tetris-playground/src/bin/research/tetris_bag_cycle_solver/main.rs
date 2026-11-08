@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 //! # Bag-Cycle Reset Solver
 //!
 //! Depth-bounded AND-OR search proving the player can force a configured
@@ -281,11 +280,11 @@ fn main() -> Result<()> {
         println!("summary_json    = {}", summary_path.display());
     }
 
-    if let Some(verification) = verification {
-        if !verification.is_clean() {
-            eprintln!("error: witness verification failed; refusing to claim a proof");
-            std::process::exit(1);
-        }
+    if let Some(verification) = verification
+        && !verification.is_clean()
+    {
+        eprintln!("error: witness verification failed; refusing to claim a proof");
+        std::process::exit(1);
     }
 
     if result.winning {
@@ -348,6 +347,10 @@ struct SummaryResult {
     policy_entries: usize,
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn write_summary(
     summary_json: Option<&PathBuf>,
     algorithm: SearchAlgorithm,

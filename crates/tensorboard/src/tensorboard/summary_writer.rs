@@ -1,4 +1,3 @@
-#![allow(clippy::too_many_arguments)]
 use prost::Message;
 
 use crate::tensorboard::event_file_writer::EventFileWriter;
@@ -19,7 +18,10 @@ pub struct FileWriter {
 }
 
 impl FileWriter {
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "Retain the existing TensorBoard summary convenience API."
+    )]
     pub(crate) fn add_global_summary(&mut self, summary: Summary) {
         let evn = Event {
             what: Some(What::Summary(summary)),
@@ -49,7 +51,7 @@ impl FileWriter {
         }
         event.wall_time = time_full;
 
-        event.step = step as i64;
+        event.step = i64::try_from(step).expect("event step must fit TensorBoard metadata");
 
         self.writer.add_event(&event)
     }
@@ -112,7 +114,10 @@ impl SummaryWriter {
                 let new_writer = FileWriter::new(fw_tag.clone());
                 self.all_writers.insert(fw_tag.clone(), new_writer);
             }
-            let fw = self.all_writers.get_mut(&fw_tag).expect("");
+            let fw = self
+                .all_writers
+                .get_mut(&fw_tag)
+                .expect("TensorBoard tag writer must exist after insertion");
             fw.add_summary(scalar(main_tag, *scalar_value), step);
         }
     }
@@ -123,6 +128,15 @@ impl SummaryWriter {
     /// bin_width = 2 * IQR / n^(1/3), where IQR is the interquartile range.
     ///
     /// Falls back to Sturges' rule for small datasets: k = ceil(log2(n) + 1)
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "Float casts deliberately quantize histogram bins; saturating float-to-integer conversion and the subsequent clamps bound the selected counts or indices."
+    )]
     fn auto_buckets(data: &[f64]) -> usize {
         let n = data.len();
 
@@ -203,6 +217,15 @@ impl SummaryWriter {
     /// * `num_buckets` - Number of buckets to use. If None, automatically determines optimal count
     ///   using the Freedman-Diaconis rule (or Sturges' rule as fallback)
     /// * `step` - The global step value
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "Float casts deliberately quantize histogram bins; saturating float-to-integer conversion and the subsequent clamps bound the selected counts or indices."
+    )]
     pub fn add_histogram(
         &mut self,
         tag: &str,

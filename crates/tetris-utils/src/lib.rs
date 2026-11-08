@@ -1,6 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
-#![allow(clippy::needless_return)]
 #![feature(const_trait_impl)]
 #![feature(const_convert)]
 #![feature(const_index)]

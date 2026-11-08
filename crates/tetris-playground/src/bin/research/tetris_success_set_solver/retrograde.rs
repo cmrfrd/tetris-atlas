@@ -22,6 +22,10 @@ pub struct SolvePassStats {
     pub states_marked_winning: u32,
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 pub fn solve(universe: &Universe) -> SolveResult {
     const LOG_EVERY: Duration = Duration::from_secs(2);
     let state_count = universe.states.len();
@@ -164,6 +168,14 @@ pub fn best_winning_successor(
     best
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Universe state IDs are checked when interned."
+)]
 fn recompute_exact_depths(universe: &Universe, result: &mut SolveResult) {
     const LOG_EVERY: Duration = Duration::from_secs(2);
     let state_count = universe.states.len();
@@ -245,7 +257,9 @@ fn recompute_exact_depths(universe: &Universe, result: &mut SolveResult) {
         }
     }
 
-    for state_id in 0..state_count as StateId {
+    for state_id in 0..StateId::try_from(state_count)
+        .expect("universe state count must fit packed iteration range")
+    {
         if !result.winning[state_id as usize] {
             continue;
         }
@@ -321,6 +335,12 @@ fn best_winning_successor_with_depths(
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "Fixture casts use explicitly bounded board dimensions and case counts, or deliberately extract test bits."
+)]
 mod tests {
     use tetris_game::{TetrisBoard, TetrisPiece, TetrisPieceBagState};
 
@@ -461,7 +481,9 @@ mod tests {
 
         loop {
             let mut changed = false;
-            for state_id in 0..state_count as StateId {
+            for state_id in 0..StateId::try_from(state_count)
+                .expect("universe state count must fit packed iteration range")
+            {
                 if result.winning[state_id as usize] {
                     continue;
                 }
@@ -485,7 +507,9 @@ mod tests {
 
         loop {
             let mut changed = false;
-            for state_id in 0..state_count as StateId {
+            for state_id in 0..StateId::try_from(state_count)
+                .expect("universe state count must fit packed iteration range")
+            {
                 if !result.winning[state_id as usize] {
                     continue;
                 }

@@ -598,10 +598,12 @@ impl ProofSolver {
 
         let start = self.parent_edges.len();
         self.parent_edges.extend_from_slice(parents);
-        let segment_id = self.parent_segments.len() as u32;
+        let segment_id = u32::try_from(self.parent_segments.len())
+            .expect("graph index must fit its packed representation");
         self.parent_segments.push(ParentSegment {
-            start: start as u32,
-            len: parents.len() as u32,
+            start: u32::try_from(start).expect("graph index must fit its packed representation"),
+            len: u32::try_from(parents.len())
+                .expect("graph index must fit its packed representation"),
             next: None,
         });
 
@@ -630,6 +632,10 @@ impl ProofSolver {
             self.optimistic_successor_popularity[bag_id as usize].saturating_sub(1);
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Node IDs are checked when interned; extracted graphs are subsets, and each piece has at most the fixed engine placement count of children."
+    )]
     fn materialized_bag_nodes(&self) -> Vec<BagNode> {
         let mut bag_nodes = self.bag_nodes.clone();
         for bag in &mut bag_nodes {
@@ -771,10 +777,10 @@ impl ProofSolver {
                 entry.failed_repairs = entry.failed_repairs.saturating_add(1);
                 self.optimistic_repairs_demoted += 1;
             }
-            if let Some(idx) = entry.placements.iter().position(|&item| item == placement) {
-                if idx + 1 < entry.placements.len() {
-                    entry.placements.swap(idx, idx + 1);
-                }
+            if let Some(idx) = entry.placements.iter().position(|&item| item == placement)
+                && idx + 1 < entry.placements.len()
+            {
+                entry.placements.swap(idx, idx + 1);
             }
         }
     }
@@ -785,12 +791,12 @@ impl ProofSolver {
         piece: TetrisPiece,
         placement: PackedPlacement,
     ) {
-        if let Some(entry) = self.optimistic_policy.get(&GeometryKey { board, piece }) {
-            if let Some(rank) = entry.placements.iter().position(|&item| item == placement) {
-                self.optimistic_reused_ranked_candidates += 1;
-                self.optimistic_rank_position_sum += rank;
-                self.optimistic_rank_position_count += 1;
-            }
+        if let Some(entry) = self.optimistic_policy.get(&GeometryKey { board, piece })
+            && let Some(rank) = entry.placements.iter().position(|&item| item == placement)
+        {
+            self.optimistic_reused_ranked_candidates += 1;
+            self.optimistic_rank_position_sum += rank;
+            self.optimistic_rank_position_count += 1;
         }
     }
 
@@ -904,6 +910,10 @@ impl ProofSolver {
         }
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Child slots and unique successor counts are bounded by the fixed engine placement catalog; branch ordering contains at most seven pieces."
+    )]
     fn choose_staged_optimistic_child_slot_strict_reuse(
         &self,
         children: &[StagedPieceChild],
@@ -955,6 +965,10 @@ impl ProofSolver {
     }
 
     #[cfg(test)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Child slots and unique successor counts are bounded by the fixed engine placement catalog; branch ordering contains at most seven pieces."
+    )]
     fn choose_optimistic_child_slot_strict_reuse(
         &self,
         children: &[PieceChild],
@@ -1034,7 +1048,7 @@ impl ProofSolver {
 
     fn optimistic_snapshot_child_rank(
         snapshot: &OptimisticSnapshot,
-        child: &StagedPieceChild,
+        _child: &StagedPieceChild,
         known_bag_id: Option<BagNodeId>,
     ) -> (u8, usize) {
         if let Some(bag_id) = known_bag_id {
@@ -1091,6 +1105,10 @@ impl ProofSolver {
         used_popularity
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Child slots and unique successor counts are bounded by the fixed engine placement catalog; branch ordering contains at most seven pieces."
+    )]
     fn choose_staged_optimistic_child_slot_strict_reuse_with_snapshot(
         children: &[StagedPieceChild],
         known_bag_ids: &[Option<BagNodeId>],
@@ -1137,6 +1155,10 @@ impl ProofSolver {
             .map(|(idx, kind)| (idx as u32, kind))
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Child slots and unique successor counts are bounded by the fixed engine placement catalog; branch ordering contains at most seven pieces."
+    )]
     fn compute_optimistic_expand_proposals(
         &self,
         expand_results: Vec<ExpandResult>,
@@ -1242,6 +1264,10 @@ impl ProofSolver {
         batch
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Child slots and unique successor counts are bounded by the fixed engine placement catalog; branch ordering contains at most seven pieces."
+    )]
     fn compute_optimistic_repair_proposals(
         &self,
         batch: Vec<PieceNodeId>,
@@ -1439,6 +1465,10 @@ impl ProofSolver {
         }
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Node IDs are checked when interned; extracted graphs are subsets, and each piece has at most the fixed engine placement count of children."
+    )]
     fn complete_optimistic_exact(&mut self) -> Result<()> {
         if !self.is_optimistic() {
             return Ok(());
@@ -1510,6 +1540,10 @@ impl ProofSolver {
         Ok(())
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     fn discover_and_propagate(&mut self) {
         const LOG_EVERY: Duration = Duration::from_secs(2);
         let start = Instant::now();
@@ -1606,7 +1640,7 @@ impl ProofSolver {
                 let delta_board_feature_misses =
                     board_feature_misses.saturating_sub(last_board_feature_misses);
                 let frontier = self.expand_queue.len();
-                let frontier_delta = frontier as isize - last_frontier as isize;
+                let frontier_delta = frontier as i128 - last_frontier as i128;
                 let frontier_gap = self.bag_nodes.len().saturating_sub(self.bags_expanded);
                 eprintln!(
                     "[success-set:discover] elapsed={elapsed:.1}s bag_nodes={} piece_nodes={} deduped_edges={} frontier={} frontier_delta={} frontier_gap={} dead_bag_queue={} dead_piece_queue={} expanded={} skipped_dead={} lost_bags={} lost_pieces={} new_bags={} new_pieces={} new_deduped_edges={} new_lost_bags={} new_lost_pieces={} expand_rate={:.1}/s skip_rate={:.1}/s bag_rate={:.1}/s piece_rate={:.1}/s edge_rate={:.1}/s bag_loss_rate={:.1}/s piece_loss_rate={:.1}/s local_expand_secs={:.3} stage_secs={:.3} commit_secs={:.3} merge_secs={:.3} cache_hit_rate={:.2} geometry_cache_hit_rate={:.2} board_feature_cache_hit_rate={:.2} branches_expanded={} branches_skipped_due_to_parent_death={} bags_killed_by_first_failed_branch={} avg_branches_expanded_per_bag={:.2} staged_branches_processed={} batch_unique_piece_keys={} batch_unique_bag_keys={} resolved_children_processed={} batched_parent_links_appended={} parent_segments_allocated={} parent_links_stored={} avg_parent_segments_per_bag={:.2} new_geometry_cache_hits={} new_geometry_cache_misses={} new_board_feature_cache_hits={} new_board_feature_cache_misses={} approx_mem_lower_bound={:.1}MB",
@@ -1669,6 +1703,10 @@ impl ProofSolver {
                     delta_board_feature_misses,
                     self.approx_bytes_lower_bound() as f64 / (1024.0 * 1024.0),
                 );
+                #[allow(
+                    clippy::let_underscore_must_use,
+                    reason = "Progress and optional statistics output are best effort and do not affect solver state."
+                )]
                 let _ = std::io::stderr().flush();
                 last_log = Instant::now();
                 last_bag_count = self.bag_nodes.len();
@@ -1695,6 +1733,10 @@ impl ProofSolver {
         self.drain_death_queues();
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     fn discover_optimistic(&mut self, options: SolveOptions) -> bool {
         const LOG_EVERY: Duration = Duration::from_secs(2);
         let start = Instant::now();
@@ -1957,7 +1999,7 @@ impl ProofSolver {
         }
 
         self.drain_death_queues();
-        Ok(self.try_build_core_first_result(total_start, discover_start)?)
+        self.try_build_core_first_result(total_start, discover_start)
     }
 
     fn collect_expand_batch(&mut self) -> Vec<ExpandTask> {
@@ -2040,6 +2082,10 @@ impl ProofSolver {
         batch
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Child slots and unique successor counts are bounded by the fixed engine placement catalog; branch ordering contains at most seven pieces."
+    )]
     fn compute_branch_order(
         &mut self,
         board: TetrisBoard<10, 20>,
@@ -2185,6 +2231,10 @@ impl ProofSolver {
         }
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Child slots and unique successor counts are bounded by the fixed engine placement catalog; branch ordering contains at most seven pieces."
+    )]
     fn apply_staged_batch(&mut self, staged_results: Vec<StagedExpandResult>) {
         let mut batch_piece_ids = HashMap::<PieceKey, PieceNodeId>::new();
         let mut batch_bag_ids = HashMap::<BagKey, BagNodeId>::new();
@@ -2360,6 +2410,10 @@ impl ProofSolver {
         self.dead_piece_queue.push_back(piece_id);
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Child slots and unique successor counts are bounded by the fixed engine placement catalog; branch ordering contains at most seven pieces."
+    )]
     fn select_witnesses(&mut self) -> Result<()> {
         let is_optimistic = self.is_optimistic();
         for piece_id in 0..self.piece_nodes.len() {
@@ -2459,7 +2513,8 @@ impl ProofSolver {
         }
 
         self.cache_misses += 1;
-        let id = self.bag_nodes.len() as BagNodeId;
+        let id = BagNodeId::try_from(self.bag_nodes.len())
+            .expect("graph index must fit its packed representation");
         self.bag_nodes.push(BagNode {
             key,
             resolution: NodeResolution::Won,
@@ -2498,7 +2553,8 @@ impl ProofSolver {
         }
 
         self.cache_misses += 1;
-        let id = self.piece_nodes.len() as PieceNodeId;
+        let id = PieceNodeId::try_from(self.piece_nodes.len())
+            .expect("graph index must fit its packed representation");
         self.piece_nodes.push(PieceNode {
             key,
             parent_bag,
@@ -2519,6 +2575,10 @@ impl ProofSolver {
         id
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Child slots and unique successor counts are bounded by the fixed engine placement catalog; branch ordering contains at most seven pieces."
+    )]
     fn apply_resolved_expand_result(
         &mut self,
         parent_links_by_succ: &mut HashMap<BagNodeId, Vec<PieceNodeId>>,
@@ -2615,6 +2675,10 @@ impl ProofSolver {
         }
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Child slots and unique successor counts are bounded by the fixed engine placement catalog; branch ordering contains at most seven pieces."
+    )]
     fn apply_expand_result(&mut self, result: ExpandResult) {
         let bag_id = result.bag_id;
         if self.bag_nodes[bag_id as usize].expanded
@@ -2830,6 +2894,10 @@ impl ProofSolver {
         }
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Child slots and unique successor counts are bounded by the fixed engine placement catalog; branch ordering contains at most seven pieces."
+    )]
     fn resolve_optimistic_repair_replacement(
         &self,
         piece_id: PieceNodeId,
@@ -3173,6 +3241,10 @@ impl ProofSolver {
         }
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Node IDs are checked when interned; extracted graphs are subsets, and each piece has at most the fixed engine placement count of children."
+    )]
     fn try_build_core_first_result(
         &mut self,
         total_start: Instant,
@@ -3214,10 +3286,9 @@ impl ProofSolver {
                 for child in &piece.children {
                     if self.bag_nodes[child.succ as usize].expanded
                         && self.bag_nodes[child.succ as usize].resolution == NodeResolution::Won
+                        && let Some(next_pos) = id_to_pos[child.succ as usize]
                     {
-                        if let Some(next_pos) = id_to_pos[child.succ as usize] {
-                            succs.push(next_pos);
-                        }
+                        succs.push(next_pos);
                     }
                 }
             }
@@ -3379,6 +3450,14 @@ impl ProofSolver {
         Ok(None)
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Node IDs are checked when interned; extracted graphs are subsets, and each piece has at most the fixed engine placement count of children."
+    )]
     fn build_template_kernel_result(
         mut self,
         total_start: Instant,
@@ -3749,6 +3828,14 @@ impl ProofSolver {
         (largest_bags, largest_pieces)
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Node IDs are checked when interned; extracted graphs are subsets, and each piece has at most the fixed engine placement count of children."
+    )]
     fn extract_target_proof(
         &self,
         target: &[bool],
@@ -4008,6 +4095,10 @@ impl ProofSolver {
         })
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     fn compute_metrics(&self) -> ProofMetrics {
         let winning_count = self
             .bag_nodes
@@ -4328,6 +4419,10 @@ impl ProofSolver {
         }
     }
 
+    #[allow(
+        clippy::cast_possible_wrap,
+        reason = "Column heights are at most the u32 backing width (32), so their signed difference fits i32."
+    )]
     fn count_turning_points(heights: [u32; 10]) -> u32 {
         let mut prev_sign = 0i32;
         let mut turning_points = 0u32;
@@ -4412,6 +4507,10 @@ fn solve_root_with_execution(
     solver.solve()
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Node IDs are checked when interned; extracted graphs are subsets, and each piece has at most the fixed engine placement count of children."
+)]
 pub fn verify_proof(result: &ProofSolveResult) -> ProofVerification {
     use std::collections::HashSet;
 
@@ -4620,6 +4719,12 @@ fn oracle_compute_winning_set(config: SolverConfig) -> OracleWinningSet {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "Fixture casts use explicitly bounded board dimensions and case counts, or deliberately extract test bits."
+)]
 mod tests {
     use std::collections::HashSet;
 

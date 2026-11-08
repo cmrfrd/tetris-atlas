@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 //! # Tetris Demo - Adaptive Multi Beam Search
 //!
 //! Similar to `tetris_demo_multi.rs`, but adapts search depth and beam width based on
@@ -29,6 +28,10 @@ fn main() {
 /// Run an adaptive multi-beam-search-driven Tetris game.
 ///
 /// This is intentionally argument-free: tweak the consts below while iterating.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 pub fn run_tetris_beam_multisearch_adaptive() {
     set_global_threadpool();
 
@@ -117,7 +120,7 @@ pub fn run_tetris_beam_multisearch_adaptive() {
 
         step_counter += 1;
 
-        if (game.apply_placement(first_action).is_lost) {
+        if game.apply_placement(first_action).is_lost {
             let secs = start.elapsed().as_secs_f64().max(1e-9);
             let rate = steps as f64 / secs;
             println!("Move lost at step={steps}. avg_pieces_per_sec={rate:.2}");
@@ -126,11 +129,11 @@ pub fn run_tetris_beam_multisearch_adaptive() {
         }
 
         steps += 1;
-        *height_counts.entry(height as u32).or_insert(0) += 1;
-        *holes_counts.entry(holes as u32).or_insert(0) += 1;
-        *count_counts.entry(count as u32).or_insert(0) += 1;
+        *height_counts.entry(height).or_insert(0) += 1;
+        *holes_counts.entry(holes).or_insert(0) += 1;
+        *count_counts.entry(count).or_insert(0) += 1;
 
-        if steps % LOG_EVERY == 0 {
+        if steps.is_multiple_of(LOG_EVERY) {
             let secs = start.elapsed().as_secs_f64().max(1e-9);
             let rate = steps as f64 / secs;
             println!(

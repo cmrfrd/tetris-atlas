@@ -1,5 +1,3 @@
-#![allow(clippy::too_many_arguments)]
-
 use crate::tensorboard_generated::tensorboard::summary::value;
 use std::io::Cursor;
 
@@ -61,16 +59,22 @@ pub fn image(tag: &str, data: &[u8], dim: &[usize]) -> Summary {
         panic!("length of data should matches with dim.");
     }
 
-    let mut img = RgbImage::new(dim[1] as u32, dim[2] as u32);
+    let height = i32::try_from(dim[1]).expect("image height must fit TensorBoard metadata");
+    let width = i32::try_from(dim[2]).expect("image width must fit TensorBoard metadata");
+    let mut img = RgbImage::new(
+        u32::try_from(height).expect("image height is nonnegative"),
+        u32::try_from(width).expect("image width is nonnegative"),
+    );
     img.clone_from_slice(data);
     let dimg = DynamicImage::ImageRgb8(img);
     let output_buf = Vec::<u8>::new();
     let mut c = Cursor::new(output_buf);
-    dimg.write_to(&mut c, ImageFormat::Png).expect("");
+    dimg.write_to(&mut c, ImageFormat::Png)
+        .expect("TensorBoard image must encode as PNG");
 
     let output_image = SummaryImage {
-        height: dim[1] as i32,
-        width: dim[2] as i32,
+        height,
+        width,
         colorspace: 3,
         encoded_image_string: c.into_inner(),
     };

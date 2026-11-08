@@ -30,6 +30,10 @@ impl ReplayVerification {
     }
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Proof node IDs originate from checked interning and proof extraction preserves a subset of those nodes."
+)]
 pub fn verify_replay(config: SolverConfig, result: &ProofSolveResult) -> ReplayVerification {
     let mut verification = ReplayVerification::default();
     let mut bag_by_key = HashMap::<BagKey, BagNodeId>::with_capacity(result.bag_nodes.len());

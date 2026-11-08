@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 
 mod admissibility;
 mod config;
@@ -17,7 +16,7 @@ mod verifier;
 
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tetris_game::TetrisGameConfig;
 
@@ -199,6 +198,10 @@ fn print_roadmap() {
     println!("6. Cross-check tiny instances against a naive greatest-fixed-point oracle.");
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn run_solver(
     config: SolverConfig,
     options: SolveOptions,
@@ -561,6 +564,10 @@ fn run_solver(
         &replay_verification,
     )?;
     println!("export_path={}", export_path.display());
+    #[allow(
+        clippy::let_underscore_must_use,
+        reason = "Progress and optional statistics output are best effort and do not affect solver state."
+    )]
     let _ = std::io::stdout().flush();
 
     Ok(())
@@ -712,7 +719,7 @@ fn export_result(
     Ok(path)
 }
 
-fn companion_proof_graph_path(summary_path: &PathBuf) -> PathBuf {
+fn companion_proof_graph_path(summary_path: &Path) -> PathBuf {
     let file_name = summary_path
         .file_name()
         .and_then(|name| name.to_str())
@@ -742,7 +749,7 @@ fn render_proof_graph_jsonl(result: &ProofSolveResult) -> String {
             "board_rows": board_to_rows(bag.key.board),
             "bag_mask": u8::from(bag.key.bag),
             "resolution": bag.resolution,
-            "is_root": id as u32 == result.root_bag,
+            "is_root": id == result.root_bag as usize,
             "piece_nodes": piece_nodes,
         });
         lines.push(value.to_string());
@@ -842,7 +849,15 @@ mod tests {
         assert!(proof_graph.contains("\"kind\":\"bag\""));
         assert!(proof_graph.contains("\"kind\":\"piece\""));
 
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "Temporary test artifact cleanup is best effort."
+        )]
         let _ = fs::remove_file(written_path);
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "Temporary test artifact cleanup is best effort."
+        )]
         let _ = fs::remove_file(proof_path);
     }
 
@@ -894,7 +909,15 @@ mod tests {
         let proof_graph = fs::read_to_string(&proof_path).expect("proof graph should be readable");
         assert!(proof_graph.contains("\"resolution\":\"lost\""));
 
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "Temporary test artifact cleanup is best effort."
+        )]
         let _ = fs::remove_file(written_path);
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "Temporary test artifact cleanup is best effort."
+        )]
         let _ = fs::remove_file(proof_path);
     }
 

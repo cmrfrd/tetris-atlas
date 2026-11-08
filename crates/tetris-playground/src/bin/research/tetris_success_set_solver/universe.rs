@@ -44,6 +44,10 @@ impl Universe {
         &self.edges[start..end]
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "State IDs are checked when interned, and piece indices are below seven."
+    )]
     pub fn states_with_empty_board(&self) -> impl Iterator<Item = StateId> + '_ {
         self.states
             .iter()
@@ -78,6 +82,10 @@ pub struct UniverseBuilder {
 }
 
 impl UniverseBuilder {
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     pub fn build(config: SolverConfig) -> Result<Universe> {
         const LOG_EVERY: Duration = Duration::from_secs(2);
         let mut builder = Self {
@@ -165,7 +173,8 @@ impl UniverseBuilder {
             return board_id;
         }
 
-        let board_id = self.boards.len() as BoardId;
+        let board_id = BoardId::try_from(self.boards.len())
+            .expect("graph index must fit its packed representation");
         self.boards.push(board);
         self.board_to_id.insert(board, board_id);
         board_id
@@ -176,7 +185,8 @@ impl UniverseBuilder {
             return state_id;
         }
 
-        let state_id = self.states.len() as StateId;
+        let state_id = StateId::try_from(self.states.len())
+            .expect("graph index must fit its packed representation");
         self.states.push(state);
         self.state_to_id.insert(state, state_id);
         self.state_index.push(StateIndex {
@@ -194,7 +204,8 @@ impl UniverseBuilder {
 
         for branch in piece_branches(state.bag) {
             let piece_idx = branch.piece.index() as usize;
-            let start = self.edges.len() as u32;
+            let start = u32::try_from(self.edges.len())
+                .expect("graph index must fit its packed representation");
 
             for &placement in <TetrisPiecePlacement<10>>::all_from_piece(branch.piece) {
                 let Some(edge) = self.build_edge(board, branch.next_bag, placement) else {
@@ -205,7 +216,9 @@ impl UniverseBuilder {
 
             piece_ranges[piece_idx] = EdgeRange {
                 start,
-                len: self.edges.len() as u32 - start,
+                len: u32::try_from(self.edges.len())
+                    .expect("graph index must fit its packed representation")
+                    - start,
             };
         }
 
@@ -251,6 +264,10 @@ pub fn edge_contains_placement(edges: &[FlatEdge], placement: PackedPlacement) -
     edges.iter().any(|edge| edge.placement == placement)
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "State IDs are checked when interned, and piece indices are below seven."
+)]
 fn build_predecessors(
     states: &[StateKey],
     state_index: &[StateIndex],
@@ -312,6 +329,12 @@ fn build_predecessors(
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "Fixture casts use explicitly bounded board dimensions and case counts, or deliberately extract test bits."
+)]
 mod tests {
     use super::*;
     use crate::config::RootStateConfig;

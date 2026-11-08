@@ -32,6 +32,10 @@ impl StateKeyPacked {
     /// Unpack back to a `StateKey`.
     #[inline]
     #[cfg(test)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Only pack constructs this private representation, starting with a u32 board ID before shifting it by eight bits."
+    )]
     pub fn unpack(self) -> StateKey {
         StateKey {
             board_id: (self.0 >> 8) as BoardId,

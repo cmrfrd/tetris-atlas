@@ -1,7 +1,6 @@
 #![feature(const_convert)]
 #![feature(const_trait_impl)]
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 //! # Tetris Atlas Builder — Narrow (4-column, 3-piece) with Backtracking
 //!
 //! A reduced-complexity atlas builder with **death propagation**:
@@ -164,6 +163,10 @@ impl PartialOrd for FrontierKey {
 }
 
 #[inline(always)]
+#[allow(
+    clippy::out_of_bounds_indexing,
+    reason = "The constant unroller guards I by the board column array length; Clippy also visits unreachable expanded indices."
+)]
 const fn hash_board_bag(board: TetrisBoard, bag: TetrisPieceBagState) -> u64 {
     const FNV_OFFSET: u64 = 0xcbf29ce484222325;
     const FNV_PRIME: u64 = 0x100000001b3;
@@ -225,7 +228,6 @@ struct SharedState {
     dead_pieces: Arc<DeadPieceSet>,
     dead_boards: Arc<DeadBoardSet>,
     frontier: Arc<PriorityFrontier>,
-    frontier_enqueued: Arc<AtomicU64>,
     shutdown: Arc<AtomicBool>,
     shutdown_requested: Arc<AtomicBool>,
     pause_dispatch: Arc<AtomicBool>,
@@ -240,8 +242,7 @@ impl SharedState {
             parents: Arc::new(DashMap::new()),
             dead_pieces: Arc::new(DashSet::new()),
             dead_boards: Arc::new(DashSet::new()),
-            frontier: Arc::new(PriorityFrontier::new(frontier_enqueued.clone())),
-            frontier_enqueued,
+            frontier: Arc::new(PriorityFrontier::new(frontier_enqueued)),
             shutdown: Arc::new(AtomicBool::new(false)),
             shutdown_requested: Arc::new(AtomicBool::new(false)),
             pause_dispatch: Arc::new(AtomicBool::new(false)),
@@ -526,14 +527,13 @@ fn process_board_state(
                 }
 
                 // Clean up old parent ref if this is a re-eval pointing elsewhere
-                if let Some(old_rb) = old_result_board {
-                    if old_rb != result_board {
-                        if let Some(mut plist) = state.parents.get_mut(&old_rb) {
-                            plist
-                                .value_mut()
-                                .retain(|r| !(r.parent_board == board && r.parent_piece == piece));
-                        }
-                    }
+                if let Some(old_rb) = old_result_board
+                    && old_rb != result_board
+                    && let Some(mut plist) = state.parents.get_mut(&old_rb)
+                {
+                    plist
+                        .value_mut()
+                        .retain(|r| !(r.parent_board == board && r.parent_piece == piece));
                 }
 
                 state
@@ -652,6 +652,10 @@ impl CsvLogger {
         Ok(Self { file: writer })
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+    )]
     fn log(&mut self, ctx: &LoggerContext) -> std::io::Result<()> {
         let secs = ctx.start.elapsed().as_secs_f64();
         let boards = ctx.stats.boards_expanded.load(Ordering::Relaxed);
@@ -675,6 +679,10 @@ impl CsvLogger {
     }
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+)]
 fn print_stats(ctx: &LoggerContext, last_sample_at: &mut u64) {
     let secs = ctx.start.elapsed().as_secs_f64().max(1e-9);
     let boards = ctx.stats.boards_expanded.load(Ordering::Relaxed);
@@ -687,7 +695,6 @@ fn print_stats(ctx: &LoggerContext, last_sample_at: &mut u64) {
     let inserts = ctx.stats.lookup_inserts.load(Ordering::Relaxed);
     let lost = ctx.stats.games_lost.load(Ordering::Relaxed);
 
-    let death_q = 0usize; // no death queue
     let hits = ctx.stats.lookup_hits.load(Ordering::Relaxed);
     let misses = ctx.stats.lookup_misses.load(Ordering::Relaxed);
     let cache_pct = if hits + misses > 0 {
@@ -714,7 +721,7 @@ fn print_stats(ctx: &LoggerContext, last_sample_at: &mut u64) {
     let _ = last_sample_at;
 }
 
-fn logger_thread(ctx: LoggerContext, state: SharedState, save_file: String, csv_file: String) {
+fn logger_thread(ctx: LoggerContext, csv_file: String) {
     let mut last_logged = Instant::now();
     let mut last_saved = Instant::now();
     let mut first_save_done = false;
@@ -732,6 +739,10 @@ fn logger_thread(ctx: LoggerContext, state: SharedState, save_file: String, csv_
             print_stats(&ctx, &mut last_sample_at);
 
             if let Some(ref mut logger) = csv_logger {
+                #[allow(
+                    clippy::let_underscore_must_use,
+                    reason = "Optional progress CSV output is best effort and does not affect search state."
+                )]
                 let _ = logger.log(&ctx);
             }
 
@@ -760,6 +771,10 @@ fn logger_thread(ctx: LoggerContext, state: SharedState, save_file: String, csv_
     println!("Logger: final stats...");
     print_stats(&ctx, &mut last_sample_at);
     if let Some(ref mut logger) = csv_logger {
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "Optional progress CSV output is best effort and does not affect search state."
+        )]
         let _ = logger.log(&ctx);
     }
     println!("Logger: exiting");
@@ -806,12 +821,10 @@ fn run_create(base_path: &str) {
     state.seed_starting_state();
 
     let frontier = state.frontier.clone();
-    let frontier_enqueued = state.frontier_enqueued.clone();
     let frontier_consumed = Arc::new(AtomicU64::new(0));
     let stats = Arc::new(SharedStats::new());
     let shutdown = state.shutdown.clone();
     let shutdown_requested = state.shutdown_requested.clone();
-    let pause_dispatch = state.pause_dispatch.clone();
     let processing_count = state.processing_count.clone();
     let start = Instant::now();
 
@@ -843,9 +856,8 @@ fn run_create(base_path: &str) {
         shutdown_requested: shutdown_requested.clone(),
         start,
     };
-    let logger_state = state.clone();
     let logger = thread::spawn(move || {
-        logger_thread(logger_ctx, logger_state, String::new(), csv_file);
+        logger_thread(logger_ctx, csv_file);
     });
 
     // Workers
@@ -895,7 +907,7 @@ fn run_create(base_path: &str) {
             state.frontier.push(new_board, new_bag, new_depth);
         }
         drain_iters += 1;
-        if drain_iters % 10000 == 0 {
+        if drain_iters.is_multiple_of(10000) {
             println!(
                 "  drain: iters={drain_iters} lookup={} dead_pieces={} frontier={}",
                 state.lookup.len(),
@@ -985,7 +997,7 @@ fn load_lookup(path: &str) -> Result<LookupMap, Box<dyn std::error::Error>> {
 
     let mut count_buf = [0u8; 8];
     r.read_exact(&mut count_buf)?;
-    let count = u64::from_le_bytes(count_buf) as usize;
+    let count = usize::try_from(u64::from_le_bytes(count_buf))?;
 
     let lookup = DashMap::with_capacity(count);
     const BOARD_BYTES: usize = std::mem::size_of::<TetrisBoard>();
@@ -1010,7 +1022,8 @@ fn load_lookup(path: &str) -> Result<LookupMap, Box<dyn std::error::Error>> {
                 std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid atlas piece bits")
             })?;
         let index = orient_byte[0];
-        let columns = StandardTetris::COLS as u8;
+        let columns =
+            u8::try_from(StandardTetris::COLS).expect("canonical board width must fit u8");
         if index as usize >= <GenericOrientation<{ StandardTetris::COLS }>>::TOTAL_NUM_ORIENTATIONS
             || (index % columns) as usize >= NarrowTetris::COLS
         {
@@ -1226,61 +1239,56 @@ fn run_explore(base_path: &str) {
                 f.render_widget(controls, chunks[1]);
             })?;
 
-            if event::poll(Duration::from_millis(100))? {
-                if let Event::Key(key) = event::read()? {
-                    match key.code {
-                        KeyCode::Char('q') | KeyCode::Esc => break,
-                        KeyCode::Left => timeline.go_back(),
-                        KeyCode::Right => timeline.go_forward(),
-                        KeyCode::Char(c) => {
-                            let piece_opt = match c {
-                                '1' | 'i' | 'I' => Some(TetrisPiece::I),
-                                '2' | 'o' | 'O' => Some(TetrisPiece::O),
-                                '3' | 'l' | 'L' => Some(TetrisPiece::L),
-                                '4' | 'j' | 'J' => Some(TetrisPiece::J),
-                                'r' | 'R' => {
-                                    let available: Vec<TetrisPiece> = ALLOWED_PIECES
-                                        .iter()
-                                        .copied()
-                                        .filter(|&p| {
-                                            bag.contains(p) && lookup.contains_key(&(board, p))
-                                        })
-                                        .collect();
-                                    if !available.is_empty() {
-                                        use rand::RngExt;
-                                        let mut rng = rand::rng();
-                                        Some(available[rng.random_range(0..available.len())])
-                                    } else {
-                                        None
-                                    }
-                                }
-                                _ => None,
-                            };
-
-                            if let Some(piece) = piece_opt {
-                                if bag.contains(piece) {
-                                    if let Some(entry) = lookup.get(&(board, piece)) {
-                                        let placement = TetrisPiecePlacement {
-                                            piece,
-                                            orientation: entry.chosen,
-                                        };
-                                        let mut new_board = board;
-                                        let result = new_board.apply_piece_placement(placement);
-                                        if !result.is_lost {
-                                            let lines_cleared = timeline.total_lines_cleared()
-                                                + result.lines_cleared as usize;
-                                            timeline.push(
-                                                new_board,
-                                                entry.result_bag,
-                                                lines_cleared,
-                                            );
-                                        }
-                                    }
+            if event::poll(Duration::from_millis(100))?
+                && let Event::Key(key) = event::read()?
+            {
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => break,
+                    KeyCode::Left => timeline.go_back(),
+                    KeyCode::Right => timeline.go_forward(),
+                    KeyCode::Char(c) => {
+                        let piece_opt = match c {
+                            '1' | 'i' | 'I' => Some(TetrisPiece::I),
+                            '2' | 'o' | 'O' => Some(TetrisPiece::O),
+                            '3' | 'l' | 'L' => Some(TetrisPiece::L),
+                            '4' | 'j' | 'J' => Some(TetrisPiece::J),
+                            'r' | 'R' => {
+                                let available: Vec<TetrisPiece> = ALLOWED_PIECES
+                                    .iter()
+                                    .copied()
+                                    .filter(|&p| {
+                                        bag.contains(p) && lookup.contains_key(&(board, p))
+                                    })
+                                    .collect();
+                                if !available.is_empty() {
+                                    use rand::RngExt;
+                                    let mut rng = rand::rng();
+                                    Some(available[rng.random_range(0..available.len())])
+                                } else {
+                                    None
                                 }
                             }
+                            _ => None,
+                        };
+
+                        if let Some(piece) = piece_opt
+                            && bag.contains(piece)
+                            && let Some(entry) = lookup.get(&(board, piece))
+                        {
+                            let placement = TetrisPiecePlacement {
+                                piece,
+                                orientation: entry.chosen,
+                            };
+                            let mut new_board = board;
+                            let result = new_board.apply_piece_placement(placement);
+                            if !result.is_lost {
+                                let lines_cleared =
+                                    timeline.total_lines_cleared() + result.lines_cleared as usize;
+                                timeline.push(new_board, entry.result_bag, lines_cleared);
+                            }
                         }
-                        _ => {}
                     }
+                    _ => {}
                 }
             }
         }

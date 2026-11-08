@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 
 mod compiled;
 mod config;
@@ -316,6 +315,10 @@ fn run_play(args: PlayArgs) -> Result<()> {
     Ok(())
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn run_eval(args: EvalArgs) -> Result<()> {
     let forest = match args.forest {
         Some(path) => DecisionForest::load_json(&path)?,
@@ -337,6 +340,10 @@ fn run_eval(args: EvalArgs) -> Result<()> {
     Ok(())
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
 fn run_bench(args: BenchArgs) -> Result<()> {
     let forest = DecisionForest::load_json(&args.forest)?;
     let seeds: Vec<u64> = (0..args.seeds as u64).map(|i| i + 1).collect();

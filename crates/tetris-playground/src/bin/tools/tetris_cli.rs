@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -119,7 +118,8 @@ fn main() {
     }
 
     let verbosity = cli.verbose.saturating_add(2).clamp(0, 5);
-    let level = Level::from_str(verbosity.to_string().as_str()).unwrap();
+    let level = Level::from_str(verbosity.to_string().as_str())
+        .expect("configured verbosity must parse as a tracing level in main");
 
     let registry = tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().with_target(false))
@@ -132,9 +132,9 @@ fn main() {
                 &time::format_description::parse_borrowed::<2>(
                     "[year][month][day]_[hour][minute][second]",
                 )
-                .unwrap(),
+                .expect("time format description must parse in main"),
             )
-            .unwrap();
+            .expect("formatting the configured timestamp must succeed in main");
         registry.init();
         None
     } else {

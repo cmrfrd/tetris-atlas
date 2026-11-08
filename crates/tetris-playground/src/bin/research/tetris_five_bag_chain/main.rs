@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 //! 5-bag chain solver: solve one 5-bag, then swap the last bag and reuse
 //! the MCTS tree to solve the next sequence, chaining through as many
 //! sequences as possible.
@@ -110,6 +109,10 @@ impl Rng {
         z ^ (z >> 31)
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Truncating the random word to the machine width is intentional; the result is then reduced modulo the permutation count."
+    )]
     fn next_bag_index(&mut self) -> usize {
         (self.next_u64() as usize) % BAG_PERMUTATION_COUNT
     }
@@ -128,6 +131,10 @@ fn build_sequence(bag_indices: &[usize; BAG_COUNT]) -> [TetrisPiece; TOTAL_PIECE
 // --- PUCT/MCTS search (same as bench, but with tree-pruning support) ---
 
 const MCTS_EXPLORATION: f32 = 0.8;
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "StandardTetris has twenty playable rows."
+)]
 const MAX_HEIGHT: u32 = StandardTetris::ROWS as u32;
 const MAX_CHILDREN: usize = 64;
 const PRIOR_NOISE_AMPLITUDE: f32 = 0.2;
@@ -136,6 +143,10 @@ const PRIOR_NOISE_AMPLITUDE: f32 = 0.2;
 /// ~2M nodes × ~24 bytes ≈ 48MB — fits comfortably in L3.
 const NODE_BUDGET: usize = 2_000_000;
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Rank priors are approximate heuristic probabilities."
+)]
 const RANK_PRIORS: [f32; MAX_CHILDREN] = {
     let mut raw = [0.0f32; MAX_CHILDREN];
     let mut sum = 0.0f32;
@@ -314,7 +325,7 @@ impl PuctSearch {
             if self.witness_placements.is_some() {
                 return (true, iterations);
             }
-            if progress_every > 0 && iterations % progress_every == 0 {
+            if progress_every > 0 && iterations.is_multiple_of(progress_every) {
                 on_progress(iterations, self);
             }
             if iterations & 0x1FFF == 0x1FFF && Instant::now() >= deadline {
@@ -401,6 +412,14 @@ impl PuctSearch {
         nonterminal_value(state.board, state.step as usize, self.pieces.len())
     }
 
+    #[allow(
+        clippy::needless_range_loop,
+        reason = "Indices align ranked candidates with priors or copy the fixed elite prefix; preserve the existing traversal."
+    )]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "child_len is bounded by the fixed 10-column engine placement catalog and fits u16; edge offsets are checked separately."
+    )]
     fn expand_node(&mut self, node_id: usize) -> bool {
         let state = self.nodes[node_id].state;
         let piece = self.pieces[state.step as usize];
@@ -414,10 +433,10 @@ impl PuctSearch {
             }
 
             // Apply filter — prune undesirable boards early
-            if let Some(f) = self.filter_fn {
-                if !f(next, state.step + 1) {
-                    continue;
-                }
+            if let Some(f) = self.filter_fn
+                && !f(next, state.step + 1)
+            {
+                continue;
             }
 
             let mut prior_score = scorer_prior(next, result.lines_cleared);
@@ -445,7 +464,7 @@ impl PuctSearch {
             .min(MAX_CHILDREN)
             .min(<TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT);
 
-        let edges_start = self.edges.len() as u32;
+        let edges_start = u32::try_from(self.edges.len()).expect("MCTS edge offset must fit u32");
         for idx in 0..child_len {
             let candidate = self.expand_candidates[idx];
             let child_state = SearchState {
@@ -472,6 +491,10 @@ impl PuctSearch {
         child_len > 0
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+    )]
     fn select_child(&self, node_id: usize) -> usize {
         let node = &self.nodes[node_id];
         let parent_visits = node.visits.max(1) as f32;
@@ -510,12 +533,20 @@ fn scorer_prior(board: TetrisBoard<10, 20>, recent_lines_cleared: u32) -> f32 {
     })
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+)]
 fn nonterminal_value(board: TetrisBoard<10, 20>, step: usize, total_steps: usize) -> f32 {
     let scorer_value = score_value_from_empty_distance(board);
     let depth_value = step as f32 / total_steps.max(1) as f32;
     (scorer_value * 0.85 + depth_value * 0.15).clamp(-1.0, 0.99)
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+)]
 fn terminal_failure_value(board: TetrisBoard<10, 20>) -> f32 {
     let distance = height_mse_distance_from_empty(board);
     let cells = board.count();
@@ -530,6 +561,14 @@ fn score_value_from_empty_distance(board: TetrisBoard<10, 20>) -> f32 {
     (1.0 - distance / 200.0).clamp(-1.0, 1.0)
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Normalized hash noise lies in the unit interval; rounding to f32 is intentional."
+)]
 fn prior_noise(state: SearchState, placement: TetrisPiecePlacement<10>, seed: u64) -> f32 {
     let mut hasher = FxHasher::default();
     seed.hash(&mut hasher);
@@ -563,6 +602,10 @@ fn replay_witness(
 
 /// Default filter for empty-to-empty 5-bag search.
 /// Prunes boards that can't possibly reach 0 cells with the remaining pieces.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "The fixed five-bag sequence contains exactly 35 pieces."
+)]
 fn empty_cycle_filter(board: TetrisBoard<10, 20>, step: u8) -> bool {
     let cells = board.count();
     let remaining = TOTAL_PIECES as u32 - step as u32;
@@ -572,7 +615,7 @@ fn empty_cycle_filter(board: TetrisBoard<10, 20>, step: u8) -> bool {
     // Each line clear removes 10 cells. Need total / 10 lines.
     // Each piece can clear at most 4 lines.
     let total_cells_to_clear = cells + cells_to_add;
-    let lines_needed = (total_cells_to_clear + 9) / 10;
+    let lines_needed = total_cells_to_clear.div_ceil(10);
     let max_lines_possible = remaining * 4;
     if lines_needed > max_lines_possible {
         return false;
@@ -674,6 +717,10 @@ fn main() {
     }
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+)]
 fn cmd_run(per_seq_timeout: u64, global_timeout: u64, seed: u64) {
     let overall_start = Instant::now();
     let global_deadline = overall_start + std::time::Duration::from_secs(global_timeout);
@@ -744,6 +791,10 @@ fn cmd_run(per_seq_timeout: u64, global_timeout: u64, seed: u64) {
     println!("{solved}");
 }
 
+#[allow(
+    clippy::let_underscore_must_use,
+    reason = "Interactive status output is best effort; losing the terminal does not change search state."
+)]
 fn print_raw(s: &str) {
     use std::io::Write;
     let mut stderr = std::io::stderr().lock();
@@ -839,6 +890,10 @@ fn interactive_viewer(
     eprintln!();
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "These casts produce approximate heuristic scores or reporting statistics; state identities and counters stay integer-valued."
+)]
 fn cmd_spotcheck(bag_indices: [usize; BAG_COUNT], log_every: u64) {
     let pieces = build_sequence(&bag_indices);
     let mut search = PuctSearch::new(pieces);
@@ -866,31 +921,31 @@ fn cmd_spotcheck(bag_indices: [usize; BAG_COUNT], log_every: u64) {
     let elapsed = start.elapsed().as_secs_f64();
 
     if found {
-        if let Some(ref p) = search.witness_placements {
-            if replay_witness(&search.pieces, p) {
+        if let Some(ref p) = search.witness_placements
+            && replay_witness(&search.pieces, p)
+        {
+            eprintln!(
+                "SOLVED time={elapsed:.3}s iters={iterations} nodes={} edges={}",
+                search.nodes.len(),
+                search.edges.len()
+            );
+            eprintln!();
+            // Print summary, then launch interactive viewer
+            let mut board: TetrisBoard<10, 20> = TetrisBoard::<10, 20>::new();
+            for (step, placement) in p.iter().copied().enumerate() {
+                let result = board.apply_piece_placement(placement);
                 eprintln!(
-                    "SOLVED time={elapsed:.3}s iters={iterations} nodes={} edges={}",
-                    search.nodes.len(),
-                    search.edges.len()
+                    "  step={step:>2} piece={} placement={:>3} lines={} cells={:>2} height={:>2}",
+                    pieces[step],
+                    placement.index(),
+                    result.lines_cleared,
+                    board.count(),
+                    board.height(),
                 );
-                eprintln!();
-                // Print summary, then launch interactive viewer
-                let mut board: TetrisBoard<10, 20> = TetrisBoard::<10, 20>::new();
-                for (step, placement) in p.iter().copied().enumerate() {
-                    let result = board.apply_piece_placement(placement);
-                    eprintln!(
-                        "  step={step:>2} piece={} placement={:>3} lines={} cells={:>2} height={:>2}",
-                        pieces[step],
-                        placement.index(),
-                        result.lines_cleared,
-                        board.count(),
-                        board.height(),
-                    );
-                }
-                eprintln!();
-                interactive_viewer(&pieces, p);
-                return;
             }
+            eprintln!();
+            interactive_viewer(&pieces, p);
+            return;
         }
         eprintln!("INVALID WITNESS");
     } else {

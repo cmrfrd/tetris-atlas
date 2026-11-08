@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use candle_core::{DType, Tensor, Var};
+use candle_core::{Tensor, Var};
 use candle_nn::Optimizer;
 
 use anyhow::Result;
 
-use crate::{clip_grad_norm, get_l2_norm};
+use crate::clip_grad_norm;
 
 /// Gradient accumulator:
 /// Accumulates gradients for individual parameters using their tensor IDs as keys
@@ -27,6 +27,10 @@ impl GradientAccumulator {
 
     /// Accumulate gradients from a GradStore by extracting individual tensor gradients
     /// Uses in-place accumulation and immediate scaling to reduce memory usage
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     pub fn accumulate(
         &mut self,
         grads: candle_core::backprop::GradStore,
@@ -96,7 +100,7 @@ impl GradientAccumulator {
 
         if let Some(clip_grad_max_norm) = clip_grad_max_norm {
             let _ = clip_grad_norm(
-                &params,
+                params,
                 &mut grad_store,
                 clip_grad_max_norm,
                 clip_grad_max_value,
@@ -138,7 +142,8 @@ impl OptimStep for crate::optim::AdamW {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candle_core::{Device, Tensor, Var};
+    use crate::get_l2_norm;
+    use candle_core::{DType, Device, Tensor, Var};
 
     /// Helper to create a simple loss and get its gradients
     /// The gradient for each element will be `scale` (derivative of sum(x * scale) = scale)
@@ -248,7 +253,10 @@ mod tests {
         assert!(accum.accumulated_grads.contains_key(&var.id()));
 
         // Gradient should be scaled by 1/4 (accumulation_steps)
-        let accumulated = accum.accumulated_grads.get(&var.id()).unwrap();
+        let accumulated = accum
+            .accumulated_grads
+            .get(&var.id())
+            .expect("requested entry must exist in test_gradient_accumulator_accumulate_single");
         let values = accumulated.to_vec1::<f32>()?;
         // Original gradient is 2.0 for each element (scale factor), scaled by 1/4 = 0.5
         for v in values {
@@ -275,7 +283,10 @@ mod tests {
 
         // After 4 accumulations of gradients of 1.0, each scaled by 1/4:
         // Total = 4 * (1.0 * 1/4) = 1.0
-        let accumulated = accum.accumulated_grads.get(&var.id()).unwrap();
+        let accumulated = accum
+            .accumulated_grads
+            .get(&var.id())
+            .expect("requested entry must exist in test_gradient_accumulator_accumulate_multiple");
         let values = accumulated.to_vec2::<f32>()?;
         for row in values {
             for v in row {
@@ -301,7 +312,7 @@ mod tests {
         accum.accumulate(grads2, std::slice::from_ref(&var))?;
 
         // Expected: (2.0/2 + 4.0/2) = 1.0 + 2.0 = 3.0
-        let accumulated = accum.accumulated_grads.get(&var.id()).unwrap();
+        let accumulated = accum.accumulated_grads.get(&var.id()).expect("requested entry must exist in test_gradient_accumulator_accumulate_different_gradients");
         let values = accumulated.to_vec1::<f32>()?;
         for v in values {
             assert!((v - 3.0).abs() < 1e-5, "Expected 3.0, got {}", v);
@@ -447,7 +458,10 @@ mod tests {
         }
 
         // Expected average: (1+2+3+4+5+6+7+8)/8 = 36/8 = 4.5
-        let accumulated = accum.accumulated_grads.get(&var.id()).unwrap();
+        let accumulated = accum
+            .accumulated_grads
+            .get(&var.id())
+            .expect("requested entry must exist in test_gradient_accumulator_preserves_averaging");
         let values = accumulated.to_vec1::<f32>()?;
         for v in values {
             assert!((v - 4.5).abs() < 1e-5, "Expected average of 4.5, got {}", v);
@@ -499,7 +513,10 @@ mod tests {
         }
 
         // The accumulated gradient should not track operations
-        let accumulated = accum.accumulated_grads.get(&var.id()).unwrap();
+        let accumulated = accum
+            .accumulated_grads
+            .get(&var.id())
+            .expect("requested entry must exist in test_gradient_accumulator_detaches_gradients");
         // Verify we can perform operations without graph issues
         let _ = accumulated.sum_all()?.to_scalar::<f32>()?;
         Ok(())

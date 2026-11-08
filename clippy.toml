@@ -1,0 +1,9 @@
+# Shared Clippy settings. Lint levels are set in the root Cargo.toml.
+
+# Tests may fail immediately, but must use contextual expect rather than unwrap.
+allow-expect-in-tests = true
+allow-unwrap-in-tests = false
+allow-panic-in-tests = true
+
+# Apply enabled documentation lints to private helpers as well as public APIs.
+check-private-items = true

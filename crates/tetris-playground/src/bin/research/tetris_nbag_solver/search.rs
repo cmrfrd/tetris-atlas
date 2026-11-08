@@ -14,6 +14,14 @@ struct ScoreState {
 }
 
 #[inline(always)]
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+)]
+#[allow(
+    clippy::out_of_bounds_indexing,
+    reason = "The constant-unrolled body is guarded by the actual array length; Clippy also visits unreachable expanded indices."
+)]
 fn score_board(state: &ScoreState) -> f32 {
     let lines = state.recent_lines_cleared as f32;
     let holes = state.board.total_holes() as f32;
@@ -252,7 +260,8 @@ pub fn search(
                 return SearchOutcome::Exhausted { nodes_expanded };
             }
             let child_depth = node.depth + 1;
-            let child_idx = arena.len() as u32;
+            let child_idx =
+                u32::try_from(arena.len()).expect("graph index must fit its packed representation");
             arena.push(SearchNode {
                 board: child.board,
                 depth: child_depth,

@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
 //! # Tetris Atlas PUCT — integer-UCT graph search + gfp safe-set extraction
 //!
 //! Grows a canonical AND-OR state graph over complete Tetris states

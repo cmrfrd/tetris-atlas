@@ -51,7 +51,10 @@ impl CompiledForest {
 
     fn add_cond(&mut self, e: &BoolExpr) -> u32 {
         let node = match e {
-            BoolExpr::Cell(i) => CCond::Cell(*i as u16),
+            BoolExpr::Cell(i) => CCond::Cell(
+                u16::try_from(*i)
+                    .expect("compiled forest index must fit its packed representation"),
+            ),
             BoolExpr::Const(b) => CCond::Const(*b),
             BoolExpr::Not(a) => {
                 let ia = self.add_cond(a);
@@ -74,7 +77,8 @@ impl CompiledForest {
             }
         };
         self.conds.push(node);
-        (self.conds.len() - 1) as u32
+        u32::try_from(self.conds.len() - 1)
+            .expect("compiled forest index must fit its packed representation")
     }
 
     fn add_tree(&mut self, t: &DecisionTree) -> u32 {
@@ -93,7 +97,8 @@ impl CompiledForest {
             }
         };
         self.nodes.push(node);
-        (self.nodes.len() - 1) as u32
+        u32::try_from(self.nodes.len() - 1)
+            .expect("compiled forest index must fit its packed representation")
     }
 
     /// Short-circuiting condition evaluation, identical to `BoolExpr::eval`.
