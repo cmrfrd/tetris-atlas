@@ -353,7 +353,10 @@ fn ledger_canon(key: StateKey) -> StateKey {
 
 /// Structured capacity exhaustion — never silently wrap ids.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(clippy::enum_variant_names)] // all variants are naturally `*Exhausted`
+#[allow(
+    clippy::enum_variant_names,
+    reason = "All variants describe an exhausted resource, so the shared suffix is intentional."
+)] // all variants are naturally `*Exhausted`
 enum CapacityError {
     StatesExhausted,
     PlacementsExhausted,
@@ -427,6 +430,10 @@ impl<T> Arena<T> {
     }
 
     /// Number of reserved slots (occupancy), capped at capacity.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Arena storage is allocated from a u32 capacity and never resized."
+    )]
     fn len(&self) -> u32 {
         self.next
             .load(Ordering::Acquire)
@@ -434,6 +441,10 @@ impl<T> Arena<T> {
     }
 
     /// Total slot capacity (occupancy is `len`).
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Arena storage is allocated from a u32 capacity and never resized."
+    )]
     fn capacity(&self) -> u32 {
         self.slots.len() as u32
     }
@@ -499,6 +510,10 @@ impl PieceBranchRecord {
     }
 
     fn saturating_add_reward(&self, amount: u32) {
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "An overflowing reward update is deliberately rejected by fetch_update."
+        )]
         let _ = self
             .reward_sum
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
@@ -542,6 +557,10 @@ impl BranchArena {
     }
 
     /// Number of reserved slots (occupancy), capped at capacity.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Arena storage is allocated from a u32 capacity and never resized."
+    )]
     fn len(&self) -> u32 {
         self.next
             .load(Ordering::Acquire)
@@ -549,6 +568,10 @@ impl BranchArena {
     }
 
     /// Total slot capacity (occupancy is `len`).
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Arena storage is allocated from a u32 capacity and never resized."
+    )]
     fn capacity(&self) -> u32 {
         self.slots.len() as u32
     }
@@ -708,6 +731,10 @@ impl SearchGraph {
     /// as PROOF_DEAD with zero placements — its placements/branches are never
     /// consulted again (rollouts die on the proof byte; the death lfp seeds
     /// from it), so re-proving and arena spend are both skipped.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "The surviving placement count is bounded by the fixed 10-column piece catalog and fits u8."
+    )]
     fn build_state_record(&self, key: StateKey) -> Result<StateRecord, CapacityError> {
         if self.ledger_contains(&key) {
             return Ok(StateRecord {
@@ -976,6 +1003,10 @@ const SCORE_SHIFT: u32 = 20;
 const SCORE_ONE: u64 = 1 << SCORE_SHIFT;
 
 /// successes/visits in fixed point. u128 intermediates: no overflow for any u64 inputs.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Callers normalize accumulated depth credits by visits times the credit cap; production branch rewards are also bounded by u32 storage."
+)]
 fn mean_fixed(successes: u64, visits: u64) -> u64 {
     if visits == 0 {
         return 0;
@@ -991,6 +1022,10 @@ fn mean_fixed(successes: u64, visits: u64) -> u64 {
 /// sentinel — with FPU, no production caller passes 0 (unvisited placements are
 /// scored via the FPU branch in `choose_search_placement` instead). The arm is
 /// retained for safety in case future callers change this invariant.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "log2 is at most 63, so its fixed-point square root is below eight times SCORE_ONE; run_search bounds c to u64::MAX / 8."
+)]
 fn exploration_bonus(parent_visits: u64, action_visits: u64, c: u64) -> u64 {
     if action_visits == 0 {
         return u64::MAX / 4;
@@ -1439,6 +1474,10 @@ enum RolloutOutcome {
 
 /// One rollout from `root`: UCT placement, adversarial piece, cached-id
 /// traversal (edges expand on first touch). No allocation, no floats, no RNG.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "run_search bounds horizon by u32::MAX / 2; credit_cap and every recorded path depth are bounded by that horizon."
+)]
 fn rollout(
     graph: &SearchGraph,
     params: &SearchParams,
@@ -1570,6 +1609,10 @@ fn rollout(
 /// reward == horizon >= path.len()); saturating_sub is defensive only.
 /// Credit saturates at `cap` (the scoring normalizer): "continued ≥ cap
 /// deeper" earns full marks, keeping means on the [0, 1] certainty scale.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "run_search bounds horizon by u32::MAX / 2; credit_cap and every recorded path depth are bounded by that horizon."
+)]
 fn backup(graph: &SearchGraph, path: &[PathEntry], final_state: u32, reward: u32, cap: u32) {
     let terminal = graph.states.get(final_state);
     terminal.visits.fetch_add(1, Ordering::Relaxed);
@@ -1594,6 +1637,10 @@ fn backup(graph: &SearchGraph, path: &[PathEntry], final_state: u32, reward: u32
 }
 
 impl Counters {
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "run_search bounds horizon by u32::MAX / 2; credit_cap and every recorded path depth are bounded by that horizon."
+    )]
     fn record_rollout(&self, outcome: RolloutOutcome, depth: usize) {
         self.rollouts.fetch_add(1, Ordering::Relaxed);
         let bucket = match outcome {
@@ -1680,6 +1727,10 @@ fn closure_qualifies(graph: &SearchGraph, id: u32, k: &[bool]) -> Option<u8> {
 /// the protection/seeding consumers). Proven-dead states are excluded — a
 /// dead state can trivially have a one-failure placement, but it is not a
 /// boundary the safe set can ever absorb.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "State counts and indices come from the fixed u32-capacity arenas; compaction cannot increase the number of states."
+)]
 fn near_miss_boundary(graph: &SearchGraph, k: &[bool]) -> (usize, Vec<u32>) {
     let ids: Vec<u32> = (0..k.len() as u32)
         .into_par_iter()
@@ -1728,6 +1779,10 @@ struct ReverseEdges {
     parents: Vec<u32>,
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "State counts and indices come from the fixed u32-capacity arenas; compaction cannot increase the number of states."
+)]
 fn build_reverse_edges(graph: &SearchGraph) -> ReverseEdges {
     let n = graph.states.len() as usize;
     let indeg: Vec<AtomicU32> = (0..n + 1).map(|_| AtomicU32::new(0)).collect();
@@ -1809,6 +1864,10 @@ fn state_all_refuted(graph: &SearchGraph, id: u32, dead: &[bool]) -> bool {
 /// parent is rechecked only when one of its children dies. The lfp is unique,
 /// so the result is deterministic. Persists PROOF_DEAD marks (and the
 /// run-lifetime ledger); returns the total proven-dead count. Barrier-only.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "State counts and indices come from the fixed u32-capacity arenas; compaction cannot increase the number of states."
+)]
 fn propagate_death(graph: &SearchGraph, rev: &ReverseEdges) -> usize {
     let n = graph.states.len() as usize;
     let mut dead: Vec<bool> = (0..n as u32)
@@ -1871,6 +1930,14 @@ fn propagate_death(graph: &SearchGraph, rev: &ReverseEdges) -> usize {
 /// iterated (rayon-parallel scans) until no state is removed. Runs only
 /// between epochs — the graph is quiescent, no snapshot machinery needed.
 /// `iterations` counts every pass, including the final zero-removal pass.
+#[allow(
+    clippy::needless_range_loop,
+    reason = "Indices align board coordinates or parallel buffers; retain the existing traversal and independent reference calculation."
+)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "State counts and indices come from the fixed u32-capacity arenas; compaction cannot increase the number of states."
+)]
 fn extract_safe_set(graph: &SearchGraph, roots: &[u32; 7]) -> ClosureReport {
     // Build the reverse adjacency once; the death lfp (and later the gfp
     // worklist) both consume it. Death runs first so K0 exclusion and SAFE
@@ -1989,6 +2056,14 @@ struct CompactConfig {
 /// non-protected states (ties broken toward lower id). Dead states
 /// (placement_len == 0) compete like any other: a hot dead state is a useful
 /// cached death; cold ones evaporate.
+#[allow(
+    clippy::needless_range_loop,
+    reason = "Indices align board coordinates or parallel buffers; retain the existing traversal and independent reference calculation."
+)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "State counts and indices come from the fixed u32-capacity arenas; compaction cannot increase the number of states."
+)]
 fn select_survivors(
     graph: &SearchGraph,
     protect: &ClosureReport,
@@ -2001,11 +2076,9 @@ fn select_survivors(
     let mut protected_count = 0usize;
     // Mark K members.
     for (id, w) in protect.witnesses.iter().enumerate() {
-        if id < n && *w != u8::MAX {
-            if !survive[id] {
-                survive[id] = true;
-                protected_count += 1;
-            }
+        if id < n && *w != u8::MAX && !survive[id] {
+            survive[id] = true;
+            protected_count += 1;
         }
     }
     // Mark SAFE-proof states (belt for prior-generation SAFE beyond the current report's K).
@@ -2087,6 +2160,10 @@ struct CompactionStats {
 /// kept (closure checks branches, never labels); every copied visit/reward
 /// counter is aged by `cfg.decay_shift`. Cumulative Counters transfer; the
 /// `exhausted` flag deliberately does NOT (the new graph has fresh headroom).
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "State counts and indices come from the fixed u32-capacity arenas; compaction cannot increase the number of states."
+)]
 fn compact(
     old: &SearchGraph,
     protect: &ClosureReport,
@@ -2305,7 +2382,8 @@ fn compact(
     // (No in-function assert: synthetic test graphs wire non-canonical
     // children, which is legitimate fixture behavior, not corruption.)
 
-    let wall_ms = started.elapsed().as_millis() as u64;
+    let wall_ms =
+        u64::try_from(started.elapsed().as_millis()).expect("elapsed milliseconds must fit u64");
     Ok((
         new,
         CompactionStats {
@@ -2428,7 +2506,7 @@ fn load_ledger(graph: &SearchGraph, path: &PathBuf, carrier: &Carrier) -> anyhow
     );
     let mut u64buf = [0u8; 8];
     r.read_exact(&mut u64buf)?;
-    let count = u64::from_le_bytes(u64buf) as usize;
+    let count = usize::try_from(u64::from_le_bytes(u64buf))?;
     let mut loaded = 0usize;
     for _ in 0..count {
         let mut limbs = [0u32; 10];
@@ -2464,7 +2542,6 @@ fn load_ledger(graph: &SearchGraph, path: &PathBuf, carrier: &Carrier) -> anyhow
 /// sites, so the barrier-only contract holds). Returns Ok(false) when the
 /// livelock guard fires (occupancy cannot drop below the trigger) — the
 /// caller must stop the run.
-#[allow(clippy::too_many_arguments)]
 fn compact_barrier(
     args: &Args,
     pool: &rayon::ThreadPool,
@@ -2577,7 +2654,8 @@ fn expansion_batch(
             || occupancy_hit(graph.branches.len(), graph.branches.capacity())
     };
     let mut total: u64 = 0;
-    let mut batch: Vec<u32> = Vec::with_capacity(CHUNK as usize);
+    let mut batch: Vec<u32> =
+        Vec::with_capacity(usize::try_from(CHUNK).expect("batch capacity must fit usize"));
     while total < limit && !over_budget() {
         batch.clear();
         while (batch.len() as u64) < CHUNK.min(limit - total) {
@@ -2591,12 +2669,13 @@ fn expansion_batch(
         }
         pool.install(|| {
             batch.par_iter().for_each(|&id| {
+                #[allow(clippy::let_underscore_must_use, reason = "Capacity failure is recorded in graph.exhausted and stops the batch; unknown states remain uncertified.")]
                 let _ = graph.ensure_fully_expanded(id);
             });
         });
         total += batch.len() as u64;
     }
-    total as usize
+    usize::try_from(total).expect("expansion count must fit usize")
 }
 
 /// What a run produced, for main's summary and the integration tests.
@@ -2619,6 +2698,10 @@ fn run_search(args: &Args, stop: &AtomicBool) -> anyhow::Result<RunOutcome> {
         "--horizon out of range"
     );
     anyhow::ensure!(args.credit_cap >= 1, "--credit-cap must be >= 1");
+    anyhow::ensure!(
+        args.c_uct <= u64::MAX / 8 && args.c_lcb <= u64::MAX / 8,
+        "--c-uct and --c-lcb must be <= u64::MAX / 8 for fixed-point scoring"
+    );
     // Default placement provisioning: measured mean STORED (surviving)
     // placements per state is ~2.9 across reference-carrier runs (dead
     // states store none; constrained states store few) — 8 per state gives
@@ -2662,11 +2745,11 @@ fn run_search(args: &Args, stop: &AtomicBool) -> anyhow::Result<RunOutcome> {
         carrier,
         policy,
     );
-    if let Some(path) = &args.ledger {
-        if path.exists() {
-            let loaded = load_ledger(&graph, path, &carrier)?;
-            println!("ledger loaded: {loaded} dead keys from {}", path.display());
-        }
+    if let Some(path) = &args.ledger
+        && path.exists()
+    {
+        let loaded = load_ledger(&graph, path, &carrier)?;
+        println!("ledger loaded: {loaded} dead keys from {}", path.display());
     }
     let mut roots = [0u32; 7];
     for (i, key) in root_keys().into_iter().enumerate() {
@@ -2709,10 +2792,10 @@ fn run_search(args: &Args, stop: &AtomicBool) -> anyhow::Result<RunOutcome> {
             break; // legacy terminal-exhaustion behavior
         }
 
-        if let Some(max) = args.epochs {
-            if epoch >= max {
-                break;
-            }
+        if let Some(max) = args.epochs
+            && epoch >= max
+        {
+            break;
         }
 
         let occupancy_hit = |len: u32, cap: u32| -> bool {
@@ -2780,7 +2863,8 @@ fn run_search(args: &Args, stop: &AtomicBool) -> anyhow::Result<RunOutcome> {
                         let seed = if boundary_ids.is_empty() || i % 100 < root_pct {
                             roots[(i % 7) as usize]
                         } else {
-                            boundary_ids[(i as usize) % boundary_ids.len()]
+                            boundary_ids[usize::try_from(i % boundary_ids.len() as u64)
+                                .expect("boundary index is below vector length")]
                         };
                         let outcome = rollout(&graph, &params, seed, scratch);
                         graph.counters.record_rollout(outcome, scratch.path.len());
@@ -2831,7 +2915,7 @@ fn run_search(args: &Args, stop: &AtomicBool) -> anyhow::Result<RunOutcome> {
 
         let (rootv_min, rootv_mean) = root_values_permille(&graph, &roots, &params);
 
-        let closure = if epoch % args.closure_every.max(1) == 0 {
+        let closure = if epoch.is_multiple_of(args.closure_every.max(1)) {
             Some(pool.install(|| extract_safe_set(&graph, &roots)))
         } else {
             None
@@ -2856,7 +2940,8 @@ fn run_search(args: &Args, stop: &AtomicBool) -> anyhow::Result<RunOutcome> {
             );
         }
 
-        let elapsed_ms = started.elapsed().as_millis() as u64;
+        let elapsed_ms = u64::try_from(started.elapsed().as_millis())
+            .expect("elapsed milliseconds must fit u64");
         let counters = &graph.counters;
         let (k_size, roots_in_k) = closure
             .as_ref()
@@ -2911,11 +2996,12 @@ fn run_search(args: &Args, stop: &AtomicBool) -> anyhow::Result<RunOutcome> {
             last_report = Some(report);
         }
         epoch += 1;
-        if let Some(path) = &args.ledger {
-            if args.ledger_save_every > 0 && epoch % args.ledger_save_every == 0 {
-                let saved = save_ledger(&graph, path, &carrier)?;
-                println!("ledger autosave: {saved} dead keys -> {}", path.display());
-            }
+        if let Some(path) = &args.ledger
+            && args.ledger_save_every > 0
+            && epoch.is_multiple_of(args.ledger_save_every)
+        {
+            let saved = save_ledger(&graph, path, &carrier)?;
+            println!("ledger autosave: {saved} dead keys -> {}", path.display());
         }
     }
 
@@ -2999,9 +3085,27 @@ fn main() -> anyhow::Result<()> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "Fixture casts use explicitly bounded board dimensions and case counts, or deliberately extract test bits."
+)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejects_fixed_point_coefficients_that_could_overflow() {
+        for flag in ["--c-uct", "--c-lcb"] {
+            let args = Args::try_parse_from(["tetris_atlas_puct", flag, &u64::MAX.to_string()])
+                .expect("coefficient fixture must parse");
+            let error = run_search(&args, &AtomicBool::new(false))
+                .err()
+                .expect("out-of-range coefficient must be rejected before arena allocation");
+            assert!(error.to_string().contains("fixed-point scoring"));
+        }
+        assert!(exploration_bonus(u64::MAX, 1, u64::MAX / 8) < u64::MAX);
+    }
 
     // --- Task 1: domain ---
 
@@ -3087,7 +3191,7 @@ mod tests {
                 p.piece.width(p.orientation.rotation) == 1
                     && usize::from(p.orientation.column.inner()) == 0
             })
-            .unwrap();
+            .expect("fixture must contain the requested successor in apply_move_detects_loss");
         assert!(apply_move(&board, vertical_i_col0, &Carrier::UNBOUNDED).is_none());
         // Empty board: every placement survives.
         for &p in <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::T) {
@@ -3151,7 +3255,9 @@ mod tests {
     #[test]
     fn arena_set_get_roundtrip() {
         let arena: Arena<u64> = Arena::new(4);
-        let base = arena.reserve(2).unwrap();
+        let base = arena
+            .reserve(2)
+            .expect("arena reservation must fit available capacity in arena_set_get_roundtrip");
         arena.set(base, 42);
         arena.set(base + 1, 43);
         assert_eq!(*arena.get(base), 42);
@@ -3164,7 +3270,7 @@ mod tests {
         let bases: Vec<u32> = (0..1_000u32)
             .into_par_iter()
             .map(|i| {
-                let base = arena.reserve(8).unwrap();
+                let base = arena.reserve(8).expect("arena reservation must fit available capacity in arena_concurrent_reserves_do_not_overlap");
                 for j in 0..8 {
                     arena.set(base + j, i);
                 }
@@ -3190,8 +3296,12 @@ mod tests {
     fn intern_same_key_returns_same_id() {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let key = root_keys()[0];
-        let first = graph.intern(key).unwrap();
-        let second = graph.intern(key).unwrap();
+        let first = graph
+            .intern(key)
+            .expect("interning the fixture state must succeed in intern_same_key_returns_same_id");
+        let second = graph
+            .intern(key)
+            .expect("interning the fixture state must succeed in intern_same_key_returns_same_id");
         assert!(first.newly_created);
         assert!(!second.newly_created);
         assert_eq!(first.id, second.id);
@@ -3204,7 +3314,11 @@ mod tests {
         let key = root_keys()[3];
         let results: Vec<InternResult> = (0..1_000)
             .into_par_iter()
-            .map(|_| graph.intern(key).unwrap())
+            .map(|_| {
+                graph.intern(key).expect(
+                    "interning the fixture state must succeed in concurrent_intern_one_record",
+                )
+            })
             .collect();
         assert!(results.iter().all(|r| r.id == results[0].id));
         // Exactly one caller wins the Vacant-entry race and sees newly_created.
@@ -3219,7 +3333,7 @@ mod tests {
         // Unbounded carrier, empty board: every placement of the current piece survives.
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let key = root_keys()[TetrisPiece::T.index() as usize];
-        let id = graph.intern(key).unwrap().id;
+        let id = graph.intern(key).expect("interning the fixture state must succeed in structural_enumeration_filters_placements").id;
         let state = graph.states.get(id);
         let all = <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::T).len();
         assert_eq!(state.placement_len as usize, all);
@@ -3247,7 +3361,7 @@ mod tests {
             max_roughness: 4,
         };
         let pg = test_graph(100, partial, ExpansionPolicy::AllDiscovered);
-        let pid = pg.intern(key).unwrap().id;
+        let pid = pg.intern(key).expect("interning the fixture state must succeed in structural_enumeration_filters_placements").id;
         let pstate = pg.states.get(pid);
         assert!(
             (pstate.placement_len as usize) > 0 && (pstate.placement_len as usize) < all,
@@ -3272,7 +3386,10 @@ mod tests {
             max_roughness: 0,
         };
         let graph = test_graph(100, tight, ExpansionPolicy::AllDiscovered);
-        let id = graph.intern(root_keys()[0]).unwrap().id;
+        let id = graph
+            .intern(root_keys()[0])
+            .expect("interning the fixture state must succeed in dead_state_has_zero_placements")
+            .id;
         assert_eq!(graph.states.get(id).placement_len, 0);
         // Terminally-dead states never enter the frontier (no-op expansion),
         // but the queued-once flag is set so they are never reconsidered.
@@ -3286,7 +3403,10 @@ mod tests {
     #[test]
     fn candidate_policy_defers_queueing() {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::CandidateOnly);
-        let id = graph.intern(root_keys()[0]).unwrap().id;
+        let id = graph
+            .intern(root_keys()[0])
+            .expect("interning the fixture state must succeed in candidate_policy_defers_queueing")
+            .id;
         assert_eq!(graph.frontier.len(), 0);
         graph.mark_queued_and_push(id);
         graph.mark_queued_and_push(id); // second push is a no-op
@@ -3299,8 +3419,8 @@ mod tests {
     fn ensure_fully_expanded_covers_exactly_the_bag() {
         let graph = test_graph(10_000, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let key = root_keys()[0];
-        let id = graph.intern(key).unwrap().id;
-        graph.ensure_fully_expanded(id).unwrap();
+        let id = graph.intern(key).expect("interning the fixture state must succeed in ensure_fully_expanded_covers_exactly_the_bag").id;
+        graph.ensure_fully_expanded(id).expect("expanding the fixture state must succeed in ensure_fully_expanded_covers_exactly_the_bag");
         let state = graph.states.get(id);
         assert_eq!(
             state.expansion_status.load(Ordering::Acquire),
@@ -3318,7 +3438,7 @@ mod tests {
                     assert!(child <= MAX_VALID_STATE_ID, "bag piece must be expanded");
                     // Child key is the canonical successor.
                     let expect_board =
-                        apply_move(&key.board, pr.placement, &graph.carrier).unwrap();
+                        apply_move(&key.board, pr.placement, &graph.carrier).expect("fixture placement must be legal in ensure_fully_expanded_covers_exactly_the_bag");
                     let expect = StateKey::new(expect_board, child_bag(key.bag(), piece), piece);
                     assert_eq!(graph.states.get(child).key, expect);
                 } else {
@@ -3331,18 +3451,26 @@ mod tests {
     #[test]
     fn expand_edge_is_idempotent_and_canonical() {
         let graph = test_graph(10_000, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
-        let id = graph.intern(root_keys()[1]).unwrap().id;
-        graph.ensure_fully_expanded(id).unwrap();
+        let id = graph.intern(root_keys()[1]).expect("interning the fixture state must succeed in expand_edge_is_idempotent_and_canonical").id;
+        graph.ensure_fully_expanded(id).expect(
+            "expanding the fixture state must succeed in expand_edge_is_idempotent_and_canonical",
+        );
         let state = graph.states.get(id);
         let pr = graph.placements.get(state.placement_base);
-        let piece = state.key.bag().iter_pieces().next().unwrap();
+        let piece = state.key.bag().iter_pieces().next().expect(
+            "fixture bag must contain a remaining piece in expand_edge_is_idempotent_and_canonical",
+        );
         let br = graph.branches.get(pr.branch_base + piece.index() as u32);
         let first = br.child.load(Ordering::Acquire);
         // Re-resolving the same edge returns the same cached child.
-        let again = graph.resolve_child(state, pr, br, piece).unwrap();
+        let again = graph.resolve_child(state, pr, br, piece).expect(
+            "resolving the fixture child must succeed in expand_edge_is_idempotent_and_canonical",
+        );
         assert_eq!(first, again);
         // A second full expansion is a no-op.
-        graph.ensure_fully_expanded(id).unwrap();
+        graph.ensure_fully_expanded(id).expect(
+            "expanding the fixture state must succeed in expand_edge_is_idempotent_and_canonical",
+        );
         assert_eq!(br.child.load(Ordering::Acquire), first);
     }
 
@@ -3351,11 +3479,11 @@ mod tests {
         let graph = test_graph(50_000, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let ids: Vec<u32> = root_keys()
             .iter()
-            .map(|&k| graph.intern(k).unwrap().id)
+            .map(|&k| graph.intern(k).expect("interning the fixture state must succeed in concurrent_full_expansion_no_stuck_expanding").id)
             .collect();
         // Hammer all roots from many workers simultaneously.
         (0..64usize).into_par_iter().for_each(|i| {
-            graph.ensure_fully_expanded(ids[i % 7]).unwrap();
+            graph.ensure_fully_expanded(ids[i % 7]).expect("expanding the fixture state must succeed in concurrent_full_expansion_no_stuck_expanding");
         });
         for &id in &ids {
             let state = graph.states.get(id);
@@ -3400,7 +3528,12 @@ mod tests {
             Carrier::UNBOUNDED,
             ExpansionPolicy::AllDiscovered,
         );
-        let id = graph.intern(root_keys()[0]).unwrap().id;
+        let id = graph
+            .intern(root_keys()[0])
+            .expect(
+                "interning the fixture state must succeed in capacity_exhaustion_rolls_back_edges",
+            )
+            .id;
         let result = graph.ensure_fully_expanded(id);
         assert!(
             result.is_err(),
@@ -3488,6 +3621,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Floating-point values here are approximate scores, tensor math, or reporting statistics; exact state identifiers remain integers."
+    )]
     fn exploration_bonus_matches_float_reference() {
         // Floats allowed ONLY in tests. Reference: c * sqrt(log2(N+1) / n).
         for (parent, action) in [(10u64, 3u64), (1_000, 7), (1 << 30, 999), (5, 1)] {
@@ -3521,8 +3658,13 @@ mod tests {
     // --- Task 6: selection ---
 
     fn expanded_root(graph: &SearchGraph, root_idx: usize) -> u32 {
-        let id = graph.intern(root_keys()[root_idx]).unwrap().id;
-        graph.ensure_fully_expanded(id).unwrap();
+        let id = graph
+            .intern(root_keys()[root_idx])
+            .expect("interning the fixture state must succeed in expanded_root")
+            .id;
+        graph
+            .ensure_fully_expanded(id)
+            .expect("expanding the fixture state must succeed in expanded_root");
         id
     }
 
@@ -3581,7 +3723,10 @@ mod tests {
             admit_after: 1,
             piece_policy: PiecePolicyArg::Adversarial,
         };
-        let id = graph.intern(root_keys()[0]).unwrap().id;
+        let id = graph
+            .intern(root_keys()[0])
+            .expect("interning the fixture state must succeed in selection_none_when_dead")
+            .id;
         let state = graph.states.get(id);
         assert_eq!(choose_search_placement(&graph, state, &params), None);
         assert_eq!(choose_best_placement(&graph, state, &params), None);
@@ -3616,7 +3761,7 @@ mod tests {
         assert_eq!(choose_best_placement(&graph, state, &params), Some(2));
         // placement_value is the min over branches: zero out ONE branch of slot 2.
         let pr2 = graph.placements.get(state.placement_base + 2);
-        let piece = state.key.bag().iter_pieces().next().unwrap();
+        let piece = state.key.bag().iter_pieces().next().expect("fixture bag must contain a remaining piece in best_placement_tracks_min_branch_and_ignores_exploration");
         let br = graph.branches.get(pr2.branch_base + piece.index() as u32);
         // visits 2000, survivals still 1000 -> mean 0.5 on that branch.
         br.visits.fetch_add(1_000, Ordering::Relaxed);
@@ -3737,8 +3882,14 @@ mod tests {
         let placement_base = if n_placements == 0 {
             0
         } else {
-            let base = graph.placements.reserve(n_placements as u32).unwrap();
-            let branch_base = graph.branches.reserve(n_placements as u32 * 7).unwrap();
+            let base = graph
+                .placements
+                .reserve(n_placements as u32)
+                .expect("arena reservation must fit available capacity in synth_state");
+            let branch_base = graph
+                .branches
+                .reserve(n_placements as u32 * 7)
+                .expect("arena reservation must fit available capacity in synth_state");
             for i in 0..n_placements as u32 {
                 graph.placements.set(
                     base + i,
@@ -3752,7 +3903,10 @@ mod tests {
             }
             base
         };
-        let id = graph.states.reserve(1).unwrap();
+        let id = graph
+            .states
+            .reserve(1)
+            .expect("arena reservation must fit available capacity in synth_state");
         graph.states.set(
             id,
             StateRecord {
@@ -3881,7 +4035,14 @@ mod tests {
         };
         let roots: Vec<u32> = root_keys()
             .iter()
-            .map(|&k| graph.intern(k).unwrap().id)
+            .map(|&k| {
+                graph
+                    .intern(k)
+                    .expect(
+                        "interning the fixture state must succeed in rollout_scratch_does_not_grow",
+                    )
+                    .id
+            })
             .collect();
         let mut scratch = WorkerScratch::new(params.horizon);
         let path_cap = scratch.path.capacity();
@@ -4118,12 +4279,12 @@ mod tests {
         let collect_keys = |threads: usize| -> Vec<StateKey> {
             let graph = test_graph(50_000, carrier, ExpansionPolicy::AllDiscovered);
             for key in root_keys() {
-                graph.intern(key).unwrap();
+                graph.intern(key).expect("interning the fixture state must succeed in expansion_topology_is_thread_count_invariant");
             }
             let pool = rayon::ThreadPoolBuilder::new()
                 .num_threads(threads)
                 .build()
-                .unwrap();
+                .expect("building the configured Rayon pool must succeed in expansion_topology_is_thread_count_invariant");
             drain_expand_universe(&graph, &pool);
             // Verify we didn't hit capacity (would cause non-determinism).
             assert!(
@@ -4177,7 +4338,8 @@ mod tests {
             piece_policy: PiecePolicyArg::Adversarial,
         };
         let stop = AtomicBool::new(false);
-        let outcome = run_search(&args, &stop).unwrap();
+        let outcome = run_search(&args, &stop)
+            .expect("bounded fixture search must succeed in smoke_run_bounded");
         assert_eq!(outcome.report.roots_in_k.len(), 7);
         // One witness entry per interned state; at minimum the 7 roots exist.
         assert!(outcome.report.witnesses.len() >= 7);
@@ -4215,7 +4377,8 @@ mod tests {
             piece_policy: PiecePolicyArg::Adversarial,
         };
         let stop = AtomicBool::new(false);
-        let outcome = run_search(&args, &stop).unwrap();
+        let outcome = run_search(&args, &stop)
+            .expect("bounded fixture search must succeed in smoke_run_bounded_candidate_policy");
         assert_eq!(outcome.report.roots_in_k.len(), 7);
         // One witness entry per interned state; at minimum the 7 roots exist.
         assert!(outcome.report.witnesses.len() >= 7);
@@ -4235,10 +4398,10 @@ mod tests {
     fn intern_existing_key_resolves_after_exhaustion() {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let key = root_keys()[0];
-        let id = graph.intern(key).unwrap().id;
+        let id = graph.intern(key).expect("interning the fixture state must succeed in intern_existing_key_resolves_after_exhaustion").id;
         graph.exhausted.store(true, Ordering::SeqCst);
         // Existing keys still resolve after exhaustion (miss-path-only fast-fail).
-        let again = graph.intern(key).unwrap();
+        let again = graph.intern(key).expect("interning the fixture state must succeed in intern_existing_key_resolves_after_exhaustion");
         assert_eq!(again.id, id);
         assert!(!again.newly_created);
         // Genuinely new keys still fail fast.
@@ -4255,7 +4418,7 @@ mod tests {
             Carrier::UNBOUNDED,
             ExpansionPolicy::AllDiscovered,
         );
-        let root = graph.intern(root_keys()[0]).unwrap().id;
+        let root = graph.intern(root_keys()[0]).expect("interning the fixture state must succeed in rollout_unresolvable_edge_scores_death").id;
         let params = SearchParams {
             horizon: 8,
             credit_cap: 8,
@@ -4443,13 +4606,18 @@ mod tests {
             keep_frac_pct: 0,
             decay_shift: 1,
         };
-        let (new, stats) = compact(&graph, &protect, &roots, &cfg).unwrap();
+        let (new, stats) = compact(&graph, &protect, &roots, &cfg).expect(
+            "compacting the fixture graph must succeed in compaction_preserves_k_and_evicts_junk",
+        );
         // Only the protected K survived; junk gone.
         assert_eq!(stats.kept, 3);
         assert_eq!(stats.evicted, 2);
         assert_eq!(new.states.len(), 3);
         // K is preserved EXACTLY on the new graph (monotone across compaction).
-        let new_a = *new.ids.get(&graph.states.get(a).key).unwrap();
+        let new_a = *new
+            .ids
+            .get(&graph.states.get(a).key)
+            .expect("requested entry must exist in compaction_preserves_k_and_evicts_junk");
         let new_report = extract_safe_set(&new, &[new_a; 7]);
         assert_eq!(new_report.k_size, 3);
         assert!(new_report.roots_in_k.iter().all(|&x| x));
@@ -4460,10 +4628,10 @@ mod tests {
         let graph = test_graph(50_000, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let mut roots = [0u32; 7];
         for (i, key) in root_keys().into_iter().enumerate() {
-            roots[i] = graph.intern(key).unwrap().id;
+            roots[i] = graph.intern(key).expect("interning the fixture state must succeed in compaction_remap_is_faithful_on_real_graph").id;
         }
         for &r in &roots {
-            graph.ensure_fully_expanded(r).unwrap();
+            graph.ensure_fully_expanded(r).expect("expanding the fixture state must succeed in compaction_remap_is_faithful_on_real_graph");
         }
         let params = SearchParams {
             horizon: 8,
@@ -4482,7 +4650,7 @@ mod tests {
             keep_frac_pct: 50,
             decay_shift: 1,
         };
-        let (new, stats) = compact(&graph, &protect, &roots, &cfg).unwrap();
+        let (new, stats) = compact(&graph, &protect, &roots, &cfg).expect("compacting the fixture graph must succeed in compaction_remap_is_faithful_on_real_graph");
         assert!(stats.kept > 7, "roots plus hot states survive");
         assert!(
             compaction_is_faithful(&new),
@@ -4500,13 +4668,17 @@ mod tests {
 
         // Second compaction: roots-only survive (keep_frac 0) — exercises the
         // evicted-edge-reset path on a post-compaction graph.
-        let new_root_ids: [u32; 7] = root_keys().map(|key| *new.ids.get(&key).unwrap());
+        let new_root_ids: [u32; 7] = root_keys().map(|key| {
+            *new.ids
+                .get(&key)
+                .expect("requested entry must exist in compaction_remap_is_faithful_on_real_graph")
+        });
         let new_protect = extract_safe_set(&new, &new_root_ids);
         let cfg2 = CompactConfig {
             keep_frac_pct: 0,
             decay_shift: 0,
         };
-        let (newer, _) = compact(&new, &new_protect, &new_root_ids, &cfg2).unwrap();
+        let (newer, _) = compact(&new, &new_protect, &new_root_ids, &cfg2).expect("compacting the fixture graph must succeed in compaction_remap_is_faithful_on_real_graph");
 
         // (a) The strict faithfulness validator must hold even when most children were evicted.
         assert!(
@@ -4516,7 +4688,12 @@ mod tests {
 
         // (b) At least one root placement's branch was reset to UNEXPANDED
         //     (evicted-edge reset actually happened).
-        let newer_root_ids: [u32; 7] = root_keys().map(|key| *newer.ids.get(&key).unwrap());
+        let newer_root_ids: [u32; 7] = root_keys().map(|key| {
+            *newer
+                .ids
+                .get(&key)
+                .expect("requested entry must exist in compaction_remap_is_faithful_on_real_graph")
+        });
         let mut found_unexpanded = false;
         'outer: for &rid in &newer_root_ids {
             let state = newer.states.get(rid);
@@ -4569,8 +4746,12 @@ mod tests {
             keep_frac_pct: 0,
             decay_shift: 1,
         }; // roots protect a
-        let (new, _) = compact(&graph, &protect, &roots, &cfg).unwrap();
-        let na = *new.ids.get(&graph.states.get(a).key).unwrap();
+        let (new, _) = compact(&graph, &protect, &roots, &cfg)
+            .expect("compacting the fixture graph must succeed in compaction_decays_stats");
+        let na = *new
+            .ids
+            .get(&graph.states.get(a).key)
+            .expect("requested entry must exist in compaction_decays_stats");
         let ns = new.states.get(na);
         assert_eq!(ns.visits.load(Ordering::Relaxed), 50);
         assert_eq!(ns.reward_sum.load(Ordering::Relaxed), 20);
@@ -4587,8 +4768,12 @@ mod tests {
             keep_frac_pct: 0,
             decay_shift: 0,
         };
-        let (new0, _) = compact(&graph, &protect, &roots, &cfg0).unwrap();
-        let na0 = *new0.ids.get(&graph.states.get(a).key).unwrap();
+        let (new0, _) = compact(&graph, &protect, &roots, &cfg0)
+            .expect("compacting the fixture graph must succeed in compaction_decays_stats");
+        let na0 = *new0
+            .ids
+            .get(&graph.states.get(a).key)
+            .expect("requested entry must exist in compaction_decays_stats");
         assert_eq!(new0.states.get(na0).visits.load(Ordering::Relaxed), 100);
     }
 
@@ -4610,9 +4795,12 @@ mod tests {
             keep_frac_pct: 0,
             decay_shift: 0,
         };
-        let (new, stats) = compact(&graph, &protect, &roots, &cfg).unwrap();
+        let (new, stats) = compact(&graph, &protect, &roots, &cfg).expect("compacting the fixture graph must succeed in compaction_resets_evicted_edges_keeps_label");
         assert_eq!(stats.kept, 1);
-        let np = *new.ids.get(&graph.states.get(parent).key).unwrap();
+        let np = *new
+            .ids
+            .get(&graph.states.get(parent).key)
+            .expect("requested entry must exist in compaction_resets_evicted_edges_keeps_label");
         let ns = new.states.get(np);
         // Label kept, edge reset.
         assert_eq!(
@@ -4675,11 +4863,14 @@ mod tests {
             keep_frac_pct: 100,
             decay_shift: 0,
         };
-        let (new, _) = compact(&graph, &protect, &roots, &cfg).unwrap();
+        let (new, _) = compact(&graph, &protect, &roots, &cfg).expect("compacting the fixture graph must succeed in compaction_requeues_queued_survivors_once");
         // Exactly the QUEUED+admitted survivor is on the new frontier, exactly once.
         // The unadmitted QUEUED state must NOT be spuriously requeued.
         assert_eq!(new.frontier.len(), 1);
-        let nq = *new.ids.get(&graph.states.get(queued).key).unwrap();
+        let nq = *new
+            .ids
+            .get(&graph.states.get(queued).key)
+            .expect("requested entry must exist in compaction_requeues_queued_survivors_once");
         assert_eq!(new.frontier.pop(), Some(nq));
     }
 
@@ -4715,7 +4906,7 @@ mod tests {
             keep_frac_pct: 100,
             decay_shift: 1,
         };
-        let (new, _) = compact(&graph, &protect, &roots, &cfg).unwrap();
+        let (new, _) = compact(&graph, &protect, &roots, &cfg).expect("compacting the fixture graph must succeed in compaction_transfers_counters_and_resets_exhausted");
         assert_eq!(new.counters.rollouts.load(Ordering::Relaxed), 1234);
         assert_eq!(new.counters.deaths.load(Ordering::Relaxed), 999);
         assert_eq!(new.counters.horizons.load(Ordering::Relaxed), 11);
@@ -4783,11 +4974,13 @@ mod tests {
             keep_frac_pct: 0,
             decay_shift: 0,
         };
-        let (new, stats) = compact(&graph, &protect, &roots, &cfg).unwrap();
+        let (new, stats) = compact(&graph, &protect, &roots, &cfg).expect("compacting the fixture graph must succeed in compaction_preserves_k_with_evicted_nonwitness_branch");
         assert_eq!(stats.kept, 1, "only s survived");
 
         // s survives under its new id.
-        let new_s = *new.ids.get(&graph.states.get(s).key).unwrap();
+        let new_s = *new.ids.get(&graph.states.get(s).key).expect(
+            "requested entry must exist in compaction_preserves_k_with_evicted_nonwitness_branch",
+        );
 
         // Fresh extract_safe_set on new graph: K must still have s with k_size == 1.
         let new_roots = [new_s; 7];
@@ -4850,7 +5043,8 @@ mod tests {
             piece_policy: PiecePolicyArg::Adversarial,
         };
         let stop = AtomicBool::new(false);
-        let outcome = run_search(&args, &stop).unwrap();
+        let outcome = run_search(&args, &stop)
+            .expect("bounded fixture search must succeed in smoke_run_with_compaction");
         assert_eq!(
             outcome.epochs_run, 6,
             "compaction keeps the run alive to the epoch limit"
@@ -4897,7 +5091,8 @@ mod tests {
             piece_policy: PiecePolicyArg::Adversarial,
         };
         let stop = AtomicBool::new(false);
-        let outcome = run_search(&args, &stop).unwrap();
+        let outcome = run_search(&args, &stop)
+            .expect("bounded fixture search must succeed in livelock_guard_exits_gracefully");
         assert_eq!(
             outcome.generations, 1,
             "one compaction attempt, then the guard fires"
@@ -4943,7 +5138,9 @@ mod tests {
             piece_policy: PiecePolicyArg::Adversarial,
         };
         let stop = AtomicBool::new(false);
-        let outcome = run_search(&args, &stop).unwrap();
+        let outcome = run_search(&args, &stop).expect(
+            "bounded fixture search must succeed in no_compact_restores_terminal_exhaustion_exit",
+        );
         assert_eq!(outcome.generations, 0, "no-compact must never compact");
         assert!(
             outcome.epochs_run < 50,
@@ -4960,7 +5157,7 @@ mod tests {
         // near-miss. s2: both branches unexpanded -> 2 failures, NOT near-miss.
         let b = synth_state(&graph, 1, O_BAG, 1);
         let s1 = synth_state(&graph, 2, OI_BAG, 1);
-        let s2 = synth_state(&graph, 3, OI_BAG, 1);
+        let _s2 = synth_state(&graph, 3, OI_BAG, 1);
         wire(&graph, b, 0, TetrisPiece::O, b);
         wire(&graph, s1, 0, TetrisPiece::O, b);
         let report = extract_safe_set(&graph, &[b; 7]);
@@ -5331,7 +5528,7 @@ mod tests {
             keep_frac_pct: 0,
             decay_shift: 0,
         };
-        let (new_graph, _stats) = compact(&graph, &protect, &roots, &cfg).unwrap();
+        let (new_graph, _stats) = compact(&graph, &protect, &roots, &cfg).expect("compacting the fixture graph must succeed in compaction_carries_proofs_and_protects_safe");
 
         // sfe must survive (proof-based protection).
         assert!(
@@ -5339,7 +5536,10 @@ mod tests {
             "sfe must survive compaction via proof protection"
         );
         // Proof must be carried across compaction.
-        let new_sfe_id = *new_graph.ids.get(&graph.states.get(sfe).key).unwrap();
+        let new_sfe_id = *new_graph
+            .ids
+            .get(&graph.states.get(sfe).key)
+            .expect("requested entry must exist in compaction_carries_proofs_and_protects_safe");
         assert_eq!(
             new_graph
                 .states
@@ -5371,18 +5571,20 @@ mod tests {
         // rollout from the root must never abort on it.
         let graph = test_graph(50_000, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let key = root_keys()[0];
-        let piece = key.bag().iter_pieces().next().unwrap();
+        let piece = key.bag().iter_pieces().next().expect("fixture bag must contain a remaining piece in expansion_stamps_ledgered_children_without_intern");
         let first_placement = <TetrisPiecePlacement<10>>::all_from_piece(key.piece())
             .iter()
             .copied()
             .find(|&p| apply_move(&key.board, p, &graph.carrier).is_some())
-            .unwrap();
-        let child_board = apply_move(&key.board, first_placement, &graph.carrier).unwrap();
+            .expect("fixture must contain the requested successor in expansion_stamps_ledgered_children_without_intern");
+        let child_board = apply_move(&key.board, first_placement, &graph.carrier).expect(
+            "fixture placement must be legal in expansion_stamps_ledgered_children_without_intern",
+        );
         let child_key = StateKey::new(child_board, child_bag(key.bag(), piece), piece);
         graph.ledger_insert(child_key);
 
-        let id = graph.intern(key).unwrap().id;
-        graph.ensure_fully_expanded(id).unwrap();
+        let id = graph.intern(key).expect("interning the fixture state must succeed in expansion_stamps_ledgered_children_without_intern").id;
+        graph.ensure_fully_expanded(id).expect("expanding the fixture state must succeed in expansion_stamps_ledgered_children_without_intern");
         assert!(
             graph.ids.get(&child_key).is_none(),
             "ledgered child never materialized"
@@ -5398,7 +5600,7 @@ mod tests {
         assert!(placement_refuted(&graph, state, pr), "stamp refutes");
         // resolve_child returns the stamp without claiming/materializing.
         assert_eq!(
-            graph.resolve_child(state, pr, br, piece).unwrap(),
+            graph.resolve_child(state, pr, br, piece).expect("resolving the fixture child must succeed in expansion_stamps_ledgered_children_without_intern"),
             DEAD_LEDGER
         );
         assert!(graph.ids.get(&child_key).is_none());
@@ -5439,9 +5641,14 @@ mod tests {
             keep_frac_pct: 0,
             decay_shift: 0,
         };
-        let (new, stats) = compact(&graph, &protect, &roots, &cfg).unwrap();
+        let (new, stats) = compact(&graph, &protect, &roots, &cfg).expect(
+            "compacting the fixture graph must succeed in compaction_stamps_evicted_dead_children",
+        );
         assert_eq!(stats.kept, 1, "dead child evicted");
-        let np = *new.ids.get(&graph.states.get(parent).key).unwrap();
+        let np = *new
+            .ids
+            .get(&graph.states.get(parent).key)
+            .expect("requested entry must exist in compaction_stamps_evicted_dead_children");
         let ns = new.states.get(np);
         let npr = new.placements.get(ns.placement_base);
         let nbr = new
@@ -5540,7 +5747,7 @@ mod tests {
         graph.ledger_insert(mkey);
         assert_eq!(graph.dead_keys.len(), 1, "mirror pair deduplicates");
         // Interning the MIRROR key materializes PROOF_DEAD from the ledger.
-        let id = graph.intern(mkey).unwrap().id;
+        let id = graph.intern(mkey).expect("interning the fixture state must succeed in ledger_covers_both_mirror_orientations").id;
         assert_eq!(
             graph.states.get(id).proof.load(Ordering::Acquire),
             PROOF_DEAD
@@ -5571,7 +5778,9 @@ mod tests {
             "tetris_puct_ledger_test_{}.bin",
             std::process::id()
         ));
-        let saved = save_ledger(&graph, &path, &carrier).unwrap();
+        let saved = save_ledger(&graph, &path, &carrier).expect(
+            "saving the fixture ledger must succeed in ledger_file_roundtrip_and_carrier_guard",
+        );
         assert_eq!(saved, 2);
         // Round-trip into a fresh graph.
         let fresh = SearchGraph::new(
@@ -5581,11 +5790,13 @@ mod tests {
             carrier,
             ExpansionPolicy::AllDiscovered,
         );
-        let loaded = load_ledger(&fresh, &path, &carrier).unwrap();
+        let loaded = load_ledger(&fresh, &path, &carrier).expect(
+            "loading the fixture ledger must succeed in ledger_file_roundtrip_and_carrier_guard",
+        );
         assert_eq!(loaded, 2);
         assert!(fresh.ledger_contains(&k1) && fresh.ledger_contains(&k2));
         // Interning a ledgered key materializes the proof.
-        let id = fresh.intern(k1).unwrap().id;
+        let id = fresh.intern(k1).expect("interning the fixture state must succeed in ledger_file_roundtrip_and_carrier_guard").id;
         assert_eq!(
             fresh.states.get(id).proof.load(Ordering::Acquire),
             PROOF_DEAD
@@ -5604,6 +5815,10 @@ mod tests {
             ExpansionPolicy::AllDiscovered,
         );
         assert!(load_ledger(&wrong, &path, &other).is_err());
+        #[allow(
+            clippy::let_underscore_must_use,
+            reason = "Progress and optional statistics output are best effort and do not affect solver state."
+        )]
         let _ = std::fs::remove_file(&path);
     }
 
@@ -5617,7 +5832,7 @@ mod tests {
         wire(&graph, anchor, 0, TetrisPiece::O, anchor);
         // A REAL key for x (root 0's key) so re-interning is meaningful.
         let x_key = root_keys()[0];
-        let x = graph.intern(x_key).unwrap().id;
+        let x = graph.intern(x_key).expect("interning the fixture state must succeed in dead_ledger_survives_eviction_and_reintern").id;
         // Force x dead: overwrite its record semantics via a dead child on
         // every placement is overkill — instead prove death by the lfp on a
         // zero-placement synthetic... x is a real state with placements, so
@@ -5638,11 +5853,11 @@ mod tests {
             keep_frac_pct: 0,
             decay_shift: 0,
         };
-        let (new, stats) = compact(&graph, &protect, &roots, &cfg).unwrap();
+        let (new, stats) = compact(&graph, &protect, &roots, &cfg).expect("compacting the fixture graph must succeed in dead_ledger_survives_eviction_and_reintern");
         assert_eq!(stats.kept, 1, "x and its record are gone");
         assert!(new.ids.get(&x_key).is_none());
         // Re-intern: the ledger resurrects the proof, not the subtree.
-        let again = new.intern(x_key).unwrap();
+        let again = new.intern(x_key).expect("interning the fixture state must succeed in dead_ledger_survives_eviction_and_reintern");
         assert!(again.newly_created);
         let st = new.states.get(again.id);
         assert_eq!(st.proof.load(Ordering::Acquire), PROOF_DEAD);

@@ -147,6 +147,14 @@ pub struct TetrisSequencePlanner<const WIDTH: usize, const DEPTH: usize, const N
     filter_fn: Option<fn(TetrisBoard<10, 20>) -> bool>,
 }
 
+impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize> Default
+    for TetrisSequencePlanner<WIDTH, DEPTH, NODE_CAPACITY>
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
     TetrisSequencePlanner<WIDTH, DEPTH, NODE_CAPACITY>
 {
@@ -167,9 +175,6 @@ impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
     /// the planner in const-initialized TLS makes every `thread::spawn` fault in
     /// the full buffer size.
     pub fn new_boxed() -> Box<Self> {
-        // SAFETY: all-zero bytes are exactly `Self::new()` — both containers are
-        // `MaybeUninit` storage (no validity requirement) plus a zero `len`, the
-        // counters are zero, and `None::<fn>` is the all-zero niche.
         unsafe { Box::<Self>::new_zeroed().assume_init() }
     }
 
@@ -294,6 +299,10 @@ impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
         )));
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "The node capacity is compile-time bounded by u32 and child_idx is checked against it before insertion."
+    )]
     fn expand_node<ScoreFn>(
         &mut self,
         parent_idx: u32,
@@ -304,6 +313,12 @@ impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
     where
         ScoreFn: Fn(&TetrisPlanScoreState) -> f32,
     {
+        let _ = const {
+            tetris_utils::const_assert!(
+                NODE_CAPACITY <= u32::MAX as usize,
+                "planner node capacity must fit u32 slots"
+            )
+        };
         let piece = forced_sequence[node.depth as usize];
         let child_depth = node.depth + 1;
         let mut top_candidates = [CandidateNode::default(); WIDTH];
