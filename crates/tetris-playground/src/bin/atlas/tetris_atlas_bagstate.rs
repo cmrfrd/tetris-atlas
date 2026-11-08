@@ -25,7 +25,6 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use tetris_game::{
     Major, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
-    constants,
 };
 use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetris_score};
 use tetris_utils::repeat_idx_unroll;
@@ -44,7 +43,6 @@ const fn filter_fn(state: &BeamTetrisState) -> bool {
 }
 
 // --- Threading ---
-const CHANNEL_CAPACITY: usize = 256;
 const NUM_WORKERS: usize = 16;
 const WORKER_FRONTIER_BATCH_SIZE: usize = 128;
 const WORKER_STACK_BYTES: usize = 256 * 1024 * 1024;
@@ -132,6 +130,10 @@ static ALL_PERMUTATIONS: [Bag; NUM_PERMS] = generate_all_permutations();
 const LOOKUP_KEY_LEN: usize = 42;
 
 #[inline(always)]
+#[allow(
+    clippy::out_of_bounds_indexing,
+    reason = "The constant unroller is bounded by the board column count; Clippy also visits unreachable expanded indices."
+)]
 const fn hash_board_perm(board: TetrisBoard<10, 20>, perm_index: u16) -> u64 {
     const FNV_OFFSET: u64 = 0xcbf29ce484222325;
     const FNV_PRIME: u64 = 0x100000001b3;
@@ -222,7 +224,7 @@ impl AtlasDB {
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
-        opts.set_max_background_jobs(num_cpus::get() as i32);
+        opts.set_max_background_jobs(i32::try_from(num_cpus::get())?);
         opts.set_write_buffer_size(256 * 1024 * 1024);
         opts.set_max_write_buffer_number(6);
         opts.set_min_write_buffer_number_to_merge(2);
@@ -293,10 +295,16 @@ impl AtlasDB {
     }
 
     pub fn flush(&self) {
-        let _ = self.db.flush();
+        self.db
+            .flush()
+            .expect("bag-state Atlas database flush must succeed");
     }
 
     /// Seed the empty board with all 5040 bag permutations.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "The fixed seven-piece bag has 5040 permutations, which fits u16."
+    )]
     fn seed_board(&self, board: TetrisBoard<10, 20>) -> Result<bool, Box<dyn std::error::Error>> {
         let board_bytes = board.to_bytes(Major::Col);
         let cf_seeded = self.cf_handle(CF_SEEDED);
@@ -329,48 +337,46 @@ impl AtlasDB {
         Ok(())
     }
 
-    fn is_board_seeded(&self, board: TetrisBoard<10, 20>) -> bool {
-        let board_bytes = board.to_bytes(Major::Col);
-        let cf_seeded = self.cf_handle(CF_SEEDED);
-        self.db
-            .get_cf(&cf_seeded, board_bytes)
-            .ok()
-            .flatten()
-            .is_some()
-    }
-
-    fn seeded_count(&self) -> usize {
+    fn seeded_count(&self) -> u64 {
         let cf = self.cf_handle(CF_SEEDED);
         self.db
             .property_int_value_cf(&cf, "rocksdb.estimate-num-keys")
             .ok()
             .flatten()
-            .unwrap_or(0) as usize
+            .unwrap_or(0)
     }
 
-    fn frontier_size(&self) -> usize {
+    fn frontier_size(&self) -> u64 {
         let cf = self.cf_handle(CF_FRONTIER);
         self.db
             .property_int_value_cf(&cf, "rocksdb.estimate-num-keys")
             .ok()
             .flatten()
-            .unwrap_or(0) as usize
+            .unwrap_or(0)
     }
 
-    fn lookup_size(&self) -> usize {
+    fn lookup_size(&self) -> u64 {
         let cf = self.cf_handle(CF_LOOKUP);
         self.db
             .property_int_value_cf(&cf, "rocksdb.estimate-num-keys")
             .ok()
             .flatten()
-            .unwrap_or(0) as usize
+            .unwrap_or(0)
     }
 
     // -----------------------------------------------------------------------
     // Worker loop
     // -----------------------------------------------------------------------
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "The fixed permutation catalog fits u16; partition end is narrowed only after checking it is below 256."
+    )]
     fn run_worker_loop(&self, num_workers: usize) -> Vec<JoinHandle<()>> {
+        assert!(
+            (1..=256).contains(&num_workers),
+            "worker count must be in 1..=256"
+        );
         (0..num_workers)
             .map(|worker_id| {
                 let db = Arc::clone(&self.db);
@@ -400,8 +406,8 @@ impl AtlasDB {
                         let mut game = <tetris_game::TetrisGame>::new();
 
                         // Partition frontier key space across workers
-                        let part_start = (worker_id as u16 * 256 / num_workers as u16) as u8;
-                        let part_end_u16 = ((worker_id + 1) as u16 * 256) / num_workers as u16;
+                        let (part_start, part_end_u16) =
+                            worker_partition_bounds(worker_id, num_workers);
                         let lower = [0u8, part_start, 0, 0, 0, 0, 0, 0, 0].to_vec();
                         let upper = if part_end_u16 > 255 {
                             vec![0xFF; 9]
@@ -488,8 +494,8 @@ impl AtlasDB {
                                             let piece = perm[step];
                                             // Build bag state for remaining pieces
                                             let mut bag_mask = 0u8;
-                                            for j in step..7 {
-                                                bag_mask |= perm[j].mask();
+                                            for remaining_piece in &perm[step..7] {
+                                                bag_mask |= remaining_piece.mask();
                                             }
                                             let bag = TetrisPieceBagState::try_from(bag_mask)
                                                 .expect("valid bag mask");
@@ -598,6 +604,10 @@ impl AtlasDB {
 // Create mode
 // ---------------------------------------------------------------------------
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Throughput is an approximate reporting statistic; exact counts remain integers."
+)]
 fn run_create(db_path: &str) {
     tetris_search::set_global_threadpool();
     let start = Instant::now();
@@ -659,7 +669,8 @@ fn run_create(db_path: &str) {
     }
 
     for h in handles {
-        let _ = h.join();
+        h.join()
+            .expect("bag-state Atlas worker must finish without panicking");
     }
     println!("Finished in {:.2}s", start.elapsed().as_secs_f64());
 }
@@ -668,6 +679,11 @@ fn run_create(db_path: &str) {
 // Explore mode (simplified)
 // ---------------------------------------------------------------------------
 
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    reason = "Coverage is an approximate reporting percentage; the fixed 5040-permutation catalog fits u16."
+)]
 fn run_explore(db_path: &str) {
     let atlas = AtlasDB::new(db_path).expect("Failed to open atlas");
     let cf_lookup = atlas.cf_handle(CF_LOOKUP);
@@ -717,10 +733,50 @@ fn run_explore(db_path: &str) {
 // Main
 // ---------------------------------------------------------------------------
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Worker count is checked in 1..=256 and worker_id is below it; usize products are at most 65536, start is below 256, and end is at most 256."
+)]
+fn worker_partition_bounds(worker_id: usize, num_workers: usize) -> (u8, u16) {
+    assert!(
+        (1..=256).contains(&num_workers) && worker_id < num_workers,
+        "worker index must be below a worker count in 1..=256"
+    );
+    let start = worker_id * 256 / num_workers;
+    let end = (worker_id + 1) * 256 / num_workers;
+    (start as u8, end as u16)
+}
+
 fn main() {
     let cli = Cli::parse();
     match cli.mode {
         Mode::Create => run_create(&cli.db_path),
         Mode::Explore => run_explore(&cli.db_path),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn worker_partitions_cover_every_hash_byte_without_gaps() {
+        for workers in [1, 2, 16, 255, 256] {
+            let mut previous_end = 0u16;
+            for id in 0..workers {
+                let (start, end) = worker_partition_bounds(id, workers);
+                assert_eq!(u16::from(start), previous_end);
+                assert!(end > u16::from(start));
+                previous_end = end;
+            }
+            assert_eq!(previous_end, 256);
+        }
+    }
+
+    #[test]
+    fn worker_partition_rejects_invalid_counts_and_indices() {
+        for (id, workers) in [(0, 0), (0, 257), (2, 2)] {
+            assert!(std::panic::catch_unwind(|| worker_partition_bounds(id, workers)).is_err());
+        }
     }
 }

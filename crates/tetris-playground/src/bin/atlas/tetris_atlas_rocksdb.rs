@@ -87,6 +87,10 @@ enum Mode {
 }
 
 #[inline(always)]
+#[allow(
+    clippy::out_of_bounds_indexing,
+    reason = "The constant unroller is bounded by the board column count; Clippy also visits unreachable expanded indices."
+)]
 const fn hash_board_bag(board: TetrisBoard<10, 20>, bag: TetrisPieceBagState) -> u64 {
     // FNV-1a hash: fast, good distribution, no state needed
     const FNV_OFFSET: u64 = 0xcbf29ce484222325;
@@ -219,7 +223,7 @@ impl TetrisAtlasDB {
         opts.create_missing_column_families(true);
 
         // Performance tuning
-        opts.set_max_background_jobs(num_cpus::get() as i32);
+        opts.set_max_background_jobs(i32::try_from(num_cpus::get())?);
         opts.set_write_buffer_size(256 * 1024 * 1024); // 256MB
         opts.set_max_write_buffer_number(6); // Increased from 4 for better write throughput
         opts.set_min_write_buffer_number_to_merge(2);
@@ -297,7 +301,7 @@ impl TetrisAtlasDB {
     }
 
     pub fn flush(&self) {
-        let _ = self.db.flush();
+        self.db.flush().expect("Atlas database flush must succeed");
     }
 
     /// Check if a board+piece combination exists in the lookup table
@@ -353,7 +357,15 @@ impl TetrisAtlasDB {
         Ok(())
     }
 
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "The partition end is narrowed only in the branch where it is below 256; worker partition bounds are validated during setup."
+    )]
     fn run_worker_loop(&self, num_workers: usize) -> Vec<JoinHandle<()>> {
+        assert!(
+            (1..=256).contains(&num_workers),
+            "worker count must be in 1..=256"
+        );
         let db = Arc::clone(&self.db);
         let stop = Arc::clone(&self.stop);
         let lookup_hits = Arc::clone(&self.lookup_hits);
@@ -401,11 +413,8 @@ impl TetrisAtlasDB {
                         // Calculate this worker's partition of the key space (based on first byte of hash)
                         // Key structure: [height(1), hash(8)] = 9 bytes total
                         // Partitioning 256 values (0..=255) across num_workers based on hash's first byte
-                        let partition_start_u16 = (worker_id as u16 * 256) / num_workers as u16;
-                        let partition_end_u16 = ((worker_id + 1) as u16 * 256) / num_workers as u16;
-
-                        let partition_start = partition_start_u16 as u8;
-                        let partition_end = partition_end_u16 as u8;
+                        let (partition_start, partition_end_u16) =
+                            worker_partition_bounds(worker_id, num_workers);
 
                         // Keys are now [u8; 9]: [height, hash_byte_0, ..., hash_byte_7]
                         // lower_bound: start at height=0, partition_start hash
@@ -416,7 +425,7 @@ impl TetrisAtlasDB {
                         let upper_bound = if partition_end_u16 > 255 {
                             vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF] // Beyond any real 9-byte key
                         } else {
-                            [0xFF, partition_end, 0, 0, 0, 0, 0, 0, 0].to_vec()
+                            [0xFF, partition_end_u16 as u8, 0, 0, 0, 0, 0, 0, 0].to_vec()
                         };
 
                         let cf_frontier = db.cf_handle(CF_FRONTIER).expect("missing frontier cf");
@@ -466,7 +475,7 @@ impl TetrisAtlasDB {
                                             );
 
                                         frontier_consumed.fetch_add(1, Ordering::Relaxed);
-                                        let board_index =
+                                        let _board_index =
                                             boards_expanded.fetch_add(1, Ordering::Relaxed);
 
                                         // Process all pieces for this board state
@@ -608,27 +617,30 @@ impl TetrisAtlasDB {
     }
 
     /// Get frontier queue size
-    fn frontier_size(&self) -> Result<usize, Box<dyn std::error::Error>> {
+    fn frontier_size(&self) -> Result<u64, Box<dyn std::error::Error>> {
         let cf_frontier = self.cf_handle(CF_FRONTIER);
         let count = self
             .db
             .property_int_value_cf(&cf_frontier, "rocksdb.estimate-num-keys")?
-            .unwrap_or(0) as usize;
+            .unwrap_or(0);
         Ok(count)
     }
 
     /// Get lookup table size
-    fn lookup_size(&self) -> Result<usize, Box<dyn std::error::Error>> {
+    fn lookup_size(&self) -> Result<u64, Box<dyn std::error::Error>> {
         let cf_lookup = self.cf_handle(CF_LOOKUP);
         let count = self
             .db
             .property_int_value_cf(&cf_lookup, "rocksdb.estimate-num-keys")?
-            .unwrap_or(0) as usize;
+            .unwrap_or(0);
         Ok(count)
     }
 
     /// Get all performance statistics (RocksDB doesn't have as many built-in stats as FeoxDB)
-    #[allow(clippy::type_complexity)]
+    #[allow(
+        clippy::type_complexity,
+        reason = "The stats tuple preserves the existing named counter order used by reporting."
+    )]
     pub fn stats(
         &self,
     ) -> Result<
@@ -736,8 +748,6 @@ impl BoardStats {
 struct TimelineEntry {
     board: TetrisBoard<10, 20>,
     bag: TetrisPieceBagState,
-    piece: TetrisPiece,
-    orientation: TetrisPieceOrientation<10>,
     lines_cleared: usize,
 }
 
@@ -778,22 +788,13 @@ impl Timeline {
         }
     }
 
-    fn push(
-        &mut self,
-        board: TetrisBoard<10, 20>,
-        bag: TetrisPieceBagState,
-        piece: TetrisPiece,
-        orientation: TetrisPieceOrientation<10>,
-        lines_cleared: usize,
-    ) {
+    fn push(&mut self, board: TetrisBoard<10, 20>, bag: TetrisPieceBagState, lines_cleared: usize) {
         // Truncate timeline at current position (discard future if we branched)
         self.entries.truncate(self.current_position);
 
         self.entries.push(TimelineEntry {
             board,
             bag,
-            piece,
-            orientation,
             lines_cleared,
         });
         self.current_position = self.entries.len();
@@ -948,98 +949,89 @@ pub fn run_tetris_atlas_explore(db_path: &str) {
             })?;
 
             // Handle input
-            if event::poll(Duration::from_millis(100))? {
-                if let Event::Key(key) = event::read()? {
-                    match key.code {
-                        KeyCode::Char('q') | KeyCode::Esc => break,
-                        KeyCode::Left => {
-                            timeline.go_back();
-                        }
-                        KeyCode::Right => {
-                            timeline.go_forward();
-                        }
-                        KeyCode::Char(c) => {
-                            let piece_opt = match c {
-                                '1' => Some(TetrisPiece::O),
-                                '2' => Some(TetrisPiece::I),
-                                '3' => Some(TetrisPiece::L),
-                                '4' => Some(TetrisPiece::J),
-                                '5' => Some(TetrisPiece::S),
-                                '6' => Some(TetrisPiece::Z),
-                                '7' => Some(TetrisPiece::T),
-                                'o' | 'O' => Some(TetrisPiece::O),
-                                'i' | 'I' => Some(TetrisPiece::I),
-                                'l' | 'L' => Some(TetrisPiece::L),
-                                'j' | 'J' => Some(TetrisPiece::J),
-                                's' | 'S' => Some(TetrisPiece::S),
-                                'z' | 'Z' => Some(TetrisPiece::Z),
-                                't' | 'T' => Some(TetrisPiece::T),
-                                'r' | 'R' => {
-                                    // Random piece from available pieces in DB
-                                    let available: Vec<TetrisPiece> = [
-                                        TetrisPiece::O,
-                                        TetrisPiece::I,
-                                        TetrisPiece::L,
-                                        TetrisPiece::J,
-                                        TetrisPiece::S,
-                                        TetrisPiece::Z,
-                                        TetrisPiece::T,
-                                    ]
-                                    .iter()
-                                    .copied()
-                                    .filter(|&p| bag.contains(p) && atlas.lookup_exists(board, p))
-                                    .collect();
+            if event::poll(Duration::from_millis(100))?
+                && let Event::Key(key) = event::read()?
+            {
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => break,
+                    KeyCode::Left => {
+                        timeline.go_back();
+                    }
+                    KeyCode::Right => {
+                        timeline.go_forward();
+                    }
+                    KeyCode::Char(c) => {
+                        let piece_opt = match c {
+                            '1' => Some(TetrisPiece::O),
+                            '2' => Some(TetrisPiece::I),
+                            '3' => Some(TetrisPiece::L),
+                            '4' => Some(TetrisPiece::J),
+                            '5' => Some(TetrisPiece::S),
+                            '6' => Some(TetrisPiece::Z),
+                            '7' => Some(TetrisPiece::T),
+                            'o' | 'O' => Some(TetrisPiece::O),
+                            'i' | 'I' => Some(TetrisPiece::I),
+                            'l' | 'L' => Some(TetrisPiece::L),
+                            'j' | 'J' => Some(TetrisPiece::J),
+                            's' | 'S' => Some(TetrisPiece::S),
+                            'z' | 'Z' => Some(TetrisPiece::Z),
+                            't' | 'T' => Some(TetrisPiece::T),
+                            'r' | 'R' => {
+                                // Random piece from available pieces in DB
+                                let available: Vec<TetrisPiece> = [
+                                    TetrisPiece::O,
+                                    TetrisPiece::I,
+                                    TetrisPiece::L,
+                                    TetrisPiece::J,
+                                    TetrisPiece::S,
+                                    TetrisPiece::Z,
+                                    TetrisPiece::T,
+                                ]
+                                .iter()
+                                .copied()
+                                .filter(|&p| bag.contains(p) && atlas.lookup_exists(board, p))
+                                .collect();
 
-                                    if !available.is_empty() {
-                                        use rand::RngExt;
-                                        let mut rng = rand::rng();
-                                        let idx = rng.random_range(0..available.len());
-                                        Some(available[idx])
-                                    } else {
-                                        None
-                                    }
+                                if !available.is_empty() {
+                                    use rand::RngExt;
+                                    let mut rng = rand::rng();
+                                    let idx = rng.random_range(0..available.len());
+                                    Some(available[idx])
+                                } else {
+                                    None
                                 }
-                                _ => None,
-                            };
+                            }
+                            _ => None,
+                        };
 
-                            if let Some(piece) = piece_opt {
-                                // Check if piece is valid (in bag and in DB)
-                                if bag.contains(piece) && atlas.lookup_exists(board, piece) {
-                                    if let Some(orientation) =
-                                        atlas.lookup_orientation(board, piece)
-                                    {
-                                        // Apply the move
-                                        game.board = board;
-                                        game.set_bag_piece_seeded(bag, piece, 42);
+                        if let Some(piece) = piece_opt {
+                            // Check if piece is valid (in bag and in DB)
+                            if bag.contains(piece)
+                                && atlas.lookup_exists(board, piece)
+                                && let Some(orientation) = atlas.lookup_orientation(board, piece)
+                            {
+                                // Apply the move
+                                game.board = board;
+                                game.set_bag_piece_seeded(bag, piece, 42);
 
-                                        let placement = tetris_game::TetrisPiecePlacement {
-                                            piece,
-                                            orientation,
-                                        };
-                                        let result = game.apply_placement(placement);
-                                        if !result.is_lost {
-                                            let mut new_bag = bag;
-                                            new_bag.remove(piece);
-                                            // Auto-refill bag if empty (matches create mode behavior)
-                                            if new_bag.count() == 0 {
-                                                new_bag.fill();
-                                            }
-                                            let lines_cleared = timeline.total_lines_cleared()
-                                                + result.lines_cleared as usize;
-                                            timeline.push(
-                                                game.board,
-                                                new_bag,
-                                                piece,
-                                                orientation,
-                                                lines_cleared,
-                                            );
-                                        }
+                                let placement =
+                                    tetris_game::TetrisPiecePlacement { piece, orientation };
+                                let result = game.apply_placement(placement);
+                                if !result.is_lost {
+                                    let mut new_bag = bag;
+                                    new_bag.remove(piece);
+                                    // Auto-refill bag if empty (matches create mode behavior)
+                                    if new_bag.count() == 0 {
+                                        new_bag.fill();
                                     }
+                                    let lines_cleared = timeline.total_lines_cleared()
+                                        + result.lines_cleared as usize;
+                                    timeline.push(game.board, new_bag, lines_cleared);
                                 }
                             }
                         }
-                        _ => {}
                     }
+                    _ => {}
                 }
             }
         }
@@ -1062,6 +1054,20 @@ pub fn run_tetris_atlas_explore(db_path: &str) {
     }
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Worker count is checked in 1..=256 and worker_id is below it; usize products are at most 65536, start is below 256, and end is at most 256."
+)]
+fn worker_partition_bounds(worker_id: usize, num_workers: usize) -> (u8, u16) {
+    assert!(
+        (1..=256).contains(&num_workers) && worker_id < num_workers,
+        "worker index must be below a worker count in 1..=256"
+    );
+    let start = worker_id * 256 / num_workers;
+    let end = (worker_id + 1) * 256 / num_workers;
+    (start as u8, end as u16)
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -1071,6 +1077,10 @@ fn main() {
     }
 }
 
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Throughput and hit rates are approximate reporting statistics; exact counters remain integers."
+)]
 pub fn run_tetris_atlas_create(db_path: &str) {
     set_global_threadpool();
 
@@ -1199,9 +1209,36 @@ pub fn run_tetris_atlas_create(db_path: &str) {
 
     // Wait for all worker threads to finish
     for h in handles {
-        let _ = h.join();
+        h.join()
+            .expect("Atlas worker must finish without panicking");
     }
 
     eprintln!("All workers stopped.");
     println!("Finished in {:.2} seconds", start.elapsed().as_secs_f64());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn worker_partitions_cover_every_hash_byte_without_gaps() {
+        for workers in [1, 2, 16, 255, 256] {
+            let mut previous_end = 0u16;
+            for id in 0..workers {
+                let (start, end) = worker_partition_bounds(id, workers);
+                assert_eq!(u16::from(start), previous_end);
+                assert!(end > u16::from(start));
+                previous_end = end;
+            }
+            assert_eq!(previous_end, 256);
+        }
+    }
+
+    #[test]
+    fn worker_partition_rejects_invalid_counts_and_indices() {
+        for (id, workers) in [(0, 0), (0, 257), (2, 2)] {
+            assert!(std::panic::catch_unwind(|| worker_partition_bounds(id, workers)).is_err());
+        }
+    }
 }
