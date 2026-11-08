@@ -36,9 +36,9 @@ terminal target:
 
 The code uses the canonical engine primitives directly:
 
-- `TetrisBoard` for exact occupancy, gravity, line clears, loss detection, and hashing.
+- `TetrisBoard<10, 20>` for exact occupancy, gravity, line clears, loss detection, and hashing.
 - `TetrisPieceBagState` for the 7-bit remaining-bag mask and next-piece enumeration.
-- `TetrisPiecePlacement::all_from_piece(piece)` for legal final-placement enumeration.
+- `TetrisPiecePlacement::<10>::all_from_piece(piece)` for legal final-placement enumeration.
 - `TetrisBoard::apply_piece_placement` for concrete board transitions.
 
 Boards are interned in `BoardCache`, and search results are memoized with a typed
@@ -82,8 +82,8 @@ count(board)     <= --max-count
 ```
 
 These caps keep the state space bounded. They are proof assumptions for the run:
-a `winning=YES` result proves a reset strategy that never leaves the configured
-admissible region before the final empty reset.
+a verified positive result in `empty` target mode certifies a reset strategy within that
+region. A negative result applies only to this horizon and carrier.
 
 ## Running
 
@@ -174,163 +174,26 @@ cargo run --release -p tetris-playground --bin tetris_bag_cycle_solver -- \
   --closed-set-max-height 4 --closed-set-max-holes 0
 ```
 
-## Result Meaning
+## Result meaning
 
-`winning=YES` means the solver found a strategy that forces an empty-board reset
-within the configured number of bag cycles under the configured admissibility
-caps. Chaining that reset gives an infinite-play proof for the loop state.
+In `--target-mode empty`, a positive result with clean witness verification establishes an
+online reset strategy at the configured horizon and caps. Repeating a verified reset from the
+empty/full-bag root gives an infinite-survival policy. The stored witnesses must cover every
+legal adversarial draw; a single successful path is insufficient.
 
-`winning=NO` does not prove the reset theorem false. It only means no strategy
-was found within the current horizon, board caps, search ordering, and strict
-empty-reset target.
+In `--target-mode low-clean`, success establishes the configured finite-horizon terminal
+predicate. It does not show that the terminal set is closed under another bag.
 
-## Current Limitations
+A completed negative solve excludes a strategy only for the selected horizon, carrier, and
+target. It does not exclude all canonical survival policies. Search/progress coverage is
+specific to its reported denominator and is not a proof-completion percentage.
 
-- The target is very strict. Returning to the empty board is much narrower than
-  returning to any board in a closed safe set.
-- The solver reports a single root boolean, so failed runs do not yet say whether
-  the approach is 5%, 40%, or 95% of the way through the current proof ladder.
-- Full witness export to a standalone Atlas format is not implemented yet, but
-  successful runs now keep an in-memory witness policy and verify it before
-  reporting a clean proof.
-- The DFS root solve still short-circuits on the first failed adversary branch, which is efficient
-  for proving `NO` under current ordering but weak for diagnosis.
-- Root diagnostics now evaluate every root piece branch, but deeper failed-frontier
-  diagnostics are still limited.
-- Transitions are cached as `(board, piece) -> successors`, but the DFS is still
-  single-threaded.
-- A bottom-up retrograde implementation exists behind `--algorithm retrograde`,
-  but dependency-driven reverse updates and parallel expansion are not implemented.
+## Implementation scope
 
-## Incremental Viability System
+The default DFS memoizes states and caches board/piece transitions. A bottom-up implementation
+is available with `--algorithm retrograde`. Positive results retain an in-memory witness policy
+and run concrete replay verification; exported summaries include verification results.
 
-This experiment should be treated as a measurable system, not a one-shot
-`YES/NO` gamble. The goal is to move a fixed score upward through repeated
-changes:
-
-```text
-33% -> 40% -> 70% -> 99% -> 100%
-```
-
-Use a versioned proof ladder. Each scenario is a fixed tuple:
-
-```text
-(bag_cycles, max_height, max_holes, max_roughness, max_count)
-```
-
-Start with a small ladder and only add harder scenarios when the previous ones
-are stable:
-
-```text
-L0: cargo check and unit tests pass
-L1: 5 bags, height 2, holes 0
-L2: 5 bags, height 3, holes 0
-L3: 5 bags, height 4, holes 0
-L4: 5 bags, height 4, holes 1
-L5: 10 bags, height 4, holes 0
-L6: relaxed closed-set reset instead of empty reset
-```
-
-For every run, write a JSON summary under `artifacts/output/` with:
-
-```text
-commit hash
-command and config
-hardware and rustc -Vv
-winning boolean
-elapsed seconds
-nodes/sec
-boards interned
-memo entries
-cell/admissibility/death prune counts
-root piece coverage
-adversary obligation coverage
-first failing state and piece
-hardest frontier boards
-```
-
-The main score should not be only "how many scenarios passed." Failed scenarios
-need partial progress metrics:
-
-```text
-root_piece_coverage =
-  pieces from the full bag with at least one proven placement / 7
-
-adversary_obligation_coverage =
-  proven (state, next_piece) obligations / total diagnosed obligations
-
-frontier_repair_rate =
-  failed obligations that become proven after the latest change / old failures
-```
-
-That gives us an honest improvement loop: each code or heuristic change should
-show which obligations became solvable, which stayed blocked, and whether the
-search got faster or only searched more.
-
-## Top 3 Improvements
-
-### 1. Add witness extraction, verification, and progress diagnostics
-
-The highest-priority improvement is observability. The solver should store the
-winning placement for every proven OR obligation and export a witness policy.
-Then an independent verifier should replay that policy over the full adversarial
-tree and confirm:
-
-```text
-for every reachable witness state
-for every legal next piece in the bag
-the stored placement is legal
-the successor is either the final empty board or another verified witness state
-```
-
-For failed runs, add a diagnostic mode that does not stop at the first failed
-AND branch. It should count branch coverage and emit the smallest or most common
-frontier blockers. This is what turns the project into an incremental system:
-we can measure that a change improved a scenario from, for example, 33% to 40%
-even when it still does not prove the root.
-
-### 2. Replace recursive DFS with a cached transition universe plus retrograde solve
-
-The current DFS repeatedly computes placements and learns only the states it
-happens to visit under its current ordering. For the finite reset theorem, a
-stronger structure is available:
-
-```text
-Win[0] = { empty board at horizon }
-Win[t + 1] contains state S iff
-  for every next piece p in bag(S)
-  there exists a placement a
-  such that successor(S, p, a) is in Win[t]
-```
-
-Build or lazily cache board-piece successors once, deduplicate successor boards,
-and solve this recurrence bottom-up or with dependency-driven reverse updates.
-This gives better reuse, easier parallelism, exact coverage counts by depth, and
-natural witness extraction.
-
-### 3. Generalize from empty reset to a closed bag-boundary safe set
-
-Empty reset is elegant but probably too restrictive. A more viable proof target
-is a closed set of low, clean bag-boundary boards:
-
-```text
-S is a safe set iff for every board in S and every full-bag adversarial sequence,
-the player can return to some board in S without leaving the admissible region.
-```
-
-This keeps the proof-by-construction shape while giving the solver more room.
-The system can start with `S = { empty }`, then grow `S` with candidate boards
-found by search, beam policies, or success-set solving. The incremental metric
-becomes the size and closure rate of `S`, not just whether one empty reset exists.
-
-## Suggested Next Implementation Order
-
-1. Export the verified witness policy to a compact artifact that can be replayed
-   outside the process.
-2. Extend diagnostics below the root: persist failed frontier obligations and
-   track repair rate between runs.
-3. Add dependency-driven reverse updates to the retrograde solver so it avoids
-   full finite-universe scans on larger caps.
-4. Parallelize transition expansion and, where deterministic, branch evaluation.
-5. Turn `low-clean` from a relaxed terminal predicate into a true closed-set
-   fixed-point solver.
+DFS evaluates root piece branches for diagnostics by default; `--no-diagnostics` disables it. Independent policy
+export/replay and closure across a general low-clean terminal set remain separate from merely
+finding a finite-horizon candidate. Use `--help` for current diagnostic and summary options.

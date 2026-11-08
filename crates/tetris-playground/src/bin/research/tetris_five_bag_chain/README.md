@@ -6,30 +6,32 @@ Chain-solve 5-bag sequences by reusing the MCTS tree across related sequences.
 
 Instead of solving each 5-bag sequence from scratch, solve one sequence then
 **swap the last bag** and reuse the existing tree. Since the first 4 bags
-(28 pieces) are unchanged, all tree knowledge for steps 0-27 carries over.
-Only the last 7 steps need re-exploration.
+(28 pieces) are unchanged, their board transitions can be reused. Search values may still
+depend on the changed final bag, so reuse is a heuristic rather than an independent proof.
 
 ## Algorithm
 
 1. Generate a random 5-bag sequence `[B0, B1, B2, B3, B4]`
-2. Run PUCT/MCTS until solved (empty board after 35 pieces) or 10s timeout
+2. Run PUCT/MCTS until solved (empty board after 35 pieces) or the per-sequence timeout
+   (60 seconds by default)
 3. On solve: swap bag 4 with a new random bag -> `[B0, B1, B2, B3, B5]`
    - Invalidate all nodes at step >= 28
    - Keep tree structure and visit stats for steps 0-27
 4. Resume MCTS on the pruned tree
 5. Repeat until 6-minute global deadline
 
-## Why this helps
+## Intended benefit
 
-- The tree at steps 0-27 is already well-explored with accurate Q-values
-- Only ~20% of the tree (bag 5 territory) needs re-exploration
-- Each subsequent solve should be dramatically faster than a cold start
-- Enables solving many more sequences in the same wall-clock budget
+Reusing prefix transitions can reduce repeated work. The final seven moves are 20% of the
+sequence, not necessarily 20% of the search tree or runtime. Measure reuse against a cold
+start on identical sequences before claiming a speedup. These are known-sequence witnesses;
+they do not establish an online strategy against adversarial draws.
 
 ## Running
 
 ```sh
-cargo run --release -p tetris-playground --bin tetris_five_bag_chain
+cargo run --release -p tetris-playground --features tui --bin tetris_five_bag_chain -- \
+  run --timeout 60 --global-timeout 360
 ```
 
 ## Output

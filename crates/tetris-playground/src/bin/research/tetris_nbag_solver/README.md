@@ -1,7 +1,6 @@
 # N-Bag Empty-Return Solver
 
-**Level:** L0 (empirical search)
-**Status:** Search tool — finds placement sequences returning to empty for specific seeds
+Search tool for empty-return witnesses on specific seeded sequences.
 
 ## Strategy
 
@@ -25,6 +24,7 @@ player knows the full sequence in advance.
 
 Each bag places 28 cells. Line clears remove 10 cells each. For N bags to
 return to empty: `28N` must be divisible by 10, so N must be a multiple of 5.
+This is a necessary condition, not a guarantee that a placement sequence exists.
 
 - 5 bags → 14 lines needed (2.8/bag)
 - 10 bags → 28 lines needed (2.8/bag)

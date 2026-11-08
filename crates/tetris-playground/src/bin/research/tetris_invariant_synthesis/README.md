@@ -1,7 +1,6 @@
 # Controlled-Invariant Synthesis (MVP)
 
-**Level:** Attempting L2 (non-adversarial approximation)
-**Status:** Experimental
+Experimental approximation of an adversarial safety game.
 
 ## Strategy
 
@@ -19,8 +18,10 @@ keeps the state safe.
 
 ## Opponent model
 
-**Non-adversarial** (falsification via rollouts). The fixed-point is computed
-over sampled states, not an exact state space.
+The fixed-point step uses adversarial piece obligations over a sampled abstract model.
+Rollout falsification samples continuations and does not exhaust the adversary's choices.
+Optimistic representative selection or ignored unknown successors can leave spurious candidates;
+concrete closure, transition replay, and empty-seed reachability remain separate obligations.
 
 ## Constraints
 
@@ -33,5 +34,7 @@ over sampled states, not an exact state space.
 
 ```sh
 cargo run --release -p tetris-playground --bin tetris_invariant_synthesis -- \
-  --mode incremental --max-rounds 20 --max-concrete-states 150000
+  --mode incremental --max-rounds 20 --max-concrete-states 150000 \
+  --policy-map-csv artifacts/output/tetris_invariant_policy_map.csv \
+  --artifact-dir artifacts/output/invariant-synthesis
 ```

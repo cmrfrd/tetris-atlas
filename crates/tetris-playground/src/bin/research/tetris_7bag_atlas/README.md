@@ -1,7 +1,6 @@
 # 7-Bag Adversarial Atlas Solver
 
-**Level:** Attempting L2/L3 (adversarial)
-**Status:** All tested configurations → 0% winning
+**Goal:** A policy-closed winning set under adversarial 7-bag draws.
 
 ## Strategy
 
@@ -24,11 +23,12 @@ possible adversary choice. This is the strongest (hardest) opponent model.
 - Retrograde GFP: start with all states as "winning", eliminate those with no
   surviving move against some adversary choice
 
-## Results
+## Interpreting results
 
-Every tested height/hole/roughness configuration produces **0% winning states**.
-The adversarial admissibility constraints help the adversary — they can always
-force the player into a losing position within the bounded state space.
+Results apply to the explored height/hole/roughness carrier. Unexpanded successors and
+expansion caps must be resolved before a surviving candidate is certified. An empty winning
+set inside a restricted carrier does not prove the canonical game losing. Preserve exact
+run parameters and independently replay the policy before claiming closure or seed reachability.
 
 ## Usage
 

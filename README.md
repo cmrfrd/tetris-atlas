@@ -4,7 +4,8 @@ A research project aiming to **solve Tetris** — including techniques such as a
 
 ## Quick start / Demos
 
-Runnable binaries are in the `tetris-playground` crate. All artifacts (model checkpoints, datasets, etc.) are generates from these binaries.
+Runnable binaries are in `tetris-playground`. Write checkpoints, datasets, databases, and other
+runtime output under the gitignored `artifacts/` directory.
 
 ```sh
 # Run tests
@@ -13,7 +14,7 @@ cargo test --workspace
 # Watch a beam search agent play
 cargo run --release -p tetris-playground --bin tetris_demo_single
 
-# Multi-beam voting (stronger, slower)
+# Multi-beam voting
 cargo run --release -p tetris-playground --bin tetris_demo_multi
 ```
 
@@ -22,39 +23,43 @@ cargo run --release -p tetris-playground --bin tetris_demo_multi
 ```
 crates/
 ├── tetris-game        Core engine: board, pieces, bag, placement, line clearing
-├── tetris-search      Tetris DAG search, Beam search, multi-beam voting, and more
+├── tetris-utils       Bit operations, loop unrolling, and fixed-capacity containers
+├── tetris-search      Beam/multi-beam search, sequence planning, parallel exploration
 ├── tetris-ml          Candle-based ML: NN modules, optimizers, checkpointing
 ├── tetris-playground  All runnable binaries (demos, training, atlas builders, experiments)
 ├── tetris-benches     Criterion + pprof benchmarks
 ├── tensorboard        TensorBoard event-file writer
-└── proc-macros        Conditional inlining and loop unrolling macros
+└── proc-macros        Read-only field accessors and conditional inlining
 ```
 
 ## Training
 
-Included in this project (specifically in the `tetris-ml` crate) are ML training binaries use Candle with optional CUDA or Metal acceleration.
+Training binaries live in `tetris-playground` and use `tetris-ml` with Candle.
+Enable `ml`; add `candle-metal` on a configured macOS host or `candle-cuda` for CUDA.
 
 ```sh
 # Beam-supervised learning (learns from beam search trajectories)
 RAYON_STACK_SIZE_MB=64 cargo run --release -p tetris-playground \
-  --features candle-metal \
+  --features ml,candle-metal \
   --bin tetris_train_beam_supervised -- train \
   --run-name my-run \
   --logdir ./artifacts/logdir \
   --checkpoint-dir ./artifacts/checkpoints
 
-# Resume from checkpoint
-cargo run --release -p tetris-playground --features candle-metal \
+# Resume an existing run: replace <run-ulid> with the ULID printed by that run.
+cargo run --release -p tetris-playground --features ml,candle-metal \
   --bin tetris_train_beam_supervised -- train \
-  --run-name my-run --logdir ./artifacts/logdir --checkpoint-dir ./artifacts/checkpoints --resume
+  --run-name my-run --logdir ./artifacts/logdir --checkpoint-dir ./artifacts/checkpoints \
+  --resume "<run-ulid>"
 
 # Run inference
-cargo run --release -p tetris-playground --features candle-metal \
+cargo run --release -p tetris-playground --features ml,candle-metal \
   --bin tetris_train_beam_supervised -- inference \
-  --checkpoint ./artifacts/checkpoints/my-run/latest.safetensors
+  --checkpoint "./artifacts/checkpoints/my-run/<run-ulid>"
 ```
 
-Use `--features candle-cuda` instead of `candle-metal` for NVIDIA GPUs.
+Checkpoints and logs are grouped as `<base>/<run-name>/<run-ulid>/`. Inference accepts that
+checkpoint directory, including its policy configuration. For CPU training, use `--features ml`.
 
 ## Benchmarking
 

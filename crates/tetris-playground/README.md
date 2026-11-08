@@ -1,132 +1,86 @@
-# Tetris Playground — Research Registry
+# Tetris Playground
 
-All runnable binaries for the Tetris Atlas project. Each binary represents a
-distinct approach toward proving infinite play under canonical 7-bag Tetris.
+Runnable demos, Atlas builders, training tools, and research experiments. Cargo targets and required
+features are declared in [Cargo.toml](Cargo.toml). New runtime output belongs under `artifacts/`.
 
-## Evaluation Framework
+## Evaluation framework
 
-### What counts as "solved"?
+The proof target is infinite survival from the empty board under the canonical 10×20 engine for
+**every legal 7-bag sequence**. At each state, the required order is **for every possible next
+piece, there exists a surviving placement**. A cycle alone is insufficient: selected moves must
+cover every legal draw and remain inside a verified policy-closed set reachable from the seed.
 
-A solution must prove that **there exists a placement strategy that survives
-forever** under the canonical rules (10-wide board, 7-bag randomizer, standard
-pieces). The strength of a result depends on what constraints it assumes:
+Use the shared [mission and milestones](../../AGENTS.md#mission-and-proof-standard). Finite play,
+sampled rollouts, and heuristic search failures do not establish an infinite-play theorem or an
+impossibility result.
 
-| Level | Description | Proof strength |
-|-------|-------------|---------------|
-| **L0** | Empirical survival (never observed to die) | No proof |
-| **L1** | Infinite play under **added constraints** (fixed bag order, bounded height, reduced board) | Partial proof (constrained game) |
-| **L2** | Infinite play under **canonical rules** for a **subset** of reachable states | Local proof (cycle found) |
-| **L3** | Infinite play under **canonical rules** from the **empty board** | Full proof |
+### How experimental restrictions affect a result
 
-### Constraint taxonomy
+| Restriction | Meaning |
+|---|---|
+| Fixed or fully known piece sequence | A witness applies to that sequence/lookahead model. |
+| Reduced board width or piece set | A result applies to the modified game. |
+| Tighter height, hole, or roughness carrier | A verified closed policy inside the carrier can prove canonical survival; failure inside it does not prove the full game losing. |
+| Empty-board reset after a fixed number of bags | A verified online reset strategy can repeat indefinitely; it is a stricter target than general survival. |
+| Sampled or abstract transitions | Require concrete transition replay and closure verification before certification. |
 
-Each approach may relax or strengthen the problem along these axes:
+### Cell-count arithmetic
 
-| Axis | Canonical | Relaxed | Strengthened |
-|------|-----------|---------|-------------|
-| **Piece sequence** | 7-bag randomizer (adversarial ordering within bag) | Fixed/known sequence | — |
-| **Board width** | 10 | Narrower (e.g., 4-wide) | — |
-| **Height bound** | 20 (loss at overflow) | Tighter (e.g., h≤6) | Unbounded |
-| **Intermediate constraints** | None | Hole/roughness limits during play | — |
-| **Opponent model** | Adversarial (worst-case bag ordering) | Non-adversarial (known ordering) | — |
-| **Cycle target** | Any reachable state | Empty board | Non-empty checkpoint |
-| **Cycle length** | Any | Fixed N bags (must be multiple of 5 for empty) | — |
+- Seven tetrominoes add 28 cells per complete bag.
+- A standard line clear removes 10 cells.
+- Returning to the same cell count after `N` complete bags requires `28N mod 10 = 0`.
+  Thus `N` must be a multiple of five; this is necessary, not sufficient.
+- Five bags add 140 cells, requiring 14 clears to return to the same cell count.
+- There are `7! = 5040` permutations of one complete bag.
 
-### Key arithmetic
+## Research binaries
 
-- 7 pieces per bag = 28 cells placed
-- Line clear removes exactly 10 cells
-- N bags can return to same cell count iff `28N mod 10 = 0` → N must be multiple of 5
-- 5 bags: 140 cells, 14 lines needed (2.8 lines/bag average)
-- 5040 possible bag permutations per bag (7!)
+| Binary | Purpose | Required features | Documentation |
+|---|---|---|---|
+| `tetris_7bag_atlas` | Adversarial AND-OR retrograde elimination in a bounded carrier | None | [README](src/bin/research/tetris_7bag_atlas/README.md) |
+| `tetris_bag_cycle_solver` | Adversarial finite-horizon empty-reset or low-clean target search | None | [README](src/bin/research/tetris_bag_cycle_solver/README.md) |
+| `tetris_success_set_solver` | Closed winning-set search with proof-graph and engine replay checks | None | [README](src/bin/research/tetris_success_set_solver/README.md) |
+| `tetris_nbag_solver` | Empty-return search for a fixed seeded sequence | None | [README](src/bin/research/tetris_nbag_solver/README.md) |
+| `tetris_five_bag_chain` | MCTS tree reuse across related known five-bag sequences | `tui` | [README](src/bin/research/tetris_five_bag_chain/README.md) |
+| `tetris_atlas_narrow` | Atlas exploration for the four-column O/L/J variant | `tui` | [README](src/bin/research/tetris_atlas_narrow/README.md) |
+| `tetris_invariant_synthesis` | Sampled abstract safety-game synthesis and falsification | None | [README](src/bin/research/tetris_invariant_synthesis/README.md) |
+| `tetris_decision_forest` | Boolean decision-forest evolution and search-teacher distillation | None | [README](src/bin/research/tetris_decision_forest/README.md) |
 
----
+Research results are specific to a run, engine version, configuration, and opponent model. Preserve
+those details with replayable witnesses or certificates. An unsuccessful beam/MCTS run does not
+show that its sequence is impossible.
 
-## Research Binaries
+## Demos and tools
 
-### Adversarial solvers (worst-case piece ordering)
+| Binary | Purpose | Required features |
+|---|---|---|
+| `tetris_demo_single` | Single beam search | None |
+| `tetris_demo_multi` | Multi-beam voting | None |
+| `tetris_demo_adaptive_multi` | Adaptive multi-beam search | None |
+| `tetris_five_bag_empty` | Five-bag empty-return experiment | None |
+| `tetris_five_bag_bench` | Five-bag experiment timing | None |
+| `tetris_state_trajectory` | State-trajectory visualization | None |
+| `tetris_cli` | Interactive ML-backed game CLI | `ml` |
 
-#### `tetris_7bag_atlas`
-- **Strategy:** AND-OR retrograde elimination over (board, bag_remaining) states
-- **Opponent:** Full adversarial — enemy picks any remaining bag piece
-- **Constraints:** Configurable h/holes/roughness/count bounds
-- **Status:** All tested configurations → 0% winning. Adversarial admissibility constraints help the adversary too much.
-- **README:** [Yes](src/bin/research/tetris_7bag_atlas/README.md)
+## Atlas builders
 
-#### `tetris_bag_cycle_solver`
-- **Strategy:** Memoized AND-OR depth-bounded search proving player can force empty-board reset in N cycles against adversary
-- **Opponent:** Adversarial bag ordering
-- **Constraints:** N bags (multiple of 5), configurable h/holes/roughness/count
-- **Status:** Tested at various bounds; no winning configuration found yet
-- **README:** [Yes](src/bin/research/tetris_bag_cycle_solver/README.md)
+| Binary | Purpose | Required features |
+|---|---|---|
+| `tetris_atlas_inmemory` | In-memory graph/frontier with checkpointing and death propagation | `tui` |
+| `tetris_atlas_rocksdb` | RocksDB-backed Atlas | `rocksdb-backend,tui` |
+| `tetris_atlas_partitioned` | Partitioned RocksDB-backed Atlas | `rocksdb-backend` |
+| `tetris_atlas_bagstate` | Bag-state-aware RocksDB exploration | `rocksdb-backend` |
+| `tetris_atlas_puct` | PUCT-guided Atlas exploration | None |
 
-#### `tetris_success_set_solver`
-- **Strategy:** Exact in-memory retrograde solver; state=(board, bag_mask), target=empty board, AND-OR with witness extraction
-- **Opponent:** Adversarial
-- **Constraints:** Configurable h/holes/cells/roughness/height_spread
-- **Status:** In development
-- **README:** [Yes](src/bin/research/tetris_success_set_solver/README.md)
+Graph expansion and persisted lookup entries require independent closure and seed-reachability
+checks before they establish a survival proof.
 
-### Non-adversarial / known-sequence solvers
+## Training
 
-#### `tetris_nbag_solver`
-- **Strategy:** Searches for placement sequence over N seeded random bags returning to empty
-- **Opponent:** Non-adversarial (known sequence from seed)
-- **Constraints:** N bags (multiple of 5 for empty target), seeded RNG
-- **Status:** Empirical search tool, not exhaustive
-- **README:** [Yes](src/bin/research/tetris_nbag_solver/README.md)
+| Binary | Purpose | Required features |
+|---|---|---|
+| `tetris_train_beam_supervised` | Candle model trained from beam-search trajectories | `ml` |
+| `tetris_train_genetic` | Genetic search over heuristic weights | `ml` |
 
-### SMT / synthesis approaches
-
-#### `tetris_invariant_synthesis`
-- **Strategy:** Fixed-point elimination on sampled concrete states + refinement rounds
-- **Opponent:** Non-adversarial (falsification via rollouts)
-- **Constraints:** Bucketed state space (height/holes/roughness)
-- **Status:** Experimental
-- **README:** [Yes](src/bin/research/tetris_invariant_synthesis/README.md)
-
----
-
-## Non-Research Binaries
-
-### Examples (demos)
-
-| Binary | Description |
-|--------|-------------|
-| `tetris_demo_single` | Single beam search playing Tetris |
-| `tetris_demo_multi` | Multi-beam voting |
-| `tetris_demo_adaptive_multi` | Adaptive multi-beam with dynamic width |
-
-### Atlas builders
-
-| Binary | Description |
-|--------|-------------|
-| `tetris_atlas_inmemory` | In-memory BFS state-space expansion with checkpointing |
-| `tetris_atlas_rocksdb` | RocksDB-backed persistent atlas |
-
-### Training
-
-| Binary | Description |
-|--------|-------------|
-| `tetris_train_beam_supervised` | Beam-supervised neural net training (Candle) |
-| `tetris_train_genetic` | Genetic algorithm over heuristic weight vectors |
-
----
-
-## Progress Summary
-
-| Approach | Level | Key result |
-|----------|-------|------------|
-| All exhaustive adversarial solvers | — | 0% winning at all tested bounds |
-| SMT/synthesis | — | No invariants found yet |
-| Beam search demos | L0 | Millions of pieces without death (empirical) |
-
-### What's proven
-
-
-### What's NOT proven
-
-- No adversarial solver has found a winning state at any height bound
-- No 5-step chain cycle has been closed (cover diverges at step 3)
-- No inductive invariant has been synthesized
-- The canonical game (adversarial 7-bag on 10×20) remains unproven
+Add `candle-metal` or `candle-cuda` when using that configured accelerator. See the root
+[training commands](../../README.md#training) for checkpoint-directory and resume syntax.

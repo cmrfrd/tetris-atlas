@@ -1,110 +1,69 @@
 # `tetris_success_set_solver`
 
-This directory is an isolated implementation plan and scaffold for an exact in-memory solver for the capped recovery game:
+Searches for a closed winning set in the canonical no-preview, no-hold 7-bag game, subject to
+configured board-admissibility bounds. The current CLI runs the proof-graph implementation in
+`proof.rs`; the older recovery-to-empty retrograde implementation is retained under `cfg(test)`.
 
-- state = `(board, bag_mask)`
-- target = `empty board`
-- rule = for every next piece allowed by the current bag, there exists a legal placement that stays inside the success set
+## State and obligations
 
-## Why this design fits this repo
+A bag node is an exact `(board, remaining_bag)` state. It must satisfy every remaining-piece
+obligation; a piece node needs at least one non-losing placement whose successor stays in the
+winning set. Removing the last bag piece refills the membership mask with all seven pieces.
 
-The repo already has the core primitives the solver should reuse directly:
+The solver uses `TetrisBoard<10, 20>`, `TetrisPieceBagState`, and
+`TetrisPiecePlacement<10>` directly. Actions come from `all_from_piece(piece)` and transitions
+use `apply_piece_placement`. It does not sample or shuffle a `TetrisGame` stream during graph
+construction.
 
-- `tetris_game::TetrisBoard`
-  Exact board occupancy, line clearing, height, loss detection, and hashing.
-- `tetris_game::TetrisPieceBagState`
-  Exact 7-bit bag-mask representation with `contains`, `remove`, `fill`, and `iter_next_states`.
-- `tetris_game::TetrisPiecePlacement`
-  Canonical final placements, globally indexed by `u8`, with `all_from_piece(piece)`.
-- `TetrisBoard::apply_piece_placement`
-  Exact transition operator for `(board, placement) -> (board', lines_cleared, is_lost)`.
+The default root is the empty board with a full bag. `--root-board-rows` and `--root-bag-mask`
+can select another root; a result for that root requires a separate reachability argument before
+it establishes survival from a new canonical game.
 
-That means this solver should not introduce an alternate board encoding or alternate bag logic in the first milestone. The first exact implementation should use `TetrisBoard` as the canonical board key and only add dense interning and compact graph storage around it.
+## Solve modes
 
-## Key repo-specific decisions
+`--solve-mode` accepts `full`, `core-first` (the CLI default), `template-kernel`, and `optimistic`.
+The latter modes change how candidate cores, templates, or repairs are explored. A partial
+candidate or a budget-limited probe is not certified merely because its unresolved frontier
+has no observed death.
 
-### 1. Use `TetrisBoard` directly as the interned board key
+The root conclusion is `yes`, `no`, or `unresolved`. A completed negative result applies to the
+configured admissible carrier, not automatically to the unrestricted canonical game.
+`unresolved` must remain distinct from either conclusion.
 
-The engine already stores boards as `[u32; 10]`, derives `Hash + Eq + Ord + Copy`, and line clears are applied immediately inside `apply_piece_placement`. There is no extra canonicalization step needed beyond rejecting boards above the configured height cap.
+## Verification and export
 
-### 2. Use `TetrisPieceBagState` directly as the bag mask
+For resolved conclusions, the CLI runs both `verify_proof` and `verify_replay` and rejects
+verification failures. The graph checker validates witnesses and resolutions; the replay checker
+recomputes concrete placements and bag transitions with the engine. Unknown results use no
+completed-certificate claim.
 
-The engine’s bag-state type already matches the exact solver’s needs. The correct next-bag transition is:
+`--export-path` selects a summary JSON path; a proof-graph artifact is written beside it. Preserve
+the configuration, root, source revision, verification output, and artifacts together. A positive
+result at the empty/full-bag seed must include verified closure over every legal next piece.
 
-- remove current piece
-- if bag becomes empty, refill to full mask
+## Modules
 
-That behavior already exists in `iter_next_states`.
+| File | Responsibility |
+|---|---|
+| `main.rs` | CLI, result reporting, verification orchestration, exports |
+| `config.rs` | Board admissibility and root-state configuration |
+| `admissibility.rs` | Concrete admissibility checks |
+| `state.rs` | State keys, bag transitions, packed placement helpers |
+| `proof.rs` | Current proof-graph search, solve modes, witness and resolution checks |
+| `verifier.rs` | Concrete engine replay verification |
+| `graph.rs`, `universe.rs`, `retrograde.rs`, `policy.rs` | Test-only recovery solver and reference infrastructure |
 
-### 3. Use `TetrisPiecePlacement::all_from_piece(piece)` for action enumeration
+## Usage
 
-This repo models legal actions as canonical final placements for the current piece, not path-dependent input sequences. The solver should follow that exact convention.
+```sh
+cargo run -p tetris-playground --bin tetris_success_set_solver -- --help
 
-### 4. Avoid `TetrisGame` during graph construction
+mkdir -p artifacts/output/success-set
+cargo run --release -p tetris-playground --bin tetris_success_set_solver -- \
+  --max-height 2 --max-holes 0 --solve-mode full \
+  --export-path artifacts/output/success-set/summary.json
 
-`TetrisGame` is useful for full gameplay, but it shuffles a bag stream and advances RNG state. The success-set solver only needs:
+cargo test -p tetris-playground --bin tetris_success_set_solver
+```
 
-- current board
-- current bag mask
-- current concrete piece
-- exact board transition under one final placement
-
-So graph construction should work from `TetrisBoard`, `TetrisPieceBagState`, and `TetrisPiecePlacement` directly.
-
-## Proposed module split
-
-- `main.rs`
-  CLI entrypoint and top-level orchestration.
-- `config.rs`
-  Solver configuration, CLI-to-config translation, and milestone presets.
-- `state.rs`
-  Dense IDs, bag helpers, packed placement aliases, and state-key utilities.
-- `universe.rs`
-  Board/state interning plus forward-reachable capped-universe expansion.
-- `graph.rs`
-  Flat edge storage and per-state piece-range indexing.
-- `retrograde.rs`
-  Fixed-point success-set solve plus exact depth recurrence.
-- `policy.rs`
-  Witness extraction and invariant verification helpers.
-- `verifier.rs`
-  Independent replay verification for proof results.
-
-## Milestone plan
-
-### M1: exact correctness-first solver
-
-- Build the forward-reachable capped universe from all empty-board nonzero bag masks.
-- Store transitions in flat vectors.
-- Solve with a simple full-rescan fixed point.
-- Store one best witness action per `(state, piece)`.
-- Print exact counts and depth stats.
-
-### M2: graph and solve optimization
-
-- Replace nested vectors with tighter range-based indexing if needed.
-- Add reverse predecessor tracking for dependency-driven retrograde updates.
-- Add packed win flags and optional successor dedup-by-state.
-
-### M3: analysis and export
-
-- Query `is_winning(board, FULL_BAG)`.
-- Query `is_winning_for_all_bags(board)`.
-- Print depth histograms and board-height histograms.
-- Add optional artifact export for later visualization or atlas bridging work.
-
-## Recommended first implementation order
-
-1. Implement `state.rs` helpers and tests.
-2. Implement `universe.rs` around `HashMap<TetrisBoard, BoardId>` and `HashMap<StateKey, StateId>`.
-3. Enumerate transitions with `TetrisPiecePlacement::all_from_piece`.
-4. Filter successors with `!is_lost && board.height() <= height_cap`.
-5. Implement the fixed-point scan in `retrograde.rs`.
-6. Add post-solve verification that every stored witness points to a winning successor and satisfies the exact depth recurrence.
-
-## Important invariants to preserve
-
-- Empty board is winning for every nonzero bag mask.
-- A state with a piece branch that has no in-cap non-losing placement is losing.
-- `depth[state] = 1 + max_piece min_winning_action depth[succ]`.
-- Witness placement indices should be stored as `u8` because repo placements already fit in `u8`.
+These commands illustrate the interface; they are not recorded proof results.

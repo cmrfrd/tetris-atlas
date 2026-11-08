@@ -6,8 +6,8 @@ ML training binaries.
 ## Protobuf bindings
 
 The protobuf bindings live in `src/tensorboard_generated/` and are **checked in**.
-A normal build just compiles those files — it does **not** pull in the
-`prost-build` toolchain or hit the network. This keeps clean builds fast.
+A normal build compiles those files without enabling `prost-build` or running the
+protobuf download script. Cargo may still download ordinary dependencies.
 
 ### When to regenerate
 

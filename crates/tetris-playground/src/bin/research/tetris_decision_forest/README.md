@@ -4,14 +4,15 @@ An evolvable **decision forest** that plays Tetris. Each tree routes a binary
 encoding of the game — **board + bag state + current piece** (214 bits) —
 through **boolean operations** (`And`/`Or`/`Not`/`Xor`) to a leaf that names a
 **placement**; the forest plays the placement with the most tree **votes**.
-Trees that ever output an invalid placement are culled. A genetic-programming
+Trees below the configured validity rate on the culling sample are removed while retaining
+at least one tree. A genetic-programming
 loop grows the forest up a survival curriculum toward playing **1,000,000
 pieces** in a single game.
 
 - **What it is / why**: see [`DESIGN.md`](./DESIGN.md).
 
-All code for this system lives in this one directory. Fitness is pure
-**survival** (pieces placed before topping out).
+All code for this system lives in this directory. Survival training scores pieces placed before
+topping out; distillation scores agreement with the search teacher's labels.
 
 ## Layout
 
@@ -21,16 +22,19 @@ tetris_decision_forest/
 ├── encode.rs     # NUM_INPUTS = 214; encode_game — board + bag + current piece, all binary
 ├── tree.rs       # BoolExpr (boolean-op conditions) + DecisionTree (placement leaves)
 ├── forest.rs     # DecisionForest: the vote (game bits → placement) + JSON save/load
+├── compiled.rs   # Contiguous arenas for evaluating tree conditions and votes
 ├── policy.rs     # choose_placement (encode + vote) + play_game
-├── evolve.rs     # genetic operators (tree/boolean mutation, subtree crossover, selection)
+├── evolve.rs     # genetic operators (tree/boolean mutation, whole-tree crossover, selection)
 ├── train.rs      # survival fitness + invalid-tree autokill + generational loop + checkpoints
+├── puct.rs       # Root-PUCT search teacher used during distillation
+├── distill.rs    # Teacher labels and agreement-based forest evolution
 ├── config.rs     # TrainConfig / EvolveConfig (deep/wide/many + cull defaults)
 ├── README.md     # this file
 └── DESIGN.md     # system design
 ```
 
 The board portion of the input is the engine's own `board.to_cell_array`; the
-bag and current-piece bits are read from `game.bag` / `game.current_piece`.
+bag and current-piece bits are read through `game.bag()` / `game.current_piece()`.
 
 ## Build
 
@@ -105,7 +109,7 @@ Run any subcommand with `--help` for its full flag list.
 | `--generations` | `1000` | number of generations |
 | `--elite` | `8` | top forests copied unchanged each generation |
 | `--seeds` | `8` | eval seeds per generation (fitness = mean survival over these) |
-| `--seed-block` | `20` | freeze the eval-seed set for this many generations before rotating — a stationary objective within each block (per-generation rotation makes champion acceptance a race against seed noise), no overfitting across blocks |
+| `--seed-block` | `20` | freeze the evaluation seeds for this many generations, then rotate them; held-out evaluation is still needed to check generalization |
 | `--tournament-k` | `5` | tournament size for parent selection |
 | `--init-trees` | `64` | decision trees per forest at initialization (many) |
 | `--init-tree-depth` | `6` | depth of randomly *generated* trees — kept small; trees grow via evolution (random generation is a supercritical branching process, so big init depths would blow up tree size) |
@@ -139,28 +143,21 @@ engine's legal set is exactly the current piece's placement table), while the
 board logic under the gates stays fully random. Leaf-retargeting mutations
 also stay within the leaf's piece 80 % of the time. Mutations can still break
 a gate — the cull then removes that tree — and `--min-trees` regrows the
-forest with fresh gated trees, so under cull-at-1.0 the forest stays
-many-treed instead of ratcheting down to a single survivor. (Without gated
-generation, cull-at-1.0 demonstrably collapses every forest to 1 tree within
-~1 generation and evolution stalls.)
+forest with fresh gated trees. These mechanisms preserve useful valid voters without
+treating the culling sample as exhaustive validation over every game state.
 
 ## Anti-stagnation machinery
 
-Early versions plateaued hard (frozen champion, #trees pinned at the
-`--min-trees` floor). Five mechanisms now keep the search moving; all preserve
+Five mechanisms support continued exploration; all preserve
 survival-only fitness, cull-at-1.0, and forest-level voting:
 
 - **Same-seed champion gate** — each generation the incumbent champion is
   re-scored on the *current* seed set and replaced only if the generation's
-  best beats it on those identical seeds. (Comparing against a historical
-  high-water mark set on different seeds froze the champion ~3.4 σ of seed
-  noise above its true skill for thousands of generations.)
+  best beats it on those identical seeds.
 - **Seed blocks** (`--seed-block`) — a stationary objective to climb within
   each block.
 - **Whole-tree crossover** — recombination swaps *whole trees* between
-  parents, never subtrees (a subtree graft crossed piece gates 6/7 of the
-  time, manufacturing invalid votes that the autokill punished by destroying
-  the evolved recipient tree).
+  parents, preserving each selected tree's piece-gate structure.
 - **Duplicate-and-diverge tree-add** — tree-add usually copies an evolved
   tree and mutates the copy (near-neutral gene duplication, the fixation path
   above the `--min-trees` floor) instead of injecting a random tree.
@@ -172,9 +169,8 @@ survival-only fitness, cull-at-1.0, and forest-level voting:
 ## PUCT teacher distillation (`distill`)
 
 The AlphaZero improve→project cycle with the forest in the network's role,
-entirely at TRAINING time — the played artifact stays a pure state→move
-boolean circuit (no search at inference, so the proof story and the fast
-`play`/`eval` path are untouched):
+entirely at training time. The played artifact remains a deterministic state-to-move
+policy with no search at inference; this does not itself certify survival.
 
 1. **Improve**: sample states by playing the prior forest; at each state run
    a root-PUCT search — the forest's vote tally (mixed 3:1 with uniform) is
@@ -205,9 +201,7 @@ cargo run --release -p tetris-playground --bin tetris_decision_forest -- train \
 Key flags: `--states` (dataset size), `--sims` (PUCT budget per state),
 `--rollout-depth` (value horizon), `--c-puct` (exploration), `--game-seeds`
 (sampling games), plus the usual population/generations/elite knobs. The gen-0
-`agreement` line tells you how much improvement the search found over the
-prior (e.g. 0.46 = the teacher disagrees with the forest on half the states —
-plenty to learn).
+`agreement` line measures agreement with the teacher's labels; it is not a survival improvement metric.
 
 ## Outputs (under `--out-dir`)
 
@@ -234,7 +228,7 @@ reachable "no answer" state.
 
 ## Determinism
 
-A game is fully determined by `(seed, forest)`: vote ties break by lowest
+A game is determined by the seed, forest, engine version, and evaluation cap: vote ties break by lowest
 placement index and all randomness in training flows through explicitly-seeded
 `SmallRng`. Re-running `play`/`eval`/`bench` on the same inputs reproduces
 results exactly.
