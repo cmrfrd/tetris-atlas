@@ -1,11 +1,10 @@
 #![feature(generic_const_exprs)]
+#![allow(incomplete_features)]
+#![allow(clippy::needless_return)]
 #![feature(const_trait_impl)]
 #![feature(const_convert)]
 #![feature(const_index)]
-#![allow(incomplete_features)]
-#![allow(clippy::expect_used)]
-#![allow(clippy::needless_return)]
-#![allow(clippy::out_of_bounds_indexing)]
+#![doc(test(attr(feature(generic_const_exprs, const_trait_impl))))]
 
 use std::cell::UnsafeCell;
 use std::fmt::Debug;
@@ -16,6 +15,32 @@ use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 
 use proc_macros::inline_conditioned;
+
+#[doc(hidden)]
+pub const fn checked_assert(condition: bool, message: &str) -> usize {
+    assert!(condition, "{}", message);
+    0
+}
+
+/// Checks an assertion in a const expression, returning zero for an array-length bound.
+///
+/// ```
+/// use tetris_utils::const_assert;
+/// const _: [(); const_assert!(4 < 8, "four must be less than eight")] = [];
+/// ```
+///
+/// A false assertion fails during const evaluation:
+///
+/// ```compile_fail,E0080
+/// use tetris_utils::const_assert;
+/// const _: [(); const_assert!(4 > 8, "four must be greater than eight")] = [];
+/// ```
+#[macro_export]
+macro_rules! const_assert {
+    ($condition:expr, $message:literal $(,)?) => {
+        $crate::checked_assert($condition, $message)
+    };
+}
 
 /// Converts an array of 8 bit values (0 or 1) into a single byte.
 ///
@@ -71,6 +96,10 @@ pub const fn byte_to_bits(byte: u8) -> [u8; u8::BITS as usize] {
 }
 
 const _: () = {
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "The loop visits only 0..256, so every value fits u8."
+    )]
     const fn verify_all_u8() -> bool {
         let mut i: u16 = 0;
         while i < 256 {
@@ -87,6 +116,54 @@ const _: () = {
     // Compile-time assertion: index out of bounds if verify_all_u8() returns false
     [()][(!verify_all_u8()) as usize];
 };
+
+/// Swaps chunks `i` and `j` in `x`.
+///
+/// Each chunk contains `BITS` bits. Chunks are numbered from the least significant
+/// end of the value, starting at zero. All other bits are preserved.
+///
+/// `BITS` must be between 1 and 63; invalid widths are rejected at compile time.
+/// Both chunks must fit entirely within `x`.
+///
+/// # Examples
+///
+/// ```rust
+/// use tetris_utils::swap_bit_chunks;
+///
+/// // Four-bit chunks, from least to most significant: [1, 2, 3].
+/// let mut x = 0x0000_0000_0000_0321_u64;
+/// swap_bit_chunks::<4>(&mut x, 0, 2);
+///
+/// // The outer chunks are swapped and the middle chunk is preserved.
+/// assert_eq!(x, 0x0000_0000_0000_0123);
+/// ```
+///
+/// Zero-width chunks are rejected:
+///
+/// ```compile_fail,E0080
+/// use tetris_utils::swap_bit_chunks;
+/// let mut x = 0u64;
+/// swap_bit_chunks::<0>(&mut x, 0, 0);
+/// ```
+///
+/// The width must be smaller than the word:
+///
+/// ```compile_fail,E0080
+/// use tetris_utils::swap_bit_chunks;
+/// let mut x = 0u64;
+/// swap_bit_chunks::<64>(&mut x, 0, 0);
+/// ```
+#[inline_conditioned(always)]
+pub const fn swap_bit_chunks<const BITS: u32>(x: &mut u64, i: u32, j: u32)
+where
+    [(); (BITS > 0) as usize - 1]:,
+    [(); (BITS < u64::BITS) as usize - 1]:,
+{
+    let i = i * BITS;
+    let j = j * BITS;
+    let different = ((*x >> i) ^ (*x >> j)) & ((1u64 << BITS) - 1);
+    *x ^= (different << i) ^ (different << j);
+}
 
 /// Transposes an `ROWS × COLS` bit matrix stored in `[u8; N]` in-place.
 ///
@@ -116,6 +193,10 @@ const _: () = {
 /// assert_eq!(m, [0x11, 0x11]);
 /// ```
 #[inline_conditioned(always)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "The fast path requires ROWS and COLS <= 32; shift offsets are reduced modulo 8 or 32, and byte extraction intentionally discards higher lanes."
+)]
 pub const fn transpose_bits<const ROWS: usize, const COLS: usize, const N: usize>(m: &mut [u8; N]) {
     assert!(
         N * 8 >= ROWS * COLS,
@@ -223,13 +304,30 @@ pub const fn transpose_bits<const ROWS: usize, const COLS: usize, const N: usize
 }
 pub struct BitMask<const N: usize>(u64);
 
-impl<const N: usize> BitMask<N>
-where
-    [(); N - 1]:,
-    [(); 64 - N]:,
-{
+impl<const N: usize> BitMask<N> {
+    /// Creates a mask with a logical width of `N` bits, preserving the raw value.
+    /// `N` must be in `1..=64`; bits above that width remain available through `inner()`.
+    ///
+    /// ```
+    /// use tetris_utils::BitMask;
+    /// const MASK: BitMask<4> = BitMask::new_from_u64(0xff);
+    /// assert_eq!(MASK.inner(), 0xff);
+    /// assert_eq!(MASK.as_slice(), [1; 4]);
+    /// ```
+    ///
+    /// ```compile_fail,E0080
+    /// use tetris_utils::BitMask;
+    /// let _ = BitMask::<0>::new_from_u64(0);
+    /// ```
+    ///
+    /// ```compile_fail,E0080
+    /// use tetris_utils::BitMask;
+    /// let _ = BitMask::<65>::new_from_u64(0);
+    /// ```
     #[inline_conditioned(always)]
     pub const fn new_from_u64(x: u64) -> Self {
+        let _ = const { const_assert!(N > 0, "bit mask must contain at least one bit") };
+        let _ = const { const_assert!(N <= u64::BITS as usize, "bit mask must fit in u64") };
         Self(x)
     }
 
@@ -248,31 +346,59 @@ where
     }
 
     /// Zero-extend the low `N` bits into a wider `BitMask<M>` (`M >= N`).
+    ///
+    /// ```compile_fail,E0080
+    /// use tetris_utils::BitMask;
+    /// let _ = BitMask::<4>::new_from_u64(0).widen::<65>();
+    /// ```
+    ///
+    /// ```compile_fail,E0080
+    /// use tetris_utils::BitMask;
+    /// let _ = BitMask::<8>::new_from_u64(0).widen::<4>();
+    /// ```
     #[inline_conditioned(always)]
     pub const fn widen<const M: usize>(&self) -> BitMask<M>
     where
         [(); M - N]:,
-        [(); M - 1]:,
-        [(); 64 - M]:,
     {
-        BitMask(self.0 & (u64::MAX >> (64 - N)))
+        BitMask::new_from_u64(self.0 & (u64::MAX >> (64 - N)))
     }
 
     /// Truncate to the low `M` bits, producing a `BitMask<M>` (`M <= N`).
+    ///
+    /// ```compile_fail,E0080
+    /// use tetris_utils::BitMask;
+    /// let _ = BitMask::<4>::new_from_u64(0).narrow::<0>();
+    /// ```
+    ///
+    /// ```compile_fail,E0080
+    /// use tetris_utils::BitMask;
+    /// let _ = BitMask::<4>::new_from_u64(0).narrow::<8>();
+    /// ```
     #[inline_conditioned(always)]
     pub const fn narrow<const M: usize>(&self) -> BitMask<M>
     where
         [(); N - M]:,
-        [(); M - 1]:,
-        [(); 64 - M]:,
     {
-        BitMask(self.0 & (u64::MAX >> (64 - M)))
+        BitMask::new_from_u64(self.0 & (u64::MAX >> (64 - M)))
     }
 }
 
 /// A spin lock for shared-mutual exclusion.
 ///
 /// Used internally by [`VecPool`] for low-contention synchronization.
+/// Only one guard can access the value at a time. Dropping the guard releases
+/// the lock, including during unwinding; the lock does not implement poisoning.
+/// Locking again on the same thread while holding a guard will spin indefinitely.
+///
+/// Sharing the lock requires a value that can be transferred between threads:
+///
+/// ```compile_fail,E0277
+/// use std::rc::Rc;
+/// use tetris_utils::SpinLock;
+/// fn require_sync<T: Sync>() {}
+/// require_sync::<SpinLock<Rc<usize>>>();
+/// ```
 #[derive(Debug)]
 pub struct SpinLock<T: Debug> {
     lock: AtomicBool,
@@ -281,6 +407,17 @@ pub struct SpinLock<T: Debug> {
 
 unsafe impl<T: Debug> Sync for SpinLock<T> where T: Send {}
 
+/// Exclusive access to a [`SpinLock`]'s value; releases the lock when dropped.
+///
+/// Sharing a guard also requires the protected value to be `Sync`:
+///
+/// ```compile_fail,E0277
+/// use std::cell::Cell;
+/// use tetris_utils::SpinLockGuard;
+/// fn require_sync<T: Sync>() {}
+/// require_sync::<SpinLockGuard<'static, Cell<usize>>>();
+/// ```
+#[must_use = "the lock is released immediately if its guard is discarded"]
 pub struct SpinLockGuard<'a, T> {
     lock: &'a AtomicBool,
     data: &'a mut T,
@@ -288,6 +425,8 @@ pub struct SpinLockGuard<'a, T> {
 
 impl<'a, T> Drop for SpinLockGuard<'a, T> {
     fn drop(&mut self) {
+        // Publish the protected writes before another thread acquires the flag.
+        // This cannot panic, so unwinding also releases the lock without poisoning.
         self.lock.store(false, AtomicOrdering::Release);
     }
 }
@@ -300,6 +439,7 @@ impl<T: Debug> SpinLock<T> {
         }
     }
 
+    /// Spins until exclusive access is acquired. This lock is not reentrant.
     pub fn lock(&self) -> SpinLockGuard<'_, T> {
         while self.lock.swap(true, AtomicOrdering::Acquire) {
             spin_loop();
@@ -311,6 +451,7 @@ impl<T: Debug> SpinLock<T> {
         }
     }
 
+    /// Attempts to acquire exclusive access once, returning `None` if already held.
     pub fn try_lock(&self) -> Option<SpinLockGuard<'_, T>> {
         if self
             .lock
@@ -352,12 +493,23 @@ impl<'a, T> DerefMut for SpinLockGuard<'a, T> {
 /// - Compile-time loop unrolling with early exit
 /// - Optimized for beam search (keep best K items)
 pub struct FixedBinMinHeap<T: Copy + Ord, const SIZE: usize> {
+    // Storage invariant at API boundaries and before user comparisons:
+    // len <= SIZE, and every slot in 0..len holds an initialized T.
+    // Slots in len..SIZE may be uninitialized. Bounds do not depend on heap ordering.
     data: [MaybeUninit<T>; SIZE],
     len: usize,
 }
 
+impl<T: Copy + Ord, const SIZE: usize> Default for FixedBinMinHeap<T, SIZE> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Copy + Ord, const SIZE: usize> FixedBinMinHeap<T, SIZE> {
     // Calculate the minimum number of steps needed to sift up/down the heap
+    // Successful const evaluation requires SIZE <= usize::MAX / 2; larger
+    // capacities overflow `level *= 2`. This also bounds child-index arithmetic.
     pub const STEPS: usize = {
         let mut cap = 1usize;
         let mut level = 2usize;
@@ -403,23 +555,23 @@ impl<T: Copy + Ord, const SIZE: usize> FixedBinMinHeap<T, SIZE> {
 
     #[inline_conditioned(always)]
     pub fn as_slice(&self) -> &[T] {
-        // SAFETY: `FixedBinMinHeap` maintains the invariant that indices `0..self.len`
-        // are initialized, and `self.len..SIZE` may be uninitialized.
         unsafe { std::slice::from_raw_parts(self.data.as_ptr() as *const T, self.len) }
     }
 
     /// Return a mutable slice of the initialized elements [0..len)
     #[inline]
     pub fn as_mut_slice(&mut self) -> &mut [T] {
-        // SAFETY: `FixedBinMinHeap` maintains the invariant that indices `0..self.len`
-        // are initialized, and `self.len..SIZE` may be uninitialized.
         unsafe { std::slice::from_raw_parts_mut(self.data.as_mut_ptr() as *mut T, self.len) }
     }
 
-    /// Push into heap (must not be full). Unrolled sift-up with early exit.
+    /// Push into heap. Unrolled sift-up with early exit.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the heap is full.
     #[inline_conditioned(always)]
     pub fn push(&mut self, v: T) {
-        debug_assert!(self.len < SIZE, "FixedBinMinHeap::push called when full");
+        assert!(self.len < SIZE, "FixedBinMinHeap::push called when full");
         let i = self.len;
         self.len = i + 1;
         unsafe {
@@ -447,9 +599,16 @@ impl<T: Copy + Ord, const SIZE: usize> FixedBinMinHeap<T, SIZE> {
     }
 
     /// Replace root and sift down (fast path).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the heap is empty, including when its capacity is zero.
     #[inline_conditioned(always)]
     pub fn replace_min(&mut self, v: T) {
-        debug_assert!(self.len != 0);
+        assert!(
+            self.len != 0,
+            "FixedBinMinHeap::replace_min called when empty"
+        );
         unsafe {
             self.data.get_unchecked_mut(0).write(v);
             self.sift_down_min_unrolled(0);
@@ -462,8 +621,13 @@ impl<T: Copy + Ord, const SIZE: usize> FixedBinMinHeap<T, SIZE> {
     /// For plain T where "higher is better", this works as-is:
     /// - if full and v <= root => reject
     /// - else replace root
+    ///
+    /// Returns whether the candidate was inserted. A zero-capacity heap always rejects it.
     #[inline_conditioned(always)]
     pub fn push_if_better_min_heap(&mut self, v: T) -> bool {
+        if SIZE == 0 {
+            return false;
+        }
         if self.len < SIZE {
             self.push(v);
             return true;
@@ -481,12 +645,18 @@ impl<T: Copy + Ord, const SIZE: usize> FixedBinMinHeap<T, SIZE> {
 
     // ----------------- bounded sift-up/down with early exit -----------------
 
+    /// # Safety
+    ///
+    /// The storage invariant must hold and start must be below self.len.
     #[inline_conditioned(always)]
     unsafe fn sift_up_min_unrolled(&mut self, start: usize) {
-        // SAFETY: We maintain the invariant that 0..len are initialized
         let ptr = self.data.as_mut_ptr().cast::<T>();
         let mut i = start;
 
+        /// # Safety
+        ///
+        /// ptr must provide exclusive access to initialized T slots through *i,
+        /// and the index variable must be separate from that storage.
         #[inline(always)]
         unsafe fn step_up<T: Copy + Ord>(ptr: *mut T, i: &mut usize) -> bool {
             let child = *i;
@@ -519,13 +689,19 @@ impl<T: Copy + Ord, const SIZE: usize> FixedBinMinHeap<T, SIZE> {
         }
     }
 
+    /// # Safety
+    ///
+    /// The storage invariant must hold and start must be below self.len.
     #[inline(always)]
     unsafe fn sift_down_min_unrolled(&mut self, start: usize) {
-        // SAFETY: We maintain the invariant that 0..len are initialized
         let ptr = self.data.as_mut_ptr().cast::<T>();
         let len = self.len;
         let mut i = start;
 
+        /// # Safety
+        ///
+        /// ptr must provide exclusive access to len initialized T slots, *i < len,
+        /// and len <= usize::MAX / 2. The index variable must be separate from storage.
         #[inline(always)]
         unsafe fn step_down<T: Copy + Ord>(ptr: *mut T, len: usize, i: &mut usize) -> bool {
             let p = *i;
@@ -542,7 +718,6 @@ impl<T: Copy + Ord, const SIZE: usize> FixedBinMinHeap<T, SIZE> {
             let vp = unsafe { *ptr.add(p) };
 
             let (min_val, min_idx) = if right >= len {
-                // Only left child exists
                 (unsafe { *ptr.add(left) }, left)
             } else {
                 // Both children exist - find minimum
@@ -577,8 +752,17 @@ impl<T: Copy + Ord, const SIZE: usize> FixedBinMinHeap<T, SIZE> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct HeaplessVec<T: Copy, const N: usize> {
+    // Storage invariant at API boundaries and before callbacks: len <= N,
+    // and every slot in 0..len holds an initialized T. Remaining slots may be
+    // uninitialized. T: Copy lets compaction retain valid copies in old slots.
     data: [MaybeUninit<T>; N],
     len: usize,
+}
+
+impl<T: Copy, const N: usize> Default for HeaplessVec<T, N> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T: Copy, const N: usize> HeaplessVec<T, N> {
@@ -599,10 +783,13 @@ impl<T: Copy, const N: usize> HeaplessVec<T, N> {
 
     /// Returns a mutable raw pointer to the vector's buffer.
     ///
-    /// # Safety
+    /// # Pointer validity
     ///
-    /// The pointer is only valid for `self.len()` elements and may contain uninitialized data
-    /// for indices `self.len()..N`.
+    /// The pointer is aligned for `T` and points to `N` inline storage slots.
+    /// Only `0..self.len()` is guaranteed initialized; `self.len()..N` may be uninitialized.
+    /// Moving or dropping this vector invalidates the pointer. Dereferencing it must
+    /// respect Rust's borrowing rules and preserve the initialized prefix. Writing spare
+    /// slots does not change the vector's length.
     pub fn as_mut_ptr(&mut self) -> *mut T {
         self.data.as_mut_ptr() as *mut T
     }
@@ -653,16 +840,13 @@ impl<T: Copy, const N: usize> HeaplessVec<T, N> {
     ///
     /// * `item` - The element to append
     ///
-    /// # Safety
+    /// # Panics
     ///
-    /// The caller must ensure the vector is not full before calling this method.
-    /// Pushing to a full vector will cause undefined behavior.
+    /// Panics if the vector is full. Use [`Self::try_push`] to handle a full vector.
     #[inline_conditioned(always)]
     pub fn push(&mut self, item: T) {
-        unsafe {
-            *self.data.get_unchecked_mut(self.len) = MaybeUninit::new(item); // safe because we know the index is in bounds
-            self.len += 1;
-        }
+        self.data[self.len].write(item);
+        self.len += 1;
     }
 
     /// Attempts to push an element to the end of the vector.
@@ -854,7 +1038,7 @@ impl<T: Copy, const N: usize> HeaplessVec<T, N> {
         None
     }
 
-    /// Applies a function to each element in the vector, allowing mutation.
+    /// Applies a function to a shared reference to each initialized element.
     ///
     /// # Arguments
     ///
@@ -865,7 +1049,7 @@ impl<T: Copy, const N: usize> HeaplessVec<T, N> {
     {
         for i in 0..self.len {
             unsafe {
-                f(&self.data[i].assume_init_ref());
+                f(self.data[i].assume_init_ref());
             }
         }
     }
@@ -881,7 +1065,7 @@ impl<T: Copy, const N: usize> HeaplessVec<T, N> {
     {
         for i in 0..self.len {
             unsafe {
-                f(&mut self.data[i].assume_init_mut());
+                f(self.data[i].assume_init_mut());
             }
         }
     }
@@ -1007,7 +1191,7 @@ impl<T: Copy, const N: usize> HeaplessVec<T, N> {
         self.len
     }
 
-    /// Fills this vector with all elements from a `Vec`.
+    /// Replaces this vector's contents with all elements from a `Vec`.
     ///
     /// # Arguments
     ///
@@ -1015,16 +1199,17 @@ impl<T: Copy, const N: usize> HeaplessVec<T, N> {
     ///
     /// # Panics
     ///
-    /// Panics if the source vector has more elements than this vector's capacity
+    /// Panics if the source vector has more elements than this vector's capacity.
+    /// The destination is unchanged if this check fails.
     pub fn fill_from_vec(&mut self, vec: &Vec<T>) {
-        self.len = vec.len();
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                vec.as_ptr(),
-                self.data.as_mut_ptr() as *mut T,
-                vec.len(),
-            );
+        assert!(
+            vec.len() <= N,
+            "HeaplessVec::fill_from_vec source exceeds capacity"
+        );
+        for (destination, &value) in self.data.iter_mut().zip(vec) {
+            destination.write(value);
         }
+        self.len = vec.len();
     }
 
     /// Converts this `HeaplessVec` to a standard `Vec`.
@@ -1055,7 +1240,7 @@ impl<T: Copy, const N: usize> HeaplessVec<T, N> {
         if self.len != N {
             return None;
         }
-        // SAFETY: `len == N` implies all elements `0..N` were initialized.
+        // `len == N` implies all elements `0..N` were initialized.
         // We reuse the safe slice view and then convert it to an array reference.
         self.to_slice().try_into().ok()
     }
@@ -1096,22 +1281,26 @@ impl<T: Copy, const N: usize> HeaplessVec<T, N> {
     ///
     /// An iterator yielding mutable references to each element
     pub fn into_iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
-        unsafe {
-            std::slice::from_raw_parts_mut(self.data.as_mut_ptr() as *mut T, self.len).iter_mut()
-        }
+        self.as_mut_slice().iter_mut()
     }
 }
 
 impl<T: Copy, const N: usize> Index<usize> for HeaplessVec<T, N> {
     type Output = T;
     fn index(&self, index: usize) -> &Self::Output {
-        unsafe { &self.data[index].assume_init_ref() }
+        &self.to_slice()[index]
     }
 }
 
 /// Vec Pool
 pub struct VecPool<T: Copy + Sized + Debug, const N: usize, const M: usize> {
     pool: [SpinLock<HeaplessVec<T, N>>; M],
+}
+
+impl<T: Copy + Sized + Debug, const N: usize, const M: usize> Default for VecPool<T, N, M> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T: Copy + Sized + Debug, const N: usize, const M: usize> VecPool<T, N, M> {
@@ -1121,14 +1310,9 @@ impl<T: Copy + Sized + Debug, const N: usize, const M: usize> VecPool<T, N, M> {
     ///
     /// A new `VecPool` with all vectors initialized to empty state
     pub const fn new() -> Self {
-        let mut pool: [SpinLock<HeaplessVec<T, N>>; M] =
-            unsafe { MaybeUninit::uninit().assume_init() };
-        let mut i = 0;
-        while i < M {
-            pool[i] = SpinLock::new(HeaplessVec::new());
-            i += 1;
+        Self {
+            pool: [const { SpinLock::new(HeaplessVec::new()) }; M],
         }
-        Self { pool }
     }
 
     /// Acquires a lock on one of the vectors in the pool.
@@ -1530,76 +1714,17 @@ macro_rules! repeat_exact_idx {
     }};
 }
 
-/// Compile-time loop unrolling with const index variable.
-///
-/// This macro unrolls loops at compile time, allowing the index variable to be `const`,
-/// which enables full const evaluation of expressions like `8 * i` and `i % 10`.
-///
-/// **IMPORTANT**: Each match branch incurs significant compilation time cost due to
-/// macro expansion and monomorphization. Only add branches for N values you actually use.
-/// Adding unused branches will slow down compilation without providing any benefit.
+/// Unrolls a compile-time count of up to 64 iterations with a constant index.
 #[macro_export]
 macro_rules! repeat_idx_unroll {
-    ($N:expr, $i:ident, $b:block) => {
-        match const { $N } {
-            0_usize => {}
-            1_usize => $crate::repeat_exact_idx!(1, $i, $b),
-            2_usize => $crate::repeat_exact_idx!(2, $i, $b),
-            3_usize => $crate::repeat_exact_idx!(3, $i, $b),
-            4_usize => $crate::repeat_exact_idx!(4, $i, $b),
-            5_usize => $crate::repeat_exact_idx!(5, $i, $b),
-            6_usize => $crate::repeat_exact_idx!(6, $i, $b),
-            7_usize => $crate::repeat_exact_idx!(7, $i, $b),
-            8_usize => $crate::repeat_exact_idx!(8, $i, $b),
-            9_usize => $crate::repeat_exact_idx!(9, $i, $b),
-            10_usize => $crate::repeat_exact_idx!(10, $i, $b),
-            11_usize => $crate::repeat_exact_idx!(11, $i, $b),
-            12_usize => $crate::repeat_exact_idx!(12, $i, $b),
-            13_usize => $crate::repeat_exact_idx!(13, $i, $b),
-            14_usize => $crate::repeat_exact_idx!(14, $i, $b),
-            15_usize => $crate::repeat_exact_idx!(15, $i, $b),
-            16_usize => $crate::repeat_exact_idx!(16, $i, $b),
-            18_usize => $crate::repeat_exact_idx!(18, $i, $b),
-            20_usize => $crate::repeat_exact_idx!(20, $i, $b),
-            25_usize => $crate::repeat_exact_idx!(25, $i, $b),
-            32_usize => $crate::repeat_exact_idx!(32, $i, $b),
-            40_usize => $crate::repeat_exact_idx!(40, $i, $b),
-            64_usize => $crate::repeat_exact_idx!(64, $i, $b),
-            _ => panic!(
-                "{}",
-                concat!("repeat_idx_unroll! supports up to N={", stringify!($N), "}")
-            ),
-        }
-    };
+    ($N:expr, $i:ident, $b:block) => {{
+        assert!($N <= 64, "unroll count exceeds 64");
+        $crate::repeat_exact_idx!(64, $i, {
+            if const { $i < $N } $b
+        });
+    }};
 }
 
-/// Removes up to `I` lowest marked rows from every column in a u32 array.
-///
-/// For each iteration, this function:
-/// 1. Finds the least significant set bit in the mask
-/// 2. Right shifts all elements by 1 position from that bit onward
-/// 3. Clears the processed bit from the mask
-///
-/// # Type Parameters
-///
-/// * `N` - The number of u32 elements in the array
-/// * `I` - The number of shift iterations to perform
-///
-/// # Arguments
-///
-/// * `xs` - Array of u32 values to shift
-/// * `m` - Mask indicating which bit positions to shift from
-///
-/// # Example
-/// ```rust
-/// use tetris_utils::rshift_slice_from_mask_u32;
-/// let mut arr = [0b1111_0000_0000_0000_0000_0000_0000_0000_u32; 2];
-/// let mask = 0b0000_0000_0000_0000_0000_0000_0000_1111_u32;
-/// rshift_slice_from_mask_u32::<2, 4>(&mut arr, mask);
-/// // After 4 iterations, each 1 in the mask causes a right shift by 1
-/// // So the result shifts everything down by 4 positions
-/// assert_eq!(arr, [0b0000_1111_0000_0000_0000_0000_0000_0000_u32; 2]);
-/// ```
 #[inline_conditioned(always)]
 pub const fn rshift_slice_from_mask_u32<const N: usize, const I: usize>(
     xs: &mut [u32; N],
@@ -1681,6 +1806,10 @@ fn select_kth_u64(mut x: u64, mut k: u32) -> u32 {
 }
 
 #[inline(always)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "A nonzero u64 mask has at most 64 set bits; the remainder is below that count."
+)]
 pub fn choose_set_bit_u64<R: rand::RngExt + ?Sized>(mask: u64, rng: &mut R) -> Option<u32> {
     (mask != 0).then(|| {
         let n = mask.count_ones(); // 1..=64, fits in u32
@@ -1690,19 +1819,506 @@ pub fn choose_set_bit_u64<R: rand::RngExt + ?Sized>(mask: u64, rng: &mut R) -> O
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "Fixture casts use explicitly bounded board dimensions and case counts, or deliberately extract test bits."
+)]
 mod tests {
     use rand::RngExt;
 
     use super::*;
 
+    mod heapless_fill_from_vec {
+        use super::*;
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        #[test]
+        fn replaces_contents_and_shrinks_or_clears_the_initialized_prefix() {
+            let mut values = HeaplessVec::<i32, 4>::new();
+            values.push(99);
+            for source in [vec![1, 2, 3, 4], vec![5, 6], vec![], vec![7]] {
+                values.fill_from_vec(&source);
+                assert_eq!(values.len(), source.len());
+                assert_eq!(values.to_slice(), source.as_slice());
+                assert_eq!(values.to_vec(), source);
+            }
+            values.push(8);
+            assert_eq!(values.to_slice(), &[7, 8]);
+        }
+
+        #[test]
+        fn oversized_input_preserves_contents_and_allows_subsequent_use() {
+            let mut values = HeaplessVec::<i32, 3>::new();
+            values.fill_from_vec(&vec![1, 2]);
+            let source = vec![10, 20, 30, 40];
+            let result = catch_unwind(AssertUnwindSafe(|| values.fill_from_vec(&source)));
+            assert!(result.is_err());
+            assert_eq!(values.len(), 2);
+            assert_eq!(values.to_slice(), &[1, 2]);
+            values.push(3);
+            assert_eq!(values.to_array(), Some([1, 2, 3]));
+            values.fill_from_vec(&vec![4]);
+            assert_eq!(values.to_slice(), &[4]);
+        }
+
+        #[test]
+        fn zero_capacity_accepts_empty_and_rejects_nonempty_input() {
+            let mut values = HeaplessVec::<u32, 0>::new();
+            values.fill_from_vec(&Vec::new());
+            assert_eq!(values.to_array(), Some([]));
+            let source = vec![1];
+            assert!(catch_unwind(AssertUnwindSafe(|| values.fill_from_vec(&source))).is_err());
+            assert!(values.is_empty());
+            assert_eq!(values.to_array(), Some([]));
+        }
+
+        #[test]
+        fn zero_sized_values_still_obey_logical_capacity() {
+            let mut values = HeaplessVec::<(), 2>::new();
+            values.fill_from_vec(&vec![(); 2]);
+            assert_eq!(values.len(), 2);
+            let source = vec![(); 3];
+            assert!(catch_unwind(AssertUnwindSafe(|| values.fill_from_vec(&source))).is_err());
+            assert_eq!(values.to_array(), Some([(), ()]));
+            values.fill_from_vec(&vec![()]);
+            assert_eq!(values.len(), 1);
+            values.fill_from_vec(&Vec::new());
+            assert!(values.is_empty());
+        }
+
+        #[test]
+        fn copies_borrowed_values_without_extending_their_lifetimes() {
+            let first = String::from("first");
+            let second = String::from("second");
+            let source = vec![first.as_str(), second.as_str()];
+            let mut values = HeaplessVec::<&str, 2>::new();
+            values.fill_from_vec(&source);
+            drop(source);
+            assert_eq!(values.to_array(), Some([first.as_str(), second.as_str()]));
+        }
+    }
+
+    mod fixed_bin_min_heap {
+        use super::*;
+        use rand::{SeedableRng, rngs::SmallRng};
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        fn assert_matches<const N: usize>(heap: &FixedBinMinHeap<i32, N>, expected: &[i32]) {
+            assert_eq!(heap.len(), expected.len());
+            assert_eq!(heap.is_empty(), expected.is_empty());
+            assert_eq!(heap.peek_min(), expected.first().copied());
+            let mut actual = heap.as_slice().to_vec();
+            actual.sort_unstable();
+            assert_eq!(actual, expected);
+            for (index, &value) in heap.as_slice().iter().enumerate().skip(1) {
+                assert!(heap.as_slice()[(index - 1) / 2] <= value);
+            }
+        }
+
+        #[test]
+        fn zero_capacity_rejects_candidates_and_preserves_empty_state() {
+            let mut heap = FixedBinMinHeap::<i32, 0>::new();
+            for value in [i32::MIN, -1, 0, 1, i32::MAX] {
+                assert!(!heap.push_if_better_min_heap(value));
+                assert_matches(&heap, &[]);
+                assert!(heap.as_mut_slice().is_empty());
+                assert_eq!(heap.pop_min(), None);
+                heap.clear();
+            }
+            assert!(catch_unwind(AssertUnwindSafe(|| heap.push(7))).is_err());
+            assert_matches(&heap, &[]);
+        }
+
+        fn assert_empty_replacement_panics<const N: usize>(heap: &mut FixedBinMinHeap<i32, N>) {
+            assert!(heap.is_empty());
+            assert!(catch_unwind(AssertUnwindSafe(|| heap.replace_min(7))).is_err());
+            assert_matches(heap, &[]);
+        }
+
+        fn check_empty_replacement<const N: usize>() {
+            let mut heap = FixedBinMinHeap::<i32, N>::new();
+            assert_empty_replacement_panics(&mut heap);
+            if N != 0 {
+                heap.push(3);
+                heap.clear();
+                assert_empty_replacement_panics(&mut heap);
+                heap.push(5);
+                assert_eq!(heap.pop_min(), Some(5));
+                assert_empty_replacement_panics(&mut heap);
+            }
+        }
+
+        #[test]
+        fn replacement_rejects_fresh_cleared_and_drained_empty_heaps() {
+            check_empty_replacement::<0>();
+            check_empty_replacement::<1>();
+            check_empty_replacement::<8>();
+        }
+
+        #[test]
+        fn singleton_accepts_only_better_candidates_when_full() {
+            let mut heap = FixedBinMinHeap::<i32, 1>::new();
+            assert!(heap.push_if_better_min_heap(3));
+            assert!(!heap.push_if_better_min_heap(2));
+            assert!(!heap.push_if_better_min_heap(3));
+            assert!(heap.push_if_better_min_heap(4));
+            assert_matches(&heap, &[4]);
+            heap.replace_min(-1);
+            assert_matches(&heap, &[-1]);
+        }
+
+        fn check_sorted_reference<const N: usize>() {
+            let mut rng = SmallRng::seed_from_u64(0x007e_715a_71a5);
+            let mut inputs = vec![i32::MIN, i32::MAX, 0, 0, -1, 1, i32::MIN, i32::MAX];
+            inputs.extend((0..128).map(|_| rng.random_range(-32..=32)));
+            let mut heap = FixedBinMinHeap::<i32, N>::new();
+            let mut expected = Vec::new();
+            for (step, value) in inputs.into_iter().enumerate() {
+                if step == 96 {
+                    heap.clear();
+                    expected.clear();
+                }
+                let accepted = N != 0 && (expected.len() < N || value > expected[0]);
+                assert_eq!(heap.push_if_better_min_heap(value), accepted);
+                expected.push(value);
+                expected.sort_unstable();
+                if expected.len() > N {
+                    expected.remove(0);
+                }
+                assert_matches(&heap, &expected);
+
+                if step.is_multiple_of(17) && !expected.is_empty() {
+                    let replacement = value.saturating_add(1);
+                    heap.replace_min(replacement);
+                    expected.remove(0);
+                    expected.push(replacement);
+                    expected.sort_unstable();
+                }
+                if step.is_multiple_of(11) {
+                    assert_eq!(heap.pop_min(), expected.first().copied());
+                    if !expected.is_empty() {
+                        expected.remove(0);
+                    }
+                }
+                assert_matches(&heap, &expected);
+            }
+            for value in expected {
+                assert_eq!(heap.pop_min(), Some(value));
+            }
+            assert_eq!(heap.pop_min(), None);
+            assert!(heap.is_empty());
+        }
+
+        #[test]
+        fn mixed_operations_match_a_sorted_reference() {
+            check_sorted_reference::<0>();
+            check_sorted_reference::<1>();
+            check_sorted_reference::<2>();
+            check_sorted_reference::<3>();
+            check_sorted_reference::<7>();
+            check_sorted_reference::<16>();
+            check_sorted_reference::<64>();
+        }
+
+        #[test]
+        fn zero_sized_values_respect_capacity() {
+            let mut heap = FixedBinMinHeap::<(), 2>::new();
+            assert!(heap.push_if_better_min_heap(()));
+            assert!(heap.push_if_better_min_heap(()));
+            assert!(!heap.push_if_better_min_heap(()));
+            heap.replace_min(());
+            assert_eq!(heap.len(), 2);
+            assert_eq!(heap.pop_min(), Some(()));
+            assert_eq!(heap.pop_min(), Some(()));
+            assert_eq!(heap.pop_min(), None);
+        }
+    }
+
+    mod spin_lock {
+        use super::*;
+        use std::cell::Cell;
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+        use std::sync::Barrier;
+        use std::thread;
+
+        #[test]
+        fn try_lock_excludes_other_guards_and_releases_on_drop() {
+            let lock = SpinLock::new(Cell::new(7usize));
+            let mut guard = lock.try_lock().expect("unlocked");
+            assert!(lock.try_lock().is_none());
+            *guard = Cell::new(11);
+            drop(guard);
+
+            let guard = lock.try_lock().expect("released");
+            assert_eq!(guard.get(), 11);
+        }
+
+        #[test]
+        fn held_lock_is_unavailable_to_another_thread() {
+            let lock = SpinLock::new(Cell::new(7usize));
+            let guard = lock.lock();
+            thread::scope(|scope| {
+                scope
+                    .spawn(|| assert!(lock.try_lock().is_none()))
+                    .join()
+                    .expect("contender");
+            });
+            guard.set(11);
+            drop(guard);
+
+            thread::scope(|scope| {
+                scope
+                    .spawn(|| assert_eq!(lock.try_lock().expect("released").get(), 11))
+                    .join()
+                    .expect("next owner");
+            });
+        }
+
+        #[test]
+        fn contending_owners_publish_updates_to_send_but_not_sync_values() {
+            const WORKERS: usize = 4;
+            const UPDATES: usize = 16;
+            // Cell is Send but not Sync: the lock must supply synchronization.
+            let lock = SpinLock::new(Cell::new((0usize, !0usize)));
+            let start = Barrier::new(WORKERS);
+            thread::scope(|scope| {
+                for worker in 0..WORKERS {
+                    let lock = &lock;
+                    let start = &start;
+                    scope.spawn(move || {
+                        start.wait();
+                        for _ in 0..UPDATES {
+                            let guard = if worker.is_multiple_of(2) {
+                                lock.lock()
+                            } else {
+                                loop {
+                                    if let Some(guard) = lock.try_lock() {
+                                        break guard;
+                                    }
+                                    thread::yield_now();
+                                }
+                            };
+                            let (count, inverse) = guard.get();
+                            assert_eq!(inverse, !count);
+                            // Leave an inconsistent pair while holding the lock:
+                            // another owner must not observe this intermediate state.
+                            let next = count + 1;
+                            guard.set((next, inverse));
+                            thread::yield_now();
+                            guard.set((next, !next));
+                        }
+                    });
+                }
+            });
+            assert_eq!(lock.lock().get(), (WORKERS * UPDATES, !(WORKERS * UPDATES)));
+        }
+
+        #[test]
+        #[allow(clippy::panic, reason = "Exercise guard cleanup during unwinding.")]
+        fn unwinding_releases_the_lock_without_poisoning() {
+            let lock = SpinLock::new(7usize);
+            let result = catch_unwind(AssertUnwindSafe(|| {
+                let mut guard = lock.lock();
+                *guard = 11;
+                panic!("intentional unwind while holding the guard");
+            }));
+            assert!(result.is_err());
+            assert_eq!(*lock.try_lock().expect("released during unwind"), 11);
+        }
+
+        #[test]
+        fn guard_can_be_transferred_and_released_on_another_thread() {
+            let lock = SpinLock::new(7usize);
+            let mut guard = lock.lock();
+            thread::scope(|scope| {
+                scope
+                    .spawn(move || *guard = 11)
+                    .join()
+                    .expect("guard owner");
+            });
+            assert_eq!(*lock.try_lock().expect("released by other thread"), 11);
+        }
+    }
+
     #[test]
-    fn test_repeat_idx_generic() {
-        const MAX_N: usize = 40;
-        let mut test_vec = Vec::new();
-        repeat_idx_unroll!(MAX_N, I, {
-            test_vec.push(I);
-        });
-        assert_eq!(test_vec, (0..MAX_N).collect::<Vec<_>>());
+    fn pool_initializes_every_lock_and_retains_each_vector() {
+        let pool: VecPool<u32, 2, 3> = const { VecPool::new() };
+        for (index, lock) in pool.pool.iter().enumerate() {
+            let mut values = lock.lock();
+            assert!(values.is_empty());
+            values.push(u32::try_from(index).expect("three pool entries fit in u32"));
+        }
+        for (index, lock) in pool.pool.iter().enumerate() {
+            assert_eq!(
+                lock.lock().to_slice(),
+                &[u32::try_from(index).expect("small index")]
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn indexing_spare_capacity_panics() {
+        let mut values = HeaplessVec::<u32, 4>::new();
+        values.push(7);
+        let _value = values[1];
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn pushing_to_full_vector_panics() {
+        let mut values = HeaplessVec::<u32, 1>::new();
+        values.push(7);
+        values.push(8);
+    }
+
+    #[test]
+    #[should_panic(expected = "FixedBinMinHeap::push called when full")]
+    fn pushing_to_full_heap_panics() {
+        let mut heap = FixedBinMinHeap::<u32, 1>::new();
+        heap.push(7);
+        heap.push(8);
+    }
+
+    mod bit_chunks {
+        use super::*;
+
+        #[test]
+        fn chunk_swaps_match_individual_bit_moves_for_every_supported_width() {
+            fn check<const BITS: u32>()
+            where
+                [(); (BITS > 0) as usize - 1]:,
+                [(); (BITS < u64::BITS) as usize - 1]:,
+            {
+                for original in [0x0123_4567_89ab_cdefu64, 0xfedc_ba98_7654_3210] {
+                    for first in 0..u64::BITS / BITS {
+                        for second in 0..u64::BITS / BITS {
+                            let mut expected = 0u64;
+                            for bit in 0..u64::BITS {
+                                let source = if (first * BITS..(first + 1) * BITS).contains(&bit) {
+                                    second * BITS + bit - first * BITS
+                                } else if (second * BITS..(second + 1) * BITS).contains(&bit) {
+                                    first * BITS + bit - second * BITS
+                                } else {
+                                    bit
+                                };
+                                expected |= ((original >> source) & 1) << bit;
+                            }
+                            let mut actual = original;
+                            swap_bit_chunks::<BITS>(&mut actual, first, second);
+                            assert_eq!(
+                                actual, expected,
+                                "bits={BITS}, first={first}, second={second}"
+                            );
+                        }
+                    }
+                }
+            }
+            // Every width needs its own const-generic instantiation.
+            macro_rules! check_widths { ($($bits:literal),*) => { $(check::<$bits>();)* }; }
+            check_widths!(
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
+                45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63
+            );
+        }
+
+        #[test]
+        fn chunk_swaps_exchange_only_the_two_requested_slots() {
+            const BITS: u32 = 4;
+            const MASK: u64 = (1 << BITS) - 1;
+            let values = [0u64, 1, 3, 7, 9, 12, 15];
+            let packed = values.iter().enumerate().fold(0, |word, (index, value)| {
+                word | (value << (index as u32 * BITS))
+            });
+            for first in 0..values.len() {
+                for second in 0..values.len() {
+                    let mut expected = values;
+                    expected.swap(first, second);
+                    let mut actual = packed;
+                    swap_bit_chunks::<BITS>(&mut actual, first as u32, second as u32);
+                    for (index, value) in expected.into_iter().enumerate() {
+                        assert_eq!(
+                            (actual >> (index as u32 * BITS)) & MASK,
+                            value,
+                            "first={first}, second={second}, slot={index}"
+                        );
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn chunk_width_bounds_work_in_const_context() {
+            const HIGH_BIT: u64 = {
+                let mut x = 1;
+                swap_bit_chunks::<1>(&mut x, 0, 63);
+                x
+            };
+            const UNCHANGED: u64 = {
+                let mut x = 0x8000_0000_0000_0321;
+                swap_bit_chunks::<63>(&mut x, 0, 0);
+                x
+            };
+            assert_eq!(HIGH_BIT, 0x8000_0000_0000_0000);
+            assert_eq!(UNCHANGED, 0x8000_0000_0000_0321);
+        }
+    }
+
+    mod unrolling {
+        const fn indices<const N: usize>() -> [usize; N] {
+            let mut result = [usize::MAX; N];
+            let mut position = 0;
+            crate::repeat_idx_unroll!(N, I, {
+                const INDEX: usize = I;
+                result[position] = INDEX;
+                position += 1;
+            });
+            assert!(position == N, "iteration count must match N");
+            result
+        }
+
+        #[test]
+        fn every_count_preserves_constant_indices_and_order() {
+            fn check<const N: usize>() {
+                assert_eq!(indices::<N>().as_slice(), &(0..N).collect::<Vec<_>>());
+            }
+            macro_rules! check_counts {
+                ($($count:literal),* $(,)?) => { $(check::<$count>();)* };
+            }
+            check_counts!(
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43,
+                44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64,
+            );
+        }
+
+        #[test]
+        fn missing_count_can_be_evaluated_in_a_const_context() {
+            const INDICES: [usize; 24] = indices::<24>();
+            assert_eq!(INDICES.as_slice(), &(0..24).collect::<Vec<_>>());
+        }
+
+        #[test]
+        #[should_panic(expected = "unroll count exceeds 64")]
+        fn counts_above_capacity_are_rejected() {
+            let _ = indices::<65>();
+        }
+
+        #[test]
+        fn large_transpose_keeps_its_scatter_fallback() {
+            let mut bytes = [0u8; 17];
+            bytes[8] = 0b10; // Cell (row 32, column 1) is bit 65.
+            let original = bytes;
+            super::super::transpose_bits::<65, 2, 17>(&mut bytes);
+            let mut expected = [0u8; 17];
+            expected[12] = 0b10; // Transposed cell (row 1, column 32) is bit 97.
+            assert_eq!(bytes, expected);
+            super::super::transpose_bits::<2, 65, 17>(&mut bytes);
+            assert_eq!(bytes, original);
+        }
     }
 
     #[test]
@@ -2102,6 +2718,7 @@ mod tests {
 
         // Test empty vec iteration
         assert_eq!(vec.into_iter().count(), 0);
+        assert_eq!(vec.into_iter_mut().len(), 0);
 
         // Add some elements
         vec.push(1);
@@ -2121,10 +2738,31 @@ mod tests {
         // Test collecting into Vec
         let collected: Vec<i32> = vec.into_iter().copied().collect();
         assert_eq!(collected, vec![1, 2, 3]);
+
+        // Hold references to both ends while iterating the remaining initialized element.
+        let mut iter = vec.into_iter_mut();
+        let first = iter.next().expect("first element");
+        let last = iter.next_back().expect("last element");
+        assert_eq!(iter.len(), 1);
+        *first += 10;
+        *last += 30;
+        *iter.next().expect("middle element") += 20;
+        assert!(iter.next().is_none());
+        assert!(iter.next_back().is_none());
+        assert_eq!(vec.to_slice(), &[11, 22, 33]);
+
+        vec.clear();
+        assert!(vec.into_iter_mut().next().is_none());
+        let mut zero_capacity = HeaplessVec::<i32, 0>::new();
+        assert!(zero_capacity.into_iter_mut().next().is_none());
     }
 
     #[test]
     fn test_bitmask_as_bits_lsb_first_matches_reference() {
+        #[allow(
+            clippy::needless_range_loop,
+            reason = "Indices align board coordinates or parallel buffers; retain the existing traversal and independent reference calculation."
+        )]
         fn ref_bits<const N: usize>(x: u64) -> [u8; N] {
             let mut out = [0u8; N];
             for i in 0..N {
@@ -2146,7 +2784,7 @@ mod tests {
         for &x in &cases {
             macro_rules! assert_bits {
                 ($n:literal) => {{
-                    let got = BitMask::<$n>(x).as_slice();
+                    let got = BitMask::<$n>::new_from_u64(x).as_slice();
                     let expected = ref_bits::<$n>(x);
                     assert_eq!(
                         got, expected,
@@ -2197,7 +2835,7 @@ mod tests {
         let mut rng = rand::rng();
         for _ in 0..10_000 {
             let x: u64 = rng.random();
-            let bits = BitMask::<64>(x).as_slice();
+            let bits = BitMask::<64>::new_from_u64(x).as_slice();
             for &b in &bits {
                 assert!(b <= 1, "expected 0/1 bit lane, got {b}");
             }
