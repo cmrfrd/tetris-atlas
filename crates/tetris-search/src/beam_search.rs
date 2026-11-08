@@ -273,15 +273,16 @@ where
         // Determine the current+next beam and clear the next beam for filling
         let next_idx = 1 - self.current_idx;
         let active_beam_width = self.beam_width;
-        let current_beam: &FixedBinMinHeap<ScoredState<S>, MAX_BEAM_WIDTH> =
-            unsafe { &*(&self.beams[self.current_idx] as *const _) };
-        let next_beam: &mut FixedBinMinHeap<ScoredState<S>, MAX_BEAM_WIDTH> =
-            unsafe { &mut *(&mut self.beams[next_idx] as *mut _) };
+        let [first, second] = &mut self.beams;
+        let (current_beam, next_beam) = if self.current_idx == 0 {
+            (&*first, second)
+        } else {
+            (&*second, first)
+        };
         next_beam.clear();
         self.best_state = None;
 
-        for beam_idx in 0..current_beam.len() {
-            let parent = unsafe { current_beam.as_slice().get_unchecked(beam_idx) };
+        for parent in current_beam.as_slice() {
             // Fill action buffer from parent beam state
             self.action_buffer.clear();
             let _action_count = parent
