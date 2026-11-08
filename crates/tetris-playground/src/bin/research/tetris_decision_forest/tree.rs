@@ -1,5 +1,5 @@
+use rand::RngExt;
 use rand::rngs::SmallRng;
-use rand::{RngExt, SeedableRng};
 use serde::{Deserialize, Serialize};
 
 use tetris_game::tetris::{TetrisPiece, TetrisPiecePlacement};
@@ -30,6 +30,7 @@ pub fn random_boolexpr_leaf(rng: &mut SmallRng) -> BoolExpr {
 
 impl BoolExpr {
     /// Evaluate on the input bits (out-of-range index reads as `false`).
+    #[cfg(test)]
     pub fn eval(&self, bits: &[u8]) -> bool {
         match self {
             BoolExpr::Cell(i) => bits.get(*i).is_some_and(|&v| v != 0),
@@ -106,9 +107,9 @@ impl BoolExpr {
     }
 }
 
-/// A random valid placement id (index into `TetrisPiecePlacement::from_index`).
+/// A random valid placement id (index into `<TetrisPiecePlacement>::from_index`).
 pub fn random_pid(rng: &mut SmallRng) -> u8 {
-    rng.random_range(0..TetrisPiecePlacement::NUM_PLACEMENTS) as u8
+    rng.random_range(0..<tetris_game::TetrisPiecePlacement<10>>::NUM_PLACEMENTS) as u8
 }
 
 /// Probability that a randomly generated tree leaf is an `Abstain` (a
@@ -116,6 +117,7 @@ pub fn random_pid(rng: &mut SmallRng) -> u8 {
 pub const ABSTAIN_LEAF_PROB: f64 = 0.15;
 
 /// A random tree leaf: usually a placement vote, sometimes an abstention.
+#[cfg(test)]
 pub fn random_tree_leaf(rng: &mut SmallRng) -> DecisionTree {
     if rng.random_bool(ABSTAIN_LEAF_PROB) {
         DecisionTree::Abstain
@@ -126,7 +128,7 @@ pub fn random_tree_leaf(rng: &mut SmallRng) -> DecisionTree {
 
 /// A random placement id restricted to `piece`'s own placement table.
 pub fn random_pid_of_piece(rng: &mut SmallRng, piece: TetrisPiece) -> u8 {
-    let all = TetrisPiecePlacement::all_from_piece(piece);
+    let all = <TetrisPiecePlacement<10>>::all_from_piece(piece);
     all[rng.random_range(0..all.len())].index()
 }
 
@@ -314,6 +316,7 @@ pub enum DecisionTree {
 impl DecisionTree {
     /// Route `bits` to a leaf: `Some(placement id)` or `None` (abstain).
     /// Iterative so deep trees do not risk stack overflow.
+    #[cfg(test)]
     pub fn decide(&self, bits: &[u8]) -> Option<u8> {
         let mut node = self;
         loop {
@@ -327,6 +330,7 @@ impl DecisionTree {
         }
     }
 
+    #[cfg(test)]
     pub fn random(rng: &mut SmallRng, max_depth: u32, cond_depth: u32) -> Self {
         if max_depth == 0 || rng.random_bool(0.25) {
             return random_tree_leaf(rng);
@@ -381,7 +385,8 @@ impl DecisionTree {
     /// abstains (silence is never invalid) or its placement id is among the
     /// legal placements. Used by the training-time autokill — abstention is a
     /// sanctioned "no recommendation", not an invalid output.
-    pub fn output_is_valid(&self, bits: &[u8], legal: &[TetrisPiecePlacement]) -> bool {
+    #[cfg(test)]
+    pub fn output_is_valid(&self, bits: &[u8], legal: &[TetrisPiecePlacement<10>]) -> bool {
         match self.decide(bits) {
             None => true,
             Some(pid) => legal.iter().any(|p| p.index() == pid),
@@ -392,6 +397,7 @@ impl DecisionTree {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
 
     fn zeros() -> [u8; NUM_INPUTS] {
         [0u8; NUM_INPUTS]
@@ -431,7 +437,7 @@ mod tests {
 
     #[test]
     fn random_tree_is_bounded_and_decides_a_valid_pid() {
-        let n = TetrisPiecePlacement::NUM_PLACEMENTS as u8;
+        let n = <tetris_game::TetrisPiecePlacement<10>>::NUM_PLACEMENTS as u8;
         let mut rng = SmallRng::seed_from_u64(7);
         for _ in 0..50 {
             let t = DecisionTree::random(&mut rng, 6, 4);
@@ -447,7 +453,7 @@ mod tests {
         let tree = DecisionTree::Abstain;
         assert_eq!(tree.decide(&zeros()), None);
         // Abstention is never an invalid output, whatever the legal set.
-        let legal = [TetrisPiecePlacement::from_index(3)];
+        let legal = [<TetrisPiecePlacement<10>>::from_index(3)];
         assert!(tree.output_is_valid(&zeros(), &legal));
         assert!(tree.output_is_valid(&zeros(), &[]));
         // A branch can route to abstention on one side and a vote on the other.
@@ -468,7 +474,7 @@ mod tests {
         for piece in TetrisPiece::all() {
             for _ in 0..20 {
                 let pid = random_pid_of_piece(&mut rng, piece);
-                assert_eq!(TetrisPiecePlacement::from_index(pid).piece, piece);
+                assert_eq!(<TetrisPiecePlacement<10>>::from_index(pid).piece, piece);
             }
         }
     }
@@ -494,7 +500,7 @@ mod tests {
                 bits[NUM_CELLS + NUM_PIECES + i] = 1;
                 if let Some(pid) = tree.decide(&bits) {
                     assert_eq!(
-                        TetrisPiecePlacement::from_index(pid).piece,
+                        <TetrisPiecePlacement<10>>::from_index(pid).piece,
                         *piece,
                         "gated tree voted another piece's placement"
                     );
@@ -508,13 +514,13 @@ mod tests {
         let cells = zeros();
         let tree = DecisionTree::Leaf(0);
         let legal_has0 = [
-            TetrisPiecePlacement::from_index(0),
-            TetrisPiecePlacement::from_index(1),
+            <TetrisPiecePlacement<10>>::from_index(0),
+            <TetrisPiecePlacement<10>>::from_index(1),
         ];
         assert!(tree.output_is_valid(&cells, &legal_has0)); // pid 0 in legal
         let legal_no0 = [
-            TetrisPiecePlacement::from_index(3),
-            TetrisPiecePlacement::from_index(5),
+            <TetrisPiecePlacement<10>>::from_index(3),
+            <TetrisPiecePlacement<10>>::from_index(5),
         ];
         assert!(!tree.output_is_valid(&cells, &legal_no0)); // pid 0 not in legal
     }
@@ -523,8 +529,8 @@ mod tests {
     fn placement_id_round_trips_over_the_full_range() {
         // The pid scheme (u8 index <-> placement) is the contract between tree
         // leaves and the engine; protect it across the whole range.
-        for i in 0..TetrisPiecePlacement::NUM_PLACEMENTS as u8 {
-            assert_eq!(TetrisPiecePlacement::from_index(i).index(), i);
+        for i in 0..<tetris_game::TetrisPiecePlacement<10>>::NUM_PLACEMENTS as u8 {
+            assert_eq!(<TetrisPiecePlacement<10>>::from_index(i).index(), i);
         }
     }
 

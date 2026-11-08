@@ -37,10 +37,10 @@ fn generate_sequence(num_bags: u32, seed: u64) -> Vec<TetrisPiece> {
     let mut rng = TetrisGameRng::new(seed);
     let mut seq = Vec::with_capacity((num_bags * 7) as usize);
     for _ in 0..num_bags {
-        let mut bag = TetrisPieceBag::new_ordered(TetrisPieceBagState::new());
+        let mut bag = TetrisPieceBag::from_bag_state(TetrisPieceBagState::full());
         bag.shuffle(&mut rng);
         for _ in 0..7 {
-            seq.push(bag.rand_next(&mut rng));
+            seq.push(bag.draw().expect("seven-piece bag"));
         }
     }
     seq
@@ -76,7 +76,7 @@ fn main() -> Result<()> {
     println!();
     println!();
 
-    let target = TetrisBoard::EMPTY_BOARD;
+    let target = TetrisBoard::<10, 20>::new();
     let start = Instant::now();
     let outcome = search(&sequence, target, cli.width, cli.max_nodes, cli.verbose);
     let elapsed = start.elapsed();
@@ -99,7 +99,7 @@ fn main() -> Result<()> {
             if cli.replay {
                 println!();
                 println!("=== Replay ===");
-                let mut board: TetrisBoard = TetrisBoard::EMPTY_BOARD;
+                let mut board: TetrisBoard<10, 20> = TetrisBoard::<10, 20>::new();
                 for (i, p) in result.placements.iter().enumerate() {
                     let outcome = board.apply_piece_placement(*p);
                     println!(

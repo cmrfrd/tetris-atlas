@@ -1,3 +1,4 @@
+use std::num::NonZeroU64;
 use std::ops::Range;
 use std::thread;
 
@@ -48,13 +49,13 @@ impl TetrisDatasetGenerator {
         batch_size: usize,
         rng: &mut R,
     ) -> Result<TetrisGameSet> {
-        let base_seed = rng.next_u64();
+        let base_seed = rng.random::<NonZeroU64>().get();
 
         // Seed each game with its own random number of placements
         let distribution = Uniform::new(num_piece_range.start, num_piece_range.end)?;
         let mut games: Vec<TetrisGame> = Vec::with_capacity(batch_size);
         for i in 0..batch_size {
-            let mut game = TetrisGame::new_with_seed(base_seed + i as u64);
+            let mut game = <TetrisGame>::new_with_seed(base_seed + i as u64);
             let num_pieces = distribution.sample(rng);
             for _ in 0..num_pieces {
                 let placement = *game.current_placements().choose(rng).unwrap();
@@ -252,8 +253,8 @@ impl TetrisDatasetGenerator {
     }
 }
 
+#[cfg(test)]
 mod test {
-    #[allow(unused_imports)]
     use super::*;
 
     /// Test that the sequence of boards is chained correctly

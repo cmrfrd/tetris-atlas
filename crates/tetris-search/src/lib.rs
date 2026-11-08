@@ -6,13 +6,17 @@
 //!
 //! # Example
 //!
-//! ```ignore
+//! ```
+//! # #![feature(generic_const_exprs)]
+//! # #![allow(incomplete_features)]
 //! use tetris_search::{BeamTetrisState, TetrisBeamSearch, height_mse_beam_tetris_score};
-//! use tetris_game::TetrisGame;
+//! use tetris_game::{TetrisGame, TetrisPiecePlacement};
 //!
-//! let game = TetrisGame::new();
-//! let mut search = TetrisBeamSearch::<32, 8, 40>::new(height_mse_beam_tetris_score);
-//! let result = search.search_top_with_state(BeamTetrisState::new(game), 8);
+//! let game = <TetrisGame>::new();
+//! let mut search = TetrisBeamSearch::<8, 2, { TetrisPiecePlacement::<10>::MAX_PIECE_PLACEMENT_COUNT }>
+//!     ::new(height_mse_beam_tetris_score);
+//! let result = search.search_top_with_state(BeamTetrisState::new(game), 2);
+//! assert!(result.is_some());
 //! ```
 
 #![feature(generic_const_exprs)]

@@ -41,8 +41,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use tetris_game::{
-    IsLost, Major, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
-    TetrisPieceOrientation, constants,
+    Major, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
+    TetrisPieceOrientation,
 };
 use tetris_search::set_global_threadpool;
 use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetris_score};
@@ -52,7 +52,7 @@ const N: usize = 16;
 const TOP_N_PER_BEAM: usize = 32;
 const BEAM_WIDTH: usize = 256;
 const MAX_DEPTH: usize = 4;
-const MAX_MOVES: usize = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
+const MAX_MOVES: usize = <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS;
 
 const STATS_CSV_PATH: &str = "tetris_atlas_stats_rocksdb.csv";
 const LOG_EVERY_SECS: u64 = 3;
@@ -87,12 +87,12 @@ enum Mode {
 }
 
 #[inline(always)]
-const fn hash_board_bag(board: TetrisBoard, bag: TetrisPieceBagState) -> u64 {
+const fn hash_board_bag(board: TetrisBoard<10, 20>, bag: TetrisPieceBagState) -> u64 {
     // FNV-1a hash: fast, good distribution, no state needed
     const FNV_OFFSET: u64 = 0xcbf29ce484222325;
     const FNV_PRIME: u64 = 0x100000001b3;
 
-    let board_bytes: [u32; StandardTetris::COLS] = board.as_limbs();
+    let board_bytes = board.as_limbs();
     let mut hash = FNV_OFFSET;
     repeat_idx_unroll!(StandardTetris::COLS, I, {
         hash ^= board_bytes[I] as u64;
@@ -105,13 +105,17 @@ const fn hash_board_bag(board: TetrisBoard, bag: TetrisPieceBagState) -> u64 {
 
 #[derive(Clone, Copy)]
 struct TetrisAtlasLookupKeyValue {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     piece: TetrisPiece,
-    orientation: TetrisPieceOrientation,
+    orientation: TetrisPieceOrientation<10>,
 }
 
 impl TetrisAtlasLookupKeyValue {
-    fn new(board: TetrisBoard, piece: TetrisPiece, orientation: TetrisPieceOrientation) -> Self {
+    fn new(
+        board: TetrisBoard<10, 20>,
+        piece: TetrisPiece,
+        orientation: TetrisPieceOrientation<10>,
+    ) -> Self {
         Self {
             board,
             piece,
@@ -122,7 +126,7 @@ impl TetrisAtlasLookupKeyValue {
     #[inline(always)]
     const fn key_bytes(&self) -> [u8; 41] {
         let board_bytes = self.board.to_bytes(Major::Col);
-        let piece_byte: u8 = self.piece.into();
+        let piece_byte: u8 = self.piece.mask();
         let mut key = [0u8; 41];
         key[0..40].copy_from_slice(&board_bytes);
         key[40] = piece_byte;
@@ -139,7 +143,7 @@ impl TetrisAtlasLookupKeyValue {
 
 #[derive(Clone, Copy)]
 struct TetrisAtlasFrontierKeyValue {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     bag: TetrisPieceBagState,
 }
 
@@ -155,7 +159,7 @@ impl std::fmt::Display for TetrisAtlasFrontierKeyValue {
 
 impl TetrisAtlasFrontierKeyValue {
     #[inline(always)]
-    const fn new(board: TetrisBoard, bag: TetrisPieceBagState) -> Self {
+    const fn new(board: TetrisBoard<10, 20>, bag: TetrisPieceBagState) -> Self {
         Self { board, bag }
     }
 
@@ -181,12 +185,12 @@ impl TetrisAtlasFrontierKeyValue {
     }
 
     #[inline(always)]
-    const fn from_value_bytes(v: &[u8; 41]) -> Self {
+    fn from_value_bytes(v: &[u8; 41]) -> Self {
         let board_bytes: [u8; 40] = unsafe { *(v.as_ptr() as *const [u8; 40]) };
         let bag_byte = v[40];
         Self {
-            board: TetrisBoard::from_bytes(board_bytes, Major::Col),
-            bag: TetrisPieceBagState::from(bag_byte),
+            board: TetrisBoard::<10, 20>::from_bytes(board_bytes, Major::Col),
+            bag: TetrisPieceBagState::try_from(bag_byte).expect("valid bag mask"),
         }
     }
 }
@@ -297,9 +301,13 @@ impl TetrisAtlasDB {
     }
 
     /// Check if a board+piece combination exists in the lookup table
-    pub fn lookup_exists(&self, board: TetrisBoard, piece: TetrisPiece) -> bool {
-        let key = TetrisAtlasLookupKeyValue::new(board, piece, TetrisPieceOrientation::default())
-            .key_bytes();
+    pub fn lookup_exists(&self, board: TetrisBoard<10, 20>, piece: TetrisPiece) -> bool {
+        let key = TetrisAtlasLookupKeyValue::new(
+            board,
+            piece,
+            <TetrisPieceOrientation<10>>::from_index(0),
+        )
+        .key_bytes();
         let cf_lookup = self.cf_handle(CF_LOOKUP);
         self.db.get_cf(&cf_lookup, key).ok().flatten().is_some()
     }
@@ -307,17 +315,21 @@ impl TetrisAtlasDB {
     /// Get the optimal orientation for a board+piece combination
     pub fn lookup_orientation(
         &self,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         piece: TetrisPiece,
-    ) -> Option<TetrisPieceOrientation> {
-        let key = TetrisAtlasLookupKeyValue::new(board, piece, TetrisPieceOrientation::default())
-            .key_bytes();
+    ) -> Option<TetrisPieceOrientation<10>> {
+        let key = TetrisAtlasLookupKeyValue::new(
+            board,
+            piece,
+            <TetrisPieceOrientation<10>>::from_index(0),
+        )
+        .key_bytes();
         let cf_lookup = self.cf_handle(CF_LOOKUP);
 
         match self.db.get_cf(&cf_lookup, key) {
             Ok(Some(value)) => {
                 if value.len() == 1 {
-                    Some(TetrisPieceOrientation::from_index(value[0]))
+                    Some(<TetrisPieceOrientation<10>>::from_index(value[0]))
                 } else {
                     None
                 }
@@ -327,8 +339,8 @@ impl TetrisAtlasDB {
     }
 
     fn seed_starting_state(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let empty_board = TetrisBoard::EMPTY_BOARD;
-        let bag = TetrisPieceBagState::new();
+        let empty_board = TetrisBoard::<10, 20>::new();
+        let bag = TetrisPieceBagState::full();
         let frontier_item = TetrisAtlasFrontierKeyValue::new(empty_board, bag);
 
         let cf_frontier = self.cf_handle(CF_FRONTIER);
@@ -384,7 +396,7 @@ impl TetrisAtlasDB {
                                 MAX_MOVES,
                             >::new(height_mse_beam_tetris_score);
 
-                        let mut game = tetris_game::TetrisGame::new();
+                        let mut game = <tetris_game::TetrisGame>::new();
 
                         // Calculate this worker's partition of the key space (based on first byte of hash)
                         // Key structure: [height(1), hash(8)] = 9 bytes total
@@ -458,14 +470,17 @@ impl TetrisAtlasDB {
                                             boards_expanded.fetch_add(1, Ordering::Relaxed);
 
                                         // Process all pieces for this board state
-                                        for (piece, bag_state) in
-                                            current_frontier_item.bag.iter_next_states()
-                                        {
+                                        for piece in current_frontier_item.bag.iter_pieces() {
+                                            let mut bag_state = current_frontier_item.bag;
+                                            bag_state.remove(piece);
+                                            if bag_state.empty() {
+                                                bag_state.fill();
+                                            }
                                             // Check if we've already computed this (board, piece) combination
                                             let lookup_key = TetrisAtlasLookupKeyValue::new(
                                                 current_frontier_item.board,
                                                 piece,
-                                                TetrisPieceOrientation::default(),
+                                                <TetrisPieceOrientation<10>>::from_index(0),
                                             )
                                             .key_bytes();
 
@@ -527,9 +542,7 @@ impl TetrisAtlasDB {
                                             };
 
                                             // Skip if game is lost
-                                            if game.apply_placement(best_placement).is_lost
-                                                == IsLost::LOST
-                                            {
+                                            if game.apply_placement(best_placement).is_lost {
                                                 games_lost.fetch_add(1, Ordering::Relaxed);
                                                 continue;
                                             }
@@ -677,7 +690,7 @@ struct BoardStats {
 }
 
 impl BoardStats {
-    fn calculate(board: &TetrisBoard, lines_cleared: usize) -> Self {
+    fn calculate(board: &TetrisBoard<10, 20>, lines_cleared: usize) -> Self {
         let mut filled_cells = 0;
         let mut height = 0;
         let mut holes = 0;
@@ -721,10 +734,10 @@ impl BoardStats {
 
 #[derive(Clone)]
 struct TimelineEntry {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     bag: TetrisPieceBagState,
     piece: TetrisPiece,
-    orientation: TetrisPieceOrientation,
+    orientation: TetrisPieceOrientation<10>,
     lines_cleared: usize,
 }
 
@@ -734,16 +747,16 @@ struct Timeline {
 }
 
 impl Timeline {
-    fn new(_board: TetrisBoard, _bag: TetrisPieceBagState) -> Self {
+    fn new(_board: TetrisBoard<10, 20>, _bag: TetrisPieceBagState) -> Self {
         Self {
             entries: vec![],
             current_position: 0,
         }
     }
 
-    fn current_board(&self) -> TetrisBoard {
+    fn current_board(&self) -> TetrisBoard<10, 20> {
         if self.current_position == 0 {
-            TetrisBoard::EMPTY_BOARD
+            TetrisBoard::<10, 20>::new()
         } else {
             self.entries[self.current_position - 1].board
         }
@@ -751,7 +764,7 @@ impl Timeline {
 
     fn current_bag(&self) -> TetrisPieceBagState {
         if self.current_position == 0 {
-            TetrisPieceBagState::new()
+            TetrisPieceBagState::full()
         } else {
             self.entries[self.current_position - 1].bag
         }
@@ -767,10 +780,10 @@ impl Timeline {
 
     fn push(
         &mut self,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         bag: TetrisPieceBagState,
         piece: TetrisPiece,
-        orientation: TetrisPieceOrientation,
+        orientation: TetrisPieceOrientation<10>,
         lines_cleared: usize,
     ) {
         // Truncate timeline at current position (discard future if we branched)
@@ -827,8 +840,8 @@ pub fn run_tetris_atlas_explore(db_path: &str) {
     use std::io;
 
     let atlas = TetrisAtlasDB::new(db_path).expect("Failed to open atlas database");
-    let mut timeline = Timeline::new(TetrisBoard::EMPTY_BOARD, TetrisPieceBagState::new());
-    let mut game = tetris_game::TetrisGame::new();
+    let mut timeline = Timeline::new(TetrisBoard::<10, 20>::new(), TetrisPieceBagState::full());
+    let mut game = <tetris_game::TetrisGame>::new();
 
     // Setup terminal
     enable_raw_mode().expect("Failed to enable raw mode");
@@ -883,13 +896,13 @@ pub fn run_tetris_atlas_explore(db_path: &str) {
                 let mut piece_items: Vec<ListItem> = vec![];
 
                 for (idx, piece) in [
-                    TetrisPiece::O_PIECE,
-                    TetrisPiece::I_PIECE,
-                    TetrisPiece::L_PIECE,
-                    TetrisPiece::J_PIECE,
-                    TetrisPiece::S_PIECE,
-                    TetrisPiece::Z_PIECE,
-                    TetrisPiece::T_PIECE,
+                    TetrisPiece::O,
+                    TetrisPiece::I,
+                    TetrisPiece::L,
+                    TetrisPiece::J,
+                    TetrisPiece::S,
+                    TetrisPiece::Z,
+                    TetrisPiece::T,
                 ]
                 .iter()
                 .enumerate()
@@ -947,30 +960,30 @@ pub fn run_tetris_atlas_explore(db_path: &str) {
                         }
                         KeyCode::Char(c) => {
                             let piece_opt = match c {
-                                '1' => Some(TetrisPiece::O_PIECE),
-                                '2' => Some(TetrisPiece::I_PIECE),
-                                '3' => Some(TetrisPiece::L_PIECE),
-                                '4' => Some(TetrisPiece::J_PIECE),
-                                '5' => Some(TetrisPiece::S_PIECE),
-                                '6' => Some(TetrisPiece::Z_PIECE),
-                                '7' => Some(TetrisPiece::T_PIECE),
-                                'o' | 'O' => Some(TetrisPiece::O_PIECE),
-                                'i' | 'I' => Some(TetrisPiece::I_PIECE),
-                                'l' | 'L' => Some(TetrisPiece::L_PIECE),
-                                'j' | 'J' => Some(TetrisPiece::J_PIECE),
-                                's' | 'S' => Some(TetrisPiece::S_PIECE),
-                                'z' | 'Z' => Some(TetrisPiece::Z_PIECE),
-                                't' | 'T' => Some(TetrisPiece::T_PIECE),
+                                '1' => Some(TetrisPiece::O),
+                                '2' => Some(TetrisPiece::I),
+                                '3' => Some(TetrisPiece::L),
+                                '4' => Some(TetrisPiece::J),
+                                '5' => Some(TetrisPiece::S),
+                                '6' => Some(TetrisPiece::Z),
+                                '7' => Some(TetrisPiece::T),
+                                'o' | 'O' => Some(TetrisPiece::O),
+                                'i' | 'I' => Some(TetrisPiece::I),
+                                'l' | 'L' => Some(TetrisPiece::L),
+                                'j' | 'J' => Some(TetrisPiece::J),
+                                's' | 'S' => Some(TetrisPiece::S),
+                                'z' | 'Z' => Some(TetrisPiece::Z),
+                                't' | 'T' => Some(TetrisPiece::T),
                                 'r' | 'R' => {
                                     // Random piece from available pieces in DB
                                     let available: Vec<TetrisPiece> = [
-                                        TetrisPiece::O_PIECE,
-                                        TetrisPiece::I_PIECE,
-                                        TetrisPiece::L_PIECE,
-                                        TetrisPiece::J_PIECE,
-                                        TetrisPiece::S_PIECE,
-                                        TetrisPiece::Z_PIECE,
-                                        TetrisPiece::T_PIECE,
+                                        TetrisPiece::O,
+                                        TetrisPiece::I,
+                                        TetrisPiece::L,
+                                        TetrisPiece::J,
+                                        TetrisPiece::S,
+                                        TetrisPiece::Z,
+                                        TetrisPiece::T,
                                     ]
                                     .iter()
                                     .copied()
@@ -1004,7 +1017,7 @@ pub fn run_tetris_atlas_explore(db_path: &str) {
                                             orientation,
                                         };
                                         let result = game.apply_placement(placement);
-                                        if result.is_lost != IsLost::LOST {
+                                        if !result.is_lost {
                                             let mut new_bag = bag;
                                             new_bag.remove(piece);
                                             // Auto-refill bag if empty (matches create mode behavior)

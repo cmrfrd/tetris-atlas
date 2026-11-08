@@ -16,8 +16,7 @@ use anyhow::{Context, Result, bail};
 use clap::Parser;
 use rustc_hash::{FxHashMap, FxHasher};
 use tetris_game::{
-    IsLost, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPiecePlacement,
-    constants,
+    StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPiecePlacement,
 };
 use tetris_search::{
     TetrisBoardScoreState, height_mse_board_score, height_mse_distance_from_empty,
@@ -34,7 +33,7 @@ const DEFAULT_MCTS_RESTARTS: u64 = 1;
 const DEFAULT_MCTS_EXPLORATION: f32 = 1.4;
 const DEFAULT_MCTS_PRIOR_TEMPERATURE: f32 = 64.0;
 const DEFAULT_MCTS_PRIOR_NOISE: f32 = 0.0;
-const DEFAULT_MCTS_MAX_CHILDREN: usize = TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT;
+const DEFAULT_MCTS_MAX_CHILDREN: usize = <TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT;
 const DEFAULT_MCTS_PROGRESS_EVERY: u64 = 25_000;
 const DEFAULT_MAX_HEIGHT: u32 = StandardTetris::ROWS as u32;
 
@@ -43,10 +42,10 @@ type ForcedBag = [TetrisPiece; PIECES_PER_BAG];
 static ALL_BAG_PERMUTATIONS: [ForcedBag; BAG_PERMUTATION_COUNT] =
     generate_forced_bag_permutations();
 
-const DEFAULT_PLACEMENT: TetrisPiecePlacement = TetrisPiecePlacement::from_index(0);
+const DEFAULT_PLACEMENT: TetrisPiecePlacement<10> = <TetrisPiecePlacement<10>>::from_index(0);
 const DEFAULT_CANDIDATE: Candidate = Candidate {
     placement: DEFAULT_PLACEMENT,
-    board: TetrisBoard::EMPTY_BOARD,
+    board: TetrisBoard::<10, 20>::new(),
     prior_score: f32::NEG_INFINITY,
 };
 
@@ -117,7 +116,7 @@ struct Cli {
 
 #[derive(Debug, Clone, Copy)]
 struct FiveBagWitness {
-    placements: [TetrisPiecePlacement; TOTAL_PIECES],
+    placements: [TetrisPiecePlacement<10>; TOTAL_PIECES],
     lines_cleared: u32,
     max_height: u32,
     iterations: u64,
@@ -129,7 +128,7 @@ struct FiveBagWitness {
 
 #[derive(Debug, Clone, Copy)]
 struct PuctFailure {
-    placements: [TetrisPiecePlacement; TOTAL_PIECES],
+    placements: [TetrisPiecePlacement<10>; TOTAL_PIECES],
     prefix_len: usize,
     best_cells: u32,
     best_score: f32,
@@ -184,8 +183,8 @@ impl ScanPosition {
 
 #[derive(Debug, Clone, Copy)]
 struct PuctRunResult {
-    witness_placements: Option<[TetrisPiecePlacement; TOTAL_PIECES]>,
-    best_placements: [TetrisPiecePlacement; TOTAL_PIECES],
+    witness_placements: Option<[TetrisPiecePlacement<10>; TOTAL_PIECES]>,
+    best_placements: [TetrisPiecePlacement<10>; TOTAL_PIECES],
     best_prefix_len: usize,
     best_cells: u32,
     best_score: f32,
@@ -230,13 +229,13 @@ impl ScanStats {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct StateKey {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     step: u8,
 }
 
 #[derive(Clone, Copy, Debug)]
 struct SearchState {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     step: usize,
 }
 
@@ -263,7 +262,7 @@ impl SearchNode {
 
 #[derive(Clone, Copy, Debug)]
 struct ActionEdge {
-    placement: TetrisPiecePlacement,
+    placement: TetrisPiecePlacement<10>,
     child: usize,
     visits: u32,
     value_sum: f32,
@@ -272,8 +271,8 @@ struct ActionEdge {
 
 #[derive(Clone, Copy, Debug)]
 struct Candidate {
-    placement: TetrisPiecePlacement,
-    board: TetrisBoard,
+    placement: TetrisPiecePlacement<10>,
+    board: TetrisBoard<10, 20>,
     prior_score: f32,
 }
 
@@ -282,18 +281,18 @@ struct PuctSearch<'a> {
     config: PuctConfig,
     nodes: Vec<SearchNode>,
     index: FxHashMap<StateKey, usize>,
-    best_placements: [TetrisPiecePlacement; TOTAL_PIECES],
+    best_placements: [TetrisPiecePlacement<10>; TOTAL_PIECES],
     best_prefix_len: usize,
     best_cells: u32,
     best_score: f32,
-    witness_placements: Option<[TetrisPiecePlacement; TOTAL_PIECES]>,
+    witness_placements: Option<[TetrisPiecePlacement<10>; TOTAL_PIECES]>,
     terminal_evaluations: u64,
 }
 
 impl<'a> PuctSearch<'a> {
     fn new(pieces: &'a [TetrisPiece], config: PuctConfig) -> Self {
         let root_state = SearchState {
-            board: TetrisBoard::EMPTY_BOARD,
+            board: TetrisBoard::<10, 20>::new(),
             step: 0,
         };
         let mut index = FxHashMap::default();
@@ -413,7 +412,7 @@ impl<'a> PuctSearch<'a> {
     fn evaluate_terminal(
         &mut self,
         node_id: usize,
-        placements: &[TetrisPiecePlacement; TOTAL_PIECES],
+        placements: &[TetrisPiecePlacement<10>; TOTAL_PIECES],
         prefix_len: usize,
     ) -> f32 {
         self.terminal_evaluations += 1;
@@ -438,7 +437,7 @@ impl<'a> PuctSearch<'a> {
     fn evaluate_leaf(
         &mut self,
         node_id: usize,
-        placements: &[TetrisPiecePlacement; TOTAL_PIECES],
+        placements: &[TetrisPiecePlacement<10>; TOTAL_PIECES],
         prefix_len: usize,
     ) -> f32 {
         let state = self.nodes[node_id].state;
@@ -449,7 +448,7 @@ impl<'a> PuctSearch<'a> {
 
     fn evaluate_dead_end(
         &mut self,
-        placements: &[TetrisPiecePlacement; TOTAL_PIECES],
+        placements: &[TetrisPiecePlacement<10>; TOTAL_PIECES],
         prefix_len: usize,
     ) -> f32 {
         let value = -1.0;
@@ -463,9 +462,9 @@ impl<'a> PuctSearch<'a> {
 
     fn record_best(
         &mut self,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         value: f32,
-        placements: &[TetrisPiecePlacement; TOTAL_PIECES],
+        placements: &[TetrisPiecePlacement<10>; TOTAL_PIECES],
         prefix_len: usize,
     ) {
         let terminal_bonus = usize::from(prefix_len == self.pieces.len());
@@ -489,13 +488,14 @@ impl<'a> PuctSearch<'a> {
     fn expand_node(&mut self, node_id: usize) -> bool {
         let state = self.nodes[node_id].state;
         let piece = self.pieces[state.step];
-        let mut candidates = [DEFAULT_CANDIDATE; TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT];
+        let mut candidates =
+            [DEFAULT_CANDIDATE; <TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT];
         let mut candidate_len = 0usize;
 
-        for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+        for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
             let mut next = state.board;
             let result = next.apply_piece_placement(placement);
-            if result.is_lost == IsLost::LOST || next.height() > self.config.max_height {
+            if result.is_lost || next.height() > self.config.max_height {
                 continue;
             }
 
@@ -522,7 +522,7 @@ impl<'a> PuctSearch<'a> {
 
         let child_len = candidate_len
             .min(self.config.max_children)
-            .min(TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT);
+            .min(<TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT);
         let priors = normalized_priors(&candidates, child_len, self.config.prior_temperature);
         let mut children = Vec::with_capacity(child_len);
 
@@ -627,15 +627,15 @@ const fn advance_permutation(indices: &mut [u8; PIECES_PER_BAG]) -> bool {
 }
 
 const fn generate_forced_bag_permutations() -> [ForcedBag; BAG_PERMUTATION_COUNT] {
-    let mut permutations = [[TetrisPiece::O_PIECE; PIECES_PER_BAG]; BAG_PERMUTATION_COUNT];
+    let mut permutations = [[TetrisPiece::O; PIECES_PER_BAG]; BAG_PERMUTATION_COUNT];
     let mut indices = [0u8, 1, 2, 3, 4, 5, 6];
     let mut out_idx = 0usize;
 
     loop {
-        let mut bag = [TetrisPiece::O_PIECE; PIECES_PER_BAG];
+        let mut bag = [TetrisPiece::O; PIECES_PER_BAG];
         let mut i = 0usize;
         while i < PIECES_PER_BAG {
-            bag[i] = TetrisPiece::from_index(indices[i]);
+            bag[i] = TetrisPiece::all()[indices[i] as usize];
             i += 1;
         }
         permutations[out_idx] = bag;
@@ -671,7 +671,7 @@ fn main() -> Result<()> {
     println!(
         "mcts_max_children        = {}",
         cli.mcts_max_children
-            .min(TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT)
+            .min(<TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT)
     );
     println!();
 
@@ -746,7 +746,7 @@ fn scan_all_tuples(cli: &Cli) -> Result<()> {
             ordinal: Some(ordinal),
         };
         let tuple = bag_tuple_from_ordinal(ordinal);
-        let mut pieces = [TetrisPiece::O_PIECE; TOTAL_PIECES];
+        let mut pieces = [TetrisPiece::O; TOTAL_PIECES];
         fill_five_bag_sequence(tuple, &mut pieces);
 
         let attempt = run_puct_for_sequence(&pieces, cli, ordinal_seed(ordinal), scan_position);
@@ -800,7 +800,7 @@ fn scan_all_tuples(cli: &Cli) -> Result<()> {
 
 fn run_one_tuple(cli: &Cli, tuple: [usize; BAG_COUNT]) -> Result<()> {
     let started = Instant::now();
-    let mut pieces = [TetrisPiece::O_PIECE; TOTAL_PIECES];
+    let mut pieces = [TetrisPiece::O; TOTAL_PIECES];
     fill_five_bag_sequence(tuple, &mut pieces);
 
     print_bag_tuple(tuple);
@@ -848,7 +848,7 @@ fn run_puct_for_sequence(
             prior_noise: cli.mcts_prior_noise,
             max_children: cli
                 .mcts_max_children
-                .min(TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT),
+                .min(<TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT),
             noise_seed: mix_seed(sequence_seed, restart),
         };
 
@@ -946,20 +946,20 @@ fn state_key(state: SearchState) -> StateKey {
     }
 }
 
-fn scorer_prior(board: TetrisBoard, recent_lines_cleared: u32) -> f32 {
+fn scorer_prior(board: TetrisBoard<10, 20>, recent_lines_cleared: u32) -> f32 {
     height_mse_board_score(&TetrisBoardScoreState {
         board,
         recent_lines_cleared,
     })
 }
 
-fn nonterminal_value(board: TetrisBoard, step: usize, total_steps: usize) -> f32 {
+fn nonterminal_value(board: TetrisBoard<10, 20>, step: usize, total_steps: usize) -> f32 {
     let scorer_value = score_value_from_empty_distance(board);
     let depth_value = step as f32 / total_steps.max(1) as f32;
     (scorer_value * 0.85 + depth_value * 0.15).clamp(-1.0, 0.99)
 }
 
-fn terminal_failure_value(board: TetrisBoard) -> f32 {
+fn terminal_failure_value(board: TetrisBoard<10, 20>) -> f32 {
     let distance = height_mse_distance_from_empty(board);
     let cells = board.count();
     let height = board.height();
@@ -968,17 +968,17 @@ fn terminal_failure_value(board: TetrisBoard) -> f32 {
         .max(-8.0)
 }
 
-fn score_value_from_empty_distance(board: TetrisBoard) -> f32 {
+fn score_value_from_empty_distance(board: TetrisBoard<10, 20>) -> f32 {
     let distance = height_mse_distance_from_empty(board);
     (1.0 - distance / 200.0).clamp(-1.0, 1.0)
 }
 
 fn normalized_priors(
-    candidates: &[Candidate; TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT],
+    candidates: &[Candidate; <TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT],
     len: usize,
     temperature: f32,
-) -> [f32; TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT] {
-    let mut priors = [0.0f32; TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT];
+) -> [f32; <TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT] {
+    let mut priors = [0.0f32; <TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT];
     if len == 0 {
         return priors;
     }
@@ -1011,7 +1011,7 @@ fn normalized_priors(
     priors
 }
 
-fn prior_noise(state: SearchState, placement: TetrisPiecePlacement, seed: u64) -> f32 {
+fn prior_noise(state: SearchState, placement: TetrisPiecePlacement<10>, seed: u64) -> f32 {
     let mut hasher = FxHasher::default();
     seed.hash(&mut hasher);
     state.board.hash(&mut hasher);
@@ -1047,10 +1047,10 @@ fn mix_seed(left: u64, right: u64) -> u64 {
 
 fn replay_witness(
     pieces: &[TetrisPiece; TOTAL_PIECES],
-    placements: &[TetrisPiecePlacement; TOTAL_PIECES],
+    placements: &[TetrisPiecePlacement<10>; TOTAL_PIECES],
     max_height: u32,
 ) -> Option<FiveBagWitness> {
-    let mut board: TetrisBoard = TetrisBoard::EMPTY_BOARD;
+    let mut board: TetrisBoard<10, 20> = TetrisBoard::<10, 20>::new();
     let mut lines_cleared = 0u32;
     let mut observed_max_height = 0u32;
 
@@ -1060,7 +1060,7 @@ fn replay_witness(
         }
 
         let result = board.apply_piece_placement(placement);
-        if result.is_lost == IsLost::LOST {
+        if result.is_lost {
             return None;
         }
 
@@ -1203,7 +1203,7 @@ fn print_witness(
     print_placement_indices("placement_indices", &witness.placements, TOTAL_PIECES);
     println!("placements:");
 
-    let mut board = TetrisBoard::EMPTY_BOARD;
+    let mut board = TetrisBoard::<10, 20>::new();
     for (idx, placement) in witness.placements.iter().copied().enumerate() {
         let result = board.apply_piece_placement(placement);
         println!(
@@ -1242,7 +1242,7 @@ fn print_failure_prefix(pieces: &[TetrisPiece; TOTAL_PIECES], failure: &PuctFail
     }
 
     println!("placement_prefix:");
-    let mut board = TetrisBoard::EMPTY_BOARD;
+    let mut board = TetrisBoard::<10, 20>::new();
     for (idx, placement) in failure
         .placements
         .iter()
@@ -1266,7 +1266,7 @@ fn print_failure_prefix(pieces: &[TetrisPiece; TOTAL_PIECES], failure: &PuctFail
 
 fn print_placement_indices(
     label: &str,
-    placements: &[TetrisPiecePlacement; TOTAL_PIECES],
+    placements: &[TetrisPiecePlacement<10>; TOTAL_PIECES],
     len: usize,
 ) {
     print!("{label} = ");
@@ -1310,7 +1310,7 @@ mod tests {
             exploration: 1.4,
             prior_temperature: 64.0,
             prior_noise: 0.0,
-            max_children: TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT,
+            max_children: <TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT,
             noise_seed: 1,
         }
     }
@@ -1321,25 +1321,25 @@ mod tests {
         assert_eq!(
             ALL_BAG_PERMUTATIONS[0],
             [
-                TetrisPiece::O_PIECE,
-                TetrisPiece::I_PIECE,
-                TetrisPiece::S_PIECE,
-                TetrisPiece::Z_PIECE,
-                TetrisPiece::T_PIECE,
-                TetrisPiece::L_PIECE,
-                TetrisPiece::J_PIECE,
+                TetrisPiece::O,
+                TetrisPiece::I,
+                TetrisPiece::S,
+                TetrisPiece::Z,
+                TetrisPiece::T,
+                TetrisPiece::L,
+                TetrisPiece::J,
             ]
         );
         assert_eq!(
             ALL_BAG_PERMUTATIONS[BAG_PERMUTATION_COUNT - 1],
             [
-                TetrisPiece::J_PIECE,
-                TetrisPiece::L_PIECE,
-                TetrisPiece::T_PIECE,
-                TetrisPiece::Z_PIECE,
-                TetrisPiece::S_PIECE,
-                TetrisPiece::I_PIECE,
-                TetrisPiece::O_PIECE,
+                TetrisPiece::J,
+                TetrisPiece::L,
+                TetrisPiece::T,
+                TetrisPiece::Z,
+                TetrisPiece::S,
+                TetrisPiece::I,
+                TetrisPiece::O,
             ]
         );
     }
@@ -1357,7 +1357,7 @@ mod tests {
     #[test]
     fn explicit_tuple_fills_sequence() {
         let tuple = [0, 1, 2, 3, 4];
-        let mut pieces = [TetrisPiece::O_PIECE; TOTAL_PIECES];
+        let mut pieces = [TetrisPiece::O; TOTAL_PIECES];
         fill_five_bag_sequence(tuple, &mut pieces);
         assert_eq!(&pieces[0..PIECES_PER_BAG], &ALL_BAG_PERMUTATIONS[0]);
         assert_eq!(
@@ -1368,11 +1368,11 @@ mod tests {
 
     #[test]
     fn scorer_prefers_empty_board() {
-        let empty = TetrisBoard::EMPTY_BOARD;
-        let mut occupied = TetrisBoard::EMPTY_BOARD;
-        let placement = TetrisPiecePlacement::all_from_piece(TetrisPiece::O_PIECE)[0];
+        let empty = TetrisBoard::<10, 20>::new();
+        let mut occupied = TetrisBoard::<10, 20>::new();
+        let placement = <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::O)[0];
         let result = occupied.apply_piece_placement(placement);
-        assert_eq!(result.is_lost, IsLost::NOT_LOST);
+        assert!(!result.is_lost);
 
         assert!(scorer_prior(empty, 0) > scorer_prior(occupied, result.lines_cleared));
         assert!(score_value_from_empty_distance(empty) > score_value_from_empty_distance(occupied));
@@ -1380,7 +1380,8 @@ mod tests {
 
     #[test]
     fn normalized_priors_prefer_higher_scores() {
-        let mut candidates = [DEFAULT_CANDIDATE; TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT];
+        let mut candidates =
+            [DEFAULT_CANDIDATE; <TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT];
         candidates[0].prior_score = 0.0;
         candidates[1].prior_score = -100.0;
 

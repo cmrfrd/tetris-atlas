@@ -1,13 +1,11 @@
 use std::path::Path;
 
 use anyhow::Result;
-use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use serde::{Deserialize, Serialize};
 
 use tetris_game::tetris::TetrisPiecePlacement;
 
-use crate::encode::NUM_INPUTS;
 use crate::tree::{DecisionTree, random_piece_gated_tree};
 
 /// On-disk format version. Bump when the input encoding, node encoding, or
@@ -34,11 +32,12 @@ impl DecisionForest {
     /// TOTALITY: returns `None` ONLY when `legal` is empty, which cannot happen
     /// in a live game (the engine's per-piece placement table is static and
     /// non-empty) — the forest always answers.
+    #[cfg(test)]
     pub fn vote(
         &self,
         bits: &[u8],
-        legal: &[TetrisPiecePlacement],
-    ) -> Option<TetrisPiecePlacement> {
+        legal: &[TetrisPiecePlacement<10>],
+    ) -> Option<TetrisPiecePlacement<10>> {
         if legal.is_empty() {
             return None;
         }
@@ -46,9 +45,10 @@ impl DecisionForest {
     }
 
     /// Per-placement vote counts across all trees. Abstaining trees
-    /// (`decide` = `None`) contribute nothing. Placement ids are `u8`
-    /// (< NUM_PLACEMENTS ≤ 162); a 256-wide tally covers the whole range
+    /// (`decide` = `None`) contribute nothing. Placement IDs are `u8`;
+    /// a 256-entry tally covers the whole range
     /// without a const dependency.
+    #[cfg(test)]
     pub fn tally(&self, bits: &[u8]) -> [u32; 256] {
         let mut votes = [0u32; 256];
         for tree in &self.trees {
@@ -64,8 +64,8 @@ impl DecisionForest {
     /// used by `vote` and by callers that build the tally themselves.
     pub fn winner_from_tally(
         votes: &[u32; 256],
-        legal: &[TetrisPiecePlacement],
-    ) -> Option<TetrisPiecePlacement> {
+        legal: &[TetrisPiecePlacement<10>],
+    ) -> Option<TetrisPiecePlacement<10>> {
         legal
             .iter()
             .copied()
@@ -124,6 +124,8 @@ impl DecisionForest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::encode::NUM_INPUTS;
+    use rand::SeedableRng;
 
     #[test]
     fn vote_picks_the_legal_placement_with_the_most_votes() {
@@ -137,12 +139,12 @@ mod tests {
         };
         let bits = [0u8; NUM_INPUTS];
         let legal = [
-            TetrisPiecePlacement::from_index(0),
-            TetrisPiecePlacement::from_index(1),
+            <TetrisPiecePlacement<10>>::from_index(0),
+            <TetrisPiecePlacement<10>>::from_index(1),
         ];
         assert_eq!(
             forest.vote(&bits, &legal).unwrap(),
-            TetrisPiecePlacement::from_index(0)
+            <TetrisPiecePlacement<10>>::from_index(0)
         );
     }
 
@@ -155,13 +157,13 @@ mod tests {
         };
         let bits = [0u8; NUM_INPUTS];
         let legal = [
-            TetrisPiecePlacement::from_index(5),
-            TetrisPiecePlacement::from_index(3),
+            <TetrisPiecePlacement<10>>::from_index(5),
+            <TetrisPiecePlacement<10>>::from_index(3),
         ];
         // Invalid vote discarded -> no legal placement got a vote -> lowest index (3).
         assert_eq!(
             forest.vote(&bits, &legal).unwrap(),
-            TetrisPiecePlacement::from_index(3)
+            <TetrisPiecePlacement<10>>::from_index(3)
         );
     }
 
@@ -178,12 +180,12 @@ mod tests {
         };
         let bits = [0u8; NUM_INPUTS];
         let legal = [
-            TetrisPiecePlacement::from_index(0),
-            TetrisPiecePlacement::from_index(1),
+            <TetrisPiecePlacement<10>>::from_index(0),
+            <TetrisPiecePlacement<10>>::from_index(1),
         ];
         assert_eq!(
             forest.vote(&bits, &legal).unwrap(),
-            TetrisPiecePlacement::from_index(1)
+            <TetrisPiecePlacement<10>>::from_index(1)
         );
         // All-abstain forest: fallback still plays the lowest-index legal move.
         let silent = DecisionForest {
@@ -192,7 +194,7 @@ mod tests {
         };
         assert_eq!(
             silent.vote(&bits, &legal).unwrap(),
-            TetrisPiecePlacement::from_index(0)
+            <TetrisPiecePlacement<10>>::from_index(0)
         );
     }
 
@@ -210,7 +212,9 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(2);
         let forest = DecisionForest::random(&mut rng, 8, 6, 3);
         let bits = [0u8; NUM_INPUTS];
-        let legal: Vec<_> = (0u8..9).map(TetrisPiecePlacement::from_index).collect();
+        let legal: Vec<_> = (0u8..9)
+            .map(<TetrisPiecePlacement<10>>::from_index)
+            .collect();
         let chosen = forest.vote(&bits, &legal).unwrap();
         assert!(legal.contains(&chosen));
     }
@@ -243,8 +247,8 @@ mod tests {
         let loaded = DecisionForest::load_json(&path).unwrap();
         let bits = [0u8; NUM_INPUTS];
         let legal = [
-            TetrisPiecePlacement::from_index(0),
-            TetrisPiecePlacement::from_index(1),
+            <TetrisPiecePlacement<10>>::from_index(0),
+            <TetrisPiecePlacement<10>>::from_index(1),
         ];
         assert_eq!(forest.vote(&bits, &legal), loaded.vote(&bits, &legal));
         let _ = std::fs::remove_file(&path);

@@ -27,10 +27,8 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::time::Instant;
-use tetris_game::{
-    IsLost, PlacementResult, TetrisBoard, TetrisGame, TetrisPiece, TetrisPieceOrientation,
-    TetrisPiecePlacement,
-};
+
+use tetris_game::{PlacementResult, TetrisBoard, TetrisGame, TetrisPiece, TetrisPiecePlacement};
 use tetris_search::set_global_threadpool;
 use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetris_score};
 
@@ -72,16 +70,16 @@ impl<
 {
     pub fn new() -> Self {
         Self {
-            game: TetrisGame::new(),
+            game: <TetrisGame>::new(),
             multi_search: TetrisMultiBeamSearch::new(height_mse_beam_tetris_score)
                 .with_filter(filter_fn),
-            step_counter: 0,
+            step_counter: 1,
         }
     }
 
     pub fn new_with_seed(seed: u64) -> Self {
         Self {
-            game: TetrisGame::new_with_seed(seed),
+            game: <TetrisGame>::new_with_seed(seed),
             multi_search: TetrisMultiBeamSearch::new(height_mse_beam_tetris_score)
                 .with_filter(filter_fn),
             step_counter: seed,
@@ -95,8 +93,10 @@ impl<
         }
     }
 
-    pub fn kink(&mut self) -> PlacementResult {
-        self.game.play_random()
+    pub fn kink<R: RngExt + ?Sized>(&mut self, rng: &mut R) -> PlacementResult {
+        let placements = self.game.current_placements();
+        let placement = placements[rng.random_range(0..placements.len())];
+        self.game.apply_placement(placement)
     }
 }
 
@@ -108,7 +108,7 @@ impl<
     const MAX_MOVES: usize,
 > Iterator for TetrisGameMultiSearchIter<N, TOP_N_PER_BEAM, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
 {
-    type Item = (TetrisBoard, TetrisPiecePlacement);
+    type Item = (TetrisBoard<10, 20>, TetrisPiecePlacement<10>);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.game.board.is_lost() {
@@ -126,8 +126,7 @@ impl<
 
         self.step_counter += 1;
 
-        (self.game.apply_placement(first_action).is_lost != IsLost::LOST)
-            .then_some((board_before, first_action))
+        (!self.game.apply_placement(first_action).is_lost).then_some((board_before, first_action))
     }
 }
 
@@ -147,7 +146,7 @@ pub fn run_tetris_beam_multisearch() {
     const TOP_N_PER_BEAM: usize = 64;
     const BEAM_WIDTH: usize = 64;
     const MAX_DEPTH: usize = 6;
-    const MAX_MOVES: usize = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
+    const MAX_MOVES: usize = <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS;
     const LOG_EVERY: usize = 1024;
     const KINK_PROB: f64 = 0.00;
     // --------------
@@ -178,7 +177,7 @@ pub fn run_tetris_beam_multisearch() {
     let mut height_counts: HashMap<u32, usize> = HashMap::new();
     let mut holes_counts: HashMap<u32, usize> = HashMap::new();
     let mut cell_counts: HashMap<u32, usize> = HashMap::new();
-    let mut board_cache: HashSet<(TetrisBoard, TetrisPiece)> = HashSet::new();
+    let mut board_cache: HashSet<(TetrisBoard<10, 20>, TetrisPiece)> = HashSet::new();
     let mut cache_hits = 0usize;
     let mut cache_misses = 0usize;
     let mut iter =
@@ -189,7 +188,7 @@ pub fn run_tetris_beam_multisearch() {
 
     loop {
         if rng.random_bool(KINK_PROB) {
-            iter.kink();
+            iter.kink(&mut rng);
         }
 
         let Some((board_before, mv)) = iter.next() else {
@@ -290,6 +289,70 @@ pub fn run_tetris_beam_multisearch() {
             // if write_count % 100 == 0 {
             //     writer.flush().expect("Failed to flush output file");
             // }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{SeedableRng, rngs::SmallRng};
+
+    #[test]
+    fn default_ensemble_can_search_its_first_move() {
+        let mut iter = TetrisGameMultiSearchIter::<
+            2,
+            1,
+            8,
+            2,
+            { <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS },
+        >::new();
+        assert!(iter.next().is_some());
+        assert_eq!(iter.game.piece_count, 1);
+    }
+
+    #[test]
+    fn random_moves_replay_without_changing_piece_stream() {
+        let mut first = TetrisGameMultiSearchIter::<
+            2,
+            1,
+            8,
+            2,
+            { <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS },
+        >::new_with_seed(42);
+        let mut second = TetrisGameMultiSearchIter::<
+            2,
+            1,
+            8,
+            2,
+            { <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS },
+        >::new_with_seed(42);
+        let mut control = first.game;
+        let mut first_rng = SmallRng::seed_from_u64(123);
+        let mut second_rng = SmallRng::seed_from_u64(123);
+
+        // Keep moves live while crossing multiple bag refills.
+        for _ in 0..16 {
+            first.game.board.clear();
+            second.game.board.clear();
+            control.board.clear();
+            let before = first.game;
+            let result = first.kink(&mut first_rng);
+            assert!(!result.is_lost);
+            assert_eq!(result, second.kink(&mut second_rng));
+            assert_eq!(first.game, second.game);
+            assert!(before.current_placements().iter().any(|&placement| {
+                let mut board = before.board;
+                board.apply_piece_placement(placement);
+                board == first.game.board
+            }));
+
+            // A different move policy must see the same future piece stream.
+            let placement = control.current_placements()[0];
+            assert!(!control.apply_placement(placement).is_lost);
+            assert_eq!(first.game.current_piece(), control.current_piece());
+            assert_eq!(first.game.bag(), control.bag());
+            assert_eq!(first.game.rng, control.rng);
         }
     }
 }

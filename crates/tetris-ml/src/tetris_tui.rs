@@ -15,7 +15,7 @@ use ratatui::{
     Frame, Terminal,
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style, Stylize},
+    style::{Color, Modifier, Style},
     symbols::border,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
@@ -26,14 +26,13 @@ use tetris_game::{TetrisGame, TetrisPiece};
 /// Colors for each piece type (matching classic Tetris)
 fn piece_color(piece: TetrisPiece) -> Color {
     match piece {
-        p if p == TetrisPiece::O_PIECE => Color::Yellow,
-        p if p == TetrisPiece::I_PIECE => Color::Cyan,
-        p if p == TetrisPiece::S_PIECE => Color::Green,
-        p if p == TetrisPiece::Z_PIECE => Color::Red,
-        p if p == TetrisPiece::T_PIECE => Color::Magenta,
-        p if p == TetrisPiece::L_PIECE => Color::Rgb(255, 165, 0), // Orange
-        p if p == TetrisPiece::J_PIECE => Color::Blue,
-        _ => Color::White,
+        TetrisPiece::O => Color::Yellow,
+        TetrisPiece::I => Color::Cyan,
+        TetrisPiece::S => Color::Green,
+        TetrisPiece::Z => Color::Red,
+        TetrisPiece::T => Color::Magenta,
+        TetrisPiece::L => Color::Rgb(255, 165, 0), // Orange
+        TetrisPiece::J => Color::Blue,
     }
 }
 
@@ -43,7 +42,7 @@ fn piece_shape(piece: TetrisPiece, rotation: u8) -> [[bool; 4]; 4] {
     let mut grid = [[false; 4]; 4];
 
     match piece {
-        p if p == TetrisPiece::O_PIECE => {
+        TetrisPiece::O => {
             // O piece - same in all rotations
             // 11
             // 11
@@ -52,7 +51,7 @@ fn piece_shape(piece: TetrisPiece, rotation: u8) -> [[bool; 4]; 4] {
             grid[1][0] = true;
             grid[1][1] = true;
         }
-        p if p == TetrisPiece::I_PIECE => {
+        TetrisPiece::I => {
             match rotation % 2 {
                 0 => {
                     // Horizontal: 1111
@@ -73,7 +72,7 @@ fn piece_shape(piece: TetrisPiece, rotation: u8) -> [[bool; 4]; 4] {
                 }
             }
         }
-        p if p == TetrisPiece::S_PIECE => match rotation % 2 {
+        TetrisPiece::S => match rotation % 2 {
             0 => {
                 // 011
                 // 110
@@ -92,7 +91,7 @@ fn piece_shape(piece: TetrisPiece, rotation: u8) -> [[bool; 4]; 4] {
                 grid[2][1] = true;
             }
         },
-        p if p == TetrisPiece::Z_PIECE => match rotation % 2 {
+        TetrisPiece::Z => match rotation % 2 {
             0 => {
                 // 110
                 // 011
@@ -111,7 +110,7 @@ fn piece_shape(piece: TetrisPiece, rotation: u8) -> [[bool; 4]; 4] {
                 grid[2][0] = true;
             }
         },
-        p if p == TetrisPiece::T_PIECE => match rotation % 4 {
+        TetrisPiece::T => match rotation % 4 {
             0 => {
                 // 111
                 // 010
@@ -147,7 +146,7 @@ fn piece_shape(piece: TetrisPiece, rotation: u8) -> [[bool; 4]; 4] {
                 grid[2][0] = true;
             }
         },
-        p if p == TetrisPiece::L_PIECE => match rotation % 4 {
+        TetrisPiece::L => match rotation % 4 {
             0 => {
                 // 001
                 // 111
@@ -183,7 +182,7 @@ fn piece_shape(piece: TetrisPiece, rotation: u8) -> [[bool; 4]; 4] {
                 grid[2][1] = true;
             }
         },
-        p if p == TetrisPiece::J_PIECE => match rotation % 4 {
+        TetrisPiece::J => match rotation % 4 {
             0 => {
                 // 100
                 // 111
@@ -219,7 +218,6 @@ fn piece_shape(piece: TetrisPiece, rotation: u8) -> [[bool; 4]; 4] {
                 grid[2][1] = true;
             }
         },
-        _ => {}
     }
     grid
 }
@@ -237,7 +235,7 @@ pub struct TetrisTui {
 impl TetrisTui {
     pub fn new() -> Self {
         Self {
-            game: TetrisGame::new(),
+            game: <TetrisGame>::new(),
             selected_index: 0,
             game_over: false,
             message: None,
@@ -260,7 +258,7 @@ impl TetrisTui {
     }
 
     /// Get the currently selected placement (always valid)
-    fn current_placement(&self) -> Option<&tetris_game::TetrisPiecePlacement> {
+    fn current_placement(&self) -> Option<&tetris_game::TetrisPiecePlacement<10>> {
         let placements = self.game.current_placements();
         if placements.is_empty() {
             None
@@ -300,7 +298,7 @@ impl TetrisTui {
 
         if let Some(&placement) = self.current_placement() {
             let result = self.game.apply_placement(placement);
-            if result.is_lost.into() {
+            if result.is_lost {
                 self.game_over = true;
                 if self.game.lines_cleared > self.high_score {
                     self.high_score = self.game.lines_cleared;
@@ -344,7 +342,7 @@ impl TetrisTui {
         if self.game.lines_cleared > self.high_score {
             self.high_score = self.game.lines_cleared;
         }
-        self.game = TetrisGame::new();
+        self.game = <TetrisGame>::new();
         self.selected_index = 0;
         self.select_nearest_column(4); // Start near middle
         self.game_over = false;
@@ -512,13 +510,17 @@ fn ui(f: &mut Frame, app: &TetrisTui) {
     draw_piece_preview(
         f,
         left_chunks[0],
-        app.game.current_piece,
+        app.game.current_piece(),
         app.selected_rotation(),
         "Current",
     );
 
     // Draw next piece
-    let next_piece = app.game.peek_nth_next_piece(1);
+    let next_piece = app
+        .game
+        .iter_next_pieces()
+        .nth(1)
+        .expect("piece sequence is infinite");
     draw_piece_preview(f, left_chunks[1], next_piece, 0, "Next");
 
     // Draw controls
@@ -647,7 +649,7 @@ fn calculate_ghost_piece(app: &TetrisTui) -> Vec<(usize, usize)> {
         return vec![];
     }
 
-    let shape = piece_shape(app.game.current_piece, app.selected_rotation());
+    let shape = piece_shape(app.game.current_piece(), app.selected_rotation());
     let board = &app.game.board;
     let selected_col = app.selected_column() as i32;
 
@@ -755,7 +757,7 @@ fn draw_board(f: &mut Frame, area: Rect, app: &TetrisTui) {
 
     // Calculate ghost piece positions
     let ghost_positions = calculate_ghost_piece(app);
-    let ghost_color = piece_color(app.game.current_piece);
+    let ghost_color = piece_color(app.game.current_piece());
 
     // We show rows 0-19 (bottom to top)
     let display_rows = 20;
@@ -833,9 +835,9 @@ fn draw_stats(f: &mut Frame, area: Rect, app: &TetrisTui) {
         Line::from(vec![
             Span::styled("Piece: ", Style::default().fg(Color::White)),
             Span::styled(
-                format!("{}", app.game.current_piece),
+                format!("{}", app.game.current_piece()),
                 Style::default()
-                    .fg(piece_color(app.game.current_piece))
+                    .fg(piece_color(app.game.current_piece()))
                     .bold(),
             ),
         ]),

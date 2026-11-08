@@ -1,5 +1,6 @@
 #![feature(generic_const_exprs)]
 #![feature(const_convert)]
+#![feature(const_trait_impl)]
 #![allow(incomplete_features)]
 #![allow(clippy::absurd_extreme_comparisons)]
 #![allow(clippy::collapsible_if)]
@@ -12,7 +13,6 @@
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::same_item_push)]
 #![allow(clippy::unwrap_used)]
-#![allow(unused_imports)]
 
 pub mod checkpointer;
 pub mod data;

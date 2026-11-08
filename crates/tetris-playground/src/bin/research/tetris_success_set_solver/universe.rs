@@ -1,23 +1,20 @@
+pub use crate::admissibility::board_is_admissible;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, ensure};
-use tetris_game::{IsLost, TetrisBoard, TetrisPieceBagState, TetrisPiecePlacement};
+use tetris_game::{TetrisBoard, TetrisPieceBagState, TetrisPiecePlacement};
 
 use crate::config::{BoardAdmissibility, SolverConfig};
-use crate::graph::{EdgeRange, FlatEdge, PredecessorRef, StateIndex};
-use crate::state::{
-    BoardId, FULL_BAG_MASK, PackedPlacement, StateId, StateKey, pack_placement, piece_branches,
-};
+use crate::graph::{BoardId, EdgeRange, FlatEdge, PredecessorRef, StateId, StateIndex, StateKey};
+use crate::state::{PackedPlacement, pack_placement, piece_branches};
 
 #[derive(Debug)]
 pub struct Universe {
     pub empty_board_id: BoardId,
     pub root_state_id: StateId,
-    pub boards: Vec<TetrisBoard>,
-    pub board_to_id: HashMap<TetrisBoard, BoardId>,
+    pub boards: Vec<TetrisBoard<10, 20>>,
     pub states: Vec<StateKey>,
-    pub state_to_id: HashMap<StateKey, StateId>,
     pub state_index: Vec<StateIndex>,
     pub edges: Vec<FlatEdge>,
     pub predecessor_ranges: Vec<EdgeRange>,
@@ -29,11 +26,11 @@ impl Universe {
         self.states[state_id as usize]
     }
 
-    pub fn board(&self, board_id: BoardId) -> TetrisBoard {
+    pub fn board(&self, board_id: BoardId) -> TetrisBoard<10, 20> {
         self.boards[board_id as usize]
     }
 
-    pub fn board_of_state(&self, state_id: StateId) -> TetrisBoard {
+    pub fn board_of_state(&self, state_id: StateId) -> TetrisBoard<10, 20> {
         self.board(self.state_key(state_id).board_id)
     }
 
@@ -71,8 +68,8 @@ impl Universe {
 #[derive(Debug, Default)]
 pub struct UniverseBuilder {
     config: SolverConfig,
-    boards: Vec<TetrisBoard>,
-    board_to_id: HashMap<TetrisBoard, BoardId>,
+    boards: Vec<TetrisBoard<10, 20>>,
+    board_to_id: HashMap<TetrisBoard<10, 20>, BoardId>,
     states: Vec<StateKey>,
     state_to_id: HashMap<StateKey, StateId>,
     frontier: VecDeque<StateId>,
@@ -93,7 +90,7 @@ impl UniverseBuilder {
             "root board must be admissible"
         );
 
-        let empty_board = TetrisBoard::EMPTY_BOARD;
+        let empty_board = TetrisBoard::<10, 20>::new();
         let empty_board_id = builder.intern_board(empty_board);
         ensure!(empty_board_id == 0, "empty board should be interned first");
         let root_board_id = builder.intern_board(builder.config.root.board);
@@ -155,9 +152,7 @@ impl UniverseBuilder {
             empty_board_id,
             root_state_id,
             boards: builder.boards,
-            board_to_id: builder.board_to_id,
             states: builder.states,
-            state_to_id: builder.state_to_id,
             state_index: builder.state_index,
             edges: builder.edges,
             predecessor_ranges,
@@ -165,7 +160,7 @@ impl UniverseBuilder {
         })
     }
 
-    fn intern_board(&mut self, board: TetrisBoard) -> BoardId {
+    fn intern_board(&mut self, board: TetrisBoard<10, 20>) -> BoardId {
         if let Some(&board_id) = self.board_to_id.get(&board) {
             return board_id;
         }
@@ -201,7 +196,7 @@ impl UniverseBuilder {
             let piece_idx = branch.piece.index() as usize;
             let start = self.edges.len() as u32;
 
-            for &placement in TetrisPiecePlacement::all_from_piece(branch.piece) {
+            for &placement in <TetrisPiecePlacement<10>>::all_from_piece(branch.piece) {
                 let Some(edge) = self.build_edge(board, branch.next_bag, placement) else {
                     continue;
                 };
@@ -223,15 +218,13 @@ impl UniverseBuilder {
 
     fn build_edge(
         &mut self,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         next_bag: TetrisPieceBagState,
-        placement: TetrisPiecePlacement,
+        placement: TetrisPiecePlacement<10>,
     ) -> Option<FlatEdge> {
         let mut next_board = board;
         let result = next_board.apply_piece_placement(placement);
-        if result.is_lost == IsLost::LOST
-            || !board_is_admissible(next_board, self.config.admissibility)
-        {
+        if result.is_lost || !board_is_admissible(next_board, self.config.admissibility) {
             return None;
         }
 
@@ -245,36 +238,12 @@ impl UniverseBuilder {
 }
 
 fn approx_build_bytes(board_count: usize, state_count: usize, edge_count: usize) -> usize {
-    board_count * std::mem::size_of::<TetrisBoard>()
+    board_count * std::mem::size_of::<TetrisBoard<10, 20>>()
         + state_count
             * (std::mem::size_of::<StateKey>()
                 + std::mem::size_of::<StateIndex>()
                 + std::mem::size_of::<StateId>())
         + edge_count * std::mem::size_of::<FlatEdge>()
-}
-
-#[inline]
-pub fn board_is_admissible(board: TetrisBoard, admissibility: BoardAdmissibility) -> bool {
-    board.height() <= u32::from(admissibility.max_height)
-        && board.total_holes() <= admissibility.max_holes
-        && board.count() <= admissibility.max_cells
-        && board_surface_roughness(board) <= admissibility.max_roughness
-        && board_height_spread(board) <= admissibility.max_height_spread
-}
-
-pub fn board_surface_roughness(board: TetrisBoard) -> u32 {
-    let heights = board.heights();
-    heights
-        .windows(2)
-        .map(|window| window[0].abs_diff(window[1]))
-        .sum()
-}
-
-pub fn board_height_spread(board: TetrisBoard) -> u32 {
-    let heights = board.heights();
-    let min_height = heights.into_iter().min().unwrap_or(0);
-    let max_height = heights.into_iter().max().unwrap_or(0);
-    max_height.saturating_sub(min_height)
 }
 
 #[inline]
@@ -364,13 +333,13 @@ mod tests {
         assert_eq!(universe.empty_board_id, 0);
         assert_eq!(
             universe.state_key(0),
-            StateKey::new(universe.empty_board_id, TetrisPieceBagState::new())
+            StateKey::new(universe.empty_board_id, TetrisPieceBagState::full())
         );
     }
 
     #[test]
     fn board_admissibility_is_inclusive() {
-        let mut board = TetrisBoard::EMPTY_BOARD;
+        let mut board = TetrisBoard::<10, 20>::new();
         board.set_bit(0, 1);
         assert!(board_is_admissible(
             board,
@@ -454,7 +423,7 @@ mod tests {
             for branch in piece_branches(state.bag) {
                 let range = state_index.piece_ranges[branch.piece.index() as usize];
                 for edge in universe.edge_slice(range) {
-                    let placement = TetrisPiecePlacement::from_index(edge.placement);
+                    let placement = <TetrisPiecePlacement<10>>::from_index(edge.placement);
                     assert_eq!(placement.piece, branch.piece);
                     let succ_board = universe.board_of_state(edge.succ);
                     assert!(board_is_admissible(
@@ -500,7 +469,7 @@ mod tests {
 
     #[test]
     fn inadmissible_root_is_rejected() {
-        let mut root_board = TetrisBoard::EMPTY_BOARD;
+        let mut root_board = TetrisBoard::<10, 20>::new();
         root_board.set_bit(0, 1);
         let result = UniverseBuilder::build(SolverConfig {
             admissibility: BoardAdmissibility {
@@ -512,7 +481,7 @@ mod tests {
             },
             root: RootStateConfig {
                 board: root_board,
-                bag: TetrisPieceBagState::new(),
+                bag: TetrisPieceBagState::full(),
             },
         });
 

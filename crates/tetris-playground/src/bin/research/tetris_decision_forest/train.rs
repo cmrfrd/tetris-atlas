@@ -7,7 +7,7 @@ use rand::rngs::SmallRng;
 use rand::{RngExt, SeedableRng};
 use rayon::prelude::*;
 use tetris_game::config::StandardTetris;
-use tetris_game::tetris::{IsLost, TetrisGame};
+use tetris_game::tetris::TetrisGame;
 
 use crate::compiled::CompiledForest;
 use crate::config::{EvolveConfig, TrainConfig};
@@ -109,7 +109,7 @@ pub fn tree_valid_counts(
         let Some(placement) = DecisionForest::winner_from_tally(&votes, legal) else {
             break;
         };
-        let lost = game.apply_placement(placement).is_lost == IsLost::LOST;
+        let lost = game.apply_placement(placement).is_lost;
         decisions += 1;
         if lost {
             break;
@@ -123,6 +123,7 @@ pub fn tree_valid_counts(
 /// 1.0 = any tree that ever outputs an invalid placement is culled). Never
 /// empties a forest — if every tree is below threshold, the single most-valid
 /// tree is kept. `min_valid_rate <= 0.0` disables culling.
+#[cfg(test)]
 pub fn cull_invalid_trees(
     forest: &DecisionForest,
     seeds: &[u64],
@@ -515,7 +516,7 @@ mod tests {
         use tetris_game::tetris::{TetrisPiece, TetrisPiecePlacement};
         let mut tree = DecisionTree::Leaf(0); // unreachable fallback
         for (i, piece) in TetrisPiece::all().iter().enumerate() {
-            let legal_pid = TetrisPiecePlacement::all_from_piece(*piece)[0].index();
+            let legal_pid = <TetrisPiecePlacement<10>>::all_from_piece(*piece)[0].index();
             tree = DecisionTree::Branch {
                 cond: BoolExpr::Cell(NUM_CELLS + NUM_PIECES + i),
                 yes: Box::new(DecisionTree::Leaf(legal_pid)),

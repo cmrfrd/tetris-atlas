@@ -38,15 +38,12 @@
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::time::Instant;
-use tetris_game::{
-    IsLost, StandardTetris, TetrisBoard, TetrisGame, TetrisGameConfig, TetrisPieceOrientation,
-    constants,
-};
+use tetris_game::{StandardTetris, TetrisBoard, TetrisGame, TetrisGameConfig};
 use tetris_search::{BeamTetrisState, ScoredState, TetrisBeamSearch, height_mse_beam_tetris_score};
 
 const BEAM_WIDTH: usize = 1024;
 const MAX_DEPTH: usize = 8;
-const MAX_MOVES: usize = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
+const MAX_MOVES: usize = <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS;
 const NUM_STEPS: usize = 500_000;
 const LOG_EVERY: usize = 10_000;
 const FLUSH_EVERY: usize = 1_000;
@@ -60,7 +57,7 @@ const fn filter_fn(state: &BeamTetrisState) -> bool {
     true
 }
 
-fn board_to_flat_array(board: TetrisBoard) -> [u8; 200] {
+fn board_to_flat_array(board: TetrisBoard<10, 20>) -> [u8; 200] {
     let limbs = board.as_limbs();
     let mut flat = [0u8; 200];
     let mut i = 0;
@@ -97,7 +94,7 @@ fn write_record(
 fn main() {
     tetris_search::set_global_threadpool();
 
-    let mut game = TetrisGame::new();
+    let mut game = <TetrisGame>::new();
     let mut search =
         TetrisBeamSearch::<BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>::new(height_mse_beam_tetris_score)
             .with_filter(filter_fn);
@@ -136,7 +133,7 @@ fn main() {
         let cell_count = game.board.count();
 
         let result = game.apply_placement(placement);
-        if result.is_lost == IsLost::LOST {
+        if result.is_lost {
             println!("Lost at step {step}");
             break;
         }
@@ -144,7 +141,7 @@ fn main() {
         write_record(
             &mut writer,
             &board_flat,
-            placement.piece.into(),
+            placement.piece.mask(),
             placement.orientation.index(),
             game.board.height(),
             result.lines_cleared,

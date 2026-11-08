@@ -13,7 +13,7 @@ pub struct BoardAdmissibility {
 
 impl BoardAdmissibility {
     #[inline]
-    pub fn contains(self, board: &TetrisBoard) -> bool {
+    pub fn contains(self, board: &TetrisBoard<10, 20>) -> bool {
         if self.max_height != u32::MAX && board.height() > self.max_height {
             return false;
         }
@@ -77,9 +77,9 @@ impl SolverConfig {
     }
 
     #[inline]
-    pub fn target_contains(self, board: &TetrisBoard) -> bool {
+    pub fn target_contains(self, board: &TetrisBoard<10, 20>) -> bool {
         match self.target_mode {
-            TargetMode::Empty => *board == TetrisBoard::EMPTY_BOARD,
+            TargetMode::Empty => *board == TetrisBoard::<10, 20>::new(),
             TargetMode::LowClean => self.closed_set_admissibility.contains(board),
         }
     }

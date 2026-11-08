@@ -3,14 +3,13 @@ use std::collections::BinaryHeap;
 use std::time::Instant;
 
 use tetris_game::{
-    IsLost, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPiecePlacement,
-    constants,
+    StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPiecePlacement,
 };
 use tetris_utils::repeat_idx_unroll;
 
 #[derive(Debug, Clone, Copy)]
 struct ScoreState {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     recent_lines_cleared: u32,
 }
 
@@ -52,7 +51,7 @@ impl Ord for OrderedF32 {
 
 #[derive(Debug, Clone, Copy)]
 struct SearchNode {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     depth: u16,
     parent_slot: u32,
     placement: u8,
@@ -93,7 +92,7 @@ impl Ord for FrontierEntry {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct CandidateNode {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     placement: u8,
     score: f32,
     lines_cleared: u32,
@@ -102,8 +101,8 @@ struct CandidateNode {
 impl Default for CandidateNode {
     fn default() -> Self {
         Self {
-            board: TetrisBoard::EMPTY_BOARD,
-            placement: TetrisPiecePlacement::default().index(),
+            board: TetrisBoard::<10, 20>::new(),
+            placement: 0, // Unused placeholder until a real placement is assigned.
             score: f32::NEG_INFINITY,
             lines_cleared: 0,
         }
@@ -113,7 +112,7 @@ impl Default for CandidateNode {
 fn compare_candidates(left: &CandidateNode, right: &CandidateNode) -> Ordering {
     left.score
         .total_cmp(&right.score)
-        .then_with(|| right.board.as_limbs().cmp(&left.board.as_limbs()))
+        .then_with(|| right.board.as_limbs().cmp(left.board.as_limbs()))
 }
 
 fn insert_top_candidate(top: &mut Vec<CandidateNode>, width: usize, candidate: CandidateNode) {
@@ -138,8 +137,8 @@ fn insert_top_candidate(top: &mut Vec<CandidateNode>, width: usize, candidate: C
 }
 
 pub struct SearchResult {
-    pub placements: Vec<TetrisPiecePlacement>,
-    pub final_board: TetrisBoard,
+    pub placements: Vec<TetrisPiecePlacement<10>>,
+    pub final_board: TetrisBoard<10, 20>,
     pub lines_cleared: u32,
     pub nodes_expanded: usize,
 }
@@ -151,7 +150,7 @@ pub enum SearchOutcome {
 
 pub fn search(
     sequence: &[TetrisPiece],
-    target: TetrisBoard,
+    target: TetrisBoard<10, 20>,
     width: usize,
     max_nodes: usize,
     verbose: bool,
@@ -161,10 +160,10 @@ pub fn search(
     let mut frontier: BinaryHeap<FrontierEntry> = BinaryHeap::new();
 
     let root = SearchNode {
-        board: TetrisBoard::EMPTY_BOARD,
+        board: TetrisBoard::<10, 20>::new(),
         depth: 0,
         parent_slot: u32::MAX,
-        placement: TetrisPiecePlacement::default().index(),
+        placement: 0, // Unused placeholder until a real placement is assigned.
         lines_cleared: 0,
     };
     arena.push(root);
@@ -225,10 +224,10 @@ pub fn search(
         let piece = sequence[node.depth as usize];
         let mut top_candidates: Vec<CandidateNode> = Vec::with_capacity(width);
 
-        for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+        for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
             let mut child_board = node.board;
             let outcome = child_board.apply_piece_placement(placement);
-            if outcome.is_lost == IsLost::LOST {
+            if outcome.is_lost {
                 continue;
             }
             let cumulative_lines = node.lines_cleared + outcome.lines_cleared;
@@ -268,14 +267,18 @@ pub fn search(
     SearchOutcome::Exhausted { nodes_expanded }
 }
 
-fn build_path(arena: &[SearchNode], final_slot: u32, depth: usize) -> Vec<TetrisPiecePlacement> {
-    let mut placements = vec![TetrisPiecePlacement::default(); depth];
+fn build_path(
+    arena: &[SearchNode],
+    final_slot: u32,
+    depth: usize,
+) -> Vec<TetrisPiecePlacement<10>> {
+    let mut placements = vec![<TetrisPiecePlacement<10>>::from_index(0); depth];
     let mut cursor = final_slot;
     let mut remaining = depth;
     while cursor != 0 && cursor != u32::MAX {
         let node = &arena[cursor as usize];
         remaining -= 1;
-        placements[remaining] = TetrisPiecePlacement::from_index(node.placement);
+        placements[remaining] = <TetrisPiecePlacement<10>>::from_index(node.placement);
         cursor = node.parent_slot;
     }
     debug_assert_eq!(remaining, 0);

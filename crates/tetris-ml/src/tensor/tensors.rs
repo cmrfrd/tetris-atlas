@@ -7,40 +7,44 @@ use anyhow::Result;
 use candle_core::{D, DType, Device, IndexOp, Shape, Tensor};
 use candle_nn::{encoding::one_hot, ops::softmax};
 use tetris_game::{
-    Major, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisGameSet, TetrisPiece,
-    TetrisPieceOrientation, TetrisPiecePlacement, constants,
+    Major, TetrisBoard, TetrisGameSet, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement,
+    constants,
 };
 use tetris_search::OrientationCounts;
 
 /// Tensor wrapper for Tetris boards.
-/// Shape: (num_games, TetrisBoard::SIZE)
+/// Shape: `(num_games, TetrisBoard::<10, 20>::BOARD_SIZE)`.
 ///
-/// Each row represents a single board, flattened to a 1D binary vector of length TetrisBoard::SIZE.
+/// Each row contains `TetrisBoard::<10, 20>::BOARD_SIZE` binary cells.
 #[derive(Debug, Clone)]
 pub struct TetrisBoardsTensor(Tensor);
 
 impl_wrapped_tensor!(
     TetrisBoardsTensor,
     dtype = DType::U8,
-    shape_spec = (ShapeDim::Any, ShapeDim::Dim(StandardTetris::BOARD_SIZE))
+    shape_spec = (
+        ShapeDim::Any,
+        ShapeDim::Dim(TetrisBoard::<10, 20>::BOARD_SIZE)
+    )
 );
 
 impl TetrisBoardsTensor {
     /// Create a tetris boards tensor from a gameset
     pub fn from_gameset(games: &TetrisGameSet, device: &Device) -> Result<Self> {
-        let mut boards = Vec::with_capacity(games.len() * StandardTetris::BOARD_SIZE);
+        let mut boards = Vec::with_capacity(games.len() * TetrisBoard::<10, 20>::BOARD_SIZE);
         games.boards().into_iter().for_each(|board| {
             boards.extend_from_slice(&board.to_cell_array(Major::Row));
         });
-        let shape = Shape::from_dims(&[games.len(), StandardTetris::BOARD_SIZE]);
+        let shape = Shape::from_dims(&[games.len(), TetrisBoard::<10, 20>::BOARD_SIZE]);
         let boards = Tensor::from_vec(boards, &shape, device)?;
         Self::try_from(boards)
     }
 
     /// Create a tetris boards tensor from a slice of raw boards
-    pub fn from_boards(boards: &[TetrisBoard], device: &Device) -> Result<Self> {
-        let shape = Shape::from_dims(&[boards.len(), StandardTetris::BOARD_SIZE]);
-        let mut flattened: Vec<u8> = Vec::with_capacity(boards.len() * StandardTetris::BOARD_SIZE);
+    pub fn from_boards(boards: &[TetrisBoard<10, 20>], device: &Device) -> Result<Self> {
+        let shape = Shape::from_dims(&[boards.len(), TetrisBoard::<10, 20>::BOARD_SIZE]);
+        let mut flattened: Vec<u8> =
+            Vec::with_capacity(boards.len() * TetrisBoard::<10, 20>::BOARD_SIZE);
         for board in boards.iter() {
             flattened.extend(board.to_cell_array(Major::Row).iter());
         }
@@ -49,7 +53,7 @@ impl TetrisBoardsTensor {
     }
 
     /// Convert tetris board tensor into tetris boards
-    pub fn into_boards(self) -> Result<Vec<TetrisBoard>> {
+    pub fn into_boards(self) -> Result<Vec<TetrisBoard<10, 20>>> {
         let (batch_size, _board_size) = self.shape_tuple();
         let boards = {
             let mut boards = Vec::with_capacity(batch_size);
@@ -60,7 +64,7 @@ impl TetrisBoardsTensor {
                     .flatten_all()?
                     .to_dtype(DType::U8)?
                     .to_vec1::<u8>()?;
-                boards.push(<TetrisBoard>::from_cell_array(
+                boards.push(<TetrisBoard<10, 20>>::from_cell_array(
                     board.try_into().unwrap(),
                     Major::Row,
                 ));
@@ -128,7 +132,7 @@ impl TetrisBoardsTensor {
         );
         let equal = self.inner().eq(other.inner())?.to_dtype(DType::U32)?;
         let num_cells_equal = equal.sum(D::Minus1)?.to_dtype(DType::F64)?;
-        let perc_cells_equal = (num_cells_equal / ((StandardTetris::BOARD_SIZE) as f64))?;
+        let perc_cells_equal = (num_cells_equal / ((TetrisBoard::<10, 20>::BOARD_SIZE) as f64))?;
         let perc_equal = perc_cells_equal
             .to_dtype(DType::F32)?
             .mean([0])?
@@ -152,7 +156,10 @@ pub struct TetrisBoardLogitsTensor(Tensor);
 impl_wrapped_tensor!(
     TetrisBoardLogitsTensor,
     dtype = crate::tensor::fdtype(),
-    shape_spec = (ShapeDim::Any, ShapeDim::Dim(StandardTetris::BOARD_SIZE))
+    shape_spec = (
+        ShapeDim::Any,
+        ShapeDim::Dim(TetrisBoard::<10, 20>::BOARD_SIZE)
+    )
 );
 
 impl TetrisBoardLogitsTensor {
@@ -209,7 +216,7 @@ impl_wrapped_tensor!(
     dtype = crate::tensor::fdtype(),
     shape_spec = (
         ShapeDim::Any,
-        ShapeDim::Dim(StandardTetris::BOARD_SIZE),
+        ShapeDim::Dim(TetrisBoard::<10, 20>::BOARD_SIZE),
         ShapeDim::Dim(2)
     )
 );
@@ -317,7 +324,10 @@ impl_wrapped_tensor!(
 impl TetrisPiecePlacementTensor {
     /// Convert a list of placements to a tensor
     /// using the index of the placement
-    pub fn from_placements(placements: &[TetrisPiecePlacement], device: &Device) -> Result<Self> {
+    pub fn from_placements(
+        placements: &[TetrisPiecePlacement<10>],
+        device: &Device,
+    ) -> Result<Self> {
         let shape = Shape::from_dims(&[placements.len(), 1]);
         let placement_indices: Vec<u8> = placements.iter().map(|p| p.index()).collect();
         let tensor = Tensor::from_vec(placement_indices, &shape, device)?;
@@ -325,7 +335,7 @@ impl TetrisPiecePlacementTensor {
     }
 
     /// Convert a tensor of placement indices to a list of placements
-    pub fn into_placements(&self) -> Result<Vec<TetrisPiecePlacement>> {
+    pub fn into_placements(&self) -> Result<Vec<TetrisPiecePlacement<10>>> {
         let placement_ints = self
             .inner()
             .flatten_all()?
@@ -333,13 +343,13 @@ impl TetrisPiecePlacementTensor {
             .to_vec1::<u8>()?;
         Ok(placement_ints
             .into_iter()
-            .map(TetrisPiecePlacement::from_index)
+            .map(<TetrisPiecePlacement<10>>::from_index)
             .collect())
     }
 }
 
 /// Tetris piece placement distribution tensor
-/// Tensor of shape (batch_size, TetrisPiecePlacement::NUM_PLACEMENTS)
+/// Tensor of shape (batch_size, <tetris_game::TetrisPiecePlacement>::NUM_PLACEMENTS)
 ///
 /// Represents the distribution of a piece placement across all possible placements
 #[repr(transparent)]
@@ -350,17 +360,17 @@ impl_wrapped_tensor!(
     dtype = crate::tensor::fdtype(),
     shape_spec = (
         ShapeDim::Any,
-        ShapeDim::Dim(TetrisPiecePlacement::NUM_PLACEMENTS)
+        ShapeDim::Dim(<tetris_game::TetrisPiecePlacement<10>>::NUM_PLACEMENTS)
     )
 );
 
 impl TetrisPiecePlacementDistTensor {
-    pub fn into_placements_argmax(&self) -> Result<Vec<TetrisPiecePlacement>> {
+    pub fn into_placements_argmax(&self) -> Result<Vec<TetrisPiecePlacement<10>>> {
         let argmax = self.argmax(D::Minus1)?;
         let placements = argmax.to_vec1::<u8>()?;
         Ok(placements
             .into_iter()
-            .map(TetrisPiecePlacement::from_index)
+            .map(<TetrisPiecePlacement<10>>::from_index)
             .collect())
     }
 
@@ -369,12 +379,15 @@ impl TetrisPiecePlacementDistTensor {
         let (batch_size, _) = tensor.shape_tuple();
         let dists = one_hot(
             tensor.inner().clone(),
-            TetrisPiecePlacement::NUM_PLACEMENTS,
+            <tetris_game::TetrisPiecePlacement<10>>::NUM_PLACEMENTS,
             1f32,
             0f32,
         )?
         .to_dtype(dtype)?
-        .reshape(&[batch_size, TetrisPiecePlacement::NUM_PLACEMENTS])?;
+        .reshape(&[
+            batch_size,
+            <tetris_game::TetrisPiecePlacement<10>>::NUM_PLACEMENTS,
+        ])?;
         Self::try_from(dists)
     }
 }
@@ -396,7 +409,7 @@ impl TetrisPieceOrientationTensor {
     /// Convert a list of orientations to a tensor
     /// using the index of the orientation
     pub fn from_orientations(
-        orientations: &[TetrisPieceOrientation],
+        orientations: &[TetrisPieceOrientation<10>],
         device: &Device,
     ) -> Result<Self> {
         let shape = Shape::from_dims(&[orientations.len(), 1]);
@@ -406,11 +419,11 @@ impl TetrisPieceOrientationTensor {
     }
 
     /// Convert a tensor of orientation indices to a list of orientations
-    pub fn into_orientations(self) -> Result<Vec<TetrisPieceOrientation>> {
+    pub fn into_orientations(self) -> Result<Vec<TetrisPieceOrientation<10>>> {
         let orientation_ints = self.0.flatten_all()?.to_vec1::<u8>()?;
         Ok(orientation_ints
             .into_iter()
-            .map(TetrisPieceOrientation::from_index)
+            .map(<TetrisPieceOrientation<10>>::from_index)
             .collect())
     }
 
@@ -418,12 +431,15 @@ impl TetrisPieceOrientationTensor {
         let (batch_size, _) = self.shape_tuple();
         let dist = one_hot(
             self.0.clone(),
-            TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
+            <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS,
             1f32,
             0f32,
         )?
         .to_dtype(TetrisPieceOrientationDistTensor::expected_dtype())?
-        .reshape(&[batch_size, TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS])?;
+        .reshape(&[
+            batch_size,
+            <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS,
+        ])?;
         TetrisPieceOrientationDistTensor::try_from(dist)
     }
 
@@ -454,7 +470,7 @@ impl_wrapped_tensor!(
     dtype = crate::tensor::fdtype(),
     shape_spec = (
         ShapeDim::Any,
-        ShapeDim::Dim(TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS)
+        ShapeDim::Dim(<tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS)
     )
 );
 
@@ -531,7 +547,7 @@ impl_wrapped_tensor!(
     dtype = crate::tensor::fdtype(),
     shape_spec = (
         ShapeDim::Any,
-        ShapeDim::Dim(TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS)
+        ShapeDim::Dim(<tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS)
     )
 );
 
@@ -539,7 +555,7 @@ impl TetrisPieceOrientationDistTensor {
     /// Convert a list of orientations to a tensor
     /// using the index of the orientation
     pub fn from_orientations(
-        orientations: &[TetrisPieceOrientation],
+        orientations: &[TetrisPieceOrientation<10>],
         device: &Device,
     ) -> Result<Self> {
         let base_tensor = TetrisPieceOrientationTensor::from_orientations(orientations, device)?;
@@ -552,12 +568,15 @@ impl TetrisPieceOrientationDistTensor {
         let (batch_size, _) = tensor.shape_tuple();
         let dists = one_hot(
             tensor.inner().clone(),
-            TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
+            <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS,
             1f32,
             0f32,
         )?
         .to_dtype(dtype)?
-        .reshape(&[batch_size, TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS])?;
+        .reshape(&[
+            batch_size,
+            <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS,
+        ])?;
         Self::try_from(dists)
     }
 
@@ -573,7 +592,10 @@ impl TetrisPieceOrientationDistTensor {
                 .iter()
                 .flat_map(|c| c.inner().into_iter().map(|x| x as u32))
                 .collect::<Vec<u32>>(),
-            &[batch_size, TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS],
+            &[
+                batch_size,
+                <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS,
+            ],
             device,
         )?;
 
@@ -583,12 +605,12 @@ impl TetrisPieceOrientationDistTensor {
     }
 
     /// Convert a tensor of distribution of orientations to a list of orientations
-    pub fn into_orientations_argmax(self) -> Result<Vec<TetrisPieceOrientation>> {
+    pub fn into_orientations_argmax(self) -> Result<Vec<TetrisPieceOrientation<10>>> {
         let argmax = self.0.argmax(D::Minus1)?;
         let orientations = argmax.to_vec1::<u8>()?;
         Ok(orientations
             .into_iter()
-            .map(TetrisPieceOrientation::from_index)
+            .map(<TetrisPieceOrientation<10>>::from_index)
             .collect())
     }
 
@@ -629,8 +651,16 @@ impl TetrisPieceTensor {
 
     /// Convert a tensor of distribution of pieces to a list of pieces
     pub fn into_pieces(self) -> Result<Vec<TetrisPiece>> {
-        let pieces = self.0.flatten_all()?.to_vec1::<u8>()?;
-        Ok(pieces.into_iter().map(TetrisPiece::from_index).collect())
+        let pieces = self.0.flatten_all()?.to_vec1::<u32>()?;
+        pieces
+            .into_iter()
+            .map(|index| {
+                TetrisPiece::all()
+                    .get(index as usize)
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("invalid piece index {index}"))
+            })
+            .collect()
     }
 }
 
@@ -644,7 +674,7 @@ pub struct TetrisPieceOneHotTensor(Tensor);
 impl_wrapped_tensor!(
     TetrisPieceOneHotTensor,
     dtype = crate::tensor::fdtype(),
-    shape_spec = (ShapeDim::Any, ShapeDim::Dim(TetrisPiece::NUM_PIECES))
+    shape_spec = (ShapeDim::Any, ShapeDim::Dim(constants::NUM_TETRIS_PIECES))
 );
 
 impl TetrisPieceOneHotTensor {
@@ -653,12 +683,12 @@ impl TetrisPieceOneHotTensor {
         let (batch_size, _) = piece_tensor.shape_tuple();
         let one_hot = one_hot(
             piece_tensor.inner().clone(),
-            TetrisPiece::NUM_PIECES,
+            constants::NUM_TETRIS_PIECES,
             1f32,
             0f32,
         )?
         .to_dtype(dtype)?
-        .reshape(&[batch_size, TetrisPiece::NUM_PIECES])?;
+        .reshape(&[batch_size, constants::NUM_TETRIS_PIECES])?;
         Self::try_from(one_hot)
     }
 }
@@ -740,6 +770,19 @@ impl TetrisContextTensor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn piece_tensor_round_trips_playable_pieces_and_rejects_invalid_indices() {
+        let pieces = TetrisPiece::all();
+        let tensor = TetrisPieceTensor::from_pieces(&pieces, &Device::Cpu).unwrap();
+        assert_eq!(tensor.into_pieces().unwrap(), pieces);
+
+        for index in [7, 128, 256, u32::MAX] {
+            let raw = Tensor::from_vec(vec![index], (1, 1), &Device::Cpu).unwrap();
+            let tensor = TetrisPieceTensor::try_from(raw).unwrap();
+            assert!(tensor.into_pieces().is_err(), "index={index}");
+        }
+    }
     // use crate::data::TetrisDatasetGenerator;
 
     // /// Test round-trip conversion: TetrisPieceOrientationTensor -> Vec<Orientation> -> TetrisPieceOrientationTensor
@@ -886,7 +929,7 @@ mod tests {
     fn test_masked_orientation_sampling() {
         let device = Device::Cpu;
         let dtype = crate::tensor::fdtype();
-        let num_orientations = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
+        let num_orientations = <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS;
 
         // Get all piece types
 
@@ -897,9 +940,9 @@ mod tests {
         let pieces_tensor = TetrisPieceTensor::from_pieces(&all_pieces, &device).unwrap();
 
         // Precompute valid placements for each piece
-        let valid_placements_per_piece: Vec<Vec<TetrisPiecePlacement>> = all_pieces
+        let valid_placements_per_piece: Vec<Vec<TetrisPiecePlacement<10>>> = all_pieces
             .iter()
-            .map(|&piece| TetrisPiecePlacement::all_from_piece(piece).to_vec())
+            .map(|&piece| <TetrisPiecePlacement<10>>::all_from_piece(piece).to_vec())
             .collect();
 
         // Test with multiple temperatures
@@ -944,7 +987,7 @@ mod tests {
         // --- Test 2: Each piece individually with repeated sampling ---
         // Test each piece type separately to ensure piece-specific logic works
         for &piece in all_pieces.iter() {
-            let valid_placements = TetrisPiecePlacement::all_from_piece(piece);
+            let valid_placements = <TetrisPiecePlacement<10>>::all_from_piece(piece);
             let piece_batch = vec![piece; 16]; // Test with batch of same piece
             let pieces_tensor = TetrisPieceTensor::from_pieces(&piece_batch, &device).unwrap();
 
@@ -978,7 +1021,7 @@ mod tests {
         // --- Test 3: Argmax mode with targeted logits ---
         // Test argmax by setting strong preferences and verifying results
         for &piece in all_pieces.iter() {
-            let valid_placements = TetrisPiecePlacement::all_from_piece(piece);
+            let valid_placements = <TetrisPiecePlacement<10>>::all_from_piece(piece);
             let pieces_tensor = TetrisPieceTensor::from_pieces(&vec![piece; 1], &device).unwrap();
 
             // Try setting maximum at each possible orientation index
@@ -1035,7 +1078,7 @@ mod tests {
                     piece: *piece,
                     orientation: *orientation,
                 };
-                let valid_placements = TetrisPiecePlacement::all_from_piece(*piece);
+                let valid_placements = <TetrisPiecePlacement<10>>::all_from_piece(*piece);
 
                 assert!(
                     valid_placements.contains(&placement),
@@ -1058,7 +1101,7 @@ mod tests {
         for &piece in all_pieces.iter() {
             let large_batch = vec![piece; 64];
             let pieces_tensor = TetrisPieceTensor::from_pieces(&large_batch, &device).unwrap();
-            let valid_placements = TetrisPiecePlacement::all_from_piece(piece);
+            let valid_placements = <TetrisPiecePlacement<10>>::all_from_piece(piece);
 
             // Sample multiple times for each piece to ensure robustness
             for _ in 0..3 {
@@ -1106,7 +1149,7 @@ mod tests {
         let device = Device::Cpu;
         let dtype = crate::tensor::fdtype();
         let batch_size = 4;
-        let num_orientations = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
+        let num_orientations = <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS;
 
         // --- Step 1: Create masked logits ---
         // Generate random logits
@@ -1117,10 +1160,10 @@ mod tests {
 
         // Create piece-based mask (each piece has different valid orientations)
         let pieces = vec![
-            TetrisPiece::I_PIECE,
-            TetrisPiece::O_PIECE,
-            TetrisPiece::T_PIECE,
-            TetrisPiece::L_PIECE,
+            TetrisPiece::I,
+            TetrisPiece::O,
+            TetrisPiece::T,
+            TetrisPiece::L,
         ];
         let pieces_tensor = TetrisPieceTensor::from_pieces(&pieces, &device).unwrap();
         let mask = create_orientation_mask(&pieces_tensor)
@@ -1254,19 +1297,19 @@ mod tests {
         // Simulate 10 votes for orientation 0, 3 votes for orientation 1, 1 vote for orientation 2
         for _ in 0..10 {
             counts1.add_action(TetrisPiecePlacement {
-                piece: TetrisPiece::I_PIECE,
-                orientation: TetrisPieceOrientation::from_index(0),
+                piece: TetrisPiece::I,
+                orientation: <TetrisPieceOrientation<10>>::from_index(0),
             });
         }
         for _ in 0..3 {
             counts1.add_action(TetrisPiecePlacement {
-                piece: TetrisPiece::I_PIECE,
-                orientation: TetrisPieceOrientation::from_index(1),
+                piece: TetrisPiece::I,
+                orientation: <TetrisPieceOrientation<10>>::from_index(1),
             });
         }
         counts1.add_action(TetrisPiecePlacement {
-            piece: TetrisPiece::I_PIECE,
-            orientation: TetrisPieceOrientation::from_index(2),
+            piece: TetrisPiece::I,
+            orientation: <TetrisPieceOrientation<10>>::from_index(2),
         });
 
         let dist =
@@ -1314,8 +1357,8 @@ mod tests {
         for ori_idx in 0..4 {
             for _ in 0..5 {
                 counts2.add_action(TetrisPiecePlacement {
-                    piece: TetrisPiece::I_PIECE,
-                    orientation: TetrisPieceOrientation::from_index(ori_idx),
+                    piece: TetrisPiece::I,
+                    orientation: <TetrisPieceOrientation<10>>::from_index(ori_idx),
                 });
             }
         }
@@ -1344,8 +1387,8 @@ mod tests {
         // --- Test 3: Single vote (edge case) ---
         let mut counts3 = OrientationCounts::default();
         counts3.add_action(TetrisPiecePlacement {
-            piece: TetrisPiece::O_PIECE,
-            orientation: TetrisPieceOrientation::from_index(4),
+            piece: TetrisPiece::O,
+            orientation: <TetrisPieceOrientation<10>>::from_index(4),
         });
 
         let dist3 =
@@ -1379,7 +1422,7 @@ mod tests {
         assert_eq!(batch_size, 3, "Batch size should be 3");
         assert_eq!(
             num_orientations,
-            TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
+            <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS,
             "Should have all orientations"
         );
 
@@ -1420,7 +1463,8 @@ mod tests {
             .unwrap();
 
         // Softmax of all zeros should be uniform distribution
-        let expected_uniform = 1.0 / TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS as f32;
+        let expected_uniform =
+            1.0 / <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS as f32;
         for (i, &val) in dist_zero_vec.iter().enumerate() {
             assert!(
                 val.is_finite(),

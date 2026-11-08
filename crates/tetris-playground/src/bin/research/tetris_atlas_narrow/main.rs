@@ -22,19 +22,16 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
+use tetris_game::StandardTetris;
 use tetris_game::{
-    IsLost, TetrisBoard as GenericTetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
-    TetrisPieceOrientation, TetrisPiecePlacement,
+    Major, TetrisBoard as GenericTetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
+    TetrisPieceOrientation as GenericOrientation, TetrisPiecePlacement as GenericPlacement,
 };
 use tetris_utils::repeat_idx_unroll;
 
 // --- Narrow Game Constraints ---
 
-const ALLOWED_PIECES: [TetrisPiece; 3] = [
-    TetrisPiece::L_PIECE,
-    TetrisPiece::J_PIECE,
-    TetrisPiece::O_PIECE,
-];
+const ALLOWED_PIECES: [TetrisPiece; 3] = [TetrisPiece::L, TetrisPiece::J, TetrisPiece::O];
 
 const NARROW_BAG_FULL: TetrisPieceBagState = TetrisPieceBagState::from_pieces(ALLOWED_PIECES);
 
@@ -47,11 +44,9 @@ impl TetrisGameConfig for NarrowTetris {
     const PIECE_SET: TetrisPieceBagState = NARROW_BAG_FULL;
 }
 
-type TetrisBoard = GenericTetrisBoard<NarrowTetris>;
-
-fn is_allowed_piece(piece: TetrisPiece) -> bool {
-    ALLOWED_PIECES.contains(&piece)
-}
+type TetrisBoard = GenericTetrisBoard<{ NarrowTetris::COLS }, { NarrowTetris::ROWS }>;
+type TetrisPieceOrientation = GenericOrientation<{ NarrowTetris::COLS }>;
+type TetrisPiecePlacement = GenericPlacement<{ NarrowTetris::COLS }>;
 
 /// Strip forbidden pieces from `bag`. If no allowed pieces remain, refill
 /// with `NARROW_BAG_FULL`. Keeps the bag state invariant: only ever
@@ -61,35 +56,13 @@ fn is_allowed_piece(piece: TetrisPiece) -> bool {
 /// any piece not in `ALLOWED_PIECES` in one op, no per-piece loop.
 fn normalize_narrow_bag(bag: TetrisPieceBagState) -> TetrisPieceBagState {
     let allowed_mask = u8::from(NARROW_BAG_FULL);
-    let stripped = TetrisPieceBagState::from(u8::from(bag) & allowed_mask);
-    if stripped.is_empty() {
+    let stripped =
+        TetrisPieceBagState::try_from(u8::from(bag) & allowed_mask).expect("valid bag mask");
+    if stripped.empty() {
         NARROW_BAG_FULL
     } else {
         stripped
     }
-}
-
-/// Narrow-aware drop-in replacement for `TetrisPieceBagState::iter_next_states`.
-/// The stock iterator refills to the *full 7-piece* bag when empty, which
-/// re-introduces forbidden pieces after one cycle and eventually wedges the
-/// atlas. This wrapper:
-/// 1. normalizes the input bag (drop forbidden + refill if empty), so the
-///    iteration only yields allowed pieces;
-/// 2. normalizes each `next_bag`, so stored `result_bag`s only ever contain
-///    pieces from `ALLOWED_PIECES`.
-fn narrow_iter_next_states(
-    bag: TetrisPieceBagState,
-) -> impl Iterator<Item = (TetrisPiece, TetrisPieceBagState)> {
-    let bag = normalize_narrow_bag(bag);
-    // Collect to break the lifetime tie to the local `bag` — `iter_next_states`
-    // borrows `&self`. At most 3 entries (one per allowed piece in bag), so
-    // the allocation cost is negligible.
-    let states: Vec<(TetrisPiece, TetrisPieceBagState)> = bag
-        .iter_next_states()
-        .filter(|(piece, _)| is_allowed_piece(*piece))
-        .map(|(piece, next_bag)| (piece, normalize_narrow_bag(next_bag)))
-        .collect();
-    states.into_iter()
 }
 
 /// Board-level filter: reject boards that are too tall or have too many holes.
@@ -101,7 +74,7 @@ const fn board_filter(board: TetrisBoard) -> bool {
 
 fn placement_fits(placement: TetrisPiecePlacement) -> bool {
     let width = usize::from(placement.piece.width(placement.orientation.rotation));
-    placement.orientation.column.index() + width <= NarrowTetris::COLS
+    usize::from(placement.orientation.column.inner()) + width <= NarrowTetris::COLS
 }
 
 // --- Channel & Threading ---
@@ -194,7 +167,7 @@ impl PartialOrd for FrontierKey {
 const fn hash_board_bag(board: TetrisBoard, bag: TetrisPieceBagState) -> u64 {
     const FNV_OFFSET: u64 = 0xcbf29ce484222325;
     const FNV_PRIME: u64 = 0x100000001b3;
-    let board_bytes: [u32; NarrowTetris::COLS] = board.as_limbs();
+    let board_bytes = board.as_limbs();
     let mut hash = FNV_OFFSET;
     repeat_idx_unroll!(NarrowTetris::COLS, I, {
         hash ^= board_bytes[I] as u64;
@@ -337,7 +310,8 @@ impl SharedState {
             }
 
             let parent_bag =
-                TetrisPieceBagState::from(u8::from(result_bag) | u8::from(parent_piece));
+                TetrisPieceBagState::try_from(u8::from(result_bag) | parent_piece.mask())
+                    .expect("valid bag mask");
             let parent_depth = removed_entry.depth.saturating_sub(1);
 
             self.frontier.push(parent_board, parent_bag, parent_depth);
@@ -404,7 +378,7 @@ fn generate_scored_placements(
         }
         let mut test_board = board;
         let result = test_board.apply_piece_placement(placement);
-        if result.is_lost == IsLost::LOST {
+        if result.is_lost {
             continue;
         }
         if !board_filter(test_board) {
@@ -442,7 +416,7 @@ fn apply_orientation(
     }
     let mut new_board = board;
     let result = new_board.apply_piece_placement(placement);
-    if result.is_lost == IsLost::LOST {
+    if result.is_lost {
         return None;
     }
     if !board_filter(new_board) {
@@ -470,7 +444,13 @@ fn process_board_state(
         return new_states;
     }
 
-    for (piece, next_bag) in narrow_iter_next_states(bag) {
+    let bag = normalize_narrow_bag(bag);
+    for piece in bag.iter_pieces() {
+        let mut next_bag = bag;
+        next_bag.remove(piece);
+        if next_bag.empty() {
+            next_bag = NarrowTetris::PIECE_SET;
+        }
         // Skip if already known dead at piece level
         if state.dead_pieces.contains(&(board, piece)) {
             continue;
@@ -644,13 +624,9 @@ fn dispatcher_thread(
 
 struct LoggerContext {
     lookup: Arc<LookupMap>,
-    parents: Arc<ParentMap>,
     frontier: Arc<PriorityFrontier>,
     stats: Arc<SharedStats>,
     dead_pieces: Arc<DeadPieceSet>,
-    dead_boards: Arc<DeadBoardSet>,
-    frontier_enqueued: Arc<AtomicU64>,
-    frontier_consumed: Arc<AtomicU64>,
     shutdown: Arc<AtomicBool>,
     shutdown_requested: Arc<AtomicBool>,
     start: Instant,
@@ -736,109 +712,6 @@ fn print_stats(ctx: &LoggerContext, last_sample_at: &mut u64) {
     );
 
     let _ = last_sample_at;
-}
-
-/// Compact hex ID from board column limbs — uniquely identifies a board.
-fn board_id(board: &TetrisBoard) -> String {
-    let limbs = board.as_limbs();
-    limbs
-        .iter()
-        .map(|l| format!("{l:05x}"))
-        .collect::<Vec<_>>()
-        .join(":")
-}
-
-/// Compact single-line board representation showing only occupied rows.
-fn board_oneliner(board: &TetrisBoard) -> String {
-    let h = board.height() as usize;
-    if h == 0 {
-        return "[empty]".to_string();
-    }
-    let mut rows = Vec::with_capacity(h);
-    for row in (0..h).rev() {
-        let mut s = String::with_capacity(NarrowTetris::COLS);
-        for col in 0..NarrowTetris::COLS {
-            s.push(if board.get_bit(col, row) { '#' } else { '.' });
-        }
-        rows.push(s);
-    }
-    format!("[{}]", rows.join("|"))
-}
-
-/// Walk parent pointers backwards from a (board, bag) to reconstruct
-/// how we got there. Returns vec of (piece_played, resulting_board)
-/// from most recent to oldest (up to max_depth).
-fn reconstruct_lineage(
-    board: TetrisBoard,
-    bag: TetrisPieceBagState,
-    parents: &ParentMap,
-    _lookup: &LookupMap,
-    max_depth: usize,
-) -> Vec<(TetrisPiece, TetrisBoard, TetrisPieceBagState)> {
-    use std::collections::HashSet;
-    let mut lineage = Vec::new();
-    let mut cur_board = board;
-    let mut cur_bag = bag;
-    let mut visited: HashSet<(TetrisBoard, TetrisPieceBagState)> = HashSet::new();
-    visited.insert((cur_board, cur_bag));
-
-    for _ in 0..max_depth {
-        let parent_ref = match parents.get(&cur_board) {
-            Some(entry) => {
-                let list = entry.value();
-                // STRICT: only accept a parent_ref whose result_bag matches cur_bag.
-                // Other refs reached cur_board via different bag paths.
-                // Among matching refs, prefer non-self, non-visited.
-                let candidates: Vec<&ParentRef> =
-                    list.iter().filter(|r| r.result_bag == cur_bag).collect();
-                if candidates.is_empty() {
-                    break; // no valid parent for this exact (board, bag)
-                }
-                // Prefer non-self, non-visited from the matching set
-                let next_state_of = |r: &ParentRef| -> (TetrisBoard, TetrisPieceBagState) {
-                    (
-                        r.parent_board,
-                        TetrisPieceBagState::from(
-                            u8::from(r.result_bag) | u8::from(r.parent_piece),
-                        ),
-                    )
-                };
-                let best = candidates
-                    .iter()
-                    .find(|r| r.parent_board != cur_board && !visited.contains(&next_state_of(r)))
-                    .or_else(|| candidates.iter().find(|r| r.parent_board != cur_board))
-                    .or_else(|| candidates.first())
-                    .copied()
-                    .copied();
-                match best {
-                    Some(r) => r,
-                    None => break,
-                }
-            }
-            None => break,
-        };
-
-        lineage.push((parent_ref.parent_piece, cur_board, cur_bag));
-
-        let parent_bag = TetrisPieceBagState::from(
-            u8::from(parent_ref.result_bag) | u8::from(parent_ref.parent_piece),
-        );
-        let next_state = (parent_ref.parent_board, parent_bag);
-
-        // Stop on cycle detection
-        if !visited.insert(next_state) {
-            break;
-        }
-
-        cur_board = next_state.0;
-        cur_bag = next_state.1;
-
-        if cur_board == TetrisBoard::new() {
-            break;
-        }
-    }
-
-    lineage
 }
 
 fn logger_thread(ctx: LoggerContext, state: SharedState, save_file: String, csv_file: String) {
@@ -963,13 +836,9 @@ fn run_create(base_path: &str) {
     // Logger
     let logger_ctx = LoggerContext {
         lookup: state.lookup.clone(),
-        parents: state.parents.clone(),
         frontier: frontier.clone(),
         stats: stats.clone(),
         dead_pieces: state.dead_pieces.clone(),
-        dead_boards: state.dead_boards.clone(),
-        frontier_enqueued: frontier_enqueued.clone(),
-        frontier_consumed: frontier_consumed.clone(),
         shutdown: shutdown.clone(),
         shutdown_requested: shutdown_requested.clone(),
         start,
@@ -1093,11 +962,16 @@ fn save_lookup(lookup: &LookupMap, path: &str) -> Result<(), Box<dyn std::error:
     for entry in lookup.iter() {
         let (board, piece) = *entry.key();
         let pe = entry.value();
-        let board_bytes: [u8; NarrowTetris::BOARD_BYTES] = board.into();
+        let board_bytes = board.to_bytes(Major::Col);
         w.write_all(&board_bytes)?;
-        w.write_all(&[piece.into()])?;
-        w.write_all(&[pe.chosen.index()])?;
-        let result_bytes: [u8; NarrowTetris::BOARD_BYTES] = pe.result_board.into();
+        w.write_all(&[piece.mask()])?;
+        // Legacy files encode orientations with the standard board's column stride.
+        let stored: GenericOrientation<{ StandardTetris::COLS }> = GenericOrientation {
+            rotation: pe.chosen.rotation,
+            column: tetris_game::Column::new(pe.chosen.column.inner()),
+        };
+        w.write_all(&[stored.index()])?;
+        let result_bytes = pe.result_board.to_bytes(Major::Col);
         w.write_all(&result_bytes)?;
         w.write_all(&[pe.result_bag.into()])?;
     }
@@ -1114,7 +988,7 @@ fn load_lookup(path: &str) -> Result<LookupMap, Box<dyn std::error::Error>> {
     let count = u64::from_le_bytes(count_buf) as usize;
 
     let lookup = DashMap::with_capacity(count);
-    const BOARD_BYTES: usize = NarrowTetris::BOARD_BYTES;
+    const BOARD_BYTES: usize = std::mem::size_of::<TetrisBoard>();
 
     for _ in 0..count {
         let mut board_bytes = [0u8; BOARD_BYTES];
@@ -1128,11 +1002,32 @@ fn load_lookup(path: &str) -> Result<LookupMap, Box<dyn std::error::Error>> {
         let mut bag_byte = [0u8; 1];
         r.read_exact(&mut bag_byte)?;
 
-        let board = TetrisBoard::from(board_bytes);
-        let piece = TetrisPiece::from(piece_byte[0]);
-        let orientation = TetrisPieceOrientation::from_index(orient_byte[0]);
-        let result_board = TetrisBoard::from(result_bytes);
-        let result_bag = TetrisPieceBagState::from(bag_byte[0]);
+        let board = TetrisBoard::from_bytes(board_bytes, Major::Col);
+        let piece = TetrisPiece::all()
+            .into_iter()
+            .find(|&piece| piece.mask() == piece_byte[0])
+            .ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid atlas piece bits")
+            })?;
+        let index = orient_byte[0];
+        let columns = StandardTetris::COLS as u8;
+        if index as usize >= <GenericOrientation<{ StandardTetris::COLS }>>::TOTAL_NUM_ORIENTATIONS
+            || (index % columns) as usize >= NarrowTetris::COLS
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "invalid atlas orientation",
+            )
+            .into());
+        }
+        let stored = <GenericOrientation<{ StandardTetris::COLS }>>::from_index(index);
+        let orientation = TetrisPieceOrientation {
+            rotation: stored.rotation,
+            column: tetris_game::Column::new(stored.column.inner()),
+        };
+        let result_board = TetrisBoard::from_bytes(result_bytes, Major::Col);
+        let result_bag = TetrisPieceBagState::try_from(bag_byte[0])
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
 
         lookup.insert(
             (board, piece),
@@ -1191,8 +1086,6 @@ fn run_explore(base_path: &str) {
     struct TimelineEntry {
         board: TetrisBoard,
         bag: TetrisPieceBagState,
-        piece: TetrisPiece,
-        orientation: TetrisPieceOrientation,
         lines_cleared: usize,
     }
 
@@ -1227,20 +1120,11 @@ fn run_explore(base_path: &str) {
                 self.entries[self.current_position - 1].lines_cleared
             }
         }
-        fn push(
-            &mut self,
-            board: TetrisBoard,
-            bag: TetrisPieceBagState,
-            piece: TetrisPiece,
-            orientation: TetrisPieceOrientation,
-            lines_cleared: usize,
-        ) {
+        fn push(&mut self, board: TetrisBoard, bag: TetrisPieceBagState, lines_cleared: usize) {
             self.entries.truncate(self.current_position);
             self.entries.push(TimelineEntry {
                 board,
                 bag: normalize_narrow_bag(bag),
-                piece,
-                orientation,
                 lines_cleared,
             });
             self.current_position = self.entries.len();
@@ -1350,10 +1234,10 @@ fn run_explore(base_path: &str) {
                         KeyCode::Right => timeline.go_forward(),
                         KeyCode::Char(c) => {
                             let piece_opt = match c {
-                                '1' | 'i' | 'I' => Some(TetrisPiece::I_PIECE),
-                                '2' | 'o' | 'O' => Some(TetrisPiece::O_PIECE),
-                                '3' | 'l' | 'L' => Some(TetrisPiece::L_PIECE),
-                                '4' | 'j' | 'J' => Some(TetrisPiece::J_PIECE),
+                                '1' | 'i' | 'I' => Some(TetrisPiece::I),
+                                '2' | 'o' | 'O' => Some(TetrisPiece::O),
+                                '3' | 'l' | 'L' => Some(TetrisPiece::L),
+                                '4' | 'j' | 'J' => Some(TetrisPiece::J),
                                 'r' | 'R' => {
                                     let available: Vec<TetrisPiece> = ALLOWED_PIECES
                                         .iter()
@@ -1382,14 +1266,12 @@ fn run_explore(base_path: &str) {
                                         };
                                         let mut new_board = board;
                                         let result = new_board.apply_piece_placement(placement);
-                                        if result.is_lost != IsLost::LOST {
+                                        if !result.is_lost {
                                             let lines_cleared = timeline.total_lines_cleared()
                                                 + result.lines_cleared as usize;
                                             timeline.push(
                                                 new_board,
                                                 entry.result_bag,
-                                                piece,
-                                                entry.chosen,
                                                 lines_cleared,
                                             );
                                         }
@@ -1463,7 +1345,8 @@ fn verify_atlas(state: &SharedState) -> VerifyResult {
             };
         }
 
-        for (piece, next_bag) in narrow_iter_next_states(bag) {
+        let bag = normalize_narrow_bag(bag);
+        for piece in bag.iter_pieces() {
             // Check: piece is not in dead_pieces (zombie entry detection)
             if state.dead_pieces.contains(&(board, piece)) {
                 return VerifyResult::Broken {
@@ -1533,11 +1416,102 @@ mod tests {
     use super::*;
 
     #[test]
+    fn lookup_load_and_save_preserve_the_legacy_byte_format() {
+        // Assemble a legacy record independently of the board byte-conversion API.
+        let columns = [0x8000_0001u32, 0x0102_0304, 0x1122_3344, 0xaabb_ccdd];
+        let result_columns = [0xffff_0000u32, 0x0000_0001, 0x8000_0000, 0x0123_4567];
+        let mut legacy = Vec::from(1u64.to_le_bytes());
+        for column in columns {
+            legacy.extend_from_slice(&column.to_ne_bytes());
+        }
+        legacy.extend_from_slice(&[0x01, 11]); // O piece mask, rotation 1 / column 1 (legacy stride 10).
+        for column in result_columns {
+            legacy.extend_from_slice(&column.to_ne_bytes());
+        }
+        legacy.push(0x60); // L and J remain in the bag.
+
+        let directory =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/output/narrow-atlas-tests");
+        std::fs::create_dir_all(&directory).expect("create test output directory");
+        let path = directory.join(format!("legacy-format-{}.bin", std::process::id()));
+        let filename = path.to_str().expect("UTF-8 test path");
+        std::fs::write(&path, &legacy).expect("write legacy fixture");
+
+        let lookup = load_lookup(filename).expect("load legacy fixture");
+        assert_eq!(lookup.len(), 1);
+        {
+            let entry = lookup
+                .get(&(TetrisBoard::from_limbs(columns), TetrisPiece::O))
+                .expect("legacy board and piece");
+            assert_eq!(entry.chosen, TetrisPieceOrientation::from_index(5));
+            assert_eq!(entry.result_board, TetrisBoard::from_limbs(result_columns));
+            assert_eq!(
+                entry.result_bag,
+                TetrisPieceBagState::from_pieces([TetrisPiece::L, TetrisPiece::J])
+            );
+            assert_eq!(entry.depth, 0);
+        }
+        save_lookup(&lookup, filename).expect("save loaded fixture");
+        let saved = std::fs::read(&path).expect("read saved fixture");
+        std::fs::remove_file(&path).expect("remove test fixture");
+        assert_eq!(saved, legacy);
+    }
+
+    #[test]
+    fn lookup_rejects_legacy_orientations_outside_the_narrow_board() {
+        let directory =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../artifacts/output/narrow-atlas-tests");
+        std::fs::create_dir_all(&directory).expect("create test output directory");
+        let path = directory.join(format!("invalid-orientation-{}.bin", std::process::id()));
+        for index in [4, 14, 40, u8::MAX] {
+            let mut record = Vec::from(1u64.to_le_bytes());
+            record.extend_from_slice(&[0; std::mem::size_of::<TetrisBoard>()]);
+            record.extend_from_slice(&[TetrisPiece::O.mask(), index]);
+            record.extend_from_slice(&[0; std::mem::size_of::<TetrisBoard>()]);
+            record.push(NARROW_BAG_FULL.into());
+            std::fs::write(&path, record).expect("write invalid orientation fixture");
+            assert!(load_lookup(path.to_str().expect("UTF-8 path")).is_err());
+        }
+        std::fs::remove_file(path).expect("remove test fixture");
+    }
+
+    #[test]
     fn narrow_config_has_expected_geometry_and_piece_set() {
         assert_eq!(NarrowTetris::COLS, 4);
         assert_eq!(NarrowTetris::ROWS, 20);
         assert_eq!(NarrowTetris::PIECE_SET, NARROW_BAG_FULL);
-        assert_eq!(narrow_iter_next_states(NARROW_BAG_FULL).count(), 3);
+        assert_eq!(NARROW_BAG_FULL.iter_pieces().count(), 3);
+    }
+
+    #[test]
+    fn expansion_removes_drawn_pieces_and_refills_only_the_narrow_set() {
+        let board = TetrisBoard::new();
+        let full_mask = u8::from(NarrowTetris::PIECE_SET);
+        for mask in 0..=TetrisPieceBagState::FULL_MASK {
+            let state = SharedState::new();
+            let stats = SharedStats::new();
+            let bag = TetrisPieceBagState::try_from(mask).expect("valid bag mask");
+            let successors = process_board_state(board, bag, 0, &state, &stats);
+
+            // Loaded masks are restricted to allowed pieces; an empty remainder starts a bag.
+            let allowed = mask & full_mask;
+            let remaining = if allowed == 0 { full_mask } else { allowed };
+            assert_eq!(successors.len(), remaining.count_ones() as usize);
+            for piece in TetrisPiece::all() {
+                let entry = state.lookup.get(&(board, piece));
+                if remaining & piece.mask() == 0 {
+                    assert!(entry.is_none(), "mask={mask}, piece={piece}");
+                    continue;
+                }
+                let next = remaining & !piece.mask();
+                let expected = if next == 0 { full_mask } else { next };
+                assert_eq!(
+                    u8::from(entry.expect("allowed piece has a placement").result_bag),
+                    expected,
+                    "mask={mask}, piece={piece}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -1547,18 +1521,18 @@ mod tests {
             board.set_bit(col, 0);
         }
 
-        assert_eq!(board.clear_filled_rows(), 1);
+        assert_eq!(board.clear_and_collapse_rows(), 1);
         assert_eq!(board, TetrisBoard::new());
     }
 
     #[test]
     fn placement_ranking_returns_only_legal_in_carrier_moves() {
         let board = TetrisBoard::new();
-        let orientations = generate_scored_placements(board, TetrisPiece::O_PIECE);
+        let orientations = generate_scored_placements(board, TetrisPiece::O);
 
         assert!(!orientations.is_empty());
         for orientation in orientations {
-            assert!(apply_orientation(board, TetrisPiece::O_PIECE, orientation).is_some());
+            assert!(apply_orientation(board, TetrisPiece::O, orientation).is_some());
         }
     }
 }

@@ -1,13 +1,14 @@
 use rustc_hash::FxHashMap;
 use serde::Serialize;
-use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPiecePlacement};
+
+use tetris_game::{TetrisBoard, TetrisPiece, TetrisPiecePlacement};
 
 use crate::config::BoardAdmissibility;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BoardTransition {
-    pub placement: TetrisPiecePlacement,
-    pub board: TetrisBoard,
+    pub placement: TetrisPiecePlacement<10>,
+    pub board: TetrisBoard<10, 20>,
     pub lines_cleared: u32,
 }
 
@@ -22,7 +23,7 @@ pub struct TransitionStats {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct TransitionKey {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     piece: TetrisPiece,
 }
 
@@ -41,7 +42,11 @@ impl TransitionCache {
         }
     }
 
-    pub fn successors(&mut self, board: TetrisBoard, piece: TetrisPiece) -> &[BoardTransition] {
+    pub fn successors(
+        &mut self,
+        board: TetrisBoard<10, 20>,
+        piece: TetrisPiece,
+    ) -> &[BoardTransition] {
         let key = TransitionKey { board, piece };
         if self.cache.contains_key(&key) {
             self.stats.cache_hits += 1;
@@ -50,10 +55,10 @@ impl TransitionCache {
 
         self.stats.cache_misses += 1;
         let mut successors = Vec::new();
-        for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+        for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
             let mut next_board = board;
             let result = next_board.apply_piece_placement(placement);
-            if result.is_lost == IsLost::LOST {
+            if result.is_lost {
                 self.stats.lost_prunes += 1;
                 continue;
             }
@@ -91,11 +96,11 @@ mod tests {
     #[test]
     fn transition_cache_reuses_board_piece_successors() {
         let mut cache = TransitionCache::new(BoardAdmissibility::default());
-        let board = TetrisBoard::EMPTY_BOARD;
+        let board = TetrisBoard::<10, 20>::new();
 
-        let first_count = cache.successors(board, TetrisPiece::O_PIECE).len();
+        let first_count = cache.successors(board, TetrisPiece::O).len();
         let after_first = cache.stats();
-        let second_count = cache.successors(board, TetrisPiece::O_PIECE).len();
+        let second_count = cache.successors(board, TetrisPiece::O).len();
         let after_second = cache.stats();
 
         assert_eq!(first_count, second_count);

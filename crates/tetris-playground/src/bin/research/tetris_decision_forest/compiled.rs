@@ -23,10 +23,10 @@ enum CNode {
 }
 
 /// A forest compiled to contiguous arenas for fast evaluation — no `Box`
-/// pointer chasing during games. This is a pure REPRESSENTATION change: the
+/// pointer chasing during games. This is a representation change: the
 /// genome (boxed trees), mutations, JSON format, and all vote semantics are
 /// untouched, and `decide`/`vote` results are bit-identical to the boxed
-/// forms (see the equivalence test). Compile once per game (microseconds),
+/// forms (see the equivalence test). Compile once per game,
 /// evaluate thousands of times.
 pub struct CompiledForest {
     conds: Vec<CCond>,
@@ -142,8 +142,8 @@ impl CompiledForest {
     pub fn vote(
         &self,
         bits: &[u8],
-        legal: &[TetrisPiecePlacement],
-    ) -> Option<TetrisPiecePlacement> {
+        legal: &[TetrisPiecePlacement<10>],
+    ) -> Option<TetrisPiecePlacement<10>> {
         if legal.is_empty() {
             return None;
         }
@@ -176,7 +176,9 @@ mod tests {
                 for (i, tree) in forest.trees.iter().enumerate() {
                     assert_eq!(compiled.decide(i, &bits), tree.decide(&bits));
                 }
-                let legal: Vec<_> = (0u8..17).map(TetrisPiecePlacement::from_index).collect();
+                let legal: Vec<_> = (0u8..17)
+                    .map(<TetrisPiecePlacement<10>>::from_index)
+                    .collect();
                 assert_eq!(compiled.vote(&bits, &legal), forest.vote(&bits, &legal));
             }
         }

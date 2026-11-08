@@ -257,7 +257,7 @@ tetris_bench! {
     pub fn bench_width(c: &mut Criterion) {
         let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let placements = black_box(
-            rng.random_iter::<TetrisPiecePlacement>()
+            rng.random_iter::<TetrisPiecePlacement<10>>()
                 .take(NUM_ELEMS)
                 .collect::<Vec<_>>(),
         );
@@ -276,7 +276,7 @@ tetris_bench! {
     pub fn bench_height(c: &mut Criterion) {
         let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let placements = black_box(
-            rng.random_iter::<TetrisPiecePlacement>()
+            rng.random_iter::<TetrisPiecePlacement<10>>()
                 .take(NUM_ELEMS)
                 .collect::<Vec<_>>(),
         );
@@ -294,14 +294,15 @@ tetris_bench! {
 tetris_bench! {
     pub fn bench_bag_iter(c: &mut Criterion) {
         let mut rng = TetrisGameRng::new(42);
-        let mut bag = TetrisPieceBag::new_rand(&mut rng, TetrisPieceBagState::new());
+        let mut bag = TetrisPieceBag::from_bag_state(TetrisPieceBagState::full());
+        bag.shuffle(&mut rng);
         c.bench_with_input(
             BenchmarkId::new("bag_iter", NUM_ELEMS),
             &NUM_ELEMS,
             |b, _| {
                 b.iter(|| {
                     for _ in 0..NUM_ELEMS {
-                        black_box(bag.rand_next(&mut rng));
+                        black_box(draw_bag(&mut bag, &mut rng));
                     }
                 })
             },
@@ -312,10 +313,11 @@ tetris_bench! {
 tetris_bench! {
     pub fn bench_bag_rand_next(c: &mut Criterion) {
         let mut rng = TetrisGameRng::new(42);
-        let mut bag = TetrisPieceBag::new_rand(&mut rng, TetrisPieceBagState::new());
+        let mut bag = TetrisPieceBag::from_bag_state(TetrisPieceBagState::full());
+        bag.shuffle(&mut rng);
         c.bench_with_input(BenchmarkId::new("bag_rand_next", 1), &1, |b, _| {
             b.iter(|| {
-                bag.rand_next(&mut rng);
+                draw_bag(&mut bag, &mut rng);
             })
         });
     }
@@ -327,7 +329,7 @@ tetris_bench! {
         let single_bit_boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
-                    let mut b: TetrisBoard = TetrisBoard::new();
+                    let mut b: TetrisBoard<10, 20> = TetrisBoard::<10, 20>::new();
                     b.set_random_bits(1, &mut rng);
                     b
                 })
@@ -354,7 +356,7 @@ tetris_bench! {
         let boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
-                    let mut b: TetrisBoard = TetrisBoard::new();
+                    let mut b: TetrisBoard<10, 20> = TetrisBoard::<10, 20>::new();
                     b.set_random_bits(1024, &mut rng);
                     b
                 })
@@ -374,8 +376,8 @@ tetris_bench! {
             b.iter(|| {
                 for (&board, out) in boards.iter().zip(&mut output) {
                     let mut board = board;
-                    let cleared = board.clear_filled_rows();
-                    *out = (board.as_limbs(), cleared);
+                    let cleared = board.clear_and_collapse_rows();
+                    *out = (*board.as_limbs(), cleared);
                 }
                 black_box(&output);
             });
@@ -389,7 +391,7 @@ tetris_bench! {
         let mut boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
-                    let mut b: TetrisBoard = TetrisBoard::new();
+                    let mut b: TetrisBoard<10, 20> = TetrisBoard::<10, 20>::new();
                     b.set_random_bits(1024, &mut rng);
                     b
                 })
@@ -415,7 +417,7 @@ tetris_bench! {
                 for (f, out) in input.iter().zip(&mut output) {
                     let mut board = f.board;
                     let result = board.apply_piece_placement(f.placement);
-                    *out = (board.as_limbs(), result.lines_cleared, bool::from(result.is_lost));
+                    *out = (*board.as_limbs(), result.lines_cleared, bool::from(result.is_lost));
                 }
                 black_box(&output);
             });
@@ -429,7 +431,7 @@ tetris_bench! {
         let boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
-                    let mut b: TetrisBoard = TetrisBoard::new();
+                    let mut b: TetrisBoard<10, 20> = TetrisBoard::<10, 20>::new();
                     b.set_random_bits(1024, &mut rng);
                     b
                 })
@@ -448,7 +450,7 @@ tetris_bench! {
                 b.iter(|| {
                     cell_arrays
                         .iter()
-                        .map(|b| TetrisBoard::from_cell_array(*b, Major::Row))
+                        .map(|b| TetrisBoard::<10, 20>::from_cell_array(*b, Major::Row))
                         .collect::<Vec<_>>()
                 })
             },
@@ -460,7 +462,7 @@ tetris_bench! {
     pub fn bench_placement_index(c: &mut Criterion) {
         let mut rng = SmallRng::seed_from_u64(BENCH_SEED);
         let placements = black_box(
-            rng.random_iter::<TetrisPiecePlacement>()
+            rng.random_iter::<TetrisPiecePlacement<10>>()
                 .take(NUM_ELEMS)
                 .collect::<Vec<_>>(),
         );
@@ -482,7 +484,7 @@ tetris_bench! {
             &num_games,
             |b, &num_games| {
                 let mut counter = 0usize;
-                let mut game: TetrisGame = TetrisGame::new_with_seed(seed);
+                let mut game: TetrisGame = <TetrisGame>::new_with_seed(seed);
                 b.iter(|| {
                     counter = 0;
                     game.reset(Some(seed));
@@ -561,7 +563,7 @@ tetris_bench! {
         let boards = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
-                    let mut b: TetrisBoard = TetrisBoard::new();
+                    let mut b: TetrisBoard<10, 20> = TetrisBoard::<10, 20>::new();
                     b.set_random_bits(50, &mut rng);
                     b
                 })
@@ -589,7 +591,7 @@ tetris_bench! {
         let states = black_box(
             (0..NUM_ELEMS)
                 .map(|_| {
-                    let mut b: TetrisBoard = TetrisBoard::new();
+                    let mut b: TetrisBoard<10, 20> = TetrisBoard::<10, 20>::new();
                     b.set_random_bits(50, &mut rng);
                     TetrisBoardScoreState {
                         board: b,
@@ -674,4 +676,13 @@ tetris_bench! {
             },
         );
     }
+}
+
+fn draw_bag(bag: &mut TetrisPieceBag, rng: &mut TetrisGameRng) -> TetrisPiece {
+    bag.draw().unwrap_or_else(|| {
+        bag.refill(TetrisPieceBagState::full())
+            .shuffle(rng)
+            .draw()
+            .expect("full fixture bag contains a piece")
+    })
 }

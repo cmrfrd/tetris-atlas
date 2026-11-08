@@ -13,9 +13,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::time::Instant;
-use tetris_game::{
-    IsLost, PlacementResult, TetrisBoard, TetrisGame, TetrisPieceOrientation, TetrisPiecePlacement,
-};
+
+use tetris_game::TetrisGame;
 use tetris_search::set_global_threadpool;
 use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetris_score};
 
@@ -38,7 +37,7 @@ pub fn run_tetris_beam_multisearch_adaptive() {
     const BEAM_WIDTH: usize = 2048;
     const MAX_DEPTH: usize = 16;
 
-    const MAX_MOVES: usize = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
+    const MAX_MOVES: usize = <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS;
     const LOG_EVERY: usize = 64;
     const KINK_PROB: f64 = 0.00;
     // --------------
@@ -60,8 +59,8 @@ pub fn run_tetris_beam_multisearch_adaptive() {
     let mut holes_counts: HashMap<u32, usize> = HashMap::new();
     let mut count_counts: HashMap<u32, usize> = HashMap::new();
 
-    let mut game = TetrisGame::new();
-    let mut step_counter = 0u64;
+    let mut game = <TetrisGame>::new();
+    let mut step_counter = 1u64;
 
     let mut multi_beam_search: TetrisMultiBeamSearch<
         N_BEAMS,
@@ -77,7 +76,9 @@ pub fn run_tetris_beam_multisearch_adaptive() {
 
     loop {
         if rng.random_bool(KINK_PROB) {
-            let _ = game.play_random();
+            let placements = game.current_placements();
+            let placement = placements[rng.random_range(0..placements.len())];
+            let _ = game.apply_placement(placement);
         }
 
         if game.board.is_lost() {
@@ -116,7 +117,7 @@ pub fn run_tetris_beam_multisearch_adaptive() {
 
         step_counter += 1;
 
-        if (game.apply_placement(first_action).is_lost == IsLost::LOST) {
+        if (game.apply_placement(first_action).is_lost) {
             let secs = start.elapsed().as_secs_f64().max(1e-9);
             let rate = steps as f64 / secs;
             println!("Move lost at step={steps}. avg_pieces_per_sec={rate:.2}");

@@ -32,9 +32,22 @@ survival under the canonical game. Failure within a carrier does not prove the f
 column-major `[u32; 10]` board, seven standard tetrominoes (O, I, S, Z, T, L, J), and deterministic
 seeded 7-bag draws. Actions are precomputed rotation/column hard-drop placements, not timed input
 sequences or a separate rotation/kick system. Derive action counts from
-`TetrisPiecePlacement::NUM_PLACEMENTS`; do not hardcode a stale count. Placement drops and merges
+`TetrisPiecePlacement::<COLS>::NUM_PLACEMENTS`; do not hardcode a stale count. Placement drops and merges
 the piece, clears complete rows, then checks loss (`height > ROWS`); a lost result is normalized
 to the engine's terminal board marker. All solvers, learned models, and verifiers must agree.
+A placement can complete at most four rows; row clearing asserts this invariant.
+
+`TetrisGameConfig` defines `ROWS`, `COLS`, and `PIECE_SET`. Boards use
+`TetrisBoard<COLS, ROWS>`; columns, orientations, and placements take an explicit width.
+Placement and game construction require storage headroom for the tallest piece, checked at
+compile time (at most 28 playable rows with the current `u32` backing). Raw storage and
+conversions have their own bounds. `fill()` sets every backing bit, including overflow rows.
+Cell arrays and board IDs contain playable cells only; packed bytes include overflow storage.
+
+`TetrisPieceBagState` is an unordered membership mask. `TetrisPieceBag` is a finite packed draw
+sequence: `draw()` returns `None` when empty, and refill/shuffle are explicit. `TetrisGame`
+automatically refills from `C::PIECE_SET`. A losing game placement leaves its piece stream and
+statistics unchanged and reports zero cleared lines; the board operation reports its actual clears.
 
 | Location | Responsibility |
 |---|---|

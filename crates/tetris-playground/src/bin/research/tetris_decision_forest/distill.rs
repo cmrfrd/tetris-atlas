@@ -23,7 +23,7 @@ use rand::{RngExt, SeedableRng};
 use rayon::prelude::*;
 
 use tetris_game::config::StandardTetris;
-use tetris_game::tetris::{IsLost, TetrisGame, TetrisPiecePlacement};
+use tetris_game::tetris::{TetrisGame, TetrisPiecePlacement};
 
 use crate::compiled::CompiledForest;
 use crate::config::EvolveConfig;
@@ -38,7 +38,7 @@ use crate::tree::COND_GEN_DEPTH_CAP;
 pub struct DistillExample {
     pub bits: [u8; NUM_INPUTS],
     /// The legal set of the state (static per piece — see `encode.rs`).
-    pub legal: &'static [TetrisPiecePlacement],
+    pub legal: &'static [TetrisPiecePlacement<10>],
     /// The teacher's placement id.
     pub label: u8,
 }
@@ -114,7 +114,7 @@ pub fn build_distill_set(
             let Some(placement) = compiled.vote(&bits, game.current_placements()) else {
                 break;
             };
-            if game.apply_placement(placement).is_lost == IsLost::LOST {
+            if game.apply_placement(placement).is_lost {
                 break;
             }
         }
@@ -129,7 +129,7 @@ pub fn build_distill_set(
                 master_seed ^ (i as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15),
             );
             let bits = encode_game(g);
-            let legal = TetrisPiecePlacement::all_from_piece(g.current_piece);
+            let legal = <TetrisPiecePlacement<10>>::all_from_piece(g.current_piece());
             let actions = puct_root(g, &compiled, &cfg.puct, &mut rng);
             let label = best_action(&actions)?;
             // Q-gap filter: on disagreement, demand a demonstrable
@@ -408,14 +408,14 @@ mod tests {
                 break;
             }
             let bits = encode_game(&game);
-            let legal = TetrisPiecePlacement::all_from_piece(game.current_piece);
+            let legal = <TetrisPiecePlacement<10>>::all_from_piece(game.current_piece());
             let vote = compiled.vote(&bits, legal).unwrap();
             set.push(DistillExample {
                 bits,
                 legal,
                 label: vote.index(),
             });
-            if game.apply_placement(vote).is_lost == IsLost::LOST {
+            if game.apply_placement(vote).is_lost {
                 break;
             }
         }

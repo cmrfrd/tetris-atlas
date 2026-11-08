@@ -24,7 +24,7 @@ const _: () = assert!(
     "MEGA_BATCH_SIZE must be greater than MAX_PIECE_PLACEMENT_COUNT"
 );
 
-const MAX_PIECE_PLACEMENT_COUNT: usize = TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT;
+const MAX_PIECE_PLACEMENT_COUNT: usize = <TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT;
 const CHILD_NODE_BUFFER_SIZE: usize = MAX_PIECE_PLACEMENT_COUNT;
 static CHILD_NODE_VEC_POOL: VecPool<TetrisExplorerItem, CHILD_NODE_BUFFER_SIZE, POOL_SIZE> =
     VecPool::new();
@@ -48,7 +48,7 @@ impl TetrisBloom1 {
         TetrisBloom1 { bits }
     }
 
-    const fn hash_tetris_board(x: TetrisBoard) -> usize {
+    const fn hash_tetris_board(x: TetrisBoard<10, 20>) -> usize {
         let limbs = x.as_limbs();
 
         // Mix all limbs together
@@ -67,7 +67,7 @@ impl TetrisBloom1 {
     }
 
     /// Returns true if already seen, false if first time
-    pub fn check_and_mark(&self, x: TetrisBoard) -> bool {
+    pub fn check_and_mark(&self, x: TetrisBoard<10, 20>) -> bool {
         let hash = Self::hash_tetris_board(x);
         let bit_index = hash % BITMASK_BITS;
         let word = bit_index / BITS_PER_WORD;
@@ -251,7 +251,7 @@ where
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct TetrisExplorerNode {
     pub prev_game: Option<TetrisGame>,
-    pub placement: Option<TetrisPiecePlacement>,
+    pub placement: Option<TetrisPiecePlacement<10>>,
     pub game: TetrisGame,
 }
 
@@ -260,7 +260,7 @@ impl TetrisExplorerNode {
         Self {
             prev_game: None,
             placement: None,
-            game: TetrisGame::new_with_seed(seed),
+            game: <TetrisGame>::new_with_seed(seed),
         }
     }
 
@@ -272,7 +272,11 @@ impl TetrisExplorerNode {
         }
     }
 
-    pub fn new(prev_game: TetrisGame, placement: TetrisPiecePlacement, game: TetrisGame) -> Self {
+    pub fn new(
+        prev_game: TetrisGame,
+        placement: TetrisPiecePlacement<10>,
+        game: TetrisGame,
+    ) -> Self {
         Self {
             prev_game: Some(prev_game),
             placement: Some(placement),
@@ -292,7 +296,7 @@ impl TetrisExplorerNode {
         for placement in self.game.current_placements() {
             let mut next_game = self.game;
             let result = next_game.apply_placement(*placement);
-            if result.is_lost.into() || !filter.is_none_or(|f| f(&self)) {
+            if result.is_lost || !filter.is_none_or(|f| f(&self)) {
                 continue;
             }
             buf_guard.push(TetrisExplorerItem {

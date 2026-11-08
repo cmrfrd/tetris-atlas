@@ -1,5 +1,6 @@
+use crate::graph::StateId;
 use crate::retrograde::{SolveResult, evaluate_state};
-use crate::state::{StateId, unpack_placement};
+use crate::state::unpack_placement;
 use crate::universe::{Universe, edge_contains_placement};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

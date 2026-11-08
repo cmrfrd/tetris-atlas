@@ -40,15 +40,15 @@ impl StateEdges {
 pub fn solve_with_retrograde(config: SolverConfig) -> SolveResult {
     solve_state_with_retrograde(
         config,
-        TetrisBoard::EMPTY_BOARD,
-        TetrisPieceBagState::new(),
+        TetrisBoard::<10, 20>::new(),
+        TetrisPieceBagState::full(),
         config.total_pieces(),
     )
 }
 
 pub fn solve_state_with_retrograde(
     config: SolverConfig,
-    initial_board: TetrisBoard,
+    initial_board: TetrisBoard<10, 20>,
     initial_bag: TetrisPieceBagState,
     plies_remaining: u32,
 ) -> SolveResult {
@@ -79,7 +79,7 @@ impl RetrogradeSolver {
 
     fn solve(
         mut self,
-        initial_board: TetrisBoard,
+        initial_board: TetrisBoard<10, 20>,
         initial_bag: TetrisPieceBagState,
         plies_remaining: u32,
     ) -> SolveResult {
@@ -226,7 +226,12 @@ impl RetrogradeSolver {
             }
 
             let board = self.boards.boards[state.board_id as usize];
-            for (piece, next_bag) in state.bag.iter_next_states() {
+            for piece in state.bag.iter_pieces() {
+                let mut next_bag = state.bag;
+                next_bag.remove(piece);
+                if next_bag.empty() {
+                    next_bag.fill();
+                }
                 let successors = self.transitions.successors(board, piece).to_vec();
                 for transition in successors {
                     let child_board_id = self.boards.get_or_insert(transition.board);
@@ -321,6 +326,7 @@ fn root_diagnostics_from_policy(
 
 #[cfg(test)]
 mod tests {
+
     use tetris_game::{TetrisPiece, TetrisPiecePlacement};
 
     use crate::config::{BoardAdmissibility, TargetMode};
@@ -328,8 +334,8 @@ mod tests {
 
     use super::*;
 
-    fn single_i_clear_board() -> TetrisBoard {
-        let mut board = TetrisBoard::EMPTY_BOARD;
+    fn single_i_clear_board() -> TetrisBoard<10, 20> {
+        let mut board = TetrisBoard::<10, 20>::new();
         for col in 4..10 {
             board.set_bit(col, 0);
         }
@@ -337,13 +343,13 @@ mod tests {
     }
 
     fn single_i_bag() -> TetrisPieceBagState {
-        TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE))
+        TetrisPieceBagState::try_from(TetrisPiece::I.mask()).expect("valid bag mask")
     }
 
     #[test]
     fn cycles_remaining_from_plies_tracks_partial_bag_state() {
         assert_eq!(
-            cycles_remaining_from_plies(35, TetrisPieceBagState::new()),
+            cycles_remaining_from_plies(35, TetrisPieceBagState::full()),
             Some(5)
         );
         assert_eq!(cycles_remaining_from_plies(1, single_i_bag()), Some(1));
@@ -374,11 +380,11 @@ mod tests {
 
     #[test]
     fn expected_one_piece_witness_is_legal() {
-        let placement = TetrisPiecePlacement::all_from_piece(TetrisPiece::I_PIECE)[0];
+        let placement = <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::I)[0];
         let mut board = single_i_clear_board();
         let result = board.apply_piece_placement(placement);
 
         assert_eq!(result.lines_cleared, 1);
-        assert_eq!(board, TetrisBoard::EMPTY_BOARD);
+        assert_eq!(board, TetrisBoard::<10, 20>::new());
     }
 }

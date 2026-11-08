@@ -33,9 +33,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::time::Instant;
-use tetris_game::{
-    IsLost, TetrisBoard, TetrisGame, TetrisGameRng, TetrisPieceOrientation, TetrisPiecePlacement,
-};
+
+use tetris_game::{TetrisBoard, TetrisGame, TetrisGameRng, TetrisPiecePlacement};
 use tetris_ml::beam_search::{BeamSearch, BeamSearchState};
 use tetris_ml::set_global_threadpool;
 use tetris_utils::HeaplessVec;
@@ -187,7 +186,7 @@ type GeneticBeamSearch<const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MA
     >;
 
 impl BeamSearchState for BeamTetrisStateGenetic {
-    type Action = TetrisPiecePlacement;
+    type Action = TetrisPiecePlacement<10>;
 
     #[inline_conditioned(always)]
     fn apply_action(&self, action: &Self::Action) -> Self {
@@ -245,10 +244,10 @@ impl<const N: usize, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_
             ));
         }
         Self {
-            game: TetrisGame::new(),
+            game: <TetrisGame>::new(),
             searches,
             coefficients,
-            step_counter: 0,
+            step_counter: 1,
         }
     }
 
@@ -261,7 +260,7 @@ impl<const N: usize, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_
             ));
         }
         Self {
-            game: TetrisGame::new_with_seed(seed),
+            game: <TetrisGame>::new_with_seed(seed),
             searches,
             coefficients,
             step_counter: seed,
@@ -279,7 +278,7 @@ impl<const N: usize, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_
 impl<const N: usize, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_MOVES: usize>
     Iterator for TetrisGameIterGenetic<N, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
 {
-    type Item = (TetrisBoard, TetrisPiecePlacement);
+    type Item = (TetrisBoard<10, 20>, TetrisPiecePlacement<10>);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.game.board.is_lost() {
@@ -288,7 +287,7 @@ impl<const N: usize, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_
         let board_before = self.game.board;
 
         // Run N searches with different seeds and vote on the best action
-        let action_votes: HashMap<TetrisPiecePlacement, (usize, f32)> = self
+        let action_votes: HashMap<TetrisPiecePlacement<10>, (usize, f32)> = self
             .searches
             .par_iter_mut()
             .enumerate()
@@ -305,7 +304,7 @@ impl<const N: usize, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_
             })
             .fold(
                 HashMap::new,
-                |mut acc: HashMap<TetrisPiecePlacement, (usize, f32)>, (action, score)| {
+                |mut acc: HashMap<TetrisPiecePlacement<10>, (usize, f32)>, (action, score)| {
                     let entry = acc.entry(action).or_insert((0, 0.0));
                     entry.0 += 1; // Count votes
                     entry.1 += score; // Sum scores
@@ -333,8 +332,7 @@ impl<const N: usize, const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_
 
         self.step_counter += 1;
 
-        (self.game.apply_placement(first_action).is_lost != IsLost::LOST)
-            .then_some((board_before, first_action))
+        (!self.game.apply_placement(first_action).is_lost).then_some((board_before, first_action))
     }
 }
 
@@ -424,7 +422,7 @@ fn evolve_coefficients() {
     const N: usize = 8; // Number of parallel searches for multi-beam voting
     const BEAM_WIDTH: usize = 32;
     const MAX_DEPTH: usize = 8;
-    const MAX_MOVES: usize = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
+    const MAX_MOVES: usize = <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS;
     const POPULATION_SIZE: usize = 32;
     const GENERATIONS: usize = 1_000_000;
     const MUTATION_RATE: f32 = 0.3;

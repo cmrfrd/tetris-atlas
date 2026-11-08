@@ -6,7 +6,7 @@ use crate::BeamTetrisState;
 
 #[derive(Debug, Clone, Copy)]
 pub struct TetrisBoardScoreState {
-    pub board: TetrisBoard,
+    pub board: TetrisBoard<10, 20>,
     pub recent_lines_cleared: u32,
 }
 
@@ -84,7 +84,7 @@ const WPOP_HI: [f32; 16] = {
 ///
 /// Uses a single byte-level LUT for branchless weighted popcount per column.
 #[inline_conditioned(always)]
-pub const fn height_mse_distance_from_empty(board: TetrisBoard) -> f32 {
+pub const fn height_mse_distance_from_empty(board: TetrisBoard<10, 20>) -> f32 {
     const PLAYABLE_MASK: u32 = (1u32 << StandardTetris::ROWS) - 1;
 
     let limbs = board.as_limbs();
@@ -149,10 +149,10 @@ mod tests {
                 1 => u32::MAX,
                 _ => rng.next_u64() as u32,
             });
-            let board: TetrisBoard = TetrisBoard::from_limbs(limbs);
+            let board: TetrisBoard<10, 20> = TetrisBoard::<10, 20>::from_limbs(limbs);
             let mut expected = 0.0f32;
             for raw in limbs {
-                let v = raw & StandardTetris::ROW_MASK;
+                let v = raw & ((1 << StandardTetris::ROWS) - 1);
                 expected += WPOP_LUT[(v & 0xFF) as usize]
                     + WPOP_LUT[((v >> 8) & 0xFF) as usize] * WPOP_SCALE_MID
                     + WPOP_LUT[((v >> 16) & 0xF) as usize] * WPOP_SCALE_HI;
@@ -166,13 +166,13 @@ mod tests {
 
     #[test]
     fn test_height_mse_distance_from_empty_empty_board() {
-        let board: TetrisBoard = TetrisBoard::new();
+        let board: TetrisBoard<10, 20> = TetrisBoard::<10, 20>::new();
         assert_eq!(height_mse_distance_from_empty(board), 0.0);
     }
 
     #[test]
     fn test_height_mse_distance_from_empty_random_boards() {
-        fn reference_score(board: TetrisBoard) -> f32 {
+        fn reference_score(board: TetrisBoard<10, 20>) -> f32 {
             let limbs = board.as_limbs();
             let mask = (1u32 << StandardTetris::ROWS) - 1;
             let mut row_diffs = [0u8; StandardTetris::ROWS];
@@ -193,7 +193,7 @@ mod tests {
 
         let mut rng = rand::rng();
         for _ in 0..1000 {
-            let mut board: TetrisBoard = TetrisBoard::new();
+            let mut board: TetrisBoard<10, 20> = TetrisBoard::<10, 20>::new();
             board.set_random_bits(50, &mut rng);
             let expected = reference_score(board);
             let actual = height_mse_distance_from_empty(board);

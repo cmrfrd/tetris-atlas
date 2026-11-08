@@ -4,7 +4,8 @@ use std::time::{Duration, Instant};
 use tetris_game::TetrisPiece;
 
 use crate::graph::EdgeRange;
-use crate::state::{PackedPlacement, StateId, piece_branches};
+use crate::graph::StateId;
+use crate::state::{PackedPlacement, piece_branches};
 use crate::universe::Universe;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -156,12 +157,9 @@ pub fn best_winning_successor(
         }
     }
 
-    debug_assert!(
-        best.is_none_or(
-            |(_, placement)| TetrisPiece::from_index(piece.index()) == piece
-                && tetris_game::TetrisPiecePlacement::from_index(placement).piece == piece
-        )
-    );
+    debug_assert!(best.is_none_or(|(_, placement)| {
+        <tetris_game::TetrisPiecePlacement<10>>::from_index(placement).piece == piece
+    }));
 
     best
 }
@@ -315,12 +313,9 @@ fn best_winning_successor_with_depths(
         }
     }
 
-    debug_assert!(
-        best.is_none_or(
-            |(_, placement)| TetrisPiece::from_index(piece.index()) == piece
-                && tetris_game::TetrisPiecePlacement::from_index(placement).piece == piece
-        )
-    );
+    debug_assert!(best.is_none_or(|(_, placement)| {
+        <tetris_game::TetrisPiecePlacement<10>>::from_index(placement).piece == piece
+    }));
 
     best
 }
@@ -331,8 +326,9 @@ mod tests {
 
     use crate::config::SolverConfig;
     use crate::config::{BoardAdmissibility, RootStateConfig};
+    use crate::graph::StateId;
     use crate::policy::verify_policy;
-    use crate::state::{PackedPlacement, StateId};
+    use crate::state::PackedPlacement;
     use crate::universe::UniverseBuilder;
 
     use super::*;
@@ -382,7 +378,7 @@ mod tests {
 
     #[test]
     fn root_query_is_yes_for_immediate_line_clear() {
-        let mut board = TetrisBoard::EMPTY_BOARD;
+        let mut board = TetrisBoard::<10, 20>::new();
         for col in 4..10 {
             board.set_bit(col, 0);
         }
@@ -396,7 +392,7 @@ mod tests {
             },
             root: RootStateConfig {
                 board,
-                bag: TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE)),
+                bag: TetrisPieceBagState::try_from(TetrisPiece::I.mask()).expect("valid bag mask"),
             },
         })
         .expect("universe should build");
@@ -404,7 +400,7 @@ mod tests {
         let root = evaluate_root(&universe, &result).expect("root should be winning");
 
         assert_eq!(root.depth, 1);
-        assert!(root.best_action[TetrisPiece::I_PIECE.index() as usize].is_some());
+        assert!(root.best_action[TetrisPiece::I.index() as usize].is_some());
     }
 
     #[test]
@@ -571,7 +567,7 @@ mod tests {
 
     #[test]
     fn oracle_cross_check_matches_yes_root() {
-        let mut board = TetrisBoard::EMPTY_BOARD;
+        let mut board = TetrisBoard::<10, 20>::new();
         for col in 4..10 {
             board.set_bit(col, 0);
         }
@@ -585,7 +581,7 @@ mod tests {
             },
             root: RootStateConfig {
                 board,
-                bag: TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE)),
+                bag: TetrisPieceBagState::try_from(TetrisPiece::I.mask()).expect("valid bag mask"),
             },
         })
         .expect("universe should build");

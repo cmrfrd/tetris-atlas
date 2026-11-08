@@ -1,6 +1,21 @@
 use tetris_game::TetrisPieceBagState;
 
-use crate::state::{PackedPlacement, StateId};
+use crate::state::PackedPlacement;
+
+pub type BoardId = u32;
+pub type StateId = u32;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct StateKey {
+    pub board_id: BoardId,
+    pub bag: TetrisPieceBagState,
+}
+
+impl StateKey {
+    pub const fn new(board_id: BoardId, bag: TetrisPieceBagState) -> Self {
+        Self { board_id, bag }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct EdgeRange {
@@ -10,10 +25,6 @@ pub struct EdgeRange {
 
 impl EdgeRange {
     pub const EMPTY: Self = Self { start: 0, len: 0 };
-
-    pub const fn is_empty(self) -> bool {
-        self.len == 0
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,7 +36,7 @@ pub struct StateIndex {
 impl Default for StateIndex {
     fn default() -> Self {
         Self {
-            bag: TetrisPieceBagState::from(0),
+            bag: TetrisPieceBagState::from_pieces([]),
             piece_ranges: [EdgeRange::EMPTY; 7],
         }
     }

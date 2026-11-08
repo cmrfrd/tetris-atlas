@@ -1,5 +1,5 @@
-use tetris_game::config::StandardTetris;
-use tetris_game::tetris::{Major, TetrisGame, TetrisPiece};
+use tetris_game::config::{StandardTetris, TetrisGameConfig};
+use tetris_game::tetris::{Major, TetrisBoard, TetrisGame, TetrisPiece};
 
 /// Board occupancy bits (10 × 20).
 pub const NUM_CELLS: usize = 200;
@@ -8,7 +8,7 @@ pub const NUM_PIECES: usize = 7;
 /// Total binary inputs each tree sees: board + bag-remaining + current-piece.
 pub const NUM_INPUTS: usize = NUM_CELLS + NUM_PIECES + NUM_PIECES;
 
-/// Encode the full game as a fixed binary vector the trees read:
+/// Encodes the policy's observable inputs; RNG state and remaining draw order are omitted.
 /// - `0..200`   board occupancy (`to_cell_array(Major::Col)`, index `col*20+row`),
 /// - `200..207` bag-remaining (`bag.contains(piece)` for each of the 7 pieces),
 /// - `207..214` current-piece one-hot (`current_piece == piece`).
@@ -16,15 +16,19 @@ pub fn encode_game(game: &TetrisGame<StandardTetris>) -> [u8; NUM_INPUTS] {
     let mut bits = [0u8; NUM_INPUTS];
 
     // Board occupancy, straight from the engine (BOARD_SIZE == 200 for standard).
-    let cells = game.board.to_cell_array(Major::Col);
+    // An explicit board type avoids a pinned-nightly associated-const normalization bug.
+    let cells = TetrisBoard::<{ StandardTetris::COLS }, { StandardTetris::ROWS }>::to_cell_array(
+        &game.board,
+        Major::Col,
+    );
     bits[..NUM_CELLS].copy_from_slice(&cells[..NUM_CELLS]);
 
     // Bag-remaining and current-piece one-hot, one bit per piece.
     for (i, piece) in TetrisPiece::all().iter().enumerate() {
-        if game.bag.contains(*piece) {
+        if game.bag().contains(*piece) {
             bits[NUM_CELLS + i] = 1;
         }
-        if game.current_piece == *piece {
+        if game.current_piece() == *piece {
             bits[NUM_CELLS + NUM_PIECES + i] = 1;
         }
     }

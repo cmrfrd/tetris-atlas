@@ -24,8 +24,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use tetris_game::{
-    IsLost, Major, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
-    TetrisPieceOrientation, constants,
+    Major, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
+    constants,
 };
 use tetris_search::{BeamTetrisState, TetrisMultiBeamSearch, height_mse_beam_tetris_score};
 use tetris_utils::repeat_idx_unroll;
@@ -35,7 +35,7 @@ const N: usize = 8;
 const TOP_N_PER_BEAM: usize = 64;
 const BEAM_WIDTH: usize = 64;
 const MAX_DEPTH: usize = 6;
-const MAX_MOVES: usize = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
+const MAX_MOVES: usize = <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS;
 
 const fn filter_fn(state: &BeamTetrisState) -> bool {
     let height = state.0.board.height();
@@ -101,14 +101,14 @@ const fn advance_permutation(indices: &mut [u8; 7]) -> bool {
 }
 
 const fn generate_all_permutations() -> [Bag; NUM_PERMS] {
-    let mut permutations = [[TetrisPiece::O_PIECE; 7]; NUM_PERMS];
+    let mut permutations = [[TetrisPiece::O; 7]; NUM_PERMS];
     let mut indices = [0u8, 1, 2, 3, 4, 5, 6];
     let mut out_idx = 0usize;
     loop {
-        let mut bag = [TetrisPiece::O_PIECE; 7];
+        let mut bag = [TetrisPiece::O; 7];
         let mut i = 0usize;
         while i < 7 {
-            bag[i] = TetrisPiece::from_index(indices[i]);
+            bag[i] = TetrisPiece::all()[indices[i] as usize];
             i += 1;
         }
         permutations[out_idx] = bag;
@@ -132,10 +132,10 @@ static ALL_PERMUTATIONS: [Bag; NUM_PERMS] = generate_all_permutations();
 const LOOKUP_KEY_LEN: usize = 42;
 
 #[inline(always)]
-const fn hash_board_perm(board: TetrisBoard, perm_index: u16) -> u64 {
+const fn hash_board_perm(board: TetrisBoard<10, 20>, perm_index: u16) -> u64 {
     const FNV_OFFSET: u64 = 0xcbf29ce484222325;
     const FNV_PRIME: u64 = 0x100000001b3;
-    let board_bytes: [u32; StandardTetris::COLS] = board.as_limbs();
+    let board_bytes = board.as_limbs();
     let mut hash = FNV_OFFSET;
     repeat_idx_unroll!(StandardTetris::COLS, I, {
         hash ^= board_bytes[I] as u64;
@@ -146,7 +146,7 @@ const fn hash_board_perm(board: TetrisBoard, perm_index: u16) -> u64 {
     hash
 }
 
-fn make_lookup_key(board: TetrisBoard, perm_index: u16) -> [u8; LOOKUP_KEY_LEN] {
+fn make_lookup_key(board: TetrisBoard<10, 20>, perm_index: u16) -> [u8; LOOKUP_KEY_LEN] {
     let board_bytes = board.to_bytes(Major::Col);
     let mut key = [0u8; LOOKUP_KEY_LEN];
     key[0..40].copy_from_slice(&board_bytes);
@@ -156,7 +156,7 @@ fn make_lookup_key(board: TetrisBoard, perm_index: u16) -> [u8; LOOKUP_KEY_LEN] 
 
 /// Frontier item: (board, perm_index). Serialized as 42 bytes.
 /// The frontier key includes a priority prefix for ordered processing.
-fn make_frontier_key(board: TetrisBoard, perm_index: u16) -> [u8; 9] {
+fn make_frontier_key(board: TetrisBoard<10, 20>, perm_index: u16) -> [u8; 9] {
     let height = board.height();
     let holes = board.total_holes();
     let cost = (height + holes).min(255) as u8;
@@ -167,14 +167,17 @@ fn make_frontier_key(board: TetrisBoard, perm_index: u16) -> [u8; 9] {
     key
 }
 
-fn make_frontier_value(board: TetrisBoard, perm_index: u16) -> [u8; LOOKUP_KEY_LEN] {
+fn make_frontier_value(board: TetrisBoard<10, 20>, perm_index: u16) -> [u8; LOOKUP_KEY_LEN] {
     make_lookup_key(board, perm_index) // same encoding
 }
 
-fn parse_frontier_value(v: &[u8]) -> (TetrisBoard, u16) {
+fn parse_frontier_value(v: &[u8]) -> (TetrisBoard<10, 20>, u16) {
     let board_bytes: [u8; 40] = v[0..40].try_into().unwrap_or([0u8; 40]);
     let perm_index = u16::from_le_bytes([v[40], v[41]]);
-    (TetrisBoard::from_bytes(board_bytes, Major::Col), perm_index)
+    (
+        TetrisBoard::<10, 20>::from_bytes(board_bytes, Major::Col),
+        perm_index,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -294,7 +297,7 @@ impl AtlasDB {
     }
 
     /// Seed the empty board with all 5040 bag permutations.
-    fn seed_board(&self, board: TetrisBoard) -> Result<bool, Box<dyn std::error::Error>> {
+    fn seed_board(&self, board: TetrisBoard<10, 20>) -> Result<bool, Box<dyn std::error::Error>> {
         let board_bytes = board.to_bytes(Major::Col);
         let cf_seeded = self.cf_handle(CF_SEEDED);
         let cf_frontier = self.cf_handle(CF_FRONTIER);
@@ -319,14 +322,14 @@ impl AtlasDB {
     }
 
     fn seed_starting_state(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let empty = TetrisBoard::EMPTY_BOARD;
+        let empty = TetrisBoard::<10, 20>::new();
         println!("Seeding {} permutations from empty board...", NUM_PERMS);
         self.seed_board(empty)?;
         println!("Seeded.");
         Ok(())
     }
 
-    fn is_board_seeded(&self, board: TetrisBoard) -> bool {
+    fn is_board_seeded(&self, board: TetrisBoard<10, 20>) -> bool {
         let board_bytes = board.to_bytes(Major::Col);
         let cf_seeded = self.cf_handle(CF_SEEDED);
         self.db
@@ -394,7 +397,7 @@ impl AtlasDB {
                                 MAX_MOVES,
                             >::new(height_mse_beam_tetris_score);
 
-                        let mut game = tetris_game::TetrisGame::new();
+                        let mut game = <tetris_game::TetrisGame>::new();
 
                         // Partition frontier key space across workers
                         let part_start = (worker_id as u16 * 256 / num_workers as u16) as u8;
@@ -486,9 +489,10 @@ impl AtlasDB {
                                             // Build bag state for remaining pieces
                                             let mut bag_mask = 0u8;
                                             for j in step..7 {
-                                                bag_mask |= u8::from(perm[j]);
+                                                bag_mask |= perm[j].mask();
                                             }
-                                            let bag = TetrisPieceBagState::from(bag_mask);
+                                            let bag = TetrisPieceBagState::try_from(bag_mask)
+                                                .expect("valid bag mask");
                                             let mut next_bag = bag;
                                             next_bag.remove(piece);
                                             if next_bag.count() == 0 {
@@ -507,7 +511,7 @@ impl AtlasDB {
                                                 Some(placement) => {
                                                     game.board = sim_board;
                                                     let r = game.apply_placement(placement);
-                                                    if r.is_lost == IsLost::LOST {
+                                                    if r.is_lost {
                                                         games_lost.fetch_add(1, Ordering::Relaxed);
                                                         plan_ok = false;
                                                         break;
@@ -671,7 +675,7 @@ fn run_explore(db_path: &str) {
     println!("Atlas explore mode. Lookup size ≈ {}", atlas.lookup_size());
     println!("Checking empty board coverage...");
 
-    let empty = TetrisBoard::EMPTY_BOARD;
+    let empty = TetrisBoard::<10, 20>::new();
     let mut covered = 0u32;
     for perm_idx in 0..NUM_PERMS as u16 {
         let lk = make_lookup_key(empty, perm_idx);

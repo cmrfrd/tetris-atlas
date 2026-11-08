@@ -162,7 +162,7 @@ pub struct Solver {
 impl Solver {
     pub fn new(config: SolverConfig, diagnostics_enabled: bool) -> Self {
         let mut boards = BoardCache::new();
-        let empty_board_id = boards.get_or_insert(TetrisBoard::EMPTY_BOARD);
+        let empty_board_id = boards.get_or_insert(TetrisBoard::<10, 20>::new());
         let now = Instant::now();
         Self {
             config,
@@ -186,7 +186,7 @@ impl Solver {
         self.start_time = Instant::now();
         self.last_report = self.start_time;
 
-        let bag = TetrisPieceBagState::new();
+        let bag = TetrisPieceBagState::full();
         let cycles = self.config.bag_cycles;
         let winning = self.search(self.empty_board_id, bag, cycles);
         let root_diagnostics = self
@@ -256,13 +256,23 @@ impl Solver {
 
         // 3. AND over adversary piece choices — all pieces in bag must be survivable.
         //    Order pieces by fewest valid placements first (fail-fast).
-        let pieces: Vec<(TetrisPiece, TetrisPieceBagState)> = bag.iter_next_states().collect();
+        let pieces: Vec<(TetrisPiece, TetrisPieceBagState)> = bag
+            .iter_pieces()
+            .map(|piece| {
+                let mut next_bag = bag;
+                next_bag.remove(piece);
+                if next_bag.empty() {
+                    next_bag.fill();
+                }
+                (piece, next_bag)
+            })
+            .collect();
 
         // Sort by number of valid placements (ascending) for fail-fast AND
         let mut piece_order: Vec<usize> = (0..pieces.len()).collect();
         piece_order.sort_unstable_by_key(|&i| {
             let (piece, _) = pieces[i];
-            TetrisPiecePlacement::all_from_piece(piece).len()
+            <TetrisPiecePlacement<10>>::all_from_piece(piece).len()
         });
 
         let is_root = self.is_root_state(board_id, bag, cycles_remaining);
@@ -294,7 +304,7 @@ impl Solver {
     fn prove_piece_branch(
         &mut self,
         board_id: BoardId,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         bag: TetrisPieceBagState,
         cycles_remaining: u32,
         piece: TetrisPiece,
@@ -328,7 +338,7 @@ impl Solver {
     /// reaches the configured terminal target.
     fn try_placements_for_target(
         &mut self,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         piece: TetrisPiece,
     ) -> Option<WitnessEntry> {
         let mut transitions = self.transitions.successors(board, piece).to_vec();
@@ -355,7 +365,7 @@ impl Solver {
     /// the recursive search succeeds. Placements that clear more lines are tried first.
     fn try_placements_recursive(
         &mut self,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         piece: TetrisPiece,
         next_bag: TetrisPieceBagState,
         cycles_remaining: u32,
@@ -389,14 +399,18 @@ impl Solver {
     }
 
     fn diagnose_root_piece_coverage(&mut self) -> RootDiagnostics {
-        let bag = TetrisPieceBagState::new();
+        let bag = TetrisPieceBagState::full();
         let cycles = self.config.bag_cycles;
         let board_id = self.empty_board_id;
         let board = self.boards.boards[board_id as usize];
         let mut pieces = Vec::new();
         let mut proven_pieces = 0;
-
-        for (piece, next_bag) in bag.iter_next_states() {
+        for piece in bag.iter_pieces() {
+            let mut next_bag = bag;
+            next_bag.remove(piece);
+            if next_bag.empty() {
+                next_bag.fill();
+            }
             let witness = self.prove_piece_branch(board_id, board, bag, cycles, piece, next_bag);
             if witness.is_some() {
                 proven_pieces += 1;
@@ -485,7 +499,7 @@ impl Solver {
         cycles_remaining: u32,
     ) -> bool {
         board_id == self.empty_board_id
-            && bag == TetrisPieceBagState::new()
+            && bag == TetrisPieceBagState::full()
             && cycles_remaining == self.config.bag_cycles
     }
 }

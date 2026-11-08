@@ -3,8 +3,7 @@ use std::ops::{Index, IndexMut};
 use tetris_utils::HeaplessVec;
 
 use crate::tetris::{
-    IsLost, TetrisBoard, TetrisGame, TetrisPiece, TetrisPieceBag, TetrisPieceBagState,
-    TetrisPieceOrientation, TetrisPiecePlacement,
+    TetrisBoard, TetrisGame, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement,
 };
 
 /// Maximum number of games in a [`TetrisGameSet`].
@@ -53,7 +52,7 @@ impl TetrisGameSet {
             MAX_GAMES
         );
         let mut games = HeaplessVec::new();
-        (0..num_games).for_each(|_| games.push(TetrisGame::new()));
+        (0..num_games).for_each(|_| games.push(<TetrisGame>::new()));
         Self(games)
     }
 
@@ -68,7 +67,7 @@ impl TetrisGameSet {
             MAX_GAMES
         );
         let mut games = HeaplessVec::new();
-        (0..num_games).for_each(|i| games.push(TetrisGame::new_with_seed(seed + i as u64)));
+        (0..num_games).for_each(|i| games.push(<TetrisGame>::new_with_seed(seed + i as u64)));
         Self(games)
     }
 
@@ -80,7 +79,7 @@ impl TetrisGameSet {
             MAX_GAMES
         );
         let mut games = HeaplessVec::new();
-        (0..num_games).for_each(|_| games.push(TetrisGame::new_with_seed(seed)));
+        (0..num_games).for_each(|_| games.push(<TetrisGame>::new_with_seed(seed)));
         Self(games)
     }
 
@@ -109,14 +108,14 @@ impl TetrisGameSet {
 
     /// Returns all boards as a vector.
     #[must_use]
-    pub fn boards(&self) -> HeaplessVec<TetrisBoard, MAX_GAMES> {
+    pub fn boards(&self) -> HeaplessVec<TetrisBoard<10, 20>, MAX_GAMES> {
         self.0.map(|game| game.board)
     }
 
     /// Returns all current pieces as a vector.
     #[must_use]
     pub fn current_pieces(&self) -> HeaplessVec<TetrisPiece, MAX_GAMES> {
-        self.0.map(|game| game.current_piece)
+        self.0.map(|game| game.current_piece())
     }
 
     /// Returns all piece counts as a vector.
@@ -129,20 +128,16 @@ impl TetrisGameSet {
     ///
     /// These are the placements that can be applied to the current piece.
     #[must_use]
-    pub fn current_placements(&self) -> Vec<&[TetrisPiecePlacement]> {
+    pub fn current_placements(&self) -> Vec<&[TetrisPiecePlacement<10>]> {
         self.0
             .into_iter()
             .map(|game| game.current_placements())
             .collect()
     }
 
-    /// Apply a placement to the board.
-    ///
-    /// This will return true if the game is lost, false otherwise.
-    /// Lines cleared are tracked by measuring the difference in height before and after the placement.
-    ///
-    /// If the game is not lost, the current piece is replaced with a new random piece.
-    pub fn apply_placement(&mut self, placements: &[TetrisPiecePlacement]) -> Vec<IsLost> {
+    /// Applies placements to the corresponding games and returns their loss flags.
+    /// Each game updates its line counts and draws its next piece if play continues.
+    pub fn apply_placement(&mut self, placements: &[TetrisPiecePlacement<10>]) -> Vec<bool> {
         self.0
             .into_iter_mut()
             .zip(placements)
@@ -150,22 +145,18 @@ impl TetrisGameSet {
             .collect()
     }
 
-    /// Apply a placement from orientations to the board.
-    ///
-    /// This will return true if the game is lost, false otherwise.
-    /// Lines cleared are tracked by measuring the difference in height before and after the placement.
-    ///
-    /// If the game is not lost, the current piece is replaced with a new random piece.
+    /// Places each game's current piece at its corresponding orientation.
+    /// Returns loss flags in game order; surviving games draw their next piece.
     pub fn apply_placement_from_orientations(
         &mut self,
-        orientations: &[TetrisPieceOrientation],
-    ) -> Vec<IsLost> {
+        orientations: &[TetrisPieceOrientation<10>],
+    ) -> Vec<bool> {
         self.0
             .into_iter_mut()
             .zip(orientations)
             .map(|(game, &orientation)| {
                 game.apply_placement(TetrisPiecePlacement {
-                    piece: game.current_piece,
+                    piece: game.current_piece(),
                     orientation,
                 })
                 .is_lost

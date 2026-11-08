@@ -1,5 +1,5 @@
+use rand::RngExt;
 use rand::rngs::SmallRng;
-use rand::{RngExt, SeedableRng};
 
 use tetris_game::tetris::{TetrisPiece, TetrisPiecePlacement};
 
@@ -164,7 +164,7 @@ fn mutate_tree_node(
                 *pid = random_pid_of_piece(rng, piece);
             } else if rng.random_bool(SAME_PIECE_RETARGET_PROB) {
                 // Same-piece retarget: keeps a piece-gated path valid.
-                *pid = random_pid_of_piece(rng, TetrisPiecePlacement::from_index(*pid).piece);
+                *pid = random_pid_of_piece(rng, <TetrisPiecePlacement<10>>::from_index(*pid).piece);
             } else {
                 let _ = cfg.leaf_mutation_prob; // reserved knob (kept referenced)
                 *pid = random_pid(rng);
@@ -324,6 +324,7 @@ pub fn tournament_select<'a>(
 mod tests {
     use super::*;
     use crate::encode::NUM_INPUTS;
+    use rand::SeedableRng;
     use tetris_game::tetris::TetrisPiecePlacement;
 
     fn sample_forest(rng: &mut SmallRng) -> DecisionForest {
@@ -333,7 +334,7 @@ mod tests {
     #[test]
     fn mutation_keeps_forest_valid_and_bounded() {
         let cfg = EvolveConfig::default();
-        let n = TetrisPiecePlacement::NUM_PLACEMENTS as u8;
+        let n = <tetris_game::TetrisPiecePlacement<10>>::NUM_PLACEMENTS as u8;
         let mut rng = SmallRng::seed_from_u64(11);
         let parent = sample_forest(&mut rng);
         for _ in 0..100 {
@@ -356,7 +357,7 @@ mod tests {
         let child = crossover(&a, &b, &mut rng);
         assert!(!child.trees.is_empty());
         assert_eq!(child.version, FOREST_FORMAT_VERSION);
-        let n = TetrisPiecePlacement::NUM_PLACEMENTS as u8;
+        let n = <tetris_game::TetrisPiecePlacement<10>>::NUM_PLACEMENTS as u8;
         for t in &child.trees {
             if let Some(pid) = t.decide(&[0u8; NUM_INPUTS]) {
                 assert!(pid < n);
@@ -459,7 +460,7 @@ mod tests {
                 }
                 bits[NUM_CELLS + NUM_PIECES + i] = 1;
                 if let Some(pid) = tree.decide(&bits) {
-                    if TetrisPiecePlacement::from_index(pid).piece != *piece {
+                    if <TetrisPiecePlacement<10>>::from_index(pid).piece != *piece {
                         return false;
                     }
                 }
@@ -599,8 +600,8 @@ mod tests {
         let winner = tournament_select(&scores, &population, &mut rng2, population.len());
         let bits = [0u8; NUM_INPUTS];
         let legal = [
-            TetrisPiecePlacement::from_index(0),
-            TetrisPiecePlacement::from_index(1),
+            <TetrisPiecePlacement<10>>::from_index(0),
+            <TetrisPiecePlacement<10>>::from_index(1),
         ];
         assert_eq!(
             winner.vote(&bits, &legal),

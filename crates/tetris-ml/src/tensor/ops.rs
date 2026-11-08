@@ -4,7 +4,7 @@ use super::tensors::TetrisPieceTensor;
 use anyhow::Result;
 use candle_core::{DType, Device, Tensor, Var, backprop::GradStore};
 use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
-use tetris_game::{TetrisPiece, TetrisPieceOrientation};
+use tetris_game::{TetrisPiece, TetrisPieceOrientation, constants};
 use tracing::instrument;
 
 /// Calculate the L2 norm of all gradients in the gradient store
@@ -31,8 +31,8 @@ pub fn get_l2_norm(grad_store: &GradStore) -> Result<f32> {
 /// Create the mask over all orientations for a specific piece.
 /// Each piece has 4 possible rotations (indices 0-3), but only canonical/unique rotations are enabled.
 /// The mask is organized as [piece_index][rotation][column], where rotation*10 + column gives the flat index.
-// const PIECE_MASK_LOOKUP: [u8; TetrisPiece::NUM_PIECES
-//     * TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS] = [
+// const PIECE_MASK_LOOKUP: [u8; constants::NUM_TETRIS_PIECES
+//     * <tetris_game::TetrisPieceOrientation>::TOTAL_NUM_ORIENTATIONS] = [
 //     // O piece (index 0): Only 1 unique rotation
 //     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 0: width=2 → 9 valid columns (0-8)
 //     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Rotation 1: DISABLED (duplicate of rotation 0)
@@ -70,17 +70,18 @@ pub fn get_l2_norm(grad_store: &GradStore) -> Result<f32> {
 //     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // Rotation 3: width=2 → 9 valid columns (0-8)
 // ];
 
-const PIECE_MASK_LOOKUP: [u8; TetrisPiece::NUM_PIECES
-    * TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS] = {
-    let mut out = [0u8; TetrisPiece::NUM_PIECES * TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS];
+const PIECE_MASK_LOOKUP: [u8; constants::NUM_TETRIS_PIECES
+    * <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS] = {
+    let mut out = [0u8; constants::NUM_TETRIS_PIECES
+        * <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS];
     let mut piece_idx: usize = 0;
-    while piece_idx < TetrisPiece::NUM_PIECES {
-        let piece = TetrisPiece::from_index(piece_idx as u8);
-        let mask = TetrisPieceOrientation::bitmask_from_piece(piece).as_slice();
+    while piece_idx < constants::NUM_TETRIS_PIECES {
+        let piece = TetrisPiece::all()[piece_idx];
+        let mask = <TetrisPieceOrientation<10>>::bitmask_from_piece(piece).as_slice();
         let mut orientation_idx: usize = 0;
-        while orientation_idx < TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS {
-            out[piece_idx * TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS + orientation_idx] =
-                mask[orientation_idx];
+        while orientation_idx < <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS {
+            out[piece_idx * <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS
+                + orientation_idx] = mask[orientation_idx];
             orientation_idx += 1;
         }
         piece_idx += 1;
@@ -96,8 +97,8 @@ pub fn create_orientation_mask(pieces: &TetrisPieceTensor) -> Result<Tensor> {
     let masks = Tensor::from_slice(
         &PIECE_MASK_LOOKUP,
         (
-            TetrisPiece::NUM_PIECES,
-            TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
+            constants::NUM_TETRIS_PIECES,
+            <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS,
         ),
         device,
     )?
@@ -330,43 +331,43 @@ mod tests {
         let mask = create_orientation_mask(&pieces_tensor)?.to_dtype(crate::tensor::fdtype())?;
         let mask_as_vec = mask.to_vec2::<f32>().unwrap();
         let expected_mask: Vec<Vec<f32>> = vec![
-            TetrisPieceOrientation::bitmask_from_piece(TetrisPiece::O_PIECE)
+            <TetrisPieceOrientation<10>>::bitmask_from_piece(TetrisPiece::O)
                 .as_slice()
                 .to_vec()
                 .into_iter()
                 .map(|x| x as f32)
                 .collect(),
-            TetrisPieceOrientation::bitmask_from_piece(TetrisPiece::I_PIECE)
+            <TetrisPieceOrientation<10>>::bitmask_from_piece(TetrisPiece::I)
                 .as_slice()
                 .to_vec()
                 .into_iter()
                 .map(|x| x as f32)
                 .collect(),
-            TetrisPieceOrientation::bitmask_from_piece(TetrisPiece::S_PIECE)
+            <TetrisPieceOrientation<10>>::bitmask_from_piece(TetrisPiece::S)
                 .as_slice()
                 .to_vec()
                 .into_iter()
                 .map(|x| x as f32)
                 .collect(),
-            TetrisPieceOrientation::bitmask_from_piece(TetrisPiece::Z_PIECE)
+            <TetrisPieceOrientation<10>>::bitmask_from_piece(TetrisPiece::Z)
                 .as_slice()
                 .to_vec()
                 .into_iter()
                 .map(|x| x as f32)
                 .collect(),
-            TetrisPieceOrientation::bitmask_from_piece(TetrisPiece::T_PIECE)
+            <TetrisPieceOrientation<10>>::bitmask_from_piece(TetrisPiece::T)
                 .as_slice()
                 .to_vec()
                 .into_iter()
                 .map(|x| x as f32)
                 .collect(),
-            TetrisPieceOrientation::bitmask_from_piece(TetrisPiece::L_PIECE)
+            <TetrisPieceOrientation<10>>::bitmask_from_piece(TetrisPiece::L)
                 .as_slice()
                 .to_vec()
                 .into_iter()
                 .map(|x| x as f32)
                 .collect(),
-            TetrisPieceOrientation::bitmask_from_piece(TetrisPiece::J_PIECE)
+            <TetrisPieceOrientation<10>>::bitmask_from_piece(TetrisPiece::J)
                 .as_slice()
                 .to_vec()
                 .into_iter()
@@ -386,7 +387,7 @@ mod tests {
         assert_eq!(reversed_mask_as_vec, expected_mask_reversed);
 
         // test indexing the same piece 100 times
-        let pieces = vec![TetrisPiece::O_PIECE; 100];
+        let pieces = vec![TetrisPiece::O; 100];
         let pieces_tensor = TetrisPieceTensor::from_pieces(&pieces, &Device::Cpu)?;
         let mask = create_orientation_mask(&pieces_tensor)?.to_dtype(crate::tensor::fdtype())?;
         let mask_as_vec = mask.to_vec2::<f32>().unwrap();

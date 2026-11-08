@@ -1,5 +1,6 @@
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
+use std::num::NonZeroU64;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -17,10 +18,7 @@ use tetris_ml::MlpConfig;
 use tracing::{Level, info};
 use tracing_subscriber::prelude::*;
 
-use tetris_game::{
-    IsLost, Major, StandardTetris, TetrisBoard, TetrisGame, TetrisGameConfig, TetrisPiece,
-    TetrisPieceOrientation, TetrisPiecePlacement, constants,
-};
+use tetris_game::{Major, TetrisBoard, TetrisGame, TetrisPiece, TetrisPiecePlacement, constants};
 use tetris_ml::fdtype;
 use tetris_ml::ops::{create_orientation_mask, get_l2_norm};
 use tetris_ml::tensors::{
@@ -39,7 +37,7 @@ use tetris_search::{
     BeamTetrisState, OrientationCounts, TetrisMultiBeamSearch, height_mse_beam_tetris_score,
 };
 
-fn board_health(board: &TetrisBoard) -> f64 {
+fn board_health(board: &TetrisBoard<10, 20>) -> f64 {
     let max_height = board.height() as f64;
     let total_holes = board.total_holes() as f64;
     let heights = board.heights();
@@ -55,7 +53,7 @@ fn board_health(board: &TetrisBoard) -> f64 {
     (0.5 * height_score + 0.35 * hole_score + 0.15 * bump_score).clamp(0.0, 1.0)
 }
 
-fn adaptive_kink_prob(board: &TetrisBoard, max_kink_prob: f64) -> f64 {
+fn adaptive_kink_prob(board: &TetrisBoard<10, 20>, max_kink_prob: f64) -> f64 {
     let health = board_health(board);
     let p = if health < 0.4 {
         0.0
@@ -97,7 +95,8 @@ impl<
 {
     pub fn new() -> Self {
         let mut rng = rand::make_rng::<SmallRng>();
-        let games = std::array::from_fn(|_| TetrisGame::new_with_seed(rng.random()));
+        let games =
+            std::array::from_fn(|_| <TetrisGame>::new_with_seed(rng.random::<NonZeroU64>().get()));
         Self {
             games,
             rng,
@@ -106,14 +105,15 @@ impl<
             completed_games: 0,
             completed_game_pieces_sum: 0,
             search: TetrisMultiBeamSearch::new(height_mse_beam_tetris_score),
-            step_counter: 0,
+            step_counter: 1,
             current_game_idx: 0,
         }
     }
 
     pub fn new_with_seed(seed: u64) -> Self {
         let mut rng = SmallRng::seed_from_u64(seed);
-        let games = std::array::from_fn(|_| TetrisGame::new_with_seed(rng.random()));
+        let games =
+            std::array::from_fn(|_| <TetrisGame>::new_with_seed(rng.random::<NonZeroU64>().get()));
         Self {
             games,
             rng,
@@ -122,7 +122,7 @@ impl<
             completed_games: 0,
             completed_game_pieces_sum: 0,
             search: TetrisMultiBeamSearch::new(height_mse_beam_tetris_score),
-            step_counter: seed,
+            step_counter: seed.max(1),
             current_game_idx: 0,
         }
     }
@@ -130,10 +130,10 @@ impl<
     pub fn reset(&mut self, seed: Option<u64>) {
         if let Some(seed) = seed {
             self.rng = SmallRng::seed_from_u64(seed);
-            self.step_counter = seed;
+            self.step_counter = seed.max(1);
         }
         for g in self.games.iter_mut() {
-            g.reset(Some(self.rng.random::<u64>()));
+            g.reset(Some(self.rng.random::<NonZeroU64>().get()));
         }
         self.loss_resets = 0;
         self.completed_games = 0;
@@ -157,7 +157,7 @@ impl<
 > Iterator
     for TetrisGameIter<NUM_GAMES, NUM_BEAMS, TOP_N_PER_BEAM, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
 {
-    type Item = (TetrisBoard, TetrisPiece, OrientationCounts);
+    type Item = (TetrisBoard<10, 20>, TetrisPiece, OrientationCounts);
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -183,7 +183,7 @@ impl<
     /// Try to generate one training sample from the game pool.
     /// Uses round-robin sampling to ensure batch diversity.
     /// Returns None if all games are lost or beam search fails for all games.
-    fn try_next_sample(&mut self) -> Option<(TetrisBoard, TetrisPiece, OrientationCounts)> {
+    fn try_next_sample(&mut self) -> Option<(TetrisBoard<10, 20>, TetrisPiece, OrientationCounts)> {
         // Try all games starting from current round-robin position
         for _ in 0..(3 * NUM_GAMES) {
             let game_idx = self.current_game_idx;
@@ -196,7 +196,7 @@ impl<
             if g.board.is_lost() {
                 self.completed_games += 1;
                 self.completed_game_pieces_sum += g.piece_count as u64;
-                g.reset(Some(self.rng.random()));
+                g.reset(Some(self.rng.random::<NonZeroU64>().get()));
                 self.loss_resets += 1;
                 continue;
             }
@@ -207,10 +207,10 @@ impl<
                 let random_action = placements[self.rng.random_range(0..placements.len())];
 
                 let result = g.apply_placement(random_action);
-                if result.is_lost == IsLost::LOST {
+                if result.is_lost {
                     self.completed_games += 1;
                     self.completed_game_pieces_sum += g.piece_count as u64;
-                    g.reset(Some(self.rng.random()));
+                    g.reset(Some(self.rng.random::<NonZeroU64>().get()));
                     self.loss_resets += 1;
                 }
                 // Continue to next iteration - will try beam search on perturbed state
@@ -218,7 +218,7 @@ impl<
             }
 
             let board_before = g.board;
-            let piece = g.current_piece;
+            let piece = g.current_piece();
 
             // Use multi-beam search to get vote counts
             let counts = self.search.search_count_actions_with_seeds(
@@ -240,10 +240,10 @@ impl<
 
             // Apply action to advance the game
             let result = g.apply_placement(action);
-            if result.is_lost == IsLost::LOST {
+            if result.is_lost {
                 self.completed_games += 1;
                 self.completed_game_pieces_sum += g.piece_count as u64;
-                g.reset(Some(self.rng.random()));
+                g.reset(Some(self.rng.random::<NonZeroU64>().get()));
                 self.loss_resets += 1;
                 continue;
             }
@@ -272,14 +272,14 @@ impl TetrisBeamSupervisedPolicyMLP {
     /// Features: [binary_board(200), piece_onehot(7)]
     fn forward_features(
         &self,
-        boards: &[TetrisBoard],
+        boards: &[TetrisBoard<10, 20>],
         current_piece: &TetrisPieceTensor,
     ) -> Result<Tensor> {
         let batch_size = boards.len();
         let device = current_piece.device();
         let dtype = fdtype();
 
-        let mut features_vec = Vec::with_capacity(batch_size * StandardTetris::BOARD_SIZE);
+        let mut features_vec = Vec::with_capacity(batch_size * TetrisBoard::<10, 20>::BOARD_SIZE);
 
         for board in boards {
             let binary = board.to_cell_array(Major::Row);
@@ -290,7 +290,7 @@ impl TetrisBeamSupervisedPolicyMLP {
 
         let board_features = Tensor::from_vec(
             features_vec,
-            (batch_size, StandardTetris::BOARD_SIZE),
+            (batch_size, TetrisBoard::<10, 20>::BOARD_SIZE),
             device,
         )?
         .to_dtype(dtype)?;
@@ -300,7 +300,7 @@ impl TetrisBeamSupervisedPolicyMLP {
 
     pub fn forward_logits(
         &self,
-        boards: &[TetrisBoard],
+        boards: &[TetrisBoard<10, 20>],
         current_piece: &TetrisPieceTensor,
     ) -> Result<TetrisPieceOrientationLogitsTensor> {
         let mut x = self.forward_features(boards, current_piece)?;
@@ -312,7 +312,7 @@ impl TetrisBeamSupervisedPolicyMLP {
 
     pub fn forward_masked(
         &self,
-        boards: &[TetrisBoard],
+        boards: &[TetrisBoard<10, 20>],
         current_piece: &TetrisPieceTensor,
     ) -> Result<TetrisPieceOrientationLogitsTensor> {
         let logits = self.forward_logits(boards, current_piece)?;
@@ -340,7 +340,8 @@ pub fn train_tetris_beam_supervised(
     const TEACHER_TOP_N_PER_BEAM: usize = 128;
     const TEACHER_BEAM_WIDTH: usize = 128;
     const TEACHER_DEPTH: usize = 7;
-    const TEACHER_MAX_MOVES: usize = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
+    const TEACHER_MAX_MOVES: usize =
+        <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS;
     const SEED: u64 = 123;
     const KINK_PROB: f64 = 0.2;
 
@@ -356,13 +357,13 @@ pub fn train_tetris_beam_supervised(
     let vb = VarBuilder::from_varmap(&model_varmap, dtype, &device);
 
     // Binary board (200) + piece one-hot (7)
-    let in_size = StandardTetris::BOARD_SIZE + TetrisPiece::NUM_PIECES;
+    let in_size = TetrisBoard::<10, 20>::BOARD_SIZE + constants::NUM_TETRIS_PIECES;
     let h = model_dim;
     let policy_cfg = MlpConfig {
         input_size: in_size,
         hidden_sizes: vec![h, h, h, h, h, h],
         residual: true,
-        output_size: TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
+        output_size: <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS,
         leaky_relu_negative_slope: 0.1,
         dropout: Some(0.05),
     };
@@ -655,9 +656,9 @@ pub fn inference_tetris_beam_supervised(checkpoint_dir: PathBuf) -> Result<()> {
         let mut finished = vec![false; batch_len];
 
         for _ in 0..batch_len {
-            let seed: u64 = rand::random();
+            let seed = rand::random::<NonZeroU64>().get();
             seeds.push(seed);
-            games.push(TetrisGame::new_with_seed(seed));
+            games.push(<TetrisGame>::new_with_seed(seed));
         }
 
         while finished.iter().any(|&x| !x) {
@@ -676,7 +677,7 @@ pub fn inference_tetris_beam_supervised(checkpoint_dir: PathBuf) -> Result<()> {
 
                 active_local_indices.push(local_idx);
                 active_boards.push(games[local_idx].board);
-                active_pieces.push(games[local_idx].current_piece);
+                active_pieces.push(games[local_idx].current_piece());
             }
 
             if active_local_indices.is_empty() {
@@ -690,13 +691,13 @@ pub fn inference_tetris_beam_supervised(checkpoint_dir: PathBuf) -> Result<()> {
             for (active_idx, &local_idx) in active_local_indices.iter().enumerate() {
                 let game = &mut games[local_idx];
                 let placement = TetrisPiecePlacement {
-                    piece: game.current_piece,
+                    piece: game.current_piece(),
                     orientation: orientations[active_idx],
                 };
 
                 let r = game.apply_placement(placement);
                 steps[local_idx] += 1;
-                if r.is_lost == IsLost::LOST || steps[local_idx] >= MAX_STEPS_PER_GAME {
+                if r.is_lost || steps[local_idx] >= MAX_STEPS_PER_GAME {
                     finished[local_idx] = true;
                 }
             }

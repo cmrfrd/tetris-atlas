@@ -15,8 +15,8 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::time::Instant;
 use tetris_game::{
-    IsLost, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
-    TetrisPiecePlacement, constants,
+    StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
+    TetrisPiecePlacement,
 };
 
 #[derive(Parser, Debug, Clone)]
@@ -126,7 +126,7 @@ enum FrontierOrder {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct ConcreteState {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     bag: TetrisPieceBagState,
 }
 
@@ -170,8 +170,8 @@ struct IncrementalState {
 impl IncrementalState {
     fn new() -> Self {
         let root = ConcreteState {
-            board: TetrisBoard::EMPTY_BOARD,
-            bag: TetrisPieceBagState::new(),
+            board: TetrisBoard::<10, 20>::new(),
+            bag: TetrisPieceBagState::full(),
         };
         let mut visited = HashSet::new();
         visited.insert(root);
@@ -323,8 +323,8 @@ fn run_tetris_invariant_incremental(cli: Cli) {
         let sccs = strongly_connected_components(&graph, solved.kept_states.len());
         let empty_abs = abstract_state(
             ConcreteState {
-                board: TetrisBoard::EMPTY_BOARD,
-                bag: TetrisPieceBagState::new(),
+                board: TetrisBoard::<10, 20>::new(),
+                bag: TetrisPieceBagState::full(),
             },
             &best_round_cfg,
         );
@@ -479,11 +479,16 @@ fn pop_frontier(
 
 fn enumerate_transitions(state: ConcreteState) -> Vec<CachedTransition> {
     let mut out = Vec::new();
-    for (piece, next_bag) in state.bag.iter_next_states() {
-        for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+    for piece in state.bag.iter_pieces() {
+        let mut next_bag = state.bag;
+        next_bag.remove(piece);
+        if next_bag.empty() {
+            next_bag.fill();
+        }
+        for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
             let mut next_board = state.board;
             let result = next_board.apply_piece_placement(placement);
-            if result.is_lost == IsLost::LOST {
+            if result.is_lost {
                 continue;
             }
             out.push(CachedTransition {
@@ -570,8 +575,8 @@ fn run_tetris_invariant_synthesis(cli: Cli) {
         );
 
         let empty = ConcreteState {
-            board: TetrisBoard::EMPTY_BOARD,
-            bag: TetrisPieceBagState::new(),
+            board: TetrisBoard::<10, 20>::new(),
+            bag: TetrisPieceBagState::full(),
         };
         let empty_abs = abstract_state(empty, &abstraction);
         let empty_invariant = solved.kept_states.contains(&empty_abs);
@@ -612,8 +617,8 @@ fn run_tetris_invariant_synthesis(cli: Cli) {
     if let Some((cfg, solved, falsify)) = best_result {
         let empty_abs = abstract_state(
             ConcreteState {
-                board: TetrisBoard::EMPTY_BOARD,
-                bag: TetrisPieceBagState::new(),
+                board: TetrisBoard::<10, 20>::new(),
+                bag: TetrisPieceBagState::full(),
             },
             &cfg,
         );
@@ -662,8 +667,8 @@ fn run_tetris_invariant_synthesis(cli: Cli) {
 
 fn sample_reachable_concrete_states(max_states: usize, max_depth: usize) -> Vec<ConcreteState> {
     let root = ConcreteState {
-        board: TetrisBoard::EMPTY_BOARD,
-        bag: TetrisPieceBagState::new(),
+        board: TetrisBoard::<10, 20>::new(),
+        bag: TetrisPieceBagState::full(),
     };
     let mut visited: HashSet<ConcreteState> = HashSet::with_capacity(max_states.min(1_000_000));
     let mut out = Vec::with_capacity(max_states.min(1_000_000));
@@ -676,12 +681,16 @@ fn sample_reachable_concrete_states(max_states: usize, max_depth: usize) -> Vec<
         if out.len() >= max_states || depth >= max_depth {
             continue;
         }
-
-        for (piece, next_bag) in state.bag.iter_next_states() {
-            for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+        for piece in state.bag.iter_pieces() {
+            let mut next_bag = state.bag;
+            next_bag.remove(piece);
+            if next_bag.empty() {
+                next_bag.fill();
+            }
+            for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
                 let mut next_board = state.board;
                 let result = next_board.apply_piece_placement(placement);
-                if result.is_lost == IsLost::LOST {
+                if result.is_lost {
                     continue;
                 }
 
@@ -804,10 +813,14 @@ fn solve_controlled_invariant(
                 continue;
             };
 
-            let bag = TetrisPieceBagState::from(abs_state.bag_mask);
+            let bag = TetrisPieceBagState::try_from(abs_state.bag_mask).expect("valid bag mask");
             let mut is_valid = true;
-
-            for (piece, next_bag) in bag.iter_next_states() {
+            for piece in bag.iter_pieces() {
+                let mut next_bag = bag;
+                next_bag.remove(piece);
+                if next_bag.empty() {
+                    next_bag.fill();
+                }
                 let rep_outcomes: Vec<bool> = reps
                     .iter()
                     .map(|rep| {
@@ -852,7 +865,7 @@ fn solve_controlled_invariant(
 }
 
 fn has_safe_action_for_piece(
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     piece: TetrisPiece,
     next_bag: TetrisPieceBagState,
     abstraction: &AbstractionConfig,
@@ -860,10 +873,10 @@ fn has_safe_action_for_piece(
     known_abstract_states: &HashMap<AbstractState, Vec<ConcreteState>>,
     unknown_successor_policy: UnknownSuccessorPolicy,
 ) -> bool {
-    for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+    for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
         let mut next_board = board;
         let result = next_board.apply_piece_placement(placement);
-        if result.is_lost == IsLost::LOST {
+        if result.is_lost {
             continue;
         }
         let next_abs = abstract_state(
@@ -926,15 +939,19 @@ fn build_abstract_policy_map(
             continue;
         };
         let rep = reps[0];
-        let bag = TetrisPieceBagState::from(state.bag_mask);
+        let bag = TetrisPieceBagState::try_from(state.bag_mask).expect("valid bag mask");
         let mut state_complete = true;
-
-        for (piece, next_bag) in bag.iter_next_states() {
+        for piece in bag.iter_pieces() {
+            let mut next_bag = bag;
+            next_bag.remove(piece);
+            if next_bag.empty() {
+                next_bag.fill();
+            }
             let mut selected = None;
-            for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+            for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
                 let mut next_board = rep.board;
                 let result = next_board.apply_piece_placement(placement);
-                if result.is_lost == IsLost::LOST {
+                if result.is_lost {
                     continue;
                 }
                 let next_abs = abstract_state(
@@ -991,7 +1008,7 @@ fn write_policy_map_csv(path: &str, policy: &PolicyMap) -> std::io::Result<()> {
             k.state.max_height_bucket,
             k.state.holes_bucket,
             k.state.roughness_bucket,
-            u8::from(k.piece),
+            k.piece.mask(),
         )
     });
 
@@ -1003,7 +1020,7 @@ fn write_policy_map_csv(path: &str, policy: &PolicyMap) -> std::io::Result<()> {
             k.state.max_height_bucket,
             k.state.holes_bucket,
             k.state.roughness_bucket,
-            u8::from(k.piece),
+            k.piece.mask(),
             v.placement_index
         )?;
     }
@@ -1019,15 +1036,20 @@ fn compute_transition_coverage(
     let mut coverage: HashMap<CoverageKey, TransitionCoverage> = HashMap::new();
 
     for (&abs_state, reps) in &model.representatives {
-        let bag = TetrisPieceBagState::from(abs_state.bag_mask);
-        for (piece, next_bag) in bag.iter_next_states() {
+        let bag = TetrisPieceBagState::try_from(abs_state.bag_mask).expect("valid bag mask");
+        for piece in bag.iter_pieces() {
+            let mut next_bag = bag;
+            next_bag.remove(piece);
+            if next_bag.empty() {
+                next_bag.fill();
+            }
             let mut known = 0usize;
             let mut unknown = 0usize;
             for rep in reps {
-                for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+                for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
                     let mut next_board = rep.board;
                     let result = next_board.apply_piece_placement(placement);
-                    if result.is_lost == IsLost::LOST {
+                    if result.is_lost {
                         continue;
                     }
                     let next_abs = abstract_state(
@@ -1087,15 +1109,16 @@ fn build_policy_graph(
             continue;
         };
         let rep = reps[0];
-        let mut next_bag = TetrisPieceBagState::from(key.state.bag_mask);
+        let mut next_bag =
+            TetrisPieceBagState::try_from(key.state.bag_mask).expect("valid bag mask");
         next_bag.remove(key.piece);
-        if next_bag.is_empty() {
+        if next_bag.empty() {
             next_bag.fill();
         }
-        let placement = TetrisPiecePlacement::from_index(value.placement_index);
+        let placement = <TetrisPiecePlacement<10>>::from_index(value.placement_index);
         let mut next_board = rep.board;
         let result = next_board.apply_piece_placement(placement);
-        if result.is_lost == IsLost::LOST {
+        if result.is_lost {
             continue;
         }
         let next_abs = abstract_state(
@@ -1201,9 +1224,9 @@ fn rank_cycle_candidates(
         let mut closed_states = 0usize;
         for &node_idx in scc {
             let state = graph.nodes[node_idx];
-            let bag = TetrisPieceBagState::from(state.bag_mask);
+            let bag = TetrisPieceBagState::try_from(state.bag_mask).expect("valid bag mask");
             let mut all_closed = true;
-            for (piece, _) in bag.iter_next_states() {
+            for piece in bag.iter_pieces() {
                 let Some(value) = policy.entries.get(&PolicyKey { state, piece }) else {
                     all_closed = false;
                     break;
@@ -1213,15 +1236,16 @@ fn rank_cycle_candidates(
                     break;
                 };
                 let rep = reps[0];
-                let mut next_bag = TetrisPieceBagState::from(state.bag_mask);
+                let mut next_bag =
+                    TetrisPieceBagState::try_from(state.bag_mask).expect("valid bag mask");
                 next_bag.remove(piece);
-                if next_bag.is_empty() {
+                if next_bag.empty() {
                     next_bag.fill();
                 }
-                let placement = TetrisPiecePlacement::from_index(value.placement_index);
+                let placement = <TetrisPiecePlacement<10>>::from_index(value.placement_index);
                 let mut next_board = rep.board;
                 let result = next_board.apply_piece_placement(placement);
-                if result.is_lost == IsLost::LOST {
+                if result.is_lost {
                     all_closed = false;
                     break;
                 }
@@ -1366,8 +1390,8 @@ fn falsify_with_rollouts(
     let mut earliest_failure_step: Option<usize> = None;
 
     for r in 0..rollouts {
-        let mut game = tetris_game::TetrisGame::new_with_seed(base_seed.wrapping_add(r as u64));
-        let mut bag = TetrisPieceBagState::new();
+        let mut game = <tetris_game::TetrisGame>::new_with_seed(base_seed.wrapping_add(r as u64));
+        let mut bag = TetrisPieceBagState::full();
 
         let mut survived = true;
         for step in 0..horizon {
@@ -1384,19 +1408,19 @@ fn falsify_with_rollouts(
                 break;
             }
 
-            let piece = game.current_piece;
+            let piece = game.current_piece();
             let mut chosen = None;
 
-            for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+            for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
                 let mut next_board = board;
                 let result = next_board.apply_piece_placement(placement);
-                if result.is_lost == IsLost::LOST {
+                if result.is_lost {
                     continue;
                 }
 
                 let mut next_bag = bag;
                 next_bag.remove(piece);
-                if next_bag.is_empty() {
+                if next_bag.empty() {
                     next_bag.fill();
                 }
                 let next_abs = abstract_state(
@@ -1422,7 +1446,7 @@ fn falsify_with_rollouts(
             };
 
             let result = game.apply_placement(placement);
-            if result.is_lost == IsLost::LOST {
+            if result.is_lost {
                 survived = false;
                 earliest_failure_step = Some(match earliest_failure_step {
                     Some(prev) => prev.min(step),

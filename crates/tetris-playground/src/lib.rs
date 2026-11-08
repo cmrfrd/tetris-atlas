@@ -26,7 +26,7 @@
 
 // Re-export common types for bin convenience
 pub use tetris_game::{
-    IsLost, PlacementResult, TetrisBoard, TetrisGame, TetrisPiece, TetrisPieceBagState,
+    PlacementResult, TetrisBoard, TetrisGame, TetrisPiece, TetrisPieceBagState,
     TetrisPieceOrientation, TetrisPiecePlacement,
 };
 #[cfg(feature = "ml")]

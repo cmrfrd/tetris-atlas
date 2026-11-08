@@ -26,7 +26,7 @@ pub struct StateIndex {
 impl Default for StateIndex {
     fn default() -> Self {
         Self {
-            bag: TetrisPieceBagState::from(0),
+            bag: TetrisPieceBagState::from_pieces([]),
             piece_ranges: [EdgeRange::EMPTY; 7],
         }
     }

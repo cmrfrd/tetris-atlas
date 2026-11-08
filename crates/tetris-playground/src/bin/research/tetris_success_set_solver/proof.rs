@@ -9,11 +9,11 @@ use anyhow::{Result, bail};
 use dashmap::DashMap;
 use rayon::prelude::*;
 use serde::Serialize;
-use tetris_game::{IsLost, TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPiecePlacement};
+use tetris_game::{TetrisBoard, TetrisPiece, TetrisPieceBagState, TetrisPiecePlacement};
 
+use crate::admissibility::{board_height_spread, board_is_admissible, board_surface_roughness};
 use crate::config::SolverConfig;
 use crate::state::{PackedPlacement, next_bag_state, pack_placement, piece_branches};
-use crate::universe::{board_height_spread, board_is_admissible, board_surface_roughness};
 
 pub type BagNodeId = u32;
 pub type PieceNodeId = u32;
@@ -78,13 +78,13 @@ impl Default for SolveOptions {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BagKey {
-    pub board: TetrisBoard,
+    pub board: TetrisBoard<10, 20>,
     pub bag: TetrisPieceBagState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PieceKey {
-    pub board: TetrisBoard,
+    pub board: TetrisBoard<10, 20>,
     pub bag: TetrisPieceBagState,
     pub piece: TetrisPiece,
 }
@@ -117,12 +117,12 @@ struct OptimisticChild {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct GeometryChild {
     placement: PackedPlacement,
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct GeometryKey {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     piece: TetrisPiece,
 }
 
@@ -472,7 +472,7 @@ struct ProofSolver {
     dead_bag_queue: VecDeque<BagNodeId>,
     dead_piece_queue: VecDeque<PieceNodeId>,
     optimistic_repair_queue: VecDeque<PieceNodeId>,
-    board_features: DashMap<TetrisBoard, BoardFeatures>,
+    board_features: DashMap<TetrisBoard<10, 20>, BoardFeatures>,
     geometry_cache: DashMap<GeometryKey, Arc<[GeometryChild]>>,
     optimistic_policy: DashMap<GeometryKey, OptimisticPolicyEntry>,
     next_expand_sequence: u64,
@@ -550,11 +550,13 @@ impl ProofSolver {
             && self.bag_nodes[bag_id as usize].activated
     }
 
+    #[cfg(test)]
     fn is_live_and_dormant(&self, bag_id: BagNodeId) -> bool {
         self.bag_nodes[bag_id as usize].resolution == NodeResolution::Won
             && !self.bag_nodes[bag_id as usize].activated
     }
 
+    #[cfg(test)]
     fn new(config: SolverConfig) -> Self {
         Self::new_with_mode(config, SolveMode::Full, FrontierMode::FragileFirst)
     }
@@ -671,7 +673,7 @@ impl ProofSolver {
 
     fn ranked_placements_for(
         &self,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         piece: TetrisPiece,
     ) -> Option<Vec<PackedPlacement>> {
         self.optimistic_policy
@@ -713,7 +715,7 @@ impl ProofSolver {
 
     fn promote_policy_placement(
         &mut self,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         piece: TetrisPiece,
         placement: PackedPlacement,
         is_repair: bool,
@@ -754,7 +756,7 @@ impl ProofSolver {
 
     fn demote_policy_placement(
         &mut self,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         piece: TetrisPiece,
         placement: PackedPlacement,
         is_repair: bool,
@@ -779,7 +781,7 @@ impl ProofSolver {
 
     fn note_ranked_choice(
         &mut self,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         piece: TetrisPiece,
         placement: PackedPlacement,
     ) {
@@ -794,7 +796,7 @@ impl ProofSolver {
 
     fn reorder_piece_children_optimistically(
         &mut self,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         piece: TetrisPiece,
         children: &mut [PieceChild],
     ) -> usize {
@@ -861,7 +863,7 @@ impl ProofSolver {
 
     fn reorder_staged_children_optimistically(
         &mut self,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         piece: TetrisPiece,
         children: &mut [StagedPieceChild],
     ) {
@@ -952,6 +954,7 @@ impl ProofSolver {
             .map(|idx| (idx as u32, false))
     }
 
+    #[cfg(test)]
     fn choose_optimistic_child_slot_strict_reuse(
         &self,
         children: &[PieceChild],
@@ -1991,9 +1994,9 @@ impl ProofSolver {
 
                 let maybe_piece = {
                     let bag = &self.bag_nodes[bag_id as usize];
-                    (bag.next_branch_idx < bag.branch_order_len).then_some(TetrisPiece::from_index(
-                        bag.branch_order[bag.next_branch_idx as usize],
-                    ))
+                    (bag.next_branch_idx < bag.branch_order_len).then_some(
+                        TetrisPiece::all()[bag.branch_order[bag.next_branch_idx as usize] as usize],
+                    )
                 };
                 let Some(piece) = maybe_piece else {
                     self.bag_nodes[bag_id as usize].expanded = true;
@@ -2039,7 +2042,7 @@ impl ProofSolver {
 
     fn compute_branch_order(
         &mut self,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         bag: TetrisPieceBagState,
     ) -> ([u8; 7], u8) {
         let mut scored = piece_branches(bag)
@@ -4189,7 +4192,7 @@ impl ProofSolver {
             + self.parent_segments.len() * std::mem::size_of::<ParentSegment>()
     }
 
-    fn compute_board_features(&self, board: TetrisBoard) -> BoardFeatures {
+    fn compute_board_features(&self, board: TetrisBoard<10, 20>) -> BoardFeatures {
         let heights = board.heights();
         BoardFeatures {
             height: board.height(),
@@ -4202,7 +4205,7 @@ impl ProofSolver {
         }
     }
 
-    fn board_features(&self, board: TetrisBoard) -> BoardFeatures {
+    fn board_features(&self, board: TetrisBoard<10, 20>) -> BoardFeatures {
         if let Some(features) = self.board_features.get(&board) {
             self.board_feature_cache_hits
                 .fetch_add(1, AtomicOrdering::Relaxed);
@@ -4215,7 +4218,7 @@ impl ProofSolver {
         features
     }
 
-    fn expand_priority(&mut self, board: TetrisBoard) -> u64 {
+    fn expand_priority(&mut self, board: TetrisBoard<10, 20>) -> u64 {
         let features = self.board_features(board);
         let fragile = ((features.height as u64) << 48)
             | ((features.holes as u64) << 32)
@@ -4230,7 +4233,7 @@ impl ProofSolver {
 
     fn geometry_children(
         &mut self,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         piece: TetrisPiece,
     ) -> Arc<[GeometryChild]> {
         let key = GeometryKey { board, piece };
@@ -4260,15 +4263,15 @@ impl ProofSolver {
     }
 
     fn compute_geometry_children_for(
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         piece: TetrisPiece,
         admissibility: crate::config::BoardAdmissibility,
     ) -> Vec<GeometryChild> {
         let mut children = Vec::new();
-        for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+        for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
             let mut next_board = board;
             let outcome = next_board.apply_piece_placement(placement);
-            if outcome.is_lost == IsLost::LOST || !board_is_admissible(next_board, admissibility) {
+            if outcome.is_lost || !board_is_admissible(next_board, admissibility) {
                 continue;
             }
             children.push(GeometryChild {
@@ -4300,7 +4303,7 @@ impl ProofSolver {
             .collect()
     }
 
-    fn compute_board_features_for(board: TetrisBoard) -> BoardFeatures {
+    fn compute_board_features_for(board: TetrisBoard<10, 20>) -> BoardFeatures {
         let heights = board.heights();
         BoardFeatures {
             height: board.height(),
@@ -4313,7 +4316,7 @@ impl ProofSolver {
         }
     }
 
-    fn board_signature_for(board: TetrisBoard) -> BoardSignature {
+    fn board_signature_for(board: TetrisBoard<10, 20>) -> BoardSignature {
         let heights = board.heights();
         BoardSignature {
             heights,
@@ -4368,6 +4371,7 @@ impl ProofSolver {
     }
 }
 
+#[cfg(test)]
 pub fn solve_root(config: SolverConfig) -> Result<ProofSolveResult> {
     ProofSolver::new(config).solve()
 }
@@ -4488,11 +4492,11 @@ pub fn verify_proof(result: &ProofSolveResult) -> ProofVerification {
                     verification.witness_failures += 1;
                     continue;
                 };
-                if best_action as usize >= tetris_game::TetrisPiecePlacement::NUM_PLACEMENTS {
+                if best_action as usize >= <tetris_game::TetrisPiecePlacement<10>>::NUM_PLACEMENTS {
                     verification.witness_failures += 1;
                     continue;
                 }
-                if tetris_game::TetrisPiecePlacement::from_index(best_action).piece
+                if <tetris_game::TetrisPiecePlacement<10>>::from_index(best_action).piece
                     != piece.key.piece
                 {
                     verification.witness_failures += 1;
@@ -4628,7 +4632,7 @@ mod tests {
 
     fn placements_for_piece(piece: TetrisPiece, count: usize) -> Vec<PackedPlacement> {
         (0..117)
-            .map(TetrisPiecePlacement::from_index)
+            .map(<TetrisPiecePlacement<10>>::from_index)
             .filter(|placement| placement.piece == piece)
             .take(count)
             .map(pack_placement)
@@ -4693,27 +4697,27 @@ mod tests {
                 max_height_spread: u32::MAX,
             },
             root: RootStateConfig {
-                board: TetrisBoard::EMPTY_BOARD,
-                bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
+                board: TetrisBoard::<10, 20>::new(),
+                bag: TetrisPieceBagState::try_from(TetrisPiece::O.mask()).expect("valid bag mask"),
             },
         }
     }
 
     fn malformed_o_won_result(
         config: SolverConfig,
-        placement: TetrisPiecePlacement,
+        placement: TetrisPiecePlacement<10>,
     ) -> ProofSolveResult {
         let root_key = BagKey {
             board: config.root.board,
             bag: config.root.bag,
         };
         let child_key = BagKey {
-            board: TetrisBoard::EMPTY_BOARD,
-            bag: TetrisPieceBagState::new(),
+            board: TetrisBoard::<10, 20>::new(),
+            bag: TetrisPieceBagState::full(),
         };
         let packed = pack_placement(placement);
         let mut root_pieces = [None; 7];
-        root_pieces[TetrisPiece::O_PIECE.index() as usize] = Some(0);
+        root_pieces[TetrisPiece::O.index() as usize] = Some(0);
 
         ProofSolveResult {
             solve_mode: SolveMode::Full,
@@ -4727,7 +4731,7 @@ mod tests {
                 PieceKey {
                     board: root_key.board,
                     bag: root_key.bag,
-                    piece: TetrisPiece::O_PIECE,
+                    piece: TetrisPiece::O,
                 },
                 0,
                 NodeResolution::Won,
@@ -4743,7 +4747,7 @@ mod tests {
                 result: NodeResolution::Won,
                 best_action: {
                     let mut actions = [None; 7];
-                    actions[TetrisPiece::O_PIECE.index() as usize] = Some(packed);
+                    actions[TetrisPiece::O.index() as usize] = Some(packed);
                     actions
                 },
                 failing_pieces: Vec::new(),
@@ -4812,7 +4816,7 @@ mod tests {
 
     #[test]
     fn closed_winning_set_reports_precise_failing_root_pieces() {
-        let mut board = TetrisBoard::EMPTY_BOARD;
+        let mut board = TetrisBoard::<10, 20>::new();
         for col in 4..10 {
             board.set_bit(col, 0);
         }
@@ -4826,9 +4830,8 @@ mod tests {
             },
             root: crate::config::RootStateConfig {
                 board,
-                bag: TetrisPieceBagState::from(
-                    u8::from(TetrisPiece::I_PIECE) | u8::from(TetrisPiece::T_PIECE),
-                ),
+                bag: TetrisPieceBagState::try_from(TetrisPiece::I.mask() | TetrisPiece::T.mask())
+                    .expect("valid bag mask"),
             },
         };
         let result = solve_root(config).expect("solver should succeed");
@@ -4897,7 +4900,7 @@ mod tests {
 
     #[test]
     fn closed_winning_set_differs_from_recovery_semantics() {
-        let mut board = TetrisBoard::EMPTY_BOARD;
+        let mut board = TetrisBoard::<10, 20>::new();
         for col in 4..10 {
             board.set_bit(col, 0);
         }
@@ -4911,7 +4914,7 @@ mod tests {
             },
             root: crate::config::RootStateConfig {
                 board,
-                bag: TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE)),
+                bag: TetrisPieceBagState::try_from(TetrisPiece::I.mask()).expect("valid bag mask"),
             },
         };
         let closed = solve_root(config).expect("solver should succeed");
@@ -4938,15 +4941,10 @@ mod tests {
         .expect("solver should succeed");
 
         assert_eq!(result.root_result.result, NodeResolution::Lost);
-        assert!(
-            result
-                .root_result
-                .failing_pieces
-                .contains(&TetrisPiece::S_PIECE)
-        );
+        assert!(result.root_result.failing_pieces.contains(&TetrisPiece::S));
 
         let root_piece_nodes = result.bag_nodes[result.root_bag as usize].piece_nodes;
-        let maybe_s_piece_node = root_piece_nodes[TetrisPiece::S_PIECE.index() as usize];
+        let maybe_s_piece_node = root_piece_nodes[TetrisPiece::S.index() as usize];
         if let Some(s_piece_node) = maybe_s_piece_node {
             assert_eq!(result.piece_nodes[s_piece_node as usize].children.len(), 0);
             assert_eq!(
@@ -4960,7 +4958,7 @@ mod tests {
     #[test]
     fn replay_verifier_rejects_witness_for_wrong_piece() {
         let config = single_o_config();
-        let wrong_piece_placement = TetrisPiecePlacement::all_from_piece(TetrisPiece::I_PIECE)[0];
+        let wrong_piece_placement = <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::I)[0];
         let result = malformed_o_won_result(config, wrong_piece_placement);
 
         let verification = verify_replay(config, &result);
@@ -4972,7 +4970,7 @@ mod tests {
     #[test]
     fn replay_verifier_rejects_out_of_range_witness_index_without_panicking() {
         let config = single_o_config();
-        let placement = TetrisPiecePlacement::all_from_piece(TetrisPiece::O_PIECE)[0];
+        let placement = <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::O)[0];
         let mut result = malformed_o_won_result(config, placement);
         result.piece_nodes[0].best_action = Some(u8::MAX);
 
@@ -4985,13 +4983,14 @@ mod tests {
     #[test]
     fn replay_verifier_rejects_corrupt_successor_bag() {
         let config = single_o_config();
-        let placement = TetrisPiecePlacement::all_from_piece(TetrisPiece::O_PIECE)[0];
+        let placement = <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::O)[0];
         let mut result = malformed_o_won_result(config, placement);
         let mut expected_board = config.root.board;
         let outcome = expected_board.apply_piece_placement(placement);
-        assert_eq!(outcome.is_lost, IsLost::NOT_LOST);
+        assert!(!outcome.is_lost);
         result.bag_nodes[1].key.board = expected_board;
-        result.bag_nodes[1].key.bag = TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE));
+        result.bag_nodes[1].key.bag =
+            TetrisPieceBagState::try_from(TetrisPiece::I.mask()).expect("valid bag mask");
 
         let verification = verify_replay(config, &result);
 
@@ -5002,13 +5001,13 @@ mod tests {
     #[test]
     fn replay_verifier_rejects_lost_piece_with_winning_successor() {
         let config = single_o_config();
-        let placement = TetrisPiecePlacement::all_from_piece(TetrisPiece::O_PIECE)[0];
+        let placement = <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::O)[0];
         let mut child_board = config.root.board;
         let outcome = child_board.apply_piece_placement(placement);
-        assert_eq!(outcome.is_lost, IsLost::NOT_LOST);
+        assert!(!outcome.is_lost);
         let child_key = BagKey {
             board: child_board,
-            bag: next_bag_state(config.root.bag, TetrisPiece::O_PIECE)
+            bag: next_bag_state(config.root.bag, TetrisPiece::O)
                 .expect("single-piece bag should refill"),
         };
 
@@ -5021,7 +5020,7 @@ mod tests {
                 PieceKey {
                     board: config.root.board,
                     bag: config.root.bag,
-                    piece: TetrisPiece::O_PIECE,
+                    piece: TetrisPiece::O,
                 },
                 0,
                 NodeResolution::Lost,
@@ -5036,7 +5035,7 @@ mod tests {
                 conclusion: SolveConclusion::No,
                 result: NodeResolution::Lost,
                 best_action: [None; 7],
-                failing_pieces: vec![TetrisPiece::O_PIECE],
+                failing_pieces: vec![TetrisPiece::O],
             },
         };
 
@@ -5059,10 +5058,10 @@ mod tests {
             root: crate::config::RootStateConfig::default(),
         });
 
-        let board = TetrisBoard::EMPTY_BOARD;
-        let first_len = solver.geometry_children(board, TetrisPiece::I_PIECE).len();
+        let board = TetrisBoard::<10, 20>::new();
+        let first_len = solver.geometry_children(board, TetrisPiece::I).len();
         assert_eq!(solver.geometry_cache.len(), 1);
-        let second_len = solver.geometry_children(board, TetrisPiece::I_PIECE).len();
+        let second_len = solver.geometry_children(board, TetrisPiece::I).len();
 
         assert_eq!(first_len, second_len);
         assert_eq!(solver.geometry_cache.len(), 1);
@@ -5070,7 +5069,7 @@ mod tests {
 
     #[test]
     fn geometry_cache_dedups_duplicate_successor_boards_and_keeps_smallest_placement() {
-        let mut board = TetrisBoard::EMPTY_BOARD;
+        let mut board = TetrisBoard::<10, 20>::new();
         for &col in &[0usize, 1, 2, 3, 4, 5, 9] {
             board.set_bit(col, 0);
             board.set_bit(col, 1);
@@ -5080,7 +5079,7 @@ mod tests {
         }
         board.set_bit(4, 3);
 
-        let mut dup_board = TetrisBoard::EMPTY_BOARD;
+        let mut dup_board = TetrisBoard::<10, 20>::new();
         for &col in &[0usize, 1, 2, 3, 4, 5, 7, 9] {
             dup_board.set_bit(col, 0);
         }
@@ -5091,7 +5090,7 @@ mod tests {
 
         let min_placement = 66;
         let alt_placement = 83;
-        let piece = TetrisPiecePlacement::from_index(min_placement).piece;
+        let piece = <TetrisPiecePlacement<10>>::from_index(min_placement).piece;
         let mut solver = ProofSolver::new(SolverConfig {
             admissibility: BoardAdmissibility {
                 max_height: 6,
@@ -5111,7 +5110,10 @@ mod tests {
 
         assert_eq!(matching.len(), 1);
         assert_eq!(matching[0].placement, min_placement);
-        assert_eq!(TetrisPiecePlacement::from_index(alt_placement).piece, piece);
+        assert_eq!(
+            <TetrisPiecePlacement<10>>::from_index(alt_placement).piece,
+            piece
+        );
     }
 
     #[test]
@@ -5128,18 +5130,18 @@ mod tests {
         });
         solver.expand_queue = BinaryHeap::new();
 
-        let short_board = TetrisBoard::EMPTY_BOARD;
-        let mut tall_board = TetrisBoard::EMPTY_BOARD;
+        let short_board = TetrisBoard::<10, 20>::new();
+        let mut tall_board = TetrisBoard::<10, 20>::new();
         tall_board.set_bit(0, 0);
         tall_board.set_bit(0, 1);
 
         let short_id = solver.intern_bag(BagKey {
             board: short_board,
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE)),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::I.mask()).expect("valid bag mask"),
         });
         let tall_id = solver.intern_bag(BagKey {
             board: tall_board,
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::O.mask()).expect("valid bag mask"),
         });
 
         let first = solver
@@ -5565,45 +5567,45 @@ mod tests {
             ProofSolver::new_with_mode(config, SolveMode::Optimistic, FrontierMode::StableFirst);
 
         let live0 = solver.intern_bag(BagKey {
-            board: TetrisBoard::EMPTY_BOARD,
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
+            board: TetrisBoard::<10, 20>::new(),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::O.mask()).expect("valid bag mask"),
         });
         let doomed = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::EMPTY_BOARD;
+                let mut board = TetrisBoard::<10, 20>::new();
                 board.set_bit(0, 0);
                 board
             },
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE)),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::I.mask()).expect("valid bag mask"),
         });
         let live2 = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::EMPTY_BOARD;
+                let mut board = TetrisBoard::<10, 20>::new();
                 board.set_bit(1, 0);
                 board
             },
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::T_PIECE)),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::T.mask()).expect("valid bag mask"),
         });
         let piece_id = solver.intern_piece(
             PieceKey {
                 board: solver.config.root.board,
                 bag: solver.config.root.bag,
-                piece: TetrisPiece::L_PIECE,
+                piece: TetrisPiece::L,
             },
             solver.root_bag,
         );
 
         solver.piece_nodes[piece_id as usize].children = vec![
             PieceChild {
-                placement: pack_placement(TetrisPiecePlacement::from_index(88)),
+                placement: pack_placement(<TetrisPiecePlacement<10>>::from_index(88)),
                 succ: live0,
             },
             PieceChild {
-                placement: pack_placement(TetrisPiecePlacement::from_index(89)),
+                placement: pack_placement(<TetrisPiecePlacement<10>>::from_index(89)),
                 succ: doomed,
             },
             PieceChild {
-                placement: pack_placement(TetrisPiecePlacement::from_index(90)),
+                placement: pack_placement(<TetrisPiecePlacement<10>>::from_index(90)),
                 succ: live2,
             },
         ];
@@ -5653,7 +5655,7 @@ mod tests {
             SolveMode::Optimistic,
             FrontierMode::StableFirst,
         );
-        let placements = placements_for_piece(TetrisPiece::T_PIECE, 4);
+        let placements = placements_for_piece(TetrisPiece::T, 4);
         let mut children = placements
             .iter()
             .enumerate()
@@ -5665,20 +5667,20 @@ mod tests {
 
         solver.promote_policy_placement(
             solver.config.root.board,
-            TetrisPiece::T_PIECE,
+            TetrisPiece::T,
             placements[2],
             false,
         );
         solver.promote_policy_placement(
             solver.config.root.board,
-            TetrisPiece::T_PIECE,
+            TetrisPiece::T,
             placements[0],
             false,
         );
 
         let _ = solver.reorder_piece_children_optimistically(
             solver.config.root.board,
-            TetrisPiece::T_PIECE,
+            TetrisPiece::T,
             &mut children,
         );
 
@@ -5707,7 +5709,7 @@ mod tests {
             SolveMode::Optimistic,
             FrontierMode::StableFirst,
         );
-        let placements = placements_for_piece(TetrisPiece::L_PIECE, 3);
+        let placements = placements_for_piece(TetrisPiece::L, 3);
         let mut children = placements
             .iter()
             .enumerate()
@@ -5719,13 +5721,13 @@ mod tests {
 
         solver.promote_policy_placement(
             solver.config.root.board,
-            TetrisPiece::L_PIECE,
+            TetrisPiece::L,
             placements[2],
             true,
         );
         let _ = solver.reorder_piece_children_optimistically(
             solver.config.root.board,
-            TetrisPiece::L_PIECE,
+            TetrisPiece::L,
             &mut children,
         );
 
@@ -5749,19 +5751,19 @@ mod tests {
             SolveMode::Optimistic,
             FrontierMode::StableFirst,
         );
-        let placements = placements_for_piece(TetrisPiece::T_PIECE, 3);
+        let placements = placements_for_piece(TetrisPiece::T, 3);
         let board = solver.config.root.board;
 
-        solver.promote_policy_placement(board, TetrisPiece::T_PIECE, placements[2], false);
-        solver.promote_policy_placement(board, TetrisPiece::T_PIECE, placements[1], false);
-        solver.promote_policy_placement(board, TetrisPiece::T_PIECE, placements[0], false);
-        solver.demote_policy_placement(board, TetrisPiece::T_PIECE, placements[0], true);
+        solver.promote_policy_placement(board, TetrisPiece::T, placements[2], false);
+        solver.promote_policy_placement(board, TetrisPiece::T, placements[1], false);
+        solver.promote_policy_placement(board, TetrisPiece::T, placements[0], false);
+        solver.demote_policy_placement(board, TetrisPiece::T, placements[0], true);
 
         let entry = solver
             .optimistic_policy
             .get(&GeometryKey {
                 board,
-                piece: TetrisPiece::T_PIECE,
+                piece: TetrisPiece::T,
             })
             .expect("policy entry should exist");
         assert_eq!(
@@ -5789,29 +5791,29 @@ mod tests {
             FrontierMode::StableFirst,
         );
         let succ0 = solver.intern_bag(BagKey {
-            board: TetrisBoard::EMPTY_BOARD,
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
+            board: TetrisBoard::<10, 20>::new(),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::O.mask()).expect("valid bag mask"),
         });
         let succ1 = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::EMPTY_BOARD;
+                let mut board = TetrisBoard::<10, 20>::new();
                 board.set_bit(0, 0);
                 board
             },
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE)),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::I.mask()).expect("valid bag mask"),
         });
         let succ2 = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::EMPTY_BOARD;
+                let mut board = TetrisBoard::<10, 20>::new();
                 board.set_bit(1, 0);
                 board
             },
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::T_PIECE)),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::T.mask()).expect("valid bag mask"),
         });
         solver.optimistic_successor_popularity[succ2 as usize] = 5;
         solver.optimistic_successor_popularity[succ1 as usize] = 2;
 
-        let placements = placements_for_piece(TetrisPiece::S_PIECE, 3);
+        let placements = placements_for_piece(TetrisPiece::S, 3);
         let mut children = vec![
             PieceChild {
                 placement: placements[0],
@@ -5852,27 +5854,27 @@ mod tests {
             FrontierMode::StableFirst,
         );
         let low_pop = solver.intern_bag(BagKey {
-            board: TetrisBoard::EMPTY_BOARD,
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
+            board: TetrisBoard::<10, 20>::new(),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::O.mask()).expect("valid bag mask"),
         });
         let high_pop = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::EMPTY_BOARD;
+                let mut board = TetrisBoard::<10, 20>::new();
                 board.set_bit(0, 0);
                 board
             },
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE)),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::I.mask()).expect("valid bag mask"),
         });
         let tail = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::EMPTY_BOARD;
+                let mut board = TetrisBoard::<10, 20>::new();
                 board.set_bit(1, 0);
                 board
             },
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::T_PIECE)),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::T.mask()).expect("valid bag mask"),
         });
         solver.optimistic_successor_popularity[high_pop as usize] = 10;
-        let placements = placements_for_piece(TetrisPiece::Z_PIECE, 3);
+        let placements = placements_for_piece(TetrisPiece::Z, 3);
         let mut children = vec![
             PieceChild {
                 placement: placements[0],
@@ -5890,13 +5892,13 @@ mod tests {
 
         solver.promote_policy_placement(
             solver.config.root.board,
-            TetrisPiece::Z_PIECE,
+            TetrisPiece::Z,
             placements[0],
             false,
         );
         let locked_prefix = solver.reorder_piece_children_optimistically(
             solver.config.root.board,
-            TetrisPiece::Z_PIECE,
+            TetrisPiece::Z,
             &mut children,
         );
         solver.reorder_piece_children_by_successor_popularity(&mut children, locked_prefix);
@@ -5923,18 +5925,18 @@ mod tests {
             FrontierMode::StableFirst,
         );
         let activated = solver.intern_bag(BagKey {
-            board: TetrisBoard::EMPTY_BOARD,
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
+            board: TetrisBoard::<10, 20>::new(),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::O.mask()).expect("valid bag mask"),
         });
         let dormant = solver.intern_bag_dormant(BagKey {
             board: {
-                let mut board = TetrisBoard::EMPTY_BOARD;
+                let mut board = TetrisBoard::<10, 20>::new();
                 board.set_bit(0, 0);
                 board
             },
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE)),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::I.mask()).expect("valid bag mask"),
         });
-        let placements = placements_for_piece(TetrisPiece::T_PIECE, 2);
+        let placements = placements_for_piece(TetrisPiece::T, 2);
         let mut children = vec![
             PieceChild {
                 placement: placements[0],
@@ -5948,13 +5950,13 @@ mod tests {
 
         solver.promote_policy_placement(
             solver.config.root.board,
-            TetrisPiece::T_PIECE,
+            TetrisPiece::T,
             placements[1],
             false,
         );
         let locked_prefix = solver.reorder_piece_children_optimistically(
             solver.config.root.board,
-            TetrisPiece::T_PIECE,
+            TetrisPiece::T,
             &mut children,
         );
         solver.reorder_piece_children_by_successor_popularity(&mut children, locked_prefix);
@@ -5985,26 +5987,26 @@ mod tests {
             ProofSolver::new_with_mode(config, SolveMode::Optimistic, FrontierMode::StableFirst);
 
         let doomed = solver.intern_bag(BagKey {
-            board: TetrisBoard::EMPTY_BOARD,
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
+            board: TetrisBoard::<10, 20>::new(),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::O.mask()).expect("valid bag mask"),
         });
         let replacement = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::EMPTY_BOARD;
+                let mut board = TetrisBoard::<10, 20>::new();
                 board.set_bit(2, 0);
                 board
             },
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE)),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::I.mask()).expect("valid bag mask"),
         });
         let piece_id = solver.intern_piece(
             PieceKey {
                 board: solver.config.root.board,
                 bag: solver.config.root.bag,
-                piece: TetrisPiece::L_PIECE,
+                piece: TetrisPiece::L,
             },
             solver.root_bag,
         );
-        let placements = placements_for_piece(TetrisPiece::L_PIECE, 2);
+        let placements = placements_for_piece(TetrisPiece::L, 2);
 
         solver.piece_nodes[piece_id as usize].children = vec![
             PieceChild {
@@ -6060,38 +6062,38 @@ mod tests {
             ProofSolver::new_with_mode(config, SolveMode::Optimistic, FrontierMode::StableFirst);
 
         let doomed = solver.intern_bag(BagKey {
-            board: TetrisBoard::EMPTY_BOARD,
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
+            board: TetrisBoard::<10, 20>::new(),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::O.mask()).expect("valid bag mask"),
         });
         let activated_replacement = solver.intern_bag(BagKey {
             board: {
-                let mut board = TetrisBoard::EMPTY_BOARD;
+                let mut board = TetrisBoard::<10, 20>::new();
                 board.set_bit(1, 0);
                 board
             },
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE)),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::I.mask()).expect("valid bag mask"),
         });
         let dormant_replacement = solver.intern_bag_dormant(BagKey {
             board: {
-                let mut board = TetrisBoard::EMPTY_BOARD;
+                let mut board = TetrisBoard::<10, 20>::new();
                 board.set_bit(2, 0);
                 board
             },
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::T_PIECE)),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::T.mask()).expect("valid bag mask"),
         });
         let piece_id = solver.intern_piece(
             PieceKey {
                 board: solver.config.root.board,
                 bag: solver.config.root.bag,
-                piece: TetrisPiece::L_PIECE,
+                piece: TetrisPiece::L,
             },
             solver.root_bag,
         );
-        let placements = placements_for_piece(TetrisPiece::L_PIECE, 3);
+        let placements = placements_for_piece(TetrisPiece::L, 3);
 
         solver.promote_policy_placement(
             solver.config.root.board,
-            TetrisPiece::L_PIECE,
+            TetrisPiece::L,
             placements[2],
             false,
         );
@@ -6149,26 +6151,26 @@ mod tests {
             ProofSolver::new_with_mode(config, SolveMode::Optimistic, FrontierMode::StableFirst);
 
         let doomed = solver.intern_bag(BagKey {
-            board: TetrisBoard::EMPTY_BOARD,
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE)),
+            board: TetrisBoard::<10, 20>::new(),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::O.mask()).expect("valid bag mask"),
         });
         let novel_key = BagKey {
             board: {
-                let mut board = TetrisBoard::EMPTY_BOARD;
+                let mut board = TetrisBoard::<10, 20>::new();
                 board.set_bit(3, 0);
                 board
             },
-            bag: TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE)),
+            bag: TetrisPieceBagState::try_from(TetrisPiece::I.mask()).expect("valid bag mask"),
         };
         let piece_id = solver.intern_piece(
             PieceKey {
                 board: solver.config.root.board,
                 bag: solver.config.root.bag,
-                piece: TetrisPiece::L_PIECE,
+                piece: TetrisPiece::L,
             },
             solver.root_bag,
         );
-        let placements = placements_for_piece(TetrisPiece::L_PIECE, 2);
+        let placements = placements_for_piece(TetrisPiece::L, 2);
 
         solver.piece_nodes[piece_id as usize].optimistic_children = vec![
             OptimisticChild {

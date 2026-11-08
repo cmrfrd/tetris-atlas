@@ -23,15 +23,15 @@ impl Default for BoardAdmissibility {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RootStateConfig {
-    pub board: TetrisBoard,
+    pub board: TetrisBoard<10, 20>,
     pub bag: TetrisPieceBagState,
 }
 
 impl Default for RootStateConfig {
     fn default() -> Self {
         Self {
-            board: TetrisBoard::EMPTY_BOARD,
-            bag: TetrisPieceBagState::new(),
+            board: TetrisBoard::<10, 20>::new(),
+            bag: TetrisPieceBagState::full(),
         }
     }
 }

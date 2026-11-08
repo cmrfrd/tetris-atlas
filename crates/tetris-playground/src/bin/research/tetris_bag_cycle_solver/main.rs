@@ -189,7 +189,7 @@ fn main() -> Result<()> {
             &result.boards,
             &result.policy,
             0,
-            TetrisPieceBagState::new(),
+            TetrisPieceBagState::full(),
             config.bag_cycles,
         )
     });

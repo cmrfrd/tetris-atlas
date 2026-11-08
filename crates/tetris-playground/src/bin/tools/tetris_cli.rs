@@ -190,7 +190,7 @@ logdir={logdir:?} checkpoint_dir={checkpoint_dir:?}"
             tetris_tui::run().expect("Failed to run TUI");
         }
         Commands::Test {} => {
-            let mut game: TetrisGame = TetrisGame::new();
+            let mut game: TetrisGame = <TetrisGame>::new();
             println!("{}", game);
 
             let placements = game.current_placements();

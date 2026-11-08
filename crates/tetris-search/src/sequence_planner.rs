@@ -1,7 +1,7 @@
 use std::cmp::{Ordering, Reverse};
 
 use tetris_game::{
-    IsLost, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPiecePlacement,
+    StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPiecePlacement,
 };
 use tetris_utils::{FixedBinMinHeap, HeaplessVec};
 
@@ -9,10 +9,10 @@ use crate::scoring::{TetrisBoardScoreState, height_mse_board_score};
 
 #[derive(Debug, Clone, Copy)]
 pub struct TetrisPlanScoreState {
-    pub board: TetrisBoard,
+    pub board: TetrisBoard<10, 20>,
     pub recent_lines_cleared: u32,
     pub depth: usize,
-    pub placement: TetrisPiecePlacement,
+    pub placement: TetrisPiecePlacement<10>,
 }
 
 #[inline(always)]
@@ -25,8 +25,8 @@ pub fn height_mse_plan_score(state: &TetrisPlanScoreState) -> f32 {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TetrisSequenceWitness<const DEPTH: usize> {
-    pub board: TetrisBoard,
-    pub placements: [TetrisPiecePlacement; DEPTH],
+    pub board: TetrisBoard<10, 20>,
+    pub placements: [TetrisPiecePlacement<10>; DEPTH],
     pub nodes_expanded: usize,
     pub terminal_candidates_examined: usize,
 }
@@ -69,12 +69,12 @@ struct FrontierEntry {
 
 impl FrontierEntry {
     #[inline]
-    fn new(node_idx: u32, priority: f32, depth: u16, board: TetrisBoard) -> Self {
+    fn new(node_idx: u32, priority: f32, depth: u16, board: TetrisBoard<10, 20>) -> Self {
         Self {
             node_idx,
             priority: OrderedF32(priority),
             depth,
-            board_limbs: board.as_limbs(),
+            board_limbs: *board.as_limbs(),
         }
     }
 }
@@ -99,8 +99,8 @@ impl Ord for FrontierEntry {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct CandidateNode {
-    board: TetrisBoard,
-    placement: TetrisPiecePlacement,
+    board: TetrisBoard<10, 20>,
+    placement: TetrisPiecePlacement<10>,
     score: f32,
     recent_lines_cleared: u32,
 }
@@ -108,8 +108,8 @@ struct CandidateNode {
 impl Default for CandidateNode {
     fn default() -> Self {
         Self {
-            board: TetrisBoard::EMPTY_BOARD,
-            placement: TetrisPiecePlacement::default(),
+            board: TetrisBoard::<10, 20>::new(),
+            placement: <TetrisPiecePlacement<10>>::from_index(0),
             score: f32::NEG_INFINITY,
             recent_lines_cleared: 0,
         }
@@ -118,7 +118,7 @@ impl Default for CandidateNode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct SearchNode {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     depth: u16,
     parent_slot: u32,
     placement: u8,
@@ -144,7 +144,7 @@ pub struct TetrisSequencePlanner<const WIDTH: usize, const DEPTH: usize, const N
     nodes_expanded: usize,
     terminal_candidates_examined: usize,
     // Optional predicate applied to full-depth boards. Return `true` to accept.
-    filter_fn: Option<fn(TetrisBoard) -> bool>,
+    filter_fn: Option<fn(TetrisBoard<10, 20>) -> bool>,
 }
 
 impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
@@ -174,12 +174,12 @@ impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
     }
 
     /// Set a terminal filter. Full-depth boards where `f(board)` returns `false` are rejected.
-    pub fn with_filter(mut self, f: fn(TetrisBoard) -> bool) -> Self {
+    pub fn with_filter(mut self, f: fn(TetrisBoard<10, 20>) -> bool) -> Self {
         self.filter_fn = Some(f);
         self
     }
 
-    pub fn set_filter(&mut self, f: fn(TetrisBoard) -> bool) {
+    pub fn set_filter(&mut self, f: fn(TetrisBoard<10, 20>) -> bool) {
         self.filter_fn = Some(f);
     }
 
@@ -197,7 +197,7 @@ impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
 
     pub fn search<ScoreFn>(
         &mut self,
-        start_board: TetrisBoard,
+        start_board: TetrisBoard<10, 20>,
         forced_sequence: &[TetrisPiece; DEPTH],
         score_fn: &ScoreFn,
     ) -> TetrisSequencePlanOutcome<DEPTH>
@@ -235,7 +235,7 @@ impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
 
     pub fn collect_witnesses<ScoreFn, const OUT: usize>(
         &mut self,
-        start_board: TetrisBoard,
+        start_board: TetrisBoard<10, 20>,
         forced_sequence: &[TetrisPiece; DEPTH],
         score_fn: &ScoreFn,
         limit: usize,
@@ -277,12 +277,12 @@ impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
     }
 
     #[inline]
-    fn push_root(&mut self, start_board: TetrisBoard) {
+    fn push_root(&mut self, start_board: TetrisBoard<10, 20>) {
         let root = SearchNode {
             board: start_board,
             depth: 0,
             parent_slot: u32::MAX,
-            placement: TetrisPiecePlacement::default().index(),
+            placement: 0, // Unused placeholder until a real placement is assigned.
         };
         let pushed = self.nodes.try_push(root);
         debug_assert!(pushed, "planner root must fit in node arena");
@@ -309,10 +309,10 @@ impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
         let mut top_candidates = [CandidateNode::default(); WIDTH];
         let mut count = 0usize;
 
-        for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+        for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
             let mut child_board = node.board;
             let outcome = child_board.apply_piece_placement(placement);
-            if outcome.is_lost == IsLost::LOST {
+            if outcome.is_lost {
                 continue;
             }
 
@@ -359,13 +359,13 @@ impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
     }
 
     fn build_witness(&self, final_slot: u32) -> TetrisSequenceWitness<DEPTH> {
-        let mut placements = [TetrisPiecePlacement::default(); DEPTH];
+        let mut placements = [<TetrisPiecePlacement<10>>::from_index(0); DEPTH];
         let mut cursor = final_slot;
         let mut remaining = DEPTH;
         while cursor != 0 && cursor != u32::MAX {
             let node = self.nodes[cursor as usize];
             remaining -= 1;
-            placements[remaining] = TetrisPiecePlacement::from_index(node.placement);
+            placements[remaining] = <TetrisPiecePlacement<10>>::from_index(node.placement);
             cursor = node.parent_slot;
         }
         debug_assert_eq!(remaining, 0);
@@ -381,7 +381,7 @@ impl<const WIDTH: usize, const DEPTH: usize, const NODE_CAPACITY: usize>
 fn compare_candidate_nodes(left: &CandidateNode, right: &CandidateNode) -> Ordering {
     left.score
         .total_cmp(&right.score)
-        .then_with(|| right.board.as_limbs().cmp(&left.board.as_limbs()))
+        .then_with(|| right.board.as_limbs().cmp(left.board.as_limbs()))
 }
 
 fn insert_top_candidate<const WIDTH: usize>(
@@ -425,10 +425,10 @@ mod tests {
 
     fn sequence() -> [TetrisPiece; DEPTH] {
         [
-            TetrisPiece::O_PIECE,
-            TetrisPiece::I_PIECE,
-            TetrisPiece::S_PIECE,
-            TetrisPiece::Z_PIECE,
+            TetrisPiece::O,
+            TetrisPiece::I,
+            TetrisPiece::S,
+            TetrisPiece::Z,
         ]
     }
 
@@ -436,7 +436,7 @@ mod tests {
     fn best_first_search_returns_full_depth_plan() {
         let mut planner = TetrisSequencePlanner::<WIDTH, DEPTH, NODE_CAPACITY>::new();
         let outcome = planner.search(
-            TetrisBoard::EMPTY_BOARD,
+            TetrisBoard::<10, 20>::new(),
             &sequence(),
             &height_mse_plan_score,
         );
@@ -457,12 +457,12 @@ mod tests {
         let mut stack_planner = TetrisSequencePlanner::<WIDTH, DEPTH, NODE_CAPACITY>::new();
         let mut boxed_planner = TetrisSequencePlanner::<WIDTH, DEPTH, NODE_CAPACITY>::new_boxed();
         let stack_outcome = stack_planner.search(
-            TetrisBoard::EMPTY_BOARD,
+            TetrisBoard::<10, 20>::new(),
             &sequence(),
             &height_mse_plan_score,
         );
         let boxed_outcome = boxed_planner.search(
-            TetrisBoard::EMPTY_BOARD,
+            TetrisBoard::<10, 20>::new(),
             &sequence(),
             &height_mse_plan_score,
         );
@@ -478,7 +478,7 @@ mod tests {
         let mut planner =
             TetrisSequencePlanner::<WIDTH, DEPTH, NODE_CAPACITY>::new().with_filter(|_board| false);
         let outcome = planner.search(
-            TetrisBoard::EMPTY_BOARD,
+            TetrisBoard::<10, 20>::new(),
             &sequence(),
             &height_mse_plan_score,
         );
@@ -499,7 +499,7 @@ mod tests {
     fn collect_witnesses_respects_limit() {
         let mut planner = TetrisSequencePlanner::<WIDTH, DEPTH, NODE_CAPACITY>::new();
         let witnesses = planner.collect_witnesses::<_, 4>(
-            TetrisBoard::EMPTY_BOARD,
+            TetrisBoard::<10, 20>::new(),
             &sequence(),
             &height_mse_plan_score,
             3,
@@ -511,7 +511,7 @@ mod tests {
     fn tiny_node_capacity_exhausts() {
         let mut planner = TetrisSequencePlanner::<WIDTH, DEPTH, 1>::new();
         let outcome = planner.search(
-            TetrisBoard::EMPTY_BOARD,
+            TetrisBoard::<10, 20>::new(),
             &sequence(),
             &height_mse_plan_score,
         );

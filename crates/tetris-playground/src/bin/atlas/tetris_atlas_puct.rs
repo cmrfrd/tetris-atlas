@@ -191,19 +191,19 @@ const PROOF_SAFE: u8 = 2;
 /// A complete Tetris decision state: board, remaining-bag mask, and the visible
 /// current piece. 42 bytes, `Copy`, no heap.
 ///
-/// Canonical form (matches `TetrisPieceBagState::iter_next_states`): refill
+/// Canonical form: refill
 /// happens at draw time, so `bag_bits` is never empty. Invariant:
 /// `bag.contains(piece)  ⟹  bag == FULL_MASK` (a fresh refill legitimately
 /// contains the just-drawn current piece; otherwise the draw removed it).
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 struct StateKey {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     bag_bits: u8,
     piece_idx: u8,
 }
 
 impl StateKey {
-    fn new(board: TetrisBoard, bag: TetrisPieceBagState, piece: TetrisPiece) -> Self {
+    fn new(board: TetrisBoard<10, 20>, bag: TetrisPieceBagState, piece: TetrisPiece) -> Self {
         // Canonical invariant: the current piece is absent from the remaining
         // bag unless a refill just restored the full bag. Real construction
         // sites (root_keys, expansion via child_bag) always satisfy this;
@@ -220,11 +220,11 @@ impl StateKey {
     }
 
     fn bag(&self) -> TetrisPieceBagState {
-        TetrisPieceBagState::from(self.bag_bits)
+        TetrisPieceBagState::try_from(self.bag_bits).expect("valid bag mask")
     }
 
     fn piece(&self) -> TetrisPiece {
-        TetrisPiece::from_index(self.piece_idx)
+        TetrisPiece::all()[self.piece_idx as usize]
     }
 }
 
@@ -239,13 +239,14 @@ struct Carrier {
 }
 
 impl Carrier {
+    #[cfg(test)]
     const UNBOUNDED: Self = Self {
         max_holes: u32::MAX,
         max_height: u32::MAX,
         max_roughness: u32::MAX,
     };
 
-    fn contains(&self, board: &TetrisBoard) -> bool {
+    fn contains(&self, board: &TetrisBoard<10, 20>) -> bool {
         board.total_holes() <= self.max_holes
             && board.height() <= self.max_height
             && surface_roughness(board) <= self.max_roughness
@@ -253,9 +254,9 @@ impl Carrier {
 }
 
 /// Total surface roughness (bumpiness): sum over adjacent columns of
-/// |height[i] - height[i+1]|. Same definition as tetris_atlas_inmemory, for
+/// `|height[i] - height[i+1]|`. Same definition as tetris_atlas_inmemory, for
 /// comparability across runs.
-fn surface_roughness(board: &TetrisBoard) -> u32 {
+fn surface_roughness(board: &TetrisBoard<10, 20>) -> u32 {
     let heights = board.heights();
     let mut rough = 0u32;
     for i in 0..StandardTetris::COLS - 1 {
@@ -270,24 +271,23 @@ fn surface_roughness(board: &TetrisBoard) -> u32 {
 /// The result is independent of the *next* piece draw, so loss is decided per
 /// placement, before piece branching — stored branches always point at live states.
 fn apply_move(
-    board: &TetrisBoard,
-    placement: TetrisPiecePlacement,
+    board: &TetrisBoard<10, 20>,
+    placement: TetrisPiecePlacement<10>,
     carrier: &Carrier,
-) -> Option<TetrisBoard> {
+) -> Option<TetrisBoard<10, 20>> {
     let mut next = *board;
     let result = next.apply_piece_placement(placement);
-    if bool::from(result.is_lost) || !carrier.contains(&next) {
+    if result.is_lost || !carrier.contains(&next) {
         return None;
     }
     Some(next)
 }
 
 /// The canonical bag transition: draw `piece`, refill if the bag empties.
-/// Mirrors `TetrisPieceBagState::iter_next_states` for a single piece.
 fn child_bag(bag: TetrisPieceBagState, piece: TetrisPiece) -> TetrisPieceBagState {
     let mut next = bag;
     next.remove(piece);
-    if next.is_empty() {
+    if next.empty() {
         next.fill();
     }
     next
@@ -298,9 +298,9 @@ fn child_bag(bag: TetrisPieceBagState, piece: TetrisPiece) -> TetrisPieceBagStat
 fn root_keys() -> [StateKey; 7] {
     let pieces = TetrisPiece::all();
     pieces.map(|piece| {
-        let mut bag = TetrisPieceBagState::from(TetrisPieceBagState::FULL_MASK);
+        let mut bag = TetrisPieceBagState::full();
         bag.remove(piece);
-        StateKey::new(TetrisBoard::EMPTY_BOARD, bag, piece)
+        StateKey::new(TetrisBoard::<10, 20>::new(), bag, piece)
     })
 }
 
@@ -330,11 +330,10 @@ const fn mirror_bag_bits(bits: u8) -> u8 {
 /// (placement sets, gravity, and line clears all commute with the reflection
 /// — pinned by `engine_is_mirror_equivariant`), so `dead(k) ⟺ dead(mirror(k))`.
 fn mirror_key(key: &StateKey) -> StateKey {
-    let limbs = key.board.as_limbs();
-    let mut mirrored = limbs;
+    let mut mirrored = *key.board.as_limbs();
     mirrored.reverse();
     StateKey {
-        board: TetrisBoard::from_limbs(mirrored),
+        board: TetrisBoard::<10, 20>::from_limbs(mirrored),
         bag_bits: mirror_bag_bits(key.bag_bits),
         piece_idx: mirror_piece_idx(key.piece_idx),
     }
@@ -469,7 +468,7 @@ struct StateRecord {
 }
 
 struct PlacementRecord {
-    placement: TetrisPiecePlacement,
+    placement: TetrisPiecePlacement<10>,
     /// 7 contiguous branch slots; the slot for piece `q` is `branch_base + q.index()`.
     /// Slots for pieces not in `key.bag` stay UNEXPANDED forever.
     branch_base: u32,
@@ -582,6 +581,7 @@ struct Counters {
 
 struct InternResult {
     id: u32,
+    #[cfg(test)]
     newly_created: bool,
 }
 
@@ -658,6 +658,7 @@ impl SearchGraph {
         if let Some(existing) = self.ids.get(&key) {
             return Ok(InternResult {
                 id: *existing,
+                #[cfg(test)]
                 newly_created: false,
             });
         }
@@ -673,6 +674,7 @@ impl SearchGraph {
             Entry::Occupied(entry) => {
                 return Ok(InternResult {
                     id: *entry.get(),
+                    #[cfg(test)]
                     newly_created: false,
                 });
             }
@@ -694,6 +696,7 @@ impl SearchGraph {
         }
         Ok(InternResult {
             id,
+            #[cfg(test)]
             newly_created: true,
         })
     }
@@ -718,10 +721,10 @@ impl SearchGraph {
                 proof: AtomicU8::new(PROOF_DEAD),
             });
         }
-        let mut surviving =
-            [TetrisPiecePlacement::from_index(0); TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT];
+        let mut surviving = [<TetrisPiecePlacement<10>>::from_index(0);
+            <TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT];
         let mut n: u32 = 0;
-        for &placement in TetrisPiecePlacement::all_from_piece(key.piece()) {
+        for &placement in <TetrisPiecePlacement<10>>::all_from_piece(key.piece()) {
             if apply_move(&key.board, placement, &self.carrier).is_some() {
                 surviving[n as usize] = placement;
                 n += 1;
@@ -801,7 +804,7 @@ impl SearchGraph {
     fn expand_edge(
         &self,
         branch: &PieceBranchRecord,
-        child_board: TetrisBoard,
+        child_board: TetrisBoard<10, 20>,
         child_bag_state: TetrisPieceBagState,
         piece: TetrisPiece,
     ) -> Result<u32, CapacityError> {
@@ -897,7 +900,12 @@ impl SearchGraph {
                         debug_assert!(false, "stored placement failed re-application");
                         continue;
                     };
-                    for (piece, bag) in state.key.bag().iter_next_states() {
+                    for piece in state.key.bag().iter_pieces() {
+                        let mut bag = state.key.bag();
+                        bag.remove(piece);
+                        if bag.empty() {
+                            bag.fill();
+                        }
                         let br = self.branches.get(pr.branch_base + piece.index() as u32);
                         if let Err(e) = self.expand_edge(br, child_board, bag, piece) {
                             result = Err(e);
@@ -2436,7 +2444,7 @@ fn load_ledger(graph: &SearchGraph, path: &PathBuf, carrier: &Carrier) -> anyhow
             continue;
         }
         let key = StateKey {
-            board: TetrisBoard::from_limbs(limbs),
+            board: TetrisBoard::<10, 20>::from_limbs(limbs),
             bag_bits,
             piece_idx,
         };
@@ -2595,6 +2603,7 @@ fn expansion_batch(
 struct RunOutcome {
     report: ClosureReport,
     generations: u64,
+    #[cfg(test)]
     epochs_run: u64,
     /// Per root: proof byte at exit. All-DEAD is a certified impossibility
     /// theorem for this carrier (no strategy survives forever inside it).
@@ -2948,6 +2957,7 @@ fn run_search(args: &Args, stop: &AtomicBool) -> anyhow::Result<RunOutcome> {
     Ok(RunOutcome {
         report: final_report,
         generations,
+        #[cfg(test)]
         epochs_run: epoch,
         roots_proof,
     })
@@ -2997,31 +3007,31 @@ mod tests {
 
     #[test]
     fn key_identity_axes() {
-        let full = TetrisPieceBagState::from(TetrisPieceBagState::FULL_MASK);
+        let full = TetrisPieceBagState::full();
         // base uses the refill case (current piece present in a FULL bag) — canonical.
-        let base = StateKey::new(TetrisBoard::EMPTY_BOARD, full, TetrisPiece::O_PIECE);
-        let same = StateKey::new(TetrisBoard::EMPTY_BOARD, full, TetrisPiece::O_PIECE);
+        let base = StateKey::new(TetrisBoard::<10, 20>::new(), full, TetrisPiece::O);
+        let same = StateKey::new(TetrisBoard::<10, 20>::new(), full, TetrisPiece::O);
         assert_eq!(base, same);
 
         // board axis
-        let mut other_board = TetrisBoard::EMPTY_BOARD;
+        let mut other_board = TetrisBoard::<10, 20>::new();
         other_board.set_bit(0, 0);
-        assert_ne!(base, StateKey::new(other_board, full, TetrisPiece::O_PIECE));
+        assert_ne!(base, StateKey::new(other_board, full, TetrisPiece::O));
 
         // bag axis: a canonical bag missing the current piece (O drawn) — differs
         // from `full`, and keeps the invariant (O absent) so `new` accepts it.
         let mut dropped = full;
-        dropped.remove(TetrisPiece::O_PIECE);
-        dropped.remove(TetrisPiece::I_PIECE);
+        dropped.remove(TetrisPiece::O);
+        dropped.remove(TetrisPiece::I);
         assert_ne!(
             base,
-            StateKey::new(TetrisBoard::EMPTY_BOARD, dropped, TetrisPiece::O_PIECE)
+            StateKey::new(TetrisBoard::<10, 20>::new(), dropped, TetrisPiece::O)
         );
 
         // piece axis
         assert_ne!(
             base,
-            StateKey::new(TetrisBoard::EMPTY_BOARD, full, TetrisPiece::T_PIECE)
+            StateKey::new(TetrisBoard::<10, 20>::new(), full, TetrisPiece::T)
         );
     }
 
@@ -3030,7 +3040,7 @@ mod tests {
         let roots = root_keys();
         assert_eq!(roots.len(), 7);
         for (i, root) in roots.iter().enumerate() {
-            assert_eq!(root.board, TetrisBoard::EMPTY_BOARD);
+            assert_eq!(root.board, TetrisBoard::<10, 20>::new());
             assert_eq!(root.piece().index(), i as u8);
             // Current piece was removed from a full bag: 6 remain, piece not among them.
             assert_eq!(root.bag().count(), 6);
@@ -3047,20 +3057,20 @@ mod tests {
     #[test]
     fn bag_transition_refills() {
         // Singleton bag {O}: drawing O empties it -> refill to FULL (which contains O).
-        let mut bag = TetrisPieceBagState::from(TetrisPieceBagState::FULL_MASK);
+        let mut bag = TetrisPieceBagState::full();
         for p in TetrisPiece::all() {
-            if p != TetrisPiece::O_PIECE {
+            if p != TetrisPiece::O {
                 bag.remove(p);
             }
         }
         assert_eq!(bag.count(), 1);
-        let next = child_bag(bag, TetrisPiece::O_PIECE);
+        let next = child_bag(bag, TetrisPiece::O);
         assert_eq!(u8::from(next), TetrisPieceBagState::FULL_MASK);
         // Mid-bag draw: no refill.
-        let full = TetrisPieceBagState::from(TetrisPieceBagState::FULL_MASK);
-        let after = child_bag(full, TetrisPiece::I_PIECE);
+        let full = TetrisPieceBagState::full();
+        let after = child_bag(full, TetrisPiece::I);
         assert_eq!(after.count(), 6);
-        assert!(!after.contains(TetrisPiece::I_PIECE));
+        assert!(!after.contains(TetrisPiece::I));
     }
 
     #[test]
@@ -3069,18 +3079,19 @@ mod tests {
         // (so nothing clears), and a vertical I on column 0 reaches row 22 > 20.
         let mut limbs = [(1u32 << 19) - 1; 10];
         limbs[9] = 0;
-        let board = TetrisBoard::from_limbs(limbs);
-        let vertical_i_col0 = TetrisPiecePlacement::all_from_piece(TetrisPiece::I_PIECE)
+        let board = TetrisBoard::<10, 20>::from_limbs(limbs);
+        let vertical_i_col0 = <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::I)
             .iter()
             .copied()
             .find(|p| {
-                p.piece.width(p.orientation.rotation) == 1 && p.orientation.column.index() == 0
+                p.piece.width(p.orientation.rotation) == 1
+                    && usize::from(p.orientation.column.inner()) == 0
             })
             .unwrap();
         assert!(apply_move(&board, vertical_i_col0, &Carrier::UNBOUNDED).is_none());
         // Empty board: every placement survives.
-        for &p in TetrisPiecePlacement::all_from_piece(TetrisPiece::T_PIECE) {
-            assert!(apply_move(&TetrisBoard::EMPTY_BOARD, p, &Carrier::UNBOUNDED).is_some());
+        for &p in <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::T) {
+            assert!(apply_move(&TetrisBoard::<10, 20>::new(), p, &Carrier::UNBOUNDED).is_some());
         }
     }
 
@@ -3092,8 +3103,8 @@ mod tests {
             max_roughness: 0,
         };
         // Height cap 0: every placement leaves the carrier.
-        for &p in TetrisPiecePlacement::all_from_piece(TetrisPiece::O_PIECE) {
-            assert!(apply_move(&TetrisBoard::EMPTY_BOARD, p, &tight).is_none());
+        for &p in <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::O) {
+            assert!(apply_move(&TetrisBoard::<10, 20>::new(), p, &tight).is_none());
         }
         let loose = Carrier {
             max_holes: 0,
@@ -3101,14 +3112,14 @@ mod tests {
             max_roughness: 4,
         };
         // Flat O placement at height 2 fits.
-        let flat_o = TetrisPiecePlacement::all_from_piece(TetrisPiece::O_PIECE)[0];
-        assert!(apply_move(&TetrisBoard::EMPTY_BOARD, flat_o, &loose).is_some());
+        let flat_o = <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::O)[0];
+        assert!(apply_move(&TetrisBoard::<10, 20>::new(), flat_o, &loose).is_some());
     }
 
     #[test]
     fn surface_roughness_matches_reference() {
-        assert_eq!(surface_roughness(&TetrisBoard::EMPTY_BOARD), 0);
-        let mut board = TetrisBoard::EMPTY_BOARD;
+        assert_eq!(surface_roughness(&TetrisBoard::<10, 20>::new()), 0);
+        let mut board = TetrisBoard::<10, 20>::new();
         board.set_bit(3, 0); // one cell at column 3 -> |0-1| + |1-0| = 2
         assert_eq!(surface_roughness(&board), 2);
     }
@@ -3207,16 +3218,16 @@ mod tests {
     fn structural_enumeration_filters_placements() {
         // Unbounded carrier, empty board: every placement of the current piece survives.
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
-        let key = root_keys()[TetrisPiece::T_PIECE.index() as usize];
+        let key = root_keys()[TetrisPiece::T.index() as usize];
         let id = graph.intern(key).unwrap().id;
         let state = graph.states.get(id);
-        let all = TetrisPiecePlacement::all_from_piece(TetrisPiece::T_PIECE).len();
+        let all = <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::T).len();
         assert_eq!(state.placement_len as usize, all);
         // Stored placements are exactly the surviving ones, in order, each with
         // 7 reserved branch slots all UNEXPANDED.
         for slot in 0..state.placement_len as u32 {
             let pr = graph.placements.get(state.placement_base + slot);
-            assert_eq!(pr.placement.piece, TetrisPiece::T_PIECE);
+            assert_eq!(pr.placement.piece, TetrisPiece::T);
             // Each stored placement must genuinely survive apply_move (survivors-only).
             assert!(
                 apply_move(&key.board, pr.placement, &graph.carrier).is_some(),
@@ -3719,7 +3730,7 @@ mod tests {
         let mut limbs = [0u32; 10];
         limbs[0] = marker;
         let key = StateKey {
-            board: TetrisBoard::from_limbs(limbs),
+            board: TetrisBoard::<10, 20>::from_limbs(limbs),
             bag_bits,
             piece_idx: 0,
         };
@@ -3732,7 +3743,7 @@ mod tests {
                 graph.placements.set(
                     base + i,
                     PlacementRecord {
-                        placement: TetrisPiecePlacement::from_index(0),
+                        placement: <TetrisPiecePlacement<10>>::from_index(0),
                         branch_base: branch_base + i * 7,
                         visits: AtomicU64::new(0),
                         reward_sum: AtomicU64::new(0),
@@ -3786,7 +3797,7 @@ mod tests {
         // A -> B where B has no placements (terminal death).
         let a = synth_state(&graph, 1, O_BAG, 1);
         let b = synth_state(&graph, 2, O_BAG, 0);
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, b);
+        wire(&graph, a, 0, TetrisPiece::O, b);
         let mut scratch = WorkerScratch::new(params.horizon);
         assert!(matches!(
             rollout(&graph, &params, a, &mut scratch),
@@ -3804,7 +3815,7 @@ mod tests {
         assert_eq!(pr.reward_sum.load(Ordering::Relaxed), 1);
         let br = graph
             .branches
-            .get(pr.branch_base + TetrisPiece::O_PIECE.index() as u32);
+            .get(pr.branch_base + TetrisPiece::O.index() as u32);
         assert_eq!(br.visits.load(Ordering::Relaxed), 1);
         assert_eq!(br.reward_sum.load(Ordering::Relaxed), 1);
     }
@@ -3814,7 +3825,7 @@ mod tests {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         // Self-loop; horizon 1 stops before the cycle check fires twice.
         let a = synth_state(&graph, 1, O_BAG, 1);
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, a);
+        wire(&graph, a, 0, TetrisPiece::O, a);
         let params = SearchParams {
             horizon: 1,
             credit_cap: 1,
@@ -3838,7 +3849,7 @@ mod tests {
     fn rollout_cycle_detected_and_scored_as_survival() {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let a = synth_state(&graph, 1, O_BAG, 1);
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, a);
+        wire(&graph, a, 0, TetrisPiece::O, a);
         let params = SearchParams {
             horizon: 100,
             credit_cap: 100,
@@ -3893,9 +3904,9 @@ mod tests {
         let a = synth_state(&graph, 1, O_BAG, 1);
         let b = synth_state(&graph, 2, O_BAG, 1);
         let c = synth_state(&graph, 3, O_BAG, 1);
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, b);
-        wire(&graph, b, 0, TetrisPiece::O_PIECE, c);
-        wire(&graph, c, 0, TetrisPiece::O_PIECE, a);
+        wire(&graph, a, 0, TetrisPiece::O, b);
+        wire(&graph, b, 0, TetrisPiece::O, c);
+        wire(&graph, c, 0, TetrisPiece::O, a);
         let report = extract_safe_set(&graph, &[a, b, c, a, b, c, a]);
         assert_eq!(report.k_size, 3);
         assert_eq!(report.witnesses[a as usize], 0);
@@ -3912,9 +3923,9 @@ mod tests {
         let b = synth_state(&graph, 2, O_BAG, 1);
         let c = synth_state(&graph, 3, O_BAG, 1);
         let dead = synth_state(&graph, 4, O_BAG, 0); // no placements: not in K0
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, b);
-        wire(&graph, b, 0, TetrisPiece::O_PIECE, dead); // poison at the chain head
-        wire(&graph, c, 0, TetrisPiece::O_PIECE, a);
+        wire(&graph, a, 0, TetrisPiece::O, b);
+        wire(&graph, b, 0, TetrisPiece::O, dead); // poison at the chain head
+        wire(&graph, c, 0, TetrisPiece::O, a);
         let report = closure_of(&graph);
         assert_eq!(
             report.k_size, 0,
@@ -3959,10 +3970,10 @@ mod tests {
         let b = synth_state(&graph, 2, O_BAG, 1);
         let c = synth_state(&graph, 3, OI_BAG, 1);
         let dead = synth_state(&graph, 4, O_BAG, 0);
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, b);
-        wire(&graph, b, 0, TetrisPiece::O_PIECE, c);
-        wire(&graph, c, 0, TetrisPiece::O_PIECE, a); // cycle edge stays live
-        wire(&graph, c, 0, TetrisPiece::I_PIECE, dead); // the poison
+        wire(&graph, a, 0, TetrisPiece::O, b);
+        wire(&graph, b, 0, TetrisPiece::O, c);
+        wire(&graph, c, 0, TetrisPiece::O, a); // cycle edge stays live
+        wire(&graph, c, 0, TetrisPiece::I, dead); // the poison
         let report = closure_of(&graph);
         assert_eq!(
             report.k_size, 0,
@@ -4005,11 +4016,11 @@ mod tests {
         let y = synth_state(&graph, 2, O_BAG, 1);
         let z = synth_state(&graph, 3, OI_BAG, 1);
         let k_leaf = synth_state(&graph, 4, O_BAG, 1);
-        wire(&graph, x, 0, TetrisPiece::O_PIECE, y);
-        wire(&graph, y, 0, TetrisPiece::O_PIECE, z);
-        wire(&graph, z, 0, TetrisPiece::O_PIECE, k_leaf); // z's O branch is fine...
+        wire(&graph, x, 0, TetrisPiece::O, y);
+        wire(&graph, y, 0, TetrisPiece::O, z);
+        wire(&graph, z, 0, TetrisPiece::O, k_leaf); // z's O branch is fine...
         // ...but z's I branch stays UNEXPANDED — z fails the ∀ without being dead.
-        wire(&graph, k_leaf, 0, TetrisPiece::O_PIECE, k_leaf); // the K anchor
+        wire(&graph, k_leaf, 0, TetrisPiece::O, k_leaf); // the K anchor
         let report = extract_safe_set(&graph, &[k_leaf; 7]);
         assert_eq!(report.dead_total, 0, "nothing is provably dead here");
         assert_eq!(report.k_size, 1, "only the self-loop anchor closes");
@@ -4038,8 +4049,8 @@ mod tests {
         const OI_BAG: u8 = 0b0000_0011; // bag {O, I}: two required branches
         let a = synth_state(&graph, 1, OI_BAG, 1);
         let b = synth_state(&graph, 2, O_BAG, 1);
-        wire(&graph, b, 0, TetrisPiece::O_PIECE, b); // b: safe self-loop
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, b);
+        wire(&graph, b, 0, TetrisPiece::O, b); // b: safe self-loop
+        wire(&graph, a, 0, TetrisPiece::O, b);
         // a's I branch stays UNEXPANDED -> a fails the ∀; b survives alone.
         let report = closure_of(&graph);
         assert_eq!(report.k_size, 1);
@@ -4047,7 +4058,7 @@ mod tests {
         assert_eq!(report.witnesses[a as usize], u8::MAX);
         // Positive control: wiring the unknown I branch brings `a` into K —
         // proving the ∀ genuinely spans both bag pieces.
-        wire(&graph, a, 0, TetrisPiece::I_PIECE, b);
+        wire(&graph, a, 0, TetrisPiece::I, b);
         let report = closure_of(&graph);
         assert_eq!(report.k_size, 2);
         assert_eq!(report.witnesses[a as usize], 0);
@@ -4058,8 +4069,8 @@ mod tests {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let s = synth_state(&graph, 1, O_BAG, 2); // two placements
         let dead = synth_state(&graph, 2, O_BAG, 0);
-        wire(&graph, s, 0, TetrisPiece::O_PIECE, dead); // slot 0 fails
-        wire(&graph, s, 1, TetrisPiece::O_PIECE, s); // slot 1 keeps s safe
+        wire(&graph, s, 0, TetrisPiece::O, dead); // slot 0 fails
+        wire(&graph, s, 1, TetrisPiece::O, s); // slot 1 keeps s safe
         let report = closure_of(&graph);
         assert_eq!(report.k_size, 1);
         assert_eq!(
@@ -4072,7 +4083,7 @@ mod tests {
     fn k0_requires_fully_expanded() {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let a = synth_state(&graph, 1, O_BAG, 1);
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, a);
+        wire(&graph, a, 0, TetrisPiece::O, a);
         // Force status back to QUEUED: a would be safe, but is not fully expanded.
         graph
             .states
@@ -4270,7 +4281,7 @@ mod tests {
         // (path entry + terminal), so with admit_after = 3 the check
         // (visits + 1 >= 3) fails on rollout 1 (0+1) and passes on rollout 2 (2+1).
         let a = synth_state(&graph, 1, O_BAG, 1);
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, a);
+        wire(&graph, a, 0, TetrisPiece::O, a);
         graph
             .states
             .get(a)
@@ -4342,7 +4353,7 @@ mod tests {
         let a = synth_state(&graph, 1, O_BAG, 1); // 0: K member
         let b = synth_state(&graph, 2, O_BAG, 1); // 1: junk
         let c = synth_state(&graph, 3, O_BAG, 1); // 2: junk with visits
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, a);
+        wire(&graph, a, 0, TetrisPiece::O, a);
         graph
             .states
             .get(c)
@@ -4421,10 +4432,10 @@ mod tests {
         let c = synth_state(&graph, 3, O_BAG, 1);
         let junk1 = synth_state(&graph, 4, O_BAG, 1);
         let junk2 = synth_state(&graph, 5, O_BAG, 0);
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, b);
-        wire(&graph, b, 0, TetrisPiece::O_PIECE, c);
-        wire(&graph, c, 0, TetrisPiece::O_PIECE, a);
-        wire(&graph, junk1, 0, TetrisPiece::O_PIECE, junk2);
+        wire(&graph, a, 0, TetrisPiece::O, b);
+        wire(&graph, b, 0, TetrisPiece::O, c);
+        wire(&graph, c, 0, TetrisPiece::O, a);
+        wire(&graph, junk1, 0, TetrisPiece::O, junk2);
         let roots = [a; 7];
         let protect = extract_safe_set(&graph, &roots);
         assert_eq!(protect.k_size, 3);
@@ -4537,7 +4548,7 @@ mod tests {
     fn compaction_decays_stats() {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let a = synth_state(&graph, 1, O_BAG, 1);
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, a);
+        wire(&graph, a, 0, TetrisPiece::O, a);
         graph.states.get(a).visits.fetch_add(100, Ordering::Relaxed);
         graph
             .states
@@ -4549,7 +4560,7 @@ mod tests {
         pr.reward_sum.fetch_add(20, Ordering::Relaxed);
         let br = graph
             .branches
-            .get(pr.branch_base + TetrisPiece::O_PIECE.index() as u32);
+            .get(pr.branch_base + TetrisPiece::O.index() as u32);
         br.visits.fetch_add(30, Ordering::Relaxed);
         br.reward_sum.fetch_add(10, Ordering::Relaxed);
         let roots = [a; 7];
@@ -4568,7 +4579,7 @@ mod tests {
         assert_eq!(npr.reward_sum.load(Ordering::Relaxed), 10); // placement reward_sum >> 1
         let nbr = new
             .branches
-            .get(npr.branch_base + TetrisPiece::O_PIECE.index() as u32);
+            .get(npr.branch_base + TetrisPiece::O.index() as u32);
         assert_eq!(nbr.visits.load(Ordering::Relaxed), 15);
         assert_eq!(nbr.reward_sum.load(Ordering::Relaxed), 5); // branch reward_sum >> 1
         // shift 0 = no decay
@@ -4586,7 +4597,7 @@ mod tests {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let parent = synth_state(&graph, 1, O_BAG, 1); // FULLY_EXPANDED by synth default
         let child = synth_state(&graph, 2, O_BAG, 1);
-        wire(&graph, parent, 0, TetrisPiece::O_PIECE, child);
+        wire(&graph, parent, 0, TetrisPiece::O, child);
         graph
             .states
             .get(parent)
@@ -4608,9 +4619,9 @@ mod tests {
             ns.expansion_status.load(Ordering::Acquire),
             STATUS_FULLY_EXPANDED
         );
-        let nbr = new.branches.get(
-            new.placements.get(ns.placement_base).branch_base + TetrisPiece::O_PIECE.index() as u32,
-        );
+        let nbr = new
+            .branches
+            .get(new.placements.get(ns.placement_base).branch_base + TetrisPiece::O.index() as u32);
         assert_eq!(nbr.child.load(Ordering::Acquire), UNEXPANDED);
     }
 
@@ -4633,7 +4644,7 @@ mod tests {
             .get(unadmitted)
             .frontier_queued
             .store(0, Ordering::Release); // never admitted
-        wire(&graph, expanded, 0, TetrisPiece::O_PIECE, expanded);
+        wire(&graph, expanded, 0, TetrisPiece::O, expanded);
         // queued: pending expansion (status QUEUED, flag 1 = was admitted).
         graph
             .states
@@ -4746,9 +4757,9 @@ mod tests {
         let junk = synth_state(&graph, 2, JUNK_BAG, 1);
 
         // slot 0: O -> s (self-loop, makes s a K member via witness slot 0)
-        wire(&graph, s, 0, TetrisPiece::O_PIECE, s);
+        wire(&graph, s, 0, TetrisPiece::O, s);
         // slot 1: O -> junk (non-witness placement; junk has 0 visits)
-        wire(&graph, s, 1, TetrisPiece::O_PIECE, junk);
+        wire(&graph, s, 1, TetrisPiece::O, junk);
         // Wire junk to itself so it's nominally expandable (placement_len=1), but
         // it won't be protected: protect comes from extract_safe_set which finds
         // only s in K (junk's O branch = junk which is not in K0 since it's not
@@ -4796,7 +4807,7 @@ mod tests {
         let pr1 = new.placements.get(ns.placement_base + 1);
         let br1 = new
             .branches
-            .get(pr1.branch_base + TetrisPiece::O_PIECE.index() as u32);
+            .get(pr1.branch_base + TetrisPiece::O.index() as u32);
         assert_eq!(
             br1.child.load(Ordering::Acquire),
             UNEXPANDED,
@@ -4950,8 +4961,8 @@ mod tests {
         let b = synth_state(&graph, 1, O_BAG, 1);
         let s1 = synth_state(&graph, 2, OI_BAG, 1);
         let s2 = synth_state(&graph, 3, OI_BAG, 1);
-        wire(&graph, b, 0, TetrisPiece::O_PIECE, b);
-        wire(&graph, s1, 0, TetrisPiece::O_PIECE, b);
+        wire(&graph, b, 0, TetrisPiece::O, b);
+        wire(&graph, s1, 0, TetrisPiece::O, b);
         let report = extract_safe_set(&graph, &[b; 7]);
         assert_eq!(report.k_size, 1);
         assert_eq!(report.k0_size, 3, "b, s1, s2 are alive and FULLY");
@@ -4970,13 +4981,13 @@ mod tests {
         // a: fully confident self-loop stats; z: unvisited (value 0).
         let a = synth_state(&graph, 1, O_BAG, 1);
         let z = synth_state(&graph, 2, O_BAG, 1);
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, a);
-        wire(&graph, z, 0, TetrisPiece::O_PIECE, z);
+        wire(&graph, a, 0, TetrisPiece::O, a);
+        wire(&graph, z, 0, TetrisPiece::O, z);
         let pr = graph.placements.get(graph.states.get(a).placement_base);
         pr.visits.fetch_add(100, Ordering::Relaxed);
         let br = graph
             .branches
-            .get(pr.branch_base + TetrisPiece::O_PIECE.index() as u32);
+            .get(pr.branch_base + TetrisPiece::O.index() as u32);
         br.visits.fetch_add(100, Ordering::Relaxed);
         br.reward_sum.fetch_add(800, Ordering::Relaxed);
         let params = SearchParams {
@@ -5004,8 +5015,8 @@ mod tests {
         let dead_end = synth_state(&graph, 3, O_BAG, 0); // placement_len = 0
         let b = synth_state(&graph, 2, O_BAG, 1);
         let a = synth_state(&graph, 1, O_BAG, 1);
-        wire(&graph, b, 0, TetrisPiece::O_PIECE, dead_end);
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, b);
+        wire(&graph, b, 0, TetrisPiece::O, dead_end);
+        wire(&graph, a, 0, TetrisPiece::O, b);
 
         let report = extract_safe_set(&graph, &[a; 7]);
         assert_eq!(report.dead_total, 3, "all three states must be proven dead");
@@ -5038,8 +5049,8 @@ mod tests {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let dead_end = synth_state(&graph, 2, O_BAG, 0); // no placements
         let s = synth_state(&graph, 1, O_BAG, 2); // two placements
-        wire(&graph, s, 0, TetrisPiece::O_PIECE, dead_end); // slot 0 refuted
-        wire(&graph, s, 1, TetrisPiece::O_PIECE, s); // slot 1: self-loop, unrefuted
+        wire(&graph, s, 0, TetrisPiece::O, dead_end); // slot 0 refuted
+        wire(&graph, s, 1, TetrisPiece::O, s); // slot 1: self-loop, unrefuted
 
         let report = extract_safe_set(&graph, &[s; 7]);
         assert_eq!(
@@ -5085,8 +5096,8 @@ mod tests {
         let b = synth_state(&graph, 1, O_BAG, 1);
         let dead_end = synth_state(&graph, 3, O_BAG, 0);
         let x = synth_state(&graph, 2, O_BAG, 1);
-        wire(&graph, b, 0, TetrisPiece::O_PIECE, b);
-        wire(&graph, x, 0, TetrisPiece::O_PIECE, dead_end);
+        wire(&graph, b, 0, TetrisPiece::O, b);
+        wire(&graph, x, 0, TetrisPiece::O, dead_end);
 
         let report1 = extract_safe_set(&graph, &[b; 7]);
         assert_eq!(
@@ -5144,7 +5155,7 @@ mod tests {
     fn rollout_certified_at_safe_state() {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let a = synth_state(&graph, 1, O_BAG, 1);
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, a);
+        wire(&graph, a, 0, TetrisPiece::O, a);
         graph
             .states
             .get(a)
@@ -5174,7 +5185,7 @@ mod tests {
     fn rollout_dies_instantly_at_proven_dead() {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let a = synth_state(&graph, 1, O_BAG, 1); // has placements — proof, not len==0, must fire
-        wire(&graph, a, 0, TetrisPiece::O_PIECE, a);
+        wire(&graph, a, 0, TetrisPiece::O, a);
         graph
             .states
             .get(a)
@@ -5202,7 +5213,7 @@ mod tests {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let s = synth_state(&graph, 1, O_BAG, 1);
         let dead_child = synth_state(&graph, 2, O_BAG, 1);
-        wire(&graph, s, 0, TetrisPiece::O_PIECE, dead_child);
+        wire(&graph, s, 0, TetrisPiece::O, dead_child);
         graph
             .states
             .get(dead_child)
@@ -5213,7 +5224,7 @@ mod tests {
         pr.visits.fetch_add(1_000, Ordering::Relaxed);
         let br = graph
             .branches
-            .get(pr.branch_base + TetrisPiece::O_PIECE.index() as u32);
+            .get(pr.branch_base + TetrisPiece::O.index() as u32);
         br.visits.fetch_add(1_000, Ordering::Relaxed);
         br.saturating_add_reward(8_000); // juicy stats: mean 1.0 at horizon 8
         assert_eq!(
@@ -5230,8 +5241,8 @@ mod tests {
         let s = synth_state(&graph, 1, OI_BAG, 1);
         let safe1 = synth_state(&graph, 2, O_BAG, 1);
         let safe2 = synth_state(&graph, 3, O_BAG, 1);
-        wire(&graph, s, 0, TetrisPiece::O_PIECE, safe1);
-        wire(&graph, s, 0, TetrisPiece::I_PIECE, safe2);
+        wire(&graph, s, 0, TetrisPiece::O, safe1);
+        wire(&graph, s, 0, TetrisPiece::I, safe2);
         graph
             .states
             .get(safe1)
@@ -5257,8 +5268,8 @@ mod tests {
         let s = synth_state(&graph, 1, OI_BAG, 1);
         let safe_child = synth_state(&graph, 2, O_BAG, 1);
         let dead_child = synth_state(&graph, 3, O_BAG, 1);
-        wire(&graph, s, 0, TetrisPiece::O_PIECE, safe_child);
-        wire(&graph, s, 0, TetrisPiece::I_PIECE, dead_child);
+        wire(&graph, s, 0, TetrisPiece::O, safe_child);
+        wire(&graph, s, 0, TetrisPiece::I, dead_child);
         graph
             .states
             .get(safe_child)
@@ -5273,7 +5284,7 @@ mod tests {
         let pr = graph.placements.get(st.placement_base);
         assert_eq!(
             choose_piece(&graph, st, pr, SCORE_ONE, 8, PiecePolicyArg::Adversarial),
-            TetrisPiece::I_PIECE,
+            TetrisPiece::I,
             "proof-perfect kill beats all other piece-selection passes"
         );
     }
@@ -5292,9 +5303,9 @@ mod tests {
         let dead_st = synth_state(&graph, 3, O_BAG, 0); // no placements → will be DEAD
 
         // Wire sfe as a safe self-loop.
-        wire(&graph, sfe, 0, TetrisPiece::O_PIECE, sfe);
+        wire(&graph, sfe, 0, TetrisPiece::O, sfe);
         // Wire junk to itself too (has a valid cycle but won't be protected by K via empty report).
-        wire(&graph, junk, 0, TetrisPiece::O_PIECE, junk);
+        wire(&graph, junk, 0, TetrisPiece::O, junk);
 
         // Give junk high visits so it wins the budget competition.
         graph.states.get(junk).visits.store(9999, Ordering::Relaxed);
@@ -5361,7 +5372,7 @@ mod tests {
         let graph = test_graph(50_000, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let key = root_keys()[0];
         let piece = key.bag().iter_pieces().next().unwrap();
-        let first_placement = TetrisPiecePlacement::all_from_piece(key.piece())
+        let first_placement = <TetrisPiecePlacement<10>>::all_from_piece(key.piece())
             .iter()
             .copied()
             .find(|&p| apply_move(&key.board, p, &graph.carrier).is_some())
@@ -5415,7 +5426,7 @@ mod tests {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let parent = synth_state(&graph, 1, O_BAG, 1);
         let dead_child = synth_state(&graph, 2, O_BAG, 0);
-        wire(&graph, parent, 0, TetrisPiece::O_PIECE, dead_child);
+        wire(&graph, parent, 0, TetrisPiece::O, dead_child);
         graph
             .states
             .get(dead_child)
@@ -5435,7 +5446,7 @@ mod tests {
         let npr = new.placements.get(ns.placement_base);
         let nbr = new
             .branches
-            .get(npr.branch_base + TetrisPiece::O_PIECE.index() as u32);
+            .get(npr.branch_base + TetrisPiece::O.index() as u32);
         assert_eq!(
             nbr.child.load(Ordering::Acquire),
             DEAD_LEDGER,
@@ -5461,42 +5472,42 @@ mod tests {
         // mirror(π) on mirror(B) with result mirror(apply(B, p)) and the
         // same loss flag. With bag-transition equivariance (a bit swap,
         // trivially true), dead(k) ⟺ dead(mirror(k)) follows by induction.
-        let mirror_board = |b: &TetrisBoard| {
-            let mut limbs = b.as_limbs();
+        let mirror_board = |b: &TetrisBoard<10, 20>| -> TetrisBoard<10, 20> {
+            let mut limbs = *b.as_limbs();
             limbs.reverse();
-            TetrisBoard::from_limbs(limbs)
+            TetrisBoard::<10, 20>::from_limbs(limbs)
         };
         // Boards: empty, plus a few reachable stacks built by placements.
-        let mut boards = vec![TetrisBoard::EMPTY_BOARD];
-        let mut b = TetrisBoard::EMPTY_BOARD;
+        let mut boards = vec![TetrisBoard::<10, 20>::new()];
+        let mut b = TetrisBoard::<10, 20>::new();
         for (i, &piece) in [
-            TetrisPiece::S_PIECE,
-            TetrisPiece::L_PIECE,
-            TetrisPiece::T_PIECE,
-            TetrisPiece::J_PIECE,
-            TetrisPiece::Z_PIECE,
+            TetrisPiece::S,
+            TetrisPiece::L,
+            TetrisPiece::T,
+            TetrisPiece::J,
+            TetrisPiece::Z,
         ]
         .iter()
         .enumerate()
         {
-            let placements = TetrisPiecePlacement::all_from_piece(piece);
+            let placements = <TetrisPiecePlacement<10>>::all_from_piece(piece);
             let _ = b.apply_piece_placement(placements[(i * 3) % placements.len()]);
             boards.push(b);
         }
         for board in &boards {
             let mboard = mirror_board(board);
             for piece in TetrisPiece::all() {
-                let mpiece = TetrisPiece::from_index(mirror_piece_idx(piece.index()));
-                for &pl in TetrisPiecePlacement::all_from_piece(piece) {
+                let mpiece = TetrisPiece::all()[mirror_piece_idx(piece.index()) as usize];
+                for &pl in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
                     let mut a = *board;
                     let res = a.apply_piece_placement(pl);
                     let want = mirror_board(&a);
-                    let found = TetrisPiecePlacement::all_from_piece(mpiece)
+                    let found = <TetrisPiecePlacement<10>>::all_from_piece(mpiece)
                         .iter()
                         .any(|&mpl| {
                             let mut c = mboard;
                             let mres = c.apply_piece_placement(mpl);
-                            bool::from(mres.is_lost) == bool::from(res.is_lost) && c == want
+                            mres.is_lost == res.is_lost && c == want
                         });
                     assert!(
                         found,
@@ -5514,11 +5525,11 @@ mod tests {
         // mirrored form.
         let graph = test_graph(50_000, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         // An asymmetric key: S piece on an asymmetric board.
-        let mut board = TetrisBoard::EMPTY_BOARD;
+        let mut board = TetrisBoard::<10, 20>::new();
         board.set_bit(0, 0);
-        let mut bag = TetrisPieceBagState::from(TetrisPieceBagState::FULL_MASK);
-        bag.remove(TetrisPiece::S_PIECE);
-        let key = StateKey::new(board, bag, TetrisPiece::S_PIECE);
+        let mut bag = TetrisPieceBagState::full();
+        bag.remove(TetrisPiece::S);
+        let key = StateKey::new(board, bag, TetrisPiece::S);
         let mkey = mirror_key(&key);
         assert_ne!(key, mkey, "fixture must be asymmetric");
         assert_eq!(mirror_key(&mkey), key, "mirror is an involution");
@@ -5603,7 +5614,7 @@ mod tests {
         // placements, straight from the run-lifetime ledger.
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let anchor = synth_state(&graph, 1, O_BAG, 1); // root-protected survivor
-        wire(&graph, anchor, 0, TetrisPiece::O_PIECE, anchor);
+        wire(&graph, anchor, 0, TetrisPiece::O, anchor);
         // A REAL key for x (root 0's key) so re-interning is meaningful.
         let x_key = root_keys()[0];
         let x = graph.intern(x_key).unwrap().id;
@@ -5653,8 +5664,8 @@ mod tests {
         let s = synth_state(&graph, 1, O_BAG, 2);
         let dead_child = synth_state(&graph, 2, O_BAG, 1);
         let live_child = synth_state(&graph, 3, O_BAG, 1);
-        wire(&graph, s, 0, TetrisPiece::O_PIECE, dead_child);
-        wire(&graph, s, 1, TetrisPiece::O_PIECE, live_child);
+        wire(&graph, s, 0, TetrisPiece::O, dead_child);
+        wire(&graph, s, 1, TetrisPiece::O, live_child);
         graph
             .states
             .get(dead_child)
@@ -5665,7 +5676,7 @@ mod tests {
         pr1.visits.fetch_add(10, Ordering::Relaxed);
         let br1 = graph
             .branches
-            .get(pr1.branch_base + TetrisPiece::O_PIECE.index() as u32);
+            .get(pr1.branch_base + TetrisPiece::O.index() as u32);
         br1.visits.fetch_add(10, Ordering::Relaxed);
         br1.saturating_add_reward(40);
         let params = SearchParams {
@@ -5685,7 +5696,7 @@ mod tests {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let s = synth_state(&graph, 1, O_BAG, 1);
         let dead_child = synth_state(&graph, 2, O_BAG, 1);
-        wire(&graph, s, 0, TetrisPiece::O_PIECE, dead_child);
+        wire(&graph, s, 0, TetrisPiece::O, dead_child);
         graph
             .states
             .get(dead_child)
@@ -5721,8 +5732,8 @@ mod tests {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let s = synth_state(&graph, 1, O_BAG, 2);
         let child = synth_state(&graph, 2, O_BAG, 1);
-        wire(&graph, s, 0, TetrisPiece::O_PIECE, child);
-        wire(&graph, s, 1, TetrisPiece::O_PIECE, child);
+        wire(&graph, s, 0, TetrisPiece::O, child);
+        wire(&graph, s, 1, TetrisPiece::O, child);
         let st = graph.states.get(s);
         // Parent: mean 1.0 (visits 100, reward 100*8 at horizon 8).
         st.visits.fetch_add(100, Ordering::Relaxed);
@@ -5732,7 +5743,7 @@ mod tests {
         pr0.visits.fetch_add(100, Ordering::Relaxed);
         let br0 = graph
             .branches
-            .get(pr0.branch_base + TetrisPiece::O_PIECE.index() as u32);
+            .get(pr0.branch_base + TetrisPiece::O.index() as u32);
         br0.visits.fetch_add(100, Ordering::Relaxed);
         br0.saturating_add_reward(800);
         let params = SearchParams {
@@ -5754,15 +5765,15 @@ mod tests {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let s = synth_state(&graph, 1, O_BAG, 2);
         let child = synth_state(&graph, 2, O_BAG, 1);
-        wire(&graph, s, 0, TetrisPiece::O_PIECE, child);
-        wire(&graph, s, 1, TetrisPiece::O_PIECE, child);
+        wire(&graph, s, 0, TetrisPiece::O, child);
+        wire(&graph, s, 1, TetrisPiece::O, child);
         let st = graph.states.get(s);
         st.visits.fetch_add(100, Ordering::Relaxed); // parent mean 0 (no reward)
         let pr0 = graph.placements.get(st.placement_base);
         pr0.visits.fetch_add(100, Ordering::Relaxed); // slot 0 visited, mean 0
         let br0 = graph
             .branches
-            .get(pr0.branch_base + TetrisPiece::O_PIECE.index() as u32);
+            .get(pr0.branch_base + TetrisPiece::O.index() as u32);
         br0.visits.fetch_add(100, Ordering::Relaxed); // 0 reward
         let params = SearchParams {
             horizon: 8,
@@ -5782,8 +5793,8 @@ mod tests {
         const OI_BAG: u8 = 0b0000_0011;
         let s = synth_state(&graph, 1, OI_BAG, 1);
         let child = synth_state(&graph, 2, O_BAG, 1);
-        wire(&graph, s, 0, TetrisPiece::O_PIECE, child);
-        wire(&graph, s, 0, TetrisPiece::I_PIECE, child);
+        wire(&graph, s, 0, TetrisPiece::O, child);
+        wire(&graph, s, 0, TetrisPiece::I, child);
         let st = graph.states.get(s);
         let pr = graph.placements.get(st.placement_base);
         // O branch heavily visited with TERRIBLE value; I branch lightly
@@ -5791,21 +5802,21 @@ mod tests {
         // balanced picks I (least visited) — opposite choices, one fixture.
         let bro = graph
             .branches
-            .get(pr.branch_base + TetrisPiece::O_PIECE.index() as u32);
+            .get(pr.branch_base + TetrisPiece::O.index() as u32);
         bro.visits.fetch_add(100, Ordering::Relaxed); // reward 0 -> LCB 0
         let bri = graph
             .branches
-            .get(pr.branch_base + TetrisPiece::I_PIECE.index() as u32);
+            .get(pr.branch_base + TetrisPiece::I.index() as u32);
         bri.visits.fetch_add(10, Ordering::Relaxed);
         bri.saturating_add_reward(80); // mean 1.0 at horizon 8
         pr.visits.fetch_add(110, Ordering::Relaxed);
         assert_eq!(
             choose_piece(&graph, st, pr, 0, 8, PiecePolicyArg::Adversarial),
-            TetrisPiece::O_PIECE
+            TetrisPiece::O
         );
         assert_eq!(
             choose_piece(&graph, st, pr, 0, 8, PiecePolicyArg::Balanced),
-            TetrisPiece::I_PIECE
+            TetrisPiece::I
         );
     }
 
@@ -5817,14 +5828,14 @@ mod tests {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let s = synth_state(&graph, 1, O_BAG, 2);
         let child = synth_state(&graph, 2, O_BAG, 1);
-        wire(&graph, s, 0, TetrisPiece::O_PIECE, child);
+        wire(&graph, s, 0, TetrisPiece::O, child);
         let st = graph.states.get(s);
         st.visits.fetch_add(100, Ordering::Relaxed); // parent visited, mean 0
         let pr0 = graph.placements.get(st.placement_base);
         pr0.visits.fetch_add(100, Ordering::Relaxed);
         let br0 = graph
             .branches
-            .get(pr0.branch_base + TetrisPiece::O_PIECE.index() as u32);
+            .get(pr0.branch_base + TetrisPiece::O.index() as u32);
         br0.visits.fetch_add(100, Ordering::Relaxed);
         let params = SearchParams {
             horizon: 8,
@@ -5858,7 +5869,7 @@ mod tests {
         let graph = test_graph(100, Carrier::UNBOUNDED, ExpansionPolicy::AllDiscovered);
         let s = synth_state(&graph, 1, O_BAG, 2);
         let child = synth_state(&graph, 2, O_BAG, 1);
-        wire(&graph, s, 1, TetrisPiece::O_PIECE, child);
+        wire(&graph, s, 1, TetrisPiece::O, child);
         let st = graph.states.get(s);
         st.visits.fetch_add(200, Ordering::Relaxed);
         let pr0 = graph.placements.get(st.placement_base);
@@ -5868,7 +5879,7 @@ mod tests {
         pr1.visits.fetch_add(100, Ordering::Relaxed);
         let br1 = graph
             .branches
-            .get(pr1.branch_base + TetrisPiece::O_PIECE.index() as u32);
+            .get(pr1.branch_base + TetrisPiece::O.index() as u32);
         br1.visits.fetch_add(100, Ordering::Relaxed);
         let params = SearchParams {
             horizon: 8,
@@ -5896,18 +5907,18 @@ mod tests {
         const OI_BAG: u8 = 0b0000_0011;
         let s = synth_state(&graph, 1, OI_BAG, 1);
         let child = synth_state(&graph, 2, O_BAG, 1);
-        wire(&graph, s, 0, TetrisPiece::O_PIECE, child);
+        wire(&graph, s, 0, TetrisPiece::O, child);
         let st = graph.states.get(s);
         let pr = graph.placements.get(st.placement_base);
         let bro = graph
             .branches
-            .get(pr.branch_base + TetrisPiece::O_PIECE.index() as u32);
+            .get(pr.branch_base + TetrisPiece::O.index() as u32);
         bro.visits.fetch_add(100, Ordering::Relaxed); // visited, reward 0
         pr.visits.fetch_add(100, Ordering::Relaxed);
         for policy in [PiecePolicyArg::Adversarial, PiecePolicyArg::Balanced] {
             assert_eq!(
                 choose_piece(&graph, st, pr, SCORE_ONE, 8, policy),
-                TetrisPiece::I_PIECE,
+                TetrisPiece::I,
                 "pre-exhaustion: unexpanded branch demanded first ({policy:?})"
             );
         }
@@ -5915,7 +5926,7 @@ mod tests {
         for policy in [PiecePolicyArg::Adversarial, PiecePolicyArg::Balanced] {
             assert_eq!(
                 choose_piece(&graph, st, pr, SCORE_ONE, 8, policy),
-                TetrisPiece::O_PIECE,
+                TetrisPiece::O,
                 "post-exhaustion: expanded branch wins ({policy:?})"
             );
         }
@@ -5926,7 +5937,7 @@ mod tests {
         let pr2 = graph.placements.get(st2.placement_base);
         assert_eq!(
             choose_piece(&graph, st2, pr2, SCORE_ONE, 8, PiecePolicyArg::Adversarial),
-            TetrisPiece::O_PIECE,
+            TetrisPiece::O,
             "no expanded branch: fall back to first unexpanded"
         );
     }
@@ -5938,8 +5949,8 @@ mod tests {
         let s = synth_state(&graph, 1, OI_BAG, 1);
         let live = synth_state(&graph, 2, O_BAG, 1);
         let dead = synth_state(&graph, 3, O_BAG, 1);
-        wire(&graph, s, 0, TetrisPiece::O_PIECE, dead);
-        wire(&graph, s, 0, TetrisPiece::I_PIECE, live);
+        wire(&graph, s, 0, TetrisPiece::O, dead);
+        wire(&graph, s, 0, TetrisPiece::I, live);
         graph
             .states
             .get(dead)
@@ -5951,16 +5962,16 @@ mod tests {
         // NOT O by proof-kill; adversarial picks O (proof-perfect kill).
         graph
             .branches
-            .get(pr.branch_base + TetrisPiece::O_PIECE.index() as u32)
+            .get(pr.branch_base + TetrisPiece::O.index() as u32)
             .visits
             .fetch_add(5, Ordering::Relaxed);
         assert_eq!(
             choose_piece(&graph, st, pr, SCORE_ONE, 8, PiecePolicyArg::Adversarial),
-            TetrisPiece::O_PIECE
+            TetrisPiece::O
         );
         assert_eq!(
             choose_piece(&graph, st, pr, SCORE_ONE, 8, PiecePolicyArg::Balanced),
-            TetrisPiece::I_PIECE
+            TetrisPiece::I
         );
     }
 }

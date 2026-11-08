@@ -10,21 +10,19 @@
 //! circuit form, keeping the played artifact a pure state→move boolean
 //! function (NO search at inference; PUCT exists only at training time).
 //!
-//! Chance handling: `TetrisGame` is `Copy`, so each simulation copies the
-//! root state (board, bag membership, current piece all preserved), reseeds
-//! the game RNG **and reshuffles the remaining bag stream** — the bag stores
-//! the current bag as an already-shuffled queue, so reseeding alone would
-//! replay the root's true hidden piece order into every simulation. After
-//! the reshuffle, a simulation sees exactly what the student's inputs
-//! expose (bag MEMBERSHIP bits) and resamples everything the student cannot
-//! know (the order, and pieces beyond the bag) — labels leak no hidden
-//! information.
+//! Each simulation copies the root and rebuilds the remaining bag from its
+//! observable membership, then shuffles it with a fresh simulation seed. This
+//! samples the hidden order and future bags without replaying the root's true
+//! queue. Starting from canonical piece order makes the sampled continuation
+//! depend on the visible state and simulation seed, not the original hidden order.
 
+use std::num::NonZeroU64;
+
+use rand::RngExt;
 use rand::rngs::SmallRng;
-use rand::{RngExt, SeedableRng};
 
 use tetris_game::config::StandardTetris;
-use tetris_game::tetris::{IsLost, TetrisGame, TetrisGameRng, TetrisPiecePlacement};
+use tetris_game::tetris::{TetrisGame, TetrisPiece, TetrisPieceBagState, TetrisPiecePlacement};
 
 use crate::compiled::CompiledForest;
 use crate::encode::encode_game;
@@ -53,7 +51,7 @@ impl Default for PuctConfig {
 /// PUCT statistics for one legal root action.
 #[derive(Clone, Copy, Debug)]
 pub struct RootAction {
-    pub placement: TetrisPiecePlacement,
+    pub placement: TetrisPiecePlacement<10>,
     pub prior: f32,
     pub visits: u32,
     /// Mean rollout value in [0, 1] (survival fraction of the horizon).
@@ -78,7 +76,7 @@ fn rollout_survived(
         };
         // The fatal placement does not count as survived — keeps the value
         // scale uniform (death at depth d scores exactly d, at every depth).
-        if game.apply_placement(placement).is_lost == IsLost::LOST {
+        if game.apply_placement(placement).is_lost {
             break;
         }
         survived += 1;
@@ -126,6 +124,13 @@ pub fn puct_root(
         return actions;
     }
 
+    let mut remaining = TetrisPieceBagState::full();
+    for piece in TetrisPiece::all() {
+        if !game.bag().contains(piece) {
+            remaining.remove(piece);
+        }
+    }
+
     for sim in 0..cfg.sims {
         // Round-robin first pass: every action is evaluated once before PUCT
         // allocation starts — unvisited actions carry Q = 0 (worst case),
@@ -155,9 +160,12 @@ pub fn puct_root(
         // current bag's remaining order — membership is preserved), apply
         // the action, then roll out with the forest policy.
         let mut g = *game;
-        g.rng = TetrisGameRng::new(rng.random::<u64>());
-        g.bag.shuffle(&mut g.rng);
-        let lost = g.apply_placement(actions[pick].placement).is_lost == IsLost::LOST;
+        g.set_bag_piece_seeded(
+            remaining,
+            game.current_piece(),
+            rng.random::<NonZeroU64>().get(),
+        );
+        let lost = g.apply_placement(actions[pick].placement).is_lost;
         let survived = if lost {
             0
         } else {
@@ -183,12 +191,13 @@ pub fn best_action(actions: &[RootAction]) -> Option<&RootAction> {
 }
 
 /// The teacher's label for a state (see `best_action`).
+#[cfg(test)]
 pub fn puct_label(
     game: &TetrisGame<StandardTetris>,
     forest: &CompiledForest,
     cfg: &PuctConfig,
     rng: &mut SmallRng,
-) -> Option<TetrisPiecePlacement> {
+) -> Option<TetrisPiecePlacement<10>> {
     best_action(&puct_root(game, forest, cfg, rng)).map(|a| a.placement)
 }
 
@@ -234,28 +243,69 @@ mod tests {
 
     #[test]
     fn simulations_resample_bag_order_but_preserve_membership() {
-        use tetris_game::tetris::TetrisPiece;
-        // The per-simulation reshuffle must randomize the hidden bag ORDER
-        // (else every sim replays the root's true future — an information
-        // leak into the labels) while preserving bag MEMBERSHIP (exactly
-        // what the student's bag bits expose).
+        // Resampling changes hidden order without changing the piece set.
         let game = TetrisGame::<StandardTetris>::new_with_seed(4);
-        let mut g1 = game;
-        g1.rng = TetrisGameRng::new(1);
-        g1.bag.shuffle(&mut g1.rng);
-        let mut g2 = game;
-        g2.rng = TetrisGameRng::new(2);
-        g2.bag.shuffle(&mut g2.rng);
-        for piece in TetrisPiece::all() {
-            assert_eq!(g1.bag.contains(piece), game.bag.contains(piece));
-            assert_eq!(g2.bag.contains(piece), game.bag.contains(piece));
+        // Derive the reference set by drawing a copy of the original queue.
+        let mut bag = *game.bag();
+        let mut mask = 0;
+        while let Some(piece) = bag.draw() {
+            mask |= piece.mask();
         }
-        assert_eq!(g1.bag.remaining, game.bag.remaining);
+        let remaining = TetrisPieceBagState::try_from(mask).expect("valid piece mask");
+        let mut g1 = game;
+        g1.set_bag_piece_seeded(remaining, game.current_piece(), 1);
+        let mut g2 = game;
+        g2.set_bag_piece_seeded(remaining, game.current_piece(), 2);
+        for piece in TetrisPiece::all() {
+            assert_eq!(g1.bag().contains(piece), game.bag().contains(piece));
+            assert_eq!(g2.bag().contains(piece), game.bag().contains(piece));
+        }
+        assert_eq!(g1.bag().count(), game.bag().count());
         assert_ne!(
-            format!("{}", g1.bag),
-            format!("{}", g2.bag),
+            format!("{}", g1.bag()),
+            format!("{}", g2.bag()),
             "different seeds must give different bag orders"
         );
+    }
+
+    #[test]
+    fn teacher_ignores_the_original_hidden_piece_stream() {
+        use crate::forest::FOREST_FORMAT_VERSION;
+        use crate::tree::DecisionTree;
+        use tetris_game::TetrisBoard;
+
+        let forest = CompiledForest::compile(&DecisionForest {
+            version: FOREST_FORMAT_VERSION,
+            trees: vec![DecisionTree::Abstain],
+        });
+        let cfg = PuctConfig {
+            sims: 64,
+            rollout_depth: 12,
+            c_puct: 1.5,
+        };
+        let remaining =
+            TetrisPieceBagState::from_pieces([TetrisPiece::I, TetrisPiece::T, TetrisPiece::L]);
+        let mut first = <TetrisGame>::new_with_board_bag_piece_seeded(
+            TetrisBoard::<10, 20>::from_limbs([0x0000_0fff, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            remaining,
+            TetrisPiece::O,
+            1,
+        );
+        first.lines_cleared = 7;
+        first.piece_count = 9;
+        let mut second = first;
+        second.set_bag_piece_seeded(remaining, first.current_piece(), 2);
+        assert_eq!(encode_game(&first), encode_game(&second));
+        assert_ne!(first.bag(), second.bag());
+        assert_ne!(first.rng, second.rng);
+
+        let stats = |game| {
+            puct_root(game, &forest, &cfg, &mut SmallRng::seed_from_u64(42))
+                .into_iter()
+                .map(|a| (a.placement, a.prior.to_bits(), a.visits, a.q.to_bits()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(stats(&first), stats(&second));
     }
 
     #[test]
@@ -288,7 +338,7 @@ mod tests {
                 .iter()
                 .map(|&p| {
                     let mut g = game;
-                    g.apply_placement(p).is_lost == IsLost::LOST
+                    g.apply_placement(p).is_lost
                 })
                 .collect();
             let n_losers = losers.iter().filter(|&&l| l).count();
@@ -308,7 +358,7 @@ mod tests {
             let Some(p) = compiled.vote(&bits, legal) else {
                 break;
             };
-            if game.apply_placement(p).is_lost == IsLost::LOST {
+            if game.apply_placement(p).is_lost {
                 break;
             }
         }

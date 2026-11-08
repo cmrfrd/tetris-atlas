@@ -5,8 +5,8 @@ pub type BoardId = u32;
 
 /// Interning cache for boards — deduplicates identical boards into compact IDs.
 pub struct BoardCache {
-    pub boards: Vec<TetrisBoard>,
-    board_to_id: FxHashMap<TetrisBoard, BoardId>,
+    pub boards: Vec<TetrisBoard<10, 20>>,
+    board_to_id: FxHashMap<TetrisBoard<10, 20>, BoardId>,
 }
 
 impl BoardCache {
@@ -19,7 +19,7 @@ impl BoardCache {
 
     /// Get or insert a board, returning its stable ID.
     #[inline]
-    pub fn get_or_insert(&mut self, board: TetrisBoard) -> BoardId {
+    pub fn get_or_insert(&mut self, board: TetrisBoard<10, 20>) -> BoardId {
         if let Some(&id) = self.board_to_id.get(&board) {
             return id;
         }
@@ -30,7 +30,7 @@ impl BoardCache {
     }
 
     #[inline]
-    pub fn get_id(&self, board: &TetrisBoard) -> Option<BoardId> {
+    pub fn get_id(&self, board: &TetrisBoard<10, 20>) -> Option<BoardId> {
         self.board_to_id.get(board).copied()
     }
 
@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn board_cache_deduplicates() {
         let mut cache = BoardCache::new();
-        let board = TetrisBoard::EMPTY_BOARD;
+        let board = TetrisBoard::<10, 20>::new();
         let id1 = cache.get_or_insert(board);
         let id2 = cache.get_or_insert(board);
         assert_eq!(id1, id2);
@@ -99,7 +99,7 @@ mod tests {
 
     #[test]
     fn memo_key_distinct() {
-        let bag = TetrisPieceBagState::new();
+        let bag = TetrisPieceBagState::full();
         let k1 = MemoKey::new(0, bag, 5);
         let k2 = MemoKey::new(0, bag, 4);
         let k3 = MemoKey::new(1, bag, 5);
@@ -111,11 +111,11 @@ mod tests {
 
     #[test]
     fn witness_key_distinguishes_piece_and_state() {
-        let bag = TetrisPieceBagState::new();
-        let k1 = WitnessKey::new(0, bag, 5, TetrisPiece::I_PIECE);
-        let k2 = WitnessKey::new(0, bag, 5, TetrisPiece::O_PIECE);
-        let k3 = WitnessKey::new(1, bag, 5, TetrisPiece::I_PIECE);
-        let k4 = WitnessKey::new(0, bag, 261, TetrisPiece::I_PIECE);
+        let bag = TetrisPieceBagState::full();
+        let k1 = WitnessKey::new(0, bag, 5, TetrisPiece::I);
+        let k2 = WitnessKey::new(0, bag, 5, TetrisPiece::O);
+        let k3 = WitnessKey::new(1, bag, 5, TetrisPiece::I);
+        let k4 = WitnessKey::new(0, bag, 261, TetrisPiece::I);
         assert_ne!(k1, k2);
         assert_ne!(k1, k3);
         assert_ne!(k1, k4);

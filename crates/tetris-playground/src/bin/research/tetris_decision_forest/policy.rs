@@ -1,5 +1,7 @@
+#[cfg(test)]
+use tetris_game::TetrisPiecePlacement;
 use tetris_game::config::StandardTetris;
-use tetris_game::tetris::{IsLost, TetrisGame, TetrisPiecePlacement};
+use tetris_game::tetris::TetrisGame;
 
 use crate::compiled::CompiledForest;
 use crate::encode::encode_game;
@@ -17,10 +19,11 @@ pub struct GameOutcome {
 /// The forest's move for the current game: encode the game to 214 bits and let
 /// the forest vote among the legal placements. No lookahead — survival fitness
 /// teaches the trees to avoid losing votes.
+#[cfg(test)]
 pub fn choose_placement(
     forest: &DecisionForest,
     game: &TetrisGame<StandardTetris>,
-) -> Option<TetrisPiecePlacement> {
+) -> Option<TetrisPiecePlacement<10>> {
     let bits = encode_game(game);
     forest.vote(&bits, game.current_placements())
 }
@@ -53,7 +56,7 @@ pub fn play_game_compiled(compiled: &CompiledForest, seed: u64, max_pieces: u64)
         pieces_placed += 1;
         lines_cleared += u64::from(result.lines_cleared);
         max_height = max_height.max(game.board.height());
-        if result.is_lost == IsLost::LOST {
+        if result.is_lost {
             return GameOutcome {
                 pieces_placed,
                 lines_cleared,
@@ -112,7 +115,7 @@ mod tests {
                     game.current_placements().contains(&chosen),
                     "illegal placement chosen"
                 );
-                if game.apply_placement(chosen).is_lost == IsLost::LOST {
+                if game.apply_placement(chosen).is_lost {
                     break;
                 }
             }
@@ -130,7 +133,7 @@ mod tests {
             version: FOREST_FORMAT_VERSION,
             trees: vec![DecisionTree::Abstain, DecisionTree::Abstain],
         };
-        for seed in 0..3u64 {
+        for seed in 1..=3u64 {
             let mut game = TetrisGame::<StandardTetris>::new_with_seed(seed);
             let mut turns = 0u32;
             while !game.board.is_lost() && turns < 200 {
@@ -141,7 +144,7 @@ mod tests {
                 let chosen = choose_placement(&silent, &game)
                     .expect("forest must always answer in a live game");
                 assert!(game.current_placements().contains(&chosen));
-                if game.apply_placement(chosen).is_lost == IsLost::LOST {
+                if game.apply_placement(chosen).is_lost {
                     break;
                 }
                 turns += 1;

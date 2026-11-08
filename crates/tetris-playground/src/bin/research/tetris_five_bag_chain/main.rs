@@ -26,8 +26,7 @@ use crossterm::{
 };
 use rustc_hash::FxHasher;
 use tetris_game::{
-    IsLost, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPiecePlacement,
-    constants,
+    StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPiecePlacement,
 };
 use tetris_search::{
     TetrisBoardScoreState, height_mse_board_score, height_mse_distance_from_empty,
@@ -73,14 +72,14 @@ const fn advance_permutation(indices: &mut [u8; PIECES_PER_BAG]) -> bool {
 type ForcedBag = [TetrisPiece; PIECES_PER_BAG];
 
 const fn generate_forced_bag_permutations() -> [ForcedBag; BAG_PERMUTATION_COUNT] {
-    let mut permutations = [[TetrisPiece::O_PIECE; PIECES_PER_BAG]; BAG_PERMUTATION_COUNT];
+    let mut permutations = [[TetrisPiece::O; PIECES_PER_BAG]; BAG_PERMUTATION_COUNT];
     let mut indices = [0u8, 1, 2, 3, 4, 5, 6];
     let mut out_idx = 0usize;
     loop {
-        let mut bag = [TetrisPiece::O_PIECE; PIECES_PER_BAG];
+        let mut bag = [TetrisPiece::O; PIECES_PER_BAG];
         let mut i = 0usize;
         while i < PIECES_PER_BAG {
-            bag[i] = TetrisPiece::from_index(indices[i]);
+            bag[i] = TetrisPiece::all()[indices[i] as usize];
             i += 1;
         }
         permutations[out_idx] = bag;
@@ -117,7 +116,7 @@ impl Rng {
 }
 
 fn build_sequence(bag_indices: &[usize; BAG_COUNT]) -> [TetrisPiece; TOTAL_PIECES] {
-    let mut pieces = [TetrisPiece::O_PIECE; TOTAL_PIECES];
+    let mut pieces = [TetrisPiece::O; TOTAL_PIECES];
     for (bag_idx, &perm_idx) in bag_indices.iter().enumerate() {
         let bag = ALL_BAG_PERMUTATIONS[perm_idx];
         let start = bag_idx * PIECES_PER_BAG;
@@ -137,17 +136,6 @@ const PRIOR_NOISE_AMPLITUDE: f32 = 0.2;
 /// ~2M nodes × ~24 bytes ≈ 48MB — fits comfortably in L3.
 const NODE_BUDGET: usize = 2_000_000;
 
-/// What to do when the arena fills up.
-/// - `Restart`: clear the tree and start fresh with a new noise seed
-/// - `Evict(pct)`: reclaim ~pct% of nodes by evicting random leaves, keep searching
-#[derive(Clone, Copy)]
-enum FullPolicy {
-    Restart,
-    Evict(f32), // fraction of NODE_BUDGET to reclaim, e.g. 0.10 = 10%
-}
-
-const ARENA_FULL_POLICY: FullPolicy = FullPolicy::Restart;
-
 const RANK_PRIORS: [f32; MAX_CHILDREN] = {
     let mut raw = [0.0f32; MAX_CHILDREN];
     let mut sum = 0.0f32;
@@ -165,16 +153,16 @@ const RANK_PRIORS: [f32; MAX_CHILDREN] = {
     raw
 };
 
-const DEFAULT_PLACEMENT: TetrisPiecePlacement = TetrisPiecePlacement::from_index(0);
+const DEFAULT_PLACEMENT: TetrisPiecePlacement<10> = <TetrisPiecePlacement<10>>::from_index(0);
 const DEFAULT_CANDIDATE: Candidate = Candidate {
     placement: DEFAULT_PLACEMENT,
-    board: TetrisBoard::EMPTY_BOARD,
+    board: TetrisBoard::<10, 20>::new(),
     prior_score: f32::NEG_INFINITY,
 };
 
 #[derive(Clone, Copy, Debug)]
 struct SearchState {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     step: u8,
 }
 
@@ -203,7 +191,7 @@ impl SearchNode {
 
 #[derive(Clone, Copy, Debug)]
 struct ActionEdge {
-    placement: TetrisPiecePlacement,
+    placement: TetrisPiecePlacement<10>,
     child: usize,
     visits: u32,
     value_sum: f32,
@@ -212,33 +200,32 @@ struct ActionEdge {
 
 #[derive(Clone, Copy, Debug)]
 struct Candidate {
-    placement: TetrisPiecePlacement,
-    board: TetrisBoard,
+    placement: TetrisPiecePlacement<10>,
+    board: TetrisBoard<10, 20>,
     prior_score: f32,
 }
 
 /// Filter function: given a board and the step it was reached at,
 /// return `true` to keep the board or `false` to prune it.
-type FilterFn = fn(board: TetrisBoard, step: u8) -> bool;
+type FilterFn = fn(board: TetrisBoard<10, 20>, step: u8) -> bool;
 
 struct PuctSearch {
     pieces: [TetrisPiece; TOTAL_PIECES],
     nodes: Vec<SearchNode>,
     edges: Vec<ActionEdge>,
-    free_list: Vec<usize>, // recycled node indices from eviction
-    witness_placements: Option<[TetrisPiecePlacement; TOTAL_PIECES]>,
+    witness_placements: Option<[TetrisPiecePlacement<10>; TOTAL_PIECES]>,
     noise_seed: u64,
     filter_fn: Option<FilterFn>,
     // Scratch space
     path_edges: [(usize, usize); TOTAL_PIECES],
-    path_placements: [TetrisPiecePlacement; TOTAL_PIECES],
-    expand_candidates: [Candidate; TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT],
+    path_placements: [TetrisPiecePlacement<10>; TOTAL_PIECES],
+    expand_candidates: [Candidate; <TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT],
 }
 
 impl PuctSearch {
     fn new(pieces: [TetrisPiece; TOTAL_PIECES]) -> Self {
         let root_state = SearchState {
-            board: TetrisBoard::EMPTY_BOARD,
+            board: TetrisBoard::<10, 20>::new(),
             step: 0u8,
         };
         let mut nodes = Vec::with_capacity(NODE_BUDGET);
@@ -247,13 +234,13 @@ impl PuctSearch {
             pieces,
             nodes,
             edges: Vec::with_capacity(NODE_BUDGET * MAX_CHILDREN / 2),
-            free_list: Vec::new(),
             witness_placements: None,
             noise_seed: 0,
             filter_fn: None,
             path_edges: [(usize::MAX, usize::MAX); TOTAL_PIECES],
             path_placements: [DEFAULT_PLACEMENT; TOTAL_PIECES],
-            expand_candidates: [DEFAULT_CANDIDATE; TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT],
+            expand_candidates: [DEFAULT_CANDIDATE;
+                <TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT],
         }
     }
 
@@ -266,7 +253,7 @@ impl PuctSearch {
         self.nodes.clear();
         self.edges.clear();
         self.nodes.push(SearchNode::new(SearchState {
-            board: TetrisBoard::EMPTY_BOARD,
+            board: TetrisBoard::<10, 20>::new(),
             step: 0u8,
         }));
         self.pieces = pieces;
@@ -274,96 +261,19 @@ impl PuctSearch {
         self.noise_seed = 0;
     }
 
-    /// Swap the last bag in the piece sequence and invalidate all nodes
-    /// at step >= `invalidate_from` (i.e., bag index × PIECES_PER_BAG).
-    /// Nodes at earlier steps keep their structure and visit stats.
-    fn swap_bag_and_prune(&mut self, bag_slot: usize, new_bag_index: usize) {
-        let start_piece = bag_slot * PIECES_PER_BAG;
-        let bag = ALL_BAG_PERMUTATIONS[new_bag_index];
-        self.pieces[start_piece..start_piece + PIECES_PER_BAG].copy_from_slice(&bag);
-
-        // Invalidate: mark all nodes at step >= start_piece as unexpanded
-        // and zero out their children. We can't easily reclaim edge arena
-        // memory, but we can rebuild from scratch by truncating.
-        //
-        // Strategy: walk all nodes. For nodes at step >= invalidate_from,
-        // mark them dead. For nodes at step < invalidate_from that have
-        // children pointing to dead nodes, remove those children.
-        let invalidate_from = start_piece as u8;
-
-        // Phase 1: Mark nodes at >= invalidate_from as dead
-        let mut dead = vec![false; self.nodes.len()];
-        for (i, node) in self.nodes.iter().enumerate() {
-            if node.state.step >= invalidate_from {
-                dead[i] = true;
-            }
-        }
-
-        // Phase 2: For surviving nodes, remove edges pointing to dead children.
-        // We rebuild the edge arena from scratch for simplicity.
-        let old_edges = std::mem::take(&mut self.edges);
-        self.edges = Vec::with_capacity(old_edges.len() / 2);
-
-        for node in &mut self.nodes {
-            if dead[node.state.step as usize / PIECES_PER_BAG * PIECES_PER_BAG]
-                && node.state.step >= invalidate_from
-            {
-                // Dead node — clear it
-                node.expanded = false;
-                node.children_start = 0;
-                node.children_len = 0;
-                node.visits = 0;
-                node.value_sum = 0.0;
-                continue;
-            }
-
-            if node.children_len == 0 {
-                continue;
-            }
-
-            // Copy surviving edges
-            let old_start = node.children_start as usize;
-            let old_len = node.children_len as usize;
-            let new_start = self.edges.len() as u32;
-            let mut new_len = 0u16;
-
-            for ei in 0..old_len {
-                let edge = old_edges[old_start + ei];
-                if edge.child < dead.len() && !dead[edge.child] {
-                    self.edges.push(edge);
-                    new_len += 1;
-                }
-            }
-
-            node.children_start = new_start;
-            node.children_len = new_len;
-
-            // If all children were pruned, mark as unexpanded so MCTS re-expands
-            if new_len == 0 {
-                node.expanded = false;
-            }
-        }
-
-        // Clear witness from previous solve
-        self.witness_placements = None;
-    }
-
     /// Returns true if node arena is full.
     fn is_arena_full(&self) -> bool {
-        self.nodes.len() >= NODE_BUDGET && self.free_list.is_empty()
+        self.nodes.len() >= NODE_BUDGET
     }
 
-    /// Allocate a node, reusing a free slot if available.
+    /// Allocate a node within the arena budget.
     fn alloc_node(&mut self, node: SearchNode) -> Option<usize> {
-        if let Some(slot) = self.free_list.pop() {
-            self.nodes[slot] = node;
-            Some(slot)
-        } else if self.nodes.len() < NODE_BUDGET {
+        if self.nodes.len() < NODE_BUDGET {
             let slot = self.nodes.len();
             self.nodes.push(node);
             Some(slot)
         } else {
-            None // arena full, no free slots
+            None // arena full
         }
     }
 
@@ -371,58 +281,18 @@ impl PuctSearch {
     fn restart_with_noise(&mut self, noise_seed: u64) {
         self.nodes.clear();
         self.edges.clear();
-        self.free_list.clear();
         self.nodes.push(SearchNode::new(SearchState {
-            board: TetrisBoard::EMPTY_BOARD,
+            board: TetrisBoard::<10, 20>::new(),
             step: 0u8,
         }));
         self.witness_placements = None;
         self.noise_seed = noise_seed;
     }
 
-    /// Evict leaf nodes to free `target_count` slots.
-    /// Only zeros out the nodes and adds to free list — no edge rebuild.
-    /// Dead children are harmless: PUCT won't select them (visits=0,
-    /// Q=0, no exploration bonus since parent edge visits stay).
-    fn evict_leaves(&mut self, target_count: usize) {
-        let num_nodes = self.nodes.len();
-        let mut evicted = 0usize;
-
-        // Scan backwards — deeper nodes are more likely to be leaves
-        let mut i = num_nodes;
-        while i > 1 && evicted < target_count {
-            i -= 1;
-            let node = self.nodes[i];
-            if node.visits == 0 && !node.expanded {
-                continue; // already dead
-            }
-            // Only evict true leaves (no children or unexpanded)
-            if node.children_len > 0 && node.expanded {
-                continue;
-            }
-
-            self.nodes[i].visits = 0;
-            self.nodes[i].value_sum = 0.0;
-            self.nodes[i].expanded = false;
-            self.nodes[i].children_start = 0;
-            self.nodes[i].children_len = 0;
-            self.free_list.push(i);
-            evicted += 1;
-        }
-    }
-
-    /// Handle arena-full condition based on ARENA_FULL_POLICY.
+    /// Restart with a new noise seed when the arena fills up.
     fn handle_arena_full(&mut self, restart_count: &mut u32) {
-        match ARENA_FULL_POLICY {
-            FullPolicy::Restart => {
-                *restart_count += 1;
-                self.restart_with_noise(*restart_count as u64);
-            }
-            FullPolicy::Evict(frac) => {
-                let target = ((NODE_BUDGET as f32) * frac) as usize;
-                self.evict_leaves(target.max(1));
-            }
-        }
+        *restart_count += 1;
+        self.restart_with_noise(*restart_count as u64);
     }
 
     /// Run iterations until deadline or solution found. Returns (solved, iterations).
@@ -536,10 +406,10 @@ impl PuctSearch {
         let piece = self.pieces[state.step as usize];
         let mut candidate_len = 0usize;
 
-        for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+        for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
             let mut next = state.board;
             let result = next.apply_piece_placement(placement);
-            if result.is_lost == IsLost::LOST || next.height() > MAX_HEIGHT {
+            if result.is_lost || next.height() > MAX_HEIGHT {
                 continue;
             }
 
@@ -573,7 +443,7 @@ impl PuctSearch {
 
         let child_len = candidate_len
             .min(MAX_CHILDREN)
-            .min(TetrisPiecePlacement::MAX_PIECE_PLACEMENT_COUNT);
+            .min(<TetrisPiecePlacement<10>>::MAX_PIECE_PLACEMENT_COUNT);
 
         let edges_start = self.edges.len() as u32;
         for idx in 0..child_len {
@@ -633,20 +503,20 @@ impl PuctSearch {
 
 // --- Scoring functions ---
 
-fn scorer_prior(board: TetrisBoard, recent_lines_cleared: u32) -> f32 {
+fn scorer_prior(board: TetrisBoard<10, 20>, recent_lines_cleared: u32) -> f32 {
     height_mse_board_score(&TetrisBoardScoreState {
         board,
         recent_lines_cleared,
     })
 }
 
-fn nonterminal_value(board: TetrisBoard, step: usize, total_steps: usize) -> f32 {
+fn nonterminal_value(board: TetrisBoard<10, 20>, step: usize, total_steps: usize) -> f32 {
     let scorer_value = score_value_from_empty_distance(board);
     let depth_value = step as f32 / total_steps.max(1) as f32;
     (scorer_value * 0.85 + depth_value * 0.15).clamp(-1.0, 0.99)
 }
 
-fn terminal_failure_value(board: TetrisBoard) -> f32 {
+fn terminal_failure_value(board: TetrisBoard<10, 20>) -> f32 {
     let distance = height_mse_distance_from_empty(board);
     let cells = board.count();
     let height = board.height();
@@ -655,12 +525,12 @@ fn terminal_failure_value(board: TetrisBoard) -> f32 {
         .max(-8.0)
 }
 
-fn score_value_from_empty_distance(board: TetrisBoard) -> f32 {
+fn score_value_from_empty_distance(board: TetrisBoard<10, 20>) -> f32 {
     let distance = height_mse_distance_from_empty(board);
     (1.0 - distance / 200.0).clamp(-1.0, 1.0)
 }
 
-fn prior_noise(state: SearchState, placement: TetrisPiecePlacement, seed: u64) -> f32 {
+fn prior_noise(state: SearchState, placement: TetrisPiecePlacement<10>, seed: u64) -> f32 {
     let mut hasher = FxHasher::default();
     seed.hash(&mut hasher);
     state.board.hash(&mut hasher);
@@ -672,16 +542,16 @@ fn prior_noise(state: SearchState, placement: TetrisPiecePlacement, seed: u64) -
 
 fn replay_witness(
     pieces: &[TetrisPiece; TOTAL_PIECES],
-    placements: &[TetrisPiecePlacement; TOTAL_PIECES],
+    placements: &[TetrisPiecePlacement<10>; TOTAL_PIECES],
 ) -> bool {
-    let mut board: TetrisBoard = TetrisBoard::EMPTY_BOARD;
+    let mut board: TetrisBoard<10, 20> = TetrisBoard::<10, 20>::new();
     let mut lines_cleared = 0u32;
     for (idx, placement) in placements.iter().copied().enumerate() {
         if placement.piece != pieces[idx] {
             return false;
         }
         let result = board.apply_piece_placement(placement);
-        if result.is_lost == IsLost::LOST {
+        if result.is_lost {
             return false;
         }
         lines_cleared += result.lines_cleared;
@@ -693,7 +563,7 @@ fn replay_witness(
 
 /// Default filter for empty-to-empty 5-bag search.
 /// Prunes boards that can't possibly reach 0 cells with the remaining pieces.
-fn empty_cycle_filter(board: TetrisBoard, step: u8) -> bool {
+fn empty_cycle_filter(board: TetrisBoard<10, 20>, step: u8) -> bool {
     let cells = board.count();
     let remaining = TOTAL_PIECES as u32 - step as u32;
     let cells_to_add = remaining * 4;
@@ -883,10 +753,11 @@ fn print_raw(s: &str) {
 
 fn interactive_viewer(
     pieces: &[TetrisPiece; TOTAL_PIECES],
-    placements: &[TetrisPiecePlacement; TOTAL_PIECES],
+    placements: &[TetrisPiecePlacement<10>; TOTAL_PIECES],
 ) {
     // Pre-compute all board states
-    let mut boards: [TetrisBoard; TOTAL_PIECES + 1] = [TetrisBoard::EMPTY_BOARD; TOTAL_PIECES + 1];
+    let mut boards: [TetrisBoard<10, 20>; TOTAL_PIECES + 1] =
+        [TetrisBoard::<10, 20>::new(); TOTAL_PIECES + 1];
     let mut lines_at_step = [0u32; TOTAL_PIECES];
     for (step, placement) in placements.iter().copied().enumerate() {
         let mut board = boards[step];
@@ -1004,7 +875,7 @@ fn cmd_spotcheck(bag_indices: [usize; BAG_COUNT], log_every: u64) {
                 );
                 eprintln!();
                 // Print summary, then launch interactive viewer
-                let mut board: TetrisBoard = TetrisBoard::EMPTY_BOARD;
+                let mut board: TetrisBoard<10, 20> = TetrisBoard::<10, 20>::new();
                 for (step, placement) in p.iter().copied().enumerate() {
                     let result = board.apply_piece_placement(placement);
                     eprintln!(

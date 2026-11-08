@@ -1,12 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
 use serde::Serialize;
-use tetris_game::{IsLost, TetrisPiecePlacement};
+use tetris_game::TetrisPiecePlacement;
 
+use crate::admissibility::board_is_admissible;
 use crate::config::SolverConfig;
 use crate::proof::{BagKey, BagNodeId, NodeResolution, PieceNode, ProofSolveResult};
 use crate::state::{next_bag_state, piece_branches};
-use crate::universe::board_is_admissible;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 pub struct ReplayVerification {
@@ -103,11 +103,11 @@ fn verify_winning_piece(
         verification.missing_node_failures += 1;
         return;
     };
-    if best_action as usize >= TetrisPiecePlacement::NUM_PLACEMENTS {
+    if best_action as usize >= <tetris_game::TetrisPiecePlacement<10>>::NUM_PLACEMENTS {
         verification.replay_failures += 1;
         return;
     }
-    let placement = TetrisPiecePlacement::from_index(best_action);
+    let placement = <TetrisPiecePlacement<10>>::from_index(best_action);
     if placement.piece != piece.key.piece {
         verification.replay_failures += 1;
         return;
@@ -120,8 +120,7 @@ fn verify_winning_piece(
     let mut replayed_board = parent_key.board;
     let outcome = replayed_board.apply_piece_placement(placement);
     verification.witness_replays += 1;
-    if outcome.is_lost == IsLost::LOST || !board_is_admissible(replayed_board, config.admissibility)
-    {
+    if outcome.is_lost || !board_is_admissible(replayed_board, config.admissibility) {
         verification.replay_failures += 1;
         return;
     }
@@ -171,11 +170,10 @@ fn verify_lost_piece(
         return;
     };
 
-    for &placement in TetrisPiecePlacement::all_from_piece(piece.key.piece) {
+    for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece.key.piece) {
         let mut next_board = piece.key.board;
         let outcome = next_board.apply_piece_placement(placement);
-        if outcome.is_lost == IsLost::LOST || !board_is_admissible(next_board, config.admissibility)
-        {
+        if outcome.is_lost || !board_is_admissible(next_board, config.admissibility) {
             continue;
         }
         verification.lost_piece_placements_checked += 1;

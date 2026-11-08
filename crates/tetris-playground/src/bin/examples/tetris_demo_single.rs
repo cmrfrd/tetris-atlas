@@ -2,13 +2,12 @@
 #![allow(incomplete_features)]
 //! # Tetris Demo - Single Beam Search
 //!
-//! Demonstrates that a single beam search agent can play Tetris indefinitely (or up to N pieces)
-//! without losing, proving the viability of beam search for Tetris gameplay.
+//! Runs a single beam-search agent and records its finite gameplay results.
 //!
 //! ## Purpose
 //!
-//! This is a proof-of-concept demo showing that beam search provides sufficient lookahead
-//! to make consistently good decisions and avoid game-over states.
+//! Evaluates a beam-search heuristic under seeded 7-bag draws. Long runs provide empirical
+//! evidence; this demo does not verify a policy-closed set or prove infinite survival.
 //!
 //! ## Features
 //!
@@ -23,13 +22,14 @@
 //! - **Console**: Periodic updates on progress and performance
 
 use dashmap::DashMap;
-use proc_macros::inline_conditioned;
+use rand::RngExt;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
+
 use tetris_game::{
-    IsLost, PlacementResult, TetrisBoard, TetrisGame, TetrisPiece, TetrisPieceOrientation,
+    PlacementResult, TetrisBoard, TetrisGame, TetrisPiece, TetrisPieceOrientation,
     TetrisPiecePlacement,
 };
 use tetris_search::set_global_threadpool;
@@ -54,7 +54,7 @@ impl<const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_MOVES: usize>
 {
     pub fn new() -> Self {
         Self {
-            game: TetrisGame::new(),
+            game: <TetrisGame>::new(),
             search: TetrisBeamSearch::<BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>::new(
                 height_mse_beam_tetris_score,
             )
@@ -64,7 +64,7 @@ impl<const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_MOVES: usize>
 
     pub fn new_with_seed(seed: u64) -> Self {
         Self {
-            game: TetrisGame::new_with_seed(seed),
+            game: <TetrisGame>::new_with_seed(seed),
             search: TetrisBeamSearch::<BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>::new(
                 height_mse_beam_tetris_score,
             )
@@ -76,15 +76,17 @@ impl<const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_MOVES: usize>
         self.game.reset(seed);
     }
 
-    pub fn kink(&mut self) -> PlacementResult {
-        self.game.play_random()
+    pub fn kink<R: RngExt + ?Sized>(&mut self, rng: &mut R) -> PlacementResult {
+        let placements = self.game.current_placements();
+        let placement = placements[rng.random_range(0..placements.len())];
+        self.game.apply_placement(placement)
     }
 }
 
 impl<const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_MOVES: usize> Iterator
     for TetrisGameIter<BEAM_WIDTH, MAX_DEPTH, MAX_MOVES>
 {
-    type Item = (TetrisBoard, TetrisPiecePlacement);
+    type Item = (TetrisBoard<10, 20>, TetrisPiecePlacement<10>);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.game.board.is_lost() {
@@ -97,7 +99,7 @@ impl<const BEAM_WIDTH: usize, const MAX_DEPTH: usize, const MAX_MOVES: usize> It
         } = self
             .search
             .search_top_with_state_best_effort(BeamTetrisState::new(self.game), MAX_DEPTH)?;
-        (self.game.apply_placement(first_action.unwrap()).is_lost != IsLost::LOST)
+        (!self.game.apply_placement(first_action.unwrap()).is_lost)
             .then_some((board_before, first_action.unwrap()))
     }
 }
@@ -111,7 +113,7 @@ fn main() {
 #[derive(Clone)]
 struct SharedState {
     /// Concurrent hashmap for (board, piece) -> orientation lookup
-    lookup: Arc<DashMap<(TetrisBoard, TetrisPiece), TetrisPieceOrientation>>,
+    lookup: Arc<DashMap<(TetrisBoard<10, 20>, TetrisPiece), TetrisPieceOrientation<10>>>,
     /// Atomic counter for steps/pieces placed
     steps: Arc<AtomicUsize>,
     /// Concurrent hashmap for height distribution
@@ -252,7 +254,7 @@ pub fn run_tetris_beam() {
     // --- Tunables ---
     const BEAM_WIDTH: usize = 256;
     const MAX_DEPTH: usize = 8;
-    const MAX_MOVES: usize = TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS;
+    const MAX_MOVES: usize = <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS;
     const LOG_EVERY: usize = 100;
     // --------------
 
@@ -293,4 +295,51 @@ pub fn run_tetris_beam() {
         "All threads exited cleanly. Final lookup table size: {}",
         state.lookup.len()
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{SeedableRng, rngs::SmallRng};
+
+    #[test]
+    fn random_moves_replay_without_changing_piece_stream() {
+        let mut first = TetrisGameIter::<
+            8,
+            2,
+            { <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS },
+        >::new_with_seed(42);
+        let mut second = TetrisGameIter::<
+            8,
+            2,
+            { <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS },
+        >::new_with_seed(42);
+        let mut control = first.game;
+        let mut first_rng = SmallRng::seed_from_u64(123);
+        let mut second_rng = SmallRng::seed_from_u64(123);
+
+        // Keep moves live while crossing multiple bag refills.
+        for _ in 0..16 {
+            first.game.board.clear();
+            second.game.board.clear();
+            control.board.clear();
+            let before = first.game;
+            let result = first.kink(&mut first_rng);
+            assert!(!result.is_lost);
+            assert_eq!(result, second.kink(&mut second_rng));
+            assert_eq!(first.game, second.game);
+            assert!(before.current_placements().iter().any(|&placement| {
+                let mut board = before.board;
+                board.apply_piece_placement(placement);
+                board == first.game.board
+            }));
+
+            // A different move policy must see the same future piece stream.
+            let placement = control.current_placements()[0];
+            assert!(!control.apply_placement(placement).is_lost);
+            assert_eq!(first.game.current_piece(), control.current_piece());
+            assert_eq!(first.game.bag(), control.bag());
+            assert_eq!(first.game.rng, control.rng);
+        }
+    }
 }

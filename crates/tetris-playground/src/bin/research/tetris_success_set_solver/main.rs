@@ -1,12 +1,17 @@
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
-use tetris_game::TetrisGameConfig;
+
+mod admissibility;
 mod config;
+#[cfg(test)]
 mod graph;
+#[cfg(test)]
 mod policy;
 mod proof;
+#[cfg(test)]
 mod retrograde;
 mod state;
+#[cfg(test)]
 mod universe;
 mod verifier;
 
@@ -14,15 +19,18 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tetris_game::TetrisGameConfig;
 
 use anyhow::{Result, ensure};
 use clap::{Parser, ValueEnum};
 use serde::Serialize;
 
 use crate::config::{BoardAdmissibility, SolverConfig};
+#[cfg(test)]
+use crate::proof::solve_root;
 use crate::proof::{
-    ProofSolveResult, SolveConclusion, SolveMode, SolveOptions, solve_root,
-    solve_root_with_options, verify_proof,
+    ProofSolveResult, SolveConclusion, SolveMode, SolveOptions, solve_root_with_options,
+    verify_proof,
 };
 use crate::state::unpack_placement;
 use crate::verifier::{ReplayVerification, verify_replay};
@@ -102,7 +110,8 @@ fn main() -> Result<()> {
         },
         root: crate::config::RootStateConfig {
             board: root_board,
-            bag: tetris_game::TetrisPieceBagState::from(cli.root_bag_mask),
+            bag: tetris_game::TetrisPieceBagState::try_from(cli.root_bag_mask)
+                .expect("valid bag mask"),
         },
     };
 
@@ -148,9 +157,9 @@ fn parse_nonzero_bag_mask(value: &str) -> Result<u8, String> {
     Ok(mask)
 }
 
-fn parse_root_board_rows(value: Option<&str>) -> Result<tetris_game::TetrisBoard> {
+fn parse_root_board_rows(value: Option<&str>) -> Result<tetris_game::TetrisBoard<10, 20>> {
     let Some(value) = value else {
-        return Ok(tetris_game::TetrisBoard::EMPTY_BOARD);
+        return Ok(tetris_game::TetrisBoard::<10, 20>::new());
     };
 
     let rows = value.split('/').collect::<Vec<_>>();
@@ -160,7 +169,7 @@ fn parse_root_board_rows(value: Option<&str>) -> Result<tetris_game::TetrisBoard
         tetris_game::StandardTetris::ROWS
     );
 
-    let mut board = tetris_game::TetrisBoard::EMPTY_BOARD;
+    let mut board = tetris_game::TetrisBoard::<10, 20>::new();
     for (row_idx_from_top, row) in rows.iter().enumerate() {
         ensure!(
             row.len() == tetris_game::StandardTetris::COLS,
@@ -196,7 +205,7 @@ fn run_solver(
     export_path: Option<PathBuf>,
 ) -> Result<()> {
     ensure!(
-        crate::universe::board_is_admissible(config.root.board, config.admissibility),
+        crate::admissibility::board_is_admissible(config.root.board, config.admissibility),
         "root board is outside the admissible universe"
     );
 
@@ -557,7 +566,7 @@ fn run_solver(
     Ok(())
 }
 
-fn board_to_rows(board: tetris_game::TetrisBoard) -> String {
+fn board_to_rows(board: tetris_game::TetrisBoard<10, 20>) -> String {
     (0..tetris_game::StandardTetris::ROWS)
         .rev()
         .map(|row| {

@@ -55,7 +55,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering}
 use std::thread;
 use std::time::{Duration, Instant};
 use tetris_game::{
-    IsLost, Major, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
+    Major, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
     TetrisPieceOrientation, TetrisPiecePlacement,
 };
 
@@ -81,9 +81,9 @@ const MAX_CARRIER_ROUGHNESS: u32 = 16;
 // nothing. OMITTED = no cap (unbounded, may OOM). Empirically ~19.7M states cost ~5.5GB, so e.g.
 // `--max-states 20000000` keeps a run under ~6GB.
 
-/// Total surface roughness (bumpiness): sum over adjacent columns of |height[i] - height[i+1]|.
+/// Total surface roughness (bumpiness): sum of `|height[i] - height[i+1]|` over adjacent columns.
 #[inline]
-const fn surface_roughness(board: &TetrisBoard) -> u32 {
+const fn surface_roughness(board: &TetrisBoard<10, 20>) -> u32 {
     let heights = board.heights();
     let mut rough = 0u32;
     let mut i = 0;
@@ -95,7 +95,7 @@ const fn surface_roughness(board: &TetrisBoard) -> u32 {
 }
 
 #[inline]
-const fn carrier_contains(board: &TetrisBoard) -> bool {
+const fn carrier_contains(board: &TetrisBoard<10, 20>) -> bool {
     board.total_holes() <= MAX_CARRIER_HOLES
         && board.height() <= MAX_CARRIER_HEIGHT
         && surface_roughness(board) <= MAX_CARRIER_ROUGHNESS
@@ -163,13 +163,13 @@ enum Mode {
 /// Frontier value (similar to RocksDB implementation)
 #[derive(Clone, Copy)]
 struct FrontierValue {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     bag: TetrisPieceBagState,
 }
 
 impl FrontierValue {
     #[inline(always)]
-    const fn new(board: TetrisBoard, bag: TetrisPieceBagState) -> Self {
+    const fn new(board: TetrisBoard<10, 20>, bag: TetrisPieceBagState) -> Self {
         Self { board, bag }
     }
 }
@@ -213,7 +213,7 @@ impl PriorityFrontier {
     }
 
     /// Push an interned `(board, bag)` state. Always inserts (the `id` makes the key unique).
-    fn push(&self, board: TetrisBoard, bag: TetrisPieceBagState, id: u32) {
+    fn push(&self, board: TetrisBoard<10, 20>, bag: TetrisPieceBagState, id: u32) {
         let key = FrontierKey {
             priority: board.count(),
             id,
@@ -223,7 +223,7 @@ impl PriorityFrontier {
     }
 
     /// Pop the lowest-height entry.
-    fn pop(&self) -> Option<(TetrisBoard, TetrisPieceBagState)> {
+    fn pop(&self) -> Option<(TetrisBoard<10, 20>, TetrisPieceBagState)> {
         self.map.pop_front().map(|entry| {
             let value = entry.value();
             (value.board, value.bag)
@@ -246,13 +246,15 @@ struct PredecessorRef {
     piece_idx: u8,
 }
 
+type ForwardEdges = [Vec<(TetrisPieceOrientation<10>, StateId)>; 7];
+
 /// One AND-OR state node. ALL mutation of a node happens through the `Graph.nodes` DashMap
 /// shard lock for that id, so the predecessor-append vs death race serializes per node.
 struct Node {
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     bag: TetrisPieceBagState,
-    /// Surviving-placement edges per forced piece, written once at expansion.
-    forward: [Vec<(TetrisPieceOrientation, StateId)>; 7],
+    /// Surviving-placement edges, allocated only when this node is expanded.
+    forward: Option<Box<ForwardEdges>>,
     /// Reverse edges: parents that reach this node. Appended concurrently; drained on death.
     preds: Vec<PredecessorRef>,
     /// Live (non-dead) placement count per forced piece. Only forced pieces are meaningful;
@@ -265,16 +267,21 @@ struct Node {
 }
 
 impl Node {
-    fn new(board: TetrisBoard, bag: TetrisPieceBagState) -> Self {
+    fn new(board: TetrisBoard<10, 20>, bag: TetrisPieceBagState) -> Self {
         Self {
             board,
             bag,
-            forward: Default::default(),
+            forward: None,
             preds: Vec::new(),
             live: [0; 7],
             expanded: false,
             dead: false,
         }
+    }
+
+    fn forward_edges(&self) -> &ForwardEdges {
+        static EMPTY: ForwardEdges = [const { Vec::new() }; 7];
+        self.forward.as_deref().unwrap_or(&EMPTY)
     }
 }
 
@@ -282,7 +289,7 @@ impl Node {
 /// queue + a global in-flight counter for quiescence. Expansion and death propagation run as
 /// one interleaved task stream across all workers (see `process_expand` / `process_die`).
 struct Graph {
-    state_to_id: FxDashMap<(TetrisBoard, TetrisPieceBagState), StateId>,
+    state_to_id: FxDashMap<(TetrisBoard<10, 20>, TetrisPieceBagState), StateId>,
     nodes: FxDashMap<StateId, Node>,
     /// High-priority death tasks (drained before expansion by every worker).
     death_q: SegQueue<StateId>,
@@ -314,7 +321,7 @@ impl Graph {
 
     /// Intern a `(board, bag)` state, returning its id and whether it was newly created.
     /// The DashMap entry lock makes id assignment + node creation race-free across workers.
-    fn intern(&self, board: TetrisBoard, bag: TetrisPieceBagState) -> (StateId, bool) {
+    fn intern(&self, board: TetrisBoard<10, 20>, bag: TetrisPieceBagState) -> (StateId, bool) {
         match self.state_to_id.entry((board, bag)) {
             Entry::Occupied(o) => (*o.get(), false),
             Entry::Vacant(v) => {
@@ -351,8 +358,8 @@ impl Graph {
             && node.expanded
             && node
                 .bag
-                .iter_next_states()
-                .any(|(piece, _)| node.live[piece.index() as usize] == 0)
+                .iter_pieces()
+                .any(|piece| node.live[piece.index() as usize] == 0)
     }
 
     /// Inductive step: a successor died (or a dead-at-append compensation), so decrement `id`'s
@@ -408,11 +415,14 @@ impl Graph {
 #[derive(Clone)]
 struct SharedState {
     /// Committed `(board, bag, piece) -> orientation` policy (written in the commit pass).
-    lookup: Arc<FxDashMap<(TetrisBoard, TetrisPieceBagState, TetrisPiece), TetrisPieceOrientation>>,
+    lookup: Arc<
+        FxDashMap<
+            (TetrisBoard<10, 20>, TetrisPieceBagState, TetrisPiece),
+            TetrisPieceOrientation<10>,
+        >,
+    >,
     /// Priority frontier: height-indexed expansion queue for `(board, bag)` states.
     frontier: Arc<PriorityFrontier>,
-    /// Counter for frontier enqueued (used by PriorityFrontier).
-    frontier_enqueued: Arc<AtomicU64>,
     /// Stop the logger thread.
     shutdown: Arc<AtomicBool>,
     /// Ctrl+C: end expansion early (yields a conservative safe set).
@@ -425,7 +435,6 @@ impl SharedState {
         Self {
             lookup: Arc::new(new_fx_dashmap()),
             frontier: Arc::new(PriorityFrontier::new(frontier_enqueued.clone())),
-            frontier_enqueued,
             shutdown: Arc::new(AtomicBool::new(false)),
             shutdown_requested: Arc::new(AtomicBool::new(false)),
         }
@@ -449,7 +458,7 @@ impl SharedState {
             let ((board, bag, piece), orientation) = (*entry.key(), *entry.value());
             writer.write_all(&board.to_bytes(Major::Col))?;
             writer.write_all(&[bag.into()])?;
-            writer.write_all(&[piece.into()])?;
+            writer.write_all(&[piece.mask()])?;
             writer.write_all(&[orientation.index()])?;
         }
         writer.flush()?;
@@ -487,10 +496,16 @@ impl SharedState {
             let mut orientation_byte = [0u8; 1];
             reader.read_exact(&mut orientation_byte)?;
 
-            let board = TetrisBoard::from_bytes(board_bytes, Major::Col);
-            let bag = TetrisPieceBagState::from(bag_byte[0]);
-            let piece = TetrisPiece::from(piece_byte[0]);
-            let orientation = TetrisPieceOrientation::from_index(orientation_byte[0]);
+            let board = TetrisBoard::<10, 20>::from_bytes(board_bytes, Major::Col);
+            let bag = TetrisPieceBagState::try_from(bag_byte[0])
+                .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+            let piece = TetrisPiece::all()
+                .into_iter()
+                .find(|&piece| piece.mask() == piece_byte[0])
+                .ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid atlas piece bits")
+                })?;
+            let orientation = <TetrisPieceOrientation<10>>::from_index(orientation_byte[0]);
             self.lookup.insert((board, bag, piece), orientation);
         }
 
@@ -565,7 +580,7 @@ fn evaluated_alive(expanded: u64, dead: u64) -> u64 {
 fn process_expand(
     graph: &Graph,
     frontier: &PriorityFrontier,
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     bag: TetrisPieceBagState,
 ) {
     let (id, _) = graph.intern(board, bag);
@@ -575,18 +590,22 @@ fn process_expand(
         return;
     }
 
-    let mut edges: [Vec<(TetrisPieceOrientation, StateId)>; 7] = Default::default();
+    let mut edges: [Vec<(TetrisPieceOrientation<10>, StateId)>; 7] = Default::default();
     let mut live: [i32; 7] = [0; 7];
     let mut pending: Vec<(StateId, u8)> = Vec::new(); // (succ, piece_idx) reverse edges to add
-    let mut new_succs: Vec<(TetrisBoard, TetrisPieceBagState, StateId)> = Vec::new();
-
-    for (piece, next_bag) in bag.iter_next_states() {
+    let mut new_succs: Vec<(TetrisBoard<10, 20>, TetrisPieceBagState, StateId)> = Vec::new();
+    for piece in bag.iter_pieces() {
+        let mut next_bag = bag;
+        next_bag.remove(piece);
+        if next_bag.empty() {
+            next_bag.fill();
+        }
         let piece_idx = piece.index() as usize;
-        for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+        for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
             let mut next_board = board;
             let result = next_board.apply_piece_placement(placement);
             // Drop moves that top out or leave the carrier (keeps the graph closed + finite).
-            if result.is_lost == IsLost::LOST || !carrier_contains(&next_board) {
+            if result.is_lost || !carrier_contains(&next_board) {
                 continue;
             }
             let (succ_id, is_new) = graph.intern(next_board, next_bag);
@@ -602,8 +621,9 @@ fn process_expand(
 
     // Publish forward edges + live counts + `expanded` under this node's lock (single point;
     // after this, concurrent successor deaths may only decrement `live`).
+    let forward = Box::new(edges);
     if let Some(mut node) = graph.nodes.get_mut(&id) {
-        node.forward = edges;
+        node.forward = Some(forward);
         node.live = live;
         node.expanded = true;
     }
@@ -677,7 +697,10 @@ fn process_die(graph: &Graph, id: StateId) {
 /// `Vec`s first; the parallel pass then holds at most one node lock at a time.
 fn commit_surviving_policy(
     graph: &Graph,
-    lookup: &FxDashMap<(TetrisBoard, TetrisPieceBagState, TetrisPiece), TetrisPieceOrientation>,
+    lookup: &FxDashMap<
+        (TetrisBoard<10, 20>, TetrisPieceBagState, TetrisPiece),
+        TetrisPieceOrientation<10>,
+    >,
 ) -> SolveSummary {
     let n = graph.state_count();
 
@@ -704,11 +727,11 @@ fn commit_surviving_policy(
         };
         let board = node.board;
         let bag = node.bag;
-        for (piece, _next) in bag.iter_next_states() {
+        for piece in bag.iter_pieces() {
             let piece_idx = piece.index() as usize;
             // Pick a surviving successor edge by the heuristic — reads only the `meta`/`dead`
             // snapshots, so there is no second DashMap lock acquired while `node` is held.
-            let best = node.forward[piece_idx]
+            let best = node.forward_edges()[piece_idx]
                 .iter()
                 .filter(|(_, succ)| !dead[*succ as usize])
                 .min_by_key(|(_, succ)| meta[*succ as usize]);
@@ -934,7 +957,10 @@ fn main() {
 /// Verify the committed atlas is closed: every committed move lands on a state that is itself
 /// fully committed (has a move for every forced piece). Returns the number of violations.
 fn verify_closure(
-    lookup: &FxDashMap<(TetrisBoard, TetrisPieceBagState, TetrisPiece), TetrisPieceOrientation>,
+    lookup: &FxDashMap<
+        (TetrisBoard<10, 20>, TetrisPieceBagState, TetrisPiece),
+        TetrisPieceOrientation<10>,
+    >,
 ) -> usize {
     let mut violations = 0usize;
     for entry in lookup.iter() {
@@ -942,7 +968,7 @@ fn verify_closure(
 
         let mut next_board = board;
         let result = next_board.apply_piece_placement(TetrisPiecePlacement { piece, orientation });
-        if result.is_lost == IsLost::LOST {
+        if result.is_lost {
             violations += 1; // a committed move must never top out
             continue;
         }
@@ -950,12 +976,12 @@ fn verify_closure(
         // Successor bag = current bag minus the placed piece (auto-refilled when empty).
         let mut next_bag = bag;
         next_bag.remove(piece);
-        if next_bag.is_empty() {
+        if next_bag.empty() {
             next_bag.fill();
         }
 
         // Closure: the successor state must have a committed move for every forced piece.
-        for (next_piece, _) in next_bag.iter_next_states() {
+        for next_piece in next_bag.iter_pieces() {
             if !lookup.contains_key(&(next_board, next_bag, next_piece)) {
                 violations += 1;
             }
@@ -975,11 +1001,11 @@ fn verify_closure(
 /// a forced loss in the remaining `depth - 1` pieces. `in_carrier` is passed in so tests can
 /// supply their own boundary independently of the global carrier.
 fn forced_loss_within(
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     bag: TetrisPieceBagState,
     depth: u32,
-    in_carrier: &impl Fn(&TetrisBoard) -> bool,
-    memo: &mut HashMap<(TetrisBoard, TetrisPieceBagState, u32), bool>,
+    in_carrier: &impl Fn(&TetrisBoard<10, 20>) -> bool,
+    memo: &mut HashMap<(TetrisBoard<10, 20>, TetrisPieceBagState, u32), bool>,
 ) -> bool {
     if depth == 0 {
         return false; // survived the horizon without being forced to lose
@@ -989,14 +1015,19 @@ fn forced_loss_within(
     }
 
     let mut forced = false;
-    for (piece, next_bag) in bag.iter_next_states() {
+    for piece in bag.iter_pieces() {
+        let mut next_bag = bag;
+        next_bag.remove(piece);
+        if next_bag.empty() {
+            next_bag.fill();
+        }
         // The player needs ANY placement of this piece that survives; if none, the adversary
         // simply hands them this piece and they lose.
         let mut survivable = false;
-        for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+        for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
             let mut next_board = board;
             let result = next_board.apply_piece_placement(placement);
-            if result.is_lost == IsLost::LOST || !in_carrier(&next_board) {
+            if result.is_lost || !in_carrier(&next_board) {
                 continue; // tops out or leaves the carrier — not a usable move
             }
             if !forced_loss_within(next_board, next_bag, depth - 1, in_carrier, memo) {
@@ -1016,10 +1047,13 @@ fn forced_loss_within(
 
 /// Smallest piece-count at which the empty board is forced to lose within the given carrier,
 /// or `None` if it survives at least `cap` pieces.
-fn referee_forced_loss_depth(cap: u32, in_carrier: &impl Fn(&TetrisBoard) -> bool) -> Option<u32> {
+fn referee_forced_loss_depth(
+    cap: u32,
+    in_carrier: &impl Fn(&TetrisBoard<10, 20>) -> bool,
+) -> Option<u32> {
     let mut memo = HashMap::new();
-    let board = TetrisBoard::EMPTY_BOARD;
-    let bag = TetrisPieceBagState::new();
+    let board = TetrisBoard::<10, 20>::new();
+    let bag = TetrisPieceBagState::full();
     (1..=cap).find(|&k| forced_loss_within(board, bag, k, in_carrier, &mut memo))
 }
 
@@ -1027,7 +1061,7 @@ fn referee_forced_loss_depth(cap: u32, in_carrier: &impl Fn(&TetrisBoard) -> boo
 /// to cross-check the engine's SUCCESS/FAILED result. The carrier is supplied at runtime so you
 /// can sweep tightness without recompiling.
 pub fn run_referee(cap: u32, holes: u32, height: u32, rough: u32) {
-    let in_carrier = |b: &TetrisBoard| {
+    let in_carrier = |b: &TetrisBoard<10, 20>| {
         b.total_holes() <= holes && b.height() <= height && surface_roughness(b) <= rough
     };
 
@@ -1070,9 +1104,9 @@ fn audit_leaks(graph: &Graph) -> usize {
         if node.dead {
             continue;
         }
-        for (piece, _) in node.bag.iter_next_states() {
+        for piece in node.bag.iter_pieces() {
             let pi = piece.index() as usize;
-            let surviving = node.forward[pi]
+            let surviving = node.forward_edges()[pi]
                 .iter()
                 .filter(|(_, s)| !dead[*s as usize])
                 .count();
@@ -1083,7 +1117,7 @@ fn audit_leaks(graph: &Graph) -> usize {
                         "LEAK id={} piece={piece:?} live={} edges={} expanded={}",
                         e.key(),
                         node.live[pi],
-                        node.forward[pi].len(),
+                        node.forward_edges()[pi].len(),
                         node.expanded
                     );
                     shown += 1;
@@ -1152,11 +1186,11 @@ pub fn run_tetris_atlas_create(base_path: &str, max_states: Option<usize>) {
     let graph = Arc::new(Graph::new());
 
     // Seed the empty board: intern it, count it in-flight, push to the frontier.
-    let (seed_id, _) = graph.intern(TetrisBoard::EMPTY_BOARD, TetrisPieceBagState::new());
+    let (seed_id, _) = graph.intern(TetrisBoard::<10, 20>::new(), TetrisPieceBagState::full());
     graph.in_flight.fetch_add(1, Ordering::SeqCst);
     state.frontier.push(
-        TetrisBoard::EMPTY_BOARD,
-        TetrisPieceBagState::new(),
+        TetrisBoard::<10, 20>::new(),
+        TetrisPieceBagState::full(),
         seed_id,
     );
 
@@ -1360,10 +1394,8 @@ pub fn run_tetris_atlas_explore(base_path: &str) {
 
     #[derive(Clone)]
     struct TimelineEntry {
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         bag: TetrisPieceBagState,
-        piece: TetrisPiece,
-        orientation: TetrisPieceOrientation,
         lines_cleared: usize,
     }
 
@@ -1375,9 +1407,9 @@ pub fn run_tetris_atlas_explore(base_path: &str) {
             }
         }
 
-        fn current_board(&self) -> TetrisBoard {
+        fn current_board(&self) -> TetrisBoard<10, 20> {
             if self.current_position == 0 {
-                TetrisBoard::EMPTY_BOARD
+                TetrisBoard::<10, 20>::new()
             } else {
                 self.entries[self.current_position - 1].board
             }
@@ -1385,7 +1417,7 @@ pub fn run_tetris_atlas_explore(base_path: &str) {
 
         fn current_bag(&self) -> TetrisPieceBagState {
             if self.current_position == 0 {
-                TetrisPieceBagState::new()
+                TetrisPieceBagState::full()
             } else {
                 self.entries[self.current_position - 1].bag
             }
@@ -1401,18 +1433,14 @@ pub fn run_tetris_atlas_explore(base_path: &str) {
 
         fn push(
             &mut self,
-            board: TetrisBoard,
+            board: TetrisBoard<10, 20>,
             bag: TetrisPieceBagState,
-            piece: TetrisPiece,
-            orientation: TetrisPieceOrientation,
             lines_cleared: usize,
         ) {
             self.entries.truncate(self.current_position);
             self.entries.push(TimelineEntry {
                 board,
                 bag,
-                piece,
-                orientation,
                 lines_cleared,
             });
             self.current_position = self.entries.len();
@@ -1442,7 +1470,7 @@ pub fn run_tetris_atlas_explore(base_path: &str) {
     }
 
     let mut timeline = Timeline::new();
-    let mut game = tetris_game::TetrisGame::new();
+    let mut game = <tetris_game::TetrisGame>::new();
 
     // Setup terminal
     enable_raw_mode().expect("Failed to enable raw mode");
@@ -1516,13 +1544,13 @@ pub fn run_tetris_atlas_explore(base_path: &str) {
                 let mut piece_items: Vec<ListItem> = vec![];
 
                 for (idx, piece) in [
-                    TetrisPiece::O_PIECE,
-                    TetrisPiece::I_PIECE,
-                    TetrisPiece::L_PIECE,
-                    TetrisPiece::J_PIECE,
-                    TetrisPiece::S_PIECE,
-                    TetrisPiece::Z_PIECE,
-                    TetrisPiece::T_PIECE,
+                    TetrisPiece::O,
+                    TetrisPiece::I,
+                    TetrisPiece::L,
+                    TetrisPiece::J,
+                    TetrisPiece::S,
+                    TetrisPiece::Z,
+                    TetrisPiece::T,
                 ]
                 .iter()
                 .enumerate()
@@ -1580,30 +1608,30 @@ pub fn run_tetris_atlas_explore(base_path: &str) {
                         }
                         KeyCode::Char(c) => {
                             let piece_opt = match c {
-                                '1' => Some(TetrisPiece::O_PIECE),
-                                '2' => Some(TetrisPiece::I_PIECE),
-                                '3' => Some(TetrisPiece::L_PIECE),
-                                '4' => Some(TetrisPiece::J_PIECE),
-                                '5' => Some(TetrisPiece::S_PIECE),
-                                '6' => Some(TetrisPiece::Z_PIECE),
-                                '7' => Some(TetrisPiece::T_PIECE),
-                                'o' | 'O' => Some(TetrisPiece::O_PIECE),
-                                'i' | 'I' => Some(TetrisPiece::I_PIECE),
-                                'l' | 'L' => Some(TetrisPiece::L_PIECE),
-                                'j' | 'J' => Some(TetrisPiece::J_PIECE),
-                                's' | 'S' => Some(TetrisPiece::S_PIECE),
-                                'z' | 'Z' => Some(TetrisPiece::Z_PIECE),
-                                't' | 'T' => Some(TetrisPiece::T_PIECE),
+                                '1' => Some(TetrisPiece::O),
+                                '2' => Some(TetrisPiece::I),
+                                '3' => Some(TetrisPiece::L),
+                                '4' => Some(TetrisPiece::J),
+                                '5' => Some(TetrisPiece::S),
+                                '6' => Some(TetrisPiece::Z),
+                                '7' => Some(TetrisPiece::T),
+                                'o' | 'O' => Some(TetrisPiece::O),
+                                'i' | 'I' => Some(TetrisPiece::I),
+                                'l' | 'L' => Some(TetrisPiece::L),
+                                'j' | 'J' => Some(TetrisPiece::J),
+                                's' | 'S' => Some(TetrisPiece::S),
+                                'z' | 'Z' => Some(TetrisPiece::Z),
+                                't' | 'T' => Some(TetrisPiece::T),
                                 'r' | 'R' => {
                                     // Random piece from available pieces in DB
                                     let available: Vec<TetrisPiece> = [
-                                        TetrisPiece::O_PIECE,
-                                        TetrisPiece::I_PIECE,
-                                        TetrisPiece::L_PIECE,
-                                        TetrisPiece::J_PIECE,
-                                        TetrisPiece::S_PIECE,
-                                        TetrisPiece::Z_PIECE,
-                                        TetrisPiece::T_PIECE,
+                                        TetrisPiece::O,
+                                        TetrisPiece::I,
+                                        TetrisPiece::L,
+                                        TetrisPiece::J,
+                                        TetrisPiece::S,
+                                        TetrisPiece::Z,
+                                        TetrisPiece::T,
                                     ]
                                     .iter()
                                     .copied()
@@ -1640,7 +1668,7 @@ pub fn run_tetris_atlas_explore(base_path: &str) {
                                             orientation,
                                         };
                                         let result = game.apply_placement(placement);
-                                        if result.is_lost != IsLost::LOST {
+                                        if !result.is_lost {
                                             let mut new_bag = bag;
                                             new_bag.remove(piece);
                                             // Auto-refill bag if empty
@@ -1649,13 +1677,7 @@ pub fn run_tetris_atlas_explore(base_path: &str) {
                                             }
                                             let lines_cleared = timeline.total_lines_cleared()
                                                 + result.lines_cleared as usize;
-                                            timeline.push(
-                                                game.board,
-                                                new_bag,
-                                                piece,
-                                                orientation,
-                                                lines_cleared,
-                                            );
+                                            timeline.push(game.board, new_bag, lines_cleared);
                                         }
                                     }
                                 }
@@ -1690,19 +1712,137 @@ mod tests {
     use super::*;
     use tetris_game::TetrisPiece;
 
+    /// Replay production graph/frontier work; hash and destruction are outside the timer.
+    fn replay_expansions(expansions: usize) -> (usize, u64, u64, u64) {
+        let start = Instant::now();
+        let graph = Graph::new();
+        let frontier = PriorityFrontier::new(Arc::new(AtomicU64::new(0)));
+        let (seed, _) = graph.intern(TetrisBoard::<10, 20>::new(), TetrisPieceBagState::full());
+        graph.in_flight.fetch_add(1, Ordering::SeqCst);
+        frontier.push(
+            TetrisBoard::<10, 20>::new(),
+            TetrisPieceBagState::full(),
+            seed,
+        );
+        for _ in 0..expansions {
+            while let Some(dead) = graph.death_q.pop() {
+                process_die(&graph, dead);
+                graph.in_flight.fetch_sub(1, Ordering::SeqCst);
+            }
+            assert!(!graph.seed_dead.load(Ordering::SeqCst));
+            let (board, bag) = frontier.pop().expect("replay frontier exhausted");
+            process_expand(&graph, &frontier, board, bag);
+            graph.in_flight.fetch_sub(1, Ordering::SeqCst);
+        }
+        let elapsed = start.elapsed();
+        // Hash every node in intern order, including the graph's forward and reverse
+        // edges. This detects changed ordering, carrier filtering and death semantics.
+        let mut digest = 0xcbf2_9ce4_8422_2325u64;
+        let mut append = |word: u64| {
+            for byte in word.to_le_bytes() {
+                digest = (digest ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+            }
+        };
+        let states = graph.nodes.len();
+        for id in 0..states as u32 {
+            let node = graph.nodes.get(&id).expect("missing interned node");
+            append(id as u64);
+            for &col in node.board.as_limbs() {
+                append(col as u64);
+            }
+            append(u8::from(node.bag) as u64);
+            append(node.expanded as u64);
+            append(node.dead as u64);
+            for (i, edges) in node.forward_edges().iter().enumerate() {
+                append(node.live[i] as u64);
+                append(edges.len() as u64);
+                for (orientation, child) in edges {
+                    append(orientation.index() as u64);
+                    append(*child as u64);
+                }
+            }
+            append(node.preds.len() as u64);
+            for pred in &node.preds {
+                append(pred.parent as u64);
+                append(pred.piece_idx as u64);
+            }
+        }
+        assert_eq!(
+            graph.expanded_count.load(Ordering::SeqCst),
+            expansions as u64
+        );
+        assert_eq!(
+            graph.in_flight.load(Ordering::SeqCst),
+            frontier.len() as u64 + graph.death_q.len() as u64
+        );
+        println!(
+            "atlas_replay expansions={expansions} states={states} edges={} dead={} digest={digest:016x} elapsed_ns={} node_bytes={}",
+            graph.edge_count.load(Ordering::SeqCst),
+            graph.dead_count.load(Ordering::SeqCst),
+            elapsed.as_nanos(),
+            std::mem::size_of::<Node>()
+        );
+        (
+            states,
+            graph.edge_count.load(Ordering::SeqCst),
+            graph.dead_count.load(Ordering::SeqCst),
+            digest,
+        )
+    }
+
+    #[test]
+    #[ignore = "bounded production replay for performance comparisons"]
+    fn bounded_expansion_replay() {
+        assert_eq!(
+            replay_expansions(512),
+            (12_852, 21_567, 179, 0x264b_357e_ab8b_16fd)
+        );
+    }
+
+    #[test]
+    #[ignore = "longer production replay for performance comparisons"]
+    fn long_expansion_replay() {
+        assert_eq!(
+            replay_expansions(2_048),
+            (38_670, 66_470, 341, 0xec7f_a802_1e2c_b3e8)
+        );
+    }
+
+    #[test]
+    fn forward_edges_are_allocated_only_for_expanded_nodes() {
+        let graph = Graph::new();
+        let frontier = PriorityFrontier::new(Arc::new(AtomicU64::new(0)));
+        let board = TetrisBoard::<10, 20>::new();
+        let bag = TetrisPieceBagState::full();
+        let (seed, _) = graph.intern(board, bag);
+        assert!(graph.nodes.get(&seed).unwrap().forward.is_none());
+        process_expand(&graph, &frontier, board, bag);
+        let parent = graph.nodes.get(&seed).unwrap();
+        assert!(parent.expanded);
+        assert!(parent.forward.is_some());
+        drop(parent);
+        for node in graph.nodes.iter() {
+            if *node.key() != seed {
+                assert!(!node.expanded);
+                assert!(node.forward.is_none());
+                assert!(node.forward_edges().iter().all(Vec::is_empty));
+            }
+        }
+    }
+
     const ALL_PIECES: [TetrisPiece; 7] = [
-        TetrisPiece::O_PIECE,
-        TetrisPiece::I_PIECE,
-        TetrisPiece::L_PIECE,
-        TetrisPiece::J_PIECE,
-        TetrisPiece::S_PIECE,
-        TetrisPiece::Z_PIECE,
-        TetrisPiece::T_PIECE,
+        TetrisPiece::O,
+        TetrisPiece::I,
+        TetrisPiece::L,
+        TetrisPiece::J,
+        TetrisPiece::S,
+        TetrisPiece::Z,
+        TetrisPiece::T,
     ];
 
     /// A bag containing exactly the given pieces (its AND-obligations).
     fn bag_of(pieces: &[TetrisPiece]) -> TetrisPieceBagState {
-        let mut bag = TetrisPieceBagState::new(); // full 7-bag
+        let mut bag = TetrisPieceBagState::full(); // full 7-bag
         for p in ALL_PIECES {
             if !pieces.contains(&p) {
                 bag.remove(p);
@@ -1713,17 +1853,17 @@ mod tests {
 
     /// A distinct synthetic board per `k` (its byte pattern differs), so `(board, bag)` keys do
     /// not collide in the committed lookup. Not a "valid" board — only used as a distinct key.
-    fn make_board(k: u8) -> TetrisBoard {
+    fn make_board(k: u8) -> TetrisBoard<10, 20> {
         let mut bytes = [0u8; 40];
         bytes[0] = k;
-        TetrisBoard::from_bytes(bytes, Major::Col)
+        TetrisBoard::<10, 20>::from_bytes(bytes, Major::Col)
     }
 
     /// Insert node `id` with the given board + bag (optionally already expanded).
     fn make_node(
         g: &Graph,
         id: StateId,
-        board: TetrisBoard,
+        board: TetrisBoard<10, 20>,
         bag: TetrisPieceBagState,
         expanded: bool,
     ) {
@@ -1738,10 +1878,10 @@ mod tests {
 
     /// Add a forward edge `parent --piece(ori)--> succ` plus its reverse edge, updating `live`.
     fn link(g: &Graph, parent: StateId, succ: StateId, piece_idx: usize, ori_idx: u8) {
-        let ori = TetrisPieceOrientation::from_index(ori_idx);
+        let ori = <TetrisPieceOrientation<10>>::from_index(ori_idx);
         {
             let mut p = g.nodes.get_mut(&parent).unwrap();
-            p.forward[piece_idx].push((ori, succ));
+            p.forward.get_or_insert_with(Box::default)[piece_idx].push((ori, succ));
             p.live[piece_idx] += 1;
         }
         {
@@ -1769,8 +1909,8 @@ mod tests {
     /// surviving placement (including a self-sustaining cycle).
     #[test]
     fn death_propagates_backward_but_spares_a_surviving_cycle() {
-        let i = TetrisPiece::I_PIECE.index() as usize;
-        let bag = bag_of(&[TetrisPiece::I_PIECE]);
+        let i = TetrisPiece::I.index() as usize;
+        let bag = bag_of(&[TetrisPiece::I]);
 
         let g = Graph::new();
         for id in 0u32..6 {
@@ -1801,8 +1941,8 @@ mod tests {
     #[test]
     fn state_dies_when_any_forced_piece_is_unsatisfiable() {
         // Bag = {I, T}: two obligations. I has a self-loop placement; T has none.
-        let i = TetrisPiece::I_PIECE.index() as usize;
-        let bag = bag_of(&[TetrisPiece::I_PIECE, TetrisPiece::T_PIECE]);
+        let i = TetrisPiece::I.index() as usize;
+        let bag = bag_of(&[TetrisPiece::I, TetrisPiece::T]);
 
         let g = Graph::new();
         make_node(&g, 0, make_board(0), bag, true);
@@ -1819,8 +1959,8 @@ mod tests {
     /// This is what keeps a transient mid-expansion zero from falsely killing a state.
     #[test]
     fn death_by_exhaustion_waits_for_expanded() {
-        let i = TetrisPiece::I_PIECE.index() as usize;
-        let bag = bag_of(&[TetrisPiece::I_PIECE]);
+        let i = TetrisPiece::I.index() as usize;
+        let bag = bag_of(&[TetrisPiece::I]);
 
         let g = Graph::new();
         make_node(&g, 0, make_board(0), bag, false); // parent NOT yet expanded
@@ -1850,8 +1990,8 @@ mod tests {
     /// successor edge (not a dead one), and must write nothing for dead states.
     #[test]
     fn commit_writes_surviving_edges_and_skips_dead_states() {
-        let i = TetrisPiece::I_PIECE.index() as usize;
-        let bag = bag_of(&[TetrisPiece::I_PIECE]);
+        let i = TetrisPiece::I.index() as usize;
+        let bag = bag_of(&[TetrisPiece::I]);
 
         let g = Graph::new();
         for id in 0u32..6 {
@@ -1881,7 +2021,7 @@ mod tests {
             "one entry per safe state (distinct boards)"
         );
 
-        let key = |k: u8| (make_board(k), bag, TetrisPiece::I_PIECE);
+        let key = |k: u8| (make_board(k), bag, TetrisPiece::I);
         // State 0: only surviving edge is ->1 (ori 1).
         assert_eq!(lookup.get(&key(0)).unwrap().index(), 1);
         // State 1: the DEAD edge ->2 (ori 2) must be filtered out; commit picks ->5 (ori 3).
@@ -1902,17 +2042,17 @@ mod tests {
     fn verify_closure_detects_open_policy() {
         // Empty policy is trivially closed.
         let empty: FxDashMap<
-            (TetrisBoard, TetrisPieceBagState, TetrisPiece),
-            TetrisPieceOrientation,
+            (TetrisBoard<10, 20>, TetrisPieceBagState, TetrisPiece),
+            TetrisPieceOrientation<10>,
         > = new_fx_dashmap();
         assert_eq!(verify_closure(&empty), 0);
 
         // A single real committed move whose successor state has no committed moves is OPEN.
         let lookup = new_fx_dashmap();
-        let board = TetrisBoard::EMPTY_BOARD;
-        let bag = TetrisPieceBagState::new();
-        let piece = TetrisPiece::I_PIECE;
-        let placement = TetrisPiecePlacement::all_from_piece(piece)[0];
+        let board = TetrisBoard::<10, 20>::new();
+        let bag = TetrisPieceBagState::full();
+        let piece = TetrisPiece::I;
+        let placement = <TetrisPiecePlacement<10>>::all_from_piece(piece)[0];
         lookup.insert((board, bag, piece), placement.orientation);
 
         let violations = verify_closure(&lookup);
@@ -1930,8 +2070,8 @@ mod tests {
     fn referee_depth_zero_is_never_forced_loss() {
         let mut memo = HashMap::new();
         assert!(!forced_loss_within(
-            TetrisBoard::EMPTY_BOARD,
-            TetrisPieceBagState::new(),
+            TetrisBoard::<10, 20>::new(),
+            TetrisPieceBagState::full(),
             0,
             &|_| true,
             &mut memo
@@ -1944,8 +2084,8 @@ mod tests {
     fn referee_immediate_loss_when_nothing_fits() {
         let mut memo = HashMap::new();
         assert!(forced_loss_within(
-            TetrisBoard::EMPTY_BOARD,
-            TetrisPieceBagState::new(),
+            TetrisBoard::<10, 20>::new(),
+            TetrisPieceBagState::full(),
             1,
             &|_| false,
             &mut memo
@@ -1958,8 +2098,8 @@ mod tests {
     fn referee_no_loss_when_everything_fits() {
         let mut memo = HashMap::new();
         assert!(!forced_loss_within(
-            TetrisBoard::EMPTY_BOARD,
-            TetrisPieceBagState::new(),
+            TetrisBoard::<10, 20>::new(),
+            TetrisPieceBagState::full(),
             5,
             &|_| true,
             &mut memo
@@ -2017,20 +2157,42 @@ mod tests {
     // --- Persistence round-trip (the graceful early-stop relies on committing + saving whatever
     // conservative safe set exists, so the on-disk format must round-trip exactly). ---
 
+    #[test]
+    fn load_rejects_invalid_piece_bits() {
+        let path = std::env::temp_dir().join(format!(
+            "tetris_atlas_invalid_piece_{}.bin",
+            std::process::id()
+        ));
+        for bits in [0, 3, 128, 255] {
+            let mut bytes = 1u64.to_le_bytes().to_vec();
+            bytes.extend_from_slice(&[0; 40]);
+            bytes.extend_from_slice(&[TetrisPieceBagState::FULL_MASK, bits, 0]);
+            std::fs::write(&path, bytes).unwrap();
+            let state = SharedState::new();
+            let error = state.load_from_disk(path.to_str().unwrap()).unwrap_err();
+            assert_eq!(
+                error.downcast_ref::<std::io::Error>().unwrap().kind(),
+                std::io::ErrorKind::InvalidData
+            );
+            assert!(state.lookup.is_empty());
+        }
+        std::fs::remove_file(path).unwrap();
+    }
+
     /// `save_to_disk` then `load_from_disk` must reproduce the committed lookup exactly:
     /// same entry count, same (board, bag, piece) keys, same orientation values.
     #[test]
     fn save_load_roundtrip_preserves_committed_lookup() {
-        let bag = bag_of(&[TetrisPiece::I_PIECE, TetrisPiece::T_PIECE]);
+        let bag = bag_of(&[TetrisPiece::I, TetrisPiece::T]);
         let (b0, p0, o0) = (
             make_board(0),
-            TetrisPiece::I_PIECE,
-            TetrisPieceOrientation::from_index(2),
+            TetrisPiece::I,
+            <TetrisPieceOrientation<10>>::from_index(2),
         );
         let (b1, p1, o1) = (
             make_board(9),
-            TetrisPiece::T_PIECE,
-            TetrisPieceOrientation::from_index(0),
+            TetrisPiece::T,
+            <TetrisPieceOrientation<10>>::from_index(0),
         );
 
         let state = SharedState::new();

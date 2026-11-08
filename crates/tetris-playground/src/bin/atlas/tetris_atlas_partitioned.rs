@@ -23,8 +23,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use tetris_game::{
-    IsLost, StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
-    TetrisPieceOrientation, TetrisPiecePlacement,
+    StandardTetris, TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState,
+    TetrisPieceOrientation, TetrisPiecePlacement, constants,
 };
 use tetris_search::{TetrisBoardScoreState, height_mse_board_score};
 use tetris_utils::HeaplessVec;
@@ -34,7 +34,7 @@ static GLOBAL_ALLOCATOR: MiMalloc = MiMalloc;
 
 const PACKED_COLUMN_BYTES: usize = 3;
 const STATE_KEY_LEN: usize = StandardTetris::COLS * PACKED_COLUMN_BYTES + 1;
-const NODE_RECORD_LEN: usize = TetrisPiece::NUM_PIECES;
+const NODE_RECORD_LEN: usize = constants::NUM_TETRIS_PIECES;
 const REDGE_KEY_LEN: usize = STATE_KEY_LEN * 2 + 2;
 const WORK_KEY_LEN: usize = 11;
 const VIRTUAL_SHARDS: usize = 256;
@@ -70,9 +70,9 @@ const STATUS_SEED_DEAD: &[u8] = b"seed-dead";
 const STATUS_ABORTED: &[u8] = b"aborted";
 
 const WORK_BATCH_COMMANDS: usize = 1024;
-const MAX_CANDIDATES_PER_COMMAND: usize = TetrisPiecePlacement::NUM_PLACEMENTS;
+const MAX_CANDIDATES_PER_COMMAND: usize = <tetris_game::TetrisPiecePlacement<10>>::NUM_PLACEMENTS;
 const MAX_CANDIDATES_PER_BATCH: usize = WORK_BATCH_COMMANDS * MAX_CANDIDATES_PER_COMMAND;
-const MAX_CHOICE_REQUESTS_PER_BATCH: usize = WORK_BATCH_COMMANDS * TetrisPiece::NUM_PIECES;
+const MAX_CHOICE_REQUESTS_PER_BATCH: usize = WORK_BATCH_COMMANDS * constants::NUM_TETRIS_PIECES;
 const MAX_REDGES_PER_DRAIN: usize = 4_096;
 const MAX_WRITE_BATCH_BYTES: usize = 8 * 1024 * 1024;
 const MAX_COMMAND_WRITE_BYTES: usize = 700_000;
@@ -154,12 +154,12 @@ enum Mode {
 struct StateKey([u8; STATE_KEY_LEN]);
 
 impl StateKey {
-    fn from_board_bag(board: TetrisBoard, bag: TetrisPieceBagState) -> Result<Self> {
+    fn from_board_bag(board: TetrisBoard<10, 20>, bag: TetrisPieceBagState) -> Result<Self> {
         let bag_byte = u8::from(bag);
         validate_bag_byte(bag_byte)?;
 
         let mut out = [0u8; STATE_KEY_LEN];
-        for (column, limb) in board.as_limbs().into_iter().enumerate() {
+        for (column, &limb) in board.as_limbs().iter().enumerate() {
             ensure!(
                 limb >> StandardTetris::ROWS == 0,
                 "board column {column} has bits above row {}",
@@ -187,7 +187,7 @@ impl StateKey {
         Ok(key)
     }
 
-    fn decode(self) -> Result<(TetrisBoard, TetrisPieceBagState)> {
+    fn decode(self) -> Result<(TetrisBoard<10, 20>, TetrisPieceBagState)> {
         let mut limbs = [0u32; StandardTetris::COLS];
         for (column, limb) in limbs.iter_mut().enumerate() {
             let offset = column * PACKED_COLUMN_BYTES;
@@ -201,15 +201,15 @@ impl StateKey {
         let bag_byte = self.0[STATE_KEY_LEN - 1];
         validate_bag_byte(bag_byte)?;
         Ok((
-            TetrisBoard::from_limbs(limbs),
-            TetrisPieceBagState::from(bag_byte),
+            TetrisBoard::<10, 20>::from_limbs(limbs),
+            TetrisPieceBagState::try_from(bag_byte)?,
         ))
     }
 
     fn bag(self) -> Result<TetrisPieceBagState> {
         let bag = self.0[STATE_KEY_LEN - 1];
         validate_bag_byte(bag)?;
-        Ok(TetrisPieceBagState::from(bag))
+        Ok(TetrisPieceBagState::try_from(bag)?)
     }
 
     const fn as_bytes(&self) -> &[u8; STATE_KEY_LEN] {
@@ -447,10 +447,10 @@ impl ClosureGauges {
 
 fn validate_piece_index(index: u8) -> Result<TetrisPiece> {
     ensure!(
-        (index as usize) < TetrisPiece::NUM_PIECES,
+        (index as usize) < constants::NUM_TETRIS_PIECES,
         "invalid piece index {index}"
     );
-    Ok(TetrisPiece::from_index(index))
+    Ok(TetrisPiece::all()[index as usize])
 }
 
 fn producer_sequence_meta_key(producer: u8) -> [u8; 14] {
@@ -474,17 +474,17 @@ fn decode_u64_metadata(bytes: &[u8], name: &str) -> Result<u64> {
     Ok(u64::from_be_bytes(encoded))
 }
 
-fn validate_orientation(piece: TetrisPiece, index: u8) -> Result<TetrisPieceOrientation> {
+fn validate_orientation(piece: TetrisPiece, index: u8) -> Result<TetrisPieceOrientation<10>> {
     ensure!(
-        (index as usize) < TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS,
+        (index as usize) < <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS,
         "invalid orientation index {index}"
     );
-    let mask = TetrisPieceOrientation::ORIENTATION_MASKS_BY_PIECE[piece.index() as usize];
+    let mask = <TetrisPieceOrientation<10>>::bitmask_from_piece(piece).inner();
     ensure!(
         mask & (1u64 << index) != 0,
         "orientation {index} does not belong to piece {piece:?}"
     );
-    Ok(TetrisPieceOrientation::from_index(index))
+    Ok(<TetrisPieceOrientation<10>>::from_index(index))
 }
 
 fn cf<'db>(db: &'db DB, name: &str) -> Result<Arc<BoundColumnFamily<'db>>> {
@@ -500,7 +500,7 @@ impl ReverseEdgeKey {
         succ: StateKey,
         pred: StateKey,
         piece: TetrisPiece,
-        orientation: TetrisPieceOrientation,
+        orientation: TetrisPieceOrientation<10>,
     ) -> Result<Self> {
         validate_orientation(piece, orientation.index())?;
         let mut out = [0u8; REDGE_KEY_LEN];
@@ -524,7 +524,7 @@ impl ReverseEdgeKey {
         Ok(key)
     }
 
-    fn decode(self) -> Result<(StateKey, StateKey, TetrisPiece, TetrisPieceOrientation)> {
+    fn decode(self) -> Result<(StateKey, StateKey, TetrisPiece, TetrisPieceOrientation<10>)> {
         let succ = StateKey::from_slice(&self.0[..STATE_KEY_LEN])?;
         let pred = StateKey::from_slice(&self.0[STATE_KEY_LEN..STATE_KEY_LEN * 2])?;
         let piece = validate_piece_index(self.0[STATE_KEY_LEN * 2])?;
@@ -715,26 +715,26 @@ enum Command {
         succ: StateKey,
         pred: StateKey,
         piece: TetrisPiece,
-        orientation: TetrisPieceOrientation,
+        orientation: TetrisPieceOrientation<10>,
     },
     AttachResult {
         accepted: bool,
         succ: StateKey,
         pred: StateKey,
         piece: TetrisPiece,
-        orientation: TetrisPieceOrientation,
+        orientation: TetrisPieceOrientation<10>,
     },
     ChildDead {
         succ: StateKey,
         pred: StateKey,
         piece: TetrisPiece,
-        orientation: TetrisPieceOrientation,
+        orientation: TetrisPieceOrientation<10>,
     },
     DetachEdge {
         succ: StateKey,
         pred: StateKey,
         piece: TetrisPiece,
-        orientation: TetrisPieceOrientation,
+        orientation: TetrisPieceOrientation<10>,
     },
     DrainDead {
         succ: StateKey,
@@ -1827,8 +1827,8 @@ impl RuntimeStats {
         let seed_closure = ClosureGauges {
             live_states: 1,
             states_with_unexpanded: 1,
-            forced_slots_total: TetrisPiece::NUM_PIECES as i64,
-            forced_slots_unexpanded: TetrisPiece::NUM_PIECES as i64,
+            forced_slots_total: constants::NUM_TETRIS_PIECES as i64,
+            forced_slots_unexpanded: constants::NUM_TETRIS_PIECES as i64,
             ..ClosureGauges::default()
         };
         let owners = (0..writer_count)
@@ -2183,7 +2183,7 @@ enum CandidateState {
 struct Candidate {
     reuse: CandidateReuse,
     score: f32,
-    orientation: TetrisPieceOrientation,
+    orientation: TetrisPieceOrientation<10>,
     succ: StateKey,
 }
 
@@ -2201,7 +2201,7 @@ enum PreparedPlacement {
     Admissible {
         succ: StateKey,
         score: f32,
-        orientation: TetrisPieceOrientation,
+        orientation: TetrisPieceOrientation<10>,
         /// Reuse verdict screened at prepare time through the dead-Bloom and
         /// key_may_exist ladder. None means the Bloom was positive, so the
         /// record was prefetched and the batch overlay decides dead/existing.
@@ -2216,7 +2216,7 @@ struct PreparedChoice {
     used: bool,
 }
 
-const MAX_EXPANSION_MOVES: usize = TetrisPiece::NUM_PIECES;
+const MAX_EXPANSION_MOVES: usize = constants::NUM_TETRIS_PIECES;
 
 #[derive(Clone, Copy)]
 struct PlannedMove {
@@ -2234,14 +2234,14 @@ fn candidate_order(left: &Candidate, right: &Candidate) -> Ordering {
 }
 
 #[inline]
-const fn is_admissible(board: TetrisBoard) -> bool {
+const fn is_admissible(board: TetrisBoard<10, 20>) -> bool {
     board.height() <= MAX_CARRIER_HEIGHT && board.total_holes() <= MAX_CARRIER_HOLES
 }
 
 fn successor(
     state: StateKey,
     piece: TetrisPiece,
-    orientation: TetrisPieceOrientation,
+    orientation: TetrisPieceOrientation<10>,
 ) -> Result<Option<StateKey>> {
     let (mut board, bag) = state.decode()?;
     ensure!(
@@ -2250,12 +2250,12 @@ fn successor(
     );
     validate_orientation(piece, orientation.index())?;
     let result = board.apply_piece_placement(TetrisPiecePlacement { piece, orientation });
-    if result.is_lost == IsLost::LOST {
+    if result.is_lost {
         return Ok(None);
     }
     let mut next_bag = bag;
     next_bag.remove(piece);
-    if next_bag.is_empty() {
+    if next_bag.empty() {
         next_bag.fill();
     }
     if !is_admissible(board) {
@@ -2264,7 +2264,7 @@ fn successor(
     Ok(Some(StateKey::from_board_bag(board, next_bag)?))
 }
 
-fn score_board(board: TetrisBoard, recent_lines_cleared: u32) -> Result<f32> {
+fn score_board(board: TetrisBoard<10, 20>, recent_lines_cleared: u32) -> Result<f32> {
     let score = height_mse_board_score(&TetrisBoardScoreState {
         board,
         recent_lines_cleared,
@@ -2276,25 +2276,25 @@ fn score_board(board: TetrisBoard, recent_lines_cleared: u32) -> Result<f32> {
 fn choice_context(
     pred: StateKey,
     piece: TetrisPiece,
-) -> Result<(TetrisBoard, TetrisPieceBagState)> {
+) -> Result<(TetrisBoard<10, 20>, TetrisPieceBagState)> {
     let (board, bag) = pred.decode()?;
     ensure!(bag.contains(piece), "piece is not forced by predecessor");
     let mut next_bag = bag;
     next_bag.remove(piece);
-    if next_bag.is_empty() {
+    if next_bag.empty() {
         next_bag.fill();
     }
     Ok((board, next_bag))
 }
 
 fn prepare_placement(
-    board: TetrisBoard,
+    board: TetrisBoard<10, 20>,
     next_bag: TetrisPieceBagState,
-    placement: TetrisPiecePlacement,
+    placement: TetrisPiecePlacement<10>,
 ) -> Result<PreparedPlacement> {
     let mut next_board = board;
     let result = next_board.apply_piece_placement(placement);
-    if result.is_lost == IsLost::LOST {
+    if result.is_lost {
         return Ok(PreparedPlacement::Lost);
     }
     if next_board.height() > MAX_CARRIER_HEIGHT {
@@ -2582,7 +2582,7 @@ impl<'a> BatchProcessor<'a> {
         );
         let placement_start = self.scratch.prepared_placements.len();
         let (board, next_bag) = choice_context(key.pred, key.piece)?;
-        for &placement in TetrisPiecePlacement::all_from_piece(key.piece) {
+        for &placement in <TetrisPiecePlacement<10>>::all_from_piece(key.piece) {
             ensure!(
                 self.scratch.prepared_placements.len() < MAX_CANDIDATES_PER_BATCH,
                 "prepared placements exceed fixed batch capacity"
@@ -3005,7 +3005,7 @@ impl<'a> BatchProcessor<'a> {
     ) -> Result<Option<Candidate>> {
         let (board, next_bag) = choice_context(pred, piece)?;
         let mut best = None;
-        for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+        for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
             let prepared = prepare_placement(board, next_bag, placement)?;
             self.consider_prepared_placement(prepared, &mut best)?;
         }
@@ -3104,7 +3104,7 @@ impl<'a> BatchProcessor<'a> {
         succ: StateKey,
         pred: StateKey,
         piece: TetrisPiece,
-        orientation: TetrisPieceOrientation,
+        orientation: TetrisPieceOrientation<10>,
     ) -> Result<()> {
         let succ_bag = succ.bag()?;
         let record = match self.load_node(succ)? {
@@ -3142,7 +3142,7 @@ impl<'a> BatchProcessor<'a> {
         succ: StateKey,
         pred: StateKey,
         piece: TetrisPiece,
-        orientation: TetrisPieceOrientation,
+        orientation: TetrisPieceOrientation<10>,
     ) -> Result<()> {
         let bag = pred.bag()?;
         let mut record = self
@@ -3168,7 +3168,7 @@ impl<'a> BatchProcessor<'a> {
         succ: StateKey,
         pred: StateKey,
         piece: TetrisPiece,
-        orientation: TetrisPieceOrientation,
+        orientation: TetrisPieceOrientation<10>,
     ) -> Result<()> {
         let bag = pred.bag()?;
         let record = self
@@ -3256,7 +3256,7 @@ impl<'a> BatchProcessor<'a> {
         succ: StateKey,
         pred: StateKey,
         piece: TetrisPiece,
-        orientation: TetrisPieceOrientation,
+        orientation: TetrisPieceOrientation<10>,
     ) -> Result<()> {
         let edge = ReverseEdgeKey::new(succ, pred, piece, orientation)?;
         self.set_redge(edge, false)?;
@@ -3556,7 +3556,7 @@ fn atomic_checked_sub(counter: &AtomicU64, amount: u64) -> Result<()> {
 }
 
 fn seed_key() -> Result<StateKey> {
-    StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, TetrisPieceBagState::new())
+    StateKey::from_board_bag(TetrisBoard::<10, 20>::new(), TetrisPieceBagState::full())
 }
 
 fn claim_batch(
@@ -5016,13 +5016,13 @@ fn read_required_meta(db: &DB, key: &[u8]) -> Result<Vec<u8>> {
 
 fn piece_from_char(value: char) -> Result<TetrisPiece> {
     match value.to_ascii_uppercase() {
-        'O' => Ok(TetrisPiece::O_PIECE),
-        'I' => Ok(TetrisPiece::I_PIECE),
-        'S' => Ok(TetrisPiece::S_PIECE),
-        'Z' => Ok(TetrisPiece::Z_PIECE),
-        'T' => Ok(TetrisPiece::T_PIECE),
-        'L' => Ok(TetrisPiece::L_PIECE),
-        'J' => Ok(TetrisPiece::J_PIECE),
+        'O' => Ok(TetrisPiece::O),
+        'I' => Ok(TetrisPiece::I),
+        'S' => Ok(TetrisPiece::S),
+        'Z' => Ok(TetrisPiece::Z),
+        'T' => Ok(TetrisPiece::T),
+        'L' => Ok(TetrisPiece::L),
+        'J' => Ok(TetrisPiece::J),
         other => bail!("invalid piece {other:?}; expected one of OISZTLJ"),
     }
 }
@@ -5125,12 +5125,12 @@ mod tests {
     const TEST_DEAD_STATE_BLOOM_BYTES: usize = 4 * 1024;
 
     fn empty_key() -> StateKey {
-        StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, TetrisPieceBagState::new())
+        StateKey::from_board_bag(TetrisBoard::<10, 20>::new(), TetrisPieceBagState::full())
             .expect("empty state must encode")
     }
 
-    fn first_orientation(piece: TetrisPiece) -> TetrisPieceOrientation {
-        TetrisPiecePlacement::all_from_piece(piece)[0].orientation
+    fn first_orientation(piece: TetrisPiece) -> TetrisPieceOrientation<10> {
+        <TetrisPiecePlacement<10>>::all_from_piece(piece)[0].orientation
     }
 
     fn test_dead_filter() -> DeadStateBloom {
@@ -5204,13 +5204,9 @@ mod tests {
                 let expansion_plan = ExpansionPlan::new();
                 let scratch = WorkerScratch::new().expect("worker scratch must allocate");
                 let seed = empty_key();
-                let next = successor(
-                    seed,
-                    TetrisPiece::O_PIECE,
-                    first_orientation(TetrisPiece::O_PIECE),
-                )
-                .expect("seed successor must evaluate")
-                .expect("first O placement must remain in the carrier");
+                let next = successor(seed, TetrisPiece::O, first_orientation(TetrisPiece::O))
+                    .expect("seed successor must evaluate")
+                    .expect("first O placement must remain in the carrier");
                 let (board, _) = next.decode().expect("successor must decode");
                 let score = score_board(board, 0).expect("successor must score");
                 std::hint::black_box(claimed);
@@ -5227,7 +5223,7 @@ mod tests {
 
     #[test]
     fn expansion_plan_is_small_and_covers_a_full_bag() {
-        assert_eq!(ExpansionPlan::capacity(), TetrisPiece::NUM_PIECES);
+        assert_eq!(ExpansionPlan::capacity(), constants::NUM_TETRIS_PIECES);
         assert!(std::mem::size_of::<ExpansionPlan>() <= 512);
     }
 
@@ -5560,8 +5556,11 @@ mod tests {
             .expect("test node must be written");
     }
 
-    fn first_admissible_orientation(state: StateKey, piece: TetrisPiece) -> TetrisPieceOrientation {
-        TetrisPiecePlacement::all_from_piece(piece)
+    fn first_admissible_orientation(
+        state: StateKey,
+        piece: TetrisPiece,
+    ) -> TetrisPieceOrientation<10> {
+        <TetrisPiecePlacement<10>>::all_from_piece(piece)
             .iter()
             .find_map(|placement| {
                 successor(state, piece, placement.orientation)
@@ -5578,7 +5577,7 @@ mod tests {
         piece: TetrisPiece,
     ) -> usize {
         let mut persisted = 0;
-        for placement in TetrisPiecePlacement::all_from_piece(piece) {
+        for placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
             let Some(succ) = successor(state, piece, placement.orientation)
                 .expect("test successor must evaluate")
             else {
@@ -5605,8 +5604,8 @@ mod tests {
             let mut limbs = [0u32; StandardTetris::COLS];
             limbs[0] = value;
             let state = StateKey::from_board_bag(
-                TetrisBoard::from_limbs(limbs),
-                TetrisPieceBagState::new(),
+                TetrisBoard::<10, 20>::from_limbs(limbs),
+                TetrisPieceBagState::full(),
             )
             .expect("synthetic state must encode");
             if owners.owner(state) == wanted {
@@ -5619,10 +5618,10 @@ mod tests {
 
     #[test]
     fn state_key_round_trips_and_rejects_invalid_data() {
-        let mut board = TetrisBoard::EMPTY_BOARD;
+        let mut board = TetrisBoard::<10, 20>::new();
         board.set_bit(0, 0);
         board.set_bit(9, 19);
-        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::I_PIECE, TetrisPiece::T_PIECE]);
+        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::I, TetrisPiece::T]);
         let key = StateKey::from_board_bag(board, bag).expect("state must encode");
         assert_eq!(key.decode().expect("state must decode"), (board, bag));
         assert_eq!(key.bag().expect("state bag must decode"), bag);
@@ -5647,12 +5646,12 @@ mod tests {
     #[test]
     fn dead_state_bloom_has_no_false_negatives_after_insert() {
         let filter = test_dead_filter();
-        let bag = TetrisPieceBagState::new();
+        let bag = TetrisPieceBagState::full();
         let mut states = Vec::new();
         for value in 0..512u32 {
             let mut limbs = [0u32; StandardTetris::COLS];
             limbs[0] = value;
-            let state = StateKey::from_board_bag(TetrisBoard::from_limbs(limbs), bag)
+            let state = StateKey::from_board_bag(TetrisBoard::<10, 20>::from_limbs(limbs), bag)
                 .expect("synthetic state must encode");
             states.push(state);
             filter.insert(state);
@@ -5706,9 +5705,11 @@ mod tests {
 
         let mut limbs = [0u32; StandardTetris::COLS];
         limbs[0] = 1;
-        let dead_state =
-            StateKey::from_board_bag(TetrisBoard::from_limbs(limbs), TetrisPieceBagState::new())
-                .expect("dead state must encode");
+        let dead_state = StateKey::from_board_bag(
+            TetrisBoard::<10, 20>::from_limbs(limbs),
+            TetrisPieceBagState::full(),
+        )
+        .expect("dead state must encode");
         let (_, bag) = dead_state.decode().expect("dead state must decode");
         let witness = bag.iter_pieces().next().expect("bag is nonempty");
         let mut dead_record = NodeRecord::INIT;
@@ -5801,25 +5802,25 @@ mod tests {
 
     #[test]
     fn node_record_derives_state_from_forced_slots() {
-        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::O_PIECE, TetrisPiece::I_PIECE]);
+        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::O, TetrisPiece::I]);
         let mut node = NodeRecord::INIT;
         assert!(!node.is_dead(bag).expect("valid node"));
         assert!(!node.is_resolved(bag).expect("valid node"));
 
-        let o = first_orientation(TetrisPiece::O_PIECE).index();
-        let i = first_orientation(TetrisPiece::I_PIECE).index();
-        node.set_slot(TetrisPiece::O_PIECE, MoveSlot::Active(o))
+        let o = first_orientation(TetrisPiece::O).index();
+        let i = first_orientation(TetrisPiece::I).index();
+        node.set_slot(TetrisPiece::O, MoveSlot::Active(o))
             .expect("valid O orientation");
-        node.set_slot(TetrisPiece::I_PIECE, MoveSlot::Pending(i))
+        node.set_slot(TetrisPiece::I, MoveSlot::Pending(i))
             .expect("valid I orientation");
         assert!(node.has_pending(bag).expect("valid node"));
         assert!(!node.is_resolved(bag).expect("valid node"));
 
-        node.set_slot(TetrisPiece::I_PIECE, MoveSlot::Active(i))
+        node.set_slot(TetrisPiece::I, MoveSlot::Active(i))
             .expect("valid I orientation");
         assert!(node.is_resolved(bag).expect("valid node"));
 
-        node.set_slot(TetrisPiece::I_PIECE, MoveSlot::Exhausted)
+        node.set_slot(TetrisPiece::I, MoveSlot::Exhausted)
             .expect("exhaustion is valid");
         assert!(node.is_dead(bag).expect("valid node"));
         assert!(NodeRecord::from_slice(node.as_bytes(), bag).is_ok());
@@ -5827,7 +5828,7 @@ mod tests {
 
     #[test]
     fn closure_gauges_follow_live_node_resolution_and_death() {
-        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::O_PIECE, TetrisPiece::I_PIECE]);
+        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::O, TetrisPiece::I]);
         let initial =
             ClosureGauges::from_record(Some(NodeRecord::INIT), bag).expect("initial gauges");
         assert_eq!(
@@ -5844,8 +5845,8 @@ mod tests {
         let mut pending = NodeRecord::INIT;
         pending
             .set_slot(
-                TetrisPiece::O_PIECE,
-                MoveSlot::Pending(first_orientation(TetrisPiece::O_PIECE).index()),
+                TetrisPiece::O,
+                MoveSlot::Pending(first_orientation(TetrisPiece::O).index()),
             )
             .expect("pending O move must be valid");
         let pending_gauges =
@@ -5857,14 +5858,14 @@ mod tests {
         let mut resolved = pending;
         resolved
             .set_slot(
-                TetrisPiece::O_PIECE,
-                MoveSlot::Active(first_orientation(TetrisPiece::O_PIECE).index()),
+                TetrisPiece::O,
+                MoveSlot::Active(first_orientation(TetrisPiece::O).index()),
             )
             .expect("active O move must be valid");
         resolved
             .set_slot(
-                TetrisPiece::I_PIECE,
-                MoveSlot::Active(first_orientation(TetrisPiece::I_PIECE).index()),
+                TetrisPiece::I,
+                MoveSlot::Active(first_orientation(TetrisPiece::I).index()),
             )
             .expect("active I move must be valid");
         let resolved_gauges =
@@ -5873,7 +5874,7 @@ mod tests {
         assert_eq!(resolved_gauges.forced_slots_active, 2);
 
         resolved
-            .set_slot(TetrisPiece::I_PIECE, MoveSlot::Exhausted)
+            .set_slot(TetrisPiece::I, MoveSlot::Exhausted)
             .expect("exhaustion must be valid");
         assert_eq!(
             ClosureGauges::from_record(Some(resolved), bag).expect("dead gauges"),
@@ -5883,14 +5884,14 @@ mod tests {
 
     #[test]
     fn node_record_rejects_piece_mismatched_orientation() {
-        let vertical_i = TetrisPiecePlacement::all_from_piece(TetrisPiece::I_PIECE)
+        let vertical_i = <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::I)
             .iter()
             .find(|placement| placement.orientation.index() >= 10)
             .expect("I has a vertical orientation")
             .orientation
             .index();
         assert!(
-            MoveSlot::decode(TetrisPiece::O_PIECE, vertical_i).is_err(),
+            MoveSlot::decode(TetrisPiece::O, vertical_i).is_err(),
             "O must reject an I-only orientation"
         );
     }
@@ -5994,7 +5995,7 @@ mod tests {
     #[test]
     fn command_codec_round_trips_and_validates_work_routing() {
         let pred = empty_key();
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let orientation = first_orientation(piece);
         let succ = successor(pred, piece, orientation)
             .expect("successor calculation")
@@ -6025,7 +6026,7 @@ mod tests {
     #[test]
     fn command_node_read_key_matches_each_handler() {
         let pred = empty_key();
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let orientation = first_orientation(piece);
         let succ = successor(pred, piece, orientation)
             .expect("successor calculation")
@@ -6081,7 +6082,7 @@ mod tests {
     fn node_prefetch_deduplicates_and_loads_present_and_missing_records() {
         let (path, db, owners) = test_db();
         let pred = empty_key();
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let orientation = first_orientation(piece);
         let succ = successor(pred, piece, orientation)
             .expect("successor calculation")
@@ -6195,7 +6196,7 @@ mod tests {
     fn node_prefetch_skips_commands_without_node_reads() {
         let (path, db, owners) = test_db();
         let pred = empty_key();
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let orientation = first_orientation(piece);
         let succ = successor(pred, piece, orientation)
             .expect("successor calculation")
@@ -6239,10 +6240,10 @@ mod tests {
     #[test]
     fn process_claimed_preserves_order_after_node_prefetch() {
         let (path, db, owners) = test_db();
-        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::O_PIECE]);
-        let pred = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::O]);
+        let pred = StateKey::from_board_bag(TetrisBoard::<10, 20>::new(), bag)
             .expect("predecessor must encode");
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let orientation = first_orientation(piece);
         let succ = successor(pred, piece, orientation)
             .expect("successor calculation")
@@ -6357,8 +6358,8 @@ mod tests {
         metrics.closure_delta = ClosureGauges {
             states_with_unexpanded: -1,
             states_with_pending: 1,
-            forced_slots_unexpanded: -(TetrisPiece::NUM_PIECES as i64),
-            forced_slots_pending: TetrisPiece::NUM_PIECES as i64,
+            forced_slots_unexpanded: -(constants::NUM_TETRIS_PIECES as i64),
+            forced_slots_pending: constants::NUM_TETRIS_PIECES as i64,
             ..ClosureGauges::default()
         };
         metrics.reroutes = 2;
@@ -6444,7 +6445,7 @@ mod tests {
         assert_eq!(snapshot.closure.states_with_pending, 1);
         assert_eq!(
             snapshot.closure.forced_slots_pending,
-            TetrisPiece::NUM_PIECES as u64
+            constants::NUM_TETRIS_PIECES as u64
         );
         assert_eq!(snapshot.closure.reroutes, 2);
         assert_eq!(snapshot.batches.bytes_max, 512);
@@ -6732,7 +6733,7 @@ rocksdb.stall.micros COUNT : 17\n";
         let owners = OwnerMap::balanced(2).expect("two writers are valid");
         let owner_zero = state_owned_by(&owners, 0);
         let owner_one = state_owned_by(&owners, 1);
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let orientation = first_orientation(piece);
         let commands = [
             Command::AttachResult {
@@ -6820,8 +6821,8 @@ rocksdb.stall.micros COUNT : 17\n";
             let command = Command::DetachEdge {
                 succ: owner_zero,
                 pred: producer_state,
-                piece: TetrisPiece::O_PIECE,
-                orientation: first_orientation(TetrisPiece::O_PIECE),
+                piece: TetrisPiece::O,
+                orientation: first_orientation(TetrisPiece::O),
             };
             let head = 10 * (producer as u64 + 1);
             cursor.set(PRIORITY_EDGE, producer as u8, head);
@@ -6866,7 +6867,7 @@ rocksdb.stall.micros COUNT : 17\n";
         let owners = OwnerMap::balanced(2).expect("two writers are valid");
         let owner_zero = state_owned_by(&owners, 0);
         let owner_one = state_owned_by(&owners, 1);
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let orientation = first_orientation(piece);
         let edge = Command::DetachEdge {
             succ: owner_zero,
@@ -6926,7 +6927,7 @@ rocksdb.stall.micros COUNT : 17\n";
         );
         let owner_zero = state_owned_by(&owners, 0);
         let owner_one = state_owned_by(&owners, 1);
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let orientation = first_orientation(piece);
         let producer_zero = Command::DetachEdge {
             succ: owner_zero,
@@ -7167,8 +7168,8 @@ rocksdb.stall.micros COUNT : 17\n";
         let command = Command::DetachEdge {
             succ: state,
             pred: state,
-            piece: TetrisPiece::O_PIECE,
-            orientation: first_orientation(TetrisPiece::O_PIECE),
+            piece: TetrisPiece::O,
+            orientation: first_orientation(TetrisPiece::O),
         };
         let old_retained =
             WorkKey::new(0, PRIORITY_EDGE, 0, old_head - 2).expect("work key must encode");
@@ -7292,7 +7293,7 @@ rocksdb.stall.micros COUNT : 17\n";
     #[test]
     fn reverse_edge_codec_round_trips() {
         let pred = empty_key();
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let orientation = first_orientation(piece);
         let succ = successor(pred, piece, orientation)
             .expect("successor calculation")
@@ -7310,9 +7311,9 @@ rocksdb.stall.micros COUNT : 17\n";
     #[test]
     fn candidate_order_prefers_reuse_then_score_then_low_orientation() {
         let key = empty_key();
-        let low_orientation = first_orientation(TetrisPiece::O_PIECE);
+        let low_orientation = first_orientation(TetrisPiece::O);
         let high_orientation =
-            TetrisPiecePlacement::all_from_piece(TetrisPiece::O_PIECE)[1].orientation;
+            <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::O)[1].orientation;
         let existing_low_score = Candidate {
             reuse: CandidateReuse::Existing,
             score: -2.0,
@@ -7356,12 +7357,9 @@ rocksdb.stall.micros COUNT : 17\n";
     #[test]
     fn expand_publishes_a_complete_plan_and_duplicate_expand_is_a_no_op() {
         let (path, db, owners) = test_db();
-        let bag = TetrisPieceBagState::from_pieces([
-            TetrisPiece::O_PIECE,
-            TetrisPiece::I_PIECE,
-            TetrisPiece::T_PIECE,
-        ]);
-        let state = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+        let bag =
+            TetrisPieceBagState::from_pieces([TetrisPiece::O, TetrisPiece::I, TetrisPiece::T]);
+        let state = StateKey::from_board_bag(TetrisBoard::<10, 20>::new(), bag)
             .expect("test state must encode");
         put_node_for_test(&db, state, NodeRecord::INIT);
 
@@ -7451,12 +7449,12 @@ rocksdb.stall.micros COUNT : 17\n";
     #[test]
     fn prepare_screens_successor_prefetch_with_the_dead_filter() {
         let (path, db, owners) = test_db();
-        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::O_PIECE]);
-        let state = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::O]);
+        let state = StateKey::from_board_bag(TetrisBoard::<10, 20>::new(), bag)
             .expect("test state must encode");
         put_node_for_test(&db, state, NodeRecord::INIT);
-        let piece = TetrisPiece::O_PIECE;
-        let placements = TetrisPiecePlacement::all_from_piece(piece).len() as u64;
+        let piece = TetrisPiece::O;
+        let placements = <TetrisPiecePlacement<10>>::all_from_piece(piece).len() as u64;
         let flagged = successor(state, piece, first_orientation(piece))
             .expect("test successor must evaluate")
             .expect("first O placement must stay in the carrier");
@@ -7511,8 +7509,8 @@ rocksdb.stall.micros COUNT : 17\n";
     #[test]
     fn late_exhaustion_discards_the_complete_new_plan() {
         let (path, db, owners) = test_db();
-        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::O_PIECE, TetrisPiece::I_PIECE]);
-        let state = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::O, TetrisPiece::I]);
+        let state = StateKey::from_board_bag(TetrisBoard::<10, 20>::new(), bag)
             .expect("test state must encode");
         put_node_for_test(&db, state, NodeRecord::INIT);
         let forced: Vec<_> = bag.iter_pieces().collect();
@@ -7577,12 +7575,12 @@ rocksdb.stall.micros COUNT : 17\n";
     fn doomed_partial_expansion_detaches_only_preexisting_edges() {
         let (path, db, owners) = test_db();
         let bag = TetrisPieceBagState::from_pieces([
-            TetrisPiece::O_PIECE,
-            TetrisPiece::I_PIECE,
-            TetrisPiece::T_PIECE,
-            TetrisPiece::L_PIECE,
+            TetrisPiece::O,
+            TetrisPiece::I,
+            TetrisPiece::T,
+            TetrisPiece::L,
         ]);
-        let state = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+        let state = StateKey::from_board_bag(TetrisBoard::<10, 20>::new(), bag)
             .expect("test state must encode");
         let forced: Vec<_> = bag.iter_pieces().collect();
         assert_eq!(forced.len(), 4);
@@ -7680,8 +7678,8 @@ rocksdb.stall.micros COUNT : 17\n";
     fn choose_next_prefers_a_persisted_successor_without_publishing_it() {
         let (path, db, owners) = test_db();
         let pred = empty_key();
-        let piece = TetrisPiece::O_PIECE;
-        let orientation = TetrisPiecePlacement::all_from_piece(piece)
+        let piece = TetrisPiece::O;
+        let orientation = <TetrisPiecePlacement<10>>::all_from_piece(piece)
             .last()
             .expect("O piece must have placements")
             .orientation;
@@ -7715,11 +7713,11 @@ rocksdb.stall.micros COUNT : 17\n";
     #[test]
     fn prepared_choice_screens_existing_successors_to_reuse_hints() {
         let (path, db, owners) = test_db();
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let bag = TetrisPieceBagState::from_pieces([piece]);
-        let pred = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+        let pred = StateKey::from_board_bag(TetrisBoard::<10, 20>::new(), bag)
             .expect("predecessor must encode");
-        let orientation = TetrisPiecePlacement::all_from_piece(piece)
+        let orientation = <TetrisPiecePlacement<10>>::all_from_piece(piece)
             .last()
             .expect("O piece must have placements")
             .orientation;
@@ -7757,17 +7755,17 @@ rocksdb.stall.micros COUNT : 17\n";
         assert_eq!(processor.metrics.candidates.prepared_choice_unique, 1);
         assert_eq!(
             processor.metrics.candidates.prepared_placements,
-            TetrisPiecePlacement::all_from_piece(piece).len() as u64
+            <TetrisPiecePlacement<10>>::all_from_piece(piece).len() as u64
         );
         assert_eq!(processor.metrics.candidates.unplanned_fallbacks, 0);
         assert_eq!(processor.metrics.node_reads.candidate_db_gets, 0);
         assert_eq!(
             processor.metrics.candidates.reuse_probes,
-            TetrisPiecePlacement::all_from_piece(piece).len() as u64
+            <TetrisPiecePlacement<10>>::all_from_piece(piece).len() as u64
         );
         assert_eq!(
             processor.metrics.dead_filter.checks,
-            TetrisPiecePlacement::all_from_piece(piece).len() as u64
+            <TetrisPiecePlacement<10>>::all_from_piece(piece).len() as u64
         );
         assert_eq!(processor.metrics.dead_filter.maybe_positives, 0);
 
@@ -7779,9 +7777,9 @@ rocksdb.stall.micros COUNT : 17\n";
     #[test]
     fn duplicate_choice_requests_share_one_prepared_placement_set() {
         let (path, db, owners) = test_db();
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let bag = TetrisPieceBagState::from_pieces([piece]);
-        let pred = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+        let pred = StateKey::from_board_bag(TetrisBoard::<10, 20>::new(), bag)
             .expect("predecessor must encode");
         put_node_for_test(&db, pred, NodeRecord::INIT);
 
@@ -7811,7 +7809,7 @@ rocksdb.stall.micros COUNT : 17\n";
         assert_eq!(processor.scratch.prepared_choices.len(), 1);
         assert_eq!(
             processor.scratch.prepared_placements.len(),
-            TetrisPiecePlacement::all_from_piece(piece).len()
+            <TetrisPiecePlacement<10>>::all_from_piece(piece).len()
         );
 
         drop(processor);
@@ -7822,11 +7820,11 @@ rocksdb.stall.micros COUNT : 17\n";
     #[test]
     fn prepared_choice_observes_same_batch_overlay_mutations() {
         let (path, db, owners) = test_db();
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let bag = TetrisPieceBagState::from_pieces([piece]);
-        let pred = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+        let pred = StateKey::from_board_bag(TetrisBoard::<10, 20>::new(), bag)
             .expect("predecessor must encode");
-        let orientation = TetrisPiecePlacement::all_from_piece(piece)
+        let orientation = <TetrisPiecePlacement<10>>::all_from_piece(piece)
             .last()
             .expect("O piece must have placements")
             .orientation;
@@ -7900,9 +7898,8 @@ rocksdb.stall.micros COUNT : 17\n";
         let seed = empty_key();
         let (board, _) = seed.decode().expect("seed must decode");
         assert!(is_admissible(board));
-        let orientation = first_orientation(TetrisPiece::O_PIECE);
-        let succ =
-            successor(seed, TetrisPiece::O_PIECE, orientation).expect("successor calculation");
+        let orientation = first_orientation(TetrisPiece::O);
+        let succ = successor(seed, TetrisPiece::O, orientation).expect("successor calculation");
         assert!(succ.is_some());
         let succ_board = succ
             .expect("successor exists")
@@ -7919,8 +7916,8 @@ rocksdb.stall.micros COUNT : 17\n";
     #[test]
     fn persisted_attachment_handshake_activates_seed_moves() {
         let (path, db, owners) = test_db();
-        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::O_PIECE]);
-        let pred = StateKey::from_board_bag(TetrisBoard::EMPTY_BOARD, bag)
+        let bag = TetrisPieceBagState::from_pieces([TetrisPiece::O]);
+        let pred = StateKey::from_board_bag(TetrisBoard::<10, 20>::new(), bag)
             .expect("predecessor must encode");
         put_node_for_test(&db, pred, NodeRecord::INIT);
         let command = Command::Expand { state: pred };
@@ -8036,26 +8033,26 @@ rocksdb.stall.micros COUNT : 17\n";
         let mut scratch = WorkerScratch::new().expect("worker scratch must allocate");
         let expansion = process_next_batch(&shared, &mut sequence, &mut claim_cursor, &mut scratch);
         assert_eq!(expansion.inputs, 1);
-        assert_eq!(expansion.outputs, TetrisPiece::NUM_PIECES as u64);
+        assert_eq!(expansion.outputs, constants::NUM_TETRIS_PIECES as u64);
 
         let snapshot = shared.stats.snapshot();
         assert_eq!(snapshot.expansion.doomed, 0);
         assert_eq!(
             snapshot.expansion.planned_attachments_published,
-            TetrisPiece::NUM_PIECES as u64
+            constants::NUM_TETRIS_PIECES as u64
         );
         assert_eq!(snapshot.expansion.planned_attachments_avoided, 0);
         assert_eq!(
             snapshot.candidates.prepared_choice_requests,
-            TetrisPiece::NUM_PIECES as u64
+            constants::NUM_TETRIS_PIECES as u64
         );
         assert_eq!(
             snapshot.candidates.prepared_choice_unique,
-            TetrisPiece::NUM_PIECES as u64
+            constants::NUM_TETRIS_PIECES as u64
         );
         assert_eq!(
             snapshot.candidates.prepared_placements,
-            TetrisPiecePlacement::NUM_PLACEMENTS as u64
+            <tetris_game::TetrisPiecePlacement<10>>::NUM_PLACEMENTS as u64
         );
         assert_eq!(snapshot.candidates.prepared_choices_unused, 0);
         assert_eq!(snapshot.candidates.unplanned_fallbacks, 0);
@@ -8064,7 +8061,7 @@ rocksdb.stall.micros COUNT : 17\n";
         // is screened with one read-free reuse probe instead of a prefetch.
         assert_eq!(
             snapshot.candidates.reuse_probes,
-            TetrisPiecePlacement::NUM_PLACEMENTS as u64
+            <tetris_game::TetrisPiecePlacement<10>>::NUM_PLACEMENTS as u64
         );
         assert_eq!(snapshot.dead_filter.maybe_positives, 0);
         assert_eq!(snapshot.closure.nodes_not_dead, 1);
@@ -8073,13 +8070,13 @@ rocksdb.stall.micros COUNT : 17\n";
         assert_eq!(snapshot.closure.locally_resolved_states, 0);
         assert_eq!(
             snapshot.closure.forced_slots_pending,
-            TetrisPiece::NUM_PIECES as u64
+            constants::NUM_TETRIS_PIECES as u64
         );
         assert_eq!(snapshot.closure.forced_slots_unexpanded, 0);
         assert_eq!(snapshot.closure.expand_backlog, 0);
         assert_eq!(
             snapshot.closure.coordination_backlog,
-            TetrisPiece::NUM_PIECES as u64
+            constants::NUM_TETRIS_PIECES as u64
         );
 
         drop(shared);
@@ -8091,7 +8088,7 @@ rocksdb.stall.micros COUNT : 17\n";
     fn death_before_attach_rejects_without_installing_edge() {
         let (path, db, owners) = test_db();
         let pred = empty_key();
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let orientation = first_orientation(piece);
         let succ = successor(pred, piece, orientation)
             .expect("successor calculation")
@@ -8140,7 +8137,7 @@ rocksdb.stall.micros COUNT : 17\n";
     fn child_death_before_acceptance_makes_acceptance_stale() {
         let (path, db, owners) = test_db();
         let pred = empty_key();
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let orientation = first_orientation(piece);
         let succ = successor(pred, piece, orientation)
             .expect("successor calculation")
@@ -8206,13 +8203,13 @@ rocksdb.stall.micros COUNT : 17\n";
         let (path, db, owners) = test_db();
         let succ = empty_key();
         let (_, bag) = succ.decode().expect("successor must decode");
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let orientation = first_orientation(piece);
         let mut edges = Vec::new();
         for value in 1..=3 {
             let mut limbs = [0u32; StandardTetris::COLS];
             limbs[0] = value;
-            let pred = StateKey::from_board_bag(TetrisBoard::from_limbs(limbs), bag)
+            let pred = StateKey::from_board_bag(TetrisBoard::<10, 20>::from_limbs(limbs), bag)
                 .expect("synthetic predecessor must encode");
             edges.push(
                 ReverseEdgeKey::new(succ, pred, piece, orientation).expect("edge must encode"),
@@ -8269,13 +8266,13 @@ rocksdb.stall.micros COUNT : 17\n";
         dead_filter.insert(succ);
 
         let redge_cf = db.cf_handle(CF_REDGE).expect("reverse-edge CF must exist");
-        let piece = TetrisPiece::O_PIECE;
+        let piece = TetrisPiece::O;
         let orientation = first_orientation(piece);
         let mut batch = WriteBatch::default();
         for index in 0..MAX_REDGES_PER_DRAIN + 3 {
             let mut limbs = [0u32; StandardTetris::COLS];
             limbs[0] = index as u32 + 1;
-            let pred = StateKey::from_board_bag(TetrisBoard::from_limbs(limbs), bag)
+            let pred = StateKey::from_board_bag(TetrisBoard::<10, 20>::from_limbs(limbs), bag)
                 .expect("synthetic predecessor must encode");
             let edge =
                 ReverseEdgeKey::new(succ, pred, piece, orientation).expect("edge must encode");

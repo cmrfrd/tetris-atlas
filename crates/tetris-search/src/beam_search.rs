@@ -1,58 +1,70 @@
 use proc_macros::inline_conditioned;
 use rayon::prelude::*;
-use tetris_game::{
-    TetrisBoard, TetrisGame, TetrisGameRng, TetrisPieceOrientation, TetrisPiecePlacement,
-};
+
+use tetris_game::{TetrisGame, TetrisGameRng, TetrisPieceOrientation, TetrisPiecePlacement};
 use tetris_utils::{FixedBinMinHeap, HeaplessVec, repeat_idx_unroll};
 
 /// Counts of actions by orientation index
 #[derive(Clone, Copy)]
-pub struct OrientationCounts([u32; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS]);
+pub struct OrientationCounts(
+    [u32; <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS],
+);
 
 impl Default for OrientationCounts {
     fn default() -> Self {
-        Self([0; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS])
+        Self([0; <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS])
     }
 }
 
 impl OrientationCounts {
     #[inline_conditioned(always)]
-    pub fn inner(&self) -> [u32; TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS] {
+    pub fn inner(
+        &self,
+    ) -> [u32; <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS] {
         self.0
     }
 
     #[inline_conditioned(always)]
     pub fn merge(&mut self, other: Self) -> &mut Self {
-        repeat_idx_unroll!(TetrisPieceOrientation::TOTAL_NUM_ORIENTATIONS, I, {
-            self.0[I] += other.0[I];
-        });
+        repeat_idx_unroll!(
+            <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS,
+            I,
+            {
+                self.0[I] += other.0[I];
+            }
+        );
         self
     }
 
     #[inline_conditioned(always)]
-    pub fn add_action(&mut self, action: TetrisPiecePlacement) -> &mut Self {
+    pub fn add_action(&mut self, action: TetrisPiecePlacement<10>) -> &mut Self {
         self.0[action.orientation.index() as usize] += 1;
         self
     }
 
     #[inline_conditioned(always)]
-    pub fn top_orientation(&self) -> (TetrisPieceOrientation, u32) {
+    pub fn top_orientation(&self) -> (TetrisPieceOrientation<10>, u32) {
         let (max_idx, &max_count) = self
             .0
             .iter()
             .enumerate()
             .max_by_key(|&(_, &count)| count)
             .unwrap_or((0, &0));
-        (TetrisPieceOrientation::from_index(max_idx as u8), max_count)
+        (
+            <TetrisPieceOrientation<10>>::from_index(max_idx as u8),
+            max_count,
+        )
     }
 
     #[inline_conditioned(always)]
-    pub fn nonzero_orientations(&self) -> impl Iterator<Item = (TetrisPieceOrientation, u32)> + '_ {
+    pub fn nonzero_orientations(
+        &self,
+    ) -> impl Iterator<Item = (TetrisPieceOrientation<10>, u32)> + '_ {
         self.0
             .iter()
             .enumerate()
             .filter(|&(_, &count)| count > 0)
-            .map(|(i, &count)| (TetrisPieceOrientation::from_index(i as u8), count))
+            .map(|(i, &count)| (<TetrisPieceOrientation<10>>::from_index(i as u8), count))
     }
 }
 
@@ -61,7 +73,7 @@ impl OrientationCounts {
 /// Ranking is supplied by [`BeamSearch`] scoring callbacks rather than by the state type itself.
 pub trait BeamSearchState: Copy {
     /// Type representing an action in the search space
-    type Action: Copy + Default;
+    type Action: Copy;
 
     /// Apply an action to this state, returning a new state
     fn apply_action(&self, action: &Self::Action) -> Self;
@@ -78,7 +90,6 @@ pub trait BeamSearchState: Copy {
 #[derive(Clone, Copy)]
 pub struct ScoredState<S: BeamSearchState> {
     pub state: S,
-    pub action: S::Action,              // Action from parent to this state
     pub root_action: Option<S::Action>, // First action from root (None for root, Some for descendants)
     pub depth: usize,
     pub score: f32,
@@ -121,16 +132,9 @@ impl<S: BeamSearchState> Ord for ScoredState<S> {
 
 impl<S: BeamSearchState> ScoredState<S> {
     #[inline]
-    pub fn new(
-        state: S,
-        action: S::Action,
-        root_action: Option<S::Action>,
-        depth: usize,
-        score: f32,
-    ) -> Self {
+    pub fn new(state: S, root_action: Option<S::Action>, depth: usize, score: f32) -> Self {
         Self {
             state,
-            action,
             root_action,
             depth,
             score,
@@ -277,8 +281,8 @@ where
         self.best_state = None;
 
         for beam_idx in 0..current_beam.len() {
-            // Fill action buffer from parent beam state
             let parent = unsafe { current_beam.as_slice().get_unchecked(beam_idx) };
+            // Fill action buffer from parent beam state
             self.action_buffer.clear();
             let _action_count = parent
                 .state
@@ -303,7 +307,6 @@ where
 
                 let child = ScoredState {
                     state: new_state,
-                    action,
                     root_action: parent.root_action.or(Some(action)), // Branchless: propagate or set at depth 1
                     depth: parent.depth + 1,
                     score,
@@ -432,13 +435,7 @@ where
     {
         self.beams[self.current_idx].clear();
         let score = score_fn(&state);
-        let root = ScoredState::new(
-            state,
-            S::Action::default(),
-            None, // Root has no root_action
-            0,
-            score,
-        );
+        let root = ScoredState::new(state, None, 0, score);
         self.beams[self.current_idx].push(root);
         self.best_state = Some(root);
         self.search_top_using(depth, score_fn)
@@ -457,13 +454,7 @@ where
     {
         self.beams[self.current_idx].clear();
         let score = score_fn(&state);
-        let root = ScoredState::new(
-            state,
-            S::Action::default(),
-            None, // Root has no root_action
-            0,
-            score,
-        );
+        let root = ScoredState::new(state, None, 0, score);
         self.beams[self.current_idx].push(root);
         self.best_state = Some(root);
         self.search_top_best_effort_using(depth, score_fn)
@@ -545,13 +536,7 @@ where
     {
         self.beams[self.current_idx].clear();
         let score = score_fn(&state);
-        let root = ScoredState::new(
-            state,
-            S::Action::default(),
-            None, // Root has no root_action
-            0,
-            score,
-        );
+        let root = ScoredState::new(state, None, 0, score);
         self.beams[self.current_idx].push(root);
         self.best_state = Some(root);
         self.search_top_n_using::<N, _>(depth, score_fn)
@@ -823,7 +808,7 @@ where
     ///
     /// # Arguments
     /// * `base_state` - The starting game state to use for all searches
-    /// * `base_seed` - Base seed value; each search gets base_seed + index
+    /// * `base_seed` - Nonzero base seed; each search gets base_seed + index
     /// * `depth` - Search depth
     ///
     /// # Returns
@@ -834,7 +819,7 @@ where
         base_seed: u64,
         depth: usize,
         beam_width: usize,
-    ) -> Option<TetrisPiecePlacement> {
+    ) -> Option<TetrisPiecePlacement<10>> {
         let counts = self.search_count_actions_with_seeds(base_state, base_seed, depth, beam_width);
 
         // Find best orientation by vote count
@@ -844,7 +829,7 @@ where
         }
 
         Some(TetrisPiecePlacement {
-            piece: base_state.0.current_piece,
+            piece: base_state.0.current_piece(),
             orientation: best_orientation,
         })
     }
@@ -856,7 +841,7 @@ where
         depth: usize,
         beam_width: usize,
         score_fn: F,
-    ) -> Option<TetrisPiecePlacement>
+    ) -> Option<TetrisPiecePlacement<10>>
     where
         F: Fn(&BeamTetrisState) -> f32 + Clone + Send + Sync,
     {
@@ -870,7 +855,7 @@ where
         }
 
         Some(TetrisPiecePlacement {
-            piece: base_state.0.current_piece,
+            piece: base_state.0.current_piece(),
             orientation: best_orientation,
         })
     }
@@ -909,7 +894,7 @@ impl BeamTetrisState {
 }
 
 impl BeamSearchState for BeamTetrisState {
-    type Action = TetrisPiecePlacement;
+    type Action = TetrisPiecePlacement<10>;
 
     #[inline_conditioned(always)]
     fn apply_action(&self, action: &Self::Action) -> Self {
@@ -1040,6 +1025,61 @@ mod tests {
 
             buffer.len()
         }
+    }
+
+    #[test]
+    fn search_accepts_non_default_actions_and_roots_have_no_action() {
+        #[derive(Clone, Copy)]
+        struct Counter(u8);
+
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum Step {
+            Advance,
+        }
+
+        impl BeamSearchState for Counter {
+            type Action = Step;
+
+            fn apply_action(&self, _action: &Step) -> Self {
+                Self(self.0 + 1)
+            }
+
+            fn generate_actions<const N: usize>(&self, buffer: &mut HeaplessVec<Step, N>) -> usize {
+                buffer.clear();
+                if self.0 < 2 {
+                    let _ = buffer.try_push(Step::Advance);
+                }
+                buffer.len()
+            }
+        }
+
+        let mut search = BeamSearch::<Counter, 2, 4, 1, _>::new(|state| state.0 as f32);
+        let root = search.search_top_with_state(Counter(0), 0).expect("root");
+        assert_eq!(root.state.0, 0);
+        assert_eq!(root.depth, 0);
+        assert_eq!(root.root_action, None);
+
+        let leaf = search.search_top_with_state(Counter(0), 2).expect("leaf");
+        assert_eq!(leaf.state.0, 2);
+        assert_eq!(leaf.depth, 2);
+        assert_eq!(leaf.root_action, Some(Step::Advance));
+
+        let best = search
+            .search_top_with_state_best_effort(Counter(0), 4)
+            .expect("deepest leaf");
+        assert_eq!(best.state.0, 2);
+        assert_eq!(best.depth, 2);
+        assert_eq!(best.root_action, Some(Step::Advance));
+
+        let [root] = search
+            .search_top_n_with_state::<1>(Counter(0), 0)
+            .expect("root");
+        assert_eq!(root.root_action, None);
+        let [leaf] = search
+            .search_top_n_with_state::<1>(Counter(0), 2)
+            .expect("leaf");
+        assert_eq!(leaf.state.0, 2);
+        assert_eq!(leaf.root_action, Some(Step::Advance));
     }
 
     #[test]

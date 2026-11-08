@@ -204,13 +204,12 @@ pub fn replay_from_root(universe: &Universe, result: &SolveResult, max_steps: us
 fn piece_name(piece: tetris_game::TetrisPiece) -> &'static str {
     use tetris_game::TetrisPiece;
     match piece {
-        p if p == TetrisPiece::O_PIECE => "O",
-        p if p == TetrisPiece::I_PIECE => "I",
-        p if p == TetrisPiece::S_PIECE => "S",
-        p if p == TetrisPiece::Z_PIECE => "Z",
-        p if p == TetrisPiece::T_PIECE => "T",
-        p if p == TetrisPiece::L_PIECE => "L",
-        p if p == TetrisPiece::J_PIECE => "J",
-        _ => "?",
+        TetrisPiece::O => "O",
+        TetrisPiece::I => "I",
+        TetrisPiece::S => "S",
+        TetrisPiece::Z => "Z",
+        TetrisPiece::T => "T",
+        TetrisPiece::L => "L",
+        TetrisPiece::J => "J",
     }
 }

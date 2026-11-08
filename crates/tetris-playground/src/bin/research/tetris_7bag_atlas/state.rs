@@ -31,10 +31,11 @@ pub struct StateKeyPacked(u64);
 impl StateKeyPacked {
     /// Unpack back to a `StateKey`.
     #[inline]
+    #[cfg(test)]
     pub fn unpack(self) -> StateKey {
         StateKey {
             board_id: (self.0 >> 8) as BoardId,
-            bag: TetrisPieceBagState::from((self.0 & 0xFF) as u8),
+            bag: TetrisPieceBagState::try_from((self.0 & 0xFF) as u8).expect("valid bag mask"),
         }
     }
 }
@@ -55,7 +56,7 @@ pub fn next_bag_state(bag: TetrisPieceBagState, piece: TetrisPiece) -> Option<Te
     }
     let mut next = bag;
     next.remove(piece);
-    if next.is_empty() {
+    if next.empty() {
         next.fill();
     }
     Some(next)
@@ -70,13 +71,13 @@ pub fn piece_branches(bag: TetrisPieceBagState) -> impl Iterator<Item = PieceBra
 }
 
 #[inline]
-pub fn pack_placement(placement: TetrisPiecePlacement) -> PackedPlacement {
+pub fn pack_placement(placement: TetrisPiecePlacement<10>) -> PackedPlacement {
     placement.index()
 }
 
 #[inline]
-pub fn unpack_placement(packed: PackedPlacement) -> TetrisPiecePlacement {
-    TetrisPiecePlacement::from_index(packed)
+pub fn unpack_placement(packed: PackedPlacement) -> TetrisPiecePlacement<10> {
+    <TetrisPiecePlacement<10>>::from_index(packed)
 }
 
 #[cfg(test)]
@@ -85,7 +86,7 @@ mod tests {
 
     #[test]
     fn piece_branches_matches_bag_count() {
-        let bag = TetrisPieceBagState::new();
+        let bag = TetrisPieceBagState::full();
         let branches: Vec<_> = piece_branches(bag).collect();
         assert_eq!(branches.len(), bag.count() as usize);
         for branch in branches {
@@ -95,22 +96,22 @@ mod tests {
 
     #[test]
     fn next_bag_state_removes_piece() {
-        let bag = TetrisPieceBagState::new();
-        let next = next_bag_state(bag, TetrisPiece::O_PIECE).expect("piece in bag");
-        assert!(!next.contains(TetrisPiece::O_PIECE));
+        let bag = TetrisPieceBagState::full();
+        let next = next_bag_state(bag, TetrisPiece::O).expect("piece in bag");
+        assert!(!next.contains(TetrisPiece::O));
         assert_eq!(next.count(), 6);
     }
 
     #[test]
     fn next_bag_state_refills_on_last() {
-        let bag = TetrisPieceBagState::from(u8::from(TetrisPiece::O_PIECE));
-        let next = next_bag_state(bag, TetrisPiece::O_PIECE).expect("piece in bag");
-        assert_eq!(next, TetrisPieceBagState::new());
+        let bag = TetrisPieceBagState::try_from(TetrisPiece::O.mask()).expect("valid bag mask");
+        let next = next_bag_state(bag, TetrisPiece::O).expect("piece in bag");
+        assert_eq!(next, TetrisPieceBagState::full());
     }
 
     #[test]
     fn state_key_pack_round_trips() {
-        let key = StateKey::new(12345, TetrisPieceBagState::new());
+        let key = StateKey::new(12345, TetrisPieceBagState::full());
         let packed = key.pack();
         let unpacked = packed.unpack();
         assert_eq!(unpacked.board_id, key.board_id);
@@ -119,7 +120,7 @@ mod tests {
 
     #[test]
     fn state_key_pack_single_piece_bag() {
-        let bag = TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE));
+        let bag = TetrisPieceBagState::try_from(TetrisPiece::I.mask()).expect("valid bag mask");
         let key = StateKey::new(u32::MAX >> 8, bag);
         let unpacked = key.pack().unpack();
         assert_eq!(unpacked.board_id, key.board_id);
@@ -128,7 +129,7 @@ mod tests {
 
     #[test]
     fn placement_round_trips() {
-        for placement in TetrisPiecePlacement::ALL_PLACEMENTS {
+        for &placement in <TetrisPiecePlacement<10>>::ALL_PLACEMENTS {
             assert_eq!(unpack_placement(pack_placement(placement)), placement);
         }
     }

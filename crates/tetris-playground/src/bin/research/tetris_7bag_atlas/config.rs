@@ -41,7 +41,7 @@ impl Default for SolverConfig {
         Self {
             admissibility: BoardAdmissibility::default(),
             max_states: usize::MAX,
-            root_bag: TetrisPieceBagState::new(),
+            root_bag: TetrisPieceBagState::full(),
         }
     }
 }

@@ -66,10 +66,8 @@ impl<T> UnsafeSlice<T> {
 /// Built via forward BFS from `(empty_board, full_bag)`, then augmented with
 /// predecessor links for backward propagation.
 pub struct Universe {
-    pub config: SolverConfig,
     // --- Board interning ---
-    pub boards: Vec<TetrisBoard>,
-    pub board_to_id: FxHashMap<TetrisBoard, BoardId>,
+    pub boards: Vec<TetrisBoard<10, 20>>,
     // --- Board-level precomputed successors (with edge dedup) ---
     board_succ_ranges: Vec<[EdgeRange; 7]>,
     board_succs: Vec<BoardSuccEntry>,
@@ -99,8 +97,8 @@ impl Universe {
         let estimated_boards = 100_000;
         let estimated_states = estimated_boards * 50;
 
-        let mut boards: Vec<TetrisBoard> = Vec::with_capacity(estimated_boards);
-        let mut board_to_id: FxHashMap<TetrisBoard, BoardId> =
+        let mut boards: Vec<TetrisBoard<10, 20>> = Vec::with_capacity(estimated_boards);
+        let mut board_to_id: FxHashMap<TetrisBoard<10, 20>, BoardId> =
             FxHashMap::with_capacity_and_hasher(estimated_boards, Default::default());
 
         // Board-level precomputed successors (flat storage).
@@ -112,7 +110,7 @@ impl Universe {
         // ================================================================
         let board_start = Instant::now();
 
-        let empty_board = TetrisBoard::EMPTY_BOARD;
+        let empty_board = TetrisBoard::<10, 20>::new();
         let empty_board_id = intern_board(&mut boards, &mut board_to_id, &empty_board);
         board_succ_ranges.push([EdgeRange::EMPTY; 7]);
 
@@ -131,11 +129,11 @@ impl Universe {
                 let pidx = piece.index() as usize;
                 let succ_start = board_succs.len() as u32;
 
-                for &placement in TetrisPiecePlacement::all_from_piece(piece) {
+                for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
                     let mut new_board = board;
                     let result = new_board.apply_piece_placement(placement);
 
-                    if result.is_lost.into() {
+                    if result.is_lost {
                         continue;
                     }
                     if !board_is_admissible(&new_board, &config.admissibility) {
@@ -341,7 +339,7 @@ impl Universe {
 
             // Step E: Register new states, extend frontier (sequential)
             let new_total = next_state_id.load(Ordering::Relaxed) as usize;
-            let default_key = StateKey::new(0, TetrisPieceBagState::from(0u8));
+            let default_key = StateKey::new(0, TetrisPieceBagState::from_pieces([]));
             states.resize(new_total, default_key);
             state_indices.resize(new_total, StateIndex::default());
 
@@ -385,9 +383,7 @@ impl Universe {
         eprintln!("[build] total {:.2}s", total_time);
 
         Universe {
-            config: *config,
             boards,
-            board_to_id,
             board_succ_ranges,
             board_succs,
             states,
@@ -490,9 +486,9 @@ impl Universe {
 // --- Helpers ---
 
 fn intern_board(
-    boards: &mut Vec<TetrisBoard>,
-    board_to_id: &mut FxHashMap<TetrisBoard, BoardId>,
-    board: &TetrisBoard,
+    boards: &mut Vec<TetrisBoard<10, 20>>,
+    board_to_id: &mut FxHashMap<TetrisBoard<10, 20>, BoardId>,
+    board: &TetrisBoard<10, 20>,
 ) -> BoardId {
     if let Some(&id) = board_to_id.get(board) {
         return id;
@@ -516,7 +512,7 @@ fn intern_state(
 
 /// Admissibility check with early exits ordered cheapest-first.
 #[inline]
-fn board_is_admissible(board: &TetrisBoard, adm: &BoardAdmissibility) -> bool {
+fn board_is_admissible(board: &TetrisBoard<10, 20>, adm: &BoardAdmissibility) -> bool {
     if adm.max_height != u32::MAX && board.height() > adm.max_height {
         return false;
     }

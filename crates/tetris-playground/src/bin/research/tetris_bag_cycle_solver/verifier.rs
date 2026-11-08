@@ -1,6 +1,7 @@
 use rustc_hash::FxHashSet;
 use serde::Serialize;
-use tetris_game::{IsLost, TetrisPieceBagState, TetrisPiecePlacement};
+
+use tetris_game::{TetrisPieceBagState, TetrisPiecePlacement};
 
 use crate::config::SolverConfig;
 use crate::solver::WitnessPolicy;
@@ -72,20 +73,26 @@ pub fn verify_witness_policy(
             verification.missing_child_failures += 1;
             continue;
         };
-
-        for (piece, next_bag) in state.bag.iter_next_states() {
+        for piece in state.bag.iter_pieces() {
+            let mut next_bag = state.bag;
+            next_bag.remove(piece);
+            if next_bag.empty() {
+                next_bag.fill();
+            }
             verification.piece_branches_checked += 1;
             let key = WitnessKey::new(state.board_id, state.bag, state.cycles_remaining, piece);
             let Some(witness) = policy.get(&key) else {
                 verification.witness_failures += 1;
                 continue;
             };
-            if witness.placement_index as usize >= TetrisPiecePlacement::NUM_PLACEMENTS {
+            if witness.placement_index as usize
+                >= <tetris_game::TetrisPiecePlacement<10>>::NUM_PLACEMENTS
+            {
                 verification.witness_failures += 1;
                 continue;
             }
 
-            let placement = TetrisPiecePlacement::from_index(witness.placement_index);
+            let placement = <TetrisPiecePlacement<10>>::from_index(witness.placement_index);
             if placement.piece != piece {
                 verification.witness_failures += 1;
                 continue;
@@ -93,7 +100,7 @@ pub fn verify_witness_policy(
 
             let mut next_board = board;
             let result = next_board.apply_piece_placement(placement);
-            if result.is_lost == IsLost::LOST || !config.admissibility.contains(&next_board) {
+            if result.is_lost || !config.admissibility.contains(&next_board) {
                 verification.replay_failures += 1;
                 continue;
             }
@@ -151,8 +158,8 @@ mod tests {
 
     use super::*;
 
-    fn single_i_clear_board() -> TetrisBoard {
-        let mut board = TetrisBoard::EMPTY_BOARD;
+    fn single_i_clear_board() -> TetrisBoard<10, 20> {
+        let mut board = TetrisBoard::<10, 20>::new();
         for col in 4..10 {
             board.set_bit(col, 0);
         }
@@ -160,11 +167,11 @@ mod tests {
     }
 
     fn single_i_bag() -> TetrisPieceBagState {
-        TetrisPieceBagState::from(u8::from(TetrisPiece::I_PIECE))
+        TetrisPieceBagState::try_from(TetrisPiece::I.mask()).expect("valid bag mask")
     }
 
-    fn single_i_horizontal_left() -> TetrisPiecePlacement {
-        TetrisPiecePlacement::all_from_piece(TetrisPiece::I_PIECE)[0]
+    fn single_i_horizontal_left() -> TetrisPiecePlacement<10> {
+        <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::I)[0]
     }
 
     fn empty_target_config() -> SolverConfig {
@@ -190,7 +197,7 @@ mod tests {
         let placement = single_i_horizontal_left();
         let mut policy = FxHashMap::default();
         policy.insert(
-            WitnessKey::new(root_id, bag, 1, TetrisPiece::I_PIECE),
+            WitnessKey::new(root_id, bag, 1, TetrisPiece::I),
             WitnessEntry {
                 placement_index: placement.index(),
                 child_board_id: None,
@@ -211,10 +218,10 @@ mod tests {
         let mut boards = BoardCache::new();
         let root_id = boards.get_or_insert(single_i_clear_board());
         let bag = single_i_bag();
-        let bad_placement = TetrisPiecePlacement::all_from_piece(TetrisPiece::O_PIECE)[0];
+        let bad_placement = <TetrisPiecePlacement<10>>::all_from_piece(TetrisPiece::O)[0];
         let mut policy = FxHashMap::default();
         policy.insert(
-            WitnessKey::new(root_id, bag, 1, TetrisPiece::I_PIECE),
+            WitnessKey::new(root_id, bag, 1, TetrisPiece::I),
             WitnessEntry {
                 placement_index: bad_placement.index(),
                 child_board_id: None,
