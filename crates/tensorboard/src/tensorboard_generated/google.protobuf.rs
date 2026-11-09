@@ -7,6 +7,7 @@
 ///
 /// Example 1: Pack and unpack a message in C++.
 ///
+/// ```cpp
 ///      Foo foo = ...;
 ///      Any any;
 ///      any.PackFrom(foo);
@@ -14,9 +15,11 @@
 ///      if (any.UnpackTo(&foo)) {
 ///        ...
 ///      }
+/// ```
 ///
 /// Example 2: Pack and unpack a message in Java.
 ///
+/// ```java
 ///      Foo foo = ...;
 ///      Any any = Any.pack(foo);
 ///      ...
@@ -27,9 +30,11 @@
 ///      if (any.isSameTypeAs(Foo.getDefaultInstance())) {
 ///        foo = any.unpack(Foo.getDefaultInstance());
 ///      }
+/// ```
 ///
 ///   Example 3: Pack and unpack a message in Python.
 ///
+/// ```python
 ///      foo = Foo(...)
 ///      any = Any()
 ///      any.Pack(foo)
@@ -37,9 +42,11 @@
 ///      if any.Is(Foo.DESCRIPTOR):
 ///        any.Unpack(foo)
 ///        ...
+/// ```
 ///
 ///   Example 4: Pack and unpack a message in Go
 ///
+/// ```go
 ///       foo := &pb.Foo{...}
 ///       any, err := anypb.New(foo)
 ///       if err != nil {
@@ -50,6 +57,7 @@
 ///       if err := any.UnmarshalTo(foo); err != nil {
 ///         ...
 ///       }
+/// ```
 ///
 /// The pack methods provided by protobuf library will by default use
 /// 'type.googleapis.com/full.type.name' as the type URL and the unpack
@@ -63,27 +71,33 @@
 /// representation of the deserialized, embedded message, with an
 /// additional field `@type` which contains the type URL. Example:
 ///
+/// ```protobuf
 ///      package google.profile;
 ///      message Person {
 ///        string first_name = 1;
 ///        string last_name = 2;
 ///      }
+/// ```
 ///
+/// ```json
 ///      {
 ///        "@type": "type.googleapis.com/google.profile.Person",
 ///        "firstName": <string>,
 ///        "lastName": <string>
 ///      }
+/// ```
 ///
 /// If the embedded message type is well-known and has a custom JSON
 /// representation, that representation will be embedded adding a field
 /// `value` which holds the custom JSON in addition to the `@type`
 /// field. Example (for message [google.protobuf.Duration][]):
 ///
+/// ```json
 ///      {
 ///        "@type": "type.googleapis.com/google.protobuf.Duration",
 ///        "value": "1.212s"
 ///      }
+/// ```
 ///
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Any {

@@ -25,6 +25,7 @@ A normal code change to this crate does **not** require regenerating.
 cargo build -p tensorboard --features regen-protos
 
 # Review and commit the regenerated bindings
+cargo test --locked -p tensorboard --doc
 git add crates/tensorboard/src/tensorboard_generated/
 ```
 
@@ -32,3 +33,6 @@ The `regen-protos` feature is the only thing that activates `prost-build` and th
 proto download script (`scripts/download_tensorboard_protos.sh`). Without it,
 `build.rs` errors if the checked-in bindings are missing rather than silently
 regenerating.
+
+Keep explicit language fences around non-Rust examples in the generated documentation, including
+mixed Python/protobuf examples marked as `text`, so rustdoc does not compile them as Rust.
