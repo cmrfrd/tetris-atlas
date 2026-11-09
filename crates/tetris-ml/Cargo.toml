@@ -27,7 +27,7 @@ dtype-f64 = []
 # Internal crates
 tetris-game.workspace = true
 tetris-search.workspace = true
-proc-macros.workspace = true
+tetris-macros.workspace = true
 
 # Core
 anyhow.workspace = true

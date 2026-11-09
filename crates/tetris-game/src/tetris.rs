@@ -1,6 +1,6 @@
-use proc_macros::{Getters, inline_conditioned};
 use rand::RngExt;
 use rand::distr::{Distribution, StandardUniform};
+use tetris_macros::{Getters, inline_conditioned};
 
 use std::fmt::Display;
 use std::hash::Hash;

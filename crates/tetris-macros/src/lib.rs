@@ -13,7 +13,7 @@ mod getters;
 /// and use the same conditional inlining as `#[inline_conditioned(always)]`.
 ///
 /// ```
-/// use proc_macros::Getters;
+/// use tetris_macros::Getters;
 ///
 /// #[derive(Getters)]
 /// struct State {
@@ -33,7 +33,7 @@ mod getters;
 /// Borrowed accessors do not permit mutation:
 ///
 /// ```compile_fail,E0596
-/// use proc_macros::Getters;
+/// use tetris_macros::Getters;
 /// #[derive(Getters)]
 /// struct State { #[getter] text: String }
 /// let mut state = State { text: String::new() };
@@ -43,7 +43,7 @@ mod getters;
 /// Copy accessors require a `Copy` field:
 ///
 /// ```compile_fail,E0507
-/// use proc_macros::Getters;
+/// use tetris_macros::Getters;
 /// #[derive(Getters)]
 /// struct State { #[getter(copy)] text: String }
 /// ```
@@ -71,7 +71,7 @@ fn code(src: impl AsRef<str>) -> TokenStream {
 /// # Examples
 ///
 /// ```
-/// use proc_macros::inline_conditioned;
+/// use tetris_macros::inline_conditioned;
 ///
 /// #[inline_conditioned(always)]
 /// fn hot_path(x: u32) -> u32 { x + 1 }

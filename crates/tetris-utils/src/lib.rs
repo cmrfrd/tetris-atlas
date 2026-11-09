@@ -12,7 +12,7 @@ use std::ops::{Deref, DerefMut, Index};
 use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 
-use proc_macros::inline_conditioned;
+use tetris_macros::inline_conditioned;
 
 #[doc(hidden)]
 pub const fn checked_assert(condition: bool, message: &str) -> usize {

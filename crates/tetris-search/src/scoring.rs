@@ -1,5 +1,5 @@
-use proc_macros::inline_conditioned;
 use tetris_game::{StandardTetris, TetrisBoard, TetrisGameConfig};
+use tetris_macros::inline_conditioned;
 use tetris_utils::repeat_idx_unroll;
 
 use crate::BeamTetrisState;

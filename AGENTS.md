@@ -53,7 +53,7 @@ statistics unchanged and reports zero cleared lines; the board operation reports
 |---|---|
 | `crates/tetris-game` | Board, configuration, pieces, bags, placement, line clearing |
 | `crates/tetris-utils` | Bit operations, fixed-capacity containers, shared low-level utilities |
-| `crates/proc-macros` | Read-only field accessors and conditional inlining |
+| `crates/tetris-macros` | Read-only field accessors and conditional inlining |
 | `crates/tetris-search` | Beam/multi-beam search, sequence planner, parallel state exploration |
 | `crates/tetris-ml` | Candle models, optimizers, tensors, data generation, checkpoints, TUI |
 | `crates/tetris-playground` | Explicit Cargo binaries: examples, atlas, research, training, tools |

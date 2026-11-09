@@ -16,7 +16,7 @@ opt-level = 3
 
 [workspace.dependencies]
 # Internal crates
-proc-macros = { path = "crates/proc-macros" }
+tetris-macros = { path = "crates/tetris-macros" }
 tetris-utils = { path = "crates/tetris-utils" }
 tetris-game = { path = "crates/tetris-game" }
 tetris-search = { path = "crates/tetris-search" }

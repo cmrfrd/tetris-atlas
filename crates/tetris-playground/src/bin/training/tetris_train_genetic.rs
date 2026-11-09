@@ -25,13 +25,13 @@
 //! - **Console**: Real-time progress with best fitness and coefficient values
 //! - Final best coefficients printed at completion
 
-use proc_macros::inline_conditioned;
 use rand::RngExt;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::time::Instant;
+use tetris_macros::inline_conditioned;
 
 use tetris_game::{TetrisBoard, TetrisGame, TetrisGameRng, TetrisPiecePlacement};
 use tetris_ml::beam_search::{BeamSearch, BeamSearchState};

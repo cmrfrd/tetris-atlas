@@ -134,7 +134,7 @@ tetris-game.workspace = true
 tetris-utils.workspace = true
 tetris-search.workspace = true
 tetris-ml = { workspace = true, optional = true }
-proc-macros.workspace = true
+tetris-macros.workspace = true
 tensorboard = { workspace = true, optional = true }
 
 # CLI

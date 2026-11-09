@@ -15,7 +15,7 @@ never-inline = []
 
 [dependencies]
 rand.workspace = true
-proc-macros.workspace = true
+tetris-macros.workspace = true
 tetris-utils.workspace = true
 
 [lints]

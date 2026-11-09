@@ -1,5 +1,5 @@
-use proc_macros::inline_conditioned;
 use rayon::prelude::*;
+use tetris_macros::inline_conditioned;
 
 use tetris_game::{TetrisGame, TetrisGameRng, TetrisPieceOrientation, TetrisPiecePlacement};
 use tetris_utils::{FixedBinMinHeap, HeaplessVec, repeat_idx_unroll};

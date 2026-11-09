@@ -29,7 +29,7 @@ crates/
 ├── tetris-playground  All runnable binaries (demos, training, atlas builders, experiments)
 ├── tetris-benches     Criterion + pprof benchmarks
 ├── tensorboard        TensorBoard event-file writer
-└── proc-macros        Read-only field accessors and conditional inlining
+└── tetris-macros        Read-only field accessors and conditional inlining
 ```
 
 ## Training

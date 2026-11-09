@@ -1,6 +1,6 @@
 #![feature(generic_const_exprs)]
 
-use proc_macros::Getters;
+use tetris_macros::Getters;
 
 #[derive(Getters)]
 struct Record<'a, T: Copy, const N: usize = 2>
