@@ -914,7 +914,8 @@ impl BeamSearchState for BeamTetrisState {
 )]
 mod tests {
     use super::*;
-    use rand::RngExt;
+    use rand::{RngExt, SeedableRng, rngs::SmallRng};
+    use std::collections::VecDeque;
     use tetris_utils::HeaplessVec;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
@@ -927,10 +928,11 @@ mod tests {
         Right,
     }
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     struct GridState<const N: usize> {
         position: (i32, i32),
         goal: (i32, i32),
+        terrain_seed: u64,
     }
 
     impl<const N: usize> GridState<N> {
@@ -939,12 +941,25 @@ mod tests {
             x >= 0 && y >= 0 && (x as usize) < N && (y as usize) < N
         }
 
-        /// 4-bit mask for (Up,Down,Left,Right) indicating which directions are blocked.
-        #[inline]
+        /// Fixed directed edges for this fixture, with a Manhattan-decreasing route to the goal.
         fn blocked_mask(&self) -> u8 {
-            let mut rng = rand::rng();
-            let mask = rng.random_range(0..16);
-            mask as u8 & 0b1111
+            let (x, y) = self.position;
+            let mixed = self.terrain_seed
+                ^ (x as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15)
+                ^ (y as u64).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+            let mask = (mixed ^ (mixed >> 32)) as u8 & 0b1111;
+            let toward_goal = if x > self.goal.0 {
+                1 << 2 // Left
+            } else if x < self.goal.0 {
+                1 << 3 // Right
+            } else if y > self.goal.1 {
+                1 << 0 // Up
+            } else if y < self.goal.1 {
+                1 << 1 // Down
+            } else {
+                0
+            };
+            mask & !toward_goal
         }
 
         /// Score: negative Manhattan distance to goal (higher is better)
@@ -977,6 +992,7 @@ mod tests {
             Self {
                 position: new_pos,
                 goal: self.goal,
+                terrain_seed: self.terrain_seed,
             }
         }
 
@@ -985,6 +1001,11 @@ mod tests {
             buffer: &mut HeaplessVec<Self::Action, MAX_ACTIONS>,
         ) -> usize {
             buffer.clear();
+            // The goal is absorbing, with exactly one action even at full buffer capacity.
+            if self.position == self.goal {
+                let _ = buffer.try_push(Direction::Stay);
+                return buffer.len();
+            }
             let moves = [
                 Direction::Stay,
                 Direction::Up,
@@ -993,12 +1014,6 @@ mod tests {
                 Direction::Right,
             ];
             let blocked = self.blocked_mask();
-
-            // If we're at the goal, allow a no-op move so the beam can retain the
-            // goal state across levels.
-            if self.position == self.goal {
-                buffer.try_push(Direction::Stay);
-            }
 
             for mv in moves {
                 // `blocked` is a 4-bit mask for cardinal directions only:
@@ -1027,6 +1042,48 @@ mod tests {
             }
 
             buffer.len()
+        }
+    }
+
+    // Independent breadth-first reachability oracle for the fixed fixture graph.
+    fn grid_distances<const N: usize>(start: GridState<N>) -> Vec<usize> {
+        let index = |state: GridState<N>| state.position.1 as usize * N + state.position.0 as usize;
+        let mut distances = vec![usize::MAX; N * N];
+        distances[index(start)] = 0;
+        let mut queue = VecDeque::from([start]);
+        let mut actions = HeaplessVec::<Direction, 5>::new();
+        while let Some(state) = queue.pop_front() {
+            state.generate_actions(&mut actions);
+            for action in actions.into_iter() {
+                let next = state.apply_action(action);
+                let slot = index(next);
+                if distances[slot] == usize::MAX {
+                    distances[slot] = distances[index(state)] + 1;
+                    queue.push_back(next);
+                }
+            }
+        }
+        distances
+    }
+
+    #[test]
+    fn grid_actions_repeat_and_the_goal_is_absorbing() {
+        let mut first = HeaplessVec::<Direction, 5>::new();
+        let mut second = HeaplessVec::<Direction, 5>::new();
+        for terrain_seed in [0, 1, 0x4752_4944_5eed, u64::MAX] {
+            for position in [(0, 0), (50, 50), (99, 99)] {
+                let state = GridState::<100> {
+                    position,
+                    goal: (50, 50),
+                    terrain_seed,
+                };
+                let count = state.generate_actions(&mut first);
+                assert_eq!(count, state.generate_actions(&mut second));
+                assert_eq!(first.to_slice(), second.to_slice());
+                if position == state.goal {
+                    assert_eq!(first.to_slice(), &[Direction::Stay]);
+                }
+            }
         }
     }
 
@@ -1092,7 +1149,7 @@ mod tests {
         const BEAM_WIDTH: usize = 256;
         const MAX_DEPTH: usize = 64;
         const MAX_MOVES: usize = 5;
-        const ITERS: usize = 500;
+        const LOOKAHEAD: usize = 5;
 
         fn cell_to_pos<const N: usize>(idx: usize) -> (i32, i32) {
             let x = (idx % N) as i32;
@@ -1100,32 +1157,97 @@ mod tests {
             (x, y)
         }
 
-        let mut rng = rand::rng();
-        let mut search =
+        let mut rng = SmallRng::seed_from_u64(0x4752_4944_5eed);
+        let mut cases = vec![
+            ((0, 0), (99, 99)),
+            ((99, 99), (0, 0)),
+            ((50, 50), (50, 50)),
+            ((50, 50), (50, 49)),
+            ((50, 50), (50, 51)),
+            ((50, 50), (49, 50)),
+            ((50, 50), (51, 50)),
+            ((52, 17), (51, 18)),
+        ];
+        cases.extend((0..NUM_TESTS).map(|_| {
+            (
+                cell_to_pos::<N>(rng.random_range(0..N * N)),
+                cell_to_pos::<N>(rng.random_range(0..N * N)),
+            )
+        }));
+        let mut leaf_search =
             BeamSearch::<GridState<N>, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES, _>::new(|state| {
                 state.score()
             });
+        // Cumulative distance penalizes waiting while testing receding-horizon progress.
+        let mut search =
+            BeamSearch::<GridState<N>, BEAM_WIDTH, MAX_DEPTH, MAX_MOVES, _>::new(|state| {
+                state.score()
+            })
+            .with_score_mode(BeamScoreMode::Cumulative);
 
-        for _ in 0..NUM_TESTS {
-            let start = cell_to_pos::<N>(rng.random_range(0..N * N));
-            let goal = cell_to_pos::<N>(rng.random_range(0..N * N));
+        for (start, goal) in cases {
             let initial = GridState::<N> {
                 position: start,
                 goal,
+                terrain_seed: rng.random(),
             };
+            let distances = grid_distances(initial);
+            let goal_index = goal.1 as usize * N + goal.0 as usize;
+            let shortest_path = distances[goal_index];
+            assert_ne!(
+                shortest_path,
+                usize::MAX,
+                "unreachable fixture: {initial:?}"
+            );
 
-            let mut made = 0usize;
+            let first = leaf_search
+                .search_top_with_state(initial, LOOKAHEAD)
+                .expect("fixed grid always has a legal continuation");
+            let repeated = leaf_search
+                .search_top_with_state(initial, LOOKAHEAD)
+                .expect("repeated search must have the same continuation");
+            assert_eq!(first.state, repeated.state);
+            assert_eq!(first.root_action, repeated.root_action);
+            assert_eq!(first.score.to_bits(), repeated.score.to_bits());
+            assert_eq!(first.depth, LOOKAHEAD);
+            let expected_distance = u16::try_from(shortest_path.saturating_sub(LOOKAHEAD))
+                .expect("100-by-100 grid distances fit in u16");
+            assert_eq!(first.state.score(), -f32::from(expected_distance));
+            assert_eq!(first.score, first.state.score());
+            let leaf_index = first.state.position.1 as usize * N + first.state.position.0 as usize;
+            assert!(
+                distances[leaf_index] <= LOOKAHEAD,
+                "leaf must be reachable within the horizon"
+            );
+            let mut actions = HeaplessVec::<Direction, MAX_MOVES>::new();
+            initial.generate_actions(&mut actions);
+            assert!(
+                actions
+                    .to_slice()
+                    .contains(&first.root_action.expect("searched root action"))
+            );
+
             let mut s = initial;
-            while (made < ITERS) && (s.position != goal) {
-                let Some(state) = search.search_top_with_state(s, 5) else {
-                    continue;
-                };
-                s = s.apply_action(&state.root_action.expect("successful search must provide a root action in test_beam_search_grid_many_cases"));
+            for step in 0..shortest_path {
+                let state = search
+                    .search_top_with_state(s, LOOKAHEAD)
+                    .expect("reachable fixture must return a continuation");
+                let action = state.root_action.expect("searched root action");
+                s.generate_actions(&mut actions);
+                assert!(
+                    actions.to_slice().contains(&action),
+                    "illegal move at step {step}: {s:?}"
+                );
+                let next = s.apply_action(&action);
+                assert_eq!(
+                    next.score(),
+                    s.score() + 1.0,
+                    "no progress at step {step}: {s:?}"
+                );
+                s = next;
                 assert!(GridState::<N>::in_bounds(s.position), "moved out of bounds");
-
-                made += 1;
             }
-            assert_eq!(s.position, goal, "did not reach goal");
+            assert_eq!(s.position, goal, "did not reach goal: {initial:?}");
         }
     }
 }
