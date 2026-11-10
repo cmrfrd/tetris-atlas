@@ -29,7 +29,8 @@ const POWERS: [[u32; 11]; 8] = {
 /// Packs height in bits 0..=2 and hole-row-plus-one in bits 3..=5; bit 7 rejects the column.
 #[inline_conditioned]
 const fn make_columns<const R: usize, const N: usize>() -> [u8; N] {
-    assert!(N == 1 << R);
+    assert!(R >= 4 && R <= 6, "column height must be 4..=6");
+    assert!(N == 1 << R, "column table must cover every R-bit mask");
     let mut out = [0; N];
     let mut column = 0;
     while column < N {
@@ -44,6 +45,14 @@ const fn make_columns<const R: usize, const N: usize>() -> [u8; N] {
             } else {
                 (((1u32 << height) - 1) ^ bits).trailing_zeros() + 1
             };
+            assert!(
+                height < 8 && hole_code < 8,
+                "column fields must fit three bits"
+            );
+            assert!(
+                hole_code == 0 || hole_code < height,
+                "hole must be below the top cell"
+            );
             height as u8 | ((hole_code as u8) << 3)
         };
         column += 1;
@@ -98,10 +107,16 @@ impl Prefix {
 /// Counts bounded height words with the requested occupancy parity.
 #[inline_conditioned(always)]
 const fn words(n: usize, lo: usize, hi: usize, parity: u8) -> i64 {
+    debug_assert!(n <= 10, "suffix length exceeds the ten-column domain");
+    debug_assert!(parity <= 1, "parity must be a bit");
     if lo > hi {
         return (n == 0 && parity == 0) as i64;
     }
     let size = hi - lo + 1;
+    debug_assert!(
+        size < POWERS.len(),
+        "height alphabet exceeds the power table"
+    );
     // Even-sized intervals balance even/odd heights. Odd-sized intervals differ by
     // one, so their signed power depends only on the start height and length parity.
     let imbalance_power = if size & 1 == 0 {
@@ -115,12 +130,14 @@ const fn words(n: usize, lo: usize, hi: usize, parity: u8) -> i64 {
 /// Counts solid-column completions that satisfy the row and parity restrictions.
 #[inline_conditioned(always)]
 const fn solid_count<const R: usize>(p: Prefix, n: usize) -> u64 {
-    (words(n, 0, R, p.parity)
+    let count = words(n, 0, R, p.parity)
         - if p.min == 0 {
             0
         } else {
             words(n, 1, R, p.parity)
-        }) as u64
+        };
+    debug_assert!(count >= 0, "solid completion count must be nonnegative");
+    count as u64
 }
 
 /// Counts completions with one fixed hole and the required row coverage.
@@ -179,13 +196,7 @@ impl Bad {
 
     /// Extends the prefix with a solid column height.
     #[inline_conditioned]
-    const fn add<const R: usize>(
-        mut self,
-        _x: usize,
-        h: usize,
-        _hole_col: usize,
-        max_low: usize,
-    ) -> Self {
+    const fn add<const R: usize>(mut self, h: usize, max_low: usize) -> Self {
         if !self.possible {
             return self;
         }
@@ -236,6 +247,15 @@ const INDEPENDENT: [[[i32; 11]; 2]; 7] = {
 /// Counts weighted column words with no adjacent cap markers.
 #[inline_conditioned]
 const fn independent(n: usize, low: i64, cap: i64) -> i64 {
+    debug_assert!(n <= 10, "suffix length exceeds the ten-column domain");
+    debug_assert!(
+        low >= -1 && low <= 5,
+        "lower-symbol weight is outside -1..=5"
+    );
+    debug_assert!(
+        cap == -1 || cap == 0 || cap == 1,
+        "cap weight must be -1, 0 or 1"
+    );
     if cap == 0 {
         let power = POWERS[low.unsigned_abs() as usize][n] as i64;
         if low < 0 && n & 1 != 0 { -power } else { power }
@@ -247,6 +267,8 @@ const fn independent(n: usize, low: i64, cap: i64) -> i64 {
 /// Counts marker words around the distinguished hole column.
 #[inline_conditioned]
 const fn weighted(position: usize, prev: bool, hole_col: usize, low: i64, cap: i64) -> i64 {
+    debug_assert!(position <= 10, "suffix position exceeds ten columns");
+    debug_assert!(hole_col < 10, "hole column exceeds the board width");
     let n = 10 - position;
     if cap == 0 {
         return if hole_col < position {
@@ -341,7 +363,13 @@ const fn bucket<const R: usize>(height: usize, y: usize, hole_col: usize) -> u64
         parity: ((height - 1) & 1) as u8,
         ..Prefix::empty()
     };
-    one_count::<R>(p, 9, y) - bad_count::<R>(height, y, hole_col, 0, Bad::empty())
+    let total = one_count::<R>(p, 9, y);
+    let excluded = bad_count::<R>(height, y, hole_col, 0, Bad::empty());
+    assert!(
+        excluded <= total,
+        "excluded bucket count exceeds its carrier"
+    );
+    total - excluded
 }
 
 // Differentiating the independent-marker recurrence counts a distinguished
@@ -405,12 +433,19 @@ const fn group<const R: usize>(height: usize, y: usize) -> u64 {
             -value[1]
         };
     assert!(removed >= 0 && removed % 2 == 0);
-    base - (removed / 2) as u64
+    let excluded = (removed / 2) as u64;
+    assert!(excluded <= base, "excluded group count exceeds its carrier");
+    base - excluded
 }
 
 /// Builds cumulative hole-bucket offsets from the solid-sector count to the final ID sentinel.
 #[inline_conditioned]
 const fn make_metadata<const R: usize, const N: usize>() -> [u32; N] {
+    assert!(R >= 4 && R <= 6, "metadata height must be 4..=6");
+    assert!(
+        N == 1 + 10 * R * (R - 1) / 2,
+        "metadata table length is inconsistent"
+    );
     let mut out = [0; N];
     let mut offset = solid_count::<R>(Prefix::empty(), 10);
     assert!(offset <= u32::MAX as u64);
@@ -422,9 +457,15 @@ const fn make_metadata<const R: usize, const N: usize>() -> [u32; N] {
         while y + 1 < height {
             let mut hole_col = 0;
             while hole_col < 10 {
-                offset += bucket::<R>(height, y, hole_col);
+                offset = offset
+                    .checked_add(bucket::<R>(height, y, hole_col))
+                    .expect("metadata count overflow");
                 assert!(offset <= u32::MAX as u64);
                 out[index] = offset as u32;
+                assert!(
+                    out[index - 1] <= out[index],
+                    "metadata offsets must be nondecreasing"
+                );
                 index += 1;
                 hole_col += 1;
             }
@@ -454,6 +495,12 @@ const fn metadata<const R: usize>() -> &'static [u32] {
 /// Counts IDs preceding the supplied hole metadata.
 #[inline_conditioned]
 const fn metadata_before<const R: usize>(height: usize, y: usize, hole_col: usize) -> u64 {
+    debug_assert!(
+        height >= 2 && height <= R,
+        "hole-column height is outside the cap"
+    );
+    debug_assert!(y < height - 1, "hole must be below the top cell");
+    debug_assert!(hole_col < 10, "hole column exceeds the board width");
     let group = (height - 1) * (height - 2) / 2 + y;
     metadata::<R>()[10 * group + hole_col] as u64
 }
@@ -478,6 +525,14 @@ const fn count<const R: usize>() -> u64 {
 /// Ranks solid column heights using the parity-adjusted radix representation.
 #[inline_conditioned]
 fn suffix_rank<const R: usize>(heights: &[usize; 10], start: usize, skip: usize) -> u64 {
+    debug_assert!(
+        start <= 10 && skip <= 10,
+        "invalid suffix bounds or skip sentinel"
+    );
+    debug_assert!(
+        heights.iter().all(|&height| height <= R),
+        "column exceeds the cap"
+    );
     let mut raw = 0;
     for (x, &h) in heights.iter().enumerate().skip(start) {
         if x != skip {
@@ -496,6 +551,11 @@ fn suffix_select<const R: usize>(
     skip: usize,
     parity: u8,
 ) {
+    debug_assert!(
+        start <= 10 && skip <= 10,
+        "invalid suffix bounds or skip sentinel"
+    );
+    debug_assert!(parity <= 1, "parity must be a bit");
     let mut raw = 2 * id
         + if R.is_multiple_of(2) {
             u64::from(parity)
@@ -526,7 +586,7 @@ fn suffix_select<const R: usize>(
 
 /// Arithmetic kernel. Ten columns and at most one hole; caps four through six.
 /// Its language matches the recursively refined one-hole carrier, with a new dense ID order.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct ArithmeticOneHole<const R: usize>;
 
 impl<const R: usize> ArithmeticOneHole<R> {
@@ -587,7 +647,7 @@ impl<const R: usize> ArithmeticOneHole<R> {
                     family = family.hole();
                 } else {
                     validity = validity.add(column_height);
-                    family = family.add::<R>(x, column_height, hole_col, y);
+                    family = family.add::<R>(column_height, y);
                 }
             }
             let limit = usize::from(y == 0);
@@ -617,12 +677,17 @@ impl<const R: usize> ArithmeticOneHole<R> {
                 let remaining = 9 - x - usize::from(hole_col > x);
                 for h in 0..heights[x] {
                     let q = p.add(h);
-                    let b = bad.add::<R>(x, h, hole_col, y);
-                    id += one_count::<R>(q, remaining, y)
-                        - bad_count::<R>(height, y, hole_col, x + 1, b);
+                    let b = bad.add::<R>(h, y);
+                    let total = one_count::<R>(q, remaining, y);
+                    let excluded = bad_count::<R>(height, y, hole_col, x + 1, b);
+                    debug_assert!(
+                        excluded <= total,
+                        "excluded suffix count exceeds its carrier"
+                    );
+                    id += total - excluded;
                 }
                 p = p.add(heights[x]);
-                bad = bad.add::<R>(x, heights[x], hole_col, y);
+                bad = bad.add::<R>(heights[x], y);
             }
             Some(id)
         } else {
@@ -682,7 +747,16 @@ impl<const R: usize> ArithmeticOneHole<R> {
         } else {
             let offsets = metadata::<R>();
             // The last equal offset skips empty buckets; BOARD_COUNT is the upper sentinel.
-            let bucket_index = offsets.partition_point(|&offset| u64::from(offset) <= id) - 1;
+            let split = offsets.partition_point(|&offset| u64::from(offset) <= id);
+            debug_assert!(
+                split > 0 && split < offsets.len(),
+                "ID must fall before the sentinel"
+            );
+            let bucket_index = split - 1;
+            debug_assert!(
+                u64::from(offsets[bucket_index]) <= id && id < u64::from(offsets[bucket_index + 1]),
+                "selected metadata bucket must contain the ID"
+            );
             id -= u64::from(offsets[bucket_index]);
             let hole_col = bucket_index % 10;
             let mut y = bucket_index / 10;
@@ -715,9 +789,14 @@ impl<const R: usize> ArithmeticOneHole<R> {
                 let mut found = false;
                 for h in 0..=R {
                     let q = p.add(h);
-                    let b = bad.add::<R>(x, h, hole_col, y);
-                    let n = one_count::<R>(q, remaining, y)
-                        - bad_count::<R>(height, y, hole_col, x + 1, b);
+                    let b = bad.add::<R>(h, y);
+                    let total = one_count::<R>(q, remaining, y);
+                    let excluded = bad_count::<R>(height, y, hole_col, x + 1, b);
+                    debug_assert!(
+                        excluded <= total,
+                        "excluded suffix count exceeds its carrier"
+                    );
+                    let n = total - excluded;
                     if id >= n {
                         id -= n;
                     } else {
@@ -785,6 +864,36 @@ pub(crate) fn select(rows: usize, id: u64) -> Option<u64> {
 mod tests {
     use super::*;
     use tetris_game::{StandardTetris, TetrisGameConfig};
+
+    /// Rejects metadata storage with the wrong number of bucket boundaries.
+    #[test]
+    #[should_panic(expected = "metadata table length is inconsistent")]
+    fn metadata_requires_the_exact_boundary_count() {
+        let _ = make_metadata::<4, 60>();
+    }
+
+    /// Rejects a future column cap before its fields can overlap the rejection bit.
+    #[test]
+    #[should_panic(expected = "column height must be 4..=6")]
+    fn column_descriptions_require_a_supported_height() {
+        let _ = make_columns::<7, 128>();
+    }
+
+    /// Rejects cap weights that would otherwise alias a supported table entry.
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "cap weight must be -1, 0 or 1")]
+    fn recurrence_rejects_unsupported_cap_weights() {
+        let _ = independent(2, 1, 2);
+    }
+
+    /// Catches invalid metadata before its arithmetic index can select another bucket.
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "hole column exceeds the board width")]
+    fn metadata_rejects_an_out_of_range_column() {
+        let _ = metadata_before::<4>(2, 0, 10);
+    }
 
     /// Checks selection at both boundaries of every metadata bucket.
     fn metadata_boundaries<const R: usize>() {
@@ -990,7 +1099,7 @@ mod tests {
                 };
                 *col = (1 << h) - 1;
                 p = p.add(h);
-                bad = bad.add::<R>(x, h, j, y);
+                bad = bad.add::<R>(h, y);
             }
             let n = 3 - usize::from(j >= 7);
             let actual = one_count::<R>(p, n, y) - bad_count::<R>(height, y, j, 7, bad);

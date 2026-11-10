@@ -195,6 +195,15 @@ fn rank_nodes<T: Decision>(
     vars: usize,
     mut bit: impl FnMut(usize) -> bool,
 ) -> Option<u64> {
+    #[cfg(debug_assertions)]
+    {
+        debug_assert!(total > 0, "a graph carrier must contain the empty board");
+        debug_assert!((root as usize) < nodes.len(), "root must be a stored node");
+        debug_assert!(
+            levels.is_empty() || levels.len() == nodes.len(),
+            "node levels are inconsistent"
+        );
+    }
     let mut edge = root;
     let mut rank = 0;
     if levels.is_empty() {
@@ -203,6 +212,13 @@ fn rank_nodes<T: Decision>(
             if edge == 0 {
                 return None;
             }
+            #[cfg(debug_assertions)]
+            {
+                debug_assert!(
+                    edge > 1,
+                    "significant variables must not skip to a terminal"
+                );
+            }
             let node = nodes[edge as usize];
             if bit(level) {
                 rank += node.weight();
@@ -210,6 +226,10 @@ fn rank_nodes<T: Decision>(
             } else {
                 edge = node.zero();
             }
+        }
+        #[cfg(debug_assertions)]
+        {
+            debug_assert!(edge != 1 || rank < total, "rank must fit the carrier");
         }
         return (edge == 1).then_some(rank);
     }
@@ -221,6 +241,14 @@ fn rank_nodes<T: Decision>(
         let node = nodes[edge as usize];
         let decision = edge > 1 && levels[edge as usize] as usize == level;
         let zero = if decision { node.weight() } else { count / 2 };
+        #[cfg(debug_assertions)]
+        {
+            debug_assert!(zero <= count, "zero branch exceeds the remaining count");
+            debug_assert!(
+                decision || count.is_multiple_of(2),
+                "free bits must split evenly"
+            );
+        }
         if bit(level) {
             rank += zero;
             count -= zero;
@@ -251,9 +279,24 @@ fn select_nodes<T: Decision>(
     if rank >= total {
         return Err(Error::InvalidId);
     }
+    #[cfg(debug_assertions)]
+    {
+        debug_assert!((root as usize) < nodes.len(), "root must be a stored node");
+        debug_assert!(
+            levels.is_empty() || levels.len() == nodes.len(),
+            "node levels are inconsistent"
+        );
+    }
     let mut edge = root;
     if levels.is_empty() {
         for level in 0..vars {
+            #[cfg(debug_assertions)]
+            {
+                debug_assert!(
+                    edge > 1,
+                    "significant variables must not skip to a terminal"
+                );
+            }
             let node = nodes[edge as usize];
             let one = rank >= node.weight();
             if one {
@@ -275,6 +318,15 @@ fn select_nodes<T: Decision>(
         let node = nodes[edge as usize];
         let decision = edge > 1 && levels[edge as usize] as usize == level;
         let zero = if decision { node.weight() } else { count / 2 };
+        #[cfg(debug_assertions)]
+        {
+            debug_assert!(zero <= count, "zero branch exceeds the remaining count");
+            debug_assert!(
+                decision || count.is_multiple_of(2),
+                "free bits must split evenly"
+            );
+            debug_assert!(rank < count, "rank must fit the remaining suffix");
+        }
         let one = rank >= zero;
         if one {
             rank -= zero;
@@ -552,14 +604,15 @@ where
             ));
         }
         if C::COLS * ROWS <= 64 {
-            let mut code = 0u64;
-            if crate::arithmetic::applies(C::COLS, ROWS, MAX_HOLES) {
-                code = crate::arithmetic::select(ROWS, id).ok_or(Error::InvalidId)?;
+            let code = if crate::arithmetic::applies(C::COLS, ROWS, MAX_HOLES) {
+                crate::arithmetic::select(ROWS, id).ok_or(Error::InvalidId)?
             } else {
+                let mut code = 0u64;
                 Self::TABLES.select(id, C::COLS * ROWS, |_, one| {
                     code = (code << 1) | u64::from(one)
                 })?;
-            }
+                code
+            };
             Ok(TetrisBoard::<{ C::COLS }, { C::ROWS }>::from_limbs(
                 std::array::from_fn(|x| {
                     u32::try_from((code >> ((C::COLS - 1 - x) * ROWS)) & ((1u64 << ROWS) - 1))
@@ -1465,8 +1518,11 @@ pub(crate) mod tests {
     fn invalid_inputs_preserve_precise_errors_and_are_never_truncated() {
         for (rows, error) in [
             ([1024, 0, 0, 0], Error::InvalidRowMask),
+            ([1024, 0, 1023, 0], Error::InvalidRowMask),
             ([0, 3, 0, 0], Error::EmptyInternalRow),
+            ([1023, 0, 1, 0], Error::EmptyInternalRow),
             ([1023, 0, 0, 0], Error::FullRow),
+            ([1023, 1, 0, 0], Error::FullRow),
             ([1, 0, 0, 0], Error::OccupancyResidue),
             ([5, 1, 1, 5], Error::ImpossibleBoard),
         ] {
