@@ -1,9 +1,44 @@
 //! Rule-derived, reduced decision diagram. All construction runs in const evaluation.
-#![allow(long_running_const_eval)]
+#![allow(
+    long_running_const_eval,
+    reason = "Bounded codec graph construction may exceed the const evaluator progress threshold."
+)]
 use crate::board::{MediumNode, Nodes, SmallNode, WideNode};
 use crate::rules::occupancy_modulus;
 use crate::{CompiledConfig, Dimensions, Tables, private};
-use tetris_game::{Column, TetrisPiece, TetrisPieceOrientation};
+use tetris_game::{Rotation, TetrisPiece};
+
+/// Returns the normalized footprint used by the symbolic predecessor proof.
+///
+/// The engine keeps its geometry private. Module-local tests compare every fitting
+/// canonical placement against these columns through the public placement API.
+const fn symbolic_shape(piece: TetrisPiece, rotation: Rotation) -> ([u32; 4], u8) {
+    use Rotation::{R0, R90, R180, R270};
+    use TetrisPiece::{I, J, L, O, S, T, Z};
+
+    let columns = match (piece, rotation) {
+        (O, _) => [3, 3, 0, 0],
+        (I, R0 | R180) => [1, 1, 1, 1],
+        (I, _) => [15, 0, 0, 0],
+        (S, R0 | R180) => [1, 3, 2, 0],
+        (S, _) => [6, 3, 0, 0],
+        (Z, R0 | R180) => [2, 3, 1, 0],
+        (Z, _) => [3, 6, 0, 0],
+        (T, R0) => [2, 3, 2, 0],
+        (T, R90) => [2, 7, 0, 0],
+        (T, R180) => [1, 3, 1, 0],
+        (T, R270) => [7, 2, 0, 0],
+        (L, R0) => [1, 1, 3, 0],
+        (L, R90) => [7, 1, 0, 0],
+        (L, R180) => [3, 2, 2, 0],
+        (L, R270) => [4, 7, 0, 0],
+        (J, R0) => [3, 1, 1, 0],
+        (J, R90) => [7, 4, 0, 0],
+        (J, R180) => [2, 2, 3, 0],
+        (J, R270) => [1, 7, 0, 0],
+    };
+    (columns, piece.width(rotation))
+}
 
 #[derive(Clone, Copy)]
 struct Raw {
@@ -11,6 +46,7 @@ struct Raw {
     zero: u32,
     one: u32,
 }
+
 impl Raw {
     const EMPTY: Self = Self {
         var: u16::MAX,
@@ -18,6 +54,7 @@ impl Raw {
         one: 0,
     };
 }
+
 #[derive(Clone, Copy)]
 pub(crate) struct Node {
     pub zero: u32,
@@ -25,6 +62,7 @@ pub(crate) struct Node {
     pub zero_count: u64,
     pub var: u16,
 }
+
 impl Node {
     const EMPTY: Self = Self {
         zero: 0,
@@ -34,6 +72,7 @@ impl Node {
     };
 }
 
+/// Returns the bounded symbolic node capacity for these dimensions.
 pub const fn capacity(c: usize, r: usize, h: usize) -> usize {
     assert!(
         c >= 1 && c <= 12 && r >= 1 && r <= 31,
@@ -51,14 +90,23 @@ pub const fn capacity(c: usize, r: usize, h: usize) -> usize {
     );
     n
 }
+
+/// Returns the size of the symbolic unique-node hash table.
 pub const fn slots(c: usize, r: usize, h: usize) -> usize {
     capacity(c, r, h) * 2
 }
+
+/// Mixes a node key for indexing a power-of-two hash table.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Hash indexing intentionally retains the low bits of the target pointer width."
+)]
 const fn mix(mut x: u64) -> usize {
     x = (x ^ (x >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
     x = (x ^ (x >> 27)).wrapping_mul(0x94d049bb133111eb);
     (x ^ (x >> 31)) as usize
 }
+
 #[derive(Clone, Copy)]
 struct Frame {
     key: u64,
@@ -68,6 +116,7 @@ struct Frame {
     high_b: u32,
     returning_high: bool,
 }
+
 impl Frame {
     const EMPTY: Self = Self {
         key: 0,
@@ -78,6 +127,7 @@ impl Frame {
         returning_high: false,
     };
 }
+
 struct Builder<const N: usize, const M: usize> {
     nodes: [Raw; N],
     len: usize,
@@ -92,7 +142,13 @@ struct Builder<const N: usize, const M: usize> {
     rows: usize,
     frames: [Frame; 373],
 }
+
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "The bounded workspace holds at most 2^20 nodes and board variables are below 12 * 31; node indices fit u32 and variables fit u16."
+)]
 impl<const N: usize, const M: usize> Builder<N, M> {
+    /// Creates an empty symbolic builder for the requested dimensions.
     const fn new(c: usize, r: usize) -> Self {
         Self {
             nodes: [Raw::EMPTY; N],
@@ -109,10 +165,14 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             frames: [Frame::EMPTY; 373],
         }
     }
+
+    /// Clears memoized Boolean operations without discarding live nodes.
     const fn clear_cache(&mut self) {
         self.epoch += 1;
         self.cached = 0;
     }
+
+    /// Interns a decision node, reducing identical branches.
     const fn node(&mut self, var: u16, zero: u32, one: u32) -> u32 {
         if zero == one {
             return zero;
@@ -138,6 +198,8 @@ impl<const N: usize, const M: usize> Builder<N, M> {
         self.unique[at] = i as u32;
         ((i as u32) * 2) ^ sign
     }
+
+    /// Computes the intersection of two symbolic board languages.
     const fn and(&mut self, mut a: u32, mut b: u32) -> u32 {
         let mut depth = 0;
         let mut returning = false;
@@ -239,12 +301,18 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             b = bz;
         }
     }
+
+    /// Computes the union of two symbolic board languages.
     const fn or(&mut self, a: u32, b: u32) -> u32 {
         self.and(a ^ 1, b ^ 1) ^ 1
     }
+
+    /// Returns the Boolean variable for one board cell.
     const fn bit(&mut self, x: usize, y: usize) -> u32 {
         self.node((x * self.rows + self.rows - 1 - y) as u16, 0, 1)
     }
+
+    /// Builds the predicate that a row is entirely occupied or entirely empty.
     const fn row(&mut self, y: usize, all: bool) -> u32 {
         let mut f = if all { 1 } else { 0 };
         let mut x = 0;
@@ -255,6 +323,8 @@ impl<const N: usize, const M: usize> Builder<N, M> {
         }
         f
     }
+
+    /// Compacts nodes reachable from two roots and returns their relocated indices.
     const fn collect(&mut self, a: u32, b: u32) -> (u32, u32) {
         let old_len = self.len;
         let mut i = 0;
@@ -319,6 +389,8 @@ impl<const N: usize, const M: usize> Builder<N, M> {
         self.clear_cache();
         (a, b)
     }
+
+    /// Builds the structural board language for the given hole budget.
     const fn carrier(&mut self, holes: usize) -> u32 {
         let modulus = occupancy_modulus(self.cols);
         let mut residues = [0; 4];
@@ -420,6 +492,8 @@ impl<const N: usize, const M: usize> Builder<N, M> {
         }
         f
     }
+
+    /// Builds the predicate for a legal zero-clear predecessor with this footprint.
     const fn removable(&mut self, cells: &[u32; 12]) -> u32 {
         let mut term = 1;
         let mut support = 0;
@@ -468,6 +542,8 @@ impl<const N: usize, const M: usize> Builder<N, M> {
         }
         term
     }
+
+    /// Removes boards that violate the proved capped-history predecessor condition.
     const fn rules(&mut self, holes: usize) -> u32 {
         let mut carrier = self.carrier(holes);
         if self.cols <= 4 || self.rows > 28 {
@@ -500,10 +576,10 @@ impl<const N: usize, const M: usize> Builder<N, M> {
                 let piece = pieces[p];
                 let mut rotation = 0;
                 while rotation < piece.num_rotations() && bad != 0 {
-                    let orientation = TetrisPieceOrientation::from_index(rotation * Column::MAX);
-                    let (raw, width) = piece.shape_cols(orientation.rotation);
+                    let rotation_value = Rotation::ALL[rotation as usize];
+                    let (raw, width) = symbolic_shape(piece, rotation_value);
                     let width = width as usize;
-                    let height = piece.height(orientation.rotation) as usize;
+                    let height = piece.height(rotation_value) as usize;
                     let vertical = width == 1 && height == 4;
                     if width <= self.cols && height <= self.rows && vertical == (pass == 0) {
                         let mut shift = 32;
@@ -584,6 +660,12 @@ pub struct Diagram<const N: usize> {
     pub root: u32,
     pub count: u64,
 }
+
+/// Counts satisfying assignments, including skipped board variables.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "The preceding assertion checks that the shifted u128 count fits u64."
+)]
 const fn assignments<const N: usize>(
     diagram: &Diagram<N>,
     totals: &[u64; N],
@@ -607,6 +689,12 @@ const fn assignments<const N: usize>(
     assert!(v <= u64::MAX as u128, "codec count exceeds u64");
     v as u64
 }
+
+/// Constructs a reduced decision diagram and its completion counts at compile time.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Workspace indices fit u32; every u128 completion total is checked against u64::MAX before narrowing."
+)]
 pub const fn build<const N: usize, const M: usize, const OUT: usize>(
     c: usize,
     r: usize,
@@ -700,17 +788,36 @@ pub const fn build<const N: usize, const M: usize, const OUT: usize>(
     }
     result
 }
-pub struct Configuration<const C: usize, const R: usize, const H: usize>;
-impl<const C: usize, const R: usize, const H: usize> Configuration<C, R, H>
+
+pub struct Configuration<const C: usize, const R: usize, const H: usize, const FULL_BAG: bool>;
+
+impl<const C: usize, const R: usize, const H: usize, const FULL_BAG: bool>
+    Configuration<C, R, H, FULL_BAG>
 where
     [(); capacity(C, R, H)]:,
     [(); slots(C, R, H)]:,
     [(); capacity(C, R, H) * 2]:,
 {
+    // Generic-const normalization can visit GRAPH even when Source selects arithmetic.
+    // Guard construction here too, so those configurations never run the graph builder.
     pub const GRAPH: Diagram<{ capacity(C, R, H) * 2 }> =
-        build::<{ capacity(C, R, H) }, { slots(C, R, H) }, { capacity(C, R, H) * 2 }>(C, R, H);
+        if crate::single_row::applies(C, R, FULL_BAG) || crate::arithmetic::applies(C, R, H) {
+            Diagram {
+                nodes: [Node::EMPTY; capacity(C, R, H) * 2],
+                len: 0,
+                root: 0,
+                count: if crate::single_row::applies(C, R, FULL_BAG) {
+                    crate::single_row::board_count(C)
+                } else {
+                    crate::arithmetic::board_count(R)
+                },
+            }
+        } else {
+            build::<{ capacity(C, R, H) }, { slots(C, R, H) }, { capacity(C, R, H) * 2 }>(C, R, H)
+        };
 }
-pub trait Source: private::Sealed {
+
+pub(crate) trait Source: private::Sealed {
     const HOLES: usize;
     const NODES: &'static [Node];
     const LEN: usize;
@@ -721,18 +828,48 @@ pub trait Source: private::Sealed {
     const WIDE: usize;
     const LEVELS: usize;
 }
-impl<const C: usize, const R: usize, const H: usize> private::Sealed for Dimensions<C, R, H> {}
-impl<const C: usize, const R: usize, const H: usize> Source for Dimensions<C, R, H>
+
+impl<const C: usize, const R: usize, const H: usize, const FULL_BAG: bool> private::Sealed
+    for Dimensions<C, R, H, FULL_BAG>
+{
+}
+
+impl<const C: usize, const R: usize, const H: usize, const FULL_BAG: bool> Source
+    for Dimensions<C, R, H, FULL_BAG>
 where
     [(); capacity(C, R, H)]:,
     [(); slots(C, R, H)]:,
     [(); capacity(C, R, H) * 2]:,
 {
     const HOLES: usize = if H < C * (R - 1) { H } else { C * (R - 1) };
-    const NODES: &'static [Node] = &Configuration::<C, R, H>::GRAPH.nodes;
-    const LEN: usize = Configuration::<C, R, H>::GRAPH.len;
-    const ROOT: u32 = Configuration::<C, R, H>::GRAPH.root;
-    const COUNT: u64 = Configuration::<C, R, H>::GRAPH.count;
+    const NODES: &'static [Node] =
+        if crate::single_row::applies(C, R, FULL_BAG) || crate::arithmetic::applies(C, R, H) {
+            &[]
+        } else {
+            &Configuration::<C, R, H, FULL_BAG>::GRAPH.nodes
+        };
+    const LEN: usize =
+        if crate::single_row::applies(C, R, FULL_BAG) || crate::arithmetic::applies(C, R, H) {
+            0
+        } else {
+            Configuration::<C, R, H, FULL_BAG>::GRAPH.len
+        };
+    const ROOT: u32 =
+        if crate::single_row::applies(C, R, FULL_BAG) || crate::arithmetic::applies(C, R, H) {
+            0
+        } else {
+            Configuration::<C, R, H, FULL_BAG>::GRAPH.root
+        };
+    const COUNT: u64 =
+        if crate::single_row::applies(C, R, FULL_BAG) || crate::arithmetic::applies(C, R, H) {
+            if crate::single_row::applies(C, R, FULL_BAG) {
+                crate::single_row::board_count(C)
+            } else {
+                crate::arithmetic::board_count(R)
+            }
+        } else {
+            Configuration::<C, R, H, FULL_BAG>::GRAPH.count
+        };
     const SMALL: usize = if storage_kind(Self::LEN, Self::COUNT) == 0 {
         Self::LEN
     } else {
@@ -754,6 +891,8 @@ where
         0
     };
 }
+
+/// Selects the narrowest lossless node representation.
 const fn storage_kind(len: usize, count: u64) -> usize {
     if len <= u16::MAX as usize + 1 && count <= u16::MAX as u64 {
         0
@@ -763,6 +902,12 @@ const fn storage_kind(len: usize, count: u64) -> usize {
         2
     }
 }
+
+/// Packs nodes whose children and completion counts fit in u16.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Each record is asserted to fit its u16 children and completion count before narrowing."
+)]
 const fn small<const N: usize>(nodes: &[Node]) -> [SmallNode; N] {
     let mut out = [SmallNode {
         zero: 0,
@@ -786,6 +931,12 @@ const fn small<const N: usize>(nodes: &[Node]) -> [SmallNode; N] {
     }
     out
 }
+
+/// Packs u16 children with u32 completion counts.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Each record is asserted to fit its u16 children and u32 completion count before narrowing."
+)]
 const fn medium<const N: usize>(nodes: &[Node]) -> [MediumNode; N] {
     let mut out = [MediumNode {
         zero: 0,
@@ -809,6 +960,8 @@ const fn medium<const N: usize>(nodes: &[Node]) -> [MediumNode; N] {
     }
     out
 }
+
+/// Packs u32 children with u64 completion counts.
 const fn wide<const N: usize>(nodes: &[Node]) -> [WideNode; N] {
     let mut out = [WideNode {
         zero: 0,
@@ -827,6 +980,8 @@ const fn wide<const N: usize>(nodes: &[Node]) -> [WideNode; N] {
     }
     out
 }
+
+/// Extracts decision levels for diagrams with skipped variables.
 const fn levels<const N: usize>(nodes: &[Node]) -> [u16; N] {
     let mut out = [0; N];
     let mut i = 0;
@@ -836,6 +991,7 @@ const fn levels<const N: usize>(nodes: &[Node]) -> [u16; N] {
     }
     out
 }
+
 impl<T: Source> CompiledConfig for T
 where
     [(); T::SMALL]:,
@@ -861,7 +1017,44 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::storage_kind;
+    use super::{storage_kind, symbolic_shape};
+    use tetris_game::{Column, TetrisBoard, TetrisPieceOrientation, TetrisPiecePlacement};
+
+    #[test]
+    fn symbolic_shapes_match_every_canonical_engine_placement() {
+        for &placement in TetrisPiecePlacement::<10>::ALL_PLACEMENTS {
+            let (columns, width) = symbolic_shape(placement.piece, placement.orientation.rotation);
+            let mut board = TetrisBoard::<10, 20>::new();
+            let result = board.apply_piece_placement(placement);
+            assert_eq!(result.lines_cleared, 0);
+            assert_eq!(board.count(), 4);
+            let start = usize::from(placement.orientation.column.inner());
+            let expected = std::array::from_fn(|x| {
+                if (start..start + usize::from(width)).contains(&x) {
+                    columns[x - start]
+                } else {
+                    0
+                }
+            });
+            assert_eq!(board.as_limbs(), &expected);
+        }
+        // Also compare the symmetric rotations omitted from the canonical catalog.
+        for piece in tetris_game::TetrisPiece::all() {
+            for rotation in tetris_game::Rotation::ALL {
+                let (columns, _) = symbolic_shape(piece, rotation);
+                let mut board = TetrisBoard::<10, 20>::new();
+                board.apply_piece_placement(TetrisPiecePlacement {
+                    piece,
+                    orientation: TetrisPieceOrientation {
+                        rotation,
+                        column: Column::new(0),
+                    },
+                });
+                assert_eq!(&board.as_limbs()[..4], &columns);
+            }
+        }
+    }
+
     #[test]
     fn packed_children_and_weights_are_selected_without_narrowing_loss() {
         assert_eq!(storage_kind(65536, 65535), 0);

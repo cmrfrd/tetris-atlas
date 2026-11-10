@@ -1,5 +1,8 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features, long_running_const_eval)]
+#![allow(
+    long_running_const_eval,
+    reason = "Bounded codec construction exceeds the default const evaluation threshold."
+)]
 //! Continuous codec reachability research. See README.md beside this file.
 mod proof;
 mod sampling;

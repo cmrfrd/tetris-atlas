@@ -73,6 +73,22 @@ a new unsupported cell beside an existing unsupported top run. A legal seven-bag
 columns `[2,1,2]` at height two, so applying the support condition there was incorrect. The codec
 now omits it below width four; its owning module retains the complete replay as a regression test.
 
+The top-support argument is inductive over the entire capped history, rather than a claim about
+arbitrary boards. Empty starts with no top runs. After a zero-clear move, an old unsupported run
+can remain, but a new top run cannot become unsupported: every multi-row standard tetromino has
+an occupied cell immediately below its top row, while a horizontal I must land on support.
+Merging a new supported run with an old run makes the combined run supported as well. After a
+move that clears rows below the cap, all surviving old cells move below the cap, so only one
+contiguous piece row can remain at the cap. An unsupported such row has at most three cells:
+a four-cell row is the entire horizontal I, which needs support unless it clears itself. At
+width four an above-cap I clear leaves the previous board unchanged. These cases preserve the
+condition without assuming that earlier boards obey the target hole budget.
+
+Consequently, a board reached after an earlier post-clear height excursion above the codec cap
+is outside this proof's history restriction, even if its current height fits. Such a history is
+not a counterexample to the capped codec. Earlier hole excursions are allowed and are exercised
+explicitly by the independent forward tests in `src/board.rs`.
+
 ## Built into the codec language
 
 The current implementation has no excluded-ID file, rank-correction layer, source-binding
@@ -102,3 +118,28 @@ StandardTetris's 20-row playable height lies within the supported range.
 This remains a carrier defined by necessary conditions. A last-move witness need not itself
 have a reachable predecessor or compatible bag history. Retained boards therefore are not all
 proved reachable, and no survival/closure claim follows from encoding them.
+
+## Independent forward regression checks
+
+The owning `src/board.rs` tests include two expensive checks, run explicitly with:
+
+```sh
+cargo test --release -p tetris-codec false_exclusions -- --ignored --nocapture --test-threads=1
+```
+
+The first computes complete forward closure from empty for eight small configurations, allowing
+every piece order. This is a superset of seven-bag histories, with no search depth limit. The
+second follows fixed-seed legal seven-bag histories for five larger configurations and checks
+every in-cap successor of each drawn piece. Neither exploration filters parents by codec admission
+or hole budget. Every target within the hole budget must encode and round-trip. Failure output
+includes the placement indices needed for replay. Sampling is evidence, not a proof for all large
+configurations; complete closure establishes the property only for its enumerated configurations.
+
+Fast default tests separately check the engine shape premises, the twenty-row native-board
+boundary, and a four-column clear above the codec cap that must leave the board admitted.
+
+## Ten-column one-hole arithmetic specialization
+
+For caps 4–6, the public codec now applies the stronger closed-family invariant described and
+proved in [ARITHMETIC.md](ARITHMETIC.md). Its finite scalar recurrence counts valid suffixes
+without constructing a graph. The rules above continue to govern other configurations.

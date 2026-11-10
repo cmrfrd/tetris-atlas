@@ -3,22 +3,24 @@ use crate::state::{
 };
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
-use tetris_game::{Column, TetrisPiecePlacement};
+use tetris_game::TetrisPiecePlacement;
 
-pub fn actions() -> Vec<TetrisPiecePlacement> {
-    TetrisPiecePlacement::ALL_PLACEMENTS
-        .into_iter()
+pub fn actions() -> Vec<TetrisPiecePlacement<COLS>> {
+    TetrisPiecePlacement::<COLS>::ALL_PLACEMENTS
+        .iter()
+        .copied()
         .filter(|p| {
-            p.orientation.column.index() + usize::from(p.piece.width(p.orientation.rotation))
+            usize::from(p.orientation.column.inner())
+                + usize::from(p.piece.width(p.orientation.rotation))
                 <= COLS
         })
         .collect()
 }
-pub fn describe(p: TetrisPiecePlacement) -> [u8; 3] {
+pub fn describe(p: TetrisPiecePlacement<COLS>) -> [u8; 3] {
     [
         p.piece.index(),
-        p.orientation.index() / Column::MAX,
-        p.orientation.column.index() as u8,
+        p.orientation.rotation.index(),
+        p.orientation.column.inner(),
     ]
 }
 
@@ -42,14 +44,14 @@ pub enum Finding {
 }
 
 pub struct Footprint {
-    pub placement: TetrisPiecePlacement,
+    pub placement: TetrisPiecePlacement<COLS>,
     pub cells: Columns,
     pub height: usize,
 }
 pub struct Prover {
-    pub actions: Vec<TetrisPiecePlacement>,
+    pub actions: Vec<TetrisPiecePlacement<COLS>>,
     pub footprints: Vec<Footprint>,
-    pub by_piece: [Vec<TetrisPiecePlacement>; tetris_game::constants::NUM_TETRIS_PIECES],
+    pub by_piece: [Vec<TetrisPiecePlacement<COLS>>; tetris_game::constants::NUM_TETRIS_PIECES],
 }
 impl Prover {
     pub fn new() -> Result<Self> {
@@ -73,7 +75,7 @@ impl Prover {
             }
             footprints.push(Footprint {
                 placement,
-                cells: piece.as_limbs(),
+                cells: piece.as_limbs().to_owned(),
                 height: piece.height() as usize,
             });
         }
@@ -105,11 +107,16 @@ impl Prover {
             }
             for dy in 0..=ROWS - footprint.height {
                 let cells = footprint.cells.map(|c| c << dy);
-                if !cells.iter().zip(board.as_limbs()).all(|(q, b)| q & b == *q) {
+                if !cells
+                    .iter()
+                    .zip(board.as_limbs().to_owned())
+                    .all(|(q, b)| q & b == *q)
+                {
                     continue;
                 }
-                let before =
-                    Board::from_limbs(std::array::from_fn(|x| board.as_limbs()[x] & !cells[x]));
+                let before = Board::from_limbs(std::array::from_fn(|x| {
+                    board.as_limbs().to_owned()[x] & !cells[x]
+                }));
                 if !nonempty_rows(&before) {
                     continue;
                 }
@@ -176,7 +183,7 @@ impl Prover {
                     }
                 }
                 ensure!(
-                    board.as_limbs() == *columns && bag == *remaining_bag,
+                    board.as_limbs() == columns && bag == *remaining_bag,
                     "witness result mismatch"
                 );
                 ensure!(
@@ -195,11 +202,18 @@ impl Prover {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "Fixtures use bounded board dimensions and case counts, or deliberately select low bits from deterministic random words."
+)]
 mod tests {
     use super::*;
     #[test]
     fn accepts_known_impossibility_and_rejects_reachable_board() {
-        let p = Prover::new().unwrap();
+        let p = Prover::new()
+            .expect("valid fixture in accepts_known_impossibility_and_rejects_reachable_board");
         let bad = Board::from_limbs(std::array::from_fn(|x| {
             if x == 0 {
                 15
@@ -220,19 +234,21 @@ mod tests {
     }
     #[test]
     fn witness_checks_bag_and_raw_board_not_old_id() {
-        let p = Prover::new().unwrap();
+        let p =
+            Prover::new().expect("valid fixture in witness_checks_bag_and_raw_board_not_old_id");
         let action = p.actions[0];
         let mut board = Board::new();
         board.apply_piece_placement(action);
         let f = Finding::Witness {
             batch: 0,
             codec_id: u64::MAX,
-            columns: board.as_limbs(),
+            columns: board.as_limbs().to_owned(),
             relaxed_holes: false,
             actions: vec![describe(action)],
             remaining_bag: FULL_BAG & !(1 << action.piece.index()),
         };
-        p.verify(&f).unwrap();
+        p.verify(&f)
+            .expect("valid fixture in witness_checks_bag_and_raw_board_not_old_id");
         let mut bad = f.clone();
         if let Finding::Witness { actions, .. } = &mut bad {
             actions.push(describe(action));

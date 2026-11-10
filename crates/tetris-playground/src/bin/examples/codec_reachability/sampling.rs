@@ -135,7 +135,7 @@ fn consider(
     let finding = Finding::Impossible {
         batch: state.header.totals.batches,
         codec_id: id,
-        columns: board.as_limbs(),
+        columns: board.as_limbs().to_owned(),
         origin: origin.to_owned(),
     };
     prover.verify(&finding)?;
@@ -171,7 +171,7 @@ fn play(
             for _ in 0..rng.next() % u64::from(bag.count_ones()) {
                 piece_bits &= piece_bits - 1;
             }
-            let piece = piece_bits.trailing_zeros() as u8;
+            let piece = u8::try_from(piece_bits.trailing_zeros()).expect("piece bit index fits u8");
             choices.clear();
             for &placement in &prover.by_piece[piece as usize] {
                 let mut next = board;
@@ -189,19 +189,25 @@ fn play(
                 totals.stopped += 1;
                 break;
             }
-            let pick = if relaxed && outside && rng.next() % 5 != 0 {
-                let least = choices.iter().map(|c| c.3).min().unwrap();
+            let pick = if relaxed && outside && !rng.next().is_multiple_of(5) {
+                let least = choices
+                    .iter()
+                    .map(|c| c.3)
+                    .min()
+                    .expect("nonempty successor list has a minimum hole count");
                 let n = choices.iter().filter(|c| c.3 == least).count();
-                let pick = rng.next() as usize % n;
+                let pick = usize::try_from(rng.next() % n as u64)
+                    .expect("random index is bounded by successor count");
                 choices
                     .iter()
                     .enumerate()
                     .filter(|(_, c)| c.3 == least)
                     .nth(pick)
-                    .unwrap()
+                    .expect("selected minimum-hole successor exists in the nonempty list")
                     .0
             } else {
-                rng.next() as usize % choices.len()
+                usize::try_from(rng.next() % choices.len() as u64)
+                    .expect("random index is bounded by successor count")
             };
             let (next, placement, lines, h) = choices[pick];
             board = next;
@@ -244,7 +250,7 @@ fn play(
                     findings.push(Finding::Witness {
                         batch,
                         codec_id: id,
-                        columns: board.as_limbs(),
+                        columns: board.as_limbs().to_owned(),
                         relaxed_holes: relaxed,
                         actions: path.iter().copied().map(describe).collect(),
                         remaining_bag: bag,
@@ -263,11 +269,19 @@ fn play(
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "Fixtures use bounded board dimensions and case counts, or deliberately select low bits from deterministic random words."
+)]
 mod tests {
     use super::*;
     #[test]
     fn watched_targets_get_paths_even_with_zero_random_witness_budget() {
-        let prover = Prover::new().unwrap();
+        let prover = Prover::new().expect(
+            "valid fixture in watched_targets_get_paths_even_with_zero_random_witness_budget",
+        );
         let mut watch: Vec<_> = prover
             .actions
             .iter()
@@ -289,8 +303,12 @@ mod tests {
             controls: false,
             watch: 0,
         };
-        let seen = Bits::new(Codec::BOARD_COUNT).unwrap();
-        let bad = Bits::new(Codec::BOARD_COUNT).unwrap();
+        let seen = Bits::new(Codec::BOARD_COUNT).expect(
+            "valid fixture in watched_targets_get_paths_even_with_zero_random_witness_budget",
+        );
+        let bad = Bits::new(Codec::BOARD_COUNT).expect(
+            "valid fixture in watched_targets_get_paths_even_with_zero_random_witness_budget",
+        );
         let found = play(
             false,
             0,
@@ -302,13 +320,16 @@ mod tests {
             &prover,
             &watch,
         )
-        .unwrap();
+        .expect("valid fixture in watched_targets_get_paths_even_with_zero_random_witness_budget");
         assert_eq!(found.len(), 1);
-        prover.verify(&found[0]).unwrap();
+        prover.verify(&found[0]).expect(
+            "valid fixture in watched_targets_get_paths_even_with_zero_random_witness_budget",
+        );
     }
     #[test]
     fn sampled_legal_paths_are_never_certified_impossible() {
-        let prover = Prover::new().unwrap();
+        let prover = Prover::new()
+            .expect("valid fixture in sampled_legal_paths_are_never_certified_impossible");
         let work = crate::state::Workload {
             seed: 42,
             parents: 0,
@@ -319,8 +340,10 @@ mod tests {
             controls: false,
             watch: 0,
         };
-        let seen = Bits::new(Codec::BOARD_COUNT).unwrap();
-        let impossible = Bits::new(Codec::BOARD_COUNT).unwrap();
+        let seen = Bits::new(Codec::BOARD_COUNT)
+            .expect("valid fixture in sampled_legal_paths_are_never_certified_impossible");
+        let impossible = Bits::new(Codec::BOARD_COUNT)
+            .expect("valid fixture in sampled_legal_paths_are_never_certified_impossible");
         for relaxed in [false, true] {
             let findings = play(
                 relaxed,
@@ -333,10 +356,12 @@ mod tests {
                 &prover,
                 &[],
             )
-            .unwrap();
+            .expect("valid fixture in sampled_legal_paths_are_never_certified_impossible");
             assert!(!findings.is_empty());
             for f in findings {
-                prover.verify(&f).unwrap();
+                prover
+                    .verify(&f)
+                    .expect("valid fixture in sampled_legal_paths_are_never_certified_impossible");
                 if let Finding::Witness { columns, .. } = f {
                     assert!(!prover.impossible(&Board::from_limbs(columns)));
                 }

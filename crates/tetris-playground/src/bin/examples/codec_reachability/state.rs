@@ -9,7 +9,7 @@ pub type Game = StandardTetris;
 pub const ROWS: usize = 4;
 pub const MAX_HOLES: usize = 2;
 pub const COLS: usize = Game::COLS;
-pub type Board = TetrisBoard<Game>;
+pub type Board = TetrisBoard<{ Game::COLS }, { Game::ROWS }>;
 pub type Columns = [u32; COLS];
 pub type Codec = BoardCodec<Game, ROWS, MAX_HOLES>;
 pub const CODEC: Codec = Codec::new();
@@ -57,7 +57,7 @@ impl Workload {
         );
         ensure!(self.watch <= 10000, "watchlist must be <=10000");
         ensure!(
-            Game::PIECE_SET == tetris_game::TetrisPieceBagState::new(),
+            Game::PIECE_SET == tetris_game::TetrisPieceBagState::full(),
             "sampler models all seven standard pieces"
         );
         Ok(())
@@ -128,11 +128,16 @@ impl Bits {
     }
     pub fn contains(&self, id: u64) -> bool {
         assert!(id < self.len);
-        self.words[id as usize / 64].load(Ordering::Relaxed) & (1 << (id % 64)) != 0
+        self.words[usize::try_from(id / 64).expect("bit index fits the allocated word count")]
+            .load(Ordering::Relaxed)
+            & (1 << (id % 64))
+            != 0
     }
     pub fn mark(&self, id: u64) -> bool {
         assert!(id < self.len);
-        self.words[id as usize / 64].fetch_or(1 << (id % 64), Ordering::Relaxed) & (1 << (id % 64))
+        self.words[usize::try_from(id / 64).expect("bit index fits the allocated word count")]
+            .fetch_or(1 << (id % 64), Ordering::Relaxed)
+            & (1 << (id % 64))
             == 0
     }
     pub fn count(&self) -> u64 {
@@ -142,7 +147,7 @@ impl Bits {
             .sum()
     }
     pub fn validate_padding(&self) -> Result<()> {
-        if self.len % 64 != 0 {
+        if !self.len.is_multiple_of(64) {
             let last = self.words.last().map_or(0, |w| w.load(Ordering::Relaxed));
             ensure!(last >> (self.len % 64) == 0, "nonzero bitmap padding");
         }
@@ -233,6 +238,7 @@ pub fn holes(board: &Board) -> u32 {
 pub fn row(board: &Board, y: usize) -> u16 {
     board
         .as_limbs()
+        .to_owned()
         .iter()
         .enumerate()
         .fold(0, |r, (x, c)| r | (((c >> y) & 1) as u16) << x)
@@ -242,27 +248,35 @@ pub fn nonempty_rows(board: &Board) -> bool {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "Fixtures use bounded board dimensions and case counts, or deliberately select low bits from deterministic random words."
+)]
 mod tests {
     use super::*;
     #[test]
     fn bitmap_has_exact_membership_and_deduplicates() {
-        let b = Bits::new(130).unwrap();
+        let b =
+            Bits::new(130).expect("valid fixture in bitmap_has_exact_membership_and_deduplicates");
         for id in [0, 63, 64, 129] {
             assert!(b.mark(id));
             assert!(!b.mark(id));
         }
         assert_eq!(b.count(), 4);
         assert!(!b.contains(128));
-        b.validate_padding().unwrap();
+        b.validate_padding()
+            .expect("valid fixture in bitmap_has_exact_membership_and_deduplicates");
     }
     #[test]
     fn concurrent_marks_count_each_board_once() {
         use rayon::prelude::*;
-        let bits = Bits::new(193).unwrap();
+        let bits = Bits::new(193).expect("valid fixture in concurrent_marks_count_each_board_once");
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(4)
             .build()
-            .unwrap();
+            .expect("valid fixture in concurrent_marks_count_each_board_once");
         let fresh: u64 = pool.install(|| {
             (0..100_000u64)
                 .into_par_iter()
@@ -271,11 +285,12 @@ mod tests {
         });
         assert_eq!(fresh, 193);
         assert_eq!(bits.count(), 193);
-        bits.validate_padding().unwrap();
+        bits.validate_padding()
+            .expect("valid fixture in concurrent_marks_count_each_board_once");
     }
     #[test]
     fn padding_corruption_is_detected() {
-        let b = Bits::new(65).unwrap();
+        let b = Bits::new(65).expect("valid fixture in padding_corruption_is_detected");
         b.words[1].store(2, Ordering::Relaxed);
         assert!(b.validate_padding().is_err());
     }

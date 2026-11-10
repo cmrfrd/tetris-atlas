@@ -15,8 +15,7 @@ harness = false
 
 [features]
 default = []
-# Large symbolic compilations are opt-in; benchmark names remain unchanged.
-large-codec-benchmarks = []
+never-inline = ["tetris-codec/never-inline"]
 apple-silicon = ["tetris-search/apple-silicon"]
 
 [dependencies]

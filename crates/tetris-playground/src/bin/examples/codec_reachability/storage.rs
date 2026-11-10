@@ -53,7 +53,11 @@ impl Sources {
                 )),
                 include_bytes!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
-                    "/../proc-macros/src/lib.rs"
+                    "/../tetris-macros/src/lib.rs"
+                )),
+                include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../tetris-macros/src/getters.rs"
                 )),
                 include_bytes!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
@@ -61,6 +65,14 @@ impl Sources {
                 )),
             ]),
             codec: fingerprint(&[
+                include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../tetris-codec/src/arithmetic.rs"
+                )),
+                include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../tetris-codec/src/single_row.rs"
+                )),
                 include_bytes!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
                     "/../tetris-codec/src/decision.rs"
@@ -249,6 +261,7 @@ impl Store {
             let board = crate::state::CODEC.board_from_u64(id)?;
             let columns = board
                 .as_limbs()
+                .to_owned()
                 .iter()
                 .map(u32::to_string)
                 .collect::<Vec<_>>()
@@ -420,6 +433,12 @@ pub fn verify(directory: &Path, prover: &Prover, recheck_engine: bool) -> Result
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "Fixtures use bounded board dimensions and case counts, or deliberately select low bits from deterministic random words."
+)]
 mod tests {
     use super::*;
     #[test]
@@ -436,13 +455,13 @@ mod tests {
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
-            fs::create_dir(&path).unwrap();
+            fs::create_dir(&path).expect("valid fixture in new");
             Self(path)
         }
     }
     impl Drop for Directory {
         fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
+            drop(fs::remove_dir_all(&self.0));
         }
     }
     fn work() -> Workload {
@@ -461,7 +480,9 @@ mod tests {
     fn checkpoint_roundtrip_corruption_truncation_and_contract_guards() {
         let dir = Directory::new();
         let path = dir.0.join("checkpoint.bin");
-        let mut state = State::new(work(), 130).unwrap();
+        let mut state = State::new(work(), 130).expect(
+            "valid fixture in checkpoint_roundtrip_corruption_truncation_and_contract_guards",
+        );
         state.bits[0].mark(64);
         state.header.totals.incoming_unique = 1;
         state.bits[1].mark(0);
@@ -470,8 +491,12 @@ mod tests {
         state.header.totals.proved_impossible = 1;
         state.header.totals.batches = 17;
         state.header.rng[0].next();
-        save(&path, &state, 123).unwrap();
-        let (loaded, offset) = load(&path, &work(), &Sources::current(), 130).unwrap();
+        save(&path, &state, 123).expect(
+            "valid fixture in checkpoint_roundtrip_corruption_truncation_and_contract_guards",
+        );
+        let (loaded, offset) = load(&path, &work(), &Sources::current(), 130).expect(
+            "valid fixture in checkpoint_roundtrip_corruption_truncation_and_contract_guards",
+        );
         assert_eq!(offset, 123);
         assert_eq!(loaded.header, state.header);
         assert!(loaded.bits[0].contains(64));
@@ -483,56 +508,82 @@ mod tests {
         changed.codec ^= 1;
         assert!(load(&path, &work(), &changed, 130).is_err());
         assert!(load(&path, &work(), &Sources::current(), 131).is_err());
-        let bytes = fs::read(&path).unwrap();
+        let bytes = fs::read(&path).expect(
+            "valid fixture in checkpoint_roundtrip_corruption_truncation_and_contract_guards",
+        );
         let mut corrupt = bytes.clone();
         let pos = corrupt.len() - 9;
         corrupt[pos] ^= 1;
-        fs::write(&path, corrupt).unwrap();
+        fs::write(&path, corrupt).expect(
+            "valid fixture in checkpoint_roundtrip_corruption_truncation_and_contract_guards",
+        );
         assert!(load(&path, &work(), &Sources::current(), 130).is_err());
-        fs::write(&path, &bytes[..bytes.len() - 1]).unwrap();
+        fs::write(&path, &bytes[..bytes.len() - 1]).expect(
+            "valid fixture in checkpoint_roundtrip_corruption_truncation_and_contract_guards",
+        );
         assert!(load(&path, &work(), &Sources::current(), 130).is_err());
     }
     #[test]
     fn journal_recovery_preserves_uncommitted_partial_record() {
         let dir = Directory::new();
         let path = dir.0.join("findings.jsonl");
-        fs::write(&path, b"committed\npartial").unwrap();
+        fs::write(&path, b"committed\npartial")
+            .expect("valid fixture in journal_recovery_preserves_uncommitted_partial_record");
         let mut file = OpenOptions::new()
             .read(true)
             .write(true)
             .open(&path)
-            .unwrap();
-        recover_tail(&mut file, 10, &dir.0).unwrap();
-        assert_eq!(fs::read(&path).unwrap(), b"committed\n");
+            .expect("valid fixture in journal_recovery_preserves_uncommitted_partial_record");
+        recover_tail(&mut file, 10, &dir.0)
+            .expect("valid fixture in journal_recovery_preserves_uncommitted_partial_record");
+        assert_eq!(
+            fs::read(&path)
+                .expect("valid fixture in journal_recovery_preserves_uncommitted_partial_record"),
+            b"committed\n"
+        );
         let backups: Vec<_> = fs::read_dir(&dir.0)
-            .unwrap()
-            .map(|e| e.unwrap().path())
+            .expect("valid fixture in journal_recovery_preserves_uncommitted_partial_record")
+            .map(|e| {
+                e.expect("valid fixture in journal_recovery_preserves_uncommitted_partial_record")
+                    .path()
+            })
             .filter(|p| p != &path)
             .collect();
         assert_eq!(backups.len(), 1);
-        assert_eq!(fs::read(&backups[0]).unwrap(), b"partial");
+        assert_eq!(
+            fs::read(&backups[0])
+                .expect("valid fixture in journal_recovery_preserves_uncommitted_partial_record"),
+            b"partial"
+        );
         assert!(recover_tail(&mut file, 11, &dir.0).is_err());
     }
     #[test]
     fn dataset_lock_excludes_another_writer() {
         let dir = Directory::new();
         let path = dir.0.join("writer.lock");
-        let first = File::create(&path).unwrap();
-        first.try_lock().unwrap();
+        let first =
+            File::create(&path).expect("valid fixture in dataset_lock_excludes_another_writer");
+        first
+            .try_lock()
+            .expect("valid fixture in dataset_lock_excludes_another_writer");
         let second = OpenOptions::new()
             .read(true)
             .write(true)
             .open(&path)
-            .unwrap();
+            .expect("valid fixture in dataset_lock_excludes_another_writer");
         assert!(second.try_lock().is_err());
         drop(first);
-        second.try_lock().unwrap();
+        second
+            .try_lock()
+            .expect("valid fixture in dataset_lock_excludes_another_writer");
     }
     #[test]
     fn engine_source_recheck_is_explicit_and_keeps_model_guards() {
         let dir = Directory::new();
-        File::create(dir.0.join("writer.lock")).unwrap();
-        File::create(dir.0.join("findings.jsonl")).unwrap();
+        File::create(dir.0.join("writer.lock"))
+            .expect("valid fixture in engine_source_recheck_is_explicit_and_keeps_model_guards");
+        File::create(dir.0.join("findings.jsonl"))
+            .expect("valid fixture in engine_source_recheck_is_explicit_and_keeps_model_guards");
         let mut sources = Sources::current();
         sources.engine ^= 1;
         let mut manifest = Manifest {
@@ -548,14 +599,22 @@ mod tests {
         let write = |manifest: &Manifest| {
             fs::write(
                 dir.0.join("manifest.json"),
-                serde_json::to_vec(manifest).unwrap(),
+                serde_json::to_vec(manifest).expect(
+                    "valid fixture in engine_source_recheck_is_explicit_and_keeps_model_guards",
+                ),
             )
-            .unwrap()
+            .expect("valid fixture in engine_source_recheck_is_explicit_and_keeps_model_guards")
         };
         write(&manifest);
-        let prover = Prover::new().unwrap();
+        let prover = Prover::new()
+            .expect("valid fixture in engine_source_recheck_is_explicit_and_keeps_model_guards");
         assert!(verify(&dir.0, &prover, false).is_err());
-        assert_eq!(verify(&dir.0, &prover, true).unwrap(), (0, 0));
+        assert_eq!(
+            verify(&dir.0, &prover, true).expect(
+                "valid fixture in engine_source_recheck_is_explicit_and_keeps_model_guards"
+            ),
+            (0, 0)
+        );
         manifest.model.rows += 1;
         write(&manifest);
         assert!(verify(&dir.0, &prover, true).is_err());

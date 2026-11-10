@@ -1,11 +1,18 @@
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features, long_running_const_eval)]
+#![allow(
+    long_running_const_eval,
+    reason = "Bounded codec construction exceeds the default const evaluation threshold."
+)]
 use tetris_codec::BoardCodec;
-use tetris_game::{StandardTetris, TetrisBoard};
+use tetris_game::{StandardTetris, TetrisBoard, TetrisGameConfig};
+
 type Codec = BoardCodec<StandardTetris, 4, 2>;
 const CODEC: Codec = Codec::new();
+
 fn main() -> Result<(), tetris_codec::Error> {
-    let board = TetrisBoard::<StandardTetris>::from_limbs([3, 3, 0, 0, 0, 0, 0, 0, 0, 0]);
+    let board = TetrisBoard::<{ StandardTetris::COLS }, { StandardTetris::ROWS }>::from_limbs([
+        3, 3, 0, 0, 0, 0, 0, 0, 0, 0,
+    ]);
     let id = CODEC.id(&board)?;
     assert_eq!(CODEC.board_from_id(id)?, board);
     println!(

@@ -4,8 +4,13 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+default = []
+never-inline = []
+
 [dependencies]
 tetris-game.workspace = true
+tetris-macros.workspace = true
 
 [lints]
 workspace = true
