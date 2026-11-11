@@ -213,6 +213,24 @@ timing, and print hashes. Setup/allocation is excluded. There are no research/la
 The historical shared `4/2` fixture remains fixed. Renamed or changed fixtures need fresh baselines.
 `never-inline` is for assembly inspection, not normal measurements.
 
+The bounded ten-column sweep checks **30 configurations**: rows 2–6 and holes 0–5.
+Each configuration compiles independently and reuses the same fixtures and four timing kernels.
+It adds no benchmark feature flags or build-script logic:
+
+```sh
+python3 crates/tetris-benches/codec_sweep.py --output artifacts/benchmarks/codec-grid
+# Retry unfinished cases with a larger compilation budget; successful cases are retained:
+python3 crates/tetris-benches/codec_sweep.py --output artifacts/benchmarks/codec-grid \
+  --resume --compile-timeout 600
+```
+
+Defaults use 20 samples, 0.2 s warmup, 0.5 s measurement and a 180 s compilation deadline per case.
+Dependencies are prepared first; reported build times include each consumer's const evaluation and
+code generation with shared dependency caches. `report.md`, JSON/CSV, exact binaries, source hashes,
+host/power metadata, logs and Criterion samples stay in the output directory. Timeouts mean support
+is unknown. Short sweep timings characterize fixtures; confirm suspected regressions with longer,
+matched repeated trials. Use `--help` for pilot subsets and measurement settings.
+
 Historical measurements below are separate experiments on native ARM64 M1 Pro with the pinned
 nightly. They are not fresh measurements of this checkout, and their percentages must not be
 added together. Exact dirty sources, executables, commands, seeds, host/power settings, samples
