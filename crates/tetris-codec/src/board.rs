@@ -1,8 +1,23 @@
+//! Board admission, native board conversion, and dense ID lookup.
+
 use tetris_macros::inline_conditioned;
 
-use crate::{IdConfig, private, rules::occupancy_modulus};
+use crate::{IdConfig, arithmetic, private};
 use std::{fmt, marker::PhantomData};
 use tetris_game::{TetrisBoard, TetrisGameConfig};
+
+/// Returns `gcd(4, cols)`, the cell-count modulus preserved by play.
+///
+/// A tetromino adds four cells; each cleared line removes `cols` cells.
+pub(crate) const fn occupancy_modulus(cols: usize) -> usize {
+    if cols.is_multiple_of(4) {
+        4
+    } else if cols.is_multiple_of(2) {
+        2
+    } else {
+        1
+    }
+}
 
 /// Checks the top-row support restriction at the capped-history boundary.
 ///
@@ -38,15 +53,25 @@ pub(crate) const fn top_supported(top: u16, below: u16, cols: usize) -> bool {
 /// Reports invalid configurations, malformed boards and out-of-range IDs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
+    /// The codec height cap does not fit a supported game configuration.
     InvalidConfiguration,
+    /// The board extends above the codec height cap.
     HeightExceeded,
+    /// A supplied row contains cells outside the configured columns.
     InvalidRowMask,
+    /// An empty row lies below an occupied row.
     EmptyInternalRow,
+    /// The board contains a full row that should have been cleared.
     FullRow,
+    /// The occupied cell count violates the placement and line-clear modulus.
     OccupancyResidue,
+    /// The board exceeds the configured hole limit.
     TooManyHoles,
+    /// The top row violates the capped-history support restriction.
     UnsupportedTopRun,
+    /// The board violates another capped-history reachability restriction.
     ImpossibleBoard,
+    /// The ID is outside the dense range for this codec.
     InvalidId,
 }
 
@@ -81,7 +106,9 @@ pub struct Dimensions<
 >;
 
 /// Returns whether the configured bag contains every canonical piece.
-#[doc(hidden)]
+///
+/// [`GameDimensions`] uses this const predicate to share compiled storage between
+/// game configurations with the same geometry and full-bag reachability rules.
 #[inline_conditioned]
 pub const fn is_full_bag(pieces: tetris_game::TetrisPieceBagState) -> bool {
     pieces.count() as usize == tetris_game::constants::NUM_TETRIS_PIECES
@@ -93,8 +120,13 @@ pub type GameDimensions<C: TetrisGameConfig, const ROWS: usize, const MAX_HOLES:
 
 /// A compiled carrier with a board count and shared rule storage.
 pub trait CompiledConfig: private::Sealed {
+    /// Number of admitted boards, including the empty board.
     const BOARD_COUNT: u64;
-    #[doc(hidden)]
+
+    /// Shared rule storage used by [`BoardCodec`].
+    ///
+    /// Algebraic families use the count and an empty node slice; graph families
+    /// additionally retain packed decision records and, when needed, their levels.
     const TABLES: &'static Tables;
 }
 
@@ -163,20 +195,10 @@ pub(crate) enum Nodes {
     Wide(&'static [WideNode]),
 }
 
-impl Nodes {
-    /// Returns the retained node-record payload in bytes.
-    #[inline_conditioned]
-    fn payload_bytes(self) -> usize {
-        match self {
-            Self::Small(n) => std::mem::size_of_val(n),
-            Self::Medium(n) => std::mem::size_of_val(n),
-            Self::Wide(n) => std::mem::size_of_val(n),
-        }
-    }
-}
-
-/// Stores compiled completion counts and packed decision records.
-#[doc(hidden)]
+/// Shared completion counts and optional packed decision records.
+///
+/// Fields are private because their layout depends on the carrier. Use
+/// [`BoardCodec`] for encoding, decoding, counts, and storage statistics.
 pub struct Tables {
     pub(crate) holes: usize,
     pub(crate) root: u32,
@@ -471,7 +493,12 @@ where
     /// Returns retained node and level bytes, excluding metadata and compiler scratch space.
     #[inline_conditioned]
     pub fn table_payload_bytes(&self) -> usize {
-        Self::TABLES.nodes.payload_bytes() + std::mem::size_of_val(Self::TABLES.levels)
+        let nodes = match Self::TABLES.nodes {
+            Nodes::Small(n) => std::mem::size_of_val(n),
+            Nodes::Medium(n) => std::mem::size_of_val(n),
+            Nodes::Wide(n) => std::mem::size_of_val(n),
+        };
+        nodes + std::mem::size_of_val(Self::TABLES.levels)
     }
 
     /// Returns the most specific admission error available for these rows.
@@ -491,18 +518,18 @@ where
         if cols.iter().any(|&col| col >> ROWS != 0) {
             return Err(Error::HeightExceeded);
         }
-        let result = if crate::single_row::applies(C::COLS, ROWS, is_full_bag(C::PIECE_SET)) {
+        let result = if arithmetic::one_row_applies(C::COLS, ROWS, is_full_bag(C::PIECE_SET)) {
             let row = cols
                 .iter()
                 .enumerate()
                 .fold(0u16, |row, (x, &col)| row | (((col & 1) as u16) << x));
-            crate::single_row::rank(C::COLS, row)
+            arithmetic::rank_one_row(C::COLS, row)
         } else if C::COLS * ROWS <= 64 {
             let code = cols
                 .iter()
                 .fold(0u64, |code, &col| (code << ROWS) | u64::from(col));
-            if crate::arithmetic::applies(C::COLS, ROWS, MAX_HOLES) {
-                crate::arithmetic::rank(ROWS, code)
+            if arithmetic::applies(C::COLS, ROWS, MAX_HOLES) {
+                arithmetic::rank(ROWS, code)
             } else {
                 Self::TABLES.rank(
                     |level| code & (1 << (C::COLS * ROWS - 1 - level)) != 0,
@@ -532,10 +559,10 @@ where
         if rows.iter().any(|&row| row & !full != 0) {
             return Err(Error::InvalidRowMask);
         }
-        if crate::single_row::applies(C::COLS, ROWS, is_full_bag(C::PIECE_SET)) {
-            return crate::single_row::rank(C::COLS, rows[0]).ok_or_else(|| self.rejection(rows));
+        if arithmetic::one_row_applies(C::COLS, ROWS, is_full_bag(C::PIECE_SET)) {
+            return arithmetic::rank_one_row(C::COLS, rows[0]).ok_or_else(|| self.rejection(rows));
         }
-        if crate::arithmetic::applies(C::COLS, ROWS, MAX_HOLES) {
+        if arithmetic::applies(C::COLS, ROWS, MAX_HOLES) {
             let code = (0..C::COLS).fold(0u64, |code, x| {
                 let col = rows
                     .iter()
@@ -543,7 +570,7 @@ where
                     .fold(0u64, |col, (y, row)| col | (u64::from((row >> x) & 1) << y));
                 (code << ROWS) | col
             });
-            return crate::arithmetic::rank(ROWS, code).ok_or_else(|| self.rejection(rows));
+            return arithmetic::rank(ROWS, code).ok_or_else(|| self.rejection(rows));
         }
         Self::TABLES
             .rank(
@@ -597,15 +624,15 @@ where
         [(); C::COLS]:,
         [(); C::ROWS]:,
     {
-        if crate::single_row::applies(C::COLS, ROWS, is_full_bag(C::PIECE_SET)) {
-            let row = crate::single_row::select(C::COLS, id).ok_or(Error::InvalidId)?;
+        if arithmetic::one_row_applies(C::COLS, ROWS, is_full_bag(C::PIECE_SET)) {
+            let row = arithmetic::select_one_row(C::COLS, id).ok_or(Error::InvalidId)?;
             return Ok(TetrisBoard::<{ C::COLS }, { C::ROWS }>::from_limbs(
                 std::array::from_fn(|x| u32::from((row >> x) & 1)),
             ));
         }
         if C::COLS * ROWS <= 64 {
-            let code = if crate::arithmetic::applies(C::COLS, ROWS, MAX_HOLES) {
-                crate::arithmetic::select(ROWS, id).ok_or(Error::InvalidId)?
+            let code = if arithmetic::applies(C::COLS, ROWS, MAX_HOLES) {
+                arithmetic::select(ROWS, id).ok_or(Error::InvalidId)?
             } else {
                 let mut code = 0u64;
                 Self::TABLES.select(id, C::COLS * ROWS, |_, one| {
@@ -631,12 +658,12 @@ where
     /// Decodes a range-checked ID into bottom-first row masks.
     #[inline_conditioned]
     pub fn rows_from_u64(&self, id: u64) -> Result<[u16; ROWS], Error> {
-        if crate::single_row::applies(C::COLS, ROWS, is_full_bag(C::PIECE_SET)) {
-            let row = crate::single_row::select(C::COLS, id).ok_or(Error::InvalidId)?;
+        if arithmetic::one_row_applies(C::COLS, ROWS, is_full_bag(C::PIECE_SET)) {
+            let row = arithmetic::select_one_row(C::COLS, id).ok_or(Error::InvalidId)?;
             return Ok(std::array::from_fn(|_| row));
         }
-        if crate::arithmetic::applies(C::COLS, ROWS, MAX_HOLES) {
-            let code = crate::arithmetic::select(ROWS, id).ok_or(Error::InvalidId)?;
+        if arithmetic::applies(C::COLS, ROWS, MAX_HOLES) {
+            let code = arithmetic::select(ROWS, id).ok_or(Error::InvalidId)?;
             return Ok(std::array::from_fn(|y| {
                 (0..C::COLS).fold(0u16, |row, x| {
                     row | ((((code >> ((C::COLS - 1 - x) * ROWS + y)) & 1) as u16) << x)
@@ -745,8 +772,10 @@ where
 )]
 pub(crate) mod tests {
     use super::*;
-    use crate::fixtures::Game;
-    use tetris_game::{StandardTetris, TetrisPiecePlacement};
+    use crate::{BoardId, fixtures::Game};
+    use tetris_game::{
+        StandardTetris, TetrisGame, TetrisPiece, TetrisPieceBagState, TetrisPiecePlacement,
+    };
 
     type Standard = BoardCodec<StandardTetris, 4, 2>;
     const CODEC: Standard = Standard::new();
@@ -844,7 +873,7 @@ pub(crate) mod tests {
         [(); C::ROWS]:,
     {
         if C::COLS >= 8 && C::COLS <= 12 && R == 1 && C::PIECE_SET.count() == 7 {
-            return crate::single_row::tests::single_row_reachable(C::COLS).contains(&rows[0]);
+            return single_row_reachable(C::COLS).contains(&rows[0]);
         }
         let full = (1u16 << C::COLS) - 1;
         if rows.iter().any(|&r| r & !full != 0) {
@@ -1692,5 +1721,287 @@ pub(crate) mod tests {
             );
         }
         Ok(())
+    }
+
+    /// Independent exhaustive engine closure, preserving the actual remaining bag.
+    fn collect_single_row<const COLS: usize>() -> std::collections::HashSet<u16> {
+        use std::collections::HashSet;
+
+        let full = u8::from(TetrisPieceBagState::full());
+        let empty = TetrisBoard::<COLS, 20>::new();
+        let mut seen = HashSet::from([(*empty.as_limbs(), full)]);
+        let mut pending = vec![(empty, full)];
+        let mut boards = HashSet::from([0]);
+        let mut head = 0;
+        while head < pending.len() {
+            let (parent, bag) = pending[head];
+            head += 1;
+            for &placement in TetrisPiecePlacement::<COLS>::ALL_PLACEMENTS {
+                let bit = placement.piece.mask();
+                if bag & bit == 0 {
+                    continue;
+                }
+                let mut board = parent;
+                board.apply_piece_placement(placement);
+                if board.is_lost() || board.height() > 1 {
+                    continue;
+                }
+                let next_bag = if bag == bit { full } else { bag & !bit };
+                let row = board
+                    .as_limbs()
+                    .iter()
+                    .enumerate()
+                    .fold(0u16, |row, (x, &col)| row | (u16::from(col != 0) << x));
+                boards.insert(row);
+                if seen.insert((*board.as_limbs(), next_bag)) {
+                    pending.push((board, next_bag));
+                }
+            }
+        }
+        boards
+    }
+
+    /// Caches the complete engine closure for each supported one-row width.
+    fn single_row_reachable(cols: usize) -> &'static std::collections::HashSet<u16> {
+        static SETS: LazyLock<[std::collections::HashSet<u16>; 5]> = LazyLock::new(|| {
+            [
+                collect_single_row::<8>(),
+                collect_single_row::<9>(),
+                collect_single_row::<10>(),
+                collect_single_row::<11>(),
+                collect_single_row::<12>(),
+            ]
+        });
+        &SETS[cols - 8]
+    }
+
+    /// Checks every row mask and ID against a complete remaining-bag engine closure.
+    #[test]
+    fn every_row_matches_exhaustive_canonical_seven_bag_reachability() {
+        type Codec = BoardCodec<StandardTetris, 1, 0>;
+        let codec = Codec::new();
+        let reachable = single_row_reachable(10);
+        assert_eq!(reachable.len(), 8);
+        assert_eq!(Codec::BOARD_COUNT, 8);
+        assert_eq!(
+            <GameDimensions<StandardTetris, 1, 0> as CompiledConfig>::BOARD_COUNT,
+            8
+        );
+        assert_eq!(Codec::ID_BITS, 3);
+        assert_eq!(Codec::ID_BYTES, 1);
+        assert_eq!(codec.table_payload_bytes(), 0);
+        for row in 0u16..=u16::MAX {
+            let expected = reachable.contains(&row);
+            assert_eq!(
+                crate::arithmetic::rank_one_row(10, row).is_some(),
+                expected,
+                "{row:016b}"
+            );
+            assert_eq!(codec.id_rows_u64(&[row]).is_ok(), expected, "{row:016b}");
+            if row < 1024 {
+                let board = TetrisBoard::<10, 20>::from_limbs(std::array::from_fn(|x| {
+                    u32::from((row >> x) & 1)
+                }));
+                assert_eq!(codec.id_u64(&board).is_ok(), expected);
+            }
+        }
+        for id in 0..crate::arithmetic::one_row_count(10) {
+            let row = crate::arithmetic::select_one_row(10, id).expect("valid ID decodes");
+            assert!(reachable.contains(&row));
+            assert_eq!(crate::arithmetic::rank_one_row(10, row), Some(id));
+            let board = codec.board_from_u64(id).expect("valid ID decodes");
+            let native: BoardId<StandardTetris, 1, 0> =
+                codec.id(&board).expect("reachable board encodes");
+            assert_eq!(u64::from(native), id);
+            assert_eq!(codec.board_from_id(native), Ok(board));
+            assert_eq!(codec.rows_from_id(native), Ok([row]));
+        }
+        assert_eq!(crate::arithmetic::select_one_row(10, 8), None);
+        assert_eq!(crate::arithmetic::select_one_row(10, u64::MAX), None);
+        assert_eq!(codec.rows_from_u64(8), Err(Error::InvalidId));
+        assert_eq!(codec.board_from_u64(u64::MAX), Err(Error::InvalidId));
+        let redundant_budget = BoardCodec::<StandardTetris, 1, 4>::new();
+        assert_eq!(redundant_budget.len(), 8);
+        assert_eq!(redundant_budget.table_payload_bytes(), 0);
+    }
+
+    /// Replays each admitted nonempty board through the seeded canonical game.
+    #[test]
+    fn every_admitted_nonempty_board_has_a_seeded_game_witness() {
+        let seed = (1..=1024)
+            .find(|&seed| {
+                TetrisGame::<StandardTetris>::new_with_seed(seed).current_piece() == TetrisPiece::I
+            })
+            .expect("fixed seed search contains a first-I draw");
+        let codec = BoardCodec::<StandardTetris, 1, 0>::new();
+        for column in 0u8..7 {
+            let mut game = TetrisGame::<StandardTetris>::new_with_seed(seed);
+            let placement = TetrisPiecePlacement::<10>::ALL_PLACEMENTS
+                .iter()
+                .copied()
+                .find(|p| {
+                    p.piece == TetrisPiece::I
+                        && p.piece.width(p.orientation.rotation) == 4
+                        && p.orientation.column.inner() == column
+                })
+                .expect("horizontal I witness exists");
+            assert!(!game.apply_placement(placement).is_lost);
+            assert_eq!(game.board.height(), 1);
+            let id = codec.id_u64(&game.board).expect("seeded witness encodes");
+            assert_eq!(id, 1 + u64::from(column));
+            assert_eq!(codec.board_from_u64(id), Ok(game.board));
+        }
+        eprintln!("SINGLE_ROW_SEED_WITNESSES seed={seed} boards=8");
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    struct IOnly;
+
+    impl TetrisGameConfig for IOnly {
+        const COLS: usize = 10;
+        const ROWS: usize = 20;
+        const PIECE_SET: TetrisPieceBagState = {
+            let mut bag = TetrisPieceBagState::full();
+            bag.remove(TetrisPiece::O);
+            bag.remove(TetrisPiece::S);
+            bag.remove(TetrisPiece::Z);
+            bag.remove(TetrisPiece::T);
+            bag.remove(TetrisPiece::L);
+            bag.remove(TetrisPiece::J);
+            bag
+        };
+    }
+
+    /// Keeps the one-row exclusion out of restricted piece-set configurations.
+    #[test]
+    fn restricted_piece_games_do_not_share_the_full_bag_exclusion() {
+        let mut game = TetrisGame::<IOnly>::new_with_seed(1);
+        for column in [0, 4] {
+            assert_eq!(game.current_piece(), TetrisPiece::I);
+            let action = TetrisPiecePlacement::<10>::ALL_PLACEMENTS
+                .iter()
+                .copied()
+                .find(|p| {
+                    p.piece == TetrisPiece::I
+                        && p.piece.width(p.orientation.rotation) == 4
+                        && usize::from(p.orientation.column.inner()) == column
+                })
+                .expect("horizontal I placement exists");
+            assert!(!game.apply_placement(action).is_lost);
+        }
+        assert_eq!(game.board.height(), 1);
+        assert_eq!(game.board.count(), 8);
+        let restricted = BoardCodec::<IOnly, 1, 0>::new();
+        assert_eq!(restricted.len(), 134);
+        assert!(restricted.id(&game.board).is_ok());
+        assert_eq!(
+            BoardCodec::<StandardTetris, 1, 0>::new().id(&game.board),
+            Err(Error::ImpossibleBoard)
+        );
+    }
+
+    /// Keeps low boards reached through taller histories available under larger caps.
+    #[test]
+    fn a_low_target_after_a_higher_history_is_not_excluded_from_larger_caps() {
+        let wanted = TetrisPiece::I.mask() | TetrisPiece::T.mask() | TetrisPiece::L.mask();
+        let mut witness = None;
+        for seed in 1..=1024 {
+            let mut game = TetrisGame::<StandardTetris>::new_with_seed(seed);
+            let mut played = 0;
+            for _ in 0..3 {
+                let piece = game.current_piece();
+                let column = match piece {
+                    TetrisPiece::I => 0,
+                    TetrisPiece::T => 4,
+                    TetrisPiece::L => 7,
+                    _ => break,
+                };
+                let placement = TetrisPiecePlacement::<10>::ALL_PLACEMENTS
+                    .iter()
+                    .copied()
+                    .find(|p| {
+                        if p.piece != piece || p.orientation.column.inner() != column {
+                            return false;
+                        }
+                        let width = p.piece.width(p.orientation.rotation);
+                        if usize::from(width) != if piece == TetrisPiece::I { 4 } else { 3 } {
+                            return false;
+                        }
+                        let mut footprint = TetrisBoard::<10, 20>::new();
+                        footprint.apply_piece_placement(*p);
+                        let start = usize::from(p.orientation.column.inner());
+                        footprint.as_limbs()[start..start + usize::from(width)]
+                            .iter()
+                            .all(|col| col & 1 == 1)
+                    })
+                    .expect("piece can tile its disjoint floor interval");
+                assert!(!game.apply_placement(placement).is_lost);
+                assert!(game.board.height() <= 2);
+                played |= piece.mask();
+            }
+            if played == wanted {
+                witness = Some((seed, game.board));
+                break;
+            }
+        }
+        let (seed, board) = witness.expect("fixed seeds include an I/T/L first-bag prefix");
+        assert_eq!(board.height(), 1);
+        assert_eq!(board.count(), 2);
+        assert_eq!(
+            BoardCodec::<StandardTetris, 1, 0>::new().id_u64(&board),
+            Err(Error::ImpossibleBoard)
+        );
+        let higher = BoardCodec::<StandardTetris, 2, 0>::new();
+        let id = higher
+            .id_u64(&board)
+            .expect("legal capped-history witness encodes");
+        assert_eq!(higher.board_from_u64(id), Ok(board));
+        assert!(
+            BoardCodec::<StandardTetris, 4, 1>::new()
+                .id_u64(&board)
+                .is_ok()
+        );
+        assert!(
+            BoardCodec::<StandardTetris, 5, 1>::new()
+                .id_u64(&board)
+                .is_ok()
+        );
+        assert!(
+            BoardCodec::<StandardTetris, 6, 1>::new()
+                .id_u64(&board)
+                .is_ok()
+        );
+        eprintln!("HIGHER_HISTORY_LOW_TARGET seed={seed} max_height=2 target_height=1");
+    }
+
+    /// Checks all supported one-row widths against independent engine exploration.
+    #[test]
+    fn every_supported_width_matches_an_independent_complete_engine_closure() {
+        macro_rules! check {
+            ($cols:literal) => {{
+                type C = crate::fixtures::Game<$cols, 20>;
+                let codec = BoardCodec::<C, 1, 0>::new();
+                let reachable = single_row_reachable($cols);
+                assert_eq!(codec.len(), crate::arithmetic::one_row_count($cols));
+                assert_eq!(codec.table_payload_bytes(), 0);
+                assert_eq!(
+                    usize::try_from(codec.len()).expect("tiny count fits usize"),
+                    reachable.len()
+                );
+                for row in 0u16..(1 << $cols) {
+                    assert_eq!(codec.id_rows_u64(&[row]).is_ok(), reachable.contains(&row));
+                }
+                for id in 0..codec.len() {
+                    let row = codec.rows_from_u64(id).expect("dense ID decodes");
+                    assert!(reachable.contains(&row[0]));
+                    assert_eq!(codec.id_rows_u64(&row), Ok(id));
+                }
+            }};
+        }
+        check!(8);
+        check!(9);
+        check!(10);
+        check!(11);
+        check!(12);
     }
 }

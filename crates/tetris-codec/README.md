@@ -30,8 +30,8 @@ For ten columns, a one-row cap and the full seven-piece bag, the codec is **exac
 only empty and the seven first-horizontal-I boards are encoded. This is eight states, three packed
 bits, a native `u8`, and zero lookup-node payload (previously 134 states/eight bits/`u16`/426 bytes
 of node payload). A second I cannot occur until the other six pieces have played; none can stay
-inside that history cap. [The proof and exhaustive engine check](REACHABLE.md) cover the full
-one-row board universe. This rule is not applied to restricted piece sets, where two consecutive
+inside that history cap. These finite reachable states are not a winning policy.
+[The proof and exhaustive engine check](REACHABLE.md) cover the full one-row board universe. This rule is not applied to restricted piece sets, where two consecutive
 I pieces can be legal. `GameDimensions` derives its full-bag policy from `C::PIECE_SET` automatically.
 
 ## Intrinsic counting and ranking
@@ -74,9 +74,10 @@ encode the complete bag-sensitive reachable set.
 
 Construction runs automatically during const evaluation, on demand for the parameters used.
 There is no `build.rs`, registration list, asset generation, runtime initialization, allocation,
-or lazy cache. The codec owns the normalized symbolic footprints it needs for const construction.
-Tests compare every canonical placement and symmetric rotation with the public engine placement API;
-the engine crate has no codec-specific changes. New rules change the language/counts without generating exclusion files.
+or lazy cache. Const construction reads the engine's public piece geometry and normalizes its masks.
+Tests compare every canonical placement and symmetric rotation with the engine placement API.
+The engine and codec share the same piece definitions. New rules change the language/counts without
+generating exclusion files.
 
 Runtime records use narrow children and completion counts when lossless. Even-width residue
 constraints make every cell significant, allowing traversal without per-node level bookkeeping;
@@ -97,7 +98,8 @@ Very large diagrams fail const evaluation with a budget error. Fresh compilation
 consuming target with a nontrivial configuration is expensive (about two minutes for the default
 in this experiment); separate binaries may each evaluate it. Normal queries do none of that work.
 Use the pinned nightly and allow the compiler's long-running const-evaluation progress lint in
-consumers.
+consumers. Its highlighted expression is where interpretation has reached a progress threshold;
+it does not identify a runtime hotspot or prove that expression dominates compilation.
 
 Generic consumers use `GameDimensions<C, R, H>: CompiledConfig` or `IdConfig`, plus
 `[(); C::COLS]:`. Automatic integer selection stays entirely within this crate.
@@ -131,8 +133,8 @@ cargo bench -p tetris-benches --bench benches -- board_codec/ --save-baseline co
 # After a change, with identical fixtures, toolchain, features and host settings:
 cargo bench -p tetris-benches --bench benches -- board_codec/ --baseline codec-before
 # Inspect emitted kernels with cargo-show-asm; never-inline is for inspection only:
-cargo asm -p tetris-codec --lib --features never-inline single_row::rank
-cargo asm -p tetris-codec --lib --features never-inline arithmetic::rank
+cargo asm -p tetris-codec --lib --features never-inline arithmetic::rank_one_row
+cargo asm -p tetris-codec --lib --features never-inline arithmetic::rank 0
 ```
 
 The public type is `BoardCodec<C, HEIGHT, MAX_HOLES>`; it does not duplicate `C::COLS` or the piece

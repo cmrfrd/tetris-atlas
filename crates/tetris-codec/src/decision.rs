@@ -3,42 +3,9 @@
     long_running_const_eval,
     reason = "Bounded codec graph construction may exceed the const evaluator progress threshold."
 )]
-use crate::board::{MediumNode, Nodes, SmallNode, WideNode};
-use crate::rules::occupancy_modulus;
-use crate::{CompiledConfig, Dimensions, Tables, private};
+use crate::board::{MediumNode, Nodes, SmallNode, WideNode, occupancy_modulus};
+use crate::{CompiledConfig, Dimensions, Tables, arithmetic, private};
 use tetris_game::{Rotation, TetrisPiece};
-
-/// Returns the normalized footprint used by the symbolic predecessor proof.
-///
-/// The engine keeps its geometry private. Module-local tests compare every fitting
-/// canonical placement against these columns through the public placement API.
-const fn symbolic_shape(piece: TetrisPiece, rotation: Rotation) -> ([u32; 4], u8) {
-    use Rotation::{R0, R90, R180, R270};
-    use TetrisPiece::{I, J, L, O, S, T, Z};
-
-    let columns = match (piece, rotation) {
-        (O, _) => [3, 3, 0, 0],
-        (I, R0 | R180) => [1, 1, 1, 1],
-        (I, _) => [15, 0, 0, 0],
-        (S, R0 | R180) => [1, 3, 2, 0],
-        (S, _) => [6, 3, 0, 0],
-        (Z, R0 | R180) => [2, 3, 1, 0],
-        (Z, _) => [3, 6, 0, 0],
-        (T, R0) => [2, 3, 2, 0],
-        (T, R90) => [2, 7, 0, 0],
-        (T, R180) => [1, 3, 1, 0],
-        (T, R270) => [7, 2, 0, 0],
-        (L, R0) => [1, 1, 3, 0],
-        (L, R90) => [7, 1, 0, 0],
-        (L, R180) => [3, 2, 2, 0],
-        (L, R270) => [4, 7, 0, 0],
-        (J, R0) => [3, 1, 1, 0],
-        (J, R90) => [7, 4, 0, 0],
-        (J, R180) => [2, 2, 3, 0],
-        (J, R270) => [1, 7, 0, 0],
-    };
-    (columns, piece.width(rotation))
-}
 
 #[derive(Clone, Copy)]
 struct Raw {
@@ -369,6 +336,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
         let a = self.map[(a / 2) as usize] ^ (a & 1);
         let b = self.map[(b / 2) as usize] ^ (b & 1);
         self.len = len;
+        // Drop stale hash slots before rehashing relocated nodes.
         i = 0;
         while i < M {
             self.unique[i] = 0;
@@ -577,7 +545,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
                 let mut rotation = 0;
                 while rotation < piece.num_rotations() && bad != 0 {
                     let rotation_value = Rotation::ALL[rotation as usize];
-                    let (raw, width) = symbolic_shape(piece, rotation_value);
+                    let (raw, width) = piece.shape_cols(rotation_value);
                     let width = width as usize;
                     let height = piece.height(rotation_value) as usize;
                     let vertical = width == 1 && height == 4;
@@ -801,15 +769,15 @@ where
     // Generic-const normalization can visit GRAPH even when Source selects arithmetic.
     // Guard construction here too, so those configurations never run the graph builder.
     pub const GRAPH: Diagram<{ capacity(C, R, H) * 2 }> =
-        if crate::single_row::applies(C, R, FULL_BAG) || crate::arithmetic::applies(C, R, H) {
+        if arithmetic::one_row_applies(C, R, FULL_BAG) || arithmetic::applies(C, R, H) {
             Diagram {
                 nodes: [Node::EMPTY; capacity(C, R, H) * 2],
                 len: 0,
                 root: 0,
-                count: if crate::single_row::applies(C, R, FULL_BAG) {
-                    crate::single_row::board_count(C)
+                count: if arithmetic::one_row_applies(C, R, FULL_BAG) {
+                    arithmetic::one_row_count(C)
                 } else {
-                    crate::arithmetic::board_count(R)
+                    arithmetic::board_count(R)
                 },
             }
         } else {
@@ -843,29 +811,29 @@ where
 {
     const HOLES: usize = if H < C * (R - 1) { H } else { C * (R - 1) };
     const NODES: &'static [Node] =
-        if crate::single_row::applies(C, R, FULL_BAG) || crate::arithmetic::applies(C, R, H) {
+        if arithmetic::one_row_applies(C, R, FULL_BAG) || arithmetic::applies(C, R, H) {
             &[]
         } else {
             &Configuration::<C, R, H, FULL_BAG>::GRAPH.nodes
         };
     const LEN: usize =
-        if crate::single_row::applies(C, R, FULL_BAG) || crate::arithmetic::applies(C, R, H) {
+        if arithmetic::one_row_applies(C, R, FULL_BAG) || arithmetic::applies(C, R, H) {
             0
         } else {
             Configuration::<C, R, H, FULL_BAG>::GRAPH.len
         };
-    const ROOT: u32 =
-        if crate::single_row::applies(C, R, FULL_BAG) || crate::arithmetic::applies(C, R, H) {
-            0
-        } else {
-            Configuration::<C, R, H, FULL_BAG>::GRAPH.root
-        };
+    const ROOT: u32 = if arithmetic::one_row_applies(C, R, FULL_BAG) || arithmetic::applies(C, R, H)
+    {
+        0
+    } else {
+        Configuration::<C, R, H, FULL_BAG>::GRAPH.root
+    };
     const COUNT: u64 =
-        if crate::single_row::applies(C, R, FULL_BAG) || crate::arithmetic::applies(C, R, H) {
-            if crate::single_row::applies(C, R, FULL_BAG) {
-                crate::single_row::board_count(C)
+        if arithmetic::one_row_applies(C, R, FULL_BAG) || arithmetic::applies(C, R, H) {
+            if arithmetic::one_row_applies(C, R, FULL_BAG) {
+                arithmetic::one_row_count(C)
             } else {
-                crate::arithmetic::board_count(R)
+                arithmetic::board_count(R)
             }
         } else {
             Configuration::<C, R, H, FULL_BAG>::GRAPH.count
@@ -1017,13 +985,21 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{storage_kind, symbolic_shape};
-    use tetris_game::{Column, TetrisBoard, TetrisPieceOrientation, TetrisPiecePlacement};
+    use super::storage_kind;
+    use tetris_game::{
+        Column, Rotation, TetrisBoard, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement,
+    };
 
+    /// Checks normalized engine masks against placements, including symmetric rotations.
     #[test]
-    fn symbolic_shapes_match_every_canonical_engine_placement() {
+    fn engine_shapes_normalize_to_every_placement() {
+        let normalized = |piece: TetrisPiece, rotation: Rotation| {
+            let (columns, width) = piece.shape_cols(rotation);
+            let shift = u32::BITS - u32::from(piece.height(rotation));
+            (columns.map(|column| column >> shift), width)
+        };
         for &placement in TetrisPiecePlacement::<10>::ALL_PLACEMENTS {
-            let (columns, width) = symbolic_shape(placement.piece, placement.orientation.rotation);
+            let (columns, width) = normalized(placement.piece, placement.orientation.rotation);
             let mut board = TetrisBoard::<10, 20>::new();
             let result = board.apply_piece_placement(placement);
             assert_eq!(result.lines_cleared, 0);
@@ -1039,9 +1015,9 @@ mod tests {
             assert_eq!(board.as_limbs(), &expected);
         }
         // Also compare the symmetric rotations omitted from the canonical catalog.
-        for piece in tetris_game::TetrisPiece::all() {
-            for rotation in tetris_game::Rotation::ALL {
-                let (columns, _) = symbolic_shape(piece, rotation);
+        for piece in TetrisPiece::all() {
+            for rotation in Rotation::ALL {
+                let (columns, _) = normalized(piece, rotation);
                 let mut board = TetrisBoard::<10, 20>::new();
                 board.apply_piece_placement(TetrisPiecePlacement {
                     piece,

@@ -2,12 +2,17 @@
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
-    reason = "The supported arithmetic domain has ten columns, R in 4..=6, and exponents at most ten. Heights and parity fit u8, column masks fit u32, and signed inclusion-exclusion expressions count nonnegative subsets, with assertions for the impossible-family totals."
+    reason = "The one-hole domain has ten columns, R in 4..=6, and exponents at most ten; one-row widths are 8..=12. Heights and parity fit u8, column masks fit u32, and signed inclusion-exclusion expressions count nonnegative subsets, with assertions for the impossible-family totals."
 )]
-//! Arithmetic codec for ten columns, caps 4..=6 and at most one hole.
-//! IDs use hole metadata followed by lexicographic column heights. There is no node
-//! table, board catalog, excluded-ID list, allocation, or memoization. Shared const
-//! arrays hold powers, signed recurrence counts, metadata offsets and column descriptions.
+//! Algebraic ranking for bounded board families, without a decision graph.
+//!
+//! Ten-column codecs with caps 4..=6 and at most one hole use hole metadata followed
+//! by lexicographic column heights. Shared const arrays hold powers, signed recurrence
+//! counts, metadata offsets and column descriptions.
+//!
+//! Full-seven-bag codecs with widths 8..=12 and a one-row whole-history cap encode
+//! empty plus each horizontal-I position using shifts. This is finite reachability,
+//! not indefinite survival. Neither family retains a board catalog or excluded-ID list.
 use tetris_macros::inline_conditioned;
 
 /// Powers for height-alphabet sizes up to seven and suffix lengths up to ten.
@@ -117,13 +122,9 @@ const fn words(n: usize, lo: usize, hi: usize, parity: u8) -> i64 {
         size < POWERS.len(),
         "height alphabet exceeds the power table"
     );
-    // Even-sized intervals balance even/odd heights. Odd-sized intervals differ by
-    // one, so their signed power depends only on the start height and length parity.
-    let imbalance_power = if size & 1 == 0 {
-        (n == 0) as i64
-    } else {
-        1 - 2 * (lo & n & 1) as i64
-    };
+    // Odd-sized alphabets and zero-length words differ by one between parities.
+    let extra = ((size & 1) | (n == 0) as usize) as i64;
+    let imbalance_power = extra - 2 * (extra & (lo & n & 1) as i64);
     (POWERS[size][n] as i64 + imbalance_power * (1 - 2 * (parity != 0) as i64)) / 2
 }
 
@@ -603,13 +604,6 @@ impl<const R: usize> ArithmeticOneHole<R> {
         Self
     }
 
-    /// Returns zero because arithmetic queries retain no lookup nodes.
-    #[cfg(test)]
-    #[inline_conditioned]
-    pub const fn table_payload_bytes(&self) -> usize {
-        0
-    }
-
     /// Ranks a packed column-major board, returning `None` outside the refined language.
     #[inline_conditioned]
     pub fn rank(&self, code: u64) -> Option<u64> {
@@ -854,6 +848,49 @@ pub(crate) fn select(rows: usize, id: u64) -> Option<u64> {
     }
 }
 
+/// Counts boards reachable under a full seven-bag and a one-row history cap.
+///
+/// At widths 8..=12, only a horizontal I fits from empty. No next distinct piece
+/// can clear a row or stay within the cap, so there are `cols - 2` boards in total.
+/// These finite reachable states do not form a surviving policy.
+#[inline_conditioned]
+pub(crate) const fn one_row_count(cols: usize) -> u64 {
+    // Empty, plus every position of a four-cell horizontal I.
+    (1 + (cols - 4 + 1)) as u64
+}
+
+/// Returns whether the full-bag, one-row reachability proof applies.
+#[inline_conditioned]
+pub(crate) const fn one_row_applies(cols: usize, rows: usize, full_bag: bool) -> bool {
+    cols >= 8 && cols <= 12 && rows == 1 && full_bag
+}
+
+/// Ranks an empty row or a single horizontal I, rejecting every other pattern.
+#[inline_conditioned]
+pub(crate) fn rank_one_row(cols: usize, row: u16) -> Option<u64> {
+    if row == 0 {
+        return Some(0);
+    }
+    let start = row.trailing_zeros();
+    if u64::from(start) < one_row_count(cols) - 1 && row == 15u16 << start {
+        Some(u64::from(start) + 1)
+    } else {
+        None
+    }
+}
+
+/// Restores the row mask for a valid seed-reachable board ID.
+#[inline_conditioned]
+pub(crate) fn select_one_row(cols: usize, id: u64) -> Option<u16> {
+    if id == 0 {
+        Some(0)
+    } else if id < one_row_count(cols) {
+        Some(15u16 << (id - 1))
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 #[allow(
     clippy::cast_possible_truncation,
@@ -1010,6 +1047,23 @@ mod tests {
         }
     }
 
+    /// Keeps interval sizing correct at the integer boundary and for empty alphabets.
+    #[test]
+    fn word_counts_handle_extreme_and_empty_intervals() {
+        for n in 0..=10 {
+            for parity in 0..=1 {
+                assert_eq!(
+                    words(n, usize::MAX, usize::MAX, parity),
+                    i64::from(usize::from(parity) == (n & 1))
+                );
+                assert_eq!(
+                    words(n, usize::MAX, usize::MAX - 1, parity),
+                    i64::from(n == 0 && parity == 0)
+                );
+            }
+        }
+    }
+
     /// Checks fixed-seed IDs against independent admission and exact inverses.
     fn check<const R: usize>() {
         let codec = ArithmeticOneHole::<R>::new();
@@ -1041,7 +1095,6 @@ mod tests {
         }
         assert_eq!(codec.select(ArithmeticOneHole::<R>::BOARD_COUNT), None);
         assert_eq!(codec.rank(1u64 << (R * 10)), None);
-        assert_eq!(codec.table_payload_bytes(), 0);
         assert_eq!(std::mem::size_of_val(&codec), 0);
     }
 

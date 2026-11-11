@@ -329,16 +329,25 @@ impl TetrisPiece {
 
     /// Returns the column bitmasks for this piece at the given rotation.
     ///
-    /// Used for display, outside the performance-critical placement path.
+    /// Returns `(cols, width)` using the same geometry as placement and display.
+    /// The first `width` columns contain the shape; the remaining columns are zero.
+    /// Masks are top-aligned: the highest occupied cell uses the backing column's
+    /// highest bit. Shift right by the backing bit width minus [`Self::height`]
+    /// to obtain a floor-aligned footprint.
     ///
-    /// Returns `(cols, width)` where `cols[0..width]` contains the shape data.
-    /// Each backing column has bits set at the rows the piece occupies,
-    /// with its highest bit representing the top row.
+    /// ```
+    /// use tetris_game::{Rotation, TetrisPiece, constants::BackingColType};
+    ///
+    /// const SHAPE: ([BackingColType; 4], u8) = TetrisPiece::I.shape_cols(Rotation::R0);
+    /// assert_eq!(SHAPE.1, 4);
+    /// assert_eq!(SHAPE.0, [1 << (BackingColType::BITS - 1); 4]);
+    /// ```
+    #[must_use]
     #[allow(
         clippy::cast_possible_truncation,
         reason = "Piece widths are at most four; orientation and placement counts are compile-time bounded by their packed u8 representation, and sampled indices stay within those catalogs."
     )]
-    fn shape_cols(&self, rotation: Rotation) -> ([BackingColType; 4], u8) {
+    pub const fn shape_cols(&self, rotation: Rotation) -> ([BackingColType; 4], u8) {
         let mut cols = [0; 4];
         let w = self.width(rotation) as usize;
         match (*self, rotation) {
@@ -3365,6 +3374,21 @@ mod tests {
 
         #[test]
         fn every_piece_rotation_matches_independent_grid_geometry() {
+            const SHAPES: [[([BackingColType; 4], u8); 4]; constants::NUM_TETRIS_PIECES] = {
+                let pieces = TetrisPiece::all();
+                let mut shapes = [[([0; 4], 0); 4]; constants::NUM_TETRIS_PIECES];
+                let mut p = 0;
+                while p < pieces.len() {
+                    let mut r = 0;
+                    while r < Rotation::ALL.len() {
+                        shapes[p][r] = pieces[p].shape_cols(Rotation::ALL[r]);
+                        r += 1;
+                    }
+                    p += 1;
+                }
+                shapes
+            };
+
             for piece in TetrisPiece::all() {
                 let mut unique_shapes = Vec::new();
                 for rotation in Rotation::ALL {
@@ -3391,6 +3415,11 @@ mod tests {
                         piece.shape_cols(rotation),
                         (columns, width as u8),
                         "piece={piece}, rotation={rotation}"
+                    );
+                    assert_eq!(
+                        SHAPES[piece.index() as usize][rotation.index() as usize],
+                        (columns, width as u8),
+                        "const piece={piece}, rotation={rotation}"
                     );
                 }
                 assert_eq!(

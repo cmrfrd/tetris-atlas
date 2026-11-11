@@ -1,10 +1,19 @@
 //! Compile-time integer selection. Table generation does not choose Rust ID types.
+//!
+//! The width predicate and bridge types must be public because they occur in the
+//! public `IdConfig::Id` definition. This module stays private; callers use `BoardId`.
 use crate::{CompiledConfig, GameDimensions};
 use std::{fmt::Debug, hash::Hash};
 use tetris_game::TetrisGameConfig;
 
-/// Smallest supported integer storage width for a nonempty dense ID range.
-#[doc(hidden)]
+/// Returns the smallest integer width in bytes that fits every ID in `0..board_count`.
+///
+/// Supported widths are 1, 2, 4, and 8 bytes. Selection uses the largest ID,
+/// `board_count - 1`, so a count of 256 still fits in one byte.
+///
+/// # Panics
+///
+/// Panics if `board_count` is zero: every codec must contain the empty board.
 pub const fn id_bytes(board_count: u64) -> usize {
     assert!(board_count > 0, "a codec must contain the empty board");
     let max_id = board_count - 1;
@@ -19,11 +28,19 @@ pub const fn id_bytes(board_count: u64) -> usize {
     }
 }
 
-#[doc(hidden)]
+/// Type-level bridge from a const-evaluated byte width to an integer type.
+///
+/// [`IdStorage`] maps widths 1, 2, 4, and 8 to their unsigned integers. This bridge
+/// must be public because it occurs in [`IdConfig`]'s associated type definition;
+/// the containing module remains private. Callers use [`BoardId`] instead.
 pub struct IdWidth<const BYTES: usize>;
 
-#[doc(hidden)]
+/// Maps the four supported [`IdWidth`] values to `u8`, `u16`, `u32`, or `u64`.
+///
+/// This public bridge is required by [`IdConfig`]'s associated type definition.
+/// Const evaluation selects the width; these implementations supply the Rust type.
 pub trait IdStorage {
+    /// Unsigned integer with exactly the selected number of bytes.
     type Id: Copy + Debug + Eq + Ord + Hash + TryFrom<u64> + Into<u64>;
 }
 
@@ -39,8 +56,11 @@ macro_rules! integer_storage {
 integer_storage!(1 => u8, 2 => u16, 4 => u32, 8 => u64);
 
 /// Dimensions with an automatically selected `u8`, `u16`, `u32`, or `u64` ID.
-/// This is implemented automatically from `CompiledConfig::BOARD_COUNT`.
+/// Implemented automatically from [`CompiledConfig::BOARD_COUNT`]. The const count
+/// selects a byte width, and the crate's type-level mapping selects the integer.
+/// Callers do not implement this trait or configure a storage width themselves.
 pub trait IdConfig: CompiledConfig {
+    /// Smallest supported unsigned integer that fits every admitted board ID.
     type Id: Copy + Debug + Eq + Ord + Hash + TryFrom<u64> + Into<u64>;
 }
 

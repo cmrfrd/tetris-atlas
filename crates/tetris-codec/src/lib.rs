@@ -35,12 +35,11 @@ mod arithmetic;
 pub mod board;
 mod decision;
 mod id;
-mod rules;
-mod single_row;
 pub use board::{BoardCodec, CompiledConfig, Dimensions, Error, GameDimensions, Tables};
 pub use id::{BoardId, IdConfig};
 
 mod private {
+    /// Restricts compiled carriers to the implementations supplied by this crate.
     pub trait Sealed {}
 }
 
