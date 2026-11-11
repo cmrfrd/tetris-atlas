@@ -110,7 +110,7 @@ macro_rules! board_id_type {
 )]
 mod tests {
     use super::*;
-    use crate::{BoardCodec, fixtures::Game};
+    use crate::{BoardCodec, board::tests::Game};
     use tetris_game::StandardTetris;
 
     #[test]

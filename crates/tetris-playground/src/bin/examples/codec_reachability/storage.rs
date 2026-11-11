@@ -71,10 +71,6 @@ impl Sources {
                 )),
                 include_bytes!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
-                    "/../tetris-codec/src/single_row.rs"
-                )),
-                include_bytes!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
                     "/../tetris-codec/src/decision.rs"
                 )),
                 include_bytes!(concat!(
@@ -88,10 +84,6 @@ impl Sources {
                 include_bytes!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
                     "/../tetris-codec/src/id.rs"
-                )),
-                include_bytes!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/../tetris-codec/src/rules.rs"
                 )),
             ]),
             sampler: fingerprint(&[

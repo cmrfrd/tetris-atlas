@@ -42,18 +42,3 @@ mod private {
     /// Restricts compiled carriers to the implementations supplied by this crate.
     pub trait Sealed {}
 }
-
-#[cfg(test)]
-mod fixtures {
-    use tetris_game::{TetrisGameConfig, TetrisPieceBagState};
-
-    /// A full-bag test game with configurable dimensions.
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-    pub(crate) struct Game<const COLS: usize, const ROWS: usize>;
-
-    impl<const COLS: usize, const ROWS: usize> TetrisGameConfig for Game<COLS, ROWS> {
-        const ROWS: usize = ROWS;
-        const COLS: usize = COLS;
-        const PIECE_SET: TetrisPieceBagState = TetrisPieceBagState::full();
-    }
-}

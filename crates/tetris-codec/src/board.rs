@@ -772,10 +772,20 @@ where
 )]
 pub(crate) mod tests {
     use super::*;
-    use crate::{BoardId, fixtures::Game};
+    use crate::BoardId;
     use tetris_game::{
         StandardTetris, TetrisGame, TetrisPiece, TetrisPieceBagState, TetrisPiecePlacement,
     };
+
+    /// A full-bag test game with configurable dimensions.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    pub(crate) struct Game<const COLS: usize, const ROWS: usize>;
+
+    impl<const COLS: usize, const ROWS: usize> TetrisGameConfig for Game<COLS, ROWS> {
+        const ROWS: usize = ROWS;
+        const COLS: usize = COLS;
+        const PIECE_SET: TetrisPieceBagState = TetrisPieceBagState::full();
+    }
 
     type Standard = BoardCodec<StandardTetris, 4, 2>;
     const CODEC: Standard = Standard::new();
@@ -1979,7 +1989,7 @@ pub(crate) mod tests {
     fn every_supported_width_matches_an_independent_complete_engine_closure() {
         macro_rules! check {
             ($cols:literal) => {{
-                type C = crate::fixtures::Game<$cols, 20>;
+                type C = Game<$cols, 20>;
                 let codec = BoardCodec::<C, 1, 0>::new();
                 let reachable = single_row_reachable($cols);
                 assert_eq!(codec.len(), crate::arithmetic::one_row_count($cols));

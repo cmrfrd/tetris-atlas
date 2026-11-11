@@ -3,7 +3,7 @@
     long_running_const_eval,
     reason = "Bounded codec construction exceeds the default const evaluation threshold."
 )]
-//! Continuous codec reachability research. See README.md beside this file.
+//! Continuous codec reachability research. See `crates/tetris-codec/README.md`.
 mod proof;
 mod sampling;
 mod state;
