@@ -1,9 +1,9 @@
 //! Scoring and bounded sequence-search benchmarks.
 
-use super::fixtures;
+use crate::fixtures::game::{self as fixtures, GAMEPLAY_SEEDS};
 use criterion::{BenchmarkId, Criterion, Throughput, black_box};
 
-use tetris_game::{TetrisGame, TetrisPiece, TetrisPiecePlacement};
+use tetris_game::{TetrisGame, TetrisPiecePlacement};
 use tetris_search::{
     BeamTetrisState, TetrisBeamSearch, TetrisBoardScoreState, height_mse_beam_tetris_score,
     height_mse_board_score, height_mse_distance_from_empty,
@@ -15,27 +15,6 @@ const SEARCH_DEPTH: usize = 6;
 const SEARCH_CAPACITY: usize = tetris_search::best_first_capacity(SEARCH_WIDTH, SEARCH_DEPTH);
 type Planner = tetris_search::TetrisSequencePlanner<SEARCH_WIDTH, SEARCH_DEPTH, SEARCH_CAPACITY>;
 type PlanOutcome = tetris_search::TetrisSequencePlanOutcome<SEARCH_DEPTH>;
-
-fn search_inputs() -> Vec<(
-    tetris_game::TetrisBoard<10, 20>,
-    [TetrisPiece; SEARCH_DEPTH],
-)> {
-    fixtures::atlas_parents()
-        .into_iter()
-        .enumerate()
-        .filter(|(i, _)| i % 8 == 3)
-        .map(|(i, parent)| {
-            let mut rng = tetris_game::TetrisGameRng::new((i / 8 + 1) as u64);
-            let mut bag = tetris_game::TetrisPieceBag::from_bag_state(parent.bag);
-            bag.shuffle(&mut rng);
-            let mut state = fixtures::BagFixture { bag, rng };
-            (
-                parent.board,
-                std::array::from_fn(|_| state.draw(tetris_game::TetrisPieceBagState::full())),
-            )
-        })
-        .collect()
-}
 
 fn search_digest(outcomes: &[PlanOutcome]) -> u64 {
     let mut digest = 0xcbf2_9ce4_8422_2325u64;
@@ -74,14 +53,6 @@ fn search_digest(outcomes: &[PlanOutcome]) -> u64 {
 type ProductionBeam =
     TetrisBeamSearch<256, 8, { <tetris_game::TetrisPieceOrientation<10>>::TOTAL_NUM_ORIENTATIONS }>;
 
-fn beam_inputs() -> Vec<TetrisGame> {
-    fixtures::replays()
-        .into_iter()
-        .take(4)
-        .map(|fixture| fixture.expected)
-        .collect()
-}
-
 fn validate_beam_result(game: TetrisGame, result: &tetris_search::ScoredState<BeamTetrisState>) {
     let action = result.root_action.expect("beam must select a first move");
     assert!(<TetrisPiecePlacement<10>>::all_from_piece(game.current_piece()).contains(&action));
@@ -98,7 +69,7 @@ fn validate_sequence_results(outcomes: &[PlanOutcome]) {
 
 tetris_bench! {
     fn bench_search_fixed(c: &mut Criterion) {
-        let input = search_inputs();
+        let input = fixtures::search_inputs::<SEARCH_DEPTH>();
         let mut planner = Planner::new_boxed();
         let mut output = input
             .iter()
@@ -171,7 +142,7 @@ tetris_bench! {
 
 tetris_bench! {
     fn bench_production_beam(c: &mut Criterion) {
-        let input = beam_inputs();
+        let input = fixtures::beam_inputs();
         let mut search = Box::new(ProductionBeam::new(height_mse_beam_tetris_score));
         let mut output = vec![None; input.len()];
         for (&game, out) in input.iter().zip(&mut output) {
@@ -198,7 +169,6 @@ tetris_bench! {
 }
 
 const GAMEPLAY_MOVES: usize = 16;
-const GAMEPLAY_SEEDS: [u64; 4] = [1, 2, 3, 4];
 
 fn play_game(search: &mut ProductionBeam, mut game: TetrisGame) -> Option<TetrisGame> {
     for _ in 0..GAMEPLAY_MOVES {
@@ -280,7 +250,7 @@ mod tests {
     #[test]
     #[ignore = "production-sized beam replay; run in release mode"]
     fn production_beam_fixture_is_legal_and_deterministic() {
-        let input = beam_inputs();
+        let input = fixtures::beam_inputs();
         let mut first = Box::new(ProductionBeam::new(height_mse_beam_tetris_score));
         let mut second = Box::new(ProductionBeam::new(height_mse_beam_tetris_score));
         for game in input {
@@ -300,8 +270,8 @@ mod tests {
 
     #[test]
     fn bounded_search_fixture_is_reproducible() {
-        let input = search_inputs();
-        assert_eq!(input, search_inputs());
+        let input = fixtures::search_inputs::<SEARCH_DEPTH>();
+        assert_eq!(input, fixtures::search_inputs::<SEARCH_DEPTH>());
         assert_eq!(input.len(), 16);
         let mut planner = Planner::new_boxed();
         let output = input

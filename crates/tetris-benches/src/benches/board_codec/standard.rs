@@ -16,7 +16,7 @@ tetris_bench! {
             c,
             "board_codec",
             "standard_4_2_reachable_shared",
-            &super::fixtures::REACHABLE_ROWS,
+            &crate::fixtures::codec::REACHABLE_ROWS,
         );
     }
 }

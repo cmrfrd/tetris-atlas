@@ -1,11 +1,11 @@
 //! Piece, board, placement, and game replay benchmarks.
 
-use super::fixtures;
+use crate::fixtures::game as fixtures;
 use criterion::{BenchmarkId, Criterion, Throughput, black_box};
 use tetris_game::{Major, TetrisBoard, TetrisGame, TetrisPiecePlacement};
 
-fn placement_boundaries() -> Vec<super::fixtures::PlacementBoundary> {
-    let fixtures = super::fixtures::placement_boundaries();
+fn placement_boundaries() -> Vec<fixtures::PlacementBoundary> {
+    let fixtures = fixtures::placement_boundaries();
     for fixture in &fixtures {
         let mut board = fixture.input.board;
         let result = board.apply_piece_placement(fixture.input.placement);
@@ -253,7 +253,7 @@ where
     group.throughput(Throughput::Elements(output.len() as u64));
     group.bench_function("10000", |b| {
         b.iter_batched(
-            || R::seed_from_u64(0xDEAD_BEEF_CAFE),
+            || R::seed_from_u64(crate::fixtures::SEED),
             |mut rng| {
                 for out in &mut output {
                     *out = rand::RngExt::random(&mut rng);

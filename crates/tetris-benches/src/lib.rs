@@ -8,4 +8,4 @@
 #[macro_use]
 pub mod registry;
 mod benches;
-mod board_codec;
+mod fixtures;

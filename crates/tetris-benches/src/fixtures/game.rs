@@ -1,13 +1,11 @@
 //! Shared deterministic benchmark inputs.
 
+use super::SEED;
 use tetris_game::{
     StandardTetris, TetrisBoard, TetrisGame, TetrisGameConfig, TetrisGameRng, TetrisPiece,
     TetrisPieceBag, TetrisPieceBagState, TetrisPiecePlacement,
 };
 
-pub const NUM_ELEMS: usize = 10_000;
-
-pub const SEED: u64 = 0xDEAD_BEEF_CAFE;
 pub const GAME_SEEDS: std::ops::RangeInclusive<u64> = 1..=16;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -330,6 +328,105 @@ pub fn atlas_parents() -> Vec<AtlasFixture> {
         }
     }
     parents
+}
+
+/// Fixed seeds for bounded production-beam gameplay.
+pub(crate) const GAMEPLAY_SEEDS: [u64; 4] = [1, 2, 3, 4];
+
+/// Builds a seeded, shuffled bag for the consumed-stream benchmark.
+pub(crate) fn bag_stream() -> BagFixture {
+    let mut rng = TetrisGameRng::new(42);
+    let mut bag = TetrisPieceBag::from_bag_state(TetrisPieceBagState::full());
+    bag.shuffle(&mut rng);
+    BagFixture { bag, rng }
+}
+
+/// Enumerates every unordered piece set.
+pub(crate) fn piece_sets() -> Vec<TetrisPieceBagState> {
+    (0..=TetrisPieceBagState::FULL_MASK)
+        .map(|mask| TetrisPieceBagState::try_from(mask).expect("valid mask"))
+        .collect()
+}
+
+/// Covers every remaining count and requested piece with fixed shuffled bags.
+pub(crate) fn bag_removals() -> Vec<(TetrisPieceBag, TetrisPiece)> {
+    let mut input = Vec::new();
+    for seed in 1..=128 {
+        let mut rng = TetrisGameRng::new(seed);
+        let mut bag = TetrisPieceBag::from_bag_state(TetrisPieceBagState::full());
+        bag.shuffle(&mut rng);
+        loop {
+            for piece in TetrisPiece::all() {
+                input.push((bag, piece));
+            }
+            if bag.count() == 0 {
+                break;
+            }
+            let _ = bag.draw();
+        }
+    }
+    input
+}
+
+/// Builds fixed board and draw-sequence inputs for bounded planning.
+pub(crate) fn search_inputs<const DEPTH: usize>() -> Vec<(TetrisBoard<10, 20>, [TetrisPiece; DEPTH])>
+{
+    atlas_parents()
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| i % 8 == 3)
+        .map(|(i, parent)| {
+            let mut rng = tetris_game::TetrisGameRng::new((i / 8 + 1) as u64);
+            let mut bag = tetris_game::TetrisPieceBag::from_bag_state(parent.bag);
+            bag.shuffle(&mut rng);
+            let mut state = BagFixture { bag, rng };
+            (
+                parent.board,
+                std::array::from_fn(|_| state.draw(tetris_game::TetrisPieceBagState::full())),
+            )
+        })
+        .collect()
+}
+
+/// Selects fixed reachable games for production-beam searches.
+pub(crate) fn beam_inputs() -> Vec<TetrisGame> {
+    replays()
+        .into_iter()
+        .take(4)
+        .map(|fixture| fixture.expected)
+        .collect()
+}
+
+/// A state lookup table using a deterministic hasher.
+pub(crate) type StateMap = std::collections::HashMap<
+    StateKey,
+    usize,
+    std::hash::BuildHasherDefault<std::hash::DefaultHasher>,
+>;
+
+/// Builds known-state queries together with explicit missing-state queries.
+pub(crate) fn state_lookup(keys: &[StateKey]) -> (StateMap, Vec<StateKey>) {
+    // Fixed hasher keys keep table layout comparable between implementations.
+    let map: StateMap = keys
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(i, key)| (key, i))
+        .collect();
+    let mut queries = keys.to_vec();
+    for &(board, _) in keys {
+        if let Some(piece) = TetrisPiece::all()
+            .into_iter()
+            .find(|&piece| !map.contains_key(&(board, piece)))
+        {
+            queries.push((board, piece));
+        }
+    }
+    assert!(
+        queries.len() > keys.len(),
+        "lookup fixtures must include misses"
+    );
+    (map, queries)
 }
 
 #[cfg(test)]

@@ -1,9 +1,8 @@
 //! Shared public-API kernels for the Standard Tetris and narrow-board collections.
+use crate::fixtures::codec::SAMPLES;
 use criterion::{Criterion, Throughput, black_box};
 use tetris_codec::{BoardCodec, GameDimensions, IdConfig};
 use tetris_game::{TetrisBoard, TetrisGameConfig};
-
-pub(super) const SAMPLES: usize = 256;
 
 /// Times both public representations after checking the fixed fixtures and all inverses.
 pub(super) fn bench_config<C: TetrisGameConfig, const R: usize, const H: usize>(

@@ -1,16 +1,7 @@
 //! Fixed-capacity heap benchmarks.
 
-use super::fixtures::SEED;
+use crate::fixtures::utils::heap_candidates;
 use criterion::{Criterion, Throughput, black_box};
-use rand::{RngExt, SeedableRng, rngs::SmallRng};
-
-fn heap_candidates(lengths: impl IntoIterator<Item = usize>) -> Vec<Vec<i32>> {
-    let mut rng = SmallRng::seed_from_u64(SEED);
-    lengths
-        .into_iter()
-        .map(|count| (0..count).map(|_| rng.random::<i32>()).collect())
-        .collect()
-}
 
 tetris_bench! {
     /// Benchmark push_if_better - the key beam search operation

@@ -1,11 +1,26 @@
 //! Fixed raw-board witnesses and deterministic, codec-independent legal histories.
-use tetris_game::{TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPiecePlacement};
+use tetris_game::{
+    TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState, TetrisPiecePlacement,
+};
+
+/// Number of raw boards in each fixed codec workload.
+pub(crate) const SAMPLES: usize = 256;
+
+/// A narrow full-bag game that exercises two-byte IDs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub(crate) struct SixColumnTetris;
+
+impl TetrisGameConfig for SixColumnTetris {
+    const ROWS: usize = 20;
+    const COLS: usize = 6;
+    const PIECE_SET: TetrisPieceBagState = TetrisPieceBagState::full();
+}
 
 /// Collects 256 legal boards without consulting codec IDs or admission rules.
 ///
 /// Every history respects the height and hole caps and consumes the configured bag.
 /// A blocked draw starts a new history; previously collected witnesses remain valid.
-pub(super) fn legal_rows<C: TetrisGameConfig, const R: usize, const H: usize>() -> Vec<[u16; R]>
+pub(crate) fn legal_rows<C: TetrisGameConfig, const R: usize, const H: usize>() -> Vec<[u16; R]>
 where
     [(); C::COLS]:,
     [(); C::ROWS]:,
@@ -21,7 +36,7 @@ where
     let mut bag = C::PIECE_SET;
     let mut rows = vec![[0; R]];
     for _ in 0..65_536 {
-        if rows.len() == super::SAMPLES {
+        if rows.len() == SAMPLES {
             break;
         }
         if bag.empty() {
@@ -65,7 +80,7 @@ where
     }
     assert_eq!(
         rows.len(),
-        super::SAMPLES,
+        SAMPLES,
         "bounded seed must supply enough legal fixtures"
     );
     rows
@@ -73,7 +88,7 @@ where
 
 /// Legal-play witnesses from seed 0xb04dc0de and a 128-placement horizon.
 /// Raw rows remain fixed when dense ID ordering changes.
-pub(super) const REACHABLE_ROWS: [[u16; 4]; super::SAMPLES] = [
+pub(crate) const REACHABLE_ROWS: [[u16; 4]; SAMPLES] = [
     [4, 28, 0, 0],
     [7, 2, 0, 0],
     [391, 770, 0, 0],

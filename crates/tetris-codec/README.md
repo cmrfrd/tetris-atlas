@@ -214,8 +214,10 @@ cargo bench -p tetris-benches --bench benches -- board_codec/
 cargo bench -p tetris-benches --bench benches -- board_codec_six_columns/
 ```
 
-The grid is declared in `tetris-benches/src/board_codec/standard.rs`; narrow coverage lives in
-`six_columns.rs`. All selected configurations compile together in the normal benchmark target.
+The grid is declared in `tetris-benches/src/benches/board_codec/standard.rs`; narrow coverage
+lives beside it in `six_columns.rs`. Codec data and generators live in `src/fixtures/codec.rs`;
+shared game and utility inputs live in `src/fixtures/game.rs` and `src/fixtures/utils.rs`.
+All selected configurations compile together in the normal benchmark target.
 There is no sweep launcher, generated consumer project, benchmark feature flag or build-script logic.
 Criterion reports stay in `target/criterion/`. Earlier exhaustive sweep reports remain historical
 artifacts; their timeouts leave support unknown.

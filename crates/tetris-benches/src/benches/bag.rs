@@ -1,8 +1,8 @@
 //! Piece-bag drawing and set-operation benchmarks.
 
-use super::fixtures;
+use crate::fixtures::game as fixtures;
 use criterion::{BenchmarkId, Criterion, Throughput, black_box};
-use tetris_game::{TetrisGameRng, TetrisPiece, TetrisPieceBag, TetrisPieceBagState};
+use tetris_game::{TetrisPiece, TetrisPieceBagState};
 
 // Preserve iteration order and membership in the consumed result.
 fn encode_pieces(state: TetrisPieceBagState) -> u64 {
@@ -15,9 +15,7 @@ fn encode_pieces(state: TetrisPieceBagState) -> u64 {
 
 tetris_bench! {
     fn bench_bag_state_iteration(c: &mut Criterion) {
-        let input: Vec<_> = (0..=TetrisPieceBagState::FULL_MASK)
-            .map(|mask| TetrisPieceBagState::try_from(mask).expect("valid mask"))
-            .collect();
+        let input = fixtures::piece_sets();
         let mut output = vec![0; input.len()];
         let mut group = c.benchmark_group("bag_state");
         group.throughput(Throughput::Elements(input.len() as u64));
@@ -44,10 +42,7 @@ tetris_bench! {
 
 tetris_bench! {
     fn bench_bag_draw_stream_consumed(c: &mut Criterion) {
-        let mut rng = TetrisGameRng::new(42);
-        let mut bag = TetrisPieceBag::from_bag_state(TetrisPieceBagState::full());
-        bag.shuffle(&mut rng);
-        let mut state = fixtures::BagFixture { bag, rng };
+        let mut state = fixtures::bag_stream();
         let mut group = c.benchmark_group("bag/draw_stream_consumed");
         group.throughput(Throughput::Elements(1));
         group.bench_with_input(BenchmarkId::from_parameter(1), &1, |b, _| {
@@ -156,29 +151,9 @@ tetris_bench! {
     }
 }
 
-// Cover every remaining count and requested piece with fixed shuffled bags.
-fn removal_inputs() -> Vec<(TetrisPieceBag, TetrisPiece)> {
-    let mut input = Vec::new();
-    for seed in 1..=128 {
-        let mut rng = TetrisGameRng::new(seed);
-        let mut bag = TetrisPieceBag::from_bag_state(TetrisPieceBagState::full());
-        bag.shuffle(&mut rng);
-        loop {
-            for piece in TetrisPiece::all() {
-                input.push((bag, piece));
-            }
-            if bag.count() == 0 {
-                break;
-            }
-            let _ = bag.draw();
-        }
-    }
-    input
-}
-
 tetris_bench! {
     fn bench_bag_remove(c: &mut Criterion) {
-        let input = removal_inputs();
+        let input = fixtures::bag_removals();
         let mut output = vec![(input[0].0, false); input.len()];
         let mut group = c.benchmark_group("bag/remove_fixed");
         group.throughput(Throughput::Elements(input.len() as u64));
@@ -198,7 +173,7 @@ tetris_bench! {
 
 tetris_bench! {
     fn bench_bag_count_scalar(c: &mut Criterion) {
-        let input = removal_inputs();
+        let input = fixtures::bag_removals();
         let mut index = 0;
         let mut group = c.benchmark_group("bag");
         group.throughput(Throughput::Elements(1));

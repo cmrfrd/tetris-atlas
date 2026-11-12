@@ -1,10 +1,10 @@
 //! State expansion and state-key benchmarks.
 
-use super::fixtures;
+use crate::fixtures::game as fixtures;
 use criterion::{BenchmarkId, Criterion, Throughput, black_box};
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, DefaultHasher, Hash, Hasher};
-use tetris_game::{TetrisPiece, TetrisPiecePlacement};
+use tetris_game::TetrisPiecePlacement;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Successor {
@@ -121,37 +121,6 @@ fn intern(output: &[Successor], map: &mut InternMap, ids: &mut [u32]) {
     }
 }
 
-// Use a fixed hasher so lookup table layout stays reproducible.
-type StateKey = (tetris_game::TetrisBoard<10, 20>, tetris_game::TetrisPiece);
-type StateMap = std::collections::HashMap<
-    StateKey,
-    usize,
-    std::hash::BuildHasherDefault<std::hash::DefaultHasher>,
->;
-fn state_lookup(keys: &[StateKey]) -> (StateMap, Vec<StateKey>) {
-    // Fixed hasher keys keep table layout comparable between implementations.
-    let map: StateMap = keys
-        .iter()
-        .copied()
-        .enumerate()
-        .map(|(i, key)| (key, i))
-        .collect();
-    let mut queries = keys.to_vec();
-    for &(board, _) in keys {
-        if let Some(piece) = TetrisPiece::all()
-            .into_iter()
-            .find(|&piece| !map.contains_key(&(board, piece)))
-        {
-            queries.push((board, piece));
-        }
-    }
-    assert!(
-        queries.len() > keys.len(),
-        "lookup fixtures must include misses"
-    );
-    (map, queries)
-}
-
 tetris_bench! {
     fn bench_atlas_successors(c: &mut Criterion) {
         let input = fixtures::atlas_parents();
@@ -210,7 +179,7 @@ tetris_bench! {
             },
         );
 
-        let (map, queries) = state_lookup(&keys);
+        let (map, queries) = fixtures::state_lookup(&keys);
         let mut output = vec![None; queries.len()];
         group.throughput(Throughput::Elements(queries.len() as u64));
         group.bench_with_input(
@@ -233,7 +202,7 @@ tetris_bench! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tetris_game::TetrisPieceBagState;
+    use tetris_game::{TetrisPiece, TetrisPieceBagState};
 
     #[test]
     fn interning_preserves_keys_loss_markers_and_resets_ids() {

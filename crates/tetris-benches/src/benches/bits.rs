@@ -1,49 +1,11 @@
 //! Bit manipulation and transpose kernels. Output storage is reused.
 
-use super::fixtures::{NUM_ELEMS, SEED};
+use crate::fixtures::{
+    NUM_ELEMS,
+    utils::{bit_inputs, byte_inputs, mask_inputs, transpose_inputs},
+};
 use criterion::{BenchmarkId, Criterion, Throughput, black_box};
-use rand::{RngExt, SeedableRng, rngs::SmallRng};
 use tetris_utils::transpose_bits;
-
-fn bit_inputs() -> Vec<[u8; 8]> {
-    let mut rng = SmallRng::seed_from_u64(SEED);
-    let input: Vec<[u8; 8]> = (0..NUM_ELEMS)
-        .map(|_| std::array::from_fn(|_| u8::from(rng.random::<bool>())))
-        .collect();
-    input
-}
-
-fn byte_inputs() -> Vec<u8> {
-    let mut rng = SmallRng::seed_from_u64(SEED);
-
-    (0..NUM_ELEMS)
-        .map(|_| rng.random::<u8>())
-        .collect::<Vec<_>>()
-}
-
-fn mask_inputs() -> Vec<u64> {
-    let mut rng = SmallRng::seed_from_u64(SEED);
-
-    (0..NUM_ELEMS)
-        .map(|_| rng.random::<u64>())
-        .collect::<Vec<_>>()
-}
-
-type TransposeInputs = (Vec<[u8; 25]>, Vec<[u8; 40]>, Vec<[u8; 40]>);
-
-fn transpose_inputs() -> TransposeInputs {
-    let mut rng = SmallRng::seed_from_u64(SEED);
-    let small: Vec<[u8; 25]> = (0..NUM_ELEMS)
-        .map(|_| std::array::from_fn(|_| rng.random()))
-        .collect();
-    let wide: Vec<[u8; 40]> = (0..NUM_ELEMS)
-        .map(|_| std::array::from_fn(|_| rng.random()))
-        .collect();
-    let tall: Vec<[u8; 40]> = (0..NUM_ELEMS)
-        .map(|_| std::array::from_fn(|_| rng.random()))
-        .collect();
-    (small, wide, tall)
-}
 
 tetris_bench! {
     fn bench_bits_to_byte(c: &mut Criterion) {

@@ -1,9 +1,9 @@
-//! Benchmark suites and their shared fixtures.
+//! Benchmark collections and timing kernels.
 
 mod bag;
 mod bits;
+mod board_codec;
 mod expansion;
-mod fixtures;
 mod game;
 mod heaps;
 mod search;
