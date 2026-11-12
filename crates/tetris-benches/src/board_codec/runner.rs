@@ -1,4 +1,4 @@
-//! Shared public-API codec kernels for representative benchmarks and the bounded sweep.
+//! Shared public-API kernels for the Standard Tetris and narrow-board collections.
 use criterion::{Criterion, Throughput, black_box};
 use tetris_codec::{BoardCodec, GameDimensions, IdConfig};
 use tetris_game::{TetrisBoard, TetrisGameConfig};
@@ -8,6 +8,7 @@ pub(super) const SAMPLES: usize = 256;
 /// Times both public representations after checking the fixed fixtures and all inverses.
 pub(super) fn bench_config<C: TetrisGameConfig, const R: usize, const H: usize>(
     c: &mut Criterion,
+    collection: &str,
     name: &str,
     rows: &[[u16; R]],
 ) where
@@ -51,7 +52,7 @@ pub(super) fn bench_config<C: TetrisGameConfig, const R: usize, const H: usize>(
         BoardCodec::<C, R, H>::ID_BYTES,
         codec.table_payload_bytes()
     );
-    let mut group = c.benchmark_group(format!("board_codec/{name}"));
+    let mut group = c.benchmark_group(format!("{collection}/{name}"));
     group.throughput(Throughput::Elements(SAMPLES as u64));
     group.bench_function("encode_rows_256", |b| {
         b.iter(|| {

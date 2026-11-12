@@ -194,32 +194,31 @@ outside the target hole budget. Historical arithmetic differential checks covere
 reachability of every retained large-carrier board. Run the full workspace and relevant backend
 checks from the repository's `AGENTS.md` before merging.
 
-The permanent suite has **32 cases**: four operations (native/row encode/decode) over 256 fixed
-raw-board witnesses for eight configurations: ten-column `2/0`, `4/1`, `5/1`, `6/1`, `4/2`, `2/4`,
-`20/0`, plus six-column `3/2`. Fixtures are independent of codec ID ordering, checked before
-timing, and print hashes. Setup/allocation is excluded. There are no research/large-codec flags.
-The historical shared `4/2` fixture remains fixed. Renamed or changed fixtures need fresh baselines.
-`never-inline` is for assembly inspection, not normal measurements.
+The permanent suite macro-instantiates two separate Criterion collections, with four operations
+(native/row encode/decode) over 256 fixed raw-board witnesses per configuration:
 
-The bounded ten-column sweep checks **30 configurations**: rows 2–6 and holes 0–5.
-Each configuration compiles independently and reuses the same fixtures and four timing kernels.
-It adds no benchmark feature flags or build-script logic:
+| Collection | Height/hole configurations | Cases |
+|---|---|---:|
+| `board_codec/` — Standard Tetris, ten columns | Rows `4, 5, 6` × holes `0, 1`, plus `2/0`, `2/4`, `4/2`, `20/0` | 40 |
+| `board_codec_six_columns/` — narrow full-bag game | `3/2` | 4 |
+
+Fixtures are independent of codec ID ordering, checked before timing, and print hashes.
+Setup/allocation is excluded. The historical shared `4/2` fixture remains fixed. Standard Tetris
+benchmark names are unchanged; the six-column collection has a new prefix and needs a fresh
+baseline. `never-inline` is for assembly inspection, not normal measurements.
+
+Run either collection through the regular benchmark target:
 
 ```sh
-cargo run -p tetris-benches --bin codec_sweep -- --output artifacts/benchmarks/codec-grid
-# Retry unfinished cases with a larger compilation budget; successful cases are retained:
-cargo run -p tetris-benches --bin codec_sweep -- --output artifacts/benchmarks/codec-grid \
-  --resume --compile-timeout 600
+cargo bench -p tetris-benches --bench benches -- board_codec/
+cargo bench -p tetris-benches --bench benches -- board_codec_six_columns/
 ```
 
-Defaults use 20 samples, 0.2 s warmup, 0.5 s measurement and a 180 s compilation deadline per case.
-Dependencies are prepared first; reported build times include each consumer's const evaluation and
-code generation with shared dependency caches. `report.md`, JSON/CSV, exact binaries, source hashes,
-host/power metadata, logs and Criterion samples stay in the output directory. Timeouts mean support
-is unknown. Short sweep timings characterize fixtures; confirm suspected regressions with longer,
-matched repeated trials. Use `--help` for pilot subsets and measurement settings.
-The launcher and its tests are Rust. Existing Python-run outputs remain historical artifacts;
-start a fresh output directory when switching to this launcher.
+The grid is declared in `tetris-benches/src/board_codec/standard.rs`; narrow coverage lives in
+`six_columns.rs`. All selected configurations compile together in the normal benchmark target.
+There is no sweep launcher, generated consumer project, benchmark feature flag or build-script logic.
+Criterion reports stay in `target/criterion/`. Earlier exhaustive sweep reports remain historical
+artifacts; their timeouts leave support unknown.
 
 Historical measurements below are separate experiments on native ARM64 M1 Pro with the pinned
 nightly. They are not fresh measurements of this checkout, and their percentages must not be
