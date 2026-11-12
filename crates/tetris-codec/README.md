@@ -1,13 +1,15 @@
 # Tetris board codec
 
 `tetris-codec` maps bounded canonical Tetris boards to dense integer IDs and back, without runtime
-allocation. `BoardCodec<C, ROWS, MAX_HOLES>` takes its width and piece set from `TetrisGameConfig`.
-`ROWS` caps **every post-clear board in the history**; `MAX_HOLES` limits empty cells below occupied
+allocation. `BoardCodec<C, ROWS, MAX_HOLES>` takes its width and native board dimensions
+from `TetrisGameConfig`.
+`ROWS` must be **at least two**, enforced at compile time, and caps
+**every post-clear board in the history**; `MAX_HOLES` limits empty cells below occupied
 cells in the target board. Earlier hole excursions are allowed. Transient placement cells may
 exceed the height cap before clearing rows.
 
-Except for the full-bag one-row specialization, encoded boards satisfy necessary conditions;
-they are **not all proved reachable**. Encoding a board does not certify an infinite-survival policy.
+Encoded boards satisfy necessary conditions; they are **not all proved reachable**.
+Encoding a board does not certify an infinite-survival policy.
 
 ## Usage and sizes
 
@@ -28,7 +30,7 @@ assert_eq!(Codec::BOARD_COUNT, 392_431_346);
 
 | Columns | Height cap | Hole cap | States | Packed bits | Native ID | Node payload |
 |---:|---:|---:|---:|---:|---|---:|
-| 10 | 1 | Any | 8 | 3 | `u8` | 0 B |
+| 10 | 2 | 0 | 25,635 | 15 | `u16` | 2,202 B |
 | 10 | 4 | 1 | 58,149,719 | 26 | `u32` | 0 B |
 | 10 | 5 | 1 | 459,948,915 | 29 | `u32` | 0 B |
 | 10 | 6 | 1 | 2,551,894,523 | 32 | `u32` | 0 B |
@@ -63,18 +65,18 @@ the configurable game in `board.rs::tests`.
 | File | Responsibility |
 |---|---|
 | [src/board.rs](src/board.rs) | Public API, configuration, storage, traversal and engine-based admission tests |
-| [src/arithmetic.rs](src/arithmetic.rs) | Arithmetic counts, rank/select and one-row specialization |
+| [src/arithmetic.rs](src/arithmetic.rs) | One-hole arithmetic counts and rank/select |
 | [src/decision.rs](src/decision.rs) | Const symbolic rules, graph reduction and packed-record construction |
 | [src/id.rs](src/id.rs) | Compile-time native ID type selection and its macro |
-| [src/lib.rs](src/lib.rs) | Exports and shared test fixture |
+| [src/lib.rs](src/lib.rs) | Exports and crate-level usage documentation |
 
 Construction runs on demand during const evaluation. There is no build script, configuration
 registry, generated asset, runtime initialization or excluded-board catalog. Generic consumers
 use `GameDimensions<C, R, H>: CompiledConfig` or `IdConfig`, plus `[(); C::COLS]:`.
-The internal geometry descriptor and full-bag flag are derived from `C`, rather than independently
-supplied public parameters.
+The internal geometry descriptor derives its width from `C`, rather than accepting it as an
+independently supplied public parameter.
 
-Supported dimensions are 1–12 columns and history caps 1–28, subject to symbolic workspace/node
+Supported dimensions are 1–12 columns and history caps 2–28, subject to symbolic workspace/node
 budgets and `u64` counts. The cap must fit `C::ROWS`, which must also be at most 28 to preserve
 engine spawn headroom. `try_new()` handles constructor configuration errors; excessive symbolic
 work or counts can fail const evaluation. Large hole budgets can be expensive or exceed budgets.
@@ -116,23 +118,9 @@ round trip and every rejection against independent engine replay. Six-column `3/
 shrinks **28,492 → 26,365**.
 
 A predecessor alone does not prove reachability: at width four, rows `[5,5]` can receive an I that
-clears itself and returns the same unreachable board. The graph fallback conservatively allows
+clears itself and returns the same unreachable board. The carrier conservatively allows
 all seven pieces, including for restricted piece sets; it does not establish bag-sensitive
 seed reachability. Symbolic translations can also be a conservative superset of engine actions.
-
-### Exact one-row arithmetic
-
-For a full seven-piece bag, widths **8–12**, and a whole-history height cap of **one**, only empty
-and the first horizontal-I placements are reachable: `C::COLS - 2` boards. Only an I fits the
-first move; its four cells cannot clear such a wide row. It cannot be drawn again before the
-other six pieces, and none can fit or clear a row alongside it within the cap.
-
-Empty has ID zero; four consecutive occupied bits have ID `1 + trailing_zeros(row)`. Decoding
-shifts `0b1111` back into place. The hole budget is irrelevant. There are no retained nodes.
-This proof does not apply to an I-only game or a low target reached after a higher history;
-regressions cover both. Independent full board/bag closure checks all five widths, every
-16-bit row mask at ten columns and all native one-row boards. An unrestricted-piece-order
-control reaches 41 boards instead of eight. These finite states are not a winning policy.
 
 ### Ten-column one-hole arithmetic
 
@@ -195,7 +183,7 @@ cargo run --release -p tetris-codec --example board_roundtrip
 cargo bench -p tetris-benches --bench benches -- board_codec/ --save-baseline codec-before
 # After editing, keep host, toolchain, features, fixtures and settings identical:
 cargo bench -p tetris-benches --bench benches -- board_codec/ --baseline codec-before
-cargo asm -p tetris-codec --lib --features never-inline arithmetic::rank_one_row
+cargo asm -p tetris-codec --lib --features never-inline arithmetic::rank 0
 ```
 
 Unit tests cover independent counts, rank/select boundaries, invalid inputs, mirrors, packed
@@ -207,7 +195,7 @@ reachability of every retained large-carrier board. Run the full workspace and r
 checks from the repository's `AGENTS.md` before merging.
 
 The permanent suite has **32 cases**: four operations (native/row encode/decode) over 256 fixed
-raw-board witnesses for eight configurations: ten-column `1/0`, `4/1`, `5/1`, `6/1`, `4/2`, `2/4`,
+raw-board witnesses for eight configurations: ten-column `2/0`, `4/1`, `5/1`, `6/1`, `4/2`, `2/4`,
 `20/0`, plus six-column `3/2`. Fixtures are independent of codec ID ordering, checked before
 timing, and print hashes. Setup/allocation is excluded. There are no research/large-codec flags.
 The historical shared `4/2` fixture remains fixed. Renamed or changed fixtures need fresh baselines.
@@ -240,7 +228,6 @@ and limitations are in the local gitignored artifact directories listed below.
 |---|---|---|
 | Packed graph vs excluded-ID index | Native encode 929 → 66.7 ns; decode 1,102 → 98.0 ns | Fixed shared default fixtures; N=2 trials/variant, 40 Criterion samples/trial; background-load caveats |
 | Same graph engine replay | 1.2886 → 0.1823 s median, 7.07× throughput | N=4/variant; identical 2,735,744 placements, 532,608 round trips and output checksum |
-| One-row specialization | Native encode/decode −86.65% / −81.48%; row −95.04% / −96.60% | Eight reachable boards repeated to 256; two trials/variant, 30 samples/trial |
 | Power-table/parity leaf | Encode −29–34%; decode −35–41% across caps 4–6 | Public native/row cases; two trials, 40 samples/trial; unchanged controls −3.93% to +0.79% |
 | Integrated arithmetic caches | Encode −12–21%; decode −0.2–5.1% across caps 4–6 | Full 32-case ABBA, two trials/variant, 60 samples/trial; some decode intervals include zero |
 | Sampler parallelism | Serial 4.463 s → four-worker 1.896 s median | 20 batches including persistence; N=4/5; one-worker cost did not improve; identical logical outputs |
@@ -259,7 +246,7 @@ Local evidence under `artifacts/output/`:
   domain corrections and validation. The stronger 380,842,218-state prototype remains research.
 - `codec-10-column-sweep-20261103/`: arithmetic derivation, exhaustive family checks and old
   packed-kernel tradeoffs (caps four/five initially slower; cap six faster).
-- `codec-reachability-refine-20261109/`, `codec-leaf-perf-20261109T220516Z/`: one-row and leaf trials.
+- `codec-leaf-perf-20261109T220516Z/`: arithmetic leaf trials.
 - `codec-combinations-20261110T014016Z/`, `codec-integrated-20261110T033902Z/`: ablations,
   combined measurements, assembly and workspace checks for their recorded source snapshots.
 - `codec-shared-geometry-20261111T182724Z/`: all 28 const shapes, focused validation, 32 fixture

@@ -41,8 +41,9 @@ impl Node {
 
 /// Returns the bounded symbolic node capacity for these dimensions.
 pub const fn capacity(c: usize, r: usize, h: usize) -> usize {
+    assert!(r >= 2, "codec requires at least two rows");
     assert!(
-        c >= 1 && c <= 12 && r >= 1 && r <= 31,
+        c >= 1 && c <= 12 && r <= 31,
         "codec dimensions out of range"
     );
     let h = if h < c * (r - 1) { h } else { c * (r - 1) };
@@ -418,7 +419,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
         // At width three a full L/J row above the cap can clear while leaving
         // a new unsupported cell beside an existing unsupported top run.
         // At width four the only such full row is an I, which clears entirely.
-        if self.rows >= 2 && self.cols >= 4 {
+        if self.cols >= 4 {
             let mut unsupported = [0u32; 2];
             let mut long = 0;
             let mut a = 0;
@@ -757,10 +758,9 @@ pub const fn build<const N: usize, const M: usize, const OUT: usize>(
     result
 }
 
-pub struct Configuration<const C: usize, const R: usize, const H: usize, const FULL_BAG: bool>;
+pub struct Configuration<const C: usize, const R: usize, const H: usize>;
 
-impl<const C: usize, const R: usize, const H: usize, const FULL_BAG: bool>
-    Configuration<C, R, H, FULL_BAG>
+impl<const C: usize, const R: usize, const H: usize> Configuration<C, R, H>
 where
     [(); capacity(C, R, H)]:,
     [(); slots(C, R, H)]:,
@@ -768,21 +768,16 @@ where
 {
     // Generic-const normalization can visit GRAPH even when Source selects arithmetic.
     // Guard construction here too, so those configurations never run the graph builder.
-    pub const GRAPH: Diagram<{ capacity(C, R, H) * 2 }> =
-        if arithmetic::one_row_applies(C, R, FULL_BAG) || arithmetic::applies(C, R, H) {
-            Diagram {
-                nodes: [Node::EMPTY; capacity(C, R, H) * 2],
-                len: 0,
-                root: 0,
-                count: if arithmetic::one_row_applies(C, R, FULL_BAG) {
-                    arithmetic::one_row_count(C)
-                } else {
-                    arithmetic::board_count(R)
-                },
-            }
-        } else {
-            build::<{ capacity(C, R, H) }, { slots(C, R, H) }, { capacity(C, R, H) * 2 }>(C, R, H)
-        };
+    pub const GRAPH: Diagram<{ capacity(C, R, H) * 2 }> = if arithmetic::applies(C, R, H) {
+        Diagram {
+            nodes: [Node::EMPTY; capacity(C, R, H) * 2],
+            len: 0,
+            root: 0,
+            count: arithmetic::board_count(R),
+        }
+    } else {
+        build::<{ capacity(C, R, H) }, { slots(C, R, H) }, { capacity(C, R, H) * 2 }>(C, R, H)
+    };
 }
 
 pub(crate) trait Source: private::Sealed {
@@ -797,47 +792,35 @@ pub(crate) trait Source: private::Sealed {
     const LEVELS: usize;
 }
 
-impl<const C: usize, const R: usize, const H: usize, const FULL_BAG: bool> private::Sealed
-    for Dimensions<C, R, H, FULL_BAG>
-{
-}
+impl<const C: usize, const R: usize, const H: usize> private::Sealed for Dimensions<C, R, H> {}
 
-impl<const C: usize, const R: usize, const H: usize, const FULL_BAG: bool> Source
-    for Dimensions<C, R, H, FULL_BAG>
+impl<const C: usize, const R: usize, const H: usize> Source for Dimensions<C, R, H>
 where
     [(); capacity(C, R, H)]:,
     [(); slots(C, R, H)]:,
     [(); capacity(C, R, H) * 2]:,
 {
     const HOLES: usize = if H < C * (R - 1) { H } else { C * (R - 1) };
-    const NODES: &'static [Node] =
-        if arithmetic::one_row_applies(C, R, FULL_BAG) || arithmetic::applies(C, R, H) {
-            &[]
-        } else {
-            &Configuration::<C, R, H, FULL_BAG>::GRAPH.nodes
-        };
-    const LEN: usize =
-        if arithmetic::one_row_applies(C, R, FULL_BAG) || arithmetic::applies(C, R, H) {
-            0
-        } else {
-            Configuration::<C, R, H, FULL_BAG>::GRAPH.len
-        };
-    const ROOT: u32 = if arithmetic::one_row_applies(C, R, FULL_BAG) || arithmetic::applies(C, R, H)
-    {
+    const NODES: &'static [Node] = if arithmetic::applies(C, R, H) {
+        &[]
+    } else {
+        &Configuration::<C, R, H>::GRAPH.nodes
+    };
+    const LEN: usize = if arithmetic::applies(C, R, H) {
         0
     } else {
-        Configuration::<C, R, H, FULL_BAG>::GRAPH.root
+        Configuration::<C, R, H>::GRAPH.len
     };
-    const COUNT: u64 =
-        if arithmetic::one_row_applies(C, R, FULL_BAG) || arithmetic::applies(C, R, H) {
-            if arithmetic::one_row_applies(C, R, FULL_BAG) {
-                arithmetic::one_row_count(C)
-            } else {
-                arithmetic::board_count(R)
-            }
-        } else {
-            Configuration::<C, R, H, FULL_BAG>::GRAPH.count
-        };
+    const ROOT: u32 = if arithmetic::applies(C, R, H) {
+        0
+    } else {
+        Configuration::<C, R, H>::GRAPH.root
+    };
+    const COUNT: u64 = if arithmetic::applies(C, R, H) {
+        arithmetic::board_count(R)
+    } else {
+        Configuration::<C, R, H>::GRAPH.count
+    };
     const SMALL: usize = if storage_kind(Self::LEN, Self::COUNT) == 0 {
         Self::LEN
     } else {
@@ -1033,6 +1016,8 @@ mod tests {
 
     #[test]
     fn packed_children_and_weights_are_selected_without_narrowing_loss() {
+        assert_eq!(std::mem::size_of::<super::MediumNode>(), 8);
+        assert_eq!(std::mem::align_of::<super::MediumNode>(), 8);
         assert_eq!(storage_kind(65536, 65535), 0);
         assert_eq!(storage_kind(65536, 65536), 1);
         assert_eq!(storage_kind(65536, u32::MAX as u64), 1);

@@ -80,8 +80,16 @@ pub type BoardId<C: TetrisGameConfig, const ROWS: usize, const MAX_HOLES: usize>
 /// ```
 /// use tetris_codec::board_id_type;
 /// use tetris_game::StandardTetris;
-/// let id: board_id_type!(StandardTetris, 1, 0) = 0u8;
-/// assert_eq!(std::mem::size_of_val(&id), 1);
+/// let id: board_id_type!(StandardTetris, 2, 0) = 0u16;
+/// assert_eq!(std::mem::size_of_val(&id), 2);
+/// ```
+///
+/// ID aliases also reject one-row configurations at compile time:
+///
+/// ```compile_fail
+/// use tetris_codec::board_id_type;
+/// use tetris_game::StandardTetris;
+/// let _: board_id_type!(StandardTetris, 1, 0) = 0;
 /// ```
 ///
 /// The default decoder requires the selected type; use `board_from_u64` for an
@@ -90,7 +98,7 @@ pub type BoardId<C: TetrisGameConfig, const ROWS: usize, const MAX_HOLES: usize>
 /// ```compile_fail
 /// use tetris_codec::BoardCodec;
 /// use tetris_game::StandardTetris;
-/// let codec = BoardCodec::<StandardTetris, 1, 0>::new();
+/// let codec = BoardCodec::<StandardTetris, 2, 0>::new();
 /// let external_id: u64 = 0;
 /// codec.board_from_id(external_id).expect("valid fixture in id_bytes");
 /// ```

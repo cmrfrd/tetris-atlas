@@ -11,22 +11,22 @@
 //!
 //! [`BoardCodec<C, ROWS, MAX_HOLES>`] uses `C::COLS` and accepts native
 //! [`tetris_game::TetrisBoard`] values. Counts are evaluated by the compiler. Ten-column, one-hole codecs at heights
-//! 4–6 and full-bag one-row codecs rank algebraically; other configurations use compiled decision graphs.
+//! 4–6 rank algebraically; other configurations use compiled decision graphs.
 //! Construction and lookup allocate nothing.
-//! Full-seven-bag 8–12-column one-row codecs are exactly seed-reachable. Other counts
-//! describe admissible patterns, not proven reachable or winning states.
+//! Height caps must be at least two. Counts describe admissible patterns, not
+//! proven reachable or winning states.
 //!
 //! ```
 //! use tetris_codec::BoardCodec;
 //! use tetris_game::{StandardTetris, TetrisBoard, TetrisGameConfig};
-//! type Codec = BoardCodec<StandardTetris, 1, 0>;
+//! type Codec = BoardCodec<StandardTetris, 2, 0>;
 //! const CODEC: Codec = Codec::new();
 //! const COUNT: u64 = Codec::BOARD_COUNT;
 //! const BYTES: u128 = Codec::required_bytes(64);
 //! assert!(COUNT > 0);
 //! assert_eq!(BYTES, u128::from(COUNT) * 8);
-//! let board = TetrisBoard::<{ StandardTetris::COLS }, { StandardTetris::ROWS }>::from_limbs([1, 1, 1, 1, 0, 0, 0, 0, 0, 0]);
-//! let id: u8 = CODEC.id(&board)?;
+//! let board = TetrisBoard::<{ StandardTetris::COLS }, { StandardTetris::ROWS }>::from_limbs([3, 3, 0, 0, 0, 0, 0, 0, 0, 0]);
+//! let id: u16 = CODEC.id(&board)?;
 //! assert_eq!(CODEC.board_from_id(id)?, board);
 //! # Ok::<(), tetris_codec::Error>(())
 //! ```

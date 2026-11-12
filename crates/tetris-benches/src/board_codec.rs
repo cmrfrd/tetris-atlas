@@ -20,7 +20,7 @@ impl TetrisGameConfig for SixColumnTetris {
 tetris_bench! {
     /// Registers the same representative configurations on every normal benchmark run.
     fn bench_board_codec(c: &mut Criterion) {
-        bench_config::<StandardTetris, 1, 0>(c, "standard_1_0", &fixtures::legal_rows::<StandardTetris, 1, 0>());
+        bench_config::<StandardTetris, 2, 0>(c, "standard_2_0", &fixtures::legal_rows::<StandardTetris, 2, 0>());
         bench_config::<StandardTetris, 4, 1>(c, "standard_4_1", &fixtures::legal_rows::<StandardTetris, 4, 1>());
         bench_config::<StandardTetris, 5, 1>(c, "standard_5_1", &fixtures::legal_rows::<StandardTetris, 5, 1>());
         bench_config::<StandardTetris, 6, 1>(c, "standard_6_1", &fixtures::legal_rows::<StandardTetris, 6, 1>());

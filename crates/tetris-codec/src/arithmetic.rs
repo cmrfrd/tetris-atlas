@@ -2,7 +2,7 @@
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
-    reason = "The one-hole domain has ten columns, R in 4..=6, and exponents at most ten; one-row widths are 8..=12. Heights and parity fit u8, column masks fit u32, and signed inclusion-exclusion expressions count nonnegative subsets, with assertions for the impossible-family totals."
+    reason = "The one-hole domain has ten columns, R in 4..=6, and exponents at most ten. Heights and parity fit u8, column masks fit u32, and signed inclusion-exclusion expressions count nonnegative subsets, with assertions for the impossible-family totals."
 )]
 //! Algebraic ranking for bounded board families, without a decision graph.
 //!
@@ -10,9 +10,7 @@
 //! by lexicographic column heights. Shared const arrays hold powers, signed recurrence
 //! counts, metadata offsets and column descriptions.
 //!
-//! Full-seven-bag codecs with widths 8..=12 and a one-row whole-history cap encode
-//! empty plus each horizontal-I position using shifts. This is finite reachability,
-//! not indefinite survival. Neither family retains a board catalog or excluded-ID list.
+//! No board catalog or excluded-ID list is retained.
 use tetris_macros::inline_conditioned;
 
 /// Powers for height-alphabet sizes up to seven and suffix lengths up to ten.
@@ -845,49 +843,6 @@ pub(crate) fn select(rows: usize, id: u64) -> Option<u64> {
         5 => ArithmeticOneHole::<5>::new().select(id),
         6 => ArithmeticOneHole::<6>::new().select(id),
         _ => None,
-    }
-}
-
-/// Counts boards reachable under a full seven-bag and a one-row history cap.
-///
-/// At widths 8..=12, only a horizontal I fits from empty. No next distinct piece
-/// can clear a row or stay within the cap, so there are `cols - 2` boards in total.
-/// These finite reachable states do not form a surviving policy.
-#[inline_conditioned]
-pub(crate) const fn one_row_count(cols: usize) -> u64 {
-    // Empty, plus every position of a four-cell horizontal I.
-    (1 + (cols - 4 + 1)) as u64
-}
-
-/// Returns whether the full-bag, one-row reachability proof applies.
-#[inline_conditioned]
-pub(crate) const fn one_row_applies(cols: usize, rows: usize, full_bag: bool) -> bool {
-    cols >= 8 && cols <= 12 && rows == 1 && full_bag
-}
-
-/// Ranks an empty row or a single horizontal I, rejecting every other pattern.
-#[inline_conditioned]
-pub(crate) fn rank_one_row(cols: usize, row: u16) -> Option<u64> {
-    if row == 0 {
-        return Some(0);
-    }
-    let start = row.trailing_zeros();
-    if u64::from(start) < one_row_count(cols) - 1 && row == 15u16 << start {
-        Some(u64::from(start) + 1)
-    } else {
-        None
-    }
-}
-
-/// Restores the row mask for a valid seed-reachable board ID.
-#[inline_conditioned]
-pub(crate) fn select_one_row(cols: usize, id: u64) -> Option<u16> {
-    if id == 0 {
-        Some(0)
-    } else if id < one_row_count(cols) {
-        Some(15u16 << (id - 1))
-    } else {
-        None
     }
 }
 
