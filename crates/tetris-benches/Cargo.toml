@@ -15,7 +15,6 @@ harness = false
 
 [features]
 default = []
-never-inline = ["tetris-codec/never-inline"]
 apple-silicon = ["tetris-search/apple-silicon"]
 
 [dependencies]
