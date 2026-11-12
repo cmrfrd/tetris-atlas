@@ -3,9 +3,9 @@ use criterion::Criterion;
 use tetris_codec::{BoardCodec, GameDimensions, IdConfig};
 use tetris_game::StandardTetris;
 
-#[path = "src/board_codec/fixtures.rs"]
+#[path = "fixtures.rs"]
 mod fixtures;
-#[path = "src/board_codec/runner.rs"]
+#[path = "runner.rs"]
 mod runner;
 
 use runner::{SAMPLES, bench_config};

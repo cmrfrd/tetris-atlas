@@ -206,9 +206,9 @@ Each configuration compiles independently and reuses the same fixtures and four 
 It adds no benchmark feature flags or build-script logic:
 
 ```sh
-python3 crates/tetris-benches/codec_sweep.py --output artifacts/benchmarks/codec-grid
+cargo run -p tetris-benches --bin codec_sweep -- --output artifacts/benchmarks/codec-grid
 # Retry unfinished cases with a larger compilation budget; successful cases are retained:
-python3 crates/tetris-benches/codec_sweep.py --output artifacts/benchmarks/codec-grid \
+cargo run -p tetris-benches --bin codec_sweep -- --output artifacts/benchmarks/codec-grid \
   --resume --compile-timeout 600
 ```
 
@@ -218,6 +218,8 @@ code generation with shared dependency caches. `report.md`, JSON/CSV, exact bina
 host/power metadata, logs and Criterion samples stay in the output directory. Timeouts mean support
 is unknown. Short sweep timings characterize fixtures; confirm suspected regressions with longer,
 matched repeated trials. Use `--help` for pilot subsets and measurement settings.
+The launcher and its tests are Rust. Existing Python-run outputs remain historical artifacts;
+start a fresh output directory when switching to this launcher.
 
 Historical measurements below are separate experiments on native ARM64 M1 Pro with the pinned
 nightly. They are not fresh measurements of this checkout, and their percentages must not be

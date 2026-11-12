@@ -3712,10 +3712,18 @@ dependencies = [
 name = "tetris-benches"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "clap",
  "criterion",
+ "ctrlc",
  "inventory",
+ "nix 0.31.3",
  "pprof",
  "rand 0.10.3",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
  "tetris-codec",
  "tetris-game",
  "tetris-search",
