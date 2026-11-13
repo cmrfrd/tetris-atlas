@@ -202,10 +202,12 @@ The permanent suite macro-instantiates two separate Criterion collections, with 
 | `board_codec/` — Standard Tetris, ten columns | Rows `4, 5, 6` × holes `0, 1`, plus `2/0`, `2/4`, `4/2`, `20/0` | 40 |
 | `board_codec_six_columns/` — narrow full-bag game | `3/2` | 4 |
 
-Fixtures are independent of codec ID ordering, checked before timing, and print hashes.
-Setup/allocation is excluded. The historical shared `4/2` fixture remains fixed. Standard Tetris
-benchmark names are unchanged; the six-column collection has a new prefix and needs a fresh
-baseline. `never-inline` is for assembly inspection, not normal measurements.
+Every configuration uses the same fixed-seed legal-play generator. Fixtures are independent of
+codec ID ordering, checked before timing, and print hashes. Setup/allocation is excluded.
+The `4/2` case is now `standard_4_2` and needs a fresh baseline after replacing its hardcoded
+dataset; former shared-fixture timings below remain historical. The separate six-column
+collection also uses its own baseline. `never-inline` is for assembly inspection, not normal
+measurements.
 
 Run either collection through the regular benchmark target:
 
