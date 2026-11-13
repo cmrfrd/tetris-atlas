@@ -3,6 +3,7 @@
     long_running_const_eval,
     reason = "Bounded codec graph construction may exceed the const evaluator progress threshold."
 )]
+
 use crate::board::{MediumNode, Nodes, SmallNode, WideNode, occupancy_modulus};
 use crate::{CompiledConfig, Dimensions, Tables, arithmetic, private};
 use tetris_game::{Rotation, TetrisPiece};
@@ -46,6 +47,7 @@ pub const fn capacity(c: usize, r: usize, h: usize) -> usize {
         c >= 1 && c <= 12 && r <= 31,
         "codec dimensions out of range"
     );
+
     let h = if h < c * (r - 1) { h } else { c * (r - 1) };
     let width = if c > 6 { 1 << (c - 6) } else { 1 };
     let complexity = if h >= 4 { 2 } else { 1 };
@@ -145,6 +147,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
         if zero == one {
             return zero;
         }
+
         let sign = zero & 1;
         let zero = zero ^ sign;
         let one = one ^ sign;
@@ -159,7 +162,9 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             }
             at = (at + 1) & (M - 1);
         }
+
         assert!(self.len < N, "codec rule diagram exceeds node budget");
+
         let i = self.len;
         self.len += 1;
         self.nodes[i] = Raw { var, zero, one };
@@ -177,6 +182,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
                 if depth == 0 {
                     return result;
                 }
+
                 let at = depth - 1;
                 let frame = self.frames[at];
                 if !frame.returning_high {
@@ -190,13 +196,16 @@ impl<const N: usize, const M: usize> Builder<N, M> {
                     if self.cached >= M * 3 / 4 {
                         self.clear_cache();
                     }
+
                     let mut at = mix(frame.key) & (M - 1);
                     while self.stamps[at] == self.epoch && self.keys[at] != frame.key {
                         at = (at + 1) & (M - 1);
                     }
+
                     if self.stamps[at] != self.epoch {
                         self.cached += 1;
                     }
+
                     self.stamps[at] = self.epoch;
                     self.keys[at] = frame.key;
                     self.values[at] = result;
@@ -204,31 +213,37 @@ impl<const N: usize, const M: usize> Builder<N, M> {
                 }
                 continue;
             }
+
             if a == 0 || b == 0 {
                 result = 0;
                 returning = true;
                 continue;
             }
+
             if a == 1 {
                 result = b;
                 returning = true;
                 continue;
             }
+
             if b == 1 || a == b {
                 result = a;
                 returning = true;
                 continue;
             }
+
             if a == b ^ 1 {
                 result = 0;
                 returning = true;
                 continue;
             }
+
             if a > b {
                 let t = a;
                 a = b;
                 b = t;
             }
+
             let key = (a as u64) << 32 | b as u64;
             let mut at = mix(key) & (M - 1);
             while self.stamps[at] == self.epoch {
@@ -237,11 +252,13 @@ impl<const N: usize, const M: usize> Builder<N, M> {
                 }
                 at = (at + 1) & (M - 1);
             }
+
             if self.stamps[at] == self.epoch {
                 result = self.values[at];
                 returning = true;
                 continue;
             }
+
             let an = self.nodes[(a / 2) as usize];
             let bn = self.nodes[(b / 2) as usize];
             let var = if an.var < bn.var { an.var } else { bn.var };
@@ -250,11 +267,13 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             } else {
                 (a, a)
             };
+
             let (bz, bo) = if bn.var == var {
                 (bn.zero ^ (b & 1), bn.one ^ (b & 1))
             } else {
                 (b, b)
             };
+
             assert!(depth < self.frames.len());
             self.frames[depth] = Frame {
                 key,
@@ -289,6 +308,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             f = if all { self.and(f, b) } else { self.or(f, b) };
             x += 1;
         }
+
         f
     }
 
@@ -300,12 +320,15 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             self.map[i] = 0;
             i += 1;
         }
+
         if a >= 2 {
             self.map[(a / 2) as usize] = 1;
         }
+
         if b >= 2 {
             self.map[(b / 2) as usize] = 1;
         }
+
         i = old_len;
         while i > 1 {
             i -= 1;
@@ -314,11 +337,13 @@ impl<const N: usize, const M: usize> Builder<N, M> {
                 if node.zero >= 2 {
                     self.map[(node.zero / 2) as usize] = 1;
                 }
+
                 if node.one >= 2 {
                     self.map[(node.one / 2) as usize] = 1;
                 }
             }
         }
+
         let mut len = 1;
         i = 1;
         while i < old_len {
@@ -334,15 +359,18 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             }
             i += 1;
         }
+
         let a = self.map[(a / 2) as usize] ^ (a & 1);
         let b = self.map[(b / 2) as usize] ^ (b & 1);
         self.len = len;
+
         // Drop stale hash slots before rehashing relocated nodes.
         i = 0;
         while i < M {
             self.unique[i] = 0;
             i += 1;
         }
+
         i = 1;
         while i < len {
             let n = self.nodes[i];
@@ -352,9 +380,11 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             while self.unique[at] != 0 {
                 at = (at + 1) & (M - 1);
             }
+
             self.unique[at] = i as u32;
             i += 1;
         }
+
         self.clear_cache();
         (a, b)
     }
@@ -374,7 +404,9 @@ impl<const N: usize, const M: usize> Builder<N, M> {
                 q += 1;
             }
         }
+
         let mut f = residues[0];
+
         // Threshold q means at least q holes. Update backwards so each hole is counted once.
         let mut thresholds = [0u32; 373];
         thresholds[0] = 1;
@@ -390,6 +422,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
                         above = self.or(above, bit);
                         z += 1;
                     }
+
                     let bit = self.bit(x, y);
                     let hole = self.and(above, bit ^ 1);
                     let mut q = holes + 1;
@@ -404,6 +437,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             }
             f = self.and(f, thresholds[holes + 1] ^ 1);
         }
+
         let mut y = 0;
         while y < self.rows {
             let full = self.row(y, true);
@@ -416,6 +450,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             }
             y += 1;
         }
+
         // At width three a full L/J row above the cap can clear while leaving
         // a new unsupported cell beside an existing unsupported top run.
         // At width four the only such full row is an I, which clears entirely.
@@ -436,10 +471,12 @@ impl<const N: usize, const M: usize> Builder<N, M> {
                         below = self.or(below, b);
                         x += 1;
                     }
+
                     if a > 0 {
                         let b = self.bit(a - 1, self.rows - 1);
                         term = self.and(term, b ^ 1);
                     }
+
                     if end < self.cols {
                         let b = self.bit(end, self.rows - 1);
                         term = self.and(term, b ^ 1);
@@ -459,6 +496,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             f = self.and(f, long ^ 1);
             f = self.and(f, unsupported[1] ^ 1);
         }
+
         f
     }
 
@@ -479,6 +517,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
                     let b = self.bit(x, low - 1);
                     support = self.or(support, b);
                 }
+
                 let mut y = low;
                 while y < self.rows {
                     let bit = self.bit(x, y);
@@ -488,9 +527,11 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             }
             x += 1;
         }
+
         if !floor {
             term = self.and(term, support);
         }
+
         // With separated top runs a single tetromino cannot remove the entire top row.
         // Thus the predecessor also reaches the cap and every remaining row must be nonempty.
         let mut y = 0;
@@ -509,6 +550,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             }
             y += 1;
         }
+
         term
     }
 
@@ -518,6 +560,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
         if self.cols <= 4 || self.rows > 28 {
             return self.collect(carrier, 0).0;
         }
+
         let mut prev = 0;
         let mut one = 0;
         let mut two = 0;
@@ -531,6 +574,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             prev = bit;
             x += 1;
         }
+
         let mut bad = self.and(carrier, two);
         let roots = self.collect(carrier, bad);
         carrier = roots.0;
@@ -538,6 +582,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
         let pieces = TetrisPiece::all();
         let mut pass = 0;
         let mut since_collect = 0;
+
         // Vertical I first: it proves removability cheaply for many solid columns.
         while pass < 2 && bad != 0 {
             let mut p = 0;
@@ -562,17 +607,21 @@ impl<const N: usize, const M: usize> Builder<N, M> {
                             cells += raw[i].count_ones();
                             i += 1;
                         }
+
                         assert!(cells == 4, "codec needs four-cell tetrominoes");
+
                         let mut occupied = 0;
                         let mut col = 0;
                         while col < width {
                             occupied |= raw[col] >> shift;
                             col += 1;
                         }
+
                         assert!(
                             (u32::BITS - occupied.leading_zeros()) as usize == height,
                             "piece height must match engine masks"
                         );
+
                         let mut yy = 0;
                         while yy < height {
                             let mut row = 0u16;
@@ -581,12 +630,14 @@ impl<const N: usize, const M: usize> Builder<N, M> {
                                 row |= ((((raw[i] >> shift) >> yy) & 1) as u16) << i;
                                 i += 1;
                             }
+
                             assert!(
                                 (row & !(row << 1)).count_ones() == 1,
                                 "codec needs contiguous piece rows"
                             );
                             yy += 1;
                         }
+
                         let mut dy = self.rows - height + 1;
                         while dy > 0 && bad != 0 {
                             dy -= 1;
@@ -598,6 +649,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
                                     shape[dx + i] = (raw[i] >> shift) << dy;
                                     i += 1;
                                 }
+
                                 let possible = self.removable(&shape);
                                 bad = self.and(bad, possible ^ 1);
                                 since_collect += 1;
@@ -617,6 +669,7 @@ impl<const N: usize, const M: usize> Builder<N, M> {
             }
             pass += 1;
         }
+
         let roots = self.collect(carrier, bad);
         let result = self.and(roots.0, roots.1 ^ 1);
         self.collect(result, 0).0
@@ -645,6 +698,7 @@ const fn assignments<const N: usize>(
     if edge == 0 {
         return 0;
     }
+
     let (count, free) = if edge == 1 {
         (1, vars - level)
     } else {
@@ -653,7 +707,9 @@ const fn assignments<const N: usize>(
             diagram.nodes[edge as usize].var as usize - level,
         )
     };
+
     assert!(free < 64, "codec count exceeds u64");
+
     let v = (count as u128) << free;
     assert!(v <= u64::MAX as u128, "codec count exceeds u64");
     v as u64
@@ -678,10 +734,12 @@ pub const fn build<const N: usize, const M: usize, const OUT: usize>(
         root: 0,
         count: 0,
     };
+
     let mut seen = [0u8; N];
     if root >= 2 {
         seen[(root / 2) as usize] |= 1 << (root & 1);
     }
+
     let mut at = b.len;
     while at > 1 {
         at -= 1;
@@ -694,6 +752,7 @@ pub const fn build<const N: usize, const M: usize, const OUT: usize>(
                 if zero >= 2 {
                     seen[(zero / 2) as usize] |= 1 << (zero & 1);
                 }
+
                 if one >= 2 {
                     seen[(one / 2) as usize] |= 1 << (one & 1);
                 }
@@ -701,6 +760,7 @@ pub const fn build<const N: usize, const M: usize, const OUT: usize>(
             sign += 1;
         }
     }
+
     let mut map = [0u32; OUT];
     map[1] = 1;
     let mut totals = [0u64; OUT];
@@ -717,6 +777,7 @@ pub const fn build<const N: usize, const M: usize, const OUT: usize>(
                 let o = assignments(&result, &totals, one, n.var as usize + 1, c * r);
                 let count = z as u128 + o as u128;
                 assert!(count <= u64::MAX as u128, "codec count exceeds u64");
+
                 let at = result.len;
                 assert!(at < OUT);
                 result.len += 1;
@@ -736,8 +797,10 @@ pub const fn build<const N: usize, const M: usize, const OUT: usize>(
     result.root = map[root as usize];
     result.count = assignments(&result, &totals, result.root, 0, c * r);
     assert!(result.count > 0);
+
     if occupancy_modulus(c) > 1 {
         assert!(result.root >= 2 && result.nodes[result.root as usize].var == 0);
+
         let mut at = 2;
         while at < result.len {
             let n = result.nodes[at];
@@ -755,6 +818,7 @@ pub const fn build<const N: usize, const M: usize, const OUT: usize>(
             at += 1;
         }
     }
+
     result
 }
 
@@ -806,36 +870,43 @@ where
     } else {
         &Configuration::<C, R, H>::GRAPH.nodes
     };
+
     const LEN: usize = if arithmetic::applies(C, R, H) {
         0
     } else {
         Configuration::<C, R, H>::GRAPH.len
     };
+
     const ROOT: u32 = if arithmetic::applies(C, R, H) {
         0
     } else {
         Configuration::<C, R, H>::GRAPH.root
     };
+
     const COUNT: u64 = if arithmetic::applies(C, R, H) {
         arithmetic::board_count(R)
     } else {
         Configuration::<C, R, H>::GRAPH.count
     };
+
     const SMALL: usize = if storage_kind(Self::LEN, Self::COUNT) == 0 {
         Self::LEN
     } else {
         0
     };
+
     const MEDIUM: usize = if storage_kind(Self::LEN, Self::COUNT) == 1 {
         Self::LEN
     } else {
         0
     };
+
     const WIDE: usize = if storage_kind(Self::LEN, Self::COUNT) == 2 {
         Self::LEN
     } else {
         0
     };
+
     const LEVELS: usize = if occupancy_modulus(C) == 1 {
         Self::LEN
     } else {
@@ -880,6 +951,7 @@ const fn small<const N: usize>(nodes: &[Node]) -> [SmallNode; N] {
         };
         i += 1;
     }
+
     out
 }
 
@@ -909,6 +981,7 @@ const fn medium<const N: usize>(nodes: &[Node]) -> [MediumNode; N] {
         };
         i += 1;
     }
+
     out
 }
 
@@ -929,6 +1002,7 @@ const fn wide<const N: usize>(nodes: &[Node]) -> [WideNode; N] {
         };
         i += 1;
     }
+
     out
 }
 
@@ -940,6 +1014,7 @@ const fn levels<const N: usize>(nodes: &[Node]) -> [u16; N] {
         out[i] = nodes[i].var;
         i += 1;
     }
+
     out
 }
 
@@ -981,12 +1056,14 @@ mod tests {
             let shift = u32::BITS - u32::from(piece.height(rotation));
             (columns.map(|column| column >> shift), width)
         };
+
         for &placement in TetrisPiecePlacement::<10>::ALL_PLACEMENTS {
             let (columns, width) = normalized(placement.piece, placement.orientation.rotation);
             let mut board = TetrisBoard::<10, 20>::new();
             let result = board.apply_piece_placement(placement);
             assert_eq!(result.lines_cleared, 0);
             assert_eq!(board.count(), 4);
+
             let start = usize::from(placement.orientation.column.inner());
             let expected = std::array::from_fn(|x| {
                 if (start..start + usize::from(width)).contains(&x) {
@@ -995,8 +1072,10 @@ mod tests {
                     0
                 }
             });
+
             assert_eq!(board.as_limbs(), &expected);
         }
+
         // Also compare the symmetric rotations omitted from the canonical catalog.
         for piece in TetrisPiece::all() {
             for rotation in Rotation::ALL {
@@ -1009,6 +1088,7 @@ mod tests {
                         column: Column::new(0),
                     },
                 });
+
                 assert_eq!(&board.as_limbs()[..4], &columns);
             }
         }

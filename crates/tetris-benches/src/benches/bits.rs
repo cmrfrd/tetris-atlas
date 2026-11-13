@@ -13,6 +13,7 @@ tetris_bench! {
         let mut output = vec![0; input.len()];
         let mut group = c.benchmark_group("bits/to_byte_fixed");
         group.throughput(Throughput::Elements(input.len() as u64));
+
         group.bench_with_input(
             BenchmarkId::from_parameter(input.len()),
             &input,
@@ -21,10 +22,12 @@ tetris_bench! {
                     for (bits, out) in black_box(input).iter().zip(&mut output) {
                         *out = tetris_utils::bits_to_byte(bits);
                     }
+
                     black_box(&output);
                 });
             },
         );
+
         group.finish();
     }
 }
@@ -35,6 +38,7 @@ tetris_bench! {
         let mut output = vec![[0; 8]; input.len()];
         let mut group = c.benchmark_group("bits/from_byte_fixed");
         group.throughput(Throughput::Elements(input.len() as u64));
+
         group.bench_with_input(
             BenchmarkId::from_parameter(input.len()),
             &input,
@@ -43,10 +47,12 @@ tetris_bench! {
                     for (&byte, out) in black_box(input).iter().zip(&mut output) {
                         *out = tetris_utils::byte_to_bits(byte);
                     }
+
                     black_box(&output);
                 });
             },
         );
+
         group.finish();
     }
 }
@@ -57,6 +63,7 @@ tetris_bench! {
         let mut output = vec![[0; 40]; input.len()];
         let mut group = c.benchmark_group("bits/bitmask_slice_fixed");
         group.throughput(Throughput::Elements(input.len() as u64));
+
         group.bench_with_input(
             BenchmarkId::from_parameter(input.len()),
             &input,
@@ -65,10 +72,12 @@ tetris_bench! {
                     for (&bits, out) in black_box(input).iter().zip(&mut output) {
                         *out = tetris_utils::BitMask::<40>::new_from_u64(bits).as_slice();
                     }
+
                     black_box(&output);
                 });
             },
         );
+
         group.finish();
     }
 }
@@ -86,9 +95,11 @@ tetris_bench! {
                 for matrix in &mut output {
                     transpose_bits::<10, 20, 25>(matrix);
                 }
+
                 black_box(&output);
             });
         });
+
         let input = wide;
         let mut output = vec![[0; 40]; input.len()];
         group.bench_with_input("10x32", &input, |b, input| {
@@ -98,9 +109,11 @@ tetris_bench! {
                 for matrix in &mut output {
                     transpose_bits::<10, 32, 40>(matrix);
                 }
+
                 black_box(&output);
             });
         });
+
         let input = tall;
         let mut output = vec![[0; 40]; input.len()];
         group.bench_with_input("32x10", &input, |b, input| {
@@ -110,9 +123,11 @@ tetris_bench! {
                 for matrix in &mut output {
                     transpose_bits::<32, 10, 40>(matrix);
                 }
+
                 black_box(&output);
             });
         });
+
         group.finish();
     }
 }

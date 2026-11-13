@@ -23,6 +23,7 @@ tetris_bench! {
                 for &v in candidates.iter() {
                     heap.push_if_better_min_heap(black_box(v));
                 }
+
                 black_box(heap.peek_min())
             })
         });
@@ -57,6 +58,7 @@ tetris_bench! {
                     for &v in candidates {
                         heap.push_if_better_min_heap(black_box(v));
                     }
+
                     black_box(heap.peek_min());
                 }
 

@@ -12,22 +12,27 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use tetris_game::TetrisGameConfig;
+
 const MAGIC: &[u8; 8] = b"TCREACH1";
 const VERSION: u32 = 1;
 const HASH_SEED: u64 = 0xcbf29ce484222325;
+
 fn hash(hash: &mut u64, data: &[u8]) {
     for &b in data {
         *hash = (*hash ^ u64::from(b)).wrapping_mul(0x100000001b3);
     }
 }
+
 fn fingerprint(parts: &[&[u8]]) -> u64 {
     let mut h = HASH_SEED;
     for p in parts {
         hash(&mut h, &(p.len() as u64).to_le_bytes());
         hash(&mut h, p);
     }
+
     h
 }
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Sources {
@@ -35,6 +40,7 @@ pub struct Sources {
     codec: u64,
     sampler: u64,
 }
+
 impl Sources {
     pub fn current() -> Self {
         Self {
@@ -64,6 +70,7 @@ impl Sources {
                     "/../../rust-toolchain.toml"
                 )),
             ]),
+
             codec: fingerprint(&[
                 include_bytes!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
@@ -86,6 +93,7 @@ impl Sources {
                     "/../tetris-codec/src/id.rs"
                 )),
             ]),
+
             sampler: fingerprint(&[
                 include_bytes!("main.rs"),
                 include_bytes!("state.rs"),
@@ -97,6 +105,7 @@ impl Sources {
         }
     }
 }
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Model {
@@ -106,6 +115,7 @@ struct Model {
     game_rows: usize,
     board_count: u64,
 }
+
 impl Model {
     fn current() -> Self {
         Self {
@@ -117,6 +127,7 @@ impl Model {
         }
     }
 }
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Manifest {
@@ -129,6 +140,7 @@ struct Manifest {
     git_head: Option<String>,
     git_dirty: Option<bool>,
 }
+
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Checkpoint {
@@ -144,6 +156,7 @@ pub struct Store {
     pub directory: PathBuf,
     journal: BufWriter<File>,
 }
+
 impl Store {
     pub fn open(directory: &Path, workload: Workload, resume: bool) -> Result<(Self, State)> {
         fs::create_dir_all(directory)?;
@@ -160,6 +173,7 @@ impl Store {
                 "output directory is not empty; use --resume or a new directory"
             );
         }
+
         let sources = Sources::current();
         let journal_path = directory.join("findings.jsonl");
         let state = if resume {
@@ -173,12 +187,14 @@ impl Store {
                 manifest.sources == sources && manifest.workload == workload,
                 "source or workload changed; use the matching binary/options, or start a new dataset and verify the old findings"
             );
+
             let checkpoint = directory.join("checkpoint.bin");
             let (loaded, journal_bytes) = if checkpoint.exists() {
                 load(&checkpoint, &workload, &sources, Codec::BOARD_COUNT)?
             } else {
                 (State::new(workload.clone(), Codec::BOARD_COUNT)?, 0)
             };
+
             let mut journal = OpenOptions::new()
                 .read(true)
                 .write(true)
@@ -206,6 +222,7 @@ impl Store {
                     .filter(|o| o.status.success())
                     .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned()),
             };
+
             let file = OpenOptions::new()
                 .write(true)
                 .create_new(true)
@@ -220,6 +237,7 @@ impl Store {
                 .sync_all()?;
             State::new(workload, Codec::BOARD_COUNT)?
         };
+
         let journal = BufWriter::new(OpenOptions::new().append(true).open(journal_path)?);
         Ok((
             Self {
@@ -230,14 +248,17 @@ impl Store {
             state,
         ))
     }
+
     pub fn append(&mut self, findings: &[Finding]) -> Result<()> {
         for f in findings {
             serde_json::to_writer(&mut self.journal, f)?;
             self.journal.write_all(b"\n")?;
         }
+
         self.journal.flush()?;
         Ok(())
     }
+
     pub fn checkpoint(&mut self, state: &State) -> Result<()> {
         self.journal.flush()?;
         self.journal.get_ref().sync_all()?;
@@ -280,6 +301,7 @@ fn recover_tail(journal: &mut File, committed: u64, directory: &Path) -> Result<
         length >= committed,
         "journal shorter than durable checkpoint"
     );
+
     if length > committed {
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
         let backup = directory.join(format!("uncheckpointed-{stamp}.jsonl.part"));
@@ -293,6 +315,7 @@ fn recover_tail(journal: &mut File, committed: u64, directory: &Path) -> Result<
         journal.set_len(committed)?;
         journal.sync_all()?;
     }
+
     Ok(())
 }
 
@@ -301,11 +324,13 @@ fn write_hashed(w: &mut impl Write, hash_value: &mut u64, bytes: &[u8]) -> Resul
     hash(hash_value, bytes);
     Ok(())
 }
+
 fn read_hashed(r: &mut impl Read, hash_value: &mut u64, bytes: &mut [u8]) -> Result<()> {
     r.read_exact(bytes)?;
     hash(hash_value, bytes);
     Ok(())
 }
+
 fn save(path: &Path, state: &State, journal_bytes: u64) -> Result<()> {
     let disk = Checkpoint {
         version: VERSION,
@@ -317,6 +342,7 @@ fn save(path: &Path, state: &State, journal_bytes: u64) -> Result<()> {
         header: state.header.clone(),
         journal_bytes,
     };
+
     let json = serde_json::to_vec(&disk)?;
     let temp = path.with_extension("tmp");
     let mut writer = BufWriter::with_capacity(256 * 1024, File::create(&temp)?);
@@ -324,6 +350,7 @@ fn save(path: &Path, state: &State, journal_bytes: u64) -> Result<()> {
     write_hashed(&mut writer, &mut digest, MAGIC)?;
     write_hashed(&mut writer, &mut digest, &(json.len() as u64).to_le_bytes())?;
     write_hashed(&mut writer, &mut digest, &json)?;
+
     for bits in &state.bits {
         for word in &bits.words {
             write_hashed(
@@ -333,25 +360,31 @@ fn save(path: &Path, state: &State, journal_bytes: u64) -> Result<()> {
             )?;
         }
     }
+
     writer.write_all(&digest.to_le_bytes())?;
     writer.flush()?;
     writer.get_ref().sync_all()?;
+
     fs::rename(temp, path)?;
     if let Some(parent) = path.parent() {
         File::open(parent)?.sync_all()?;
     }
+
     Ok(())
 }
+
 fn load(path: &Path, workload: &Workload, sources: &Sources, count: u64) -> Result<(State, u64)> {
     let mut reader = BufReader::with_capacity(256 * 1024, File::open(path)?);
     let mut digest = HASH_SEED;
     let mut magic = [0; 8];
     read_hashed(&mut reader, &mut digest, &mut magic)?;
     ensure!(&magic == MAGIC, "invalid checkpoint magic");
+
     let mut bytes = [0; 8];
     read_hashed(&mut reader, &mut digest, &mut bytes)?;
     let len = usize::try_from(u64::from_le_bytes(bytes))?;
     ensure!(len <= 1_048_576, "checkpoint header too large");
+
     let mut json = vec![0; len];
     read_hashed(&mut reader, &mut digest, &mut json)?;
     let disk: Checkpoint = serde_json::from_slice(&json)?;
@@ -368,6 +401,7 @@ fn load(path: &Path, workload: &Workload, sources: &Sources, count: u64) -> Resu
         &disk.sources == sources && &disk.header.workload == workload,
         "checkpoint contract mismatch"
     );
+
     let mut state = State::new(workload.clone(), count)?;
     state.header = disk.header;
     for bits in &state.bits {
@@ -385,6 +419,7 @@ fn load(path: &Path, workload: &Workload, sources: &Sources, count: u64) -> Resu
     state.validate()?;
     Ok((state, disk.journal_bytes))
 }
+
 pub fn verify(directory: &Path, prover: &Prover, recheck_engine: bool) -> Result<(u64, u64)> {
     let lock = File::open(directory.join("writer.lock"))?;
     lock.try_lock_shared()
@@ -405,6 +440,7 @@ pub fn verify(directory: &Path, prover: &Prover, recheck_engine: bool) -> Result
         recheck_engine || manifest.sources.engine == Sources::current().engine,
         "engine source changed; review the change and use --recheck-engine to replay facts against the current engine"
     );
+
     let mut proofs = 0;
     let mut witnesses = 0;
     for (index, line) in BufReader::new(File::open(directory.join("findings.jsonl"))?)
@@ -421,6 +457,7 @@ pub fn verify(directory: &Path, prover: &Prover, recheck_engine: bool) -> Result
             Finding::Witness { .. } => witnesses += 1,
         }
     }
+
     Ok((proofs, witnesses))
 }
 
@@ -433,12 +470,15 @@ pub fn verify(directory: &Path, prover: &Prover, recheck_engine: bool) -> Result
 )]
 mod tests {
     use super::*;
+
     #[test]
     fn fingerprints_are_framed_and_sensitive() {
         assert_ne!(fingerprint(&[b"ab", b"c"]), fingerprint(&[b"a", b"bc"]));
         assert_ne!(fingerprint(&[b"abc"]), fingerprint(&[b"abd"]));
     }
+
     struct Directory(PathBuf);
+
     impl Directory {
         fn new() -> Self {
             static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -451,11 +491,13 @@ mod tests {
             Self(path)
         }
     }
+
     impl Drop for Directory {
         fn drop(&mut self) {
             drop(fs::remove_dir_all(&self.0));
         }
     }
+
     fn work() -> Workload {
         Workload {
             seed: 1,
@@ -468,6 +510,7 @@ mod tests {
             watch: 7,
         }
     }
+
     #[test]
     fn checkpoint_roundtrip_corruption_truncation_and_contract_guards() {
         let dir = Directory::new();
@@ -493,13 +536,16 @@ mod tests {
         assert_eq!(loaded.header, state.header);
         assert!(loaded.bits[0].contains(64));
         assert!(loaded.bits[3].contains(129));
+
         let mut changed = work();
         changed.seed = 99;
         assert!(load(&path, &changed, &Sources::current(), 130).is_err());
+
         let mut changed = Sources::current();
         changed.codec ^= 1;
         assert!(load(&path, &work(), &changed, 130).is_err());
         assert!(load(&path, &work(), &Sources::current(), 131).is_err());
+
         let bytes = fs::read(&path).expect(
             "valid fixture in checkpoint_roundtrip_corruption_truncation_and_contract_guards",
         );
@@ -515,6 +561,7 @@ mod tests {
         );
         assert!(load(&path, &work(), &Sources::current(), 130).is_err());
     }
+
     #[test]
     fn journal_recovery_preserves_uncommitted_partial_record() {
         let dir = Directory::new();
@@ -533,6 +580,7 @@ mod tests {
                 .expect("valid fixture in journal_recovery_preserves_uncommitted_partial_record"),
             b"committed\n"
         );
+
         let backups: Vec<_> = fs::read_dir(&dir.0)
             .expect("valid fixture in journal_recovery_preserves_uncommitted_partial_record")
             .map(|e| {
@@ -549,6 +597,7 @@ mod tests {
         );
         assert!(recover_tail(&mut file, 11, &dir.0).is_err());
     }
+
     #[test]
     fn dataset_lock_excludes_another_writer() {
         let dir = Directory::new();
@@ -569,6 +618,7 @@ mod tests {
             .try_lock()
             .expect("valid fixture in dataset_lock_excludes_another_writer");
     }
+
     #[test]
     fn engine_source_recheck_is_explicit_and_keeps_model_guards() {
         let dir = Directory::new();
@@ -588,6 +638,7 @@ mod tests {
             git_head: None,
             git_dirty: None,
         };
+
         let write = |manifest: &Manifest| {
             fs::write(
                 dir.0.join("manifest.json"),
@@ -597,6 +648,7 @@ mod tests {
             )
             .expect("valid fixture in engine_source_recheck_is_explicit_and_keeps_model_guards")
         };
+
         write(&manifest);
         let prover = Prover::new()
             .expect("valid fixture in engine_source_recheck_is_explicit_and_keeps_model_guards");

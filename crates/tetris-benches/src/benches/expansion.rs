@@ -50,6 +50,7 @@ fn expand(input: &[fixtures::AtlasFixture], output: &mut [Successor]) -> usize {
             if bag.empty() {
                 bag.fill();
             }
+
             let piece_index = piece.index();
             for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
                 let mut board = parent.board;
@@ -65,6 +66,7 @@ fn expand(input: &[fixtures::AtlasFixture], output: &mut [Successor]) -> usize {
             }
         }
     }
+
     count
 }
 
@@ -92,6 +94,7 @@ fn successor_digest(output: &[Successor]) -> u64 {
             digest = (digest ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
         }
     }
+
     digest
 }
 
@@ -106,6 +109,7 @@ type InternMap = HashMap<
 
 fn intern(output: &[Successor], map: &mut InternMap, ids: &mut [u32]) {
     assert_eq!(output.len(), ids.len());
+
     // Include clearing retained storage and interning; exclude allocation.
     map.clear();
     for (successor, id) in output.iter().zip(ids) {
@@ -129,6 +133,7 @@ tetris_bench! {
         let mut output = successor_storage(&input);
         let count = expand(&input, &mut output);
         assert_eq!(count, output.len());
+
         // Freeze output semantics across baseline and optimized binaries before timing.
         assert_eq!(successor_digest(&output), 0xed4b_7099_977a_68f8);
         group.bench_with_input(
@@ -154,6 +159,7 @@ tetris_bench! {
                 });
             },
         );
+
         group.finish();
     }
 }
@@ -174,6 +180,7 @@ tetris_bench! {
                         key.hash(&mut hasher);
                         *out = hasher.finish();
                     }
+
                     black_box(&hashes);
                 });
             },
@@ -182,6 +189,7 @@ tetris_bench! {
         let (map, queries) = fixtures::state_lookup(&keys);
         let mut output = vec![None; queries.len()];
         group.throughput(Throughput::Elements(queries.len() as u64));
+
         group.bench_with_input(
             BenchmarkId::new("lookup_fixed", queries.len()),
             &queries,
@@ -191,10 +199,12 @@ tetris_bench! {
                     for (key, out) in black_box(queries).iter().zip(&mut output) {
                         *out = map.get(key).copied();
                     }
+
                     black_box(&output);
                 });
             },
         );
+
         group.finish();
     }
 }
@@ -215,9 +225,11 @@ mod tests {
         let mut other_board = a;
         other_board.board.set_bit(0, 19);
         assert_ne!(a.board, other_board.board);
+
         let mut other_bag = a;
         other_bag.bag.remove(a.bag.iter_pieces().next().expect("fixture collection must contain an element in interning_preserves_keys_loss_markers_and_resets_ids"));
         assert_ne!(a.bag, other_bag.bag);
+
         let topout = fixtures::placement_boundaries()
             .into_iter()
             .find(|f| f.name == "topout")
@@ -226,16 +238,19 @@ mod tests {
         lost.board = topout.input.board;
         lost.result = lost.board.apply_piece_placement(topout.input.placement);
         assert!(lost.result.is_lost);
+
         let input = [a, a, other_metadata, other_board, other_bag, lost, lost];
         let mut map = InternMap::default();
         let mut ids = [0; 7];
         intern(&input, &mut map, &mut ids);
         assert_eq!(ids, [0, 0, 0, 1, 2, u32::MAX, u32::MAX]);
         assert_eq!(map.len(), 3);
+
         for (key, id) in &map {
             let source = input[ids.iter().position(|value| value == id).expect("fixture must contain the requested identifier in interning_preserves_keys_loss_markers_and_resets_ids")];
             assert_eq!(*key, (source.board, source.bag));
         }
+
         // Reuse must discard old keys and restart numbering, including after all-lost input.
         intern(&[lost, lost], &mut map, &mut ids[..2]);
         assert_eq!(ids[..2], [u32::MAX; 2]);
@@ -250,24 +265,29 @@ mod tests {
         let input = fixtures::atlas_parents();
         assert_eq!(input, fixtures::atlas_parents());
         assert_eq!(input.len(), 128);
+
         for size in 1..=7 {
             assert!(input.iter().any(|p| p.bag.count() == size));
         }
+
         let mut output = successor_storage(&input);
         let count = expand(&input, &mut output);
         assert_eq!(count, output.len());
+
         let mut reference = Vec::new();
         for parent in &input {
             for piece in TetrisPiece::all() {
                 if !parent.bag.contains(piece) {
                     continue;
                 }
+
                 let mask = u8::from(parent.bag) & !piece.mask();
                 let bag = if mask == 0 {
                     tetris_game::TetrisPieceBagState::full()
                 } else {
                     TetrisPieceBagState::try_from(mask).expect("valid bag mask")
                 };
+
                 for &placement in <TetrisPiecePlacement<10>>::all_from_piece(piece) {
                     let mut board = parent.board;
                     let result = board.apply_piece_placement(placement);
@@ -281,7 +301,9 @@ mod tests {
                 }
             }
         }
+
         assert_eq!(output, reference);
+
         let digest = successor_digest(&output);
         println!(
             "atlas_successors={} atlas_digest={digest:016x}",

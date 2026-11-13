@@ -1,4 +1,5 @@
 //! Separate narrow-board codec coverage with its own Criterion collection.
+
 use crate::fixtures::codec::SixColumnTetris;
 use criterion::Criterion;
 

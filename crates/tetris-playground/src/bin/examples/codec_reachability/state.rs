@@ -27,6 +27,7 @@ pub struct Workload {
     pub controls: bool,
     pub watch: usize,
 }
+
 impl Workload {
     pub fn validate(&self) -> Result<()> {
         ensure!(
@@ -66,6 +67,7 @@ impl Workload {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Rng(pub u64);
+
 impl Rng {
     pub fn next(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9e3779b97f4a7c15);
@@ -89,6 +91,7 @@ pub struct PlayTotals {
     pub stopped: u64,
     pub max_holes: u32,
 }
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Totals {
@@ -105,6 +108,7 @@ pub struct Totals {
     pub strict: PlayTotals,
     pub relaxed: PlayTotals,
 }
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Header {
@@ -118,6 +122,7 @@ pub struct Bits {
     pub len: u64,
     pub words: Vec<AtomicU64>,
 }
+
 impl Bits {
     pub fn new(len: u64) -> Result<Self> {
         let n = usize::try_from(len.div_ceil(64))?;
@@ -126,6 +131,7 @@ impl Bits {
         words.resize_with(n, || AtomicU64::new(0));
         Ok(Self { len, words })
     }
+
     pub fn contains(&self, id: u64) -> bool {
         assert!(id < self.len);
         self.words[usize::try_from(id / 64).expect("bit index fits the allocated word count")]
@@ -133,6 +139,7 @@ impl Bits {
             & (1 << (id % 64))
             != 0
     }
+
     pub fn mark(&self, id: u64) -> bool {
         assert!(id < self.len);
         self.words[usize::try_from(id / 64).expect("bit index fits the allocated word count")]
@@ -140,26 +147,31 @@ impl Bits {
             & (1 << (id % 64))
             == 0
     }
+
     pub fn count(&self) -> u64 {
         self.words
             .iter()
             .map(|w| u64::from(w.load(Ordering::Relaxed).count_ones()))
             .sum()
     }
+
     pub fn validate_padding(&self) -> Result<()> {
         if !self.len.is_multiple_of(64) {
             let last = self.words.last().map_or(0, |w| w.load(Ordering::Relaxed));
             ensure!(last >> (self.len % 64) == 0, "nonzero bitmap padding");
         }
+
         Ok(())
     }
 }
 
 pub struct State {
     pub header: Header,
+
     // Incoming geometry hits, strict witnesses, relaxed witnesses, proved impossible.
     pub bits: [Bits; 4],
 }
+
 impl State {
     pub fn new(workload: Workload, count: u64) -> Result<Self> {
         let seed = workload.seed;
@@ -168,6 +180,7 @@ impl State {
         while watch.len() < workload.watch.min(usize::try_from(count)?) {
             watch.insert(rng[3].next() % count);
         }
+
         Ok(Self {
             header: Header {
                 workload,
@@ -183,6 +196,7 @@ impl State {
             ],
         })
     }
+
     pub fn validate(&self) -> Result<()> {
         ensure!(
             self.header.watch.len()
@@ -198,9 +212,11 @@ impl State {
                 && self.header.watch.iter().all(|&id| id < self.bits[0].len),
             "invalid watchlist"
         );
+
         for bits in &self.bits {
             bits.validate_padding()?;
         }
+
         let t = &self.header.totals;
         ensure!(
             self.bits[0].count() == t.incoming_unique,
@@ -218,6 +234,7 @@ impl State {
             self.bits[3].count() == t.proved_impossible,
             "proof count mismatch"
         );
+
         for i in 0..self.bits[0].words.len() {
             let proof = self.bits[3].words[i].load(Ordering::Relaxed);
             let observed = self.bits[0].words[i].load(Ordering::Relaxed)
@@ -228,6 +245,7 @@ impl State {
                 "a proved-impossible board has been observed"
             );
         }
+
         Ok(())
     }
 }
@@ -235,6 +253,7 @@ impl State {
 pub fn holes(board: &Board) -> u32 {
     board.total_holes()
 }
+
 pub fn row(board: &Board, y: usize) -> u16 {
     board
         .as_limbs()
@@ -243,6 +262,7 @@ pub fn row(board: &Board, y: usize) -> u16 {
         .enumerate()
         .fold(0, |r, (x, c)| r | (((c >> y) & 1) as u16) << x)
 }
+
 pub fn nonempty_rows(board: &Board) -> bool {
     (0..board.height() as usize).all(|y| row(board, y) != 0)
 }
@@ -256,6 +276,7 @@ pub fn nonempty_rows(board: &Board) -> bool {
 )]
 mod tests {
     use super::*;
+
     #[test]
     fn bitmap_has_exact_membership_and_deduplicates() {
         let b =
@@ -264,11 +285,13 @@ mod tests {
             assert!(b.mark(id));
             assert!(!b.mark(id));
         }
+
         assert_eq!(b.count(), 4);
         assert!(!b.contains(128));
         b.validate_padding()
             .expect("valid fixture in bitmap_has_exact_membership_and_deduplicates");
     }
+
     #[test]
     fn concurrent_marks_count_each_board_once() {
         use rayon::prelude::*;
@@ -283,17 +306,20 @@ mod tests {
                 .map(|i| u64::from(bits.mark(i % 193)))
                 .sum()
         });
+
         assert_eq!(fresh, 193);
         assert_eq!(bits.count(), 193);
         bits.validate_padding()
             .expect("valid fixture in concurrent_marks_count_each_board_once");
     }
+
     #[test]
     fn padding_corruption_is_detected() {
         let b = Bits::new(65).expect("valid fixture in padding_corruption_is_detected");
         b.words[1].store(2, Ordering::Relaxed);
         assert!(b.validate_padding().is_err());
     }
+
     #[test]
     fn rng_zero_seed_is_not_absorbing_and_replays() {
         let mut a = Rng(0);

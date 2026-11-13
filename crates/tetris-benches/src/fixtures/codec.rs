@@ -1,4 +1,5 @@
 //! Fixed raw-board witnesses and deterministic, codec-independent legal histories.
+
 use tetris_game::{
     TetrisBoard, TetrisGameConfig, TetrisPiece, TetrisPieceBagState, TetrisPiecePlacement,
 };
@@ -32,6 +33,7 @@ where
         seed ^= seed << 17;
         seed
     };
+
     let mut board = TetrisBoard::<{ C::COLS }, { C::ROWS }>::new();
     let mut bag = C::PIECE_SET;
     let mut rows = vec![[0; R]];
@@ -39,15 +41,19 @@ where
         if rows.len() == SAMPLES {
             break;
         }
+
         if bag.empty() {
             bag = C::PIECE_SET;
         }
+
         let pieces: Vec<_> = TetrisPiece::all()
             .into_iter()
             .filter(|&p| bag.contains(p))
             .collect();
+
         let piece =
             pieces[usize::try_from(next() % pieces.len() as u64).expect("piece index fits usize")];
+
         let candidates: Vec<_> = TetrisPiecePlacement::<{ C::COLS }>::ALL_PLACEMENTS
             .iter()
             .filter(|p| p.piece == piece)
@@ -60,14 +66,17 @@ where
                     .then_some(candidate)
             })
             .collect();
+
         if candidates.is_empty() {
             board = TetrisBoard::new();
             bag = C::PIECE_SET;
             continue;
         }
+
         board = candidates
             [usize::try_from(next() % candidates.len() as u64).expect("fixture index fits usize")];
         bag.remove(piece);
+
         rows.push(std::array::from_fn(|y| {
             board
                 .as_limbs()
@@ -78,6 +87,7 @@ where
                 })
         }));
     }
+
     assert_eq!(
         rows.len(),
         SAMPLES,

@@ -1,4 +1,5 @@
 //! Deterministic bit, matrix and heap inputs.
+
 use super::{NUM_ELEMS, SEED};
 use rand::{RngExt, SeedableRng, rngs::SmallRng};
 

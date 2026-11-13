@@ -11,6 +11,7 @@
 //! counts, metadata offsets and column descriptions.
 //!
 //! No board catalog or excluded-ID list is retained.
+
 use tetris_macros::inline_conditioned;
 
 /// Powers for height-alphabet sizes up to seven and suffix lengths up to ten.
@@ -26,6 +27,7 @@ const POWERS: [[u32; 11]; 8] = {
         }
         base += 1;
     }
+
     powers
 };
 
@@ -34,6 +36,7 @@ const POWERS: [[u32; 11]; 8] = {
 const fn make_columns<const R: usize, const N: usize>() -> [u8; N] {
     assert!(R >= 4 && R <= 6, "column height must be 4..=6");
     assert!(N == 1 << R, "column table must cover every R-bit mask");
+
     let mut out = [0; N];
     let mut column = 0;
     while column < N {
@@ -48,6 +51,7 @@ const fn make_columns<const R: usize, const N: usize>() -> [u8; N] {
             } else {
                 (((1u32 << height) - 1) ^ bits).trailing_zeros() + 1
             };
+
             assert!(
                 height < 8 && hole_code < 8,
                 "column fields must fit three bits"
@@ -60,6 +64,7 @@ const fn make_columns<const R: usize, const N: usize>() -> [u8; N] {
         };
         column += 1;
     }
+
     out
 }
 
@@ -112,14 +117,17 @@ impl Prefix {
 const fn words(n: usize, lo: usize, hi: usize, parity: u8) -> i64 {
     debug_assert!(n <= 10, "suffix length exceeds the ten-column domain");
     debug_assert!(parity <= 1, "parity must be a bit");
+
     if lo > hi {
         return (n == 0 && parity == 0) as i64;
     }
+
     let size = hi - lo + 1;
     debug_assert!(
         size < POWERS.len(),
         "height alphabet exceeds the power table"
     );
+
     // Odd-sized alphabets and zero-length words differ by one between parities.
     let extra = ((size & 1) | (n == 0) as usize) as i64;
     let imbalance_power = extra - 2 * (extra & (lo & n & 1) as i64);
@@ -146,6 +154,7 @@ const fn one_count<const R: usize>(p: Prefix, n: usize, y: usize) -> u64 {
     let need_min = p.min > limit;
     let need_max = p.max <= y;
     let mut count = words(n, 0, R, p.parity);
+
     if need_min {
         count -= words(n, limit + 1, R, p.parity);
     }
@@ -155,6 +164,7 @@ const fn one_count<const R: usize>(p: Prefix, n: usize, y: usize) -> u64 {
     if need_min && need_max {
         count += words(n, limit + 1, y, p.parity);
     }
+
     assert!(count >= 0);
     count as u64
 }
@@ -199,6 +209,7 @@ impl Bad {
         if !self.possible {
             return self;
         }
+
         if h == R {
             if self.prev {
                 self.possible = false;
@@ -211,6 +222,7 @@ impl Bad {
         } else {
             self.possible = false;
         }
+
         self.parity ^= h as u8 & 1;
         self
     }
@@ -240,6 +252,7 @@ const INDEPENDENT: [[[i32; 11]; 2]; 7] = {
         }
         low_index += 1;
     }
+
     out
 };
 
@@ -255,6 +268,7 @@ const fn independent(n: usize, low: i64, cap: i64) -> i64 {
         cap == -1 || cap == 0 || cap == 1,
         "cap weight must be -1, 0 or 1"
     );
+
     if cap == 0 {
         let power = POWERS[low.unsigned_abs() as usize][n] as i64;
         if low < 0 && n & 1 != 0 { -power } else { power }
@@ -268,6 +282,7 @@ const fn independent(n: usize, low: i64, cap: i64) -> i64 {
 const fn weighted(position: usize, prev: bool, hole_col: usize, low: i64, cap: i64) -> i64 {
     debug_assert!(position <= 10, "suffix position exceeds ten columns");
     debug_assert!(hole_col < 10, "hole column exceeds the board width");
+
     let n = 10 - position;
     if cap == 0 {
         return if hole_col < position {
@@ -278,6 +293,7 @@ const fn weighted(position: usize, prev: bool, hole_col: usize, low: i64, cap: i
             independent(n - 1, low, 0)
         };
     }
+
     if hole_col < position {
         if !prev || n == 0 {
             independent(n, low, cap)
@@ -296,6 +312,7 @@ const fn weighted(position: usize, prev: bool, hole_col: usize, low: i64, cap: i
         } else {
             low * low * independent(left - 2, low, cap)
         };
+
         let b = if right == 0 {
             1
         } else {
@@ -317,6 +334,7 @@ const fn bad_count<const R: usize>(
     if height != R || y + 4 < R || y == 0 || !state.possible {
         return 0;
     }
+
     let mut values = [0i64; 2];
     let mut sign = 0;
     while sign < 2 {
@@ -325,6 +343,7 @@ const fn bad_count<const R: usize>(
         } else {
             -1
         };
+
         let mut zero_free = 0;
         while zero_free < 2 {
             let low = if sign == 0 {
@@ -332,10 +351,12 @@ const fn bad_count<const R: usize>(
             } else {
                 (if y.is_multiple_of(2) { 1 } else { 0 }) - zero_free as i64
             };
+
             let mut n = weighted(position, state.prev, hole_col, low, cap);
             if !state.cap {
                 n -= weighted(position, state.prev, hole_col, low, 0);
             }
+
             if zero_free == 0 {
                 values[sign] += n;
             } else if !state.zero {
@@ -345,6 +366,7 @@ const fn bad_count<const R: usize>(
         }
         sign += 1;
     }
+
     let n = values[0]
         + if ((R - 1) as u8 ^ state.parity) & 1 == 0 {
             values[1]
@@ -362,6 +384,7 @@ const fn bucket<const R: usize>(height: usize, y: usize, hole_col: usize) -> u64
         parity: ((height - 1) & 1) as u8,
         ..Prefix::empty()
     };
+
     let total = one_count::<R>(p, 9, y);
     let excluded = bad_count::<R>(height, y, hole_col, 0, Bad::empty());
     assert!(
@@ -379,6 +402,7 @@ const fn marked(n: usize, low: i64, cap: i64) -> i64 {
     if n == 0 {
         return 0;
     }
+
     let (mut a, mut b, mut da, mut db) = (1, low + cap, 0, 1);
     let mut i = 2;
     while i <= n {
@@ -390,6 +414,7 @@ const fn marked(n: usize, low: i64, cap: i64) -> i64 {
         db = derivative;
         i += 1;
     }
+
     db
 }
 
@@ -400,10 +425,12 @@ const fn group<const R: usize>(height: usize, y: usize) -> u64 {
         parity: ((height - 1) & 1) as u8,
         ..Prefix::empty()
     };
+
     let base = 10 * one_count::<R>(p, 9, y);
     if height != R || y + 4 < R || y == 0 {
         return base;
     }
+
     let mut value = [0i64; 2];
     let mut sign = 0;
     while sign < 2 {
@@ -412,6 +439,7 @@ const fn group<const R: usize>(height: usize, y: usize) -> u64 {
         } else {
             -1
         };
+
         let mut positive = 0;
         while positive < 2 {
             let low = if sign == 0 {
@@ -419,12 +447,14 @@ const fn group<const R: usize>(height: usize, y: usize) -> u64 {
             } else {
                 (if y.is_multiple_of(2) { 1 } else { 0 }) - positive as i64
             };
+
             let n = marked(10, low, cap) - 10 * low.pow(9);
             value[sign] += if positive == 0 { n } else { -n };
             positive += 1;
         }
         sign += 1;
     }
+
     let removed = value[0]
         + if (R - 1).is_multiple_of(2) {
             value[1]
@@ -432,6 +462,7 @@ const fn group<const R: usize>(height: usize, y: usize) -> u64 {
             -value[1]
         };
     assert!(removed >= 0 && removed % 2 == 0);
+
     let excluded = (removed / 2) as u64;
     assert!(excluded <= base, "excluded group count exceeds its carrier");
     base - excluded
@@ -445,6 +476,7 @@ const fn make_metadata<const R: usize, const N: usize>() -> [u32; N] {
         N == 1 + 10 * R * (R - 1) / 2,
         "metadata table length is inconsistent"
     );
+
     let mut out = [0; N];
     let mut offset = solid_count::<R>(Prefix::empty(), 10);
     assert!(offset <= u32::MAX as u64);
@@ -472,6 +504,7 @@ const fn make_metadata<const R: usize, const N: usize>() -> [u32; N] {
         }
         height += 1;
     }
+
     assert!(index == N && offset == count::<R>());
     out
 }
@@ -500,6 +533,7 @@ const fn metadata_before<const R: usize>(height: usize, y: usize, hole_col: usiz
     );
     debug_assert!(y < height - 1, "hole must be below the top cell");
     debug_assert!(hole_col < 10, "hole column exceeds the board width");
+
     let group = (height - 1) * (height - 2) / 2 + y;
     metadata::<R>()[10 * group + hole_col] as u64
 }
@@ -508,6 +542,7 @@ const fn metadata_before<const R: usize>(height: usize, y: usize, hole_col: usiz
 #[inline_conditioned]
 const fn count<const R: usize>() -> u64 {
     assert!(R >= 4 && R <= 6);
+
     let mut total = solid_count::<R>(Prefix::empty(), 10);
     let mut h = 2;
     while h <= R {
@@ -518,6 +553,7 @@ const fn count<const R: usize>() -> u64 {
         }
         h += 1;
     }
+
     total
 }
 
@@ -532,6 +568,7 @@ fn suffix_rank<const R: usize>(heights: &[usize; 10], start: usize, skip: usize)
         heights.iter().all(|&height| height <= R),
         "column exceeds the cap"
     );
+
     let mut raw = 0;
     for (x, &h) in heights.iter().enumerate().skip(start) {
         if x != skip {
@@ -555,6 +592,7 @@ fn suffix_select<const R: usize>(
         "invalid suffix bounds or skip sentinel"
     );
     debug_assert!(parity <= 1, "parity must be a bit");
+
     let mut raw = 2 * id
         + if R.is_multiple_of(2) {
             u64::from(parity)
@@ -567,17 +605,22 @@ fn suffix_select<const R: usize>(
         if x == skip {
             continue;
         }
+
         if last == 10 {
             last = x;
         }
+
         let h = (raw % (R + 1) as u64) as usize;
         raw /= (R + 1) as u64;
         actual ^= h as u8 & 1;
         cols[x] = (1 << h) - 1;
     }
+
     assert_eq!(raw, 0);
+
     if actual != parity {
         assert!(!R.is_multiple_of(2) && last != 10);
+
         let h = (32 - cols[last].leading_zeros()) as usize;
         cols[last] = (1 << (h + 1)) - 1;
     }
@@ -608,6 +651,7 @@ impl<const R: usize> ArithmeticOneHole<R> {
         if code >> (R * 10) != 0 {
             return None;
         }
+
         let mut heights = [0usize; 10];
         let mut hole = None;
         let mut x = 0;
@@ -617,6 +661,7 @@ impl<const R: usize> ArithmeticOneHole<R> {
             if description & 0x80 != 0 {
                 return None;
             }
+
             let h = usize::from(description & 7);
             heights[x] = h;
             let hole_code = description >> 3;
@@ -628,6 +673,7 @@ impl<const R: usize> ArithmeticOneHole<R> {
             }
             x += 1;
         }
+
         if let Some((height, y, hole_col)) = hole {
             let mut validity = Prefix {
                 parity: ((height - 1) & 1) as u8,
@@ -642,13 +688,16 @@ impl<const R: usize> ArithmeticOneHole<R> {
                     family = family.add::<R>(column_height, y);
                 }
             }
+
             let limit = usize::from(y == 0);
             if validity.parity != 0 || validity.min > limit || validity.max <= y {
                 return None;
             }
+
             if height == R && y + 4 >= R && family.possible && family.cap && family.zero {
                 return None;
             }
+
             let mut id = metadata_before::<R>(height, y, hole_col);
             let mut p = Prefix {
                 parity: ((height - 1) & 1) as u8,
@@ -662,10 +711,12 @@ impl<const R: usize> ArithmeticOneHole<R> {
                 {
                     return Some(id + suffix_rank::<R>(&heights, x, hole_col));
                 }
+
                 if x == hole_col {
                     bad = bad.hole();
                     continue;
                 }
+
                 let remaining = 9 - x - usize::from(hole_col > x);
                 for h in 0..heights[x] {
                     let q = p.add(h);
@@ -681,6 +732,7 @@ impl<const R: usize> ArithmeticOneHole<R> {
                 p = p.add(heights[x]);
                 bad = bad.add::<R>(heights[x], y);
             }
+
             Some(id)
         } else {
             let mut raw = 0;
@@ -698,9 +750,11 @@ impl<const R: usize> ArithmeticOneHole<R> {
                     }
                 }
             }
+
             if first_zero == 10 || parity != 0 {
                 return None;
             }
+
             let excluded = positive_prefix * (R as u64).pow((10 - first_zero) as u32);
             Some(raw / 2 - excluded.div_ceil(2))
         }
@@ -712,6 +766,7 @@ impl<const R: usize> ArithmeticOneHole<R> {
         if id >= Self::BOARD_COUNT {
             return None;
         }
+
         let zeros = solid_count::<R>(Prefix::empty(), 10);
         let mut cols = [0u32; 10];
         if id < zeros {
@@ -722,6 +777,7 @@ impl<const R: usize> ArithmeticOneHole<R> {
                     id = 0;
                     break;
                 }
+
                 let mut found = false;
                 for h in 0..=R {
                     let n = solid_count::<R>(p.add(h), 9 - x);
@@ -734,16 +790,19 @@ impl<const R: usize> ArithmeticOneHole<R> {
                         break;
                     }
                 }
+
                 assert!(found);
             }
         } else {
             let offsets = metadata::<R>();
+
             // The last equal offset skips empty buckets; BOARD_COUNT is the upper sentinel.
             let split = offsets.partition_point(|&offset| u64::from(offset) <= id);
             debug_assert!(
                 split > 0 && split < offsets.len(),
                 "ID must fall before the sentinel"
             );
+
             let bucket_index = split - 1;
             debug_assert!(
                 u64::from(offsets[bucket_index]) <= id && id < u64::from(offsets[bucket_index + 1]),
@@ -762,6 +821,7 @@ impl<const R: usize> ArithmeticOneHole<R> {
                 parity: ((height - 1) & 1) as u8,
                 ..Prefix::empty()
             };
+
             let mut bad = Bad::empty();
             for x in 0..10 {
                 if p.min <= if y == 0 { 1 } else { 0 }
@@ -772,11 +832,13 @@ impl<const R: usize> ArithmeticOneHole<R> {
                     id = 0;
                     break;
                 }
+
                 if x == hole_col {
                     cols[x] = ((1 << height) - 1) ^ (1 << y);
                     bad = bad.hole();
                     continue;
                 }
+
                 let remaining = 9 - x - usize::from(hole_col > x);
                 let mut found = false;
                 for h in 0..=R {
@@ -788,6 +850,7 @@ impl<const R: usize> ArithmeticOneHole<R> {
                         excluded <= total,
                         "excluded suffix count exceeds its carrier"
                     );
+
                     let n = total - excluded;
                     if id >= n {
                         id -= n;
@@ -799,9 +862,11 @@ impl<const R: usize> ArithmeticOneHole<R> {
                         break;
                     }
                 }
+
                 assert!(found);
             }
         }
+
         assert_eq!(id, 0);
         Some(cols.iter().fold(0, |v, &c| (v << R) | u64::from(c)))
     }
@@ -894,6 +959,7 @@ mod tests {
             if interval[0] == interval[1] {
                 continue;
             }
+
             for id in [u64::from(interval[0]), u64::from(interval[1]) - 1] {
                 let code = codec.select(id).expect("metadata boundary ID");
                 assert_eq!(codec.rank(code), Some(id));
@@ -918,6 +984,7 @@ mod tests {
                     height = y + 1;
                 }
             }
+
             let mut missing = 0;
             let mut hole_code = 0;
             for y in 0..height {
@@ -926,8 +993,10 @@ mod tests {
                     hole_code = y + 1;
                 }
             }
+
             let description = columns::<R>()[column];
             assert_eq!(description & 0x80 != 0, missing > 1);
+
             if missing <= 1 {
                 assert_eq!(usize::from(description & 7), height);
                 assert_eq!(usize::from(description >> 3), hole_code);
@@ -957,14 +1026,17 @@ mod tests {
                                 if markers & (markers << 1) != 0 || (prev && markers & 1 != 0) {
                                     continue;
                                 }
+
                                 let has_hole = hole_col >= position;
                                 if has_hole && markers & (1 << (hole_col - position)) == 0 {
                                     continue;
                                 }
+
                                 let caps = markers.count_ones();
                                 expected +=
                                     low.pow(n as u32 - caps) * cap.pow(caps - u32::from(has_hole));
                             }
+
                             assert_eq!(
                                 weighted(position, prev, hole_col, low, cap),
                                 expected,
@@ -991,6 +1063,7 @@ mod tests {
                             "n={n} lo={lo} hi={hi} parity={parity}"
                         );
                     }
+
                     let mut next = [0; 2];
                     for height in lo..=hi {
                         next[height & 1] += expected[0];
@@ -1038,16 +1111,19 @@ mod tests {
         })) {
             let code = codec.select(id).expect("valid fixture in check");
             assert_eq!(codec.rank(code), Some(id));
+
             let rows = std::array::from_fn(|y| {
                 (0..10).fold(0u16, |v, x| {
                     v | ((((code >> ((9 - x) * R + y)) & 1) as u16) << x)
                 })
             });
+
             assert!(
                 crate::board::tests::admitted::<StandardTetris, R, 1>(&rows),
                 "R={R} id={id} code={code:x}"
             );
         }
+
         assert_eq!(codec.select(ArithmeticOneHole::<R>::BOARD_COUNT), None);
         assert_eq!(codec.rank(1u64 << (R * 10)), None);
         assert_eq!(std::mem::size_of_val(&codec), 0);
@@ -1080,6 +1156,7 @@ mod tests {
             seed ^= seed << 17;
             seed
         };
+
         for sample in 0usize..32 {
             let j = random() as usize % 10;
             let height = if sample.is_multiple_of(2) {
@@ -1087,6 +1164,7 @@ mod tests {
             } else {
                 2 + random() as usize % (R - 1)
             };
+
             let y = random() as usize % (height - 1);
             let mut cols = [0u32; 10];
             cols[j] = ((1 << height) - 1) ^ (1 << y);
@@ -1094,12 +1172,14 @@ mod tests {
                 parity: ((height - 1) & 1) as u8,
                 ..Prefix::empty()
             };
+
             let mut bad = Bad::empty();
             for (x, col) in cols.iter_mut().enumerate().take(7) {
                 if x == j {
                     bad = bad.hole();
                     continue;
                 }
+
                 let h = if sample.is_multiple_of(2) {
                     random() as usize % (y + 1)
                 } else {
@@ -1109,6 +1189,7 @@ mod tests {
                 p = p.add(h);
                 bad = bad.add::<R>(h, y);
             }
+
             let n = 3 - usize::from(j >= 7);
             let actual = one_count::<R>(p, n, y) - bad_count::<R>(height, y, j, 7, bad);
             let mut expected = 0;
@@ -1118,15 +1199,18 @@ mod tests {
                     if x == j {
                         continue;
                     }
+
                     let h = digits % (R + 1);
                     digits /= R + 1;
                     *col = (1 << h) - 1;
                 }
+
                 let rows = std::array::from_fn(|y| {
                     cols.iter()
                         .enumerate()
                         .fold(0u16, |v, (x, c)| v | (((c >> y) & 1) as u16) << x)
                 });
+
                 let mut cap_mask = 0u16;
                 let mut family = height == R && y + 4 >= R;
                 let mut other = false;
@@ -1146,6 +1230,7 @@ mod tests {
                     crate::board::tests::admitted::<StandardTetris, R, 1>(&rows) && !family,
                 );
             }
+
             assert_eq!(
                 actual, expected,
                 "R={R} sample={sample} j={j} h={height} y={y}"
@@ -1169,14 +1254,18 @@ mod tests {
                 let mut total = 0;
                 for j in 0..10 {
                     assert_eq!(metadata_before::<R>(height, y, j), offset);
+
                     let n = bucket::<R>(height, y, j);
                     total += n;
                     offset += n;
                 }
+
                 assert_eq!(total, group::<R>(height, y));
             }
         }
+
         assert_eq!(offset, ArithmeticOneHole::<R>::BOARD_COUNT);
+
         for n in 0..=4 {
             for wanted in 0..=1u8 {
                 let mut next_id = 0;
@@ -1187,10 +1276,13 @@ mod tests {
                         sum ^= (digits % (R + 1) as u64) as u8 & 1;
                         digits /= (R + 1) as u64;
                     }
+
                     if sum != wanted {
                         continue;
                     }
+
                     assert_eq!(raw / 2, next_id);
+
                     let mut cols = [0; 10];
                     suffix_select::<R>(next_id, &mut cols, 10 - n as usize, 10, wanted);
                     let heights = cols.map(|c| (32 - c.leading_zeros()) as usize);
@@ -1203,6 +1295,7 @@ mod tests {
                 }
             }
         }
+
         let mut seed = 0xb04dc0deu64;
         for _ in 0..1024 {
             let heights: [usize; 10] = std::array::from_fn(|_| {
@@ -1211,6 +1304,7 @@ mod tests {
                 seed ^= seed << 17;
                 seed as usize % (R + 1)
             });
+
             let mut prefix = Prefix::empty();
             let mut expected = 0;
             for (x, &height) in heights.iter().enumerate() {
@@ -1219,6 +1313,7 @@ mod tests {
                 }
                 prefix = prefix.add(height);
             }
+
             let code = heights.iter().fold(0u64, |v, &h| (v << R) | ((1 << h) - 1));
             if solid_count::<R>(prefix, 0) == 1 {
                 assert_eq!(codec.rank(code), Some(expected));
@@ -1246,12 +1341,16 @@ mod tests {
                 .enumerate()
                 .fold(0u16, |v, (x, c)| v | (((c >> y) & 1) as u16) << x)
         });
+
         assert!(crate::board::tests::admitted::<StandardTetris, 4, 1>(&rows));
+
         let codec = ArithmeticOneHole::<4>::new();
         let pack = |c: [u32; 10]| c.iter().fold(0u64, |v, &c| (v << 4) | u64::from(c));
         assert_eq!(codec.rank(pack(columns)), None);
+
         let before = [11, 0, 15, 0, 0, 0, 0, 0, 1, 0];
         assert_eq!(codec.rank(pack(before)), None);
+
         let action = *TetrisPiecePlacement::<10>::ALL_PLACEMENTS
             .iter()
             .find(|p| p.piece == TetrisPiece::O && usize::from(p.orientation.column.inner()) == 4)
@@ -1270,6 +1369,7 @@ mod tests {
             if usize::from(action.orientation.column.inner()) != 3 {
                 continue;
             }
+
             let width = usize::from(action.piece.width(action.orientation.rotation));
             let mut shape =
                 TetrisBoard::<{ StandardTetris::COLS }, { StandardTetris::ROWS }>::new();
@@ -1295,10 +1395,12 @@ mod tests {
                             holes += 1;
                             ((1 << R) - 1) ^ (1 << y)
                         };
+
                         if digit > y {
                             caps |= 1 << x;
                         }
                     }
+
                     if holes > 1 || caps & (caps << 1) != 0 {
                         continue;
                     }
@@ -1314,6 +1416,7 @@ mod tests {
                         if !(3..3 + width).all(|x| cols[x] & cells[x] == cells[x]) {
                             continue;
                         }
+
                         let before = std::array::from_fn(|x| cols[x] & !cells[x]);
                         let mut replay = TetrisBoard::<
                             { StandardTetris::COLS },
@@ -1323,14 +1426,17 @@ mod tests {
                         if result.lines_cleared != 0 || replay != target {
                             continue;
                         }
+
                         assert_eq!(
                             before[hole], cols[hole],
                             "hole fragment removed R={R} y={y} action={action:?}"
                         );
+
                         for (x, &column) in before.iter().enumerate().skip(3).take(width) {
                             if x == hole {
                                 continue;
                             }
+
                             let h = (32 - column.leading_zeros()) as usize;
                             assert!(
                                 h <= y || h == R,
@@ -1343,6 +1449,7 @@ mod tests {
                 }
             }
         }
+
         assert!(checked > 0);
     }
 

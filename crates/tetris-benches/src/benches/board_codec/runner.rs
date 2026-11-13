@@ -1,4 +1,5 @@
 //! Shared public-API kernels for the Standard Tetris and narrow-board collections.
+
 use crate::fixtures::codec::SAMPLES;
 use criterion::{Criterion, Throughput, black_box};
 use tetris_codec::{BoardCodec, GameDimensions, IdConfig};
@@ -17,10 +18,12 @@ pub(super) fn bench_config<C: TetrisGameConfig, const R: usize, const H: usize>(
 {
     let codec = BoardCodec::<C, R, H>::new();
     assert_eq!(rows.len(), SAMPLES);
+
     let ids: Vec<_> = rows
         .iter()
         .map(|r| codec.id_rows(r).expect("legal fixture encodes"))
         .collect();
+
     let mut boards = Vec::with_capacity(rows.len());
     for row in rows {
         let mut columns = [0u32; C::COLS];
@@ -29,13 +32,16 @@ pub(super) fn bench_config<C: TetrisGameConfig, const R: usize, const H: usize>(
                 *col |= u32::from((mask >> x) & 1) << y;
             }
         }
+
         boards.push(TetrisBoard::<{ C::COLS }, { C::ROWS }>::from_limbs(columns));
     }
+
     for ((row, board), &id) in rows.iter().zip(&boards).zip(&ids) {
         assert_eq!(codec.id(board), Ok(id));
         assert_eq!(codec.board_from_id(id), Ok(*board));
         assert_eq!(codec.rows_from_id(id), Ok(*row));
     }
+
     let fixture_hash = rows
         .iter()
         .flatten()
@@ -51,8 +57,10 @@ pub(super) fn bench_config<C: TetrisGameConfig, const R: usize, const H: usize>(
         BoardCodec::<C, R, H>::ID_BYTES,
         codec.table_payload_bytes()
     );
+
     let mut group = c.benchmark_group(format!("{collection}/{name}"));
     group.throughput(Throughput::Elements(SAMPLES as u64));
+
     group.bench_function("encode_rows_256", |b| {
         b.iter(|| {
             for row in rows {
@@ -64,6 +72,7 @@ pub(super) fn bench_config<C: TetrisGameConfig, const R: usize, const H: usize>(
             }
         })
     });
+
     group.bench_function("encode_native_256", |b| {
         b.iter(|| {
             for board in &boards {
@@ -75,6 +84,7 @@ pub(super) fn bench_config<C: TetrisGameConfig, const R: usize, const H: usize>(
             }
         })
     });
+
     group.bench_function("decode_rows_256", |b| {
         b.iter(|| {
             for &id in &ids {
@@ -86,6 +96,7 @@ pub(super) fn bench_config<C: TetrisGameConfig, const R: usize, const H: usize>(
             }
         })
     });
+
     group.bench_function("decode_native_256", |b| {
         b.iter(|| {
             for &id in &ids {
@@ -97,5 +108,6 @@ pub(super) fn bench_config<C: TetrisGameConfig, const R: usize, const H: usize>(
             }
         })
     });
+
     group.finish();
 }

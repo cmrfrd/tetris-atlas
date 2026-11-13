@@ -12,6 +12,7 @@ fn placement_boundaries() -> Vec<fixtures::PlacementBoundary> {
         assert_eq!(result.lines_cleared, fixture.lines_cleared);
         assert_eq!(result.is_lost, fixture.is_lost);
     }
+
     fixtures
 }
 
@@ -24,6 +25,7 @@ fn metadata(
     let mut output = vec![0; input.len()];
     let mut group = c.benchmark_group(name);
     group.throughput(Throughput::Elements(input.len() as u64));
+
     group.bench_with_input(
         BenchmarkId::from_parameter(input.len()),
         &input,
@@ -32,10 +34,12 @@ fn metadata(
                 for (&placement, out) in black_box(input).iter().zip(&mut output) {
                     *out = operation(placement);
                 }
+
                 black_box(&output);
             });
         },
     );
+
     group.finish();
 }
 
@@ -45,15 +49,18 @@ tetris_bench! {
         for (name, input) in fixtures::board_cases() {
             let mut output = vec![false; input.len()];
             group.throughput(Throughput::Elements(input.len() as u64));
+
             group.bench_with_input(name, &input, |b, input| {
                 b.iter(|| {
                     for (board, out) in black_box(input).iter().zip(&mut output) {
                         *out = board.is_lost();
                     }
+
                     black_box(&output);
                 });
             });
         }
+
         group.finish();
     }
 }
@@ -64,15 +71,18 @@ tetris_bench! {
         for (name, input) in fixtures::board_cases() {
             let mut output = vec![0; input.len()];
             group.throughput(Throughput::Elements(input.len() as u64));
+
             group.bench_with_input(name, &input, |b, input| {
                 b.iter(|| {
                     for (board, out) in black_box(input).iter().zip(&mut output) {
                         *out = board.count();
                     }
+
                     black_box(&output);
                 });
             });
         }
+
         group.finish();
     }
 }
@@ -83,6 +93,7 @@ tetris_bench! {
         let mut output = vec![([0u32; 10], 0u32); boards.len()];
         let mut group = c.benchmark_group("engine/clear_fixed");
         group.throughput(Throughput::Elements(boards.len() as u64));
+
         group.bench_with_input(
             BenchmarkId::from_parameter(boards.len()),
             &boards,
@@ -93,10 +104,12 @@ tetris_bench! {
                         let cleared = board.clear_and_collapse_rows();
                         *out = (*board.as_limbs(), cleared);
                     }
+
                     black_box(&output);
                 });
             },
         );
+
         group.finish();
     }
 }
@@ -107,6 +120,7 @@ tetris_bench! {
         for (name, input) in fixtures::board_cases() {
             let mut output = input.clone();
             group.throughput(Throughput::Elements(input.len() as u64));
+
             group.bench_with_input(name, &input, |b, input| {
                 b.iter(|| {
                     // Include restoring inputs; reuse storage without allocating timed batches.
@@ -114,10 +128,12 @@ tetris_bench! {
                     for board in black_box(&mut output) {
                         board.clear();
                     }
+
                     black_box(&output);
                 });
             });
         }
+
         group.finish();
     }
 }
@@ -128,6 +144,7 @@ tetris_bench! {
         let mut output = vec![([0u32; 10], 0u32, false); input.len()];
         let mut group = c.benchmark_group("engine/apply_fixed");
         group.throughput(Throughput::Elements(input.len() as u64));
+
         group.bench_with_input(
             BenchmarkId::from_parameter(input.len()),
             &input,
@@ -142,10 +159,12 @@ tetris_bench! {
                             result.is_lost,
                         );
                     }
+
                     black_box(&output);
                 });
             },
         );
+
         group.finish();
     }
 }
@@ -163,15 +182,18 @@ tetris_bench! {
                 .collect::<Vec<_>>();
             let mut output = vec![TetrisBoard::<10, 20>::new(); input.len()];
             group.throughput(Throughput::Elements(input.len() as u64));
+
             group.bench_with_input(name, &input, |b, input| {
                 b.iter(|| {
                     for (cells, out) in black_box(input).iter().zip(&mut output) {
                         *out = TetrisBoard::<10, 20>::from_cell_array(*cells, Major::Row);
                     }
+
                     black_box(&output);
                 });
             });
         }
+
         group.finish();
     }
 }
@@ -189,6 +211,7 @@ tetris_bench! {
         metadata(c, "piece/height_fixed", &input, |p| {
             p.piece.height(p.orientation.rotation)
         });
+
         metadata(c, "placement/index_fixed", &input, |p| p.index());
     }
 }
@@ -216,10 +239,12 @@ tetris_bench! {
                         }
                         *out = game;
                     }
+
                     black_box(&output);
                 });
             },
         );
+
         group.finish();
     }
 }
@@ -237,6 +262,7 @@ tetris_bench! {
                 });
             });
         }
+
         group.finish();
     }
 }
@@ -251,6 +277,7 @@ where
     let mut output = vec![initial; 10_000];
     let mut group = c.benchmark_group(name);
     group.throughput(Throughput::Elements(output.len() as u64));
+
     group.bench_function("10000", |b| {
         b.iter_batched(
             || R::seed_from_u64(crate::fixtures::SEED),
@@ -258,11 +285,13 @@ where
                 for out in &mut output {
                     *out = rand::RngExt::random(&mut rng);
                 }
+
                 black_box((&output, rng));
             },
             criterion::BatchSize::SmallInput,
         );
     });
+
     group.finish();
 }
 

@@ -1,4 +1,5 @@
 //! Ten-column Standard Tetris codecs: a small height/hole grid and representative limits.
+
 use criterion::Criterion;
 use tetris_game::StandardTetris;
 

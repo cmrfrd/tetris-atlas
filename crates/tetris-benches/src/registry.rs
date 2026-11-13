@@ -75,6 +75,7 @@ mod tests {
                 .iter()
                 .all(|benchmark| !benchmark.name.ends_with("disabled_probe"))
         );
+
         let probe = benchmarks
             .iter()
             .find(|benchmark| benchmark.name == concat!(module_path!(), "::registration_probe"))

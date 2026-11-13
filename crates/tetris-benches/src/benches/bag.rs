@@ -10,6 +10,7 @@ fn encode_pieces(state: TetrisPieceBagState) -> u64 {
     for piece in state.iter_pieces() {
         encoded = (encoded << 4) | 0b1000 | piece.index() as u64;
     }
+
     encoded
 }
 
@@ -19,14 +20,17 @@ tetris_bench! {
         let mut output = vec![0; input.len()];
         let mut group = c.benchmark_group("bag_state");
         group.throughput(Throughput::Elements(input.len() as u64));
+
         group.bench_function("iter_pieces_fixed", |b| {
             b.iter(|| {
                 for (&state, out) in black_box(&input).iter().zip(&mut output) {
                     *out = encode_pieces(state);
                 }
+
                 black_box(&output);
             });
         });
+
         group.throughput(Throughput::Elements(1));
         let mut index = 0;
         group.bench_function("iter_pieces_scalar", |b| {
@@ -36,6 +40,7 @@ tetris_bench! {
                 black_box(encode_pieces(state));
             });
         });
+
         group.finish();
     }
 }
@@ -45,11 +50,13 @@ tetris_bench! {
         let mut state = fixtures::bag_stream();
         let mut group = c.benchmark_group("bag/draw_stream_consumed");
         group.throughput(Throughput::Elements(1));
+
         group.bench_with_input(BenchmarkId::from_parameter(1), &1, |b, _| {
             b.iter(|| {
                 black_box(state.draw(TetrisPieceBagState::full()));
             })
         });
+
         group.finish();
     }
 }
@@ -66,6 +73,7 @@ tetris_bench! {
                 let mut output = vec![(input[0], TetrisPiece::O); input.len()];
                 let mut group = c.benchmark_group(format!("bag/{phase}"));
                 group.throughput(Throughput::Elements(input.len() as u64));
+
                 group.bench_with_input(BenchmarkId::from_parameter(name), &input, |b, input| {
                     b.iter(|| {
                         // Snapshot copying is included; allocation and fixture construction are not.
@@ -74,9 +82,11 @@ tetris_bench! {
                             let piece = state.draw(refill);
                             *out = (state, piece);
                         }
+
                         black_box(&output);
                     });
                 });
+
                 group.finish();
             }
         }
@@ -100,10 +110,12 @@ tetris_bench! {
                         let piece = state.pop();
                         *out = (state, piece);
                     }
+
                     black_box(&popped);
                 });
             },
         );
+
         group.bench_with_input(
             BenchmarkId::new("remove_fixed", input.len()),
             &input,
@@ -113,10 +125,12 @@ tetris_bench! {
                         state.remove(piece);
                         *out = state;
                     }
+
                     black_box(&removed);
                 });
             },
         );
+
         group.bench_with_input(
             BenchmarkId::new("contains_fixed", input.len()),
             &input,
@@ -125,10 +139,12 @@ tetris_bench! {
                     for (&(state, piece), out) in black_box(input).iter().zip(&mut contains) {
                         *out = state.contains(piece);
                     }
+
                     black_box(&contains);
                 });
             },
         );
+
         group.finish();
     }
 }
@@ -137,16 +153,19 @@ tetris_bench! {
     fn bench_bag_state_pop_scalar(c: &mut Criterion) {
         let mut group = c.benchmark_group("bag_state");
         group.throughput(Throughput::Elements(1));
+
         group.bench_function("pop_scalar", |b| {
             let mut mask = 0u8;
             b.iter(|| {
                 mask = mask.wrapping_add(1) & tetris_game::TetrisPieceBagState::FULL_MASK;
                 let mut state = tetris_game::TetrisPieceBagState::try_from(black_box(mask)).expect("valid bag mask");
                 let piece = state.pop();
+
                 // Consuming each result separately prevents cross-call SIMD, unlike pop_fixed.
                 black_box((state, piece));
             });
         });
+
         group.finish();
     }
 }
@@ -157,6 +176,7 @@ tetris_bench! {
         let mut output = vec![(input[0].0, false); input.len()];
         let mut group = c.benchmark_group("bag/remove_fixed");
         group.throughput(Throughput::Elements(input.len() as u64));
+
         group.bench_with_input(BenchmarkId::from_parameter(input.len()), &input, |b, input| {
             b.iter(|| {
                 // Copy each template so removals cannot exhaust bags during warm-up.
@@ -164,9 +184,11 @@ tetris_bench! {
                     let removed = bag.remove(piece);
                     *out = (bag, removed);
                 }
+
                 black_box(&output);
             });
         });
+
         group.finish();
     }
 }
@@ -177,6 +199,7 @@ tetris_bench! {
         let mut index = 0;
         let mut group = c.benchmark_group("bag");
         group.throughput(Throughput::Elements(1));
+
         group.bench_function("count_scalar", |b| {
             b.iter(|| {
                 let bag = black_box(input[index].0);
@@ -185,6 +208,7 @@ tetris_bench! {
                 black_box(bag.count());
             });
         });
+
         group.finish();
     }
 }

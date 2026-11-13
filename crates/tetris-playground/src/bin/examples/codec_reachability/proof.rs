@@ -16,6 +16,7 @@ pub fn actions() -> Vec<TetrisPiecePlacement<COLS>> {
         })
         .collect()
 }
+
 pub fn describe(p: TetrisPiecePlacement<COLS>) -> [u8; 3] {
     [
         p.piece.index(),
@@ -48,11 +49,13 @@ pub struct Footprint {
     pub cells: Columns,
     pub height: usize,
 }
+
 pub struct Prover {
     pub actions: Vec<TetrisPiecePlacement<COLS>>,
     pub footprints: Vec<Footprint>,
     pub by_piece: [Vec<TetrisPiecePlacement<COLS>>; tetris_game::constants::NUM_TETRIS_PIECES],
 }
+
 impl Prover {
     pub fn new() -> Result<Self> {
         let actions = actions();
@@ -61,11 +64,13 @@ impl Prover {
             ROWS <= 28,
             "this proof needs room for a transient four-cell piece in u32 columns"
         );
+
         let mut footprints = Vec::new();
         for &placement in &actions {
             let mut piece = Board::new();
             piece.apply_piece_placement(placement);
             ensure!(piece.count() == 4, "proof requires four-cell tetrominoes");
+
             for y in 0..piece.height() as usize {
                 let r = row(&piece, y);
                 ensure!(
@@ -79,6 +84,7 @@ impl Prover {
                 height: piece.height() as usize,
             });
         }
+
         let by_piece = std::array::from_fn(|i| {
             actions
                 .iter()
@@ -86,25 +92,30 @@ impl Prover {
                 .filter(|p| p.piece.index() as usize == i)
                 .collect()
         });
+
         Ok(Self {
             actions,
             footprints,
             by_piece,
         })
     }
+
     pub fn eligible(&self, board: &Board) -> bool {
         if board.height() as usize != ROWS {
             return false;
         }
+
         let top = row(board, ROWS - 1);
         (top & !(top << 1)).count_ones() > 1
     }
+
     // Reference implementation. No candidate is proved by sampling absence.
     pub fn has_predecessor_reference(&self, board: &Board) -> bool {
         for footprint in &self.footprints {
             if footprint.height > ROWS {
                 continue;
             }
+
             for dy in 0..=ROWS - footprint.height {
                 let cells = footprint.cells.map(|c| c << dy);
                 if !cells
@@ -114,12 +125,14 @@ impl Prover {
                 {
                     continue;
                 }
+
                 let before = Board::from_limbs(std::array::from_fn(|x| {
                     board.as_limbs().to_owned()[x] & !cells[x]
                 }));
                 if !nonempty_rows(&before) {
                     continue;
                 }
+
                 let mut next = before;
                 let result = next.apply_piece_placement(footprint.placement);
                 if result.lines_cleared == 0 && next == *board {
@@ -127,11 +140,14 @@ impl Prover {
                 }
             }
         }
+
         false
     }
+
     pub fn impossible(&self, board: &Board) -> bool {
         self.eligible(board) && !self.has_predecessor_reference(board)
     }
+
     pub fn verify(&self, finding: &Finding) -> Result<()> {
         match finding {
             Finding::Impossible { columns, .. } => {
@@ -153,6 +169,7 @@ impl Prover {
                 ..
             } => {
                 ensure!(!actions.is_empty(), "empty witness");
+
                 let mut board = Board::new();
                 let mut bag = FULL_BAG;
                 for action in actions {
@@ -168,6 +185,7 @@ impl Prover {
                         !board.is_lost() && board.height() as usize <= ROWS,
                         "witness exceeds height cap"
                     );
+
                     if !relaxed_holes {
                         ensure!(
                             holes(&board) as usize <= MAX_HOLES,
@@ -190,6 +208,7 @@ impl Prover {
                     holes(&board) as usize <= MAX_HOLES,
                     "witness target exceeds hole cap"
                 );
+
                 if !relaxed_holes {
                     CODEC
                         .id_u64(&board)
@@ -197,6 +216,7 @@ impl Prover {
                 }
             }
         }
+
         Ok(())
     }
 }
@@ -210,6 +230,7 @@ impl Prover {
 )]
 mod tests {
     use super::*;
+
     #[test]
     fn accepts_known_impossibility_and_rejects_reachable_board() {
         let p = Prover::new()
@@ -228,10 +249,12 @@ mod tests {
             Err(tetris_codec::Error::ImpossibleBoard)
         );
         assert!(p.impossible(&bad));
+
         let mut good = Board::new();
         good.apply_piece_placement(p.actions[0]);
         assert!(!p.impossible(&good));
     }
+
     #[test]
     fn witness_checks_bag_and_raw_board_not_old_id() {
         let p =
@@ -253,6 +276,7 @@ mod tests {
         if let Finding::Witness { actions, .. } = &mut bad {
             actions.push(describe(action));
         }
+
         assert!(p.verify(&bad).is_err());
     }
 }

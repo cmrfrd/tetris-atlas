@@ -17,6 +17,7 @@ pub fn batch(state: &mut State, prover: &Prover, pool: &rayon::ThreadPool) -> Re
                 if anchor.abs_diff(other) < 2 {
                     continue;
                 }
+
                 for low in 0..3 {
                     let board = Board::from_limbs(std::array::from_fn(|x| {
                         if x == anchor {
@@ -34,6 +35,7 @@ pub fn batch(state: &mut State, prover: &Prover, pool: &rayon::ThreadPool) -> Re
             }
         }
     }
+
     // Generate the entire deterministic input sequence before parallel work.
     let parents: Vec<_> = (0..work.parents)
         .map(|_| state.header.rng[0].next() % Codec::BOARD_COUNT)
@@ -54,6 +56,7 @@ pub fn batch(state: &mut State, prover: &Prover, pool: &rayon::ThreadPool) -> Re
                         if next.is_lost() || next.height() as usize > ROWS {
                             continue;
                         }
+
                         if let Ok(id) = CODEC.id_u64(&next) {
                             ensure!(
                                 !state.bits[3].contains(id),
@@ -64,6 +67,7 @@ pub fn batch(state: &mut State, prover: &Prover, pool: &rayon::ThreadPool) -> Re
                         }
                     }
                 }
+
                 Ok((moves, hits, fresh))
             })
             .try_reduce(|| (0, 0, 0), |a, b| Ok((a.0 + b.0, a.1 + b.1, a.2 + b.2)))
@@ -72,6 +76,7 @@ pub fn batch(state: &mut State, prover: &Prover, pool: &rayon::ThreadPool) -> Re
     state.header.totals.parent_moves += counts.0;
     state.header.totals.incoming_moves += counts.1;
     state.header.totals.incoming_unique += counts.2;
+
     let strict = play(
         false,
         batch,
@@ -83,6 +88,7 @@ pub fn batch(state: &mut State, prover: &Prover, pool: &rayon::ThreadPool) -> Re
         prover,
         &state.header.watch,
     )?;
+
     let relaxed = play(
         true,
         batch,
@@ -94,9 +100,11 @@ pub fn batch(state: &mut State, prover: &Prover, pool: &rayon::ThreadPool) -> Re
         prover,
         &state.header.watch,
     )?;
+
     state.header.totals.witnesses_saved += (strict.len() + relaxed.len()) as u64;
     findings.extend(strict);
     findings.extend(relaxed);
+
     for _ in 0..work.candidates {
         let id = state.header.rng[3].next() % Codec::BOARD_COUNT;
         state.header.totals.candidates += 1;
@@ -106,9 +114,11 @@ pub fn batch(state: &mut State, prover: &Prover, pool: &rayon::ThreadPool) -> Re
         if witnessed || state.bits[3].contains(id) {
             continue;
         }
+
         let board = CODEC.board_from_u64(id)?;
         consider(state, prover, board, id, "uniform", &mut findings)?;
     }
+
     // Raw proof/witness verification is the gate before anything reaches the journal.
     for finding in &findings {
         prover.verify(finding)?;
@@ -132,6 +142,7 @@ fn consider(
         !state.bits[0].contains(id) && !state.bits[1].contains(id) && !state.bits[2].contains(id),
         "impossibility proof contradicts observations"
     );
+
     let finding = Finding::Impossible {
         batch: state.header.totals.batches,
         codec_id: id,
@@ -171,6 +182,7 @@ fn play(
             for _ in 0..rng.next() % u64::from(bag.count_ones()) {
                 piece_bits &= piece_bits - 1;
             }
+
             let piece = u8::try_from(piece_bits.trailing_zeros()).expect("piece bit index fits u8");
             choices.clear();
             for &placement in &prover.by_piece[piece as usize] {
@@ -179,16 +191,19 @@ fn play(
                 if next.is_lost() || next.height() as usize > ROWS {
                     continue;
                 }
+
                 let h = holes(&next);
                 if !relaxed && h as usize > MAX_HOLES {
                     continue;
                 }
                 choices.push((next, placement, result.lines_cleared, h));
             }
+
             if choices.is_empty() {
                 totals.stopped += 1;
                 break;
             }
+
             let pick = if relaxed && outside && !rng.next().is_multiple_of(5) {
                 let least = choices
                     .iter()
@@ -209,6 +224,7 @@ fn play(
                 usize::try_from(rng.next() % choices.len() as u64)
                     .expect("random index is bounded by successor count")
             };
+
             let (next, placement, lines, h) = choices[pick];
             board = next;
             path.push(placement);
@@ -228,6 +244,7 @@ fn play(
             } else {
                 None
             };
+
             if let Some(id) = id {
                 ensure!(
                     !impossible.contains(id),
@@ -239,11 +256,13 @@ fn play(
                 if outside {
                     totals.returns += 1;
                 }
+
                 let budget = if relaxed && !outside {
                     work.witnesses / 2
                 } else {
                     work.witnesses
                 };
+
                 if (fresh && watch.binary_search(&id).is_ok())
                     || (findings.len() < budget && (fresh || outside))
                 {
@@ -265,6 +284,7 @@ fn play(
             }
         }
     }
+
     Ok(findings)
 }
 
@@ -277,6 +297,7 @@ fn play(
 )]
 mod tests {
     use super::*;
+
     #[test]
     fn watched_targets_get_paths_even_with_zero_random_witness_budget() {
         let prover = Prover::new().expect(
@@ -303,6 +324,7 @@ mod tests {
             controls: false,
             watch: 0,
         };
+
         let seen = Bits::new(Codec::BOARD_COUNT).expect(
             "valid fixture in watched_targets_get_paths_even_with_zero_random_witness_budget",
         );
@@ -326,6 +348,7 @@ mod tests {
             "valid fixture in watched_targets_get_paths_even_with_zero_random_witness_budget",
         );
     }
+
     #[test]
     fn sampled_legal_paths_are_never_certified_impossible() {
         let prover = Prover::new()
@@ -340,6 +363,7 @@ mod tests {
             controls: false,
             watch: 0,
         };
+
         let seen = Bits::new(Codec::BOARD_COUNT)
             .expect("valid fixture in sampled_legal_paths_are_never_certified_impossible");
         let impossible = Bits::new(Codec::BOARD_COUNT)
@@ -358,6 +382,7 @@ mod tests {
             )
             .expect("valid fixture in sampled_legal_paths_are_never_certified_impossible");
             assert!(!findings.is_empty());
+
             for f in findings {
                 prover
                     .verify(&f)

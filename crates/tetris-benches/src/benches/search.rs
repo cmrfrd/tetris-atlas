@@ -23,6 +23,7 @@ fn search_digest(outcomes: &[PlanOutcome]) -> u64 {
             digest = (digest ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
         }
     };
+
     for outcome in outcomes {
         match outcome {
             PlanOutcome::Success(witness) => {
@@ -30,9 +31,11 @@ fn search_digest(outcomes: &[PlanOutcome]) -> u64 {
                 for &col in witness.board.as_limbs() {
                     append(u64::from(col));
                 }
+
                 for placement in witness.placements {
                     append(u64::from(placement.index()));
                 }
+
                 append(witness.nodes_expanded as u64);
                 append(witness.terminal_candidates_examined as u64);
             }
@@ -46,6 +49,7 @@ fn search_digest(outcomes: &[PlanOutcome]) -> u64 {
             }
         }
     }
+
     digest
 }
 
@@ -56,6 +60,7 @@ type ProductionBeam =
 fn validate_beam_result(game: TetrisGame, result: &tetris_search::ScoredState<BeamTetrisState>) {
     let action = result.root_action.expect("beam must select a first move");
     assert!(<TetrisPiecePlacement<10>>::all_from_piece(game.current_piece()).contains(&action));
+
     let mut board = game.board;
     assert!(!board.apply_piece_placement(action).is_lost);
     assert!(!result.state.0.board.is_lost());
@@ -81,6 +86,7 @@ tetris_bench! {
         validate_sequence_results(&output);
         let mut group = c.benchmark_group("search/sequence_fixed");
         group.throughput(Throughput::Elements(input.len() as u64));
+
         group.bench_with_input(
             BenchmarkId::from_parameter(input.len()),
             &input,
@@ -90,10 +96,12 @@ tetris_bench! {
                         *out =
                             planner.search(*board, pieces, &tetris_search::height_mse_plan_score);
                     }
+
                     black_box(&output);
                 });
             },
         );
+
         group.finish();
     }
 }
@@ -113,9 +121,11 @@ tetris_bench! {
                     for (&board, out) in black_box(boards).iter().zip(&mut output) {
                         *out = height_mse_distance_from_empty(board);
                     }
+
                     black_box(&output);
                 });
             });
+
             distance.finish();
             let states = boards
                 .into_iter()
@@ -132,9 +142,11 @@ tetris_bench! {
                     for (state, out) in black_box(states).iter().zip(&mut output) {
                         *out = height_mse_board_score(state);
                     }
+
                     black_box(&output);
                 });
             });
+
             score.finish();
         }
     }
@@ -149,8 +161,10 @@ tetris_bench! {
             *out = search.search_top_with_state_best_effort(BeamTetrisState::new(game), 8);
             validate_beam_result(game, out.as_ref().expect("live beam fixture"));
         }
+
         let mut group = c.benchmark_group("search/beam_fixed");
         group.throughput(Throughput::Elements(input.len() as u64));
+
         group.bench_with_input(
             BenchmarkId::new("w256_d8", input.len()),
             &input,
@@ -160,10 +174,12 @@ tetris_bench! {
                         *out =
                             search.search_top_with_state_best_effort(BeamTetrisState::new(game), 8);
                     }
+
                     black_box(&output);
                 });
             },
         );
+
         group.finish();
     }
 }
@@ -179,6 +195,7 @@ fn play_game(search: &mut ProductionBeam, mut game: TetrisGame) -> Option<Tetris
             return None;
         }
     }
+
     Some(game)
 }
 
@@ -195,8 +212,10 @@ tetris_bench! {
                 GAMEPLAY_MOVES as u32,
             );
         }
+
         let mut group = c.benchmark_group("search/gameplay_fixed");
         group.throughput(Throughput::Elements((GAMEPLAY_SEEDS.len() * GAMEPLAY_MOVES) as u64));
+
         group.bench_with_input("w256_d8_seeds1_4_moves16", &input, |b, input| {
             b.iter(|| {
                 for (&game, out) in black_box(input).iter().zip(&mut output) {
@@ -204,9 +223,11 @@ tetris_bench! {
                         play_game(&mut search, game).expect("gameplay must complete every move"),
                     );
                 }
+
                 black_box(&output);
             });
         });
+
         group.finish();
     }
 }
@@ -233,14 +254,17 @@ mod tests {
             assert_eq!(a, b);
             assert_eq!(a.piece_count, GAMEPLAY_MOVES as u32);
             assert!(!a.board.is_lost());
+
             let mut draws = fixtures::BagFixture {
                 bag: *initial.bag(),
                 rng: initial.rng,
             };
+
             let mut piece = initial.current_piece();
             for _ in 0..GAMEPLAY_MOVES {
                 piece = draws.draw(tetris_game::TetrisPieceBagState::full());
             }
+
             assert_eq!(a.current_piece(), piece);
             assert_eq!(*a.bag(), draws.bag);
             assert_eq!(a.rng, draws.rng);
@@ -273,6 +297,7 @@ mod tests {
         let input = fixtures::search_inputs::<SEARCH_DEPTH>();
         assert_eq!(input, fixtures::search_inputs::<SEARCH_DEPTH>());
         assert_eq!(input.len(), 16);
+
         let mut planner = Planner::new_boxed();
         let output = input
             .iter()

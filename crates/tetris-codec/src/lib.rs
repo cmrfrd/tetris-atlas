@@ -35,6 +35,7 @@ mod arithmetic;
 pub mod board;
 mod decision;
 mod id;
+
 pub use board::{BoardCodec, CompiledConfig, Dimensions, Error, GameDimensions, Tables};
 pub use id::{BoardId, IdConfig};
 

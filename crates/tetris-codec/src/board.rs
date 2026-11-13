@@ -33,12 +33,14 @@ pub(crate) const fn top_supported(top: u16, below: u16, cols: usize) -> bool {
             x += 1;
             continue;
         }
+
         let start = x;
         let mut supported = false;
         while x < cols && top & (1 << x) != 0 {
             supported |= below & (1 << x) != 0;
             x += 1;
         }
+
         if !supported {
             unsupported += 1;
             if unsupported > 1 || x - start > 3 {
@@ -46,6 +48,7 @@ pub(crate) const fn top_supported(top: u16, below: u16, cols: usize) -> bool {
             }
         }
     }
+
     true
 }
 
@@ -213,14 +216,17 @@ fn rank_nodes<T: Decision>(
             "node levels are inconsistent"
         );
     }
+
     let mut edge = root;
     let mut rank = 0;
+
     if levels.is_empty() {
         // A nontrivial occupancy modulus makes every live bit significant.
         for level in 0..vars {
             if edge == 0 {
                 return None;
             }
+
             #[cfg(debug_assertions)]
             {
                 debug_assert!(
@@ -228,6 +234,7 @@ fn rank_nodes<T: Decision>(
                     "significant variables must not skip to a terminal"
                 );
             }
+
             let node = nodes[edge as usize];
             if bit(level) {
                 rank += node.weight();
@@ -236,20 +243,25 @@ fn rank_nodes<T: Decision>(
                 edge = node.zero();
             }
         }
+
         #[cfg(debug_assertions)]
         {
             debug_assert!(edge != 1 || rank < total, "rank must fit the carrier");
         }
+
         return (edge == 1).then_some(rank);
     }
+
     let mut count = total;
     for level in 0..vars {
         if count == 0 {
             return None;
         }
+
         let node = nodes[edge as usize];
         let decision = edge > 1 && levels[edge as usize] as usize == level;
         let zero = if decision { node.weight() } else { count / 2 };
+
         #[cfg(debug_assertions)]
         {
             debug_assert!(zero <= count, "zero branch exceeds the remaining count");
@@ -258,6 +270,7 @@ fn rank_nodes<T: Decision>(
                 "free bits must split evenly"
             );
         }
+
         if bit(level) {
             rank += zero;
             count -= zero;
@@ -271,6 +284,7 @@ fn rank_nodes<T: Decision>(
             }
         }
     }
+
     (edge == 1 && count == 1).then_some(rank)
 }
 
@@ -288,6 +302,7 @@ fn select_nodes<T: Decision>(
     if rank >= total {
         return Err(Error::InvalidId);
     }
+
     #[cfg(debug_assertions)]
     {
         debug_assert!((root as usize) < nodes.len(), "root must be a stored node");
@@ -296,7 +311,9 @@ fn select_nodes<T: Decision>(
             "node levels are inconsistent"
         );
     }
+
     let mut edge = root;
+
     if levels.is_empty() {
         for level in 0..vars {
             #[cfg(debug_assertions)]
@@ -306,6 +323,7 @@ fn select_nodes<T: Decision>(
                     "significant variables must not skip to a terminal"
                 );
             }
+
             let node = nodes[edge as usize];
             let one = rank >= node.weight();
             if one {
@@ -314,19 +332,23 @@ fn select_nodes<T: Decision>(
             } else {
                 edge = node.zero();
             }
+
             bit(level, one);
         }
+
         return if edge == 1 && rank == 0 {
             Ok(())
         } else {
             Err(Error::InvalidId)
         };
     }
+
     let mut count = total;
     for level in 0..vars {
         let node = nodes[edge as usize];
         let decision = edge > 1 && levels[edge as usize] as usize == level;
         let zero = if decision { node.weight() } else { count / 2 };
+
         #[cfg(debug_assertions)]
         {
             debug_assert!(zero <= count, "zero branch exceeds the remaining count");
@@ -336,6 +358,7 @@ fn select_nodes<T: Decision>(
             );
             debug_assert!(rank < count, "rank must fit the remaining suffix");
         }
+
         let one = rank >= zero;
         if one {
             rank -= zero;
@@ -349,8 +372,10 @@ fn select_nodes<T: Decision>(
                 edge = node.zero();
             }
         }
+
         bit(level, one);
     }
+
     if edge == 1 && rank == 0 && count == 1 {
         Ok(())
     } else {
@@ -463,6 +488,7 @@ where
         if !Self::VALID_CONFIGURATION {
             return Err(Error::InvalidConfiguration);
         }
+
         Ok(Self::new())
     }
 
@@ -524,6 +550,7 @@ where
         if cols.iter().any(|&col| col >> ROWS != 0) {
             return Err(Error::HeightExceeded);
         }
+
         let result = if C::COLS * ROWS <= 64 {
             let code = cols
                 .iter()
@@ -542,12 +569,14 @@ where
                 C::COLS * ROWS,
             )
         };
+
         result.ok_or_else(|| {
             let rows = std::array::from_fn(|y| {
                 cols.iter()
                     .enumerate()
                     .fold(0, |row, (x, &col)| row | (((col >> y) & 1) as u16) << x)
             });
+
             self.rejection(&rows)
         })
     }
@@ -559,6 +588,7 @@ where
         if rows.iter().any(|&row| row & !full != 0) {
             return Err(Error::InvalidRowMask);
         }
+
         if arithmetic::applies(C::COLS, ROWS, MAX_HOLES) {
             let code = (0..C::COLS).fold(0u64, |code, x| {
                 let col = rows
@@ -567,8 +597,10 @@ where
                     .fold(0u64, |col, (y, row)| col | (u64::from((row >> x) & 1) << y));
                 (code << ROWS) | col
             });
+
             return arithmetic::rank(ROWS, code).ok_or_else(|| self.rejection(rows));
         }
+
         Self::TABLES
             .rank(
                 |level| rows[ROWS - 1 - level % ROWS] & (1 << (level / ROWS)) != 0,
@@ -584,32 +616,39 @@ where
         if rows.iter().any(|&r| r & !full != 0) {
             return Err(Error::InvalidRowMask);
         }
+
         let height = rows.iter().rposition(|&row| row != 0).map_or(0, |i| i + 1);
         if rows[..height].contains(&0) {
             return Err(Error::EmptyInternalRow);
         }
+
         if rows[..height].contains(&full) {
             return Err(Error::FullRow);
         }
+
         let occupied: u32 = rows.iter().map(|row| row.count_ones()).sum();
         if !(occupied as usize).is_multiple_of(Self::OCCUPANCY_MODULUS) {
             return Err(Error::OccupancyResidue);
         }
+
         let mut seen = 0u16;
         let mut holes = 0;
         for &row in rows[..height].iter().rev() {
             holes += (seen & !row).count_ones() as usize;
             seen |= row;
         }
+
         if holes > Self::TABLES.holes {
             return Err(Error::TooManyHoles);
         }
+
         if C::COLS >= 4
             && height == ROWS
             && !top_supported(rows[height - 1], rows[height - 2], C::COLS)
         {
             return Err(Error::UnsupportedTopRun);
         }
+
         Ok(height)
     }
 
@@ -628,8 +667,10 @@ where
                 Self::TABLES.select(id, C::COLS * ROWS, |_, one| {
                     code = (code << 1) | u64::from(one)
                 })?;
+
                 code
             };
+
             Ok(TetrisBoard::<{ C::COLS }, { C::ROWS }>::from_limbs(
                 std::array::from_fn(|x| {
                     u32::try_from((code >> ((C::COLS - 1 - x) * ROWS)) & ((1u64 << ROWS) - 1))
@@ -641,6 +682,7 @@ where
             Self::TABLES.select(id, C::COLS * ROWS, |level, one| {
                 cols[level / ROWS] |= u32::from(one) << (ROWS - 1 - level % ROWS)
             })?;
+
             Ok(TetrisBoard::<{ C::COLS }, { C::ROWS }>::from_limbs(cols))
         }
     }
@@ -656,10 +698,12 @@ where
                 })
             }));
         }
+
         let mut rows = [0; ROWS];
         Self::TABLES.select(id, C::COLS * ROWS, |level, one| {
             rows[ROWS - 1 - level % ROWS] |= u16::from(one) << (level / ROWS)
         })?;
+
         Ok(rows)
     }
 }
@@ -817,6 +861,7 @@ pub(crate) mod tests {
         let columns = std::array::from_fn(|x| {
             (0..R).fold(0u32, |v, y| v | (u32::from((rows[y] >> x) & 1) << y))
         });
+
         let target = TetrisBoard::<{ C::COLS }, { C::ROWS }>::from_limbs(columns);
         for shape in FOOTPRINTS.iter() {
             if shape.height > R
@@ -828,12 +873,14 @@ pub(crate) mod tests {
             {
                 continue;
             }
+
             for dy in 0..=R - shape.height {
                 if !(0..C::COLS)
                     .all(|x| (shape.columns[x] << dy) & columns[x] == shape.columns[x] << dy)
                 {
                     continue;
                 }
+
                 let mut before =
                     TetrisBoard::<{ C::COLS }, { C::ROWS }>::from_limbs(std::array::from_fn(|x| {
                         columns[x] & !(shape.columns[x] << dy)
@@ -842,6 +889,7 @@ pub(crate) mod tests {
                 if (0..before.height()).any(|y| cols.iter().all(|c| c & (1 << y) == 0)) {
                     continue;
                 }
+
                 let result = before.apply_piece_placement(tetris_game::TetrisPiecePlacement {
                     piece: shape.placement.piece,
                     orientation: tetris_game::TetrisPieceOrientation {
@@ -851,11 +899,13 @@ pub(crate) mod tests {
                         ),
                     },
                 });
+
                 if result.lines_cleared == 0 && before == target {
                     return true;
                 }
             }
         }
+
         false
     }
 
@@ -871,26 +921,32 @@ pub(crate) mod tests {
         if rows.iter().any(|&r| r & !full != 0) {
             return false;
         }
+
         let height = rows.iter().rposition(|&r| r != 0).map_or(0, |y| y + 1);
         if rows[..height].iter().any(|&r| r == 0 || r == full) {
             return false;
         }
+
         let (mut divisor, mut width) = (4, C::COLS);
         while width != 0 {
             (divisor, width) = (width, divisor % width);
         }
+
         if rows.iter().map(|r| r.count_ones() as usize).sum::<usize>() % divisor != 0 {
             return false;
         }
+
         let mut holes = 0;
         for x in 0..C::COLS {
             if let Some(top) = rows.iter().rposition(|r| r & (1 << x) != 0) {
                 holes += rows[..top].iter().filter(|r| **r & (1 << x) == 0).count();
             }
         }
+
         if holes > H {
             return false;
         }
+
         if C::COLS >= 4 && height == R && R >= 2 {
             let mut unsupported = 0;
             let mut x = 0;
@@ -899,12 +955,14 @@ pub(crate) mod tests {
                     x += 1;
                     continue;
                 }
+
                 let start = x;
                 let mut supported = false;
                 while x < C::COLS && rows[R - 1] & (1 << x) != 0 {
                     supported |= rows[R - 2] & (1 << x) != 0;
                     x += 1;
                 }
+
                 if !supported {
                     unsupported += 1;
                     if unsupported > 1 || x - start > 3 {
@@ -930,6 +988,7 @@ pub(crate) mod tests {
         assert_eq!(codec.id_bits(), bits);
         assert_eq!(codec.table_payload_bytes(), 0);
         assert_eq!(BoardCodec::<StandardTetris, R, 1>::ID_BYTES, 4);
+
         let mut seed = 0xb38a_8f21_0731_c42d;
         for id in [0, 1, count / 2, count - 1]
             .into_iter()
@@ -943,13 +1002,16 @@ pub(crate) mod tests {
                 .expect("valid fixture in arithmetic_api");
             assert_eq!(codec.id_u64(&board), Ok(id));
             assert_eq!(codec.id_rows_u64(&rows), Ok(id));
+
             let typed = codec.id(&board).expect("valid fixture in arithmetic_api");
             assert_eq!(codec.board_from_id(typed), Ok(board));
+
             let typed_rows = codec
                 .id_rows(&rows)
                 .expect("valid fixture in arithmetic_api");
             assert_eq!(codec.rows_from_id(typed_rows), Ok(rows));
         }
+
         assert_eq!(codec.board_from_u64(count), Err(Error::InvalidId));
         assert_eq!(codec.rows_from_u64(count), Err(Error::InvalidId));
         assert_eq!(codec.rows_from_u64(u64::MAX), Err(Error::InvalidId));
@@ -992,16 +1054,19 @@ pub(crate) mod tests {
                 std::array::from_fn(|y| ((bits >> (y * C::COLS)) & ((1 << C::COLS) - 1)) as u16);
             let result = codec.id_rows_u64(&rows);
             assert_eq!(result.is_ok(), admitted::<C, R, H>(&rows), "{rows:?}");
+
             if let Ok(id) = result {
                 assert!(!seen[id as usize], "collision: {rows:?}");
                 seen[id as usize] = true;
                 assert_eq!(codec.rows_from_u64(id), Ok(rows));
+
                 let b = codec
                     .board_from_u64(id)
                     .expect("valid fixture in exhaustive");
                 assert_eq!(codec.id_u64(&b), Ok(id));
             }
         }
+
         assert!(seen.into_iter().all(|x| x));
         assert_eq!(codec.rows_from_u64(codec.len()), Err(Error::InvalidId));
     }
@@ -1032,10 +1097,13 @@ pub(crate) mod tests {
             let rows = codec.rows_from_u64(id).expect("valid fixture in sampled");
             assert!(admitted::<C, R, H>(&rows));
             assert_eq!(codec.id_rows_u64(&rows), Ok(id));
+
             let native = codec.board_from_u64(id).expect("valid fixture in sampled");
             assert_eq!(codec.id_u64(&native), Ok(id));
+
             let typed = codec.id(&native).expect("valid fixture in sampled");
             assert_eq!(codec.board_from_id(typed), Ok(native));
+
             let reflected = std::array::from_fn(|y| rows[y].reverse_bits() >> (16 - C::COLS));
             let mirror = codec
                 .id_rows_u64(&reflected)
@@ -1089,8 +1157,10 @@ pub(crate) mod tests {
                 },
                 ..action
             });
+
             let columns = &footprint.as_limbs()[..usize::from(width)];
             assert_eq!(columns.iter().map(|c| c.count_ones()).sum::<u32>(), 4);
+
             let shift = columns
                 .iter()
                 .map(|c| c.trailing_zeros())
@@ -1103,10 +1173,12 @@ pub(crate) mod tests {
                     mask | ((((c >> shift) >> y) & 1) as u16) << x
                 })
             };
+
             for y in 0..height {
                 let mask = row(y);
                 assert_eq!((mask & !(mask << 1)).count_ones(), 1);
             }
+
             if height > 1 {
                 assert_ne!(row(height - 1) & row(height - 2), 0);
             } else {
@@ -1125,6 +1197,7 @@ pub(crate) mod tests {
         let full_bag = u8::from(tetris_game::TetrisPieceBagState::full());
         let mut seen = HashSet::from([(empty.as_limbs().to_owned(), full_bag)]);
         let mut pending = VecDeque::from([(empty, full_bag)]);
+
         // Independent forward reachability: do not prune parents by codec admission
         // or hole count, which could otherwise hide an unsound carrier constraint.
         while let Some((board, bag)) = pending.pop_front() {
@@ -1137,11 +1210,13 @@ pub(crate) mod tests {
                 {
                     continue;
                 }
+
                 let mut next = board;
                 next.apply_piece_placement(action);
                 if next.is_lost() || next.height() > 2 {
                     continue;
                 }
+
                 if next.total_holes() <= 2 {
                     assert!(
                         codec.id_u64(&next).is_ok(),
@@ -1149,16 +1224,19 @@ pub(crate) mod tests {
                         next.as_limbs().to_owned()
                     );
                 }
+
                 let remaining = if bag & !bit == 0 {
                     full_bag
                 } else {
                     bag & !bit
                 };
+
                 if seen.insert((next.as_limbs().to_owned(), remaining)) {
                     pending.push_back((next, remaining));
                 }
             }
         }
+
         assert!(seen.len() > 1);
     }
 
@@ -1178,6 +1256,7 @@ pub(crate) mod tests {
         let mut checks = 0u64;
         let mut checked_boards = 0u64;
         let mut hole_returns = 0u64;
+
         // Allow every piece at every step: this contains all legal bag histories.
         // Neither the codec nor the target hole budget filters exploration.
         while head < arena.len() {
@@ -1193,11 +1272,13 @@ pub(crate) mod tests {
                 {
                     continue;
                 }
+
                 let mut next = parent;
                 next.apply_piece_placement(action);
                 if next.is_lost() || next.height() as usize > R {
                     continue;
                 }
+
                 let fresh = seen.insert(next.as_limbs().to_owned());
                 if next.total_holes() as usize <= H {
                     checks += 1;
@@ -1205,6 +1286,7 @@ pub(crate) mod tests {
                     if fresh {
                         checked_boards += 1;
                     }
+
                     let id = codec.id_u64(&next);
                     if id.is_err() {
                         let mut path = vec![index];
@@ -1221,11 +1303,13 @@ pub(crate) mod tests {
                             next.as_limbs().to_owned()
                         );
                     }
+
                     assert_eq!(
                         codec.board_from_u64(id.expect("valid fixture in forward_closure")),
                         Ok(next)
                     );
                 }
+
                 if fresh {
                     arena.push((next, head, index));
                 }
@@ -1290,6 +1374,7 @@ pub(crate) mod tests {
                         .nth(draw as usize)
                         .expect("valid fixture in legal_histories")
                 };
+
                 let mut successors = Vec::new();
                 for (index, action) in TetrisPiecePlacement::<{ C::COLS }>::ALL_PLACEMENTS
                     .iter()
@@ -1303,11 +1388,13 @@ pub(crate) mod tests {
                     {
                         continue;
                     }
+
                     let mut next = board;
                     let outcome = next.apply_piece_placement(action);
                     if next.is_lost() || next.height() as usize > R {
                         continue;
                     }
+
                     if next.total_holes() as usize <= H {
                         checks += 1;
                         at_cap += u64::from(next.height() as usize == R);
@@ -1328,12 +1415,14 @@ pub(crate) mod tests {
                     }
                     successors.push((next, index));
                 }
+
                 if successors.is_empty() {
                     board = TetrisBoard::<{ C::COLS }, { C::ROWS }>::new();
                     bag = full_bag;
                     history.clear();
                     continue;
                 }
+
                 // Mix unconstrained choices with low-hole choices. Both are actual
                 // legal play; even the latter never filters by codec membership.
                 if !random(&mut state).is_multiple_of(3) {
@@ -1344,6 +1433,7 @@ pub(crate) mod tests {
                         .expect("valid fixture in legal_histories");
                     successors.retain(|(b, _)| b.total_holes() == min_holes);
                 }
+
                 let (next, index) = successors[random(&mut state) as usize % successors.len()];
                 history.push(index);
                 max_history = max_history.max(history.len());
@@ -1354,6 +1444,7 @@ pub(crate) mod tests {
                 }
             }
         }
+
         assert!(checks > 0);
         eprintln!(
             "LEGAL_HISTORIES cols={} R={R} H={H} seeds=8 steps_per_seed=16384 target_edges={checks} unique_targets={} cap_edges={at_cap} clearing_edges={clears} hole_return_edges={hole_returns} max_history={max_history}",
@@ -1384,6 +1475,7 @@ pub(crate) mod tests {
     fn three_column_line_clear_can_create_two_unsupported_top_runs() {
         type Narrow = Game<3, 20>;
         let codec = BoardCodec::<Narrow, 2, 2>::new();
+
         // Two full seven-bags, followed by J from the third bag. Its full
         // three-cell row clears above the history cap and leaves a cell behind.
         let actions = [
@@ -1426,11 +1518,13 @@ pub(crate) mod tests {
             board.apply_piece_placement(placement);
             assert!(!board.is_lost());
             assert!(board.height() <= 2);
+
             let id = codec.id_u64(&board).expect(
                 "valid fixture in three_column_line_clear_can_create_two_unsupported_top_runs",
             );
             assert_eq!(codec.board_from_u64(id), Ok(board));
         }
+
         assert_eq!(board.as_limbs().to_owned(), [2, 1, 2]);
         assert_eq!(board.total_holes(), 2);
         assert_eq!(codec.len(), 43);
@@ -1459,6 +1553,7 @@ pub(crate) mod tests {
         let mut board = TetrisBoard::<4, 28>::new();
         board.apply_piece_placement(vertical);
         assert_eq!(board.height(), 4);
+
         let before = board;
         assert_eq!(board.apply_piece_placement(horizontal).lines_cleared, 1);
         assert_eq!(board, before);
@@ -1468,6 +1563,7 @@ pub(crate) mod tests {
             )),
             Ok(board)
         );
+
         // Exercise spawn non-overlap at the maximum supported cap independently
         // of a large diagram's compile-time construction budget.
         for n in 2..=7 {
@@ -1475,7 +1571,9 @@ pub(crate) mod tests {
             assert_eq!(board.height(), n * 4);
             assert_eq!(board.as_limbs().to_owned()[0].count_ones(), n * 4);
         }
+
         assert_eq!(board.height(), 28);
+
         let codec = BoardCodec::<StandardTetris, 20, 0>::new();
         let mut board = TetrisBoard::<{ StandardTetris::COLS }, { StandardTetris::ROWS }>::new();
         for _ in 0..5 {
@@ -1495,6 +1593,7 @@ pub(crate) mod tests {
             );
             assert_eq!(codec.board_from_u64(id), Ok(board));
         }
+
         assert_eq!(board.height(), 20);
     }
 
@@ -1521,6 +1620,7 @@ pub(crate) mod tests {
                 .expect_err("invalid fixture must be rejected"),
             Error::InvalidConfiguration
         );
+
         // The previous engine accepted this spawn-overlap board after a 31-row
         // replay. Current gameplay rejects those dimensions before placement.
         let old = TetrisBoard::<10, 20>::from_limbs([
@@ -1553,6 +1653,7 @@ pub(crate) mod tests {
         ] {
             assert_eq!(CODEC.id_rows_u64(&rows), Err(error));
         }
+
         for x in 0..10 {
             for y in 4..32 {
                 let mut cols = [0; 10];
@@ -1566,6 +1667,7 @@ pub(crate) mod tests {
                 );
             }
         }
+
         assert_eq!(CODEC.board_from_u64(u64::MAX), Err(Error::InvalidId));
 
         type Invalid = BoardCodec<Game<10, 2>, 4, 2>;
@@ -1598,6 +1700,7 @@ pub(crate) mod tests {
                 if a.abs_diff(b) < 2 {
                     continue;
                 }
+
                 for low in 0..3 {
                     let board =
                         TetrisBoard::<{ StandardTetris::COLS }, { StandardTetris::ROWS }>::from_limbs(std::array::from_fn(|x| {
@@ -1630,6 +1733,7 @@ pub(crate) mod tests {
                         choices.push(next);
                     }
                 }
+
                 if choices.is_empty() {
                     break;
                 }
@@ -1656,6 +1760,7 @@ pub(crate) mod tests {
         let Nodes::Medium(nodes) = Standard::TABLES.nodes else {
             return Err("expected medium nodes".into());
         };
+
         let mut seed = 0xb04d_c0de;
         let mut codes = Vec::new();
         for _ in 0..256 {
@@ -1670,6 +1775,7 @@ pub(crate) mod tests {
                     .fold(0u64, |code, &col| (code << 4) | u64::from(col)),
             );
         }
+
         for &code in &codes {
             let a = rank_nodes(
                 nodes,
@@ -1689,6 +1795,7 @@ pub(crate) mod tests {
             );
             assert_eq!(a, b);
         }
+
         for (trial, generic) in [false, true, true, false, true, false, false, true]
             .into_iter()
             .enumerate()
@@ -1716,6 +1823,7 @@ pub(crate) mod tests {
                 start.elapsed().as_secs_f64() * 1e9 / (4096.0 * 256.0)
             );
         }
+
         Ok(())
     }
 
@@ -1735,6 +1843,7 @@ pub(crate) mod tests {
                     TetrisPiece::L => 7,
                     _ => break,
                 };
+
                 let placement = TetrisPiecePlacement::<10>::ALL_PLACEMENTS
                     .iter()
                     .copied()
@@ -1742,10 +1851,12 @@ pub(crate) mod tests {
                         if p.piece != piece || p.orientation.column.inner() != column {
                             return false;
                         }
+
                         let width = p.piece.width(p.orientation.rotation);
                         if usize::from(width) != if piece == TetrisPiece::I { 4 } else { 3 } {
                             return false;
                         }
+
                         let mut footprint = TetrisBoard::<10, 20>::new();
                         footprint.apply_piece_placement(*p);
                         let start = usize::from(p.orientation.column.inner());
@@ -1758,14 +1869,17 @@ pub(crate) mod tests {
                 assert!(game.board.height() <= 2);
                 played |= piece.mask();
             }
+
             if played == wanted {
                 witness = Some((seed, game.board));
                 break;
             }
         }
+
         let (seed, board) = witness.expect("fixed seeds include an I/T/L first-bag prefix");
         assert_eq!(board.height(), 1);
         assert_eq!(board.count(), 2);
+
         let higher = BoardCodec::<StandardTetris, 2, 0>::new();
         let id = higher
             .id_u64(&board)
