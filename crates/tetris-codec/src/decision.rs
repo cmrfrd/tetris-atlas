@@ -1044,6 +1044,64 @@ mod tests {
         Column, Rotation, TetrisBoard, TetrisPiece, TetrisPieceOrientation, TetrisPiecePlacement,
     };
 
+    /// Exhausts three-variable Boolean functions and every pairwise intersection and union.
+    #[test]
+    fn boolean_operations_match_all_three_variable_truth_tables() {
+        let mut builder = super::Builder::<512, 1024>::new(1, 3);
+        let variables = [0, 1, 2].map(|var| builder.node(var, 0, 1));
+        let mut roots = [0; 256];
+
+        for (table, root) in roots.iter_mut().enumerate() {
+            for assignment in 0..8 {
+                if table & (1 << assignment) == 0 {
+                    continue;
+                }
+
+                let mut term = 1;
+                for (var, &edge) in variables.iter().enumerate() {
+                    let literal = edge ^ u32::from(assignment & (1 << var) == 0);
+                    term = builder.and(term, literal);
+                }
+                *root = builder.or(*root, term);
+            }
+        }
+
+        let evaluate = |builder: &super::Builder<512, 1024>, root: u32| {
+            let mut table = 0u8;
+            for assignment in 0..8 {
+                let mut edge = root;
+                while edge > 1 {
+                    let node = builder.nodes[(edge / 2) as usize];
+                    edge = (if assignment & (1 << node.var) == 0 {
+                        node.zero
+                    } else {
+                        node.one
+                    }) ^ (edge & 1);
+                }
+                table |= u8::from(edge == 1) << assignment;
+            }
+            table
+        };
+
+        let initial_epoch = builder.epoch;
+        for (a, &left) in roots.iter().enumerate() {
+            assert_eq!(usize::from(evaluate(&builder, left)), a);
+            assert_eq!(
+                evaluate(&builder, left ^ 1),
+                !u8::try_from(a).expect("truth table fits u8")
+            );
+
+            for (b, &right) in roots.iter().enumerate() {
+                let intersection = builder.and(left, right);
+                let union = builder.or(left, right);
+                assert_eq!(usize::from(evaluate(&builder, intersection)), a & b);
+                assert_eq!(usize::from(evaluate(&builder, union)), a | b);
+            }
+        }
+
+        assert!(builder.epoch > initial_epoch, "exercise memoization resets");
+    }
+
     /// Checks normalized engine masks against placements, including symmetric rotations.
     #[test]
     fn engine_shapes_normalize_to_every_placement() {

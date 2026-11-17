@@ -829,6 +829,109 @@ pub(crate) mod tests {
         assert_eq!(std::mem::size_of::<BoardCodec<StandardTetris, 20, 0>>(), 0);
     }
 
+    /// Recomputes packed graph counts with u128 arithmetic and independent level inference.
+    fn check_table_counts(tables: &Tables, vars: usize) {
+        let records: Vec<_> = match tables.nodes {
+            Nodes::Small(nodes) => nodes
+                .iter()
+                .map(|n| (n.zero(), n.one(), n.weight()))
+                .collect(),
+            Nodes::Medium(nodes) => nodes
+                .iter()
+                .map(|n| (n.zero(), n.one(), n.weight()))
+                .collect(),
+            Nodes::Wide(nodes) => nodes
+                .iter()
+                .map(|n| (n.zero(), n.one(), n.weight()))
+                .collect(),
+        };
+
+        assert!(records.len() >= 2);
+        let mut levels = vec![vars; records.len()];
+        let mut totals = vec![0u128; records.len()];
+        totals[1] = 1;
+
+        for (index, &(zero, one, weight)) in records.iter().enumerate().skip(2) {
+            let zero = zero as usize;
+            let one = one as usize;
+            assert!(zero < index && one < index, "children precede their parent");
+            assert_ne!(zero, one, "stored decisions must be reduced");
+
+            let level = if tables.levels.is_empty() {
+                levels[if zero == 0 { one } else { zero }] - 1
+            } else {
+                usize::from(tables.levels[index])
+            };
+            assert!(level < vars);
+            levels[index] = level;
+
+            let count = |child: usize| {
+                if child == 0 {
+                    return 0;
+                }
+
+                assert!(levels[child] > level);
+                if tables.levels.is_empty() {
+                    assert_eq!(levels[child], level + 1, "all live bits are significant");
+                }
+                totals[child] << (levels[child] - level - 1)
+            };
+
+            let zero_count = count(zero);
+            let one_count = count(one);
+            assert_eq!(u128::from(weight), zero_count, "node {index}");
+            totals[index] = zero_count + one_count;
+            assert!(totals[index] > 0 && totals[index] <= u128::from(u64::MAX));
+        }
+
+        let root = tables.root as usize;
+        assert!(root < records.len());
+        assert_eq!(totals[root] << levels[root], u128::from(tables.count));
+    }
+
+    /// Covers narrow, medium and wide records, free variables, and terminal-only carriers.
+    #[test]
+    fn packed_graph_counts_match_independent_bottom_up_counting() {
+        check_table_counts(BoardCodec::<Game<1, 20>, 3, 2>::TABLES, 3);
+        check_table_counts(BoardCodec::<Game<3, 20>, 3, 2>::TABLES, 9);
+        check_table_counts(BoardCodec::<Game<5, 20>, 2, 1>::TABLES, 10);
+        check_table_counts(BoardCodec::<Game<6, 20>, 3, 2>::TABLES, 18);
+        check_table_counts(Standard::TABLES, 40);
+        check_table_counts(BoardCodec::<Game<9, 20>, 20, 0>::TABLES, 180);
+        check_table_counts(BoardCodec::<StandardTetris, 20, 0>::TABLES, 200);
+    }
+
+    /// Ensures the graph audit rejects a deliberately incorrect stored branch count.
+    #[test]
+    #[should_panic(expected = "node 2")]
+    fn packed_graph_audit_rejects_corrupt_completion_counts() {
+        let tables = Tables {
+            holes: 0,
+            root: 2,
+            count: 1,
+            nodes: Nodes::Small(&[
+                SmallNode {
+                    zero: 0,
+                    one: 0,
+                    weight: 0,
+                },
+                SmallNode {
+                    zero: 0,
+                    one: 0,
+                    weight: 0,
+                },
+                SmallNode {
+                    zero: 1,
+                    one: 0,
+                    weight: 0,
+                },
+            ]),
+            levels: &[],
+        };
+
+        check_table_counts(&tables, 1);
+    }
+
     /// A canonical placement applied to an empty standard board.
     struct Footprint {
         placement: TetrisPiecePlacement<10>,

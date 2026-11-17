@@ -128,6 +128,13 @@ clears itself and returns the same unreachable board. The carrier conservatively
 all seven pieces, including for restricted piece sets; it does not establish bag-sensitive
 seed reachability. Symbolic translations can also be a conservative superset of engine actions.
 
+A confirmed remaining gap in the default `10/4/2` carrier is columns
+`[11,0,15,0,3,3,0,0,1,0]`. Among boards without internal empty rows, its only
+zero-clear predecessor is `[11,0,15,0,0,0,0,0,1,0]`, which has none. Both have separated
+cap-height runs, ruling out clearing last moves. The default codec admits the first board; the arithmetic `10/4/1` codec
+rejects its closed impossible family. The two paths therefore enforce different strengths of
+necessary conditions. Dense round trips do not establish exact reachability.
+
 ### Ten-column one-hole arithmetic
 
 Caps **4–6**, with `MAX_HOLES = 1`, use column heights and optional hole metadata instead of a
@@ -193,7 +200,10 @@ cargo asm -p tetris-codec --lib --features never-inline arithmetic::rank 0
 ```
 
 Unit tests cover independent counts, rank/select boundaries, invalid inputs, mirrors, packed
-storage, shape normalization and small exhaustive languages. Three ignored correctness audits
+storage, shape normalization and small exhaustive languages. Construction tests exhaust all 256
+three-variable truth tables and their pairwise intersections/unions, including cache resets. An
+independent bottom-up count audit checks all three packed formats and skipped variables, with a
+deliberately corrupt count as a negative control. Three ignored correctness audits
 check complete small forward closures and fixed-seed larger legal histories, allowing parents
 outside the target hole budget. Historical arithmetic differential checks covered all
 26,252,300 closed-family members and three million sampled IDs. These checks do not prove
