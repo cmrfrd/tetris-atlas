@@ -364,12 +364,8 @@ impl<const N: usize, const M: usize> Builder<N, M> {
         let b = self.map[(b / 2) as usize] ^ (b & 1);
         self.len = len;
 
-        // Drop stale hash slots before rehashing relocated nodes.
-        i = 0;
-        while i < M {
-            self.unique[i] = 0;
-            i += 1;
-        }
+        // Bulk initialization avoids interpreting a slot-by-slot clearing loop in const evaluation.
+        self.unique = [0; M];
 
         i = 1;
         while i < len {
@@ -1091,6 +1087,54 @@ mod tests {
 
                 assert_eq!(&board.as_limbs()[..4], &columns);
             }
+        }
+    }
+
+    /// Checks that repeated compaction preserves truth tables and unique retained nodes.
+    #[test]
+    fn collection_preserves_complements_and_reinterns_retained_nodes() {
+        let mut builder = super::Builder::<32, 64>::new(4, 2);
+        let first = builder.bit(0, 0);
+        let second = builder.bit(1, 0);
+        let mut root = builder.and(first, second);
+        let mut complement = root ^ 1;
+
+        let evaluate = |builder: &super::Builder<32, 64>, mut edge: u32, assignment: u32| {
+            while edge >= 2 {
+                let node = builder.nodes[(edge / 2) as usize];
+                let one = assignment & (1 << node.var) != 0;
+                edge = (if one { node.one } else { node.zero }) ^ (edge & 1);
+            }
+            edge == 1
+        };
+
+        for _ in 0..3 {
+            let discarded = builder.bit(3, 0);
+            let _discarded_root = builder.or(root, discarded);
+            let old_len = builder.len;
+            (root, complement) = builder.collect(root, complement);
+
+            assert!(builder.len < old_len);
+            assert_eq!(complement, root ^ 1);
+            assert_eq!(builder.cached, 0);
+            assert!(
+                builder
+                    .unique
+                    .iter()
+                    .all(|&index| (index as usize) < builder.len)
+            );
+
+            for assignment in 0..256 {
+                let expected = assignment & 0b1010 == 0b1010;
+                assert_eq!(evaluate(&builder, root, assignment), expected);
+                assert_eq!(evaluate(&builder, complement, assignment), !expected);
+            }
+
+            let first = builder.bit(0, 0);
+            let second = builder.bit(1, 0);
+            let retained_len = builder.len;
+            assert_eq!(builder.and(first, second), root);
+            assert_eq!(builder.len, retained_len);
         }
     }
 

@@ -84,6 +84,12 @@ A fresh default consumer historically took about 2–3 minutes to compile; separ
 each evaluate it. The compiler's long-running const-evaluation notice identifies a progress
 threshold, not a measured runtime hotspot. Use the pinned nightly.
 
+Compaction clears its scratch hash table with a bulk array assignment, avoiding a per-slot
+interpreted loop. A 13-configuration compile probe measured 154.4 s before versus 142.4 s after
+(two fresh compiler runs each, 7.7% less wall time). Every packed table field matched exactly.
+This measures the fixed probe with warmed dependencies, not a full workspace build; the rules,
+graph algorithm, IDs and runtime kernels are unchanged.
+
 ### Shared necessary conditions
 
 The admitted language rejects full rows, empty internal rows, excessive target holes and occupied
@@ -256,6 +262,8 @@ Local evidence under `artifacts/output/`:
   combined measurements, assembly and workspace checks for their recorded source snapshots.
 - `codec-shared-geometry-20261111T182724Z/`: all 28 const shapes, focused validation, 32 fixture
   checks and byte-identical 309,140-byte read-only constant sections after sharing engine geometry.
+- `codec-const-build-20261117T033220Z/`: isolated compile-time reset trials, repeated baseline
+  and retained candidate, commands/host data, and exact packed-table comparisons for 13 configs.
 
 ## Reachability sampler
 
