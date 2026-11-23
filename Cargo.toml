@@ -19,6 +19,7 @@ opt-level = 3
 tetris-macros = { path = "crates/tetris-macros" }
 tetris-utils = { path = "crates/tetris-utils" }
 tetris-game = { path = "crates/tetris-game" }
+tetris-board-set = { path = "crates/tetris-board-set" }
 tetris-search = { path = "crates/tetris-search" }
 tetris-ml = { path = "crates/tetris-ml" }
 tensorboard = { path = "crates/tensorboard" }

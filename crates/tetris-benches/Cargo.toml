@@ -21,11 +21,15 @@ apple-silicon = ["tetris-search/apple-silicon"]
 tetris-game.workspace = true
 inventory = "0.3.25"
 rand.workspace = true
+tetris-board-set.workspace = true
+foldhash = "0.1.5"
 tetris-search.workspace = true
 tetris-utils.workspace = true
 criterion = { version = "0.5.1", features = ["html_reports"] }
 
 [dev-dependencies]
+anyhow.workspace = true
+serde_json = "1.0"
 pprof = { version = "0.15.0", features = [
     "flamegraph",
     "criterion",

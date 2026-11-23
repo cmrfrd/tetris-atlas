@@ -1712,9 +1712,68 @@ macro_rules! repeat_exact_idx {
     }};
 }
 
+#[doc(hidden)]
+pub const fn __assert_unroll_width(n: usize) {
+    assert!(n <= 256, "repeat_idx_unroll! supports N <= 256");
+}
+
+// The bounded form extends the ordinary 64-index expansion through 256.
+// Each guard is constant after monomorphization; no runtime loop is emitted.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __repeat_idx_unroll_guarded_at {
+    (1, $start:expr, $n:expr, $i:ident, $b:block) => {{
+        if const { $start < $n } {
+            $crate::rep1_at!($start, $i, $b);
+        }
+    }};
+    (2, $start:expr, $n:expr, $i:ident, $b:block) => {{
+        $crate::__repeat_idx_unroll_guarded_at!(1, $start, $n, $i, $b);
+        $crate::__repeat_idx_unroll_guarded_at!(1, ($start + 1), $n, $i, $b);
+    }};
+    (4, $start:expr, $n:expr, $i:ident, $b:block) => {{
+        $crate::__repeat_idx_unroll_guarded_at!(2, $start, $n, $i, $b);
+        $crate::__repeat_idx_unroll_guarded_at!(2, ($start + 2), $n, $i, $b);
+    }};
+    (8, $start:expr, $n:expr, $i:ident, $b:block) => {{
+        $crate::__repeat_idx_unroll_guarded_at!(4, $start, $n, $i, $b);
+        $crate::__repeat_idx_unroll_guarded_at!(4, ($start + 4), $n, $i, $b);
+    }};
+    (16, $start:expr, $n:expr, $i:ident, $b:block) => {{
+        $crate::__repeat_idx_unroll_guarded_at!(8, $start, $n, $i, $b);
+        $crate::__repeat_idx_unroll_guarded_at!(8, ($start + 8), $n, $i, $b);
+    }};
+    (32, $start:expr, $n:expr, $i:ident, $b:block) => {{
+        $crate::__repeat_idx_unroll_guarded_at!(16, $start, $n, $i, $b);
+        $crate::__repeat_idx_unroll_guarded_at!(16, ($start + 16), $n, $i, $b);
+    }};
+    (64, $start:expr, $n:expr, $i:ident, $b:block) => {{
+        $crate::__repeat_idx_unroll_guarded_at!(32, $start, $n, $i, $b);
+        $crate::__repeat_idx_unroll_guarded_at!(32, ($start + 32), $n, $i, $b);
+    }};
+    (128, $start:expr, $n:expr, $i:ident, $b:block) => {{
+        $crate::__repeat_idx_unroll_guarded_at!(64, $start, $n, $i, $b);
+        $crate::__repeat_idx_unroll_guarded_at!(64, ($start + 64), $n, $i, $b);
+    }};
+    (256, $start:expr, $n:expr, $i:ident, $b:block) => {{
+        $crate::__repeat_idx_unroll_guarded_at!(128, $start, $n, $i, $b);
+        $crate::__repeat_idx_unroll_guarded_at!(128, ($start + 128), $n, $i, $b);
+    }};
+}
+
 /// Unrolls a compile-time count of up to 64 iterations with a constant index.
+///
+/// The `@bounded` form supports every width from zero through 256.
+///
+/// ```compile_fail
+/// tetris_utils::repeat_idx_unroll!(@bounded 257, I, { let _ = I; });
+/// ```
 #[macro_export]
 macro_rules! repeat_idx_unroll {
+    (@bounded $N:expr, $i:ident, $b:block) => {{
+        const { $crate::__assert_unroll_width($N) };
+        $crate::__repeat_idx_unroll_guarded_at!(256, 0usize, $N, $i, $b);
+    }};
     ($N:expr, $i:ident, $b:block) => {{
         assert!($N <= 64, "unroll count exceeds 64");
         $crate::repeat_exact_idx!(64, $i, {
@@ -2106,6 +2165,53 @@ mod tests {
             });
             assert_eq!(*lock.try_lock().expect("released by other thread"), 11);
         }
+    }
+
+    #[test]
+    fn generic_unroll_covers_gaps_large_widths_and_const_indices() {
+        fn check<const N: usize>() {
+            let mut indices = Vec::new();
+            repeat_idx_unroll!(@bounded N, I, {
+                let _: [(); I] = [(); I];
+                indices.push(I);
+            });
+            assert_eq!(indices, (0..N).collect::<Vec<_>>());
+        }
+        check::<0>();
+        check::<1>();
+        check::<10>();
+        check::<17>();
+        check::<19>();
+        check::<21>();
+        check::<22>();
+        check::<31>();
+        check::<33>();
+        check::<63>();
+        check::<64>();
+        check::<65>();
+        check::<127>();
+        check::<128>();
+        check::<129>();
+        check::<200>();
+        check::<255>();
+        check::<256>();
+    }
+
+    #[test]
+    fn generic_unroll_keeps_early_returns_in_the_calling_function() {
+        fn find<const N: usize>(stop: usize) -> usize {
+            repeat_idx_unroll!(@bounded N, I, {
+                if I == stop {
+                    return I;
+                }
+            });
+            N
+        }
+        assert_eq!(find::<0>(0), 0);
+        assert_eq!(find::<33>(17), 17);
+        assert_eq!(find::<200>(199), 199);
+        assert_eq!(find::<256>(255), 255);
+        assert_eq!(find::<256>(256), 256);
     }
 
     #[test]

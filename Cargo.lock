@@ -3712,12 +3712,24 @@ dependencies = [
 name = "tetris-benches"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "criterion",
+ "foldhash 0.1.5",
  "inventory",
  "pprof",
  "rand 0.10.3",
+ "serde_json",
+ "tetris-board-set",
  "tetris-game",
  "tetris-search",
+ "tetris-utils",
+]
+
+[[package]]
+name = "tetris-board-set"
+version = "0.1.0"
+dependencies = [
+ "tetris-game",
  "tetris-utils",
 ]
 
